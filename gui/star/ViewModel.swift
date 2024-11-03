@@ -42,6 +42,7 @@ public final class ViewModel {
     var userPreferences: UserPreferences = UserPreferences()
 
     init() {
+        self.frames = [FrameViewModel(0, viewModel: self)]
         Task {
             if let newPrefs = await UserPreferences.initialize() {
                 await MainActor.run {
@@ -88,7 +89,7 @@ public final class ViewModel {
     var labelText: String = "Started"
 
     // view class for each frame in the sequence in order
-    var frames: [FrameViewModel] = [FrameViewModel(0)]
+    var frames: [FrameViewModel] = []
 
     // the view mode that we set this image with
 
@@ -132,7 +133,13 @@ public final class ViewModel {
     var previousInteractionMode: InteractionMode = .scrub
 
     // enum for how we show each frame
-    var frameViewMode = FrameViewMode.processed
+    var frameViewMode = FrameViewMode.processed {
+        didSet {
+            previousFrameViewMode = oldValue
+        }
+    }
+
+    var previousFrameViewMode = FrameViewMode.processed
 
     // should we show full resolution images on the main frame?
     // faster low res previews otherwise
@@ -233,7 +240,7 @@ public final class ViewModel {
     func set(numberOfFrames: Int) {
 //        Task.detached {
 //            await MainActor.run {
-              self.frames = [FrameViewModel](count: numberOfFrames) { i in FrameViewModel(i) }
+        self.frames = [FrameViewModel](count: numberOfFrames) { i in FrameViewModel(i, viewModel: self) }
 //            }
 //        }
     }
@@ -253,95 +260,10 @@ public final class ViewModel {
             }
             
             let acc = frame.imageAccessor
-
-            let vpTask = Task.detached { acc.loadImage(type: .validation,  atSize: .preview)?.resizable() }
-            let apTask = Task.detached { acc.loadImage(type: .aligned, atSize: .preview)?.resizable() }
-            let spTask = Task.detached { acc.loadImage(type: .subtraction, atSize: .preview)?.resizable() }
-            let bpTask = Task.detached { acc.loadImage(type: .blobs,      atSize: .preview)?.resizable() }
-            let f1Task = Task.detached { acc.loadImage(type: .filter1,    atSize: .preview)?.resizable() }
-            let f2Task = Task.detached { acc.loadImage(type: .filter2,    atSize: .preview)?.resizable() }
-            let f3Task = Task.detached { acc.loadImage(type: .filter3,    atSize: .preview)?.resizable() }
-            let f4Task = Task.detached { acc.loadImage(type: .filter4,    atSize: .preview)?.resizable() }
-            let f5Task = Task.detached { acc.loadImage(type: .filter5,    atSize: .preview)?.resizable() }
-            let f6Task = Task.detached { acc.loadImage(type: .filter6,    atSize: .preview)?.resizable() }
-            let f7Task = Task.detached { acc.loadImage(type: .filter7,    atSize: .preview)?.resizable() }
-            let f8Task = Task.detached { acc.loadImage(type: .filter8,    atSize: .preview)?.resizable() }
-            let f9Task = Task.detached { acc.loadImage(type: .filter9,    atSize: .preview)?.resizable() }
-            let f10Task = Task.detached { acc.loadImage(type: .filter10,    atSize: .preview)?.resizable() }
-            let f11Task = Task.detached { acc.loadImage(type: .filter11,    atSize: .preview)?.resizable() }
-            let f12Task = Task.detached { acc.loadImage(type: .filter12,    atSize: .preview)?.resizable() }
-            let f13Task = Task.detached { acc.loadImage(type: .filter13,    atSize: .preview)?.resizable() }
-            let f14Task = Task.detached { acc.loadImage(type: .filter14,    atSize: .preview)?.resizable() }
-            let f15Task = Task.detached { acc.loadImage(type: .filter15,    atSize: .preview)?.resizable() }
-            let f16Task = Task.detached { acc.loadImage(type: .filter16,    atSize: .preview)?.resizable() }
-            let ppTask = Task.detached { acc.loadImage(type: .paintMask,  atSize: .preview)?.resizable() }
+            
             let prTask = Task.detached { acc.loadImage(type: .processed,  atSize: .preview)?.resizable() }
             let opTask = Task.detached { acc.loadImage(type: .original,   atSize: .preview)?.resizable() }
             let otTask = Task.detached { acc.loadImage(type: .original,   atSize: .thumbnail) }
-
-            if let image = await vpTask.value {
-                self.frames[frame.frameIndex].validationPreviewImage = image
-            }
-            if let image = await apTask.value {
-                self.frames[frame.frameIndex].alignedPreviewImage = image
-            }
-            if let image = await spTask.value  {
-                self.frames[frame.frameIndex].subtractionPreviewImage = image
-            }
-            if let image = await bpTask.value {
-                self.frames[frame.frameIndex].blobsPreviewImage = image
-            }
-            if let image = await f1Task.value {
-                self.frames[frame.frameIndex].filter1PreviewImage = image
-            }
-            if let image = await f2Task.value {
-                self.frames[frame.frameIndex].filter2PreviewImage = image
-            }
-            if let image = await f3Task.value {
-                self.frames[frame.frameIndex].filter3PreviewImage = image
-            }
-            if let image = await f4Task.value {
-                self.frames[frame.frameIndex].filter4PreviewImage = image
-            }
-            if let image = await f5Task.value {
-                self.frames[frame.frameIndex].filter5PreviewImage = image
-            }
-            if let image = await f6Task.value {
-                self.frames[frame.frameIndex].filter6PreviewImage = image
-            }
-            if let image = await f7Task.value {
-                self.frames[frame.frameIndex].filter7PreviewImage = image
-            }
-            if let image = await f8Task.value {
-                self.frames[frame.frameIndex].filter8PreviewImage = image
-            }
-            if let image = await f9Task.value {
-                self.frames[frame.frameIndex].filter9PreviewImage = image
-            }
-            if let image = await f10Task.value {
-                self.frames[frame.frameIndex].filter10PreviewImage = image
-            }
-            if let image = await f11Task.value {
-                self.frames[frame.frameIndex].filter11PreviewImage = image
-            }
-            if let image = await f12Task.value {
-                self.frames[frame.frameIndex].filter12PreviewImage = image
-            }
-            if let image = await f13Task.value {
-                self.frames[frame.frameIndex].filter13PreviewImage = image
-            }
-            if let image = await f14Task.value {
-                self.frames[frame.frameIndex].filter14PreviewImage = image
-            }
-            if let image = await f15Task.value {
-                self.frames[frame.frameIndex].filter15PreviewImage = image
-            }
-            if let image = await f16Task.value {
-                self.frames[frame.frameIndex].filter16PreviewImage = image
-            }
-            if let image = await ppTask.value {
-                self.frames[frame.frameIndex].paintMaskPreviewImage = image
-            }
             if let image = await prTask.value {
                 self.frames[frame.frameIndex].processedPreviewImage = image
             }
@@ -353,11 +275,6 @@ public final class ViewModel {
             }
 
             if let outlierTask { await outlierTask.value }
-
-            // refresh if this is the current index
-         //   if frame.frameIndex == self.currentIndex {
-         //        self.objectWillChange.send()
-         //   }
         }
     }
 
@@ -462,7 +379,7 @@ public final class ViewModel {
             self.eraserTask = nil
         }
         self.sequenceLoaded = false
-        self.frames = [FrameViewModel(0)]
+        self.frames = [FrameViewModel(0, viewModel: self)]
         self.initialLoadInProgress = false
         self.loadingAllOutliers = false
         self.numberOfFramesWithOutliersLoaded = 0

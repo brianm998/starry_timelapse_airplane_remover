@@ -49,56 +49,10 @@ public struct FrameImageView: View {
         }
     }
 
+    
     private var previewImage: some View {
         let frameView = self.viewModel.frames[self.viewModel.currentIndex]
-        switch viewModel.frameViewMode {
-        case .original:
-            return frameView.previewImage
-        case .subtraction:
-            return frameView.subtractionPreviewImage
-        case .blobs:
-            return frameView.blobsPreviewImage
-        case .filter1:
-            return frameView.filter1PreviewImage
-        case .filter2:
-            return frameView.filter2PreviewImage
-        case .filter3:
-            return frameView.filter3PreviewImage
-        case .filter4:
-            return frameView.filter4PreviewImage
-        case .filter5:
-            return frameView.filter5PreviewImage
-        case .filter6:
-            return frameView.filter6PreviewImage
-        case .filter7:
-            return frameView.filter7PreviewImage
-        case .filter8:
-            return frameView.filter8PreviewImage
-        case .filter9:
-            return frameView.filter9PreviewImage
-        case .filter10:
-            return frameView.filter10PreviewImage
-        case .filter11:
-            return frameView.filter11PreviewImage
-        case .filter12:
-            return frameView.filter12PreviewImage
-        case .filter13:
-            return frameView.filter13PreviewImage
-        case .filter14:
-            return frameView.filter14PreviewImage
-        case .filter15:
-            return frameView.filter15PreviewImage
-        case .filter16:
-            return frameView.filter16PreviewImage
-        case .paintMask:
-            return frameView.paintMaskPreviewImage
-        case .validation:
-            return frameView.validationPreviewImage
-        case .processed:
-            return frameView.processedPreviewImage
-        case .aligned:
-            return frameView.alignedPreviewImage
-        }
+        return frameView.previewImage(type: viewModel.frameViewMode)
     }
 
     private func maybeLoadOutliers() {
