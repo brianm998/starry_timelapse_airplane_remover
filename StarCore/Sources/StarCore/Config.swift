@@ -218,6 +218,8 @@ public struct Callbacks: Sendable {
     // returns the total full size of the image sequence
     public var imageSequenceSizeClosure: (@Sendable (Int) -> Void)?
 
+    public var frameOutliersLoadedCallback: (@Sendable (Int, Bool) -> Void)?
+    
     public init() { }
 }
 

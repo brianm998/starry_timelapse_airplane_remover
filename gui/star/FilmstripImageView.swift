@@ -7,31 +7,45 @@ struct FilmstripImageView: View {
     let frameIndex: Int
 
     var body: some View {
-        return VStack(alignment: .leading) {
-            Spacer().frame(maxHeight: 8)
-            HStack{
-                Spacer().frame(maxWidth: 10)
-                Text("\(frameIndex)").foregroundColor(.white)
-            }.frame(maxHeight: 10)
-            if frameIndex >= 0 && frameIndex < viewModel.frames.count {
+            VStack(alignment: .center) {
                 let frameView = viewModel.frames[frameIndex]
-                ZStack(alignment: .bottomTrailing) {
-                    if viewModel.currentIndex == frameIndex {
-                        frameView.thumbnailImage
-                          .foregroundColor(.orange)
-                    } else {
-                        frameView.thumbnailImage
+                Spacer().frame(maxHeight: 8)
+                HStack {
+                    Spacer().frame(maxWidth: 10)
+                      .frame(alignment: .leading)
+                    Text("\(frameIndex)").foregroundColor(.white)
+                      .frame(alignment: .leading)
+                    Spacer()
+                    if frameView.outliersLoaded {
+                        Image(systemName: "line.diagonal")
+                          .foregroundColor(.green)
                     }
-                    if let frameState = frameView.frameState {
-                        Circle()
-                          .fill(frameState.color)
-                          .opacity(0.6)
-                          .frame(maxWidth: 12, maxHeight: 12)
+                    Spacer()
+                      .frame(maxWidth: 6)
+                      .frame(alignment: .trailing)
+
+                }
+                  .frame(maxHeight: 10)
+                
+                if frameIndex >= 0 && frameIndex < viewModel.frames.count {
+                    ZStack(alignment: .bottomTrailing) {
+                        if viewModel.currentIndex == frameIndex {
+                            frameView.thumbnailImage
+                              .foregroundColor(.orange)
+                        } else {
+                            frameView.thumbnailImage
+                        }
+                        if let frameState = frameView.frameState {
+                            Circle()
+                              .fill(frameState.color)
+                              .opacity(0.6)
+                              .frame(maxWidth: 10, maxHeight: 10)
+                              .offset(x: -2, y: -2)
+                        }
                     }
                 }
+                Spacer().frame(maxHeight: 8)
             }
-            Spacer().frame(maxHeight: 8)
-        }
           .frame(minWidth: CGFloat((viewModel.config?.thumbnailWidth ?? 80) + 8),
                  minHeight: CGFloat((viewModel.config?.thumbnailHeight ?? 50) + 30))
         // highlight the selected frame

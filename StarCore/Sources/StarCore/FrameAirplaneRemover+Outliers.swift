@@ -106,6 +106,8 @@ extension FrameAirplaneRemover {
         }
         self.set(state: .readyForInterFrameProcessing)
     }
+
+    public func outliersLoaded() { self.outlierGroups != nil }
     
     public func loadOutliers() async throws {
         if self.outlierGroups == nil {
@@ -140,6 +142,7 @@ extension FrameAirplaneRemover {
                 
                 // perhaps apply validation image to outliers here if possible
             }
+            callbacks.frameOutliersLoadedCallback?(frameIndex, true)
         }
     }
 

@@ -588,6 +588,12 @@ public final class ViewModel {
                 self.set(numberOfFrames: imageSequenceSize)
             }
         }
+
+        callbacks.frameOutliersLoadedCallback = { frameIndex, outliersLoaded in
+            Task { @MainActor in
+                self.frames[frameIndex].outliersLoaded = outliersLoaded
+            }
+        }
         
         callbacks.frameStateChangeCallback = { frame, state in
             Task { @MainActor in

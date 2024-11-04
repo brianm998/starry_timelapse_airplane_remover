@@ -289,17 +289,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     
     public func setupOutliers() async throws {
         // this takes a long time, and the gui does it later
-        if fullyProcess {
-            try await loadOutliers()
-            Log.d("frame \(frameIndex) done detecting outlier groups")
-            if !self.outliersLoadedFromFile {
-                await self.writeOutliersBinary()
-            }
-            Log.d("frame \(frameIndex) done writing outlier binaries")
-        } else {
-            Log.d("frame \(frameIndex) loaded without outlier groups")
+        try await loadOutliers()
+        Log.d("frame \(frameIndex) done detecting outlier groups")
+        if !self.outliersLoadedFromFile {
+            await self.writeOutliersBinary()
         }
-
+        Log.d("frame \(frameIndex) done writing outlier binaries")
     }
 
     var _paintMask: PaintMask?
@@ -317,12 +312,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // does the final painting and then writes out the output files
     public func finish() async throws {
         Log.d("frame \(self.frameIndex) starting to finish")
-        self.set(state: .finishing)
         if hasChanges() {
             // write out the outliers binary if it is not there
             // only overwrite the paint reason if it is there
             await self.writeOutliersBinary()
         }
+
+        self.set(state: .finishing)
 
         if config.writeOutlierClassificationValues {
             // THIS MOFO IS SLOW

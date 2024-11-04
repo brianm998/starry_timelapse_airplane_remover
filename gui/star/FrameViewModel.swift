@@ -20,6 +20,8 @@ public class FrameViewModel {
     var frameObserver = FrameObserver()
 
     var frameState: FrameProcessingState?
+
+    var outliersLoaded: Bool = false
     
     private var cancelBag = Set<AnyCancellable>()
 
