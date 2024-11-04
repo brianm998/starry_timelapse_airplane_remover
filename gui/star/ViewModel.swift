@@ -261,9 +261,9 @@ public final class ViewModel {
             
             let acc = frame.imageAccessor
             
-            let prTask = Task.detached { acc.loadImage(type: .processed,  atSize: .preview)?.resizable() }
-            let opTask = Task.detached { acc.loadImage(type: .original,   atSize: .preview)?.resizable() }
-            let otTask = Task.detached { acc.loadImage(type: .original,   atSize: .thumbnail) }
+            let prTask = Task.detached { await acc.loadImage(type: .processed,  atSize: .preview)?.resizable() }
+            let opTask = Task.detached { await acc.loadImage(type: .original,   atSize: .preview)?.resizable() }
+            let otTask = Task.detached { await acc.loadImage(type: .original,   atSize: .thumbnail) }
             if let image = await prTask.value {
                 self.frames[frame.frameIndex].processedPreviewImage = image
             }
@@ -430,97 +430,19 @@ public final class ViewModel {
          */
 
         Task {
+            self.userPreferences.justOpened(filename: jsonConfigFilename) // make sure this works
+            
+            let config = try await Config.read(fromJsonFilename: jsonConfigFilename)
 
-            try await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
-
-                self.userPreferences.justOpened(filename: jsonConfigFilename) // make sure this works
-                
-                let config = try await Config.read(fromJsonFilename: jsonConfigFilename)
-                // overwrite global constants constant :( make this better
-                constants = Constants(detectionType: config.detectionType)
-
-                Log.d("loaded config \(config.imageSequenceDirname)")
-                
-                let imageSequence = try ImageSequence(dirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
-                                                      supportedImageFileTypes: config.supportedImageFileTypes)
-
-                
-                Log.d("loaded image sequence")
-                let callbacks = self.makeCallbacks()
-
-                if let imageSequenceSizeClosure = callbacks.imageSequenceSizeClosure {
-                    let imageSequenceSize = await imageSequence.filenames.count
-                    imageSequenceSizeClosure(imageSequenceSize)
-                }
-                
-                let imageInfo = try await imageSequence.getImageInfo()
-
-                IMAGE_WIDTH = Double(imageInfo.imageWidth)
-                IMAGE_HEIGHT = Double(imageInfo.imageHeight)
-                
-                Log.d("loaded imageInfo \(imageInfo)")
-
-                await MainActor.run {
-                    self.config = config
-                }
-
-                for (frameIndex, filename) in await imageSequence.filenames.enumerated() {
-                    taskGroup.addTask() {
-                        let basename = removePath(fromString: filename)
-                        let frame = try await FrameAirplaneRemover(with: config,
-                                                                   width: imageInfo.imageWidth,
-                                                                   height: imageInfo.imageHeight,
-                                                                   bytesPerPixel: imageInfo.imageBytesPerPixel,
-                                                                   callbacks: callbacks,
-                                                                   imageSequence: imageSequence,
-                                                                   atIndex: frameIndex,
-                                                                   outputFilename: "\(config.outputPath)/\(config.basename)",
-                                                                   baseName: basename,
-                                                                   outlierOutputDirname: config.outlierOutputDirname,
-                                                                   fullyProcess: false,
-                                                                   writeOutputFiles: true)
-                        
-                        if let callback = callbacks.frameCheckClosure {
-                            await MainActor.run {
-                                callback(frame)
-                            }
-                        }
-                        return frame
-                    }
-                }
-
-                var incomingFrames = await [FrameAirplaneRemover?](repeating: nil, count: imageSequence.filenames.count)
-                for try await frame in taskGroup {
-                    incomingFrames[frame.frameIndex] = frame
-                }
-
-                var frames: [FrameAirplaneRemover] = []
-
-                for frame in incomingFrames {
-                    if let frame {
-                        frames.append(frame)
-                    } else {
-                        fatalError("FUCK")
-                    }
-                }
-                
-                // doubly link them here
-                await doublyLink(frames: frames)
-            }
+            try await startup(with: config)
         }
     }
+
     
     @MainActor func startup(withNewImageSequence imageSequenceDirname: String) async throws {
 
-        /*
+        self.frameViewMode = .original
 
-         rewrite this path too, starting without a config
-
-         
-         
-         */
-        
-        let numConcurrentRenders: Int = ProcessInfo.processInfo.activeProcessorCount
         let shouldWriteOutlierGroupFiles = true // XXX see what happens
         
         // XXX copied from star.swift
@@ -561,19 +483,83 @@ public final class ViewModel {
                             writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
                             writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
 
+        try await startup(with: config)
+    }
+
+    private func startup(with config: Config) async throws {
         // overwrite global constants constant :( make this better
         constants = Constants(detectionType: config.detectionType)
-        
-        let callbacks = self.makeCallbacks()
-        Log.i("have config")
 
-        let eraser = try await NighttimeAirplaneRemover(with: config,
-                                                        callbacks: callbacks,
-                                                        processExistingFiles: true,
-                                                        isGUI: true)
+        try await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
+            
+            Log.d("loaded config \(config.imageSequenceDirname)")
+            
+            let imageSequence = try ImageSequence(dirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
+                                                  supportedImageFileTypes: config.supportedImageFileTypes)
 
-        self.eraser = eraser // XXX rename this crap
-        self.config = config
+            
+            Log.d("loaded image sequence")
+            let callbacks = self.makeCallbacks()
+
+            if let imageSequenceSizeClosure = callbacks.imageSequenceSizeClosure {
+                let imageSequenceSize = await imageSequence.filenames.count
+                imageSequenceSizeClosure(imageSequenceSize)
+            }
+            
+            let imageInfo = try await imageSequence.getImageInfo()
+
+            IMAGE_WIDTH = Double(imageInfo.imageWidth)
+            IMAGE_HEIGHT = Double(imageInfo.imageHeight)
+            
+            Log.d("loaded imageInfo \(imageInfo)")
+
+            await MainActor.run {
+                self.config = config
+            }
+
+            for (frameIndex, filename) in await imageSequence.filenames.enumerated() {
+                taskGroup.addTask() {
+                    let basename = removePath(fromString: filename)
+                    let frame = try await FrameAirplaneRemover(with: config,
+                                                               width: imageInfo.imageWidth,
+                                                               height: imageInfo.imageHeight,
+                                                               bytesPerPixel: imageInfo.imageBytesPerPixel,
+                                                               callbacks: callbacks,
+                                                               imageSequence: imageSequence,
+                                                               atIndex: frameIndex,
+                                                               outputFilename: "\(config.outputPath)/\(config.basename)",
+                                                               baseName: basename,
+                                                               outlierOutputDirname: config.outlierOutputDirname,
+                                                               fullyProcess: false,
+                                                               writeOutputFiles: true)
+                    
+                    if let callback = callbacks.frameCheckClosure {
+                        await MainActor.run {
+                            callback(frame)
+                        }
+                    }
+                    return frame
+                }
+            }
+
+            var incomingFrames = await [FrameAirplaneRemover?](repeating: nil, count: imageSequence.filenames.count)
+            for try await frame in taskGroup {
+                incomingFrames[frame.frameIndex] = frame
+            }
+
+            var frames: [FrameAirplaneRemover] = []
+
+            for frame in incomingFrames {
+                if let frame {
+                    frames.append(frame)
+                } else {
+                    fatalError("FUCK")
+                }
+            }
+            
+            // doubly link them here
+            await doublyLink(frames: frames)
+        }
     }
 
     @MainActor func makeCallbacks() -> Callbacks {

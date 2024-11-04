@@ -52,7 +52,7 @@ public protocol ImageAccess: Sendable {
 
     // load an image of some type and size for the GUI as a SwiftUI Image
     func loadImage(type imageType: FrameViewMode,
-                   atSize size: ImageDisplaySize) -> Image?
+                   atSize size: ImageDisplaySize) async -> Image?
 
     // bypass loading restrictions
     func loadInt(type imageType: FrameViewMode,
@@ -148,22 +148,26 @@ public struct ImageAccessor: ImageAccess, Sendable {
     }
 
     public func loadImage(type imageType: FrameViewMode,
-                          atSize size: ImageDisplaySize) -> Image?
+                          atSize size: ImageDisplaySize) async -> Image?
     {
         if let url = urlForImage(ofType: imageType, atSize: size) {
             if let image = NSImage(contentsOf: url) {
                 return Image(nsImage: image)
             } else {
-                Log.w("cannot create image from url \(url)")
+                if let image = try? await writeMissingImage(ofType: imageType, andSize: size) {
+                    return Image(nsImage: image)
+                } else {
+                    Log.w("cannot create image from url \(url)")
+                }
             }
         } else {
-            Log.w("cannot get url for image")
+            Log.w("cannot get url for image type \(imageType) atSize \(size)")
         }
         return nil
     }
 
-    nonisolated public func urlForImage(ofType imageType: FrameViewMode,
-                                        atSize size: ImageDisplaySize) -> URL?
+    public func urlForImage(ofType imageType: FrameViewMode,
+                            atSize size: ImageDisplaySize) -> URL?
     {
         if let filename = nameForImage(ofType: imageType, atSize: size) {
             if FileManager.default.fileExists(atPath: filename) {
@@ -583,9 +587,8 @@ public struct ImageAccessor: ImageAccess, Sendable {
         }
     }
     
-    private func createMissingImage(ofType type: FrameViewMode,
-                                    andSize size: ImageDisplaySize)
-      async throws -> PixelatedImage?
+    private func writeMissingImage(ofType type: FrameViewMode,
+                                   andSize size: ImageDisplaySize) async throws -> NSImage?
     {
         if let filename = nameForImage(ofType: type, atSize: size),
            let smallerSize = sizeOf(size),
@@ -601,12 +604,22 @@ public struct ImageAccessor: ImageAccess, Sendable {
 
             // write to file
             FileManager.default.createFile(atPath: filename,
-                                contents: dataToSave,
-                                attributes: nil)
+                                           contents: dataToSave,
+                                           attributes: nil)
 
+            return scaledImageData
+        }
+        return nil
+    }
+    
+    private func createMissingImage(ofType type: FrameViewMode,
+                                    andSize size: ImageDisplaySize)
+      async throws -> PixelatedImage?
+    {
+        if let scaledImageData = try await writeMissingImage(ofType: type, andSize: size) {
             if let cgImage = scaledImageData.cgImage(forProposedRect: nil,
-                                                context: nil,
-                                                hints: nil)
+                                                     context: nil,
+                                                     hints: nil)
             {
                 return PixelatedImage(cgImage)
             }
