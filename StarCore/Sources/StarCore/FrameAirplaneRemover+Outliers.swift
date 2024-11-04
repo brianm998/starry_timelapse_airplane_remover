@@ -108,8 +108,10 @@ extension FrameAirplaneRemover {
     }
 
     public func outliersLoaded() { self.outlierGroups != nil }
-    
+
     public func loadOutliers() async throws {
+        if isLoadingOutliers { return }
+        isLoadingOutliers = true
         if self.outlierGroups == nil {
             Log.d("frame \(frameIndex) loading outliers")
             if let outlierGroups = try await loadOutliersFromFile() {
@@ -144,6 +146,7 @@ extension FrameAirplaneRemover {
             }
             callbacks.frameOutliersLoadedCallback?(frameIndex, true)
         }
+        isLoadingOutliers = false
     }
 
     public func foreachOutlierGroupMulti(_ closure: @Sendable @escaping (OutlierGroup) async -> Void) async {

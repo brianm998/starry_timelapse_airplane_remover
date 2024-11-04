@@ -166,6 +166,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     private let completion: (() async -> Void)?
     
+    internal var isLoadingOutliers = false
+    
     public init(with config: Config,
                 width: Int,
                 height: Int,
