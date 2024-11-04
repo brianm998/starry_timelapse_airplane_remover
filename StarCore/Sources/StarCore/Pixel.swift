@@ -100,4 +100,10 @@ public struct Pixel {
             value = (UInt64(newValue) << 48) | (value & 0x0000FFFFFFFFFFFF)
         }
     }
+
+    public var intensity: UInt64 {
+        UInt64(self.red) +
+        UInt64(self.blue) +
+        UInt64(self.green)
+    }
 }

@@ -195,8 +195,14 @@ extension FrameAirplaneRemover {
                         paintPixel: Pixel)
     {
         var paintPixel = paintPixel
+        let op = image.readPixel(atX: x, andY: y)
+
+        // don't make the original image brighter at this pixel
+        // leave the original value there in this case
+        if op.intensity < paintPixel.intensity { return }
+        
         if alpha < 1 {
-            let op = image.readPixel(atX: x, andY: y)
+            // merge in original value
             paintPixel = Pixel(merging: paintPixel, with: op, atAlpha: alpha)
         }
 
@@ -210,6 +216,7 @@ extension FrameAirplaneRemover {
         } else if self.bytesPerPixel == 6 {
             data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
                                  with: [paintPixel.red, paintPixel.green, paintPixel.blue])
+
         } else if self.bytesPerPixel == 8 {
             data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
                                  with: [paintPixel.red,
