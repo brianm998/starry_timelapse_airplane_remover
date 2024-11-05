@@ -69,15 +69,19 @@ extension FrameAirplaneRemover {
     }
     
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool) async {
-        await foreachOutlierGroupMulti() { group in
-            await group.shouldPaint(.userSelected(shouldPaint))
+        await Task.detached {
+            await self.foreachOutlierGroupMulti() { group in
+                await group.shouldPaint(.userSelected(shouldPaint))
+            }
         }
     }
 
     public func userSelectUndecidedOutliers(toShouldPaint shouldPaint: Bool) async {
-        await foreachOutlierGroupMulti() { group in
-            if await group.shouldPaint() == nil {
-                await group.shouldPaint(.userSelected(shouldPaint))
+        await Task.detached {
+            await self.foreachOutlierGroupMulti() { group in
+                if await group.shouldPaint() == nil {
+                    await group.shouldPaint(.userSelected(shouldPaint))
+                }
             }
         }
     }

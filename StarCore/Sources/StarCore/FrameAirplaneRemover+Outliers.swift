@@ -23,18 +23,24 @@ You should have received a copy of the GNU General Public License along with sta
  
  */
 
+fileprivate let outliersFileSystemMonitor = FileSystemMonitor(max: 50)
+
 extension FrameAirplaneRemover {
 
 
     // loads outliers from a combination of the outliers.tiff image and the subtraction image,
     // if they are present
     public func loadOutliersFromFile() async throws -> OutlierGroups? {
-        do {
-            return try await loadOutliersFromBinaryFile()
-        } catch {
-            // XXX log here
+        try await outliersFileSystemMonitor.load() {
+            do {
+                // newer file format, default to this
+                return try await loadOutliersFromBinaryFile()
+            } catch {
+                // XXX log here
+            }
+            // still have stored sequences with this format
+            return try await loadOutliersFromImageFile()
         }
-        return try await loadOutliersFromImageFile()
     }
     
     public func loadOutliersFromBinaryFile() async throws -> OutlierGroups? {
@@ -113,6 +119,8 @@ extension FrameAirplaneRemover {
         if isLoadingOutliers { return }
         isLoadingOutliers = true
         if self.outlierGroups == nil {
+            // nil outlier groups means that we haven't tried to get outliers for this frame yet
+            callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
             Log.d("frame \(frameIndex) loading outliers")
             if let outlierGroups = try await loadOutliersFromFile() {
                 Log.d("frame \(frameIndex) loading outliers from file")
@@ -144,7 +152,7 @@ extension FrameAirplaneRemover {
                 
                 // perhaps apply validation image to outliers here if possible
             }
-            callbacks.frameOutliersLoadedCallback?(frameIndex, true)
+            callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
         }
         isLoadingOutliers = false
     }

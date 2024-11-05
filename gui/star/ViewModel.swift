@@ -300,13 +300,13 @@ public final class ViewModel {
                 }
             }
             if haveAll {
-                Log.d("WE HAVE THEM ALL")
+//                Log.d("WE HAVE THEM ALL")
 //                await MainActor.run {
                     self.initialLoadInProgress = false
 //                }
             }
         }
-        Log.d("set self.frames[\(frame.frameIndex)].frame")
+        //Log.d("set self.frames[\(frame.frameIndex)].frame")
 
         refresh(frame: frame)
     }
@@ -599,7 +599,7 @@ public final class ViewModel {
     }
 
     @MainActor func addToViewModel(frame newFrame: FrameAirplaneRemover) {
-        Log.d("addToViewModel(frame: \(newFrame.frameIndex))")
+        //Log.d("addToViewModel(frame: \(newFrame.frameIndex))")
 
         if self.config == nil {
             // XXX why this doesn't work initially befounds me,
@@ -675,12 +675,12 @@ public extension ViewModel {
 
         if let frame = frameView.frame {
             // update the real actor in the background
-            Task {
+            Task.detached {
                 await frame.userSelectAllOutliers(toShouldPaint: shouldPaint)
 
                 if renderImmediately {
                     // XXX make render here an option in settings
-                    await render(frame: frame) {
+                    await self.render(frame: frame) {
                         await MainActor.run {
                             self.refresh(frame: frame)
                         }

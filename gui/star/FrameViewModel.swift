@@ -21,7 +21,7 @@ public class FrameViewModel {
 
     var frameState: FrameProcessingState?
 
-    var outliersLoaded: Bool = false
+    var outliersLoaded: OutlierLoadingState = .unloaded
     
     private var cancelBag = Set<AnyCancellable>()
 

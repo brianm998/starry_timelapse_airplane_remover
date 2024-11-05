@@ -117,7 +117,6 @@ public enum FrameProcessingState: Int,
     }
 
     public var color: Color {
-        print("FUCKING color for state \(self)")
         switch self {
         case .unprocessed:
             return .red

@@ -182,7 +182,7 @@ public actor OutlierGroup: CustomStringConvertible,
     }
     
     public func shouldPaint(_ shouldPaint: PaintReason) async {
-        Log.d("\(self) should paint \(shouldPaint) self.frame \(self.frame)")
+        //Log.d("\(self) should paint \(shouldPaint) self.frame \(self.frame)")
         self._shouldPaint = shouldPaint
 
         // XXX update frame that it's different 

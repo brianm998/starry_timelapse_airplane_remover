@@ -12,10 +12,11 @@ struct ImageSequenceView: View {
         @Bindable var viewModel = viewModel
         return VStack {
             
-            let shouldShowProgress =
+            let shouldShowProgress = // XXX fuck this
+              false && (
               viewModel.renderingCurrentFrame            ||
               viewModel.updatingFrameBatch               ||
-              viewModel.renderingAllFrames
+              viewModel.renderingAllFrames)
             
             
             // selected frame 
@@ -23,21 +24,6 @@ struct ImageSequenceView: View {
                 FrameView(interactionMode: $viewModel.interactionMode,
                           showFullResolution: $viewModel.showFullResolution)
                   .frame(maxWidth: .infinity, alignment: .center)
-                  .overlay(
-                    ProgressView() // XXX this overlay sucks, change it
-                      .scaleEffect(8, anchor: .center) // this is blocky scaled up 
-                      .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
-                      .frame(maxWidth: 200, maxHeight: 200)
-                      .opacity(shouldShowProgress ? 0.8 : 0)
-                  )
-
-                  .overlay(
-                    ProgressView() // XXX this overlay sucks, change it
-                      .scaleEffect(18, anchor: .center) // this is blocky scaled up 
-                      .progressViewStyle(CircularProgressViewStyle(tint: .green))
-                      .frame(maxWidth: 200, maxHeight: 200)
-                      .opacity(viewModel.inTransition || viewModel.loadingOutliers ? 0.8 : 0)
-                  )
                 
                 // show progress bars on top of the image at the bottom
                 ProgressBars()
@@ -45,7 +31,7 @@ struct ImageSequenceView: View {
             Spacer()
             // buttons below the selected frame 
             BottomControls()
-              .disabled(self.viewModel.inTransition || self.viewModel.loadingOutliers)
+//              .disabled(self.viewModel.inTransition || self.viewModel.loadingOutliers)
             
             if viewModel.interactionMode == .edit,
                viewModel.showFilmstrip

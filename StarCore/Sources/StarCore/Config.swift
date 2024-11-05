@@ -204,6 +204,12 @@ public struct Config: Codable, Sendable {
     }
 }
 
+public enum OutlierLoadingState: Sendable {
+    case unloaded
+    case loading
+    case loaded
+}
+
 public struct Callbacks: Sendable {
     
     public var updatable: UpdatableLog?
@@ -218,7 +224,7 @@ public struct Callbacks: Sendable {
     // returns the total full size of the image sequence
     public var imageSequenceSizeClosure: (@Sendable (Int) -> Void)?
 
-    public var frameOutliersLoadedCallback: (@Sendable (Int, Bool) -> Void)?
+    public var frameOutliersLoadedCallback: (@Sendable (Int, OutlierLoadingState) -> Void)?
     
     public init() { }
 }

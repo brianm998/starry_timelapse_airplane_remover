@@ -16,10 +16,21 @@ struct FilmstripImageView: View {
                     Text("\(frameIndex)").foregroundColor(.white)
                       .frame(alignment: .leading)
                     Spacer()
-                    if frameView.outliersLoaded {
+                    switch frameView.outliersLoaded {
+                    case .unloaded:
+                        // show nothing when unloaded
+                        Group { }
+
+                    case .loading:
+                        Image(systemName: "line.diagonal")
+                          .foregroundColor(.yellow)
+                          .animation(Animation.easeInOut(duration:1)
+                                       .repeatForever(autoreverses:true))
+                    case .loaded:
                         Image(systemName: "line.diagonal")
                           .foregroundColor(.green)
                     }
+
                     Spacer()
                       .frame(maxWidth: 6)
                       .frame(alignment: .trailing)

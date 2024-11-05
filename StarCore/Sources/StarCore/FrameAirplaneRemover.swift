@@ -123,7 +123,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     // when this happens, re-calculate and send to all the combine subjects
     public func markAsChanged() async {
-        Log.d("mark as changed")
+        //Log.d("mark as changed")
         self.state = .userModified
         //Task { await self.updateCombineSubjects() }
         await self.updateCombineSubjects()
