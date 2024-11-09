@@ -63,6 +63,9 @@ public protocol ImageAccess: Sendable {
 
     func urlForImage(ofType imageType: FrameViewMode,
                      atSize size: ImageDisplaySize) -> URL?
+
+    func writeMissingImage(ofType type: FrameViewMode,
+                           andSize size: ImageDisplaySize) async throws
 }
 
 // read and write access to different image types for a given frame
@@ -154,7 +157,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
             if let image = NSImage(contentsOf: url) {
                 return Image(nsImage: image)
             } else {
-                if let image = try? await writeMissingImage(ofType: imageType, andSize: size) {
+                if let image = try? await makeMissingImage(ofType: imageType, andSize: size) {
                     return Image(nsImage: image)
                 } else {
                     Log.w("cannot create image from url \(url)")
@@ -173,7 +176,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
             if FileManager.default.fileExists(atPath: filename) {
                 return URL(fileURLWithPath: filename)
             } else {
-                Log.w("file does not exist at \(filename)")
+                Log.w("file does not exist at \(filename)") // XXX DOH!
             }
         } else {
             Log.w("no filename for type \(imageType) at size \(size)")
@@ -587,8 +590,14 @@ public struct ImageAccessor: ImageAccess, Sendable {
         }
     }
     
-    private func writeMissingImage(ofType type: FrameViewMode,
-                                   andSize size: ImageDisplaySize) async throws -> NSImage?
+    public func writeMissingImage(ofType type: FrameViewMode,
+                                  andSize size: ImageDisplaySize) async throws
+    {
+        _ = try await makeMissingImage(ofType: type, andSize: size)
+    }
+    
+    public func makeMissingImage(ofType type: FrameViewMode,
+                                  andSize size: ImageDisplaySize) async throws -> NSImage?
     {
         if let filename = nameForImage(ofType: type, atSize: size),
            let smallerSize = sizeOf(size),
@@ -616,7 +625,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
                                     andSize size: ImageDisplaySize)
       async throws -> PixelatedImage?
     {
-        if let scaledImageData = try await writeMissingImage(ofType: type, andSize: size) {
+        if let scaledImageData = try await makeMissingImage(ofType: type, andSize: size) {
             if let cgImage = scaledImageData.cgImage(forProposedRect: nil,
                                                      context: nil,
                                                      hints: nil)
