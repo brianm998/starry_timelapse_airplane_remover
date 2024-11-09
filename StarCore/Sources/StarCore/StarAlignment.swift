@@ -133,7 +133,7 @@ push enter
             // assuming same volume :(
             do {
                 try ObjC.catchException {
-                    try shellOut(to: "ln", arguments: [referenceImageName, outputFilename])
+                    try shellOut(to: "ln", arguments: [alignmentImageName, outputFilename])
                 }
                 return outputFilename
             } catch {
@@ -149,7 +149,7 @@ push enter
                 
                 do {
                     try ObjC.catchException {
-                        try shellOut(to: "cp", arguments: [referenceImageName, outputFilename])
+                        try shellOut(to: "cp", arguments: [alignmentImageName, outputFilename])
                     }
                     return outputFilename
                 } catch {
