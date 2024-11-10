@@ -158,18 +158,14 @@ public struct ImageAccessor: ImageAccess, Sendable {
     public func loadImage(type imageType: FrameViewMode,
                           atSize size: ImageDisplaySize) async -> Image?
     {
-        if let url = urlForImage(ofType: imageType, atSize: size) {
-            if let image = NSImage(contentsOf: url) {
-                return Image(nsImage: image)
-            } else {
-                if let image = try? await makeMissingImage(ofType: imageType, andSize: size) {
-                    return Image(nsImage: image)
-                } else {
-                    Log.w("cannot create image from url \(url)")
-                }
-            }
+        if let url = urlForImage(ofType: imageType, atSize: size),
+           let image = NSImage(contentsOf: url)
+        {
+            return Image(nsImage: image)
+        } else if let image = try? await makeMissingImage(ofType: imageType, andSize: size) {
+            return Image(nsImage: image)
         } else {
-            Log.w("cannot get url for image type \(imageType) atSize \(size)")
+            Log.w("cannot load image of type \(imageType) at size \(size)")
         }
         return nil
     }
