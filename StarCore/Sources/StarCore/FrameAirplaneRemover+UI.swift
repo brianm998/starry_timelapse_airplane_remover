@@ -69,7 +69,7 @@ extension FrameAirplaneRemover {
     }
     
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool) async {
-        await Task.detached {
+        Task.detached {
             await self.foreachOutlierGroupMulti() { group in
                 await group.shouldPaint(.userSelected(shouldPaint))
             }
@@ -77,7 +77,7 @@ extension FrameAirplaneRemover {
     }
 
     public func userSelectUndecidedOutliers(toShouldPaint shouldPaint: Bool) async {
-        await Task.detached {
+        Task.detached {
             await self.foreachOutlierGroupMulti() { group in
                 if await group.shouldPaint() == nil {
                     await group.shouldPaint(.userSelected(shouldPaint))
