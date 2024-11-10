@@ -51,26 +51,35 @@ struct BottomLeftView: View {
                 GridRow {
                     Text("I will see")
                       .gridColumnAlignment(.trailing) 
+
+                    let foobar = 134.0/255.0
+                    let foobar2 = 138.0/255.0
                     
-                    Picker("", selection: $viewModel.frameViewMode) {
-                        ForEach(FrameViewMode.allCases, id: \.self) { value in
+                    ViewModePicker(selection: $viewModel.frameViewMode) { value, isEnabled in
+                        if viewModel.currentFrameView.hasImage(type: value) {
                             Text(value.shortName)
-                              .help(value.localizedName)
-                              .font(.system(size: 8))
-                              .tag(value)
+                              .foregroundColor(isEnabled ? .black : .gray)
+                              .padding(4)
+                              .onTapGesture { _ in
+                                  viewModel.frameViewMode = value
+                              }
+                        } else {
+                            Text(value.shortName)
+                              .foregroundColor(isEnabled ? .white : .gray)
+                              .padding(4)
                         }
                     }
                       .disabled(viewModel.videoPlaying)
                       .help("""
-                              Show each frame as either the original   
+                               Show each frame as either the original   
                               or with star processing applied.
                               """)
-                      .frame(width: 820)
-                      .help("show original or processed frame")
-                      .pickerStyle(.segmented)
+                      .background(Color(red: foobar, green: foobar, blue: foobar2))
+                      .cornerRadius(5)
+                    
                     Spacer().frame(maxWidth: 6, maxHeight: 10)
                     Text("frames")
-                      .gridColumnAlignment(.leading) 
+                    .gridColumnAlignment(.leading)
                 }
             }
             
@@ -86,3 +95,4 @@ struct BottomLeftView: View {
         }
     }
 }
+

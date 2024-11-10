@@ -68,7 +68,7 @@ public struct FrameImageView: View {
 
             let FU = viewModel
             Task {
-                let _ = try await frame.loadOutliers()
+                let _ = try await frame.loadOutliers(loadOnly: true)
                 await self.viewModel.setOutlierGroups(forFrame: frame)
                 await MainActor.run {
                     frameView.loadingOutlierViews = false

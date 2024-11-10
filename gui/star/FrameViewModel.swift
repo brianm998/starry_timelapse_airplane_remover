@@ -16,6 +16,8 @@ public class FrameViewModel {
     }
 
     let viewModel: ViewModel
+
+    var existingImages: [FrameViewMode] = []
     
     var frameObserver = FrameObserver()
 
@@ -27,6 +29,13 @@ public class FrameViewModel {
 
     var isCurrentFrame: Bool = false
 
+    func hasImage(type: FrameViewMode) -> Bool {
+        for existingType in existingImages {
+            if existingType == type { return true }
+        }
+        return false
+    }
+    
     let frameIndex: Int
     var frame: FrameAirplaneRemover? {
         didSet {
@@ -99,12 +108,24 @@ public class FrameViewModel {
                 self.processedPreviewImage
             default: 
                 if let frame {
+                    /*
+                    if frame.imageAccessor.imageExists(ofType: type, atSize: .original),
+                       !frame.imageAccessor.imageExists(ofType: .aligned, atSize: .preview)
+                    {
+                        Task.detached {
+                            try? await frame.imageAccessor.writeMissingImage(ofType: .aligned, andSize: .preview)
+                        }
+                    }*/
+
+                    
                     AsyncImage(url: frame.imageAccessor.urlForImage(ofType: type, atSize: .preview)) { image in
                         image.resizable()
                     } placeholder: {
                         initialImage
                     }
                 } else {
+
+                    
                     initialImage
                 }
             }

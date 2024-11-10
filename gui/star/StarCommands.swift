@@ -21,6 +21,8 @@ struct StarCommands: Commands {
             /*
             contentView.outlierInfoButton()
              */
+            FindOutliersOnCurrentFrameButton()            
+              .environment(viewModel)
             ApplyAllDecisionTreeButton()
               .environment(viewModel)
             ApplyDecisionTreeButton()

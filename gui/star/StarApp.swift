@@ -12,12 +12,20 @@ import StarDecisionTrees
 
 /*
 
+ - slider to allow merging frame with black background to see outliers easier and still see frame
+ - allow selections that are not rectangular
+ * allow UI to start outlier detection for a single frame
+ - make lower views less cluttered
+ - add render this frame button
+ - add progress view for flimstrip, and edit view
+ * add frame state to edit view
+ 
  UI Improvements:
-  - scroll back and forth through frames
-  - don't finish frames until some number later
-  - improve speed when still processing files
+  * scroll back and forth through frames
+  * don't finish frames until some number later
+  * improve speed when still processing files
   - overlier hover to give paint reason and size
-  - feature to split outlier groups apart
+  * feature to split outlier groups apart
   - add ability to have selection work for just part of outlier group, or all like now
   - have streak detection take notice of user choices before processing further frames
 
@@ -25,20 +33,20 @@ import StarDecisionTrees
 
   - fix bug where zooming and selection gestures correspond
   - allow dark/light themes
-  - the filmstrip doesn't update very quickly on its own
-  - make it overwrite existing output files
-  - fix final queue usage from UI so it doesn't crash by trying to save the same frame twice
+  * the filmstrip doesn't update very quickly on its own
+  * make it overwrite existing output files
+  * fix final queue usage from UI so it doesn't crash by trying to save the same frame twice
 
   - allow showing changed frames too
 
-  - try a play button for playing a preview
-  - of both rendered and original
+  * try a play button for playing a preview
+  * of both rendered and original
 
-  - outlier groups get wrong when scrolling
+  * outlier groups get wrong when scrolling
     - kindof fixed it
 
   - let shift + forward and back move 10-100 spaces instead of one
-  - shortcut to go to the beginning and to the end of the sequence
+  * shortcut to go to the beginning and to the end of the sequence
   - play button with frame rate slider
 
   - rename previews/scrub and add and preview size to config
@@ -47,7 +55,7 @@ import StarDecisionTrees
 
   - add a button that calls frame.outlierGroups() on all frames to load their outliers
 
-  - have filmstrip show outlier group load status somehow
+  * have filmstrip show outlier group load status somehow
   
   NEW UI:
 
@@ -128,8 +136,6 @@ struct StarApp: App {
                   // XXX don't really care it's dismissed
               }
               .environment(viewModel)
-        }.commands {
-           StarCommands(viewModel: viewModel)
         }
         // this shows up as stars and wand in the upper right of the menu bar
         // always there when app is running, even when another app is used

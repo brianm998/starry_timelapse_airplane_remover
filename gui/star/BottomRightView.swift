@@ -13,8 +13,17 @@ struct BottomRightView: View {
         
         return HStack() {
             @Bindable var viewModel = viewModel
+
             if viewModel.interactionMode == .edit {
                 let frameView = viewModel.currentFrameView
+
+                if let frameState = frameView.frameState {
+                    Text("frame is \(frameState.message)")
+                      .foregroundColor(frameState.color)
+                    Spacer()
+                      .frame(maxWidth: 20)
+                }
+                
                 VStack(alignment: .trailing) {
                     let numChanged = viewModel.numberOfFramesChanged
                     if numChanged > 0 {

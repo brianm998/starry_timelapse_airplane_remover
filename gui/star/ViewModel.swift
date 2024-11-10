@@ -255,12 +255,24 @@ public final class ViewModel {
 
             var outlierTask: Task<Void,Never>?
 
-            if self.frames[frame.frameIndex].outlierViews == nil {
-                outlierTask = Task { await self.setOutlierGroups(forFrame: frame) }
-            }
+//            if self.frames[frame.frameIndex].outlierViews == nil {
+//                outlierTask = Task { await self.setOutlierGroups(forFrame: frame) }
+//            }
             
             let acc = frame.imageAccessor
-            
+/*
+            Task.detached {
+                // check to see if the aligned image exists, but the preview does not
+                if acc.imageExists(ofType: .aligned, atSize: .original),
+                   !acc.imageExists(ofType: .aligned, atSize: .preview)
+                {
+                    // make an aligned preview
+                    // other previews are made in loadImage, but we don't want to always
+                    // load all full size aligned images, so we make previews here
+                    try? await acc.writeMissingImage(ofType: .aligned, andSize: .preview)
+                }
+            }
+  */          
             let prTask = Task.detached { await acc.loadImage(type: .processed,  atSize: .preview)?.resizable() }
             let opTask = Task.detached { await acc.loadImage(type: .original,   atSize: .preview)?.resizable() }
             let otTask = Task.detached { await acc.loadImage(type: .original,   atSize: .thumbnail) }
@@ -275,6 +287,17 @@ public final class ViewModel {
             }
 
             if let outlierTask { await outlierTask.value }
+
+            var existingImages: [FrameViewMode] = []
+            
+            // set list of view modes for this frame
+            for type in FrameViewMode.allCases {
+                if acc.imageExists(ofType: type, atSize: .preview) {
+                    existingImages.append(type)
+                }
+            }
+
+            self.frames[frame.frameIndex].existingImages = existingImages
         }
     }
 
@@ -584,6 +607,7 @@ public final class ViewModel {
         callbacks.frameStateChangeCallback = { frame, state in
             Task { @MainActor in
                 self.frames[frame.frameIndex].frameState = state
+                self.refresh(frame: frame)
             }
         }
 
@@ -692,6 +716,28 @@ public extension ViewModel {
         }
     }
 
+    func findOutliers(frame: FrameAirplaneRemover) async {
+        let frameView = self.frames[frame.frameIndex]
+        frameView.outlierViews = nil
+        //frameView.loadingOutliersViews = true
+        do {
+            try await frame.findOutliers()
+            
+            await frame.applyDecisionTreeToAllOutliers()
+            // apply decision tree?
+
+            await self.render(frame: frame) {
+                Log.d("doh")
+                Task {
+                    await self.refresh(frame: frame)
+                    await self.setOutlierGroups(forFrame: frame)
+                }
+            }
+        } catch {
+            Log.e("error finding outliers for frame \(frame.frameIndex): \(error)")
+        }
+    }
+    
     func render(frame: FrameAirplaneRemover, closure: (@Sendable () async -> Void)? = nil) async {
         self.renderingCurrentFrame = true // XXX might not be right anymore
         await self.frameSaveQueue.saveNow(frame: frame) {
