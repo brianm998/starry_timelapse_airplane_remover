@@ -56,6 +56,7 @@ struct InitialView: View {
             }
         }
           .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+          .background(viewModel.backgroundColor)
           .onAppear {
               if viewModel.userPreferences.sortedSequenceList.count > 0 {
                   previously_opened_sheet_showing_item = viewModel.userPreferences.sortedSequenceList[0]

@@ -16,13 +16,6 @@ struct BottomRightView: View {
 
             if viewModel.interactionMode == .edit {
                 let frameView = viewModel.currentFrameView
-
-                if let frameState = frameView.frameState {
-                    Text("frame is \(frameState.message)")
-                      .foregroundColor(frameState.color)
-                    Spacer()
-                      .frame(maxWidth: 20)
-                }
                 
                 VStack(alignment: .trailing) {
                     let numChanged = viewModel.numberOfFramesChanged
@@ -36,6 +29,27 @@ struct BottomRightView: View {
                           .foregroundColor(.green)
                     }
                 }
+
+                if let frameState = frameView.frameState {
+                    if frameState != .complete,
+                       frameView.outlierViews != nil
+                    {
+                        Button() {
+                            Task {
+                                if let frame = viewModel.currentFrame {
+                                    await viewModel.render(frame: frame, closure: nil)
+                                }
+                            }
+                        } label: {
+                            Text("Render this Frame")
+                        }
+                    }
+                    Text("frame is \(frameState.message)")
+                      .foregroundColor(frameState.color)
+                    Spacer()
+                      .frame(maxWidth: 20)
+                }
+
                 VStack {
                     EditableFrameNumberView()
                     if let _ = frameView.outlierViews {

@@ -66,10 +66,7 @@ extension FrameAirplaneRemover {
         Log.d("frame \(self.frameIndex) DONE writeOutlierValuesCSV")
     }
 
-    // write out a directory of individual OutlierGroup binaries
-    // for each outlier in this frame
-    // large, still not fast, but lots of data
-    public func writeOutliersBinary() async {
+    public func writeOutliersPaintReasons() async {
         if config.writeOutlierGroupFiles {
             do {
                 try await fileSystemMonitor.save() {

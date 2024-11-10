@@ -150,7 +150,7 @@ public final class ViewModel {
     // causes tapping an outlier to open a dialog with multiple choices
     var multiChoice = false
 
-    var backgroundColor: Color = .gray
+    var backgroundColor = Color(red: 0.4, green: 0.4, blue: 0.4)
 
     var renderingAllFrames = false
     var updatingFrameBatch = false
@@ -555,7 +555,7 @@ public final class ViewModel {
                                                                outlierOutputDirname: config.outlierOutputDirname,
                                                                fullyProcess: false,
                                                                writeOutputFiles: true)
-                    
+
                     if let callback = callbacks.frameCheckClosure {
                         await MainActor.run {
                             callback(frame)
@@ -722,9 +722,7 @@ public extension ViewModel {
         //frameView.loadingOutliersViews = true
         do {
             try await frame.findOutliers()
-            
-            await frame.applyDecisionTreeToAllOutliers()
-            // apply decision tree?
+            try await frame.maybeApplyOutlierGroupClassifier()
 
             await self.render(frame: frame) {
                 Log.d("doh")

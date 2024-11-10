@@ -22,7 +22,7 @@ You should have received a copy of the GNU General Public License along with sta
 extension FrameAirplaneRemover {
     
     public func applyDecisionTreeToAutoSelectedOutliers() async {
-        if let classifier = currentClassifier {
+        if let classifier = await currentClassifier.get() {
             await foreachOutlierGroupMulti() { group in
                 var apply = true
                 if let shouldPaint = await group.shouldPaint() {
@@ -52,12 +52,14 @@ extension FrameAirplaneRemover {
 
     public func applyDecisionTreeToAllOutliers() async {
         //Log.d("frame \(self.frameIndex) applyDecisionTreeToAll \(self.outlierGroups?.members.count ?? 0) Outliers")
-        if let classifier = currentClassifier {
-            let startTime = NSDate().timeIntervalSince1970
+        let startTime = NSDate().timeIntervalSince1970
+        if let classifier = await currentClassifier.get() {
             await foreachOutlierGroupMulti() { group in
                 if await group.shouldPaint() == nil {
                     // only apply classifier when no other classification is otherwise present
-                    await group.shouldPaint(.fromClassifier(await classifier.asyncClassification(of: group)))
+                    let featureData = await group.featureData()
+                    let classification = classifier.classification(of: featureData)
+                    await group.shouldPaint(.fromClassifier(classification))
                 }
             }
             let endTime = NSDate().timeIntervalSince1970

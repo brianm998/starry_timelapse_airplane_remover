@@ -18,9 +18,8 @@ struct StarCommands: Commands {
             ClearUndecidedButton()
               .environment(viewModel)
               .keyboardShortcut("k", modifiers: [])
-            /*
-            contentView.outlierInfoButton()
-             */
+            ReProcessCurrentFrameButton()
+              .environment(viewModel)
             FindOutliersOnCurrentFrameButton()            
               .environment(viewModel)
             ApplyAllDecisionTreeButton()
@@ -29,6 +28,7 @@ struct StarCommands: Commands {
               .environment(viewModel)
             RenderCurrentFrameButton()
               .environment(viewModel)
+              .keyboardShortcut("r", modifiers: [])
             RenderAllFramesButton()
               .environment(viewModel)
             LoadAllOutliersButton(loadingType: .fromCurrentFrame)

@@ -59,10 +59,10 @@ public enum FrameProcessingState: Int,
     case writingOutputFile
     case complete
 
-    var message: String {
+    public var message: String {
         switch self {
         case .unprocessed:
-            return ""
+            return "unprocessed"
         case .starAlignment:
             return "aligning stars"
         case .subtractingNeighbor:
@@ -110,9 +110,9 @@ public enum FrameProcessingState: Int,
         case .painting2:
             return "painting"
         case .writingOutputFile:
-            return "frames writing to disk"
+            return "writing to disk"
         case .complete:
-            return "frames complete"
+            return "complete"
         }
     }
 

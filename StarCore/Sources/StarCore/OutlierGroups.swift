@@ -343,24 +343,27 @@ public actor OutlierGroups {
 
     // only writes the paint reasons now, outlier image is written elsewhere
     public func write(to dir: String) async throws {
-        Log.d("writing  \(self.members.count) outlier groups for frame \(self.frameIndex) to binary file")
         let frameDir = "\(dir)/\(frameIndex)"
+        let outlierGroupPaintDataFilename = "\(frameDir)/OutlierGroupPaintData.json"
+        Log.d("frame \(frameIndex) writing outlier group paint data to \(outlierGroupPaintDataFilename)")
         
         mkdir(frameDir)
 
         // data to save for paint reasons for all outliers in this frame
         var outlierGroupPaintData: [UInt16:PaintReason] = [:]
+
+        Log.d("frame \(frameIndex) has \(members.count) members")
         
         for group in members.values {
             // collate paint reasons for each group
             if let shouldPaint = await group.shouldPaint() {
+                Log.d("frame \(frameIndex) group \(group.id) shouldPaint \(shouldPaint)")
                 outlierGroupPaintData[group.id] = shouldPaint
             }
         }
 
         // write outlier paint reason json here 
         
-        let outlierGroupPaintDataFilename = "\(frameDir)/OutlierGroupPaintData.json"
 
         let encoder = JSONEncoder()
 //            encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
@@ -371,12 +374,13 @@ public actor OutlierGroups {
 
         if FileManager.default.fileExists(atPath: outlierGroupPaintDataFilename) {
             try FileManager.default.removeItem(atPath: outlierGroupPaintDataFilename)
-        } 
+        }
+        let contents = try encoder.encode(outlierGroupPaintData)
         FileManager.default.createFile(atPath: outlierGroupPaintDataFilename,
-                               contents: try encoder.encode(outlierGroupPaintData),
+                               contents: contents,
                                attributes: nil)
         
-        Log.d("wrote  \(self.members.count) outlier groups for frame \(self.frameIndex) to binary file")
+        Log.d("frame \(frameIndex) wrote outlier group paint data to \(outlierGroupPaintDataFilename): \(contents)")
     }
 
     // outputs an 8 bit monochrome image that contains a white

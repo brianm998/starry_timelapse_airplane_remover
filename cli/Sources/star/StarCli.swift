@@ -238,9 +238,10 @@ struct StarCli: AsyncParsableCommand {
 
         var callbacks = Callbacks()
         
-        // gui should do this too
-        
-        StarCore.currentClassifier = OutlierGroupForestClassifier_13227c6d()
+        // gui has to do this too
+        await StarCore.currentClassifier.set() {
+            OutlierGroupForestClassifier_4d3542f6()
+        }
 
         if version {
             print("""

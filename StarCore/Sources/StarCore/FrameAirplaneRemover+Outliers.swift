@@ -42,6 +42,10 @@ extension FrameAirplaneRemover {
             return try await loadOutliersFromImageFile()
         }
     }
+
+    public var blobBinaryFilename: String {
+        "\(outlierOutputDirname)/\(frameIndex)/\(BlobBinarySaver.outlierBinaryFilename)"
+    }
     
     public func loadOutliersFromBinaryFile() async throws -> OutlierGroups? {
         let dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
@@ -113,9 +117,9 @@ extension FrameAirplaneRemover {
         self.set(state: .readyForInterFrameProcessing)
     }
 
-    public func outliersLoaded() { self.outlierGroups != nil }
+//    public func outliersLoaded() { self.outlierGroups != nil }
 
-    public func loadOutliers() async throws {
+    public func loadOutliers(loadOnly: Bool = false) async throws {
         if isLoadingOutliers { return }
         isLoadingOutliers = true
         if self.outlierGroups == nil {
@@ -137,7 +141,7 @@ extension FrameAirplaneRemover {
                 Log.i("loaded \(String(describing: await self.outlierGroups?.getMembers().count)) outlier groups for frame \(frameIndex)")
                 await self.updateCombineSubjects()
                 
-            } else {
+            } else if !loadOnly {
                 Log.d("frame \(frameIndex) calculating outliers")
                 self.outlierGroups = OutlierGroups(frameIndex: frameIndex,
                                                    members: [:])
@@ -155,6 +159,14 @@ extension FrameAirplaneRemover {
             callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
         }
         isLoadingOutliers = false
+    }
+
+    public func foreachOutlierGroup(_ closure: @Sendable (OutlierGroup) async -> Void) async {
+        if let outlierGroups {
+            for (_, group) in await outlierGroups.getMembers() {
+                await closure(group)
+            }
+        } 
     }
 
     public func foreachOutlierGroupMulti(_ closure: @Sendable @escaping (OutlierGroup) async -> Void) async {
@@ -241,7 +253,7 @@ extension FrameAirplaneRemover {
             case .eightBit(let validationArr):
                 await classifyOutliers(with: validationArr)
                 shouldUseDecisionTree = false
-              await self.markAsChanged()
+                await self.markAsChanged()
                 
             case .sixteenBit(_):
                 Log.e("frame \(frameIndex) cannot load 16 bit validation image")
@@ -346,11 +358,18 @@ extension FrameAirplaneRemover {
 
             try await outlierGroups?.writeOutliersBinary(to: frame_outliers_dirname)
 
-            updateUserSlices(with: boundingBox)
+            await updateUserSlices(with: boundingBox)
         }
     }
 
-    private func updateUserSlices(with newSlice: BoundingBox) {
+    private func updateUserSlices(with newSlice: BoundingBox) async {
+
+        if userSlices == nil { await self.loadUserSlices() }
+
+        guard let userSlices else { return }
+        
+        // XXX update this to load them first if not present
+        
         var newSlices: [BoundingBox] = [newSlice]
 
         // append bounding box to this frame's razor list
@@ -367,6 +386,7 @@ extension FrameAirplaneRemover {
     }
     
     public func saveUserSlices() {
+        guard let userSlices else { return }
         let encoder = JSONEncoder()
         do {
             let jsonData = try encoder.encode(self.userSlices)

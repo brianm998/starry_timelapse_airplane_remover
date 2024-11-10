@@ -66,6 +66,11 @@ public protocol ImageAccess: Sendable {
 
     func writeMissingImage(ofType type: FrameViewMode,
                            andSize size: ImageDisplaySize) async throws
+
+    func deleteImage(ofType imageType: FrameViewMode,
+                     atSize size: ImageDisplaySize) throws
+
+    func deleteAllImages()
 }
 
 // read and write access to different image types for a given frame
@@ -589,6 +594,27 @@ public struct ImageAccessor: ImageAccess, Sendable {
             return thumbnailSize
         }
     }
+
+    public func deleteImage(ofType imageType: FrameViewMode,
+                            atSize size: ImageDisplaySize) throws
+    {
+        if let filename = nameForImage(ofType: imageType, atSize: size) {
+            try FileManager.default.removeItem(atPath: filename)
+        }
+    }
+
+  public func deleteAllImages() {    // XXX except for original
+        for type in FrameViewMode.allCases {
+            switch type {
+            case .original:
+                break           // don't delete the orignal images
+
+            default:
+                try? deleteImage(ofType: type, atSize: .original)
+                try? deleteImage(ofType: type, atSize: .preview)
+            }
+        }
+    }
     
     public func writeMissingImage(ofType type: FrameViewMode,
                                   andSize size: ImageDisplaySize) async throws
@@ -635,6 +661,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
         }
         return nil
     }
+
     
 }
 

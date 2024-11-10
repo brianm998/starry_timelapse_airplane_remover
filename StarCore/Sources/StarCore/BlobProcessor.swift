@@ -417,7 +417,7 @@ public class BlobProcessor {
         
         var maxKey: UInt16 = 0
         
-        for slice in await frame.userSlices {
+        for slice in await frame.getUserSlices() {
             var newBlobPixels: Set<SortablePixel> = []
             for (key, blob) in blobMap {
                 if key > maxKey { maxKey = key }

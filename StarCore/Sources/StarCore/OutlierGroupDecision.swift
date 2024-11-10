@@ -17,7 +17,19 @@ public enum DecisionSplitType: String, Sendable {
     // XXX others ???
 }
 
-nonisolated(unsafe) public var currentClassifier: NamedOutlierGroupClassifier? 
+public let currentClassifier = Classifier()
+
+public actor Classifier {
+    private var currentClassifier: (() -> NamedOutlierGroupClassifier)? 
+
+    public init() { }
+
+    public func set(classifier: @Sendable @escaping () -> NamedOutlierGroupClassifier) {
+        currentClassifier = classifier
+    }
+
+    public func get() -> NamedOutlierGroupClassifier? { currentClassifier?() }
+}
 
 public enum StreakDirection: Sendable {
     case forwards

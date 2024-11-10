@@ -65,7 +65,7 @@ struct BottomLeftView: View {
                               }
                         } else {
                             Text(value.shortName)
-                              .foregroundColor(isEnabled ? .white : .gray)
+                              .foregroundColor(/*isEnabled ? .white : */ .gray)
                               .padding(4)
                         }
                     }

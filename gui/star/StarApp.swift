@@ -103,7 +103,6 @@ import StarDecisionTrees
 
 @main
 struct StarApp: App {
-    
     init() {
         Task {
             for window in NSApp.windows {
@@ -114,7 +113,11 @@ struct StarApp: App {
         }
 
         // maybe move this elsewhere
-        StarCore.currentClassifier = OutlierGroupForestClassifier_13227c6d()
+        Task { 
+            await StarCore.currentClassifier.set() {
+                OutlierGroupForestClassifier_4d3542f6()
+            }
+        }
         
         Log.add(handler: ConsoleLogHandler(at: .debug), for: .console)
         Log.i("Starting Up")
@@ -127,7 +130,7 @@ struct StarApp: App {
             ContentView()
               .environment(viewModel)
         }.commands {
-           StarCommands(viewModel: viewModel)
+            StarCommands(viewModel: viewModel)
         }
         
         WindowGroup(id: "foobar") { // XXX hardcoded constant should be centralized
@@ -136,6 +139,8 @@ struct StarApp: App {
                   // XXX don't really care it's dismissed
               }
               .environment(viewModel)
+        }.commands {
+//           StarCommands(viewModel: viewModel)
         }
         // this shows up as stars and wand in the upper right of the menu bar
         // always there when app is running, even when another app is used

@@ -226,16 +226,25 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             frameStateChangeCallback(self, self.state)
         }
 
-        await self.loadUserSlices()
-        
         await self.updateCombineSubjects()
     }
 
     private var otherFilename: String = ""
     private let baseFilename: String
 
-    internal var userSlices: [BoundingBox] = []
-    
+    internal var userSlices: [BoundingBox]? = nil
+
+    public func getUserSlices() async -> [BoundingBox] {
+        if let userSlices { return userSlices }
+
+        await self.loadUserSlices()
+
+        if let userSlices { return userSlices }
+
+        return []               // doh!
+        
+    }
+
     public var userSliceDirname: String {
         "\(config.outputPath)/\(config.imageSequenceDirname)-star-user-slices"
     }
@@ -292,11 +301,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func setupOutliers() async throws {
         // this takes a long time, and the gui does it later
         try await loadOutliers()
-        Log.d("frame \(frameIndex) done detecting outlier groups")
-        if !self.outliersLoadedFromFile {
-            await self.writeOutliersBinary()
-        }
-        Log.d("frame \(frameIndex) done writing outlier binaries")
     }
 
     var _paintMask: PaintMask?
@@ -314,11 +318,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // does the final painting and then writes out the output files
     public func finish() async throws {
         Log.d("frame \(self.frameIndex) starting to finish")
-        if hasChanges() {
-            // write out the outliers binary if it is not there
-            // only overwrite the paint reason if it is there
-            await self.writeOutliersBinary()
-        }
+        
+        await self.writeOutliersPaintReasons()
 
         self.set(state: .finishing)
 
