@@ -32,6 +32,8 @@ public enum InteractionMode: String, Equatable, CaseIterable {
     }
 }
 
+public let frameProcessingMonitor = FileSystemMonitor(max: 32) // XXX amke this configurable
+
 // the overall view model
 @MainActor @Observable
 public final class ViewModel {
@@ -109,6 +111,9 @@ public final class ViewModel {
     var selectionMode = SelectionMode.paint
     var renderingCurrentFrame = false
 
+    var isProcessingAllFrames = false
+    var numberOfFramesProcessed = 0
+    
     var selectionColor: Color {
         switch self.selectionMode {
         case .paint:
@@ -726,6 +731,67 @@ public extension ViewModel {
         }
     }
 
+//    var isProcessingFrames = false
+    
+    func processAllFrames() {
+        // XXX keep track of how many processed here
+        if isProcessingAllFrames { return }
+        isProcessingAllFrames = true
+    
+        Task {
+            // XXX a crude version of the FinalProcessor, could be better
+            try? await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
+                for frameView in self.frames {
+                    if let frame = frameView.frame {
+                        taskGroup.addTask() {
+                            try await frameProcessingMonitor.load() {
+                                await self.findOutliers(frame: frame)
+                                await self.refresh(frame: frame)
+                                await self.setOutlierGroups(forFrame: frame)
+                                return frame
+                            }
+                        }
+                    }
+                }
+
+                // grab them one by one, and process when proces
+
+                for try await frame in taskGroup {
+                    let numNeighbors = config?.numberFinalProcessingNeighborsNeeded ?? 1
+                    var minFrameIndex = frame.frameIndex - numNeighbors
+                    var maxFrameIndex = frame.frameIndex + numNeighbors
+                    if minFrameIndex < 0 { minFrameIndex = 0 }
+                    if maxFrameIndex >= self.frames.count { maxFrameIndex = self.frames.count - 1 }
+                    var positiveCount = 0
+                    for i in minFrameIndex...maxFrameIndex {
+                        if let frame = frames[i].frame,
+                           await frame.outlierGroups != nil { positiveCount += 1 }
+                    }
+                    if positiveCount == numNeighbors*2 + 1 {
+                        // we can now move this one further
+                        Task {
+                            await frame.applyDecisionTreeToAllOutliers()
+                            
+                            await self.render(frame: frame) {
+                                Task {
+                                    await self.refresh(frame: frame)
+                                    await self.setOutlierGroups(forFrame: frame)
+                                    await MainActor.run {
+                                        self.numberOfFramesProcessed += 1
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // XXX log it?
+                    }
+                }
+            }
+            isProcessingAllFrames = false
+        }
+    }
+
+    // used to re-process a particular frame 
     func findOutliers(frame: FrameAirplaneRemover) async {
         let frameView = self.frames[frame.frameIndex]
         frameView.outlierViews = nil
@@ -733,10 +799,10 @@ public extension ViewModel {
         do {
             await frame.initializeEmptyOutlierGroups()
             try await frame.findOutliers()
+
             try await frame.applyDecisionTreeToAllOutliers()
 
             await self.render(frame: frame) {
-                Log.d("doh")
                 Task {
                     await self.refresh(frame: frame)
                     await self.setOutlierGroups(forFrame: frame)

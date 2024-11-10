@@ -16,7 +16,7 @@ public actor FileSystemMonitor {
     private let loadSemaphore: AsyncSemaphore
     private let saveSemaphore: AsyncSemaphore
     
-    init(max: Int) {
+    public init(max: Int) {
         self.loadSemaphore = AsyncSemaphore(value: max)
         self.saveSemaphore = AsyncSemaphore(value: max)
     }

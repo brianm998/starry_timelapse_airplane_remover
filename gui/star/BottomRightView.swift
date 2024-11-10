@@ -11,10 +11,11 @@ struct BottomRightView: View {
 
     var body: some View {
         
-        return HStack() {
+        HStack() {
             @Bindable var viewModel = viewModel
 
             if viewModel.interactionMode == .edit {
+
                 let frameView = viewModel.currentFrameView
                 
                 VStack(alignment: .trailing) {
@@ -30,7 +31,10 @@ struct BottomRightView: View {
                     }
                 }
 
-                if let frameState = frameView.frameState {
+                if viewModel.isProcessingAllFrames {
+                    ProgressView()
+                    Text("processing \(viewModel.frames.count - viewModel.numberOfFramesProcessed) more frames")
+                } else if let frameState = frameView.frameState {
                     if frameState != .complete,
                        frameView.outlierViews != nil
                     {
@@ -44,16 +48,18 @@ struct BottomRightView: View {
                             Text("Render this Frame")
                         }
                     }
-                    Text("frame is \(frameState.message)")
-                      .foregroundColor(frameState.color)
-                    Spacer()
-                      .frame(maxWidth: 20)
                 }
+                
+                Text("frame is \(frameState.message)")
+                  .foregroundColor(frameState.color)
+                Spacer()
+                  .frame(maxWidth: 20)
+
 
                 VStack {
                     EditableFrameNumberView()
                     if let _ = frameView.outlierViews {
-                         
+                        
                         if let numPositive = frameView.frameObserver.numberOfPositiveOutliers {
                             Text("\(numPositive) will paint")
                               .foregroundColor(numPositive == 0 ? .white : .red)
@@ -148,6 +154,10 @@ struct BottomRightView: View {
                 if viewModel.videoPlaying {
                     Text("")
                 } else {
+                    if viewModel.isProcessingAllFrames {
+                        ProgressView()
+                        Text("processing \(viewModel.frames.count - viewModel.numberOfFramesProcessed) more frames")
+                    }                    
                     EditableFrameNumberView()
                 }
             }

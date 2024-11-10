@@ -18,6 +18,8 @@ struct StarCommands: Commands {
             ClearUndecidedButton()
               .environment(viewModel)
               .keyboardShortcut("k", modifiers: [])
+            ProcessAllFramesButton()
+              .environment(viewModel)
             ReProcessCurrentFrameButton()
               .environment(viewModel)
             FindOutliersOnCurrentFrameButton()            
