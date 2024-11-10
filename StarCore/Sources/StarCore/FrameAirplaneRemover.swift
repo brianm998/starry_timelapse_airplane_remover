@@ -319,6 +319,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func finish() async throws {
         Log.d("frame \(self.frameIndex) starting to finish")
         
+        mkdir(self.outliersDirname)
+        
         await self.writeOutliersPaintReasons()
 
         self.set(state: .finishing)

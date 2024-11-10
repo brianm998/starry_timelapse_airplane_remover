@@ -151,6 +151,7 @@ public final class ViewModel {
     var multiChoice = false
 
     var backgroundColor = Color(red: 0.4, green: 0.4, blue: 0.4)
+    //var backgroundColor: Color = .gray
 
     var renderingAllFrames = false
     var updatingFrameBatch = false
@@ -506,6 +507,14 @@ public final class ViewModel {
                             writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
                             writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
 
+        config.writeJson(named: "\(config.basename)-config.json")
+
+        if config.writeOutlierGroupFiles {
+            mkdir(config.outlierOutputDirname)
+        }
+
+        // XXX add this to the recent list
+        
         try await startup(with: config)
     }
 
@@ -541,6 +550,7 @@ public final class ViewModel {
             }
 
             for (frameIndex, filename) in await imageSequence.filenames.enumerated() {
+                
                 taskGroup.addTask() {
                     let basename = removePath(fromString: filename)
                     let frame = try await FrameAirplaneRemover(with: config,
@@ -721,8 +731,9 @@ public extension ViewModel {
         frameView.outlierViews = nil
         //frameView.loadingOutliersViews = true
         do {
+            await frame.initializeEmptyOutlierGroups()
             try await frame.findOutliers()
-            try await frame.maybeApplyOutlierGroupClassifier()
+            try await frame.applyDecisionTreeToAllOutliers()
 
             await self.render(frame: frame) {
                 Log.d("doh")

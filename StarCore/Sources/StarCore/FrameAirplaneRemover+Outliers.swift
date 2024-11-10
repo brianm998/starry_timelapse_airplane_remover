@@ -91,13 +91,12 @@ extension FrameAirplaneRemover {
 
     public func findOutliers() async throws {
         
-        let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
-        mkdir(frame_outliers_dirname)
+        mkdir(self.outliersDirname)
         
         let blobMap = try await BlobProcessor(frame: self).run()
 
         let blobBinarySaver = BlobBinarySaver(blobMap: blobMap)
-        await blobBinarySaver.save(to: frame_outliers_dirname)
+        await blobBinarySaver.save(to: self.outliersDirname)
         
         // blobs to promote to outlier groups
         let blobs = Array(blobMap.values)
@@ -143,8 +142,7 @@ extension FrameAirplaneRemover {
                 
             } else if !loadOnly {
                 Log.d("frame \(frameIndex) calculating outliers")
-                self.outlierGroups = OutlierGroups(frameIndex: frameIndex,
-                                                   members: [:])
+                self.initializeEmptyOutlierGroups()
 
                 Log.i("calculating outlier groups for frame \(frameIndex)")
                 // find outlying bright pixels between frames,
@@ -161,6 +159,11 @@ extension FrameAirplaneRemover {
         isLoadingOutliers = false
     }
 
+    public func initializeEmptyOutlierGroups() {
+        self.outlierGroups = OutlierGroups(frameIndex: frameIndex,
+                                           members: [:])
+    }
+    
     public func foreachOutlierGroup(_ closure: @Sendable (OutlierGroup) async -> Void) async {
         if let outlierGroups {
             for (_, group) in await outlierGroups.getMembers() {
@@ -352,11 +355,9 @@ extension FrameAirplaneRemover {
 
         if await outlierGroups?.applyRazor(in: boundingBox) ?? false {
 
-            let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
-
             await self.markAsChanged()
 
-            try await outlierGroups?.writeOutliersBinary(to: frame_outliers_dirname)
+            try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)
 
             await updateUserSlices(with: boundingBox)
         }
@@ -414,15 +415,15 @@ extension FrameAirplaneRemover {
             mkdir(self.userSliceDirname)
         }
     }
+
+    public var outliersDirname: String { "\(self.outlierOutputDirname)/\(frameIndex)" }
     
     public func deleteOutliers(in boundingBox: BoundingBox) async throws {
         await outlierGroups?.deleteOutliers(in: boundingBox)
 
         await self.markAsChanged()
         
-        let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
-//        mkdir(frame_outliers_dirname)
-        try await outlierGroups?.writeOutliersBinary(to: frame_outliers_dirname)
+        try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)
         // XXX add y-axis here too
     }
 }
