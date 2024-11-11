@@ -38,10 +38,10 @@ struct UserPreferences: Codable, Sendable {
         self.recentlyOpenedSequencelist[filename] = Date().timeIntervalSince1970
     }
     
-    static func initialize() async -> UserPreferences? { // XXX rename this
+    static func initialize() -> UserPreferences? { // XXX rename this
         var instance: UserPreferences?
         do {
-            instance = try await UserPreferences.load()
+            instance = try UserPreferences.load()
         } catch {
             Log.e("\(error)")
         }
@@ -50,10 +50,11 @@ struct UserPreferences: Codable, Sendable {
 
 //    private static var instance: UserPreferences?
 
-    private static func load() async throws -> UserPreferences? {
+    private static func load() throws -> UserPreferences? {
         if FileManager.default.fileExists(atPath: fullPath) {
             let url = NSURL(fileURLWithPath: fullPath, isDirectory: false) as URL
-            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
+            let data = try Data(contentsOf: url)
+            //let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
             let decoder = JSONDecoder()
             decoder.nonConformingFloatDecodingStrategy = .convertFromString(
               positiveInfinity: "inf",

@@ -17,6 +17,10 @@ struct BottomLeftView: View {
             if viewModel.videoPlaying {
                 Group { }
             } else {
+                let foobar = 134.0/255.0 // XXX make a custom color from these
+                let foobar2 = 138.0/255.0
+                        
+                
                 Grid(horizontalSpacing: 0, verticalSpacing: 0) {
                     GridRow {
                         Text("I will")
@@ -35,16 +39,16 @@ struct BottomLeftView: View {
                               .opacity(0)
                               .keyboardShortcut("s", modifiers: [])
 
-                            Picker("", selection: $viewModel.interactionMode) {
-                                ForEach(InteractionMode.allCases, id: \.self) { value in
-                                    Text(value.localizedName).tag(value)
-                                      .foregroundColor(.white)
-                                }
+                            StarPicker(selection: $viewModel.interactionMode) { value, isEnabled in
+                                Text(value.rawValue)
+                                  .foregroundColor(isEnabled ? .black : .gray)
+//                                  .onTapGesture { _ in
+//                                      viewModel.frameViewMode = value
+//                                  }
                             }
-                              .pickerStyle(.segmented)
-                              .frame(width: pickerWidth)
-                              .background(.gray)
-                              .cornerRadius(8)
+                              //.frame(width: pickerWidth)
+//                              .background(Color(red: foobar, green: foobar, blue: foobar2))
+//                              .cornerRadius(5)
                               .disabled(viewModel.videoPlaying)
                               .help("""
                                       Choose between quickly scrubbing around the video
@@ -61,11 +65,8 @@ struct BottomLeftView: View {
                           .foregroundColor(.white)
                           .gridColumnAlignment(.trailing) 
 
-                        let foobar = 134.0/255.0
-                        let foobar2 = 138.0/255.0
-                        
                         //ViewModePicker(selection: $viewModel.frameViewMode) { value, isEnabled in
-                        StarPicker(selection: $viewModel.frameViewMode) { value, isEnabled in
+                        LimitedSelectionPicker(selection: $viewModel.frameViewMode) { value, isEnabled in
                             if viewModel.currentFrameView.hasImage(type: value) {
                                 Text(value.shortName)
                                   .foregroundColor(isEnabled ? .black : .gray)

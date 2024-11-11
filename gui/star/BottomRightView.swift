@@ -172,19 +172,17 @@ struct BottomRightView: View {
         @Bindable var viewModel = viewModel
 
         return VStack(alignment: .leading) {
-            Picker("selection mode", selection: $viewModel.selectionMode) {
-                ForEach(SelectionMode.allCases, id: \.self) { value in
-                    Text(value.localizedName).tag(value)
-                }
+            StarPicker("selection mode", selection: $viewModel.selectionMode) { value, _ in
+                Text(value.localizedName).tag(value)
             }
-              .foregroundColor(.white)
+              .foregroundColor(.black)
               .help("""
                       What happens when outlier groups are selected?
                       paint   - they will be marked for painting
                       clear   - they will be marked for not painting
                       details - they will be shown in the info window
                       """)
-              .frame(maxWidth: 360)
+//              .frame(maxWidth: 360)
               .pickerStyle(.segmented)
 
             HStack {

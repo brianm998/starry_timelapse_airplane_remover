@@ -6,7 +6,7 @@ struct InitialView: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
 
     @State private var previously_opened_sheet_showing_item: String = ""
-
+    
     var body: some View {
         VStack {
             Spacer()
@@ -61,8 +61,12 @@ struct InitialView: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
           .background(viewModel.backgroundColor)
           .onAppear {
+              print("FUCK")
               if viewModel.userPreferences.sortedSequenceList.count > 0 {
+                  print("FUCK FUCK")
                   previously_opened_sheet_showing_item = viewModel.userPreferences.sortedSequenceList[0]
+              } else {
+                  print("CRAP CRAP")
               }
           }
     }

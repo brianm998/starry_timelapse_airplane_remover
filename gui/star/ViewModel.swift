@@ -45,19 +45,17 @@ public final class ViewModel {
 
     init() {
         self.frames = [FrameViewModel(0, viewModel: self)]
-        Task {
-            if let newPrefs = await UserPreferences.initialize() {
-                await MainActor.run {
-                    userPreferences = newPrefs
-                }
-            }
-            frameSaveQueue.sizeUpdated() { newSize in
-                await MainActor.run {
-                    self.frameSaveQueueSize = newSize
-                }
+
+        if let newPrefs = UserPreferences.initialize() {
+            userPreferences = newPrefs
+        }
+        frameSaveQueue.sizeUpdated() { newSize in
+            await MainActor.run {
+                self.frameSaveQueueSize = newSize
             }
         }
     }
+
     
 //    @Environment(\.openWindow) private var openWindow
 

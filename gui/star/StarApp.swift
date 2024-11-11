@@ -16,7 +16,7 @@ import StarDecisionTrees
  - allow selections that are not rectangular
  * allow UI to start outlier detection for a single frame
  - make lower views less cluttered
- - add render this frame button
+ * add render this frame button
  - add progress view for flimstrip, and edit view
  * add frame state to edit view
  
@@ -140,7 +140,7 @@ struct StarApp: App {
               }
               .environment(viewModel)
         }.commands {
-//           StarCommands(viewModel: viewModel)
+            StarCommands(viewModel: viewModel)
         }
         // this shows up as stars and wand in the upper right of the menu bar
         // always there when app is running, even when another app is used
