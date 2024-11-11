@@ -172,7 +172,6 @@ public final class ViewModel {
     var videoPlaybackFramerate = 30
 
     var settingsSheetShowing = false
-    var paintSheetShowing = false
 
     var multiSelectSheetShowing = false
 

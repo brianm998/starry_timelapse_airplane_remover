@@ -80,17 +80,6 @@ struct BottomRightView: View {
                     }
                 }
 
-                let paintAction = {
-                    Log.d("PAINT")
-                    viewModel.paintSheetShowing = !viewModel.paintSheetShowing
-                }
-                Button(action: paintAction) {
-                    buttonImage("square.stack.3d.forward.dottedline", size: 44)
-                      .foregroundColor(.gray)
-                }
-                  .buttonStyle(PlainButtonStyle())           
-                  .help("effect multiple frames")
-                
                 let gearAction = {
                     Log.d("GEAR")
                     viewModel.settingsSheetShowing = !viewModel.settingsSheetShowing
@@ -129,24 +118,6 @@ struct BottomRightView: View {
                                        selectionStart: $viewModel.selectionStart,
                                        selectionEnd: $viewModel.selectionEnd,
                                        number_of_frames: $viewModel.number_of_frames)
-              }
-              .sheet(isPresented: $viewModel.paintSheetShowing) {
-                  MassivePaintSheetView(isVisible: $viewModel.paintSheetShowing) { shouldPaint, startIndex, endIndex in
-                      
-                      viewModel.updatingFrameBatch = true
-                      
-                      for idx in startIndex ... endIndex {
-                          // XXX use a task group?
-                          if idx >= 0,
-                             idx < viewModel.imageSequenceSize
-                          {
-                              viewModel.setAllFrameOutliers(in: viewModel.frames[idx], to: shouldPaint)
-                          }
-                      }
-                      viewModel.updatingFrameBatch = false
-                      
-                      Log.d("shouldPaint \(shouldPaint), startIndex \(startIndex), endIndex \(endIndex)")
-                  }
               }
             } else {
                 Spacer()
