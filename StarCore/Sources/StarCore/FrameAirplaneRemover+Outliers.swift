@@ -123,9 +123,9 @@ extension FrameAirplaneRemover {
         isLoadingOutliers = true
         if self.outlierGroups == nil {
             // nil outlier groups means that we haven't tried to get outliers for this frame yet
-            callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
             Log.d("frame \(frameIndex) loading outliers")
             if let outlierGroups = try await loadOutliersFromFile() {
+                callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
                 Log.d("frame \(frameIndex) loading outliers from file")
                 for outlier in await outlierGroups.getMembers().values {
                     await outlier.set(frame: self) 
@@ -140,7 +140,9 @@ extension FrameAirplaneRemover {
                 Log.i("loaded \(String(describing: await self.outlierGroups?.getMembers().count)) outlier groups for frame \(frameIndex)")
                 await self.updateCombineSubjects()
                 
+                callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
             } else if !loadOnly {
+                callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
                 Log.d("frame \(frameIndex) calculating outliers")
                 self.initializeEmptyOutlierGroups()
 
@@ -153,8 +155,8 @@ extension FrameAirplaneRemover {
                 await self.updateCombineSubjects()
                 
                 // perhaps apply validation image to outliers here if possible
+                callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
             }
-            callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
         }
         isLoadingOutliers = false
     }

@@ -512,7 +512,8 @@ public final class ViewModel {
                             writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
                             writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
 
-        config.writeJson(named: "\(config.basename)-config.json")
+        let jsonConfigFilename = "\(config.basename)-config.json"
+        config.writeJson(named: jsonConfigFilename)
 
         if config.writeOutlierGroupFiles {
             mkdir(config.outlierOutputDirname)
@@ -745,9 +746,15 @@ public extension ViewModel {
                     if let frame = frameView.frame {
                         taskGroup.addTask() {
                             try await frameProcessingMonitor.load() {
+                                await MainActor.run {
+                                    frameView.outliersLoaded = .loading
+                                }
                                 await self.findOutliers(frame: frame)
                                 await self.refresh(frame: frame)
                                 await self.setOutlierGroups(forFrame: frame)
+                                await MainActor.run {
+                                    frameView.outliersLoaded = .loaded
+                                }
                                 return frame
                             }
                         }

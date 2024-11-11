@@ -34,8 +34,11 @@ struct BottomRightView: View {
                 if viewModel.isProcessingAllFrames {
                     ProgressView()
                     Text("processing \(viewModel.frames.count - viewModel.numberOfFramesProcessed) more frames")
-                } else if let frameState = frameView.frameState {
-                    if frameState != .complete,
+                }
+
+                if let frameState = frameView.frameState {
+                    if !viewModel.isProcessingAllFrames,
+                       frameState != .complete,
                        frameView.outlierViews != nil
                     {
                         Button() {
@@ -48,13 +51,12 @@ struct BottomRightView: View {
                             Text("Render this Frame")
                         }
                     }
+                    
+                    Text("frame is \(frameState.message)")
+                      .foregroundColor(frameState.color)
+                    Spacer()
+                      .frame(maxWidth: 20)
                 }
-                
-                Text("frame is \(frameState.message)")
-                  .foregroundColor(frameState.color)
-                Spacer()
-                  .frame(maxWidth: 20)
-
 
                 VStack {
                     EditableFrameNumberView()
