@@ -14,6 +14,7 @@ struct EditableFrameNumberView: View {
         if self.editFrameNumberMode {
             HStack {
                 Text("frame")
+                  .foregroundColor(.white)
                 TextField("\(frameNumberString)",
                           text: $editFrameNumberModeString)
                   .frame(maxWidth: 38)
@@ -31,6 +32,7 @@ struct EditableFrameNumberView: View {
             }
         } else {
             Text("frame \(frameNumberString)")
+              .foregroundColor(.white)
               .onTapGesture(count: 2) {
                   self.editFrameNumberMode = true
               }

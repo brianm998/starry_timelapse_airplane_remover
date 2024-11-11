@@ -155,8 +155,13 @@ public final class ViewModel {
     // causes tapping an outlier to open a dialog with multiple choices
     var multiChoice = false
 
-    var backgroundColor = Color(red: 0.4, green: 0.4, blue: 0.4)
+    //var backgroundColor = Color(red: 0.4, green: 0.4, blue: 0.4)
+    var backgroundColor = ViewModel.defaultBackgroundColor
+
+    static let defaultBackgroundColor = Color(red: 0.1, green: 0.1, blue: 0.1)
+
     //var backgroundColor: Color = .gray
+    //var backgroundColor: Color = .black
 
     var renderingAllFrames = false
     var updatingFrameBatch = false
@@ -936,6 +941,8 @@ public extension ViewModel {
             Log.d("playing @ \(self.videoPlaybackFramerate) fps")
 
             let interval = 1/Double(self.videoPlaybackFramerate)
+
+            self.backgroundColor = .black
             
             videoPlaybackTask = Task {
                 while(!Task.isCancelled) {
@@ -979,7 +986,7 @@ public extension ViewModel {
         self.interactionMode = self.previousInteractionMode
         
         self.videoPlaying = false
-        self.backgroundColor = .gray
+        self.backgroundColor = ViewModel.defaultBackgroundColor
     }
 
     func goToFirstFrameButtonAction() {

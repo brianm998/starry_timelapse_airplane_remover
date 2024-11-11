@@ -34,6 +34,7 @@ struct BottomRightView: View {
                 if viewModel.isProcessingAllFrames {
                     ProgressView()
                     Text("processing \(viewModel.frames.count - viewModel.numberOfFramesProcessed) more frames")
+                      .foregroundColor(.white)
                 }
 
                 if let frameState = frameView.frameState {
@@ -85,7 +86,7 @@ struct BottomRightView: View {
                 }
                 Button(action: paintAction) {
                     buttonImage("square.stack.3d.forward.dottedline", size: 44)
-                    
+                      .foregroundColor(.gray)
                 }
                   .buttonStyle(PlainButtonStyle())           
                   .help("effect multiple frames")
@@ -96,7 +97,7 @@ struct BottomRightView: View {
                 }
                 Button(action: gearAction) {
                     buttonImage("gearshape.fill", size: 44)
-                    
+                      .foregroundColor(.gray)
                 }
                   .buttonStyle(PlainButtonStyle())           
                   .help("settings")
@@ -159,6 +160,7 @@ struct BottomRightView: View {
                     if viewModel.isProcessingAllFrames {
                         ProgressView()
                         Text("processing \(viewModel.frames.count - viewModel.numberOfFramesProcessed) more frames")
+                      .foregroundColor(.white)
                     }                    
                     EditableFrameNumberView()
                 }
@@ -175,6 +177,7 @@ struct BottomRightView: View {
                     Text(value.localizedName).tag(value)
                 }
             }
+              .foregroundColor(.white)
               .help("""
                       What happens when outlier groups are selected?
                       paint   - they will be marked for painting
@@ -186,8 +189,11 @@ struct BottomRightView: View {
 
             HStack {
                 Toggle("full resolution", isOn: $viewModel.showFullResolution)
+                  .foregroundColor(.white)
                 Toggle("show filmstip", isOn: $viewModel.showFilmstrip)
+                  .foregroundColor(.white)
                 Toggle("multi choice", isOn: $viewModel.multiChoice)
+                  .foregroundColor(.white)
             }
         }
     }

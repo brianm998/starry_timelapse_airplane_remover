@@ -13,14 +13,17 @@ struct InitialView: View {
               .frame(maxHeight: 20)
             Text("Welcome to The Star,")
               .font(.largeTitle)
+              .foregroundColor(.white)
             Spacer()
               .frame(maxHeight: 10)
             Text("The Starry Timelapse Airplane Remover")
                 .font(.largeTitle)
+                .foregroundColor(.white)
             Spacer()
               .frame(maxHeight: 200)
             Text("Choose an option to get started")
-            
+              .foregroundColor(.white)
+
             HStack {
                 VStack {
                     HStack {
