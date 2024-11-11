@@ -16,6 +16,15 @@ struct BottomRightView: View {
 
             if viewModel.interactionMode == .edit {
 
+                VStack {
+                    Text("Frame Opacity")
+                      .foregroundColor(.white)
+                    
+                    Slider(value: $viewModel.frameOpacity, in : 0...1)
+                      .frame(maxWidth: 140, alignment: .bottom)
+                      .background(.gray)
+                }
+                
                 let frameView = viewModel.currentFrameView
                 
                 VStack(alignment: .trailing) {
@@ -40,7 +49,8 @@ struct BottomRightView: View {
                 if let frameState = frameView.frameState {
                     if !viewModel.isProcessingAllFrames,
                        frameState != .complete,
-                       frameView.outlierViews != nil
+                       frameView.outlierViews != nil,
+                       !viewModel.renderingCurrentFrame
                     {
                         Button() {
                             Task {
@@ -49,7 +59,7 @@ struct BottomRightView: View {
                                 }
                             }
                         } label: {
-                            Text("Render this Frame")
+                            Text("Render Frame")
                         }
                     }
                     

@@ -80,15 +80,24 @@ public struct FrameImageView: View {
     
     public var body: some View {
         Group {
-
-            if interactionMode == .edit,
-               showFullResolution
-            {
-                self.fullResolutionImage
-            } else {
-                self.previewImage
+            ZStack {
+                if interactionMode == .edit,
+                   showFullResolution
+                {
+                    self.fullResolutionImage
+                } else {
+                    ZStack {
+                        self.previewImage
+                    }
+                }
+                if interactionMode == .edit {
+                    Rectangle()
+                      .background(.black)
+                      .frame(maxWidth: .infinity, maxHeight: .infinity)
+                      .opacity(1.0-viewModel.frameOpacity)
+                }
             }
-
+                
             if interactionMode == .edit {
                 let frameView = self.viewModel.frames[self.viewModel.currentIndex]
                 ZStack() {

@@ -63,6 +63,8 @@ public final class ViewModel {
     
     var frameSaveQueue = FrameSaveQueue()
 
+    var frameOpacity: Double = 1.0
+    
     var videoPlayMode: VideoPlayMode = .forward
     
     var videoPlaying = false
