@@ -19,84 +19,46 @@ struct BottomLeftView: View {
             } else {
                 let foobar = 134.0/255.0 // XXX make a custom color from these
                 let foobar2 = 138.0/255.0
-                        
                 
-                Grid(horizontalSpacing: 0, verticalSpacing: 0) {
-                    GridRow {
-                        Text("I will")
-                          .gridColumnAlignment(.trailing) 
-                          .foregroundColor(.white)
-                        ZStack {
-                            Button("") {
-                                self.viewModel.interactionMode = .edit
-                            }
-                              .opacity(0)
-                              .keyboardShortcut("e", modifiers: [])
-                            
-                            Button("") {
-                                self.viewModel.interactionMode = .scrub
-                            }
-                              .opacity(0)
-                              .keyboardShortcut("s", modifiers: [])
-
-                            StarPicker(selection: $viewModel.interactionMode) { value, isEnabled in
-                                Text(value.rawValue)
-                                  .foregroundColor(isEnabled ? .black : .gray)
-//                                  .onTapGesture { _ in
-//                                      viewModel.frameViewMode = value
-//                                  }
-                            }
-                              //.frame(width: pickerWidth)
-//                              .background(Color(red: foobar, green: foobar, blue: foobar2))
-//                              .cornerRadius(5)
-                              .disabled(viewModel.videoPlaying)
-                              .help("""
-                                      Choose between quickly scrubbing around the video
-                                      and editing an individual frame.
-                                      """)
+                HStack {
+                    Text("I will")
+                      .gridColumnAlignment(.trailing) 
+                      .foregroundColor(.white)
+                    ZStack {
+                        Button("") {
+                            self.viewModel.interactionMode = .edit
                         }
-                        Spacer().frame(maxWidth: 6, maxHeight: 10)
-                        Text("this video")
-                          .foregroundColor(.white)
-                          .gridColumnAlignment(.leading) 
-                    }
-                    GridRow {
-                        Text("I will see")
-                          .foregroundColor(.white)
-                          .gridColumnAlignment(.trailing) 
-
-                        //ViewModePicker(selection: $viewModel.frameViewMode) { value, isEnabled in
-                        LimitedSelectionPicker(selection: $viewModel.frameViewMode) { value, isEnabled in
-                            if viewModel.currentFrameView.hasImage(type: value) {
-                                Text(value.shortName)
-                                  .foregroundColor(isEnabled ? .black : .gray)
-                                  .padding(4)
-                                  .onTapGesture { _ in
-                                      viewModel.frameViewMode = value
-                                  }
-                            } else {
-                                Text(value.shortName)
-                                  .foregroundColor(/*isEnabled ? .white : */ .gray)
-                                  .padding(4)
-                            }
+                          .opacity(0)
+                          .keyboardShortcut("e", modifiers: [])
+                        
+                        Button("") {
+                            self.viewModel.interactionMode = .scrub
                         }
-                          .background(Color(red: foobar, green: foobar, blue: foobar2))
-                          .opacity(1.0)
-                        //                      .background(.red)
+                          .opacity(0)
+                          .keyboardShortcut("s", modifiers: [])
+
+                        StarPicker(selection: $viewModel.interactionMode) { value, isEnabled in
+                            Text(value.rawValue)
+                              .foregroundColor(isEnabled ? .black : .gray)
+                            //                                  .onTapGesture { _ in
+                            //                                      viewModel.frameViewMode = value
+                            //                                  }
+                        }
+                        //.frame(width: pickerWidth)
+                        //                              .background(Color(red: foobar, green: foobar, blue: foobar2))
+                        //                              .cornerRadius(5)
                           .disabled(viewModel.videoPlaying)
                           .help("""
-                                  Show each frame as either the original   
-                                  or with star processing applied.
+                                  Choose between quickly scrubbing around the video
+                                  and editing an individual frame.
                                   """)
-                          .cornerRadius(5)
-                        
-                        Spacer().frame(maxWidth: 6, maxHeight: 10)
-                        Text("frames")
-                          .foregroundColor(.white)
-                          .gridColumnAlignment(.leading)
                     }
-                }                
-            }
+                    Spacer().frame(maxWidth: 6, maxHeight: 10)
+                    Text("this video")
+                      .foregroundColor(.white)
+                      .gridColumnAlignment(.leading) 
+                }
+            }                
         }
     }
 }

@@ -143,19 +143,6 @@ struct BottomRightView: View {
         @Bindable var viewModel = viewModel
 
         return VStack(alignment: .leading) {
-            StarPicker("selection mode", selection: $viewModel.selectionMode) { value, _ in
-                Text(value.localizedName).tag(value)
-            }
-              .foregroundColor(.black)
-              .help("""
-                      What happens when outlier groups are selected?
-                      paint   - they will be marked for painting
-                      clear   - they will be marked for not painting
-                      details - they will be shown in the info window
-                      """)
-//              .frame(maxWidth: 360)
-              .pickerStyle(.segmented)
-
             HStack {
                 Toggle("full resolution", isOn: $viewModel.showFullResolution)
                   .foregroundColor(.white)
