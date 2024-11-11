@@ -95,19 +95,7 @@ struct BottomLeftView: View {
                           .foregroundColor(.white)
                           .gridColumnAlignment(.leading)
                     }
-                }
-                
-                // outlier opacity slider
-                if self.viewModel.interactionMode == .edit {
-                    VStack {
-                        Text("Outlier Group Opacity")
-                          .foregroundColor(.white)
-                        
-                        Slider(value: $viewModel.outlierOpacity, in : 0...1)
-                          .frame(maxWidth: 140, alignment: .bottom)
-                          .background(.gray)
-                    }
-                }
+                }                
             }
         }
     }

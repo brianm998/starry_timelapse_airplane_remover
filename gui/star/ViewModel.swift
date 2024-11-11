@@ -69,6 +69,9 @@ public final class ViewModel {
     
     var videoPlaying = false
 
+    var leftPanelShowing = true
+    var rightPanelShowing = true
+    
     var fastAdvancementType: FastAdvancementType = .normal
 
     // if fastAdvancementType == .normal, fast forward and reverse do a set number of frames

@@ -15,16 +15,6 @@ struct BottomRightView: View {
             @Bindable var viewModel = viewModel
 
             if viewModel.interactionMode == .edit {
-
-                VStack {
-                    Text("Frame Opacity")
-                      .foregroundColor(.white)
-                    
-                    Slider(value: $viewModel.frameOpacity, in : 0...1)
-                      .frame(maxWidth: 140, alignment: .bottom)
-                      .background(.gray)
-                }
-                
                 let frameView = viewModel.currentFrameView
                 
                 VStack(alignment: .trailing) {
