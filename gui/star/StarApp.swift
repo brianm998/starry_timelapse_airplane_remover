@@ -12,10 +12,10 @@ import StarDecisionTrees
 
 /*
 
- - slider to allow merging frame with black background to see outliers easier and still see frame
+ * slider to allow merging frame with black background to see outliers easier and still see frame
  - allow selections that are not rectangular
  * allow UI to start outlier detection for a single frame
- - make lower views less cluttered
+ * make lower views less cluttered
  * add render this frame button
  - add progress view for flimstrip, and edit view
  * add frame state to edit view
@@ -47,34 +47,34 @@ import StarDecisionTrees
 
   - let shift + forward and back move 10-100 spaces instead of one
   * shortcut to go to the beginning and to the end of the sequence
-  - play button with frame rate slider
+  * play button with frame rate slider
 
   - rename previews/scrub and add and preview size to config
-  - add config option to write out previews of both original and modified images to file
-  - upon load, use the previews if they exist
+  * add config option to write out previews of both original and modified images to file
+  * upon load, use the previews if they exist
 
-  - add a button that calls frame.outlierGroups() on all frames to load their outliers
+  * add a button that calls frame.outlierGroups() on all frames to load their outliers
 
   * have filmstrip show outlier group load status somehow
   
   NEW UI:
 
-  - have a render all button
+  * have a render all button
   - add filter options by frame state to constrain the filmstrip
   - make filmstrip sizeable by dragging the top of it
-  - make it possible to play the video based upon previews
-    - could be faster
+  * make it possible to play the video based upon previews
+    * could be faster
   
   - add status flags for frames
-    - don't have outliers
-    - loading outliers
-    - have outliers
+    * don't have outliers
+    * loading outliers
+    * have outliers
     - saving
 
-    - show progress in saving in UI
+    * show progress in saving in UI
 
 
-  - add slider for outlier opacity
+  * add slider for outlier opacity
 
   - add overlay grid which shows color based upon what kind of outliers are inside:
     - blank for nothing
@@ -83,9 +83,9 @@ import StarDecisionTrees
     - purple for both
     - configurable number of boxes on each axis
 
-  - add frame number to all views
-  - show number of outliers in each frame, of each type
-  - feature to allow splitting up outliers that include both cloud and airplane
+  * add frame number to all views
+  * show number of outliers in each frame, of each type
+  * feature to allow splitting up outliers that include both cloud and airplane
   - toggle to make outliers flash (either kind)
   - function to allow render of all frames that are not present and also those that have changed
   - add feature to fuzz out some outliers, such as light leak from airplanes into clouds
@@ -124,13 +124,11 @@ struct StarApp: App {
     }
     
     var body: some Scene {
-        let viewModel = ViewModel()
+        let viewModel = ViewModel() // XXX how to move this into the content view ?
         
         WindowGroup {
             ContentView()
               .environment(viewModel)
-        }.commands {
-            StarCommands(viewModel: viewModel)
         }
         
         WindowGroup(id: "foobar") { // XXX hardcoded constant should be centralized

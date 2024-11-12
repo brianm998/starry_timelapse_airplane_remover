@@ -39,7 +39,7 @@ public class FrameViewModel {
     let frameIndex: Int
     var frame: FrameAirplaneRemover? {
         didSet {
-            Log.d("frame \(frameIndex) set frame to \(String(describing: frame))")
+    //        Log.d("frame \(frameIndex) set frame to \(String(describing: frame))")
 
             cancelBag.removeAll()
             if let frame {

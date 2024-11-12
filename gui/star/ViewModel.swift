@@ -173,6 +173,8 @@ public final class ViewModel {
 
     var multiSelectSheetShowing = false
 
+    var showAllFrameViewModes = false
+
     var multiSelectionType: MultiSelectionType = .all
     var multiSelectionPaintType: MultiSelectionPaintType = .clear
 
@@ -258,7 +260,7 @@ public final class ViewModel {
     
     func refresh(frame: FrameAirplaneRemover) {
         Task {                  // XXX errors thrown from here are not handled :(
-            Log.d("refreshing frame \(frame.frameIndex)")
+            //Log.d("refreshing frame \(frame.frameIndex)")
             
             // load the view frames from the main image
             
@@ -313,7 +315,7 @@ public final class ViewModel {
     }
 
     func append(frame: FrameAirplaneRemover) {
-        Log.d("appending frame \(frame.frameIndex)")
+        //Log.d("appending frame \(frame.frameIndex)")
 
         guard frame.frameIndex >= 0,
               frame.frameIndex < self.frames.count

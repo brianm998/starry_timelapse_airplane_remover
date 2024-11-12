@@ -16,17 +16,6 @@ struct FrameEditView: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
     @Environment(\.openWindow) private var openWindow
 
-    @Binding private var interactionMode: InteractionMode
-    @Binding private var showFullResolution: Bool
-
-    public init(interactionMode: Binding<InteractionMode>,
-                showFullResolution: Binding<Bool>)
-    {
-        //$interactionMode = interactionMode // ?? try this
-        _interactionMode = interactionMode
-        _showFullResolution = showFullResolution
-    }
-
     var body: some View {
         // wrap the frame view with a zoomable view
         GeometryReader { geometry in
@@ -34,7 +23,7 @@ struct FrameEditView: View {
             let outlierArrowLength = self.viewModel.frameWidth/self.viewModel.outlierArrowLength
             
             let min = (geometry.size.height/(viewModel.frameHeight+outlierArrowLength*2))
-            let full_max = self.showFullResolution ? 1 : 0.3
+            let full_max = self.viewModel.showFullResolution ? 1 : 0.6 // XXX hardcoded constants
             let max = min < full_max ? full_max : min
 
             ZoomableView(size: CGSize(width: viewModel.frameWidth+outlierArrowLength*2,
@@ -75,8 +64,7 @@ struct FrameEditView: View {
         ZStack() {
             // the main image shown
 
-            FrameImageView(interactionMode: self.$interactionMode,
-                           showFullResolution: self.$showFullResolution)
+            FrameImageView()
               .frame(width: viewModel.frameWidth, height: viewModel.frameHeight)
             
             // this is the selection overlay

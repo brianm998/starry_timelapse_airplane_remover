@@ -101,7 +101,7 @@ struct RightPanel: View {
                               .foregroundColor(.white)
 
                             // frame rate checkoer
-                            let frame_rates = [1, 2, 3, 5, 10, 15, 20, 25, 30]
+                            let frame_rates = [1, 2, 3, 5, 10, 15, 20, 25, 30, 60, 90]
                             Text("Frame Rate")
                               .foregroundColor(.white)
                             Picker("", selection: $viewModel.videoPlaybackFramerate) {
@@ -124,33 +124,55 @@ struct RightPanel: View {
                             Slider(value: $viewModel.frameOpacity, in : 0...1)
                               .frame(maxWidth: 140, alignment: .bottom)
 
-                            Toggle("full resolution", isOn: $viewModel.showFullResolution)
+                            Toggle("show full resolution", isOn: $viewModel.showFullResolution)
                               .foregroundColor(.white)
+
+                            let frameView = viewModel.currentFrameView
+
+                    Button() {
+                        Task {
+                            if let frame = viewModel.currentFrame {
+                                await viewModel.render(frame: frame, closure: nil)
+                            }
+                        }
+                    } label: {
+                        Text("Render Frame")
+                    }
+                      .disabled(viewModel.isProcessingAllFrames ||
+                                frameView.frameState == .complete ||
+                                frameView.outlierViews == nil ||
+                                viewModel.renderingCurrentFrame)
                         }
                     }
                       .defaultScrollAnchor(.bottom)
+
+                    Spacer()
+                    
                     Button() {
                         viewModel.rightPanelShowing = false
                     } label: {
                         Image(systemName: "chevron.right.2")
-                          .foregroundColor(.black)
+                          .foregroundColor(.gray)
                     }
                       .buttonStyle(PlainButtonStyle())
                 }
+                  .padding(10)
                   .frame(maxHeight: .infinity, alignment: .bottomLeading)
                   .background(Color(white: 0.22))
             } else {
-              // hidden with arrow to allow showing it
-              VStack {
-                Button() {
-                    viewModel.rightPanelShowing = true 
-                } label: {
-                    Image(systemName: "chevron.left.2")
-                      .foregroundColor(.gray)
+                // hidden with arrow to allow showing it
+                VStack {
+                    Button() {
+                        viewModel.rightPanelShowing = true 
+                    } label: {
+                        Image(systemName: "chevron.left.2")
+                          .foregroundColor(.gray)
+                    }
+                      .buttonStyle(PlainButtonStyle())
                 }
-                  .buttonStyle(PlainButtonStyle())
-              }
-                .frame(maxHeight: .infinity, alignment: .bottomLeading)
+                  .padding(10)
+                  .background(Color(white: 0.22))
+                  .frame(maxHeight: .infinity, alignment: .bottomLeading)
             }
         }
     }

@@ -7,30 +7,20 @@ import StarCore
 
 public struct FrameView: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
-    @Binding private var interactionMode: InteractionMode
-    @Binding private var showFullResolution: Bool
 
-    public init(interactionMode: Binding<InteractionMode>,
-               showFullResolution: Binding<Bool>)
-    {
-        _interactionMode = interactionMode
-        _showFullResolution = showFullResolution
-    }
-    
     public var body: some View {
-        ZStack {
-            switch self.interactionMode {
+        @Bindable var viewModel = viewModel
+        return ZStack {
+            switch self.viewModel.interactionMode {
             case .scrub:
                 // the current frame by itself for fast video playback and scrubbing
-                FrameImageView(interactionMode: self.$interactionMode,
-                               showFullResolution: self.$showFullResolution)
+                FrameImageView()
                   .aspectRatio(contentMode: . fit)
                   .padding([.top])
 
             case .edit: 
                 // the currently visible frame with outliers made visible
-                FrameEditView(interactionMode: self.$interactionMode,
-                              showFullResolution: self.$showFullResolution)
+                FrameEditView()
             }
         }
     }

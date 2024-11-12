@@ -11,6 +11,7 @@ struct ProgressBars: View {
             if viewModel.loadingOutliers {
                 HStack {
                     Text("Loading Outliers for this frame")
+                      .foregroundColor(.white)
                     Spacer()
                     ProgressView()
                       .progressViewStyle(.linear)
@@ -21,6 +22,7 @@ struct ProgressBars: View {
             if viewModel.initialLoadInProgress {
                 HStack {
                     Text("Loading Image Sequence")
+                      .foregroundColor(.white)
                     Spacer()
                     ProgressView(value: viewModel.frameLoadingProgress)
                 }
@@ -30,6 +32,7 @@ struct ProgressBars: View {
             if viewModel.loadingAllOutliers {
                 HStack {
                     Text("Loading Outlier Groups")
+                      .foregroundColor(.white)
                     Spacer()
                     ProgressView(value: viewModel.outlierLoadingProgress)
                 }

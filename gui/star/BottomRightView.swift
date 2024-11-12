@@ -41,26 +41,11 @@ struct BottomRightView: View {
                     Text("frame is \(frameState.message)")
                       .foregroundColor(frameState.color)
 
-                    Button() {
-                        Task {
-                            if let frame = viewModel.currentFrame {
-                                await viewModel.render(frame: frame, closure: nil)
-                            }
-                        }
-                    } label: {
-                        Text("Render Frame")
-                    }
-                      .disabled(viewModel.isProcessingAllFrames ||
-                                frameState == .complete ||
-                                frameView.outlierViews == nil ||
-                                viewModel.renderingCurrentFrame)
-                    
                     Spacer()
                       .frame(maxWidth: 20)
                 }
 
                 VStack {
-                    EditableFrameNumberView()
                     if let _ = frameView.outlierViews {
                         
                         if let numPositive = frameView.frameObserver.numberOfPositiveOutliers {
@@ -80,7 +65,10 @@ struct BottomRightView: View {
                     }
                 }
 
+                EditableFrameNumberView()
+
                 toggleViews()
+                
               .sheet(isPresented: $viewModel.multiChoiceSheetShowing) {
                   if let multiChoiceOutlierView = viewModel.multiChoiceOutlierView {
                       MultiChoiceSheetView(isVisible: $viewModel.multiChoiceSheetShowing,
@@ -123,12 +111,22 @@ struct BottomRightView: View {
     }
 
     func toggleViews() -> some View {
-        @Bindable var viewModel = viewModel
-
-        return VStack(alignment: .leading) {
-            HStack {
-                Toggle("show filmstip", isOn: $viewModel.showFilmstrip)
-                  .foregroundColor(.white)
+        VStack {
+            HStack(alignment: .bottom) {
+                Button() {
+                    viewModel.showFilmstrip = !viewModel.showFilmstrip
+                } label: {
+                    if viewModel.showFilmstrip {
+                        Image(systemName: "chevron.right.2")
+                          .rotationEffect(.degrees(90))
+                          .foregroundColor(.gray)
+                    } else {
+                        Image(systemName: "chevron.right.2")
+                          .rotationEffect(.degrees(-90))
+                          .foregroundColor(.gray)
+                    }
+                }
+                  .buttonStyle(PlainButtonStyle())
             }
         }
     }

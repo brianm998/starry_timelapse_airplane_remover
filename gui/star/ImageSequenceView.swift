@@ -20,8 +20,7 @@ struct ImageSequenceView: View {
 
             ZStack(alignment: .center) {
                 // selected frame 
-                FrameView(interactionMode: $viewModel.interactionMode,
-                          showFullResolution: $viewModel.showFullResolution)
+                FrameView()
                   .frame(maxWidth: .infinity, alignment: .center)
                 
                 // show progress bars on top of the image at the bottom

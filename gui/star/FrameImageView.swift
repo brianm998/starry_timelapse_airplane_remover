@@ -7,18 +7,10 @@ import StarCore
 
 public struct FrameImageView: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
-    @Binding private var interactionMode: InteractionMode
-    @Binding private var showFullResolution: Bool
-
-    public init(interactionMode: Binding<InteractionMode>,
-                showFullResolution: Binding<Bool>)
-    {
-        _interactionMode = interactionMode
-        _showFullResolution = showFullResolution
-    }
 
     private var fullResolutionImage: some View {
-        Group {
+        @Bindable var viewModel = viewModel
+        return Group {
             let frameView = self.viewModel.currentFrameView
 
             if let nextFrame = frameView.frame {
@@ -81,8 +73,8 @@ public struct FrameImageView: View {
     public var body: some View {
         Group {
             ZStack {
-                if interactionMode == .edit,
-                   showFullResolution
+                if viewModel.interactionMode == .edit,
+                   viewModel.showFullResolution
                 {
                     self.fullResolutionImage
                 } else {
@@ -90,7 +82,7 @@ public struct FrameImageView: View {
                         self.previewImage
                     }
                 }
-                if interactionMode == .edit {
+                if viewModel.interactionMode == .edit {
                     Rectangle()
                       .background(.black)
                       .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -98,7 +90,7 @@ public struct FrameImageView: View {
                 }
             }
                 
-            if interactionMode == .edit {
+            if viewModel.interactionMode == .edit {
                 let frameView = self.viewModel.frames[self.viewModel.currentIndex]
                 ZStack() {
                     // in edit mode, show outliers groups 
@@ -111,7 +103,7 @@ public struct FrameImageView: View {
             }
 
         }.onChange(of: viewModel.currentIndex, initial: true) {
-            if interactionMode == .edit {
+            if viewModel.interactionMode == .edit {
                 maybeLoadOutliers()
             }
         }
