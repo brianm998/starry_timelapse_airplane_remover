@@ -171,8 +171,6 @@ public final class ViewModel {
 
     var videoPlaybackFramerate = 30
 
-    var settingsSheetShowing = false
-
     var multiSelectSheetShowing = false
 
     var multiSelectionType: MultiSelectionType = .all

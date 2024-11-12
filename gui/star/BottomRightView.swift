@@ -37,24 +37,24 @@ struct BottomRightView: View {
                 }
 
                 if let frameState = frameView.frameState {
-                    if !viewModel.isProcessingAllFrames,
-                       frameState != .complete,
-                       frameView.outlierViews != nil,
-                       !viewModel.renderingCurrentFrame
-                    {
-                        Button() {
-                            Task {
-                                if let frame = viewModel.currentFrame {
-                                    await viewModel.render(frame: frame, closure: nil)
-                                }
-                            }
-                        } label: {
-                            Text("Render Frame")
-                        }
-                    }
-                    
+
                     Text("frame is \(frameState.message)")
                       .foregroundColor(frameState.color)
+
+                    Button() {
+                        Task {
+                            if let frame = viewModel.currentFrame {
+                                await viewModel.render(frame: frame, closure: nil)
+                            }
+                        }
+                    } label: {
+                        Text("Render Frame")
+                    }
+                      .disabled(viewModel.isProcessingAllFrames ||
+                                frameState == .complete ||
+                                frameView.outlierViews == nil ||
+                                viewModel.renderingCurrentFrame)
+                    
                     Spacer()
                       .frame(maxWidth: 20)
                 }
@@ -80,24 +80,7 @@ struct BottomRightView: View {
                     }
                 }
 
-                let gearAction = {
-                    Log.d("GEAR")
-                    viewModel.settingsSheetShowing = !viewModel.settingsSheetShowing
-                }
-                Button(action: gearAction) {
-                    buttonImage("gearshape.fill", size: 44)
-                      .foregroundColor(.gray)
-                }
-                  .buttonStyle(PlainButtonStyle())           
-                  .help("settings")
-                
                 toggleViews()
-              .sheet(isPresented: $viewModel.settingsSheetShowing) {
-                  SettingsSheetView(isVisible: $viewModel.settingsSheetShowing,
-                                    fastSkipAmount: $viewModel.fastSkipAmount,
-                                    videoPlaybackFramerate: $viewModel.videoPlaybackFramerate,
-                                    fastAdvancementType: $viewModel.fastAdvancementType)
-              }
               .sheet(isPresented: $viewModel.multiChoiceSheetShowing) {
                   if let multiChoiceOutlierView = viewModel.multiChoiceOutlierView {
                       MultiChoiceSheetView(isVisible: $viewModel.multiChoiceSheetShowing,
@@ -144,11 +127,7 @@ struct BottomRightView: View {
 
         return VStack(alignment: .leading) {
             HStack {
-                Toggle("full resolution", isOn: $viewModel.showFullResolution)
-                  .foregroundColor(.white)
                 Toggle("show filmstip", isOn: $viewModel.showFilmstrip)
-                  .foregroundColor(.white)
-                Toggle("multi choice", isOn: $viewModel.multiChoice)
                   .foregroundColor(.white)
             }
         }

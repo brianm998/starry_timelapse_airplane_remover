@@ -21,7 +21,6 @@
 		D32F6DB92A4E6FCE00704870 /* BottomLeftView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DB72A4E6FCE00704870 /* BottomLeftView.swift */; };
 		D32F6DBA2A4E6FCE00704870 /* BottomRightView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DB82A4E6FCE00704870 /* BottomRightView.swift */; };
 		D332F6FF29B63DA2009E2796 /* InitialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F6FE29B63DA2009E2796 /* InitialView.swift */; };
-		D332F70129B63F9D009E2796 /* SettingsSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F70029B63F9D009E2796 /* SettingsSheetView.swift */; };
 		D332F70529B64004009E2796 /* ShrinkingButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F70429B64004009E2796 /* ShrinkingButton.swift */; };
 		D33FFC112A2CF92900F38194 /* SystemButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC0F2A2CF92900F38194 /* SystemButton.swift */; };
 		D33FFC122A2CF92900F38194 /* VideoPlaybackButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC102A2CF92900F38194 /* VideoPlaybackButtons.swift */; };
@@ -59,6 +58,8 @@
 		D3FBFA082CE132C400A23FC6 /* ProcessAllFramesButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA072CE132C400A23FC6 /* ProcessAllFramesButton.swift */; };
 		D3FBFA0B2CE1B18700A23FC6 /* LimitedSelectionPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA092CE1B18700A23FC6 /* LimitedSelectionPicker.swift */; };
 		D3FBFA0C2CE1B18700A23FC6 /* StarPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA0A2CE1B18700A23FC6 /* StarPicker.swift */; };
+		D3FBFA0E2CE25BC600A23FC6 /* RightPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA0D2CE25BC600A23FC6 /* RightPanel.swift */; };
+		D3FBFA102CE25CAA00A23FC6 /* LeftPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA0F2CE25CAA00A23FC6 /* LeftPanel.swift */; };
 		D3FF93DF2C75745C00A98088 /* MultiChoiceSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */; };
 /* End PBXBuildFile section */
 
@@ -95,7 +96,6 @@
 		D32F6DB72A4E6FCE00704870 /* BottomLeftView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BottomLeftView.swift; sourceTree = "<group>"; };
 		D32F6DB82A4E6FCE00704870 /* BottomRightView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BottomRightView.swift; sourceTree = "<group>"; };
 		D332F6FE29B63DA2009E2796 /* InitialView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = InitialView.swift; sourceTree = "<group>"; };
-		D332F70029B63F9D009E2796 /* SettingsSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SettingsSheetView.swift; sourceTree = "<group>"; };
 		D332F70429B64004009E2796 /* ShrinkingButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ShrinkingButton.swift; sourceTree = "<group>"; };
 		D33FFC0F2A2CF92900F38194 /* SystemButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SystemButton.swift; sourceTree = "<group>"; };
 		D33FFC102A2CF92900F38194 /* VideoPlaybackButtons.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoPlaybackButtons.swift; sourceTree = "<group>"; };
@@ -132,6 +132,8 @@
 		D3FBFA072CE132C400A23FC6 /* ProcessAllFramesButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessAllFramesButton.swift; sourceTree = "<group>"; };
 		D3FBFA092CE1B18700A23FC6 /* LimitedSelectionPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LimitedSelectionPicker.swift; sourceTree = "<group>"; };
 		D3FBFA0A2CE1B18700A23FC6 /* StarPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarPicker.swift; sourceTree = "<group>"; };
+		D3FBFA0D2CE25BC600A23FC6 /* RightPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RightPanel.swift; sourceTree = "<group>"; };
+		D3FBFA0F2CE25CAA00A23FC6 /* LeftPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeftPanel.swift; sourceTree = "<group>"; };
 		D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MultiChoiceSheetView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -196,6 +198,8 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D3FBFA0F2CE25CAA00A23FC6 /* LeftPanel.swift */,
+				D3FBFA0D2CE25BC600A23FC6 /* RightPanel.swift */,
 				D3FBFA092CE1B18700A23FC6 /* LimitedSelectionPicker.swift */,
 				D3FBFA0A2CE1B18700A23FC6 /* StarPicker.swift */,
 				D3FBFA072CE132C400A23FC6 /* ProcessAllFramesButton.swift */,
@@ -231,7 +235,6 @@
 				D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */,
 				D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */,
 				D332F70429B64004009E2796 /* ShrinkingButton.swift */,
-				D332F70029B63F9D009E2796 /* SettingsSheetView.swift */,
 				D332F6FE29B63DA2009E2796 /* InitialView.swift */,
 				D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */,
 				D386FA12298B617300878B56 /* ContentView.swift */,
@@ -437,7 +440,6 @@
 				D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */,
 				D32F6DB32A4D2BF800704870 /* ApplyAllDecisionTreeButton.swift in Sources */,
 				D332F70529B64004009E2796 /* ShrinkingButton.swift in Sources */,
-				D332F70129B63F9D009E2796 /* SettingsSheetView.swift in Sources */,
 				D33FFC142A2CFAED00F38194 /* ImageSequenceView.swift in Sources */,
 				D33FFC2A2A2E1A8900F38194 /* OutlierGroupViewModel.swift in Sources */,
 				D3D7F0FC2A2BE10D00658862 /* StarCommands.swift in Sources */,
@@ -449,7 +451,9 @@
 				D32F6DAE2A4D1C0100704870 /* RenderAllFramesButton.swift in Sources */,
 				D3FBFA0B2CE1B18700A23FC6 /* LimitedSelectionPicker.swift in Sources */,
 				D3FBFA0C2CE1B18700A23FC6 /* StarPicker.swift in Sources */,
+				D3FBFA102CE25CAA00A23FC6 /* LeftPanel.swift in Sources */,
 				D3DC07FC2C077DEB0031A3AE /* EditableFrameNumberView.swift in Sources */,
+				D3FBFA0E2CE25BC600A23FC6 /* RightPanel.swift in Sources */,
 				D39EEDF42C027AD800DD5BC4 /* ClearUndecidedButton.swift in Sources */,
 				D32F6DAC2A4D1A6E00704870 /* BottomControls.swift in Sources */,
 				D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */,
