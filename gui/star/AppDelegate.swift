@@ -6,6 +6,23 @@ import AppKit
 
 @MainActor public var _cursor_frame: CGRect?
 
+/*
+ make a much more sophisticated mechanism, by which:
+
+ we have lots of areas in priority order with different cursors
+
+ views can register themselves with a background geomeotry reader that sets their frame
+ in a main actor with some kind of string id (blob id?)
+
+ make an easily reusable view modifier that does this, and also checks disappear
+
+ allow frames to change their cursor at will
+
+ handle zooming of frame better, maybe include getting arrows on zoomed in view?
+ 
+ */
+
+
 class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
@@ -34,21 +51,17 @@ final class StarHostingView<Content>: NSHostingView<Content> where Content : Vie
     override func viewDidMoveToWindow() {
         print("FUCKING MOVED TO WINDOW")
 
-        //self.addTrackingArea(NSTrackingArea(rect: .zero,
-        self.addTrackingArea(NSTrackingArea(rect: NSRect(x: 0, y: 0, width: 64, height: 48),
+        self.addTrackingArea(NSTrackingArea(rect: .zero,
                                             options: [
                                               .activeInKeyWindow,
-                                              //.activeInActiveApp,
-                                              //.activeWhenFirstResponder, // only changes on click
-                                              //.activeAlways,
                                               .assumeInside,
                                               .inVisibleRect,
-//                                              .cursorUpdate,
                                               .mouseMoved], owner: self))
     }
 
     
     override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
 //        cursorUpdate(with: event)
 //    }
     
@@ -82,7 +95,7 @@ final class StarHostingView<Content>: NSHostingView<Content> where Content : Vie
                 if let cursor {
                     cursor.pop()
                 }
-                let newCursor: NSCursor = .openHand
+                let newCursor: NSCursor = .pointingHand
                 newCursor.push()
                 cursor = newCursor
             } else if let cursor {

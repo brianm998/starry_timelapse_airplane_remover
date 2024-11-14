@@ -89,7 +89,20 @@ public struct FrameImageView: View {
                       .opacity(1.0-viewModel.frameOpacity)
                 }
             }
-                
+              .background {
+                  // read geometry in background to not mess up view
+                      GeometryReader { reader in
+                          Rectangle()
+                            .foregroundColor(.clear)
+                          // check disappear and nil out frame
+                            .onAppear {
+                                _cursor_frame = reader.frame(in: .global)
+                            }
+                            .onChange(of: reader.size) { _ in
+                                _cursor_frame = reader.frame(in: .global)
+                            }
+                      }
+              }
             if viewModel.interactionMode == .edit {
                 let frameView = self.viewModel.frames[self.viewModel.currentIndex]
                 ZStack() {

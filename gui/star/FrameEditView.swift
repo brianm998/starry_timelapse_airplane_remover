@@ -35,12 +35,6 @@ struct FrameEditView: View {
                 // the currently visible frame
                 self.imageView
             }
-              .onAppear {
-                  _cursor_frame = geometry.frame(in: .global)
-              }
-              .onChange(of: geometry.size) { _ in
-                  _cursor_frame = geometry.frame(in: .global)
-              }
               .onChange(of: viewModel.currentIndex) { oldValue, _ in
                   // add any changes the user may have made to the save queue
                   if oldValue >= 0,
