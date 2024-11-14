@@ -101,7 +101,9 @@ import StarDecisionTrees
  */
 
 
-@main
+// XXX no longer used at all,
+// get the OuterGroupTable window working
+// get the menu bar working too
 struct StarApp: App {
     init() {
         Task {
@@ -169,6 +171,5 @@ extension Array {
         self = (0 ..< count).map { i in elementMaker(i) }
     }
 }
-
 
 

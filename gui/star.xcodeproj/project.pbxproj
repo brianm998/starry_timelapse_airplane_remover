@@ -60,6 +60,8 @@
 		D3FBFA0C2CE1B18700A23FC6 /* StarPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA0A2CE1B18700A23FC6 /* StarPicker.swift */; };
 		D3FBFA0E2CE25BC600A23FC6 /* RightPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA0D2CE25BC600A23FC6 /* RightPanel.swift */; };
 		D3FBFA102CE25CAA00A23FC6 /* LeftPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA0F2CE25CAA00A23FC6 /* LeftPanel.swift */; };
+		D3FBFA152CE460AD00A23FC6 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA132CE460AD00A23FC6 /* AppDelegate.swift */; };
+		D3FBFA162CE460AD00A23FC6 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA142CE460AD00A23FC6 /* main.swift */; };
 		D3FF93DF2C75745C00A98088 /* MultiChoiceSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */; };
 /* End PBXBuildFile section */
 
@@ -134,6 +136,8 @@
 		D3FBFA0A2CE1B18700A23FC6 /* StarPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarPicker.swift; sourceTree = "<group>"; };
 		D3FBFA0D2CE25BC600A23FC6 /* RightPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RightPanel.swift; sourceTree = "<group>"; };
 		D3FBFA0F2CE25CAA00A23FC6 /* LeftPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeftPanel.swift; sourceTree = "<group>"; };
+		D3FBFA132CE460AD00A23FC6 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		D3FBFA142CE460AD00A23FC6 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MultiChoiceSheetView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -198,6 +202,8 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D3FBFA132CE460AD00A23FC6 /* AppDelegate.swift */,
+				D3FBFA142CE460AD00A23FC6 /* main.swift */,
 				D3FBFA0F2CE25CAA00A23FC6 /* LeftPanel.swift */,
 				D3FBFA0D2CE25BC600A23FC6 /* RightPanel.swift */,
 				D3FBFA092CE1B18700A23FC6 /* LimitedSelectionPicker.swift */,
@@ -446,6 +452,8 @@
 				D33FFC232A2D48F300F38194 /* FrameView.swift in Sources */,
 				D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */,
 				D33FFC1E2A2D39BA00F38194 /* ProgressBars.swift in Sources */,
+				D3FBFA152CE460AD00A23FC6 /* AppDelegate.swift in Sources */,
+				D3FBFA162CE460AD00A23FC6 /* main.swift in Sources */,
 				D33FFC202A2D3BCD00F38194 /* FrameViewModel.swift in Sources */,
 				D33FFC242A2D48F300F38194 /* FrameEditView.swift in Sources */,
 				D32F6DAE2A4D1C0100704870 /* RenderAllFramesButton.swift in Sources */,
