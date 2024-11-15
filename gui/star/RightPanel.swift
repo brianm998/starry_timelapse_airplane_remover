@@ -155,6 +155,7 @@ struct RightPanel: View {
                           .foregroundColor(.gray)
                     }
                       .buttonStyle(PlainButtonStyle())
+                      .cursor(.resizeRight, tag: "rightPanel")
                 }
                   .padding(10)
                   .frame(maxHeight: .infinity, alignment: .bottomLeading)
@@ -169,6 +170,7 @@ struct RightPanel: View {
                           .foregroundColor(.gray)
                     }
                       .buttonStyle(PlainButtonStyle())
+                      .cursor(.resizeLeft, tag: "rightPanel")
                 }
                   .padding(10)
                   .background(Color(white: 0.22))

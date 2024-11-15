@@ -89,6 +89,15 @@ public struct FrameImageView: View {
                       .opacity(1.0-viewModel.frameOpacity)
                 }
             }
+              .cursor(viewModel.interactionMode == .edit ? .crosshair : .arrow,
+                      tag: "frame")
+              .onDisappear {
+                  print("FUCKING FRAME IMAGE DISAPPEAR")
+//                  if viewModel.interactionMode == .edit {
+//                      _cursor_frames["frame"] = nil
+//                  }
+              }
+/*              
               .background {
                   // read geometry in background to not mess up view
                       GeometryReader { reader in
@@ -98,11 +107,15 @@ public struct FrameImageView: View {
                             .onAppear {
                                 _cursor_frame = reader.frame(in: .global)
                             }
+                            .onDisappear {
+                                _cursor_frame = nil
+                            }
                             .onChange(of: reader.size) { _ in
                                 _cursor_frame = reader.frame(in: .global)
                             }
                       }
-              }
+                }
+ */
             if viewModel.interactionMode == .edit {
                 let frameView = self.viewModel.frames[self.viewModel.currentIndex]
                 ZStack() {

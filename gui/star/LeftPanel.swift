@@ -65,6 +65,12 @@ struct LeftPanel: View {
                           .foregroundColor(.gray)
                     }
                       .buttonStyle(PlainButtonStyle())
+                      .cursor(.resizeLeft, tag: "leftPanelOpen")
+                      .onDisappear {
+                          // XXX make this happen in .cursor above somehow
+                          print("FUCKING actual disppear \(tag)")
+                          _cursors["leftPanelOpen"] = nil
+                      }
                 }
                   .padding(10)
                   .background(Color(white: 0.22))
@@ -79,6 +85,7 @@ struct LeftPanel: View {
                           .foregroundColor(.gray)
                     }
                       .buttonStyle(PlainButtonStyle())
+                      .cursor(.resizeRight, tag: "leftPanel")
                 }
                   .padding(10)
                   .background(Color(white: 0.22))

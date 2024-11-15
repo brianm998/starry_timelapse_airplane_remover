@@ -120,10 +120,12 @@ struct BottomRightView: View {
                         Image(systemName: "chevron.right.2")
                           .rotationEffect(.degrees(90))
                           .foregroundColor(.gray)
+                          .cursor(.resizeDown, tag: "bottomRightPanel")
                     } else {
                         Image(systemName: "chevron.right.2")
                           .rotationEffect(.degrees(-90))
                           .foregroundColor(.gray)
+                          .cursor(.resizeUp, tag: "bottomRightPanel")
                     }
                 }
                   .buttonStyle(PlainButtonStyle())
