@@ -64,8 +64,9 @@ struct FrameEditView: View {
         ZStack() {
             // the main image shown
 
-            FrameImageView()
+            FrameEditImageView()
               .frame(width: viewModel.frameWidth, height: viewModel.frameHeight)
+              .cursor(.crosshair, tag: "frameEdit")
             
             // this is the selection overlay
             if let selectionStart = viewModel.selectionStart,

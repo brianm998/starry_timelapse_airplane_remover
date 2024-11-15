@@ -148,66 +148,20 @@ struct SizePreferenceKey: PreferenceKey {
 extension View {
     func cursor(_ cursor: NSCursor, tag: String) -> some View {
         Group {
-        background(
+            background(
               Color.clear
                 .onGeometryChange(for: CGRect.self) { proxy in
                     proxy.frame(in: .global)
                 } action: { frame in
-                    print("FUCKING FRAME \(frame)")
                     _cursor_frames[tag] = frame
                 }
                 .onAppear {
-                    print("FUCKING CURSOR ON APPEAR")
                     _cursors[tag] = cursor
                 }
-                .onDisappear {
-                    // erg, this happens almost immediately after it appears,
-                    // still visible on screen for a long time afterwards
-
-                    // XXX fix this, as the cursor areas remain after is gone :(
-                    print("FUCKING CURSOR ON DISAPPEAR \(tag)")
-//                    _cursor_frames[tag] = nil
-                }
-
-        )
+            )
         }
           .onDisappear {
-              print("FUCKING GROUP DISAPPEAR \(tag)")
+              _cursor_frames.removeValue(forKey: tag)
           }
     }
 }
-
-  /*
-  extension View {
-    func cursor(_ cursor: NSCursor, tag: String) -> some View {
-        background(
-          GeometryReader { reader in
-              Color.clear
-                .onGeometryChange(for: CGRect.self) { proxy in
-                    proxy.frame(in: .global)
-                } action: { frame in
-                    print("FUCKING FRAME \(frame)")
-                    _cursor_frames[tag] = frame
-                }
-                .onAppear {
-                    print("FUCKING CURSOR ON APPEAR")
-                    _cursors[tag] = cursor
-                    _cursor_frames[tag] = reader.frame(in: .global)
-                }
-                .onDisappear {
-                    // erg, this happens almost immediately after it appears,
-                    // still visible on screen for a long time afterwards
-                    print("FUCKING CURSOR ON DISAPPEAR")
-//                    _cursor_frames[tag] = nil
-                }
-                .onChange(of: reader.size) { _ in
-                    let frame = reader.frame(in: .global)
-                    print("FUCKING CURSOR ON CHANGE \(frame)")
-                    _cursor_frames[tag] = frame
-                }
-          }
-        )
-    }
-}
-
-*/

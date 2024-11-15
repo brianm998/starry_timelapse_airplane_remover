@@ -62,6 +62,7 @@
 		D3FBFA102CE25CAA00A23FC6 /* LeftPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA0F2CE25CAA00A23FC6 /* LeftPanel.swift */; };
 		D3FBFA152CE460AD00A23FC6 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA132CE460AD00A23FC6 /* AppDelegate.swift */; };
 		D3FBFA162CE460AD00A23FC6 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA142CE460AD00A23FC6 /* main.swift */; };
+		D3FBFA182CE700A700A23FC6 /* FrameEditImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA172CE700A700A23FC6 /* FrameEditImageView.swift */; };
 		D3FF93DF2C75745C00A98088 /* MultiChoiceSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */; };
 /* End PBXBuildFile section */
 
@@ -138,6 +139,7 @@
 		D3FBFA0F2CE25CAA00A23FC6 /* LeftPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeftPanel.swift; sourceTree = "<group>"; };
 		D3FBFA132CE460AD00A23FC6 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		D3FBFA142CE460AD00A23FC6 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		D3FBFA172CE700A700A23FC6 /* FrameEditImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameEditImageView.swift; sourceTree = "<group>"; };
 		D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MultiChoiceSheetView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -202,6 +204,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D3FBFA172CE700A700A23FC6 /* FrameEditImageView.swift */,
 				D3FBFA132CE460AD00A23FC6 /* AppDelegate.swift */,
 				D3FBFA142CE460AD00A23FC6 /* main.swift */,
 				D3FBFA0F2CE25CAA00A23FC6 /* LeftPanel.swift */,
@@ -425,6 +428,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D3FBFA182CE700A700A23FC6 /* FrameEditImageView.swift in Sources */,
 				D3F0BFFE2C0390BA0061420D /* FrameImageView.swift in Sources */,
 				D33FFC112A2CF92900F38194 /* SystemButton.swift in Sources */,
 				D32F6DB42A4D2BF800704870 /* ApplyDecisionTreeButton.swift in Sources */,
