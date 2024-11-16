@@ -104,6 +104,7 @@ import StarDecisionTrees
 // XXX no longer used at all,
 // get the OuterGroupTable window working
 // get the menu bar working too
+@main
 struct StarApp: App {
     init() {
         Task {
