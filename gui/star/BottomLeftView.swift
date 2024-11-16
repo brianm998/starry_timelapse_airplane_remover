@@ -22,7 +22,6 @@ struct BottomLeftView: View {
                 
                 HStack {
                     Text("I will")
-                      .gridColumnAlignment(.trailing) 
                       .foregroundColor(.white)
                     ZStack {
                         Button("") {
@@ -54,9 +53,33 @@ struct BottomLeftView: View {
                                   """)
                     }
                     Spacer().frame(maxWidth: 6, maxHeight: 10)
-                    Text("this video")
+                    Text("this video with")
                       .foregroundColor(.white)
-                      .gridColumnAlignment(.leading) 
+                    
+                    LimitedSelectionPicker(selection: $viewModel.frameViewMode) { value, isEnabled in
+                        if value == .original || value == .processed {
+                            if viewModel.currentFrameView.hasImage(type: value) {
+                                Text(value.shortName)
+                                  .foregroundColor(isEnabled ? .black : .gray)
+                                  .padding(4)
+                                  .onTapGesture { _ in
+                                      viewModel.frameViewMode = value
+                                  }
+                            } else {
+                                Text(value.shortName)
+                                  .foregroundColor(/*isEnabled ? .white : */ .gray)
+                                  .padding(4)
+                            }
+                        } else {
+                            Group { }
+                        }
+                    }
+                    .background(Color(red: foobar, green: foobar, blue: foobar2))
+                    .cornerRadius(5)
+
+                    Text("frames")
+                      .foregroundColor(.white)
+                    
                 }
             }                
         }

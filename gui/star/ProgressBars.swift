@@ -19,16 +19,6 @@ struct ProgressBars: View {
                 }
             }
 
-            if viewModel.initialLoadInProgress {
-                HStack {
-                    Text("Loading Image Sequence")
-                      .foregroundColor(.white)
-                    Spacer()
-                    ProgressView(value: viewModel.frameLoadingProgress)
-                }
-
-            }
-
             if viewModel.loadingAllOutliers {
                 HStack {
                     Text("Loading Outlier Groups")
