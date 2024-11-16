@@ -144,24 +144,3 @@ struct SizePreferenceKey: PreferenceKey {
   static let defaultValue: CGSize = .zero
   static func reduce(value: inout CGSize, nextValue: () -> CGSize) {}
 }
-
-extension View {
-    func cursor(_ cursor: NSCursor, tag: String) -> some View {
-        Group {
-            background(
-              Color.clear
-                .onGeometryChange(for: CGRect.self) { proxy in
-                    proxy.frame(in: .global)
-                } action: { frame in
-                    _cursor_frames[tag] = frame
-                }
-                .onAppear {
-                    _cursors[tag] = cursor
-                }
-            )
-        }
-          .onDisappear {
-              _cursor_frames.removeValue(forKey: tag)
-          }
-    }
-}

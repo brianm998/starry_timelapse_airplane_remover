@@ -31,6 +31,7 @@ struct InitialView: View {
                             Text("Load Config").font(.largeTitle)
                         }.buttonStyle(ShrinkingButton())
                           .help("Load a json config file from a previous run of star")
+//                          .cursor3(.pointingHand)
                         
                         Button(action: self.loadImageSequence) {
                             Text("Load Image Sequence").font(.largeTitle)

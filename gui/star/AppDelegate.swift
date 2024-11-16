@@ -3,11 +3,8 @@ import SwiftUI
 import AppKit
 
 @MainActor public var _window: NSWindow! // XXX don't need this anymore
-
-@MainActor public var _cursor_frame: CGRect?
-
-@MainActor public var _cursor_frames: [String:CGRect] = [:]
-@MainActor public var _cursors: [String:NSCursor] = [:]
+@MainActor fileprivate var _cursor_frames: [String:CGRect] = [:]
+@MainActor fileprivate var _cursors: [String:NSCursor] = [:]
 
 /*
  make a much more sophisticated mechanism, by which:
@@ -32,19 +29,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let viewModel = ViewModel()
         
-        _window = StarWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 640, height: 480),
+        _window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1280, height: 960),
             styleMask: [.miniaturizable, .closable, .resizable, .titled, .fullSizeContentView],
             backing: .buffered, defer: false)
         _window.center()
-        //_window.contentView?.isInFullScreenMode
         _window.title = "FUCK"
-        _window.contentView = StarHostingView(rootView: ContentView().environment(ViewModel()))
+        _window.disableCursorRects()
+  //      _window.contentView = StarHostingView(rootView: ContentView().environment(ViewModel()))
+        _window.contentView = NSHostingView(rootView: ContentView().environment(ViewModel()))
         _window.makeKeyAndOrderFront(nil)
     }
 }
 
-final class StarHostingView<Content>: NSHostingView<Content> where Content : View{
+final class StarHostingView<Content>: NSHostingView<Content> where Content : View {
 
     var cursor: NSCursor?
     
@@ -53,50 +51,50 @@ final class StarHostingView<Content>: NSHostingView<Content> where Content : Vie
     } 
 
     override func viewDidMoveToWindow() {
-        print("FUCKING MOVED TO WINDOW")
-
-        self.addTrackingArea(NSTrackingArea(rect: .zero,
+        self.addTrackingArea(NSTrackingArea(rect: NSRect(x: 0, y: 0, width: 200, height: 200),//.zero,
+        //self.addTrackingArea(NSTrackingArea(rect: .zero,
                                             options: [
-                                              .activeInKeyWindow,
-                                              .assumeInside,
-                                              .inVisibleRect,
-                                              .mouseEnteredAndExited,
-
-                                              .enabledDuringMouseDrag,
-//                                              .cursorUpdate,
-                                              .mouseMoved], owner: self))
+                                              //.activeInKeyWindow,
+                                              .activeInActiveApp,
+                                              .cursorUpdate,
+//                                              .assumeInside,
+//                                              .inVisibleRect,
+//                                              .mouseEnteredAndExited,
+//                                              .enabledDuringMouseDrag,
+                                            //  .mouseMoved
+                                            ], owner: self))
     }
 
     // catch mouse click?
 
     override func mouseUp(with event: NSEvent) {
-        print("FUCKING mouseUp")
+        //print("FUCKING mouseUp")
         super.mouseUp(with: event)
         handle(event, withLogging: true)
         _window.enableCursorRects()
     }
     
     override func mouseDown(with event: NSEvent) {
-        print("FUCKING mouseDown")
+        //print("FUCKING mouseDown")
         super.mouseDown(with: event)
         _window.disableCursorRects()
         handle(event, withLogging: true)
     }
     
     override func otherMouseUp(with event: NSEvent) {
-        print("FUCKING otherMouseUp")
+        //print("FUCKING otherMouseUp")
         super.otherMouseUp(with: event)
         handle(event, withLogging: true)
     }
     
     override func otherMouseDown(with event: NSEvent) {
-        print("FUCKING otherMouseDown")
+        //print("FUCKING otherMouseDown")
         super.otherMouseDown(with: event)
         handle(event, withLogging: true)
     }
     
     override func rightMouseUp(with event: NSEvent) {
-        print("FUCKING rightMouseUp")
+        //print("FUCKING rightMouseUp")
         super.rightMouseUp(with: event)
         Task {
             handle(event, withLogging: true)
@@ -104,21 +102,37 @@ final class StarHostingView<Content>: NSHostingView<Content> where Content : Vie
     }
     
     override func rightMouseDown(with event: NSEvent) {
-        print("FUCKING rightMouseDown")
+        //print("FUCKING rightMouseDown")
         super.rightMouseDown(with: event)
         handle(event, withLogging: true)
     }
     
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
-        handle(event)
-//        cursorUpdate(with: event)
-//    }
+//        handle(event)
     }
 
+    override func cursorUpdate(with event: NSEvent) {
+        print("cursorUpdate(with: \(event) \(event.locationInWindow))")
+        super.cursorUpdate(with: event)
+        handle(event)
+    }
+
+    private func handle_DOH(_ event: NSEvent, withLogging fuck: Bool = false) {
+        let newCursor: NSCursor = .resizeLeft
+        NSApp.windows.forEach { $0.disableCursorRects() } 
+        newCursor.push()
+    }
+
+    override func resetCursorRects() {
+        print("FUCKING resetCursorRects")
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
+    
     private func handle(_ event: NSEvent, withLogging fuck: Bool = false) {
-//    override func cursorUpdate(with event: NSEvent) {
-//        print("cursorUpdate(with: \(event) \(event.locationInWindow))")
+
+//        if true  { return }
+        
         /*
          next steps:
 
@@ -150,6 +164,7 @@ final class StarHostingView<Content>: NSHostingView<Content> where Content : Vie
                 {
                     if let cursor { cursor.pop() }
                     if let newCursor: NSCursor = _cursors[key] {
+                        NSApp.windows.forEach { $0.disableCursorRects() } 
                         newCursor.push()
                         cursor = newCursor
                         pushed = true
@@ -164,6 +179,7 @@ final class StarHostingView<Content>: NSHostingView<Content> where Content : Vie
             {
                 if fuck { print("FUCK Pop") }  
                 cursor.pop()
+                NSApp.windows.forEach { $0.enableCursorRects() } 
             }            
         } else {
             if fuck {
@@ -172,53 +188,7 @@ final class StarHostingView<Content>: NSHostingView<Content> where Content : Vie
         }
     }
     
-    private func handle_OLD(_ event: NSEvent, withLogging fuck: Bool = false) {
-//    override func cursorUpdate(with event: NSEvent) {
-//        print("cursorUpdate(with: \(event) \(event.locationInWindow))")
-        /*
-         next steps:
-
-         * better handle smaller amounts of the screen
-         * read size of frame display with geometry reader
-         - figure out menu items (they're gone now)
-         */
-
-        // XXX crude, but it works well to always make the cursor the given value when
-        // in the window
-
-        if fuck { print("FUCK started") }  
-        
-        if let _cursor_frame,
-           let windowRect = _window.contentView?.frame
-        {
-            let location = event.locationInWindow // XXX origin is in lower left corner
-
-            let x = location.x
-            var y = location.y
-            y = windowRect.height - y // put origin in top left corner
-
-            if x >= _cursor_frame.minX,
-               x < _cursor_frame.minX + _cursor_frame.width,
-               y >= _cursor_frame.minY,
-               y < _cursor_frame.minY + _cursor_frame.height
-            {
-                if let cursor { cursor.pop() }
-                let newCursor: NSCursor = .pointingHand
-                newCursor.push()
-                cursor = newCursor
-                if fuck { print("FUCK Push") }
-            } else if let cursor {
-                if fuck { print("FUCK Pop") }  
-                cursor.pop()
-            }
-        } else {
-            if fuck {
-                print("FUCK")
-            }
-        }
-    }
-    
-    @MainActor @preconcurrency required dynamic init?(coder aDecoder: NSCoder) {
+     @MainActor @preconcurrency required dynamic init?(coder aDecoder: NSCoder) {
     fatalError("init(coder:) has not been implemented")
   }
 }
@@ -247,4 +217,136 @@ final class StarWindow: NSWindow {
         print("FUCK enableCursorRects")
     }
 */
+}
+
+
+
+extension View {
+    func cursor(_ cursor: NSCursor, tag: String) -> some View {
+        Group {
+            background(
+              Color.clear
+                .onGeometryChange(for: CGRect.self) { proxy in
+                    proxy.frame(in: .global)
+                } action: { frame in
+                    _cursor_frames[tag] = frame
+                }
+                .onAppear {
+                    _cursors[tag] = cursor
+                }
+            )
+        }
+          .onDisappear {
+              _cursor_frames.removeValue(forKey: tag)
+          }
+    }
+}
+
+
+// XXX WTF
+
+extension View {
+    func trackingMouse(onCursorUpdate: @escaping (NSPoint) -> Void) -> some View {
+        TrackinAreaView(onCursorUpdate: onCursorUpdate) { self }
+    }
+}
+
+struct TrackinAreaView<Content>: View where Content : View {
+    let onCursorUpdate: (NSPoint) -> Void
+    let content: () -> Content
+    
+    init(onCursorUpdate: @escaping (NSPoint) -> Void, @ViewBuilder content: @escaping () -> Content) {
+        self.onCursorUpdate = onCursorUpdate
+        self.content = content
+    }
+    
+    var body: some View {
+        TrackingAreaRepresentable(onCursorUpdate: onCursorUpdate, content: self.content())
+    }
+}
+
+struct TrackingAreaRepresentable<Content>: NSViewRepresentable where Content: View {
+    let onCursorUpdate: (NSPoint) -> Void
+    let content: Content
+    
+    func makeNSView(context: Context) -> NSHostingView<Content> {
+        return TrackingNSHostingView(onCursorUpdate: onCursorUpdate, rootView: self.content)
+    }
+    
+    func updateNSView(_ nsView: NSHostingView<Content>, context: Context) {
+    }
+}
+
+class TrackingNSHostingView<Content>: NSHostingView<Content> where Content : View {
+    let onCursorUpdate: (NSPoint) -> Void
+    
+    init(onCursorUpdate: @escaping (NSPoint) -> Void, rootView: Content) {
+        self.onCursorUpdate = onCursorUpdate
+        
+        super.init(rootView: rootView)
+        
+        setupTrackingArea()
+    }
+    
+    required init(rootView: Content) {
+        fatalError("init(rootView:) has not been implemented")
+    }
+    
+    @objc required dynamic init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func setupTrackingArea() {
+        let options: NSTrackingArea.Options =
+          [
+            .activeInActiveApp,
+            .cursorUpdate,
+
+//            .mouseMoved,
+//            .activeAlways,
+//            .inVisibleRect,
+          ]
+        
+        self.addTrackingArea(NSTrackingArea(rect: .zero,
+                                            options: options,
+                                            owner: self,
+                                            userInfo: nil))
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        self.onCursorUpdate(self.convert(event.locationInWindow, from: nil))
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        self.onCursorUpdate(self.convert(event.locationInWindow, from: nil))
+    }
+}
+
+
+
+/// FUCK AGAIN
+
+
+extension View {
+    public func cursor3(_ cursor: NSCursor) -> some View {
+        if #available(macOS 13.0, *) {
+            return self.onContinuousHover { phase in
+                switch phase {
+                case .active(_):
+//                    guard NSCursor.current != cursor else { return }
+                    cursor.push()
+                case .ended:
+                    NSCursor.pop()
+                }
+            }
+        } else {
+            return self.onHover { inside in
+                if inside {
+                    cursor.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+        }
+    }
 }
