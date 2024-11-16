@@ -346,6 +346,8 @@ struct OutlierGroupTable: View {
 
     var body: some View {
 
+        if let viewModel = viewModel.imageSequence {
+        
 //        let displayDtSizeColumn = viewModel.outlierGroupTableDisplayGroups[.size] ?? true
         //let displayDtSizeColumn = true
       @Bindable var viewModel = viewModel
@@ -455,6 +457,9 @@ struct OutlierGroupTable: View {
         }.navigationTitle(viewModel.outlierGroupWindowFrame == nil ?
                                   OTHER_WINDOW_TITLE :
                                   "\(OUTLIER_WINDOW_PREFIX) for frame \(viewModel.outlierGroupWindowFrame!.frameIndex)")
+        } else {
+            return Text("Loading")
+        }
     }
 }
 

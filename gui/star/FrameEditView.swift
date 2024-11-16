@@ -13,7 +13,7 @@ actor ArrayActor<T> {
 }
 
 struct FrameEditView: View {
-    @Environment(ViewModel.self) var viewModel: ViewModel
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {

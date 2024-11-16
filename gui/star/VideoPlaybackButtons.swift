@@ -3,7 +3,7 @@ import SwiftUI
 
 // an HStack of buttons to advance backwards and fowards through the sequence
 struct VideoPlaybackButtons : View {
-    @Environment(ViewModel.self) var viewModel: ViewModel
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     var body: some View {
         // XXX these should really use modifiers but those don't work :(

@@ -2,7 +2,7 @@ import SwiftUI
 import StarCore
 
 struct LeftPanel: View {
-    @Environment(ViewModel.self) var viewModel: ViewModel
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     let foobar = 134.0/255.0 // XXX make a custom color from these
     let foobar2 = 138.0/255.0

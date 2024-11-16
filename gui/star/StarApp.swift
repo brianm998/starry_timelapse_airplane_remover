@@ -100,7 +100,7 @@ import StarDecisionTrees
 
  */
 
-
+ 
 // XXX no longer used at all,
 // get the OuterGroupTable window working
 // get the menu bar working too
@@ -133,7 +133,7 @@ struct StarApp: App {
             ContentView()
               .environment(viewModel)
         }
-        
+
         WindowGroup(id: "foobar") { // XXX hardcoded constant should be centralized
             OutlierGroupTable()
               { 
@@ -143,6 +143,7 @@ struct StarApp: App {
         }.commands {
             StarCommands(viewModel: viewModel)
         }
+
         // this shows up as stars and wand in the upper right of the menu bar
         // always there when app is running, even when another app is used
         MenuBarExtra {

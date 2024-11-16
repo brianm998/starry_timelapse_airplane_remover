@@ -6,7 +6,7 @@ import logging
 // below the image frame and above the filmstrip and scrub bar
 
 struct BottomLeftView: View {
-    @Environment(ViewModel.self) var viewModel: ViewModel
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     let pickerWidth: CGFloat = 160
     

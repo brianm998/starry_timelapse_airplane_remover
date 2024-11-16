@@ -6,7 +6,7 @@ import StarCore
 // just the frame itself for scrubbing and video playback
 
 public struct FrameView: View {
-    @Environment(ViewModel.self) var viewModel: ViewModel
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     public var body: some View {
         @Bindable var viewModel = viewModel

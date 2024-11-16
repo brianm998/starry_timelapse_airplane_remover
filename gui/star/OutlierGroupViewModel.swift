@@ -12,7 +12,7 @@ class OutlierGroupViewModel: Identifiable {
     // XXX make the UI use this to see changes in paintability
     var paintObserver = OutlierPaintObserver() 
     
-    init (viewModel: ViewModel,
+    init (viewModel: ImageSequenceViewModel,
           group: OutlierGroup,
           name: UInt16,
           bounds: BoundingBox,
@@ -78,7 +78,7 @@ class OutlierGroupViewModel: Identifiable {
     //  Task { await group.set(shouldPaintDidChange: nil) }
     }
     
-    var viewModel: ViewModel
+    var viewModel: ImageSequenceViewModel
     
     var arrowSelected = false // hovered over on frame view
 

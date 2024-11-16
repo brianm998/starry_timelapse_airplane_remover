@@ -2,7 +2,7 @@ import SwiftUI
 import StarCore
 
 struct RenderCurrentFrameButton: View {
-    @Environment(ViewModel.self) var viewModel: ViewModel
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     
     var body: some View {
         let action: () -> Void = {

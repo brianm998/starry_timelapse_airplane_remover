@@ -10,12 +10,12 @@ import Combine
 @MainActor @Observable
 public class FrameViewModel {
 
-    init(_ frameIndex: Int, viewModel: ViewModel) {
+    init(_ frameIndex: Int, viewModel: ImageSequenceViewModel) {
         self.frameIndex = frameIndex
         self.viewModel = viewModel
     }
 
-    let viewModel: ViewModel
+    let viewModel: ImageSequenceViewModel
 
     var existingImages: [FrameViewMode] = []
     

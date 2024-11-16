@@ -2,6 +2,7 @@ import SwiftUI
 import StarCore
 import logging
 
+@MainActor
 struct InitialView: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
 
@@ -82,15 +83,16 @@ struct InitialView: View {
             {
                 let path = returnedUrl.path
                 Log.d("url path \(path)")
-                viewModel.sequenceLoaded = true
-                viewModel.initialLoadInProgress = true
 
                 viewModel.eraserTask = Task.detached(priority: .userInitiated) {
                     do {
                         try await viewModel.startup(withConfig: path)
+                        Task { @MainActor in
+                            await viewModel.imageSequence?.initialLoadInProgress = true
+                        }
                         
-                        Log.d("viewModel.eraser \(String(describing: await viewModel.eraser))")
-                        try await viewModel.eraser?.run()
+                       // Log.d("viewModel.eraser \(String(describing: await viewModel.eraser))")
+                        try await viewModel.imageSequence?.eraser?.run()
                     } catch {
                         Log.e("\(error)")
                         await MainActor.run {
@@ -117,12 +119,13 @@ struct InitialView: View {
                 let path = returnedUrl.path
                 Log.d("url path \(path)")
                 
-                viewModel.sequenceLoaded = true
-                viewModel.initialLoadInProgress = true
                 viewModel.eraserTask = Task.detached(priority: .userInitiated) {
                     do {
                         try await viewModel.startup(withNewImageSequence: path)
-                        try await viewModel.eraser?.run()
+                        Task { @MainActor in
+                            await viewModel.imageSequence?.initialLoadInProgress = true
+                        }
+                        try await viewModel.imageSequence?.eraser?.run()
                     } catch {
                         Log.e("\(error)")
                         await MainActor.run {
@@ -138,13 +141,13 @@ struct InitialView: View {
     func loadRecent() {
         Log.d("load image sequence")
         
-        viewModel.sequenceLoaded = true
-        viewModel.initialLoadInProgress = true
-        
         viewModel.eraserTask = Task.detached(priority: .userInitiated) {
             do {
                 try await viewModel.startup(withConfig: previously_opened_sheet_showing_item)
-                try await viewModel.eraser?.run()
+                Task { @MainActor in
+                    await viewModel.imageSequence?.initialLoadInProgress = true
+                }
+                try await viewModel.imageSequence?.eraser?.run()
             } catch {
                 Log.e("\(error)")
                 await MainActor.run {

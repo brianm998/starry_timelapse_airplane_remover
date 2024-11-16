@@ -5,7 +5,7 @@ import StarCore
 // the image is always a preview here
 
 public struct FrameImageView: View {
-    @Environment(ViewModel.self) var viewModel: ViewModel
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     public var body: some View {
         let frameView = self.viewModel.frames[self.viewModel.currentIndex]

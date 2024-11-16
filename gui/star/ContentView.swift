@@ -13,8 +13,9 @@ struct ContentView: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
     
     var body: some View {
-        if viewModel.sequenceLoaded {
+        if let imageSequenceViewModel = viewModel.imageSequence {
             ImageSequenceView()
+              .environment(imageSequenceViewModel)
         } else {
             InitialView()
         }

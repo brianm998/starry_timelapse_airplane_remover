@@ -14,7 +14,7 @@ fileprivate actor CounterActor {
 }
 
 struct RenderAllFramesButton: View {
-    @Environment(ViewModel.self) var viewModel: ViewModel
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     
     var body: some View {
         let action: () -> Void = {

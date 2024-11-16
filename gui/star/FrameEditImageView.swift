@@ -6,8 +6,10 @@ import StarCore
 // and may be one of many different types (original, processed, etc)
 
 public struct FrameEditImageView: View {
-    @Environment(ViewModel.self) var viewModel: ViewModel
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
+    @State private var localID = 0
+    
     private var fullResolutionImage: some View {
         @Bindable var viewModel = viewModel
         return Group {
@@ -93,6 +95,7 @@ public struct FrameEditImageView: View {
                         if let outlierViews = frameView.outlierViews {
                             ForEach(outlierViews) { outlierViewModel in
                                 OutlierGroupView(groupViewModel: outlierViewModel)
+                                  .id(localID)
                             }
                         }
                     }.opacity(viewModel.outlierOpacity)

@@ -4,7 +4,7 @@ import StarCore
 // this button clears all undecided outliers
 
 struct ClearUndecidedButton: View {
-    @Environment(ViewModel.self) var viewModel: ViewModel
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     var body: some View {
         Button(action: {

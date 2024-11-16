@@ -6,8 +6,8 @@ import StarCore
 // user can scrub, play, edit frames, etc
 
 struct ImageSequenceView: View {
-    @Environment(ViewModel.self) var viewModel: ViewModel
-
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    
     var body: some View {
         @Bindable var viewModel = viewModel
         return VStack {
@@ -69,13 +69,13 @@ struct ImageSequenceView: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .padding([.bottom, .leading, .trailing])
           .background(viewModel.backgroundColor)
-        
+        /* XXX fix this
           .alert(isPresented: $viewModel.showErrorAlert) {
               Alert(title: Text("Error"),
                     message: Text(viewModel.errorMessage),
                     primaryButton: .default(Text("Ok")) { viewModel.sequenceLoaded = false },
                     secondaryButton: .default(Text("Sure")) { viewModel.sequenceLoaded = false } )
               
-          }
+          }*/
     }
 }

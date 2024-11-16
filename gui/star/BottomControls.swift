@@ -10,7 +10,7 @@ enum BottomControlLayout {
 }
 
 struct BottomControls: View {
-    @Environment(ViewModel.self) var viewModel: ViewModel
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     @State private var layout: BottomControlLayout = .fullyHorizontal
 

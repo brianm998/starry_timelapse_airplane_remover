@@ -4,7 +4,7 @@ import StarCore
 // progress bars for loading indications
 
 struct ProgressBars: View {
-    @Environment(ViewModel.self) var viewModel: ViewModel
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     var body: some View {
         VStack {

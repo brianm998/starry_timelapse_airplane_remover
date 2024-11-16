@@ -7,7 +7,7 @@ import Combine
 // below the image frame and above the filmstrip and scrub bar
 
 struct BottomRightView: View {
-    @Environment(ViewModel.self) var viewModel: ViewModel
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     var body: some View {
         
