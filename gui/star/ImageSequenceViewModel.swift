@@ -32,7 +32,11 @@ public enum InteractionMode: String, Equatable, CaseIterable {
     }
 }
 
-public let frameProcessingMonitor = FileSystemMonitor(max: 32) // XXX amke this configurable
+// used to limit processing of frames to this max concurrent number
+public let frameProcessingMonitor = FileSystemMonitor(max: 32) // XXX make this configurable
+
+// used for loading frames, loading 20 at a time is faster than 1000
+fileprivate let frameLoadMonitor = FileSystemMonitor(max: 20)
 
 // view model for a sequence of images
 @MainActor @Observable
@@ -43,17 +47,21 @@ public final class ImageSequenceViewModel {
 
     var backgroundColor = ViewModel.defaultBackgroundColor
 
-    convenience init(withConfig jsonConfigFilename: String) async throws {
+    convenience init(withConfig jsonConfigFilename: String,
+                     closure: (Int, Double) -> Void) async throws
+    {
         Log.d("outlier_json_startup with \(jsonConfigFilename)")
         // first read config from json
 
         let config = try await Config.read(fromJsonFilename: jsonConfigFilename)
 
-        try await self.init(with: config)
+        try await self.init(with: config, closure: closure)
     }
 
     
-  convenience init(withNewImageSequence imageSequenceDirname: String) async throws {
+    convenience init(withNewImageSequence imageSequenceDirname: String,
+                     closure: (Int, Double) -> Void) async throws
+    {
 
         let shouldWriteOutlierGroupFiles = true // XXX see what happens
         
@@ -104,12 +112,14 @@ public final class ImageSequenceViewModel {
 
         // XXX add this to the recent list
 
-        try await self.init(with: config)
+        try await self.init(with: config, closure: closure)
 
         self.frameViewMode = .original
     }
+    
+    init(with config: Config, closure: (Int, Double) -> Void) async throws {
 
-    init(with config: Config) async throws {
+        // XXX move this
         // overwrite global constants constant :( make this better
         constants = Constants(detectionType: config.detectionType)
 
@@ -120,12 +130,13 @@ public final class ImageSequenceViewModel {
             let imageSequence = try ImageSequence(dirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
                                                   supportedImageFileTypes: config.supportedImageFileTypes)
 
-            
+            print("WTF")
             Log.d("loaded image sequence")
             let callbacks = self.makeCallbacks()
 
+            let imageSequenceSize = await imageSequence.filenames.count
+            
             if let imageSequenceSizeClosure = callbacks.imageSequenceSizeClosure {
-                let imageSequenceSize = await imageSequence.filenames.count
                 imageSequenceSizeClosure(imageSequenceSize)
             }
             
@@ -142,21 +153,24 @@ public final class ImageSequenceViewModel {
 
             for (frameIndex, filename) in await imageSequence.filenames.enumerated() {
                 
+                Log.d("add task at frameIndex \(frameIndex)")
+            
                 taskGroup.addTask() {
                     let basename = removePath(fromString: filename)
-                    let frame = try await FrameAirplaneRemover(with: config,
-                                                               width: imageInfo.imageWidth,
-                                                               height: imageInfo.imageHeight,
-                                                               bytesPerPixel: imageInfo.imageBytesPerPixel,
-                                                               callbacks: callbacks,
-                                                               imageSequence: imageSequence,
-                                                               atIndex: frameIndex,
-                                                               outputFilename: "\(config.outputPath)/\(config.basename)",
-                                                               baseName: basename,
-                                                               outlierOutputDirname: config.outlierOutputDirname,
-                                                               fullyProcess: false,
-                                                               writeOutputFiles: true)
-
+                    let frame = try await frameLoadMonitor.load() {
+                        try await FrameAirplaneRemover(with: config,
+                                                       width: imageInfo.imageWidth,
+                                                       height: imageInfo.imageHeight,
+                                                       bytesPerPixel: imageInfo.imageBytesPerPixel,
+                                                       callbacks: callbacks,
+                                                       imageSequence: imageSequence,
+                                                       atIndex: frameIndex,
+                                                       outputFilename: "\(config.outputPath)/\(config.basename)",
+                                                       baseName: basename,
+                                                       outlierOutputDirname: config.outlierOutputDirname,
+                                                       fullyProcess: false,
+                                                       writeOutputFiles: true)
+                    }
                     if let callback = callbacks.frameCheckClosure {
                         await MainActor.run {
                             callback(frame)
@@ -167,7 +181,14 @@ public final class ImageSequenceViewModel {
             }
 
             var incomingFrames = await [FrameAirplaneRemover?](repeating: nil, count: imageSequence.filenames.count)
+
+            var numberOfLoadedFrames = 0
+            
             for try await frame in taskGroup {
+                numberOfLoadedFrames += 1
+                // call the callback here on the main thread
+                let update = Double(numberOfLoadedFrames)/Double(imageSequenceSize)
+                closure(numberOfLoadedFrames, update)
                 incomingFrames[frame.frameIndex] = frame
             }
 
@@ -215,7 +236,7 @@ public final class ImageSequenceViewModel {
         callbacks.frameStateChangeCallback = { frame, state in
             Task { @MainActor in
                 self.frames[frame.frameIndex].frameState = state
-                self.refresh(frame: frame)
+              await self.refresh(frame: frame)
             }
         }
 
@@ -223,7 +244,7 @@ public final class ImageSequenceViewModel {
         callbacks.frameCheckClosure = { newFrame in
             Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
             Task { @MainActor in
-                self.addToViewModel(frame: newFrame)
+              await self.addToViewModel(frame: newFrame)
             }
         }
         
@@ -414,63 +435,85 @@ public final class ImageSequenceViewModel {
 //        }
     }
     
-    func refresh(frame: FrameAirplaneRemover) {
-        Task {                  // XXX errors thrown from here are not handled :(
-            //Log.d("refreshing frame \(frame.frameIndex)")
-            
-            // load the view frames from the main image
-            
-            // look for saved versions of these
+    func refresh(frame: FrameAirplaneRemover) async {
+        //Log.d("refreshing frame \(frame.frameIndex)")
+        
+        // load the view frames from the main image
+        
+        // look for saved versions of these
 
-            var outlierTask: Task<Void,Never>?
+        var outlierTask: Task<Void,Never>?
 
-//            if self.frames[frame.frameIndex].outlierViews == nil {
-//                outlierTask = Task { await self.setOutlierGroups(forFrame: frame) }
-//            }
-            
-            let acc = frame.imageAccessor
-/*
-            Task.detached {
-                // check to see if the aligned image exists, but the preview does not
-                if acc.imageExists(ofType: .aligned, atSize: .original),
-                   !acc.imageExists(ofType: .aligned, atSize: .preview)
-                {
-                    // make an aligned preview
-                    // other previews are made in loadImage, but we don't want to always
-                    // load all full size aligned images, so we make previews here
-                    try? await acc.writeMissingImage(ofType: .aligned, andSize: .preview)
+        //            if self.frames[frame.frameIndex].outlierViews == nil {
+        //                outlierTask = Task { await self.setOutlierGroups(forFrame: frame) }
+        //            }
+        
+        let acc = frame.imageAccessor
+        /*
+         Task.detached {
+         // check to see if the aligned image exists, but the preview does not
+         if acc.imageExists(ofType: .aligned, atSize: .original),
+         !acc.imageExists(ofType: .aligned, atSize: .preview)
+         {
+         // make an aligned preview
+         // other previews are made in loadImage, but we don't want to always
+         // load all full size aligned images, so we make previews here
+         try? await acc.writeMissingImage(ofType: .aligned, andSize: .preview)
+         }
+         }
+         */          
+        let prTask = Task.detached { await acc.loadImage(type: .processed,  atSize: .preview)?.resizable() }
+        let opTask = Task.detached { await acc.loadImage(type: .original,   atSize: .preview)?.resizable() }
+        let otTask = Task.detached { await acc.loadImage(type: .original,   atSize: .thumbnail) }
+
+        /*
+         XXX check here to see if we have only the original and processed, defer the others 
+         */
+
+        // set list of view modes for this frame
+        // waiting only for processed and originals
+        let existingImages = await Task.detached {
+            var existingImages: [FrameViewMode] = []
+            for type in FrameViewMode.allCases {
+                if acc.imageExists(ofType: .original, atSize: .preview) {
+                    existingImages.append(.original)
+                }
+                if acc.imageExists(ofType: .processed, atSize: .preview) {
+                    existingImages.append(.processed)
                 }
             }
-  */          
-            let prTask = Task.detached { await acc.loadImage(type: .processed,  atSize: .preview)?.resizable() }
-            let opTask = Task.detached { await acc.loadImage(type: .original,   atSize: .preview)?.resizable() }
-            let otTask = Task.detached { await acc.loadImage(type: .original,   atSize: .thumbnail) }
-            if let image = await prTask.value {
-                self.frames[frame.frameIndex].processedPreviewImage = image
-            }
-            if let image = await opTask.value {
-                self.frames[frame.frameIndex].previewImage = image
-            }
-            if let image = await otTask.value {
-                self.frames[frame.frameIndex].thumbnailImage = image
-            }
+            return existingImages
+        }.value
 
-            if let outlierTask { await outlierTask.value }
-
+        Task.detached {
+            // check for the reset in the background
             var existingImages: [FrameViewMode] = []
-            
-            // set list of view modes for this frame
             for type in FrameViewMode.allCases {
                 if acc.imageExists(ofType: type, atSize: .preview) {
                     existingImages.append(type)
                 }
             }
-
-            self.frames[frame.frameIndex].existingImages = existingImages
+            await MainActor.run {
+                self.frames[frame.frameIndex].existingImages = existingImages
+            }
         }
+
+        if let image = await prTask.value {
+            self.frames[frame.frameIndex].processedPreviewImage = image
+        }
+        if let image = await opTask.value {
+            self.frames[frame.frameIndex].previewImage = image
+        }
+        if let image = await otTask.value {
+            self.frames[frame.frameIndex].thumbnailImage = image
+        }
+
+        if let outlierTask { await outlierTask.value }
+        
+        self.frames[frame.frameIndex].existingImages = existingImages
     }
 
-    func append(frame: FrameAirplaneRemover) {
+    func append(frame: FrameAirplaneRemover) async {
         //Log.d("appending frame \(frame.frameIndex)")
 
         guard frame.frameIndex >= 0,
@@ -500,7 +543,7 @@ public final class ImageSequenceViewModel {
         }
         //Log.d("set self.frames[\(frame.frameIndex)].frame")
 
-        refresh(frame: frame)
+        await refresh(frame: frame)
     }
 
     func setOutlierGroups(forFrame frame: FrameAirplaneRemover) async {
@@ -580,7 +623,7 @@ public final class ImageSequenceViewModel {
     }
 
 
-    func addToViewModel(frame newFrame: FrameAirplaneRemover) {
+  func addToViewModel(frame newFrame: FrameAirplaneRemover) async {
         //Log.d("addToViewModel(frame: \(newFrame.frameIndex))")
 
         if self.config == nil {
@@ -596,7 +639,7 @@ public final class ImageSequenceViewModel {
             self.frameWidth = CGFloat(newFrame.width)
             self.frameHeight = CGFloat(newFrame.height)
         }
-        self.append(frame: newFrame)
+        await self.append(frame: newFrame)
         
         // Log.d("addToViewModel self.frame \(self.frame)")
     }
@@ -637,9 +680,9 @@ public extension ImageSequenceViewModel {
                 if renderImmediately {
                     // XXX make render here an option in settings
                     await render(frame: frame) {
-                        await MainActor.run {
-                            self.refresh(frame: frame)
-                        }
+                   //     await MainActor.run {
+                            await self.refresh(frame: frame)
+                   //     }
                     }
                 }
             }
@@ -663,9 +706,9 @@ public extension ImageSequenceViewModel {
                 if renderImmediately {
                     // XXX make render here an option in settings
                     await self.render(frame: frame) {
-                        await MainActor.run {
-                            self.refresh(frame: frame)
-                        }
+                  //      await MainActor.run {
+                            await self.refresh(frame: frame)
+                     //   }
                     }
                 }
             }
@@ -749,7 +792,7 @@ public extension ImageSequenceViewModel {
             await frame.initializeEmptyOutlierGroups()
             try await frame.findOutliers()
 
-            try await frame.applyDecisionTreeToAllOutliers()
+            await frame.applyDecisionTreeToAllOutliers()
 
             await self.render(frame: frame) {
                 Task {
@@ -765,8 +808,8 @@ public extension ImageSequenceViewModel {
     func render(frame: FrameAirplaneRemover, closure: (@Sendable () async -> Void)? = nil) async {
         self.renderingCurrentFrame = true // XXX might not be right anymore
         await self.frameSaveQueue.saveNow(frame: frame) {
+            await self.refresh(frame: frame)
             await MainActor.run {
-                self.refresh(frame: frame)
                 self.renderingCurrentFrame = false
                 //                await MainActor.run {
                 //                }
@@ -955,5 +998,3 @@ public extension ImageSequenceViewModel {
     }
 
 }
-
-

@@ -63,6 +63,8 @@
 		D3FBFA152CE460AD00A23FC6 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA132CE460AD00A23FC6 /* AppDelegate.swift */; };
 		D3FBFA182CE700A700A23FC6 /* FrameEditImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA172CE700A700A23FC6 /* FrameEditImageView.swift */; };
 		D3FBFA1F2CE8FF0500A23FC6 /* ImageSequenceViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA1E2CE8FF0500A23FC6 /* ImageSequenceViewModel.swift */; };
+		D3FBFA212CE91B3800A23FC6 /* CircularProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA202CE91B3800A23FC6 /* CircularProgressView.swift */; };
+		D3FBFA232CE91B4700A23FC6 /* ImageSequenceLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA222CE91B4700A23FC6 /* ImageSequenceLoadingView.swift */; };
 		D3FF93DF2C75745C00A98088 /* MultiChoiceSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */; };
 /* End PBXBuildFile section */
 
@@ -140,6 +142,8 @@
 		D3FBFA132CE460AD00A23FC6 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		D3FBFA172CE700A700A23FC6 /* FrameEditImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameEditImageView.swift; sourceTree = "<group>"; };
 		D3FBFA1E2CE8FF0500A23FC6 /* ImageSequenceViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSequenceViewModel.swift; sourceTree = "<group>"; };
+		D3FBFA202CE91B3800A23FC6 /* CircularProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularProgressView.swift; sourceTree = "<group>"; };
+		D3FBFA222CE91B4700A23FC6 /* ImageSequenceLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSequenceLoadingView.swift; sourceTree = "<group>"; };
 		D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MultiChoiceSheetView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -204,6 +208,8 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D3FBFA222CE91B4700A23FC6 /* ImageSequenceLoadingView.swift */,
+				D3FBFA202CE91B3800A23FC6 /* CircularProgressView.swift */,
 				D3FBFA1E2CE8FF0500A23FC6 /* ImageSequenceViewModel.swift */,
 				D3FBFA172CE700A700A23FC6 /* FrameEditImageView.swift */,
 				D3FBFA132CE460AD00A23FC6 /* AppDelegate.swift */,
@@ -461,6 +467,7 @@
 				D33FFC242A2D48F300F38194 /* FrameEditView.swift in Sources */,
 				D32F6DAE2A4D1C0100704870 /* RenderAllFramesButton.swift in Sources */,
 				D3FBFA0B2CE1B18700A23FC6 /* LimitedSelectionPicker.swift in Sources */,
+				D3FBFA212CE91B3800A23FC6 /* CircularProgressView.swift in Sources */,
 				D3FBFA0C2CE1B18700A23FC6 /* StarPicker.swift in Sources */,
 				D3FBFA102CE25CAA00A23FC6 /* LeftPanel.swift in Sources */,
 				D3DC07FC2C077DEB0031A3AE /* EditableFrameNumberView.swift in Sources */,
@@ -473,6 +480,7 @@
 				D32F6DBA2A4E6FCE00704870 /* BottomRightView.swift in Sources */,
 				D33FFC162A2CFF4700F38194 /* LoadAllOutliersButton.swift in Sources */,
 				D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */,
+				D3FBFA232CE91B4700A23FC6 /* ImageSequenceLoadingView.swift in Sources */,
 				D32F6DB02A4D2ADA00704870 /* RenderCurrentFrameButton.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

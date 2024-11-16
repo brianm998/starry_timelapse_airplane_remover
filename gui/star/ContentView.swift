@@ -13,9 +13,12 @@ struct ContentView: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
     
     var body: some View {
-        if let imageSequenceViewModel = viewModel.imageSequence {
+        if viewModel.isLoadingImageSequence {
+            ImageSequenceLoadingView()
+        } else if let imageSequenceViewModel = viewModel.imageSequence {
             ImageSequenceView()
               .environment(imageSequenceViewModel)
+              .navigationTitle(imageSequenceViewModel.config?.imageSequenceDirname ?? "Star")
         } else {
             InitialView()
         }

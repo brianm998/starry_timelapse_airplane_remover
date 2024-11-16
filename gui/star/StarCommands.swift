@@ -51,7 +51,6 @@ struct StarCommands: Commands {
                     await MainActor.run {
                         // XXX make sure the current sequence isn't still processing somehow
                         viewModel.unloadSequence()
-                        // XXX this doesn't work :(
                     }
                 }
             }

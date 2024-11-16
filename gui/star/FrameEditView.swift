@@ -48,9 +48,9 @@ struct FrameEditView: View {
                               await MainActor.run {
                                   self.viewModel.saveToFile(frame: frameToSave) {
                                       Log.d("saving frame \(frameToSave.frameIndex)")
-                                      await MainActor.run {
-                                          self.viewModel.refresh(frame: frameToSave)
-                                      }
+                                     // await MainActor.run {
+                                          await self.viewModel.refresh(frame: frameToSave)
+                                     // }
                                   }
                               }
                           }

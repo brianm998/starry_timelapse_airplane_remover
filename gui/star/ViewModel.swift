@@ -8,7 +8,7 @@ import logging
 // the overall view model
 @MainActor @Observable
 public final class ViewModel {
-    var config: Config?
+//    var config: Config?
 
     var userPreferences: UserPreferences = UserPreferences()
 
@@ -29,6 +29,11 @@ public final class ViewModel {
     
     var labelText: String = "Started"
 
+    var isLoadingImageSequence = false
+
+    var amountLoaded = 0.0
+    var numberLoaded = 0
+    
     //var backgroundColor = Color(red: 0.4, green: 0.4, blue: 0.4)
     var backgroundColor = ViewModel.defaultBackgroundColor
 
@@ -48,13 +53,27 @@ public final class ViewModel {
     }
 
     func startup(withConfig jsonConfigFilename: String) async throws {
-        imageSequence = try await ImageSequenceViewModel(withConfig: jsonConfigFilename)
+        isLoadingImageSequence = true
+        imageSequence = try await ImageSequenceViewModel(withConfig: jsonConfigFilename) { numberLoaded, amountLoaded in
+            self.amountLoaded = amountLoaded
+            self.numberLoaded = numberLoaded
+        }
+        isLoadingImageSequence = false
+        numberLoaded = 0
+        amountLoaded = 0.0
         self.userPreferences.justOpened(filename: jsonConfigFilename) // make sure this works
     }
 
     
     func startup(withNewImageSequence imageSequenceDirname: String) async throws {
-        imageSequence = try await ImageSequenceViewModel(withNewImageSequence: imageSequenceDirname)
+        isLoadingImageSequence = true
+        imageSequence = try await ImageSequenceViewModel(withNewImageSequence: imageSequenceDirname) { numberLoaded, amountLoaded in
+            self.amountLoaded = amountLoaded
+            self.numberLoaded = numberLoaded
+        }
+        isLoadingImageSequence = false
+        numberLoaded = 0
+        amountLoaded = 0.0
     }
 }
 
