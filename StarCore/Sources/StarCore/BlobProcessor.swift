@@ -392,7 +392,7 @@ public class BlobProcessor {
                 
                 
             case .save(let imageType):
-                if frame.config.writeOutlierGroupFiles {
+                if await frame.configManager.config().writeOutlierGroupFiles {
                     // save image
                     let fuck = imageType
                     try await frame.saveImages(for: Array(blobMap.values), as: fuck)
@@ -497,7 +497,7 @@ public class BlobProcessor {
         // airplanes show up as lines or dots in a line
         // because the image subtracted from this frame had the sky aligned,
         // the ground may get moved, and therefore may contain blobs as well.
-        let blobber = FullFrameBlobber(config: frame.config,
+        let blobber = FullFrameBlobber(config: await frame.configManager.config(),
                                        imageWidth: frame.width,
                                        imageHeight: frame.height,
                                        subtractionPixelData: subtractionArray,

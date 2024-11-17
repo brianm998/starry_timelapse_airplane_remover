@@ -160,7 +160,7 @@ public final class ImageSequenceViewModel {
                 taskGroup.addTask() {
                     let basename = removePath(fromString: filename)
                     let frame = try await frameLoadMonitor.load() {
-                        try await FrameAirplaneRemover(with: config,
+                        try await FrameAirplaneRemover(with: configManager,
                                                        width: imageInfo.imageWidth,
                                                        height: imageInfo.imageHeight,
                                                        bytesPerPixel: imageInfo.imageBytesPerPixel,
@@ -169,7 +169,6 @@ public final class ImageSequenceViewModel {
                                                        atIndex: frameIndex,
                                                        outputFilename: "\(config.outputPath)/\(config.basename)",
                                                        baseName: basename,
-                                                       outlierOutputDirname: config.outlierOutputDirname,
                                                        fullyProcess: false,
                                                        writeOutputFiles: true)
                     }

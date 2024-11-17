@@ -37,6 +37,11 @@ public class ConfigManager {
     private var _jsonFilename: String
 
     private var _config: Config
+
+    public init() {
+        _jsonFilename = ""
+        _config = Config()
+    }
     
     public init(configFilename: String, config: Config) {
         self._jsonFilename = configFilename
@@ -229,8 +234,10 @@ public struct Config: Codable, Sendable, Transferable {
     // 0.6.7 y-axis outlier images, two new classfication features
     // 0.7.0 updated FullFrameBlobber, added BlobProcessor and LinearBlobConnector, KHT works now
     
-    public var starVersion = "0.7.0" // XXX move this out
+    public var starVersion = Config.latestVersion
 
+    public static let latestVersion = "0.7.0"
+    
     public var basename: String {
         let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)-\(self.detectionType.rawValue)"
         return _basename.replacingOccurrences(of: ".", with: "_")

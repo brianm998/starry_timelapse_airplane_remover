@@ -58,7 +58,7 @@ extension FrameAirplaneRemover {
         // alpha one means overwrite original pixel entierly with data from other frame
 
         // the alpha mask that we will convolve across all paintable pixels
-        let paintMask = self.paintMask
+        let paintMask = await self.paintMask
         let paintMaskIntRadius = Int(paintMask.radius)
 
         // only paint when we have found at least one positive outlier group
@@ -102,6 +102,8 @@ extension FrameAirplaneRemover {
             }
         }
 
+        let config = await configManager.config()
+        
         if config.writeOutlierGroupFiles { // XXX this config value is very much overloaded
             var paintMaskImageData = [UInt8](repeating: 0, count: width*height)
 

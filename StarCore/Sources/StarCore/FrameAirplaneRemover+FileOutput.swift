@@ -31,11 +31,13 @@ extension FrameAirplaneRemover {
     private func writeOutlierValuesCSVInt() async throws {
 
         Log.d("frame \(self.frameIndex) writeOutlierValuesCSV")
+        let config = await configManager.config()
+        
         if config.writeOutlierGroupFiles {
             // write out the decision tree value matrix too
             Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1")
 
-            let frameOutlierDir = "\(self.outlierOutputDirname)/\(self.frameIndex)"
+            let frameOutlierDir = "\(config.outlierOutputDirname)/\(self.frameIndex)"
             let csvFilename = "\(frameOutlierDir)/\(CondensedOutlierGroupValueMatrix.outlierDataFilename)"
 
             // check to see if both of these files exist already
@@ -67,10 +69,11 @@ extension FrameAirplaneRemover {
     }
 
     public func writeOutliersPaintReasons() async {
+        let config = await configManager.config()
         if config.writeOutlierGroupFiles {
             do {
                 try await fileSystemMonitor.save() {
-                    try await self.outlierGroups?.write(to: self.outlierOutputDirname)
+                    try await self.outlierGroups?.write(to: config.outlierOutputDirname)
                 }
             } catch {
                 Log.e("error \(error)")

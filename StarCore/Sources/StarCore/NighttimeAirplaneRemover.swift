@@ -169,7 +169,7 @@ public actor NighttimeAirplaneRemover {
 
     // ImageSequenceProcessor code
 
-    public var config: Config
+    public var configManager: ConfigManager
     public var callbacks: Callbacks
 
     public func set(callbacks: Callbacks) {
@@ -198,7 +198,7 @@ public actor NighttimeAirplaneRemover {
     
     public let basename: String
     
-    public init(with config: Config,
+    public init(with configManager: ConfigManager,
                 callbacks: Callbacks,
                 processExistingFiles: Bool,
                 maxResidentImages: Int? = nil,
@@ -206,11 +206,13 @@ public actor NighttimeAirplaneRemover {
                 isGUI: Bool = false,
                 writeOutputFiles: Bool = true) async throws
     {
-        self.config = config
+        self.configManager = configManager
         self.callbacks = callbacks
         self.isGUI = isGUI     // XXX make this better
         self.writeOutputFiles = writeOutputFiles
 
+        let config = await configManager.config()
+        
         self.basename = config.basename
 
         self.processExistingFiles = processExistingFiles
@@ -308,6 +310,8 @@ public actor NighttimeAirplaneRemover {
             }
         }
 
+        let config = await configManager.config()
+        
         if config.writeOutlierGroupFiles {
             // doesn't do mkdir -p, if a base dir is missing it just hangs :(
             mkdir(config.outlierOutputDirname) // XXX this can fail silently and pause the whole process :(
@@ -329,7 +333,7 @@ public actor NighttimeAirplaneRemover {
                       baseName: String) async throws -> FrameAirplaneRemover
     {
         await numberLeft.increment()
-        let frame = try await FrameAirplaneRemover(with: config,
+        let frame = try await FrameAirplaneRemover(with: configManager,
                                                    width: imageWidth!,
                                                    height: imageHeight!,
                                                    bytesPerPixel: imageBytesPerPixel!,
@@ -338,7 +342,6 @@ public actor NighttimeAirplaneRemover {
                                                    atIndex: index,
                                                    outputFilename: outputFilename,
                                                    baseName: baseName,
-                                                   outlierOutputDirname: config.outlierOutputDirname,
                                                    fullyProcess: fullyProcess,
                                                    writeOutputFiles: writeOutputFiles)
         {

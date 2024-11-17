@@ -44,11 +44,15 @@ extension FrameAirplaneRemover {
     }
 
     public var blobBinaryFilename: String {
-        "\(outlierOutputDirname)/\(frameIndex)/\(BlobBinarySaver.outlierBinaryFilename)"
+        get async {
+            let config = await configManager.config()
+            return "\(config.outlierOutputDirname)/\(frameIndex)/\(BlobBinarySaver.outlierBinaryFilename)"
+        }
     }
     
     public func loadOutliersFromBinaryFile() async throws -> OutlierGroups? {
-        let dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
+        let config = await configManager.config()
+        let dirname = "\(config.outlierOutputDirname)/\(frameIndex)"
 
         return try await OutlierGroups(at: frameIndex, fromOutlierDir: dirname)
     }
@@ -71,10 +75,11 @@ extension FrameAirplaneRemover {
 
         case .sixteenBit(let subtractionArr):
             do {
+                let config = await configManager.config()
                 if let groups = try await OutlierGroups(at: frameIndex,
                                                         withSubtractionArr: subtractionArr,
 
-                                                        fromOutlierDir: "\(self.outlierOutputDirname)/\(frameIndex)")
+                                                        fromOutlierDir: "\(config.outlierOutputDirname)/\(frameIndex)")
                 {
                     let endTime = Date().timeIntervalSinceReferenceDate
                     Log.i("frame \(frameIndex) loaded \(await groups.members.count) outliers in \(endTime-startTime) seconds")
@@ -91,7 +96,7 @@ extension FrameAirplaneRemover {
 
     public func findOutliers() async throws {
         
-        mkdir(self.outliersDirname)
+        mkdir(await self.outliersDirname)
         
         let blobMap = try await BlobProcessor(frame: self).run()
 
@@ -385,16 +390,16 @@ extension FrameAirplaneRemover {
         }
 
         self.userSlices = newSlices
-        saveUserSlices()
+        await saveUserSlices()
     }
     
-    public func saveUserSlices() {
+    public func saveUserSlices() async {
         guard let userSlices else { return }
         let encoder = JSONEncoder()
         do {
-            let jsonData = try encoder.encode(self.userSlices)
+            let jsonData = try encoder.encode(userSlices)
 
-            let fullPath = self.userSliceFilename
+            let fullPath = await self.userSliceFilename
             if FileManager.default.fileExists(atPath: fullPath) {
                 try FileManager.default.removeItem(atPath: fullPath)
             } 
@@ -407,18 +412,24 @@ extension FrameAirplaneRemover {
     
     public func loadUserSlices() async {
         do {
-            let slices_url = NSURL(fileURLWithPath: self.userSliceFilename, isDirectory: false) as URL
+            let slices_url = NSURL(fileURLWithPath: await self.userSliceFilename,
+                                   isDirectory: false) as URL
             let (data, _) = try await URLSession.shared.data(for: URLRequest(url: slices_url))
             let decoder = JSONDecoder()
             self.userSlices = try decoder.decode([BoundingBox].self, from: data)
         } catch {
             //Log.e("cannot load user slices: \(error)")
 
-            mkdir(self.userSliceDirname)
+            mkdir(await self.userSliceDirname)
         }
     }
 
-    public var outliersDirname: String { "\(self.outlierOutputDirname)/\(frameIndex)" }
+    public var outliersDirname: String {
+        get async {
+            let config = await configManager.config()
+            return "\(config.outlierOutputDirname)/\(frameIndex)"
+        }
+    }
     
     public func deleteOutliers(in boundingBox: BoundingBox) async throws {
         await outlierGroups?.deleteOutliers(in: boundingBox)

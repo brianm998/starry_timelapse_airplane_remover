@@ -88,8 +88,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     nonisolated public let bytesPerRow: Int
     nonisolated public let frameIndex: Int
 
-    nonisolated public let outlierOutputDirname: String
-    
     // populated by pruning
     public var outlierGroups: OutlierGroups? 
 
@@ -133,7 +131,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public let outputFilename: String
 
-    public let config: Config
+    public let configManager: ConfigManager
     public let callbacks: Callbacks
 
     public let baseName: String
@@ -168,7 +166,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     
     internal var isLoadingOutliers = false
     
-    public init(with config: Config,
+    public init(with configManager: ConfigManager,
                 width: Int,
                 height: Int,
                 bytesPerPixel: Int,
@@ -177,22 +175,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 atIndex frameIndex: Int,
                 outputFilename: String,
                 baseName: String,       // source filename without path
-                outlierOutputDirname: String,
                 fullyProcess: Bool = true,
                 writeOutputFiles: Bool = true,
                 completion: (@Sendable () async -> Void)? = nil) async throws
     {
-        self.imageAccessor = ImageAccessor(config: config,
+        // the image accessor always has the orignal config
+        self.imageAccessor = ImageAccessor(config: await configManager.config(),
                                            imageSequence: imageSequence,
                                            baseFileName: baseName)
         self.fullyProcess = fullyProcess
         self.writeOutputFiles = writeOutputFiles
-        self.config = config
+        self.configManager = configManager
         self.baseName = baseName
         self.callbacks = callbacks
         self.frameIndex = frameIndex // frame index in the image sequence
         self.outputFilename = outputFilename
-        self.outlierOutputDirname = outlierOutputDirname
         self.completion = completion
         self.width = width
         self.height = height
@@ -246,11 +243,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public var userSliceDirname: String {
-        "\(config.outputPath)/\(config.imageSequenceDirname)-star-user-slices"
+        get async {
+            let config = await configManager.config()
+            return "\(config.outputPath)/\(config.imageSequenceDirname)-star-user-slices"
+        }
     }
 
     public var userSliceFilename: String {
-        "\(self.userSliceDirname)/slices_\(frameIndex).json"
+        get async {
+            let dirname = await self.userSliceDirname
+            return "\(dirname)/slices_\(frameIndex).json"
+        }
     }
 
     // lazy loaded aligned a neighboring frame
@@ -306,12 +309,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     var _paintMask: PaintMask?
     
     var paintMask: PaintMask {
-        if let _paintMask { return _paintMask }
+        get async {
+            if let _paintMask { return _paintMask }
 
-        let mask = PaintMask(innerWallSize: config.outlierGroupPaintBorderInnerWallPixels,
-                             radius: config.outlierGroupPaintBorderPixels)
-        _paintMask = mask
-        return mask
+            let config = await configManager.config()
+
+            let mask = PaintMask(innerWallSize: config.outlierGroupPaintBorderInnerWallPixels,
+                                 radius: config.outlierGroupPaintBorderPixels)
+            _paintMask = mask
+            return mask
+        }
     }
 
     // run after shouldPaint has been set for each group, 
@@ -319,12 +326,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func finish() async throws {
         Log.d("frame \(self.frameIndex) starting to finish")
         
-        mkdir(self.outliersDirname)
+        mkdir(await self.outliersDirname)
         
         await self.writeOutliersPaintReasons()
 
         self.set(state: .finishing)
 
+        let config = await configManager.config()
+        
         if config.writeOutlierClassificationValues {
             // THIS MOFO IS SLOW
             self.set(state: .writingOutlierValues)

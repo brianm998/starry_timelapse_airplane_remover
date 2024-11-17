@@ -72,6 +72,8 @@ extension FrameAirplaneRemover {
         // any pixel which is bright in image but not bright in alignedFrame
         // will be bright in the subtractionImage
         let subtractionImage = image.subtract(alignedFrame)
+
+        let config = await configManager.config()
         
         if config.writeOutlierGroupFiles {
             // write out image of outlier amounts

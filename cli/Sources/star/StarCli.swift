@@ -232,7 +232,7 @@ struct StarCli: AsyncParsableCommand {
 
     mutating func run() async throws {
 
-        var config: Config = Config()
+        var configManager: ConfigManager = await ConfigManager()
 
         TaskRunner.maxConcurrentTasks = numConcurrentRenders
 
@@ -245,7 +245,7 @@ struct StarCli: AsyncParsableCommand {
 
         if version {
             print("""
-                  Starry Timelapse Airplane Remover (star) version \(config.starVersion)
+                  Starry Timelapse Airplane Remover (star) version \(Config.latestVersion)
                   """)
             return
         }
@@ -264,12 +264,15 @@ struct StarCli: AsyncParsableCommand {
                 let fuck = inputImageSequenceDirname
 
                 do {
-                    config = try await Config.read(fromJsonFilename: fuck)
+                    configManager = try await ConfigManager(configFilename: fuck)
+                    var config = await configManager.config() 
                     config.writeOutlierClassificationValues = shouldWriteOutlierClassificationValues
+                    await configManager.update(config)
                     // overwrite global constants constant 
                     // not really thread safe,
                     // but we only do it here before starting any other threads.
                     constants = Constants(detectionType: config.detectionType)
+
                 } catch {
                     print("\(error)")
                 }
@@ -308,16 +311,21 @@ struct StarCli: AsyncParsableCommand {
                     _outputPath = inputImageSequencePath
                 }
 
-                config = Config(outputPath: _outputPath,
-                                detectionType: detectionType,
-                                imageSequenceName: inputImageSequenceName,
-                                imageSequencePath: inputImageSequencePath,
-                                writeOutlierGroupFiles: shouldWriteOutlierGroupFiles,
-                                // maybe make a separate command line parameter for these VVV? 
-                                writeFramePreviewFiles: shouldWriteOutlierGroupFiles,
-                                writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
-                                writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
+                var config = Config(outputPath: _outputPath,
+                                    detectionType: detectionType,
+                                    imageSequenceName: inputImageSequenceName,
+                                    imageSequencePath: inputImageSequencePath,
+                                    writeOutlierGroupFiles: shouldWriteOutlierGroupFiles,
+                                    // maybe make a separate command line parameter for these VVV? 
+                                    writeFramePreviewFiles: shouldWriteOutlierGroupFiles,
+                                    writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
+                                    writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
 
+                let configFilename = "\(config.basename)-config.json"
+                
+                configManager = await ConfigManager(configFilename: configFilename,
+                                                    config: config)
+                
                 config.writeOutlierClassificationValues = shouldWriteOutlierClassificationValues
 
                 // overwrite global constants constant :( make this better
@@ -343,7 +351,7 @@ struct StarCli: AsyncParsableCommand {
                             for: .console)
                     let name = inputImageSequenceName
                     let path = inputImageSequencePath
-                    let message = "star v\(config.starVersion) is processing images from sequence in \(path)/\(name)" // XXX this shows the version from the config file, not the running version (:
+                    let message = "star v\(Config.latestVersion) is processing images from sequence in \(path)/\(name)"
                     Task {
                         await updatable.log(name: "star",
                                             message: message,
@@ -371,7 +379,7 @@ struct StarCli: AsyncParsableCommand {
 
             do {
 
-                let eraser = try await NighttimeAirplaneRemover(with: config,
+                let eraser = try await NighttimeAirplaneRemover(with: configManager,
                                                                 callbacks: callbacks,
                                                                 processExistingFiles: false,
                                                                 maxResidentImages: 40, // XXX
@@ -384,7 +392,7 @@ struct StarCli: AsyncParsableCommand {
                     let updatableProgressMonitor =
                       UpdatableProgressMonitor(frameCount: frameCount,
                                                numConcurrentRenders: 30, // XXX use num cpus?
-                                               config: config,
+                                               config: await configManager.config(),
                                                callbacks: callbacks)
                     callbacks.frameStateChangeCallback = { frame, state in
                         // XXX make sure to wait for this
