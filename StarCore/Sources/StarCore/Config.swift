@@ -188,7 +188,7 @@ public struct Config: Codable, Sendable, Transferable {
         "\(self.outputPath)/\(self.basename)-outliers"
     }
     
-    public func writeJson(named filename: String) {
+    public func writeJson(named filename: String, overwrite: Bool = false) {
         
         // write to config json
 
@@ -201,6 +201,10 @@ public struct Config: Codable, Sendable, Transferable {
             let fullPath = "\(self.outputPath)/\(filename)"
             if FileManager.default.fileExists(atPath: fullPath) {
                 Log.w("cannot write to \(fullPath), it already exists")
+                if overwrite {
+                    try? FileManager.default.removeItem(atPath: fullPath)
+                    FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
+                }
             } else {
                 Log.i("creating \(fullPath)")                      
                 FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)

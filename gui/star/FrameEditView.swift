@@ -90,7 +90,6 @@ struct FrameEditView: View {
                           y: drag_y_offset - CGFloat(viewModel.frameHeight/2) + height/2)
             }
         }
-        // XXX selecting and zooming conflict with eachother
           .gesture(self.selectionDragGesture)
     }
 

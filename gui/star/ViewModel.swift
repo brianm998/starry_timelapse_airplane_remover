@@ -8,7 +8,6 @@ import logging
 // the overall view model
 @MainActor @Observable
 public final class ViewModel {
-//    var config: Config?
 
     var userPreferences: UserPreferences = UserPreferences()
 
@@ -22,8 +21,6 @@ public final class ViewModel {
 //    @Environment(\.openWindow) private var openWindow
 
     
-//    var sequenceLoaded = false
-
     func report(error: String) {
         self.showErrorAlert = true
         self.errorMessage = "\(error)"
@@ -54,7 +51,6 @@ public final class ViewModel {
     // prepare for another sequence
     func unloadSequence() {
         imageSequence = nil
-//        self.sequenceLoaded = false
     }
 
     func startup(withConfigFile jsonConfigFilename: String) async throws {
@@ -80,9 +76,7 @@ public final class ViewModel {
         numberLoaded = 0
         amountLoaded = 0.0
 
-        if let filename = imageSequence?.jsonConfigFilename {
-            self.userPreferences.justOpened(filename: filename) 
-        }
+        // just opened handled in InitialView where we know the full path
     }
 
     func startup(withNewImageSequence imageSequenceDirname: String) async throws {
@@ -96,8 +90,10 @@ public final class ViewModel {
         numberLoaded = 0
         amountLoaded = 0.0
 
-        if let filename = imageSequence?.jsonConfigFilename {
-            self.userPreferences.justOpened(filename: filename) 
+        if let filename = imageSequence?.jsonConfigFilename,
+           let config = imageSequence?.config
+        {
+            self.userPreferences.justOpened(filename: "\(config.outputPath)/\(filename)")
         }
     }
 }

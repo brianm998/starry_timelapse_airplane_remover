@@ -13,8 +13,6 @@ struct OutlierGroupView: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        // .bottomLeading alignment is used to avoid a bug in .onHover and onTap
-        // which is described in more detail in FrameEditView
         ZStack() {
             let frameWidth = self.groupViewModel.viewModel.frameWidth
             let frameHeight = self.groupViewModel.viewModel.frameHeight
@@ -22,8 +20,8 @@ struct OutlierGroupView: View {
             let unknown_paint = self.groupViewModel.paintObserver.shouldPaint?.willPaint == nil
             let will_paint = self.groupViewModel.paintObserver.shouldPaint?.willPaint ?? false
             let paint_color = self.groupViewModel.groupColor
-            let arrow_length = self.arrowLength
-            let arrow_height = self.arrowHeight
+            let arrow_length = self.groupViewModel.viewModel.arrowLength
+            let arrow_height = self.groupViewModel.viewModel.arrowHeight
             let line_width = self.lineWidth
             let center_x = CGFloat(bounds.center.x)
             let center_y = CGFloat(bounds.center.y)
@@ -302,18 +300,6 @@ struct OutlierGroupView: View {
           .opacity(0.5)
     }
     
-    private var arrowLength: CGFloat {
-        let viewModel = self.groupViewModel.viewModel
-        let frameWidth = viewModel.frameWidth
-        return frameWidth/viewModel.outlierArrowLength
-    }
-
-    private var arrowHeight: CGFloat {
-        let viewModel = self.groupViewModel.viewModel
-        let frameWidth = viewModel.frameWidth
-        return frameWidth/viewModel.outlierArrowHeight
-    }
-    
-    private var lineWidth: CGFloat { self.arrowHeight/8 }
+    private var lineWidth: CGFloat { self.groupViewModel.viewModel.arrowHeight/8 }
 }
 

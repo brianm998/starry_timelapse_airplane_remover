@@ -113,6 +113,7 @@ struct InitialView: View {
                                     let config = try Config.read(fromJsonFilename: url.path)
                                     Task { @MainActor in
                                         try await self.viewModel.startup(withConfig: config)
+                                        self.viewModel.userPreferences.justOpened(filename: url.path) 
                                     }
                                 } catch {
                                     Log.e("cannot load \(url.path): \(error)")

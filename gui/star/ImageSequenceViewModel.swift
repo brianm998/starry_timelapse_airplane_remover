@@ -76,7 +76,7 @@ public final class ImageSequenceViewModel {
 
         if !inputImageSequenceDirname.hasPrefix("/") {
             let fullPath =
-              FileManager.default.currentDirectoryPath + "/" + 
+              FileManager.default.currentDirectoryPath + "/" +
               inputImageSequenceDirname
             inputImageSequenceDirname = fullPath
         }
@@ -129,6 +129,10 @@ public final class ImageSequenceViewModel {
         // overwrite global constants constant :( make this better
         constants = Constants(detectionType: config.detectionType)
 
+        if let ignoreLowerPixels = config.ignoreLowerPixels {
+            self.ignoreLowerPixels = CGFloat(ignoreLowerPixels) // XXX need to sync back the other dir
+        }
+        
         try await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
             
             Log.d("loaded config \(config.imageSequenceDirname)")
@@ -283,6 +287,14 @@ public final class ImageSequenceViewModel {
     // how long the arrows are
     var outlierArrowLength: CGFloat = 70 // relative to the frame width above
 
+    var arrowLength: CGFloat {
+        self.frameWidth/self.outlierArrowLength
+    }
+    
+    var arrowHeight: CGFloat {
+        self.frameWidth/self.outlierArrowHeight
+    }
+    
     // how high they are (if pointing sideways)
     var outlierArrowHeight: CGFloat = 180
     
@@ -309,6 +321,10 @@ public final class ImageSequenceViewModel {
 
     var isProcessingAllFrames = false
     var numberOfFramesProcessed = 0
+
+    var showIgnoreLowerBar = false
+    
+    var ignoreLowerPixels: CGFloat = 0
 
     var windowTitle: String {
         if let sequenceDirname = self.config?.imageSequenceDirname {
