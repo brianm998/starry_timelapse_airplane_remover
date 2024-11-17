@@ -287,6 +287,13 @@ public final class ImageSequenceViewModel {
     // how long the arrows are
     var outlierArrowLength: CGFloat = 70 // relative to the frame width above
 
+    var frameSize: CGSize {
+        var ret = CGSize()
+        ret.width = frameWidth
+        ret.height = frameHeight
+        return ret
+    }
+    
     var arrowLength: CGFloat {
         self.frameWidth/self.outlierArrowLength
     }

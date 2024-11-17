@@ -103,7 +103,12 @@ struct BottomRightView: View {
                         ProgressView()
                         Text("processing \(viewModel.frames.count - viewModel.numberOfFramesProcessed) more frames")
                       .foregroundColor(.white)
-                    }                    
+                    }
+                    if viewModel.showIgnoreLowerBar {
+                        Toggle("Show Ignore Bar", isOn: $viewModel.showIgnoreLowerBar)
+                          .foregroundColor(.white)
+                    }
+
                     EditableFrameNumberView()
                 }
             }

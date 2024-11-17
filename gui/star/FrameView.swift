@@ -15,8 +15,8 @@ public struct FrameView: View {
             case .scrub:
                 // the current frame by itself for fast video playback and scrubbing
                 FrameImageView()
-                  .aspectRatio(contentMode: . fit)
-                  .padding([.top])
+                  .aspectRatio(viewModel.frameSize, contentMode: .fit)
+//                  .padding([.top])
 
             case .edit: 
                 // the currently visible frame with outliers made visible

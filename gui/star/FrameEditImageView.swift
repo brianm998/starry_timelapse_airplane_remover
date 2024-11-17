@@ -76,7 +76,6 @@ public struct FrameEditImageView: View {
     public var body: some View {
         @Bindable var viewModel = viewModel
 
-
         return Group {
             ZStack() {
 
@@ -87,7 +86,7 @@ public struct FrameEditImageView: View {
                 }
 
                 if viewModel.showIgnoreLowerBar {
-                    self.ignoreBar
+                    IgnoreBarView()
                 }
 
                 Rectangle()
