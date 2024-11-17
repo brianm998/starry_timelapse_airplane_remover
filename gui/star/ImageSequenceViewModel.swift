@@ -41,7 +41,7 @@ fileprivate let frameLoadMonitor = FileSystemMonitor(max: 20)
 // view model for a sequence of images
 @MainActor @Observable
 public final class ImageSequenceViewModel {
-    var config: Config?
+    var config: ConfigManager?
     var eraser: NighttimeAirplaneRemover?
     var noImageExplainationText: String = "Loading..."
 
@@ -53,7 +53,7 @@ public final class ImageSequenceViewModel {
         Log.d("outlier_json_startup with \(jsonConfigFilename)")
         // first read config from json
 
-        let config = try Config.read(fromJsonFilename: jsonConfigFilename)
+        let config = try ConfigManager(configFilename: jsonConfigFilename)
 
         try await self.init(with: config, closure: closure)
     }
@@ -102,11 +102,11 @@ public final class ImageSequenceViewModel {
                             writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
                             writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
 
-        try await self.init(with: config, closure: closure)
-
-        if let filename = self.jsonConfigFilename {
-            config.writeJson(named: filename)
-        }
+        let configFilename = "\(config.basename)-config.json"
+        
+        let configManager = ConfigManager(configFilename: configFilename, config: config)
+        
+        try await self.init(with: configManager, closure: closure)
 
         if config.writeOutlierGroupFiles {
             mkdir(config.outlierOutputDirname)
@@ -114,17 +114,13 @@ public final class ImageSequenceViewModel {
 
         self.frameViewMode = .original
     }
+ 
+    init(with configManager: ConfigManager, closure: (Int, Double) -> Void) async throws {
 
-    var jsonConfigFilename: String? {
-        if let config {
-            return "\(config.basename)-config.json"
-        } else {
-            return nil
-        }
-    }
+        let config = configManager.config()
 
-    init(with config: Config, closure: (Int, Double) -> Void) async throws {
-
+        self.config = configManager
+        
         // XXX move this
         // overwrite global constants constant :( make this better
         constants = Constants(detectionType: config.detectionType)
@@ -156,10 +152,6 @@ public final class ImageSequenceViewModel {
             IMAGE_HEIGHT = Double(imageInfo.imageHeight)
             
             Log.d("loaded imageInfo \(imageInfo)")
-
-            await MainActor.run {
-                self.config = config
-            }
 
             for (frameIndex, filename) in await imageSequence.filenames.enumerated() {
                 
@@ -336,7 +328,7 @@ public final class ImageSequenceViewModel {
     var ignoreLowerPixels: CGFloat = 0
 
     var windowTitle: String {
-        if let sequenceDirname = self.config?.imageSequenceDirname {
+        if let sequenceDirname = self.config?.config().imageSequenceDirname {
             return "Star - \(sequenceDirname)"
         } else {
             return "Star"
@@ -788,7 +780,7 @@ public extension ImageSequenceViewModel {
                 // grab them one by one, and process when proces
 
                 for try await frame in taskGroup {
-                    let numNeighbors = config?.numberFinalProcessingNeighborsNeeded ?? 1
+                    let numNeighbors = config?.config().numberFinalProcessingNeighborsNeeded ?? 1
                     var minFrameIndex = frame.frameIndex - numNeighbors
                     var maxFrameIndex = frame.frameIndex + numNeighbors
                     if minFrameIndex < 0 { minFrameIndex = 0 }

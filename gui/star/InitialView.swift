@@ -110,8 +110,8 @@ struct InitialView: View {
                             } else if url.path.hasSuffix(".json") {
                                 // try to parse out a config file
                                 do {
-                                    let config = try Config.read(fromJsonFilename: url.path)
                                     Task { @MainActor in
+                                        let config = try ConfigManager(configFilename: url.path)
                                         try await self.viewModel.startup(withConfig: config)
                                         self.viewModel.userPreferences.justOpened(filename: url.path) 
                                     }

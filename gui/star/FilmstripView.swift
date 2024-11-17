@@ -26,7 +26,7 @@ struct FilmstripView: View {
                       .onChange(of: viewModel.currentIndex, initial: true) {
                           scroller.scrollTo(viewModel.currentIndex)
                       }
-                      .frame(minHeight: CGFloat((viewModel.config?.thumbnailHeight ?? 50) + 30))
+                      .frame(minHeight: CGFloat((viewModel.config?.config().thumbnailHeight ?? 50) + 30))
                 }
             }
         }

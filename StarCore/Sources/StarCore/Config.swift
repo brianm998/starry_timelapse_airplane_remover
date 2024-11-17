@@ -12,7 +12,59 @@ star is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY
 
 You should have received a copy of the GNU General Public License along with star. If not, see <https://www.gnu.org/licenses/>.
 
-*/
+ */
+
+/*
+
+ We need a config manager class
+
+ an main actor which holds a config
+
+ and knows how to save it again
+
+ use this same config manager for all config accesses
+
+ use this to allow changes in config at runtime in the gui to be used by StarCore
+
+ The config manager can give the latest config, which is then used within a method
+
+ save and load config in background
+ 
+ */
+
+@MainActor 
+public class ConfigManager {
+    private var _jsonFilename: String
+
+    private var _config: Config
+    
+    public init(configFilename: String, config: Config) {
+        self._jsonFilename = configFilename
+        self._config = config
+    }
+    
+    public init(configFilename: String) throws {
+        self._jsonFilename = configFilename
+        if FileManager.default.fileExists(atPath: _jsonFilename) {
+            self._config = try Config.read(fromJsonFilename: _jsonFilename)
+        } else {
+            self._config = Config()
+        }
+    }
+
+    public func save() {
+        _config.writeJson(named: _jsonFilename, overwrite: true) 
+    }
+
+    public func jsonFilename() -> String { _jsonFilename }
+    
+    public func config() -> Config { _config }
+
+    public func update(_ config: Config) {
+        self._config = config
+        save()
+    }
+}
 
 public struct Config: Codable, Sendable, Transferable {
  
@@ -33,7 +85,7 @@ public struct Config: Codable, Sendable, Transferable {
     }
 
     // returns a stored json config file
-    public static func read(fromJsonFilename filename: String) throws -> Config {
+    fileprivate static func read(fromJsonFilename filename: String) throws -> Config {
         let config_url = NSURL(fileURLWithPath: filename, isDirectory: false) as URL
 
         let config_data = try Data(contentsOf: config_url)
@@ -198,12 +250,19 @@ public struct Config: Codable, Sendable, Transferable {
         do {
             let jsonData = try encoder.encode(self)
 
-            let fullPath = "\(self.outputPath)/\(filename)"
+            var fullPath = ""
+            if filename.hasPrefix(self.outputPath) {
+                fullPath = filename
+            } else {
+                fullPath = "\(self.outputPath)/\(filename)"
+            }
+            
             if FileManager.default.fileExists(atPath: fullPath) {
-                Log.w("cannot write to \(fullPath), it already exists")
                 if overwrite {
                     try? FileManager.default.removeItem(atPath: fullPath)
                     FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
+                } else {
+                    Log.w("cannot write to \(fullPath), it already exists")
                 }
             } else {
                 Log.i("creating \(fullPath)")                      

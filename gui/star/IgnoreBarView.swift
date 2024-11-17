@@ -92,11 +92,15 @@ public struct IgnoreBarView: View {
               if viewModel.ignoreLowerPixels > viewModel.frameHeight {
                   viewModel.ignoreLowerPixels = viewModel.frameHeight
               }
-              if var config = viewModel.config {
+              if var configManager = viewModel.config {
+                  var config = configManager.config()
                   config.ignoreLowerPixels = Int(viewModel.ignoreLowerPixels)
-                  viewModel.config = config
+                  Log.d("FUCKING config.ignoreLowerPixels \(config.ignoreLowerPixels)")
+                  configManager.update(config)
+
                   // XXX this config doesn't get mirroried to the other spots
                   // XXX we need a centeralized config for this to work :(
+
                   // XXX and save the config to file as well
               }
           }
