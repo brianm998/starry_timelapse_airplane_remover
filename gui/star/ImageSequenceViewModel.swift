@@ -53,11 +53,10 @@ public final class ImageSequenceViewModel {
         Log.d("outlier_json_startup with \(jsonConfigFilename)")
         // first read config from json
 
-        let config = try await Config.read(fromJsonFilename: jsonConfigFilename)
+        let config = try Config.read(fromJsonFilename: jsonConfigFilename)
 
         try await self.init(with: config, closure: closure)
     }
-
     
     convenience init(withNewImageSequence imageSequenceDirname: String,
                      closure: (Int, Double) -> Void) async throws
@@ -103,20 +102,27 @@ public final class ImageSequenceViewModel {
                             writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
                             writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
 
-        let jsonConfigFilename = "\(config.basename)-config.json"
-        config.writeJson(named: jsonConfigFilename)
+        try await self.init(with: config, closure: closure)
+
+        if let filename = self.jsonConfigFilename {
+            config.writeJson(named: filename)
+        }
 
         if config.writeOutlierGroupFiles {
             mkdir(config.outlierOutputDirname)
         }
 
-        // XXX add this to the recent list
-
-        try await self.init(with: config, closure: closure)
-
         self.frameViewMode = .original
     }
-    
+
+    var jsonConfigFilename: String? {
+        if let config {
+            return "\(config.basename)-config.json"
+        } else {
+            return nil
+        }
+    }
+
     init(with config: Config, closure: (Int, Double) -> Void) async throws {
 
         // XXX move this

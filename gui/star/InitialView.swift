@@ -27,10 +27,8 @@ struct InitialView: View {
 
             VStack {
                 Text("Drop Here")
-
+                  .foregroundColor(.white)
             }
-              .frame(maxWidth: 250, maxHeight: 250)
-              .background(.gray)
 
             HStack {
                 VStack {
@@ -109,16 +107,13 @@ struct InitialView: View {
                                 Task { @MainActor in
                                     startupWithSequenceDir(url.path)
                                 }
-                               // return true
                             } else if url.path.hasSuffix(".json") {
                                 // try to parse out a config file
                                 do {
                                     let config = try Config.read(fromJsonFilename: url.path)
                                     Task { @MainActor in
                                         try await self.viewModel.startup(withConfig: config)
-                                        self.viewModel.userPreferences.justOpened(filename: url.path)
                                     }
-                                //    return true
                                 } catch {
                                     Log.e("cannot load \(url.path): \(error)")
                                     // XXX show view error

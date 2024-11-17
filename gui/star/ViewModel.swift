@@ -66,6 +66,7 @@ public final class ViewModel {
         isLoadingImageSequence = false
         numberLoaded = 0
         amountLoaded = 0.0
+
         self.userPreferences.justOpened(filename: jsonConfigFilename) // make sure this works
     }
 
@@ -78,18 +79,26 @@ public final class ViewModel {
         isLoadingImageSequence = false
         numberLoaded = 0
         amountLoaded = 0.0
+
+        if let filename = imageSequence?.jsonConfigFilename {
+            self.userPreferences.justOpened(filename: filename) 
+        }
     }
 
-    
     func startup(withNewImageSequence imageSequenceDirname: String) async throws {
         isLoadingImageSequence = true
         imageSequence = try await ImageSequenceViewModel(withNewImageSequence: imageSequenceDirname) { numberLoaded, amountLoaded in
             self.amountLoaded = amountLoaded
             self.numberLoaded = numberLoaded
         }
+
         isLoadingImageSequence = false
         numberLoaded = 0
         amountLoaded = 0.0
+
+        if let filename = imageSequence?.jsonConfigFilename {
+            self.userPreferences.justOpened(filename: filename) 
+        }
     }
 }
 
