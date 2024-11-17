@@ -65,6 +65,7 @@
 		D3FBFA1F2CE8FF0500A23FC6 /* ImageSequenceViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA1E2CE8FF0500A23FC6 /* ImageSequenceViewModel.swift */; };
 		D3FBFA212CE91B3800A23FC6 /* CircularProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA202CE91B3800A23FC6 /* CircularProgressView.swift */; };
 		D3FBFA232CE91B4700A23FC6 /* ImageSequenceLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA222CE91B4700A23FC6 /* ImageSequenceLoadingView.swift */; };
+		D3FBFA252CEA485600A23FC6 /* IgnoreBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA242CEA485600A23FC6 /* IgnoreBarView.swift */; };
 		D3FF93DF2C75745C00A98088 /* MultiChoiceSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */; };
 /* End PBXBuildFile section */
 
@@ -144,6 +145,7 @@
 		D3FBFA1E2CE8FF0500A23FC6 /* ImageSequenceViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSequenceViewModel.swift; sourceTree = "<group>"; };
 		D3FBFA202CE91B3800A23FC6 /* CircularProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularProgressView.swift; sourceTree = "<group>"; };
 		D3FBFA222CE91B4700A23FC6 /* ImageSequenceLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSequenceLoadingView.swift; sourceTree = "<group>"; };
+		D3FBFA242CEA485600A23FC6 /* IgnoreBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IgnoreBarView.swift; sourceTree = "<group>"; };
 		D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MultiChoiceSheetView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -208,6 +210,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D3FBFA242CEA485600A23FC6 /* IgnoreBarView.swift */,
 				D3FBFA222CE91B4700A23FC6 /* ImageSequenceLoadingView.swift */,
 				D3FBFA202CE91B3800A23FC6 /* CircularProgressView.swift */,
 				D3FBFA1E2CE8FF0500A23FC6 /* ImageSequenceViewModel.swift */,
@@ -481,6 +484,7 @@
 				D33FFC162A2CFF4700F38194 /* LoadAllOutliersButton.swift in Sources */,
 				D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */,
 				D3FBFA232CE91B4700A23FC6 /* ImageSequenceLoadingView.swift in Sources */,
+				D3FBFA252CEA485600A23FC6 /* IgnoreBarView.swift in Sources */,
 				D32F6DB02A4D2ADA00704870 /* RenderCurrentFrameButton.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

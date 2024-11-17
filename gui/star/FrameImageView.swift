@@ -23,7 +23,6 @@ public struct FrameImageView: View {
                   self.ignoreBar
               }
           }
-//          .aspectRatio(viewModel.frameSize, contentMode: .fit)
     }
 
     var ignoreBar: some View {
@@ -36,6 +35,10 @@ public struct FrameImageView: View {
 
             // draw an X
             Path { path in
+                // line on top
+                path.addLines([CGPoint(x: 0, y: 0),
+                               CGPoint(x: self.size.width, y: 0)])
+                path.closeSubpath()
                 
                 path.addLines([CGPoint(x: 0, y: 0),
                                CGPoint(x: self.size.width, y: barHeight)])
