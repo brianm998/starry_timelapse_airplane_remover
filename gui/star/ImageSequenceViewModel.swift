@@ -294,7 +294,9 @@ public final class ImageSequenceViewModel {
     var arrowHeight: CGFloat {
         self.frameWidth/self.outlierArrowHeight
     }
-    
+
+    var lineWidth: CGFloat { self.arrowHeight/8 }
+
     // how high they are (if pointing sideways)
     var outlierArrowHeight: CGFloat = 180
     

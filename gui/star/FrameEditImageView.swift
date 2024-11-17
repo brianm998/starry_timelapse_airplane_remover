@@ -73,9 +73,6 @@ public struct FrameEditImageView: View {
         } 
     }
 
-    // XXX this constant should change with frame size
-    let barHeight: CGFloat = 6
-    
     public var body: some View {
         @Bindable var viewModel = viewModel
 
@@ -116,49 +113,64 @@ public struct FrameEditImageView: View {
 
     var ignoreBar: some View {  // make this visible on scrub/video mode too
         ZStack {
-            ZStack {
-                // red 
-                Rectangle()
-                  .background(.red)
-                  .opacity(0.3)
-
-                /*
-                 XXX draw an X here instead, this text is really small
-                 */
-                if viewModel.ignoreLowerPixels > 30 {
-                    Text("This area will not be processed")
-                      .foregroundColor(.white)
-                }
-            }
+            // red background
+            Rectangle()
+              .background(.red)
+              .opacity(0.3)
               .frame(width: viewModel.frameWidth,
                      height: viewModel.ignoreLowerPixels)
               .offset(y: viewModel.frameHeight/2 - viewModel.ignoreLowerPixels/2)
 
+            // draw an X
+            Path { path in
+                path.addLines([CGPoint(x: 0, y: self.viewModel.frameHeight),
+                               CGPoint(x: self.viewModel.frameWidth,
+                                       y: self.viewModel.frameHeight-self.viewModel.ignoreLowerPixels)])
+                path.closeSubpath()
+                path.addLines([CGPoint(x: self.viewModel.frameWidth,
+                                       y: self.viewModel.frameHeight),
+                               CGPoint(x: 0,
+                                       y: self.viewModel.frameHeight-self.viewModel.ignoreLowerPixels)])
+                path.closeSubpath()
+            }
+              .stroke(.white, lineWidth: viewModel.lineWidth*2)
+              .opacity(0.4)
+
+            // arrow on the right
+            Image(systemName: "arrow.left")
+              .resizable()
+              .foregroundColor(.orange)
+              .frame(width: viewModel.arrowLength, height: viewModel.arrowHeight) 
+              .offset(x: (viewModel.frameWidth+viewModel.arrowLength)/2,
+                      y: viewModel.frameHeight/2 + viewModel.lineWidth/2 - viewModel.ignoreLowerPixels)
+              .gesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.arrowHeight/2))
+
+            // arrow on the left
+            Image(systemName: "arrow.right")
+              .resizable()
+              .foregroundColor(.orange)
+              .frame(width: viewModel.arrowLength, height: viewModel.arrowHeight) 
+              .offset(x: -(viewModel.frameWidth+viewModel.arrowLength)/2,
+                      y: viewModel.frameHeight/2 + viewModel.lineWidth/2 - viewModel.ignoreLowerPixels)
+              .gesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.arrowHeight/2))
+
+            // white line at the top of the ignore bar
             Rectangle()
               .foregroundColor(.white)
               .background(.white)
               .opacity(0.85)
               .frame(width: viewModel.frameWidth,
-                     height: barHeight)
-              .offset(y: viewModel.frameHeight/2 + barHeight/2 - viewModel.ignoreLowerPixels)
-              .gesture(self.ignoreLowerPixelsGesture(adjustment: barHeight))
+                     height: viewModel.lineWidth)
+              .offset(y: viewModel.frameHeight/2 + viewModel.lineWidth/2 - viewModel.ignoreLowerPixels)
+              .gesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.lineWidth))
 
-            Image(systemName: "arrow.left")
-              .resizable()
-              .foregroundColor(.purple)
-              .frame(width: viewModel.arrowLength, height: viewModel.arrowHeight) 
-              .offset(x: (viewModel.frameWidth+viewModel.arrowLength)/2,
-                      y: viewModel.frameHeight/2 + barHeight/2 - viewModel.ignoreLowerPixels)
-              .gesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.arrowHeight/2))
-
-            
-            Image(systemName: "arrow.right")
-              .resizable()
-              .foregroundColor(.purple)
-              .frame(width: viewModel.arrowLength, height: viewModel.arrowHeight) 
-              .offset(x: -(viewModel.frameWidth+viewModel.arrowLength)/2,
-                      y: viewModel.frameHeight/2 + barHeight/2 - viewModel.ignoreLowerPixels)
-              .gesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.arrowHeight/2))
+            // Text on the top
+            if viewModel.ignoreLowerPixels > viewModel.frameHeight/11 {
+                Text("This area will not be processed")
+                  .foregroundColor(.red)
+                  .font(.system(size: viewModel.frameHeight/12))
+                  .offset(y: viewModel.frameHeight/2 - viewModel.ignoreLowerPixels/2)
+            }
         }        
     }
     
@@ -185,6 +197,7 @@ public struct FrameEditImageView: View {
                   // XXX this config doesn't get mirroried to the other spots
                   // XXX we need a centeralized config for this to work :(
                   // XXX and save the config to file as well
+                  // XXX get this view working on the scrub view and during video playing
               }
           }
     }

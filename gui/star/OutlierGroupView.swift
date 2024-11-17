@@ -22,7 +22,7 @@ struct OutlierGroupView: View {
             let paint_color = self.groupViewModel.groupColor
             let arrow_length = self.groupViewModel.viewModel.arrowLength
             let arrow_height = self.groupViewModel.viewModel.arrowHeight
-            let line_width = self.lineWidth
+            let line_width = self.groupViewModel.viewModel.lineWidth
             let center_x = CGFloat(bounds.center.x)
             let center_y = CGFloat(bounds.center.y)
 
@@ -300,6 +300,5 @@ struct OutlierGroupView: View {
           .opacity(0.5)
     }
     
-    private var lineWidth: CGFloat { self.groupViewModel.viewModel.arrowHeight/8 }
 }
 
