@@ -43,6 +43,7 @@ public struct ImageInfo: Sendable {
 public actor ImageSequence {
 
     public func getImageInfo() async throws -> ImageInfo {
+        if self.filenames.count == 0 { throw "no images found"}
         let testImage = try await self.getImage(withName: self.filenames[0]).image()
         return ImageInfo(imageWidth: testImage.width,
                          imageHeight: testImage.height,

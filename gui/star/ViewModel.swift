@@ -23,6 +23,11 @@ public final class ViewModel {
 
     
 //    var sequenceLoaded = false
+
+    func report(error: String) {
+        self.showErrorAlert = true
+        self.errorMessage = "\(error)"
+    }
     
     var showErrorAlert = false
     var errorMessage: String = ""
@@ -52,7 +57,7 @@ public final class ViewModel {
 //        self.sequenceLoaded = false
     }
 
-    func startup(withConfig jsonConfigFilename: String) async throws {
+    func startup(withConfigFile jsonConfigFilename: String) async throws {
         isLoadingImageSequence = true
         imageSequence = try await ImageSequenceViewModel(withConfig: jsonConfigFilename) { numberLoaded, amountLoaded in
             self.amountLoaded = amountLoaded
@@ -62,6 +67,17 @@ public final class ViewModel {
         numberLoaded = 0
         amountLoaded = 0.0
         self.userPreferences.justOpened(filename: jsonConfigFilename) // make sure this works
+    }
+
+    func startup(withConfig config: Config) async throws {
+        isLoadingImageSequence = true
+        imageSequence = try await ImageSequenceViewModel(with: config) { numberLoaded, amountLoaded in
+            self.amountLoaded = amountLoaded
+            self.numberLoaded = numberLoaded
+        }
+        isLoadingImageSequence = false
+        numberLoaded = 0
+        amountLoaded = 0.0
     }
 
     

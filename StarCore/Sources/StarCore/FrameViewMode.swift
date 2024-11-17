@@ -39,9 +39,9 @@ public enum FrameViewMode: String, Equatable, CaseIterable, Sendable {
     public var shortName: String {
         switch self {
         case .original:
-            return "orig"
+            return "original"
         case .subtraction:
-            return "subt"
+            return "subtracted"
         case .blobs:
             return "blob"
         case .filter1:
@@ -81,7 +81,7 @@ public enum FrameViewMode: String, Equatable, CaseIterable, Sendable {
         case .validation:
             return "valid"
         case .processed:
-            return "proc"
+            return "processed"
         case .aligned:
             return "aligned"
         }

@@ -1,5 +1,6 @@
 import Foundation
 import logging
+import SwiftUI
 
 /*
 
@@ -13,7 +14,11 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-public struct Config: Codable, Sendable {
+public struct Config: Codable, Sendable, Transferable {
+ 
+    public static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .json)
+    }
 
     public init() {
         self.outputPath = "."
@@ -28,9 +33,11 @@ public struct Config: Codable, Sendable {
     }
 
     // returns a stored json config file
-    public static func read(fromJsonFilename filename: String) async throws -> Config {
+    public static func read(fromJsonFilename filename: String) throws -> Config {
         let config_url = NSURL(fileURLWithPath: filename, isDirectory: false) as URL
-        let (config_data, _) = try await URLSession.shared.data(for: URLRequest(url: config_url))
+
+        let config_data = try Data(contentsOf: config_url)
+        //let (config_data, _) = try await URLSession.shared.data(for: URLRequest(url: config_url))
         let decoder = JSONDecoder()
         let config = try decoder.decode(Config.self, from: config_data)
 

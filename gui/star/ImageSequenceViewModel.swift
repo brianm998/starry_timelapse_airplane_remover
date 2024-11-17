@@ -303,6 +303,14 @@ public final class ImageSequenceViewModel {
 
     var isProcessingAllFrames = false
     var numberOfFramesProcessed = 0
+
+    var windowTitle: String {
+        if let sequenceDirname = self.config?.imageSequenceDirname {
+            return "Star - \(sequenceDirname)"
+        } else {
+            return "Star"
+        }
+    }
     
     var selectionColor: Color {
         switch self.selectionMode {
@@ -785,7 +793,7 @@ public extension ImageSequenceViewModel {
 
     // used to re-process a particular frame 
     func findOutliers(frame: FrameAirplaneRemover) async {
-        let frameView = self.frames[frame.frameIndex]
+        let frameView = self.frames[frame.frameIndex] 
         frameView.outlierViews = nil
         //frameView.loadingOutliersViews = true
         do {

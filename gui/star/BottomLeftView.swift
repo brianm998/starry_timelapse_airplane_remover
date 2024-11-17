@@ -21,8 +21,6 @@ struct BottomLeftView: View {
                 let foobar2 = 138.0/255.0
                 
                 HStack {
-                    Text("I will")
-                      .foregroundColor(.white)
                     ZStack {
                         Button("") {
                             self.viewModel.interactionMode = .edit
@@ -53,7 +51,7 @@ struct BottomLeftView: View {
                                   """)
                     }
                     Spacer().frame(maxWidth: 6, maxHeight: 10)
-                    Text("this video with")
+                    Text("with")
                       .foregroundColor(.white)
                     
                     LimitedSelectionPicker(selection: $viewModel.frameViewMode) { value, isEnabled in
