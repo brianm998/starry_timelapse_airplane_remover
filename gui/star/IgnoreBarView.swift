@@ -18,6 +18,11 @@ public struct IgnoreBarView: View {
 
             // draw an X
             Path { path in
+                path.addLines([CGPoint(x: 0,
+                                       y: self.viewModel.frameHeight-self.viewModel.ignoreLowerPixels),
+                               CGPoint(x: self.viewModel.frameWidth,
+                                       y: self.viewModel.frameHeight-self.viewModel.ignoreLowerPixels)])
+                path.closeSubpath()
                 path.addLines([CGPoint(x: 0, y: self.viewModel.frameHeight),
                                CGPoint(x: self.viewModel.frameWidth,
                                        y: self.viewModel.frameHeight-self.viewModel.ignoreLowerPixels)])
@@ -32,32 +37,31 @@ public struct IgnoreBarView: View {
               .opacity(0.4)
 
             // arrow on the right
-            Image(systemName: "arrow.left")
+            Image(systemName: "chevron.left")
               .resizable()
               .foregroundColor(.orange)
               .frame(width: viewModel.arrowLength, height: viewModel.arrowHeight) 
               .offset(x: (viewModel.frameWidth+viewModel.arrowLength)/2,
-                      y: viewModel.frameHeight/2 + viewModel.lineWidth/2 - viewModel.ignoreLowerPixels)
+                      y: viewModel.frameHeight/2 - viewModel.lineWidth*2 - viewModel.ignoreLowerPixels)
               .gesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.arrowHeight/2))
 
             // arrow on the left
-            Image(systemName: "arrow.right")
+            Image(systemName: "chevron.right")
               .resizable()
               .foregroundColor(.orange)
               .frame(width: viewModel.arrowLength, height: viewModel.arrowHeight) 
               .offset(x: -(viewModel.frameWidth+viewModel.arrowLength)/2,
-                      y: viewModel.frameHeight/2 + viewModel.lineWidth/2 - viewModel.ignoreLowerPixels)
+                      y: viewModel.frameHeight/2 - viewModel.lineWidth*2 - viewModel.ignoreLowerPixels)
               .gesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.arrowHeight/2))
 
-            // white line at the top of the ignore bar
+            // orange line at the top for gestures
             Rectangle()
-              .foregroundColor(.white)
-              .background(.white)
-              .opacity(0.85)
+              .opacity(0.4)
+              .background(.orange)
               .frame(width: viewModel.frameWidth,
-                     height: viewModel.lineWidth)
+                     height: viewModel.lineWidth*4)
               .offset(y: viewModel.frameHeight/2 + viewModel.lineWidth/2 - viewModel.ignoreLowerPixels)
-              .gesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.lineWidth))
+              .gesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.lineWidth*4))
 
             // Text on the top
             if viewModel.ignoreLowerPixels > viewModel.frameHeight/11 {
@@ -93,15 +97,10 @@ public struct IgnoreBarView: View {
                   viewModel.ignoreLowerPixels = viewModel.frameHeight
               }
               if var configManager = viewModel.config {
+                  // set the final value in the config
                   var config = configManager.config()
                   config.ignoreLowerPixels = Int(viewModel.ignoreLowerPixels)
-                  Log.d("FUCKING config.ignoreLowerPixels \(config.ignoreLowerPixels)")
                   configManager.update(config)
-
-                  // XXX this config doesn't get mirroried to the other spots
-                  // XXX we need a centeralized config for this to work :(
-
-                  // XXX and save the config to file as well
               }
           }
     }

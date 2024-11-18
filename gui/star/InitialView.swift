@@ -22,17 +22,35 @@ struct InitialView: View {
                 .foregroundColor(.white)
             Spacer()
               .frame(maxHeight: 200)
+
+            Button() {
+                viewModel.showInfoDialog = true
+            } label: {
+                Text("Learn about Star").font(.largeTitle)
+            }
+              .buttonStyle(ShrinkingButton())
+              .help("Tell me how to us this software") 
+            Spacer()
+              .frame(maxHeight: 100)
+
+            
             Text("Choose an option to get started")
+            .font(.title)
+              .foregroundColor(.white)
+            Text("or")
+              .font(.title)
+              .foregroundColor(.white)
+            Text("Drop an image sequence or existing config file here")
+              .font(.title)
               .foregroundColor(.white)
 
-            VStack {
-                Text("Drop Here")
-                  .foregroundColor(.white)
-            }
+            Spacer()
+              .frame(maxHeight: 200)
 
             HStack {
                 VStack {
                     HStack {
+                        
                         Button(action: self.loadConfig) {
                             Text("Load Config").font(.largeTitle)
                         }.buttonStyle(ShrinkingButton())

@@ -31,7 +31,7 @@ import StarDecisionTrees
 
   - add meteor detection phase, which the backend will use to accentuate this outlier
 
-  - fix bug where zooming and selection gestures correspond
+  * fix bug where zooming and selection gestures correspond
   - allow dark/light themes
   * the filmstrip doesn't update very quickly on its own
   * make it overwrite existing output files

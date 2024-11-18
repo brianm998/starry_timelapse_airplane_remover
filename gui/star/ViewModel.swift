@@ -29,6 +29,9 @@ public final class ViewModel {
     var showErrorAlert = false
     var errorMessage: String = ""
     
+    var showInfoDialog = false
+    var currentInfoType: InfoType = .about
+
     var labelText: String = "Started"
 
     var isLoadingImageSequence = false
