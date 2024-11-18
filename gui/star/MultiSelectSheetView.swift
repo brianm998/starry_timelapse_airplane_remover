@@ -174,9 +174,11 @@ struct MultiSelectSheetView: View {
                                                   endIndex: currentIndex)
                         case .paintOverlaps:
                             self.updateOverlappersInFrames(shouldPaint: true,
+                                                           startIndex: 0,
                                                            endIndex: currentIndex)
                         case .clearOverlaps:
                             self.updateOverlappersInFrames(shouldPaint: true,
+                                                           startIndex: 0,
                                                            endIndex: currentIndex)
                         }
 
@@ -201,10 +203,12 @@ struct MultiSelectSheetView: View {
                                                       endIndex: currentIndex + number_of_frames)
                             case .paintOverlaps:
                                 self.updateOverlappersInFrames(shouldPaint: true,
+                                                               startIndex: currentIndex,
                                                                endIndex: currentIndex + number_of_frames)
 
                             case .clearOverlaps:
                                 self.updateOverlappersInFrames(shouldPaint: false,
+                                                               startIndex: currentIndex,
                                                                endIndex: currentIndex + number_of_frames)
                             }
                             
