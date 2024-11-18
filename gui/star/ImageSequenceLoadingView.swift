@@ -12,26 +12,43 @@ struct ImageSequenceLoadingView: View {
         // XXX needs a cancel button if it takes forever
         // XXX needs to show error messages when they occur
         // XXX can still be waiting time after the spinner finishes, figure out why
-        
-        ZStack {
-            CircularProgressView(progress: $viewModel.amountLoaded)
-              .frame(maxWidth: 500, maxHeight: 500)
+
+        VStack {
             Spacer()
-              .frame(maxHeight: 50)
-            if viewModel.amountLoaded == 1.0 {
-                VStack {
-                    Text("All \(viewModel.numberLoaded) frames loaded")
-                      .foregroundColor(.green)
-                    ProgressView()
-                      .foregroundColor(.white)
-                }
-            } else {
-                Text("\(viewModel.numberLoaded) frames loaded")
+            if let text = viewModel.loadingImageSequenceFilename {
+                Text("Loading \(text)")
+                  .font(.title)
                   .foregroundColor(.white)
             }
+            Spacer()
+            ZStack {
+                CircularProgressView(progress: $viewModel.amountLoaded)
+                  .frame(maxWidth: 500, maxHeight: 500)
+                Spacer()
+                  .frame(maxHeight: 50)
+                if viewModel.amountLoaded == 1.0 {
+                    VStack {
+                        Text("All \(viewModel.numberLoaded) frames loaded")
+                          .foregroundColor(.green)
+                        ProgressView()
+                          .foregroundColor(.white)
+                    }
+                } else {
+                    Text("\(viewModel.numberLoaded) frames loaded")
+                      .foregroundColor(.white)
+                }
+            }
+            Spacer()
+            Button() {
+                viewModel.isLoadingImageSequence = false
+                viewModel.imageSequence = nil
+            } label: {
+                Text("Cancel")
+                  .font(.largeTitle)
+            }
+            Spacer()
         }
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .background(viewModel.backgroundColor)
     }
-
 }

@@ -27,6 +27,8 @@ public enum MultiSelectionPaintType: String, Equatable, CaseIterable {
 }
 
 struct MultiSelectSheetView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    
     @Binding var isVisible: Bool
     @Binding var multiSelectionType: MultiSelectionType
     @Binding var multiSelectionPaintType: MultiSelectionPaintType
@@ -272,6 +274,10 @@ struct MultiSelectSheetView: View {
                                 try await frame.deleteOutliers(in: gestureBounds)
                                 // save outlier paintability changes here
                                 await frame.writeOutliersPaintReasons()
+                                Task {
+                                    await viewModel.render(frame: frame, closure: nil)
+                                }
+                                
                             } catch {
                                 // XXX handle errors here better
                                 Log.e("failed to delete outliers: \(error)")
@@ -315,6 +321,10 @@ struct MultiSelectSheetView: View {
                         // save outlier paintability changes here
                         await frame.writeOutliersPaintReasons()
 
+                        Task {
+                            await viewModel.render(frame: frame, closure: nil)
+                        }
+                        
                         await MainActor.run {
                             if currentIndex == frame.frameIndex {
                                 self.selectionStart = nil
@@ -355,6 +365,10 @@ struct MultiSelectSheetView: View {
                             }
                             // save outlier paintability changes here
                             await frame.writeOutliersPaintReasons()
+
+                            Task {
+                                await viewModel.render(frame: frame, closure: nil)
+                            }
                             
                             await MainActor.run {
                                 if currentIndex == frame.frameIndex {

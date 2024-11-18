@@ -136,7 +136,6 @@ public final class ImageSequenceViewModel {
             let imageSequence = try ImageSequence(dirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
                                                   supportedImageFileTypes: config.supportedImageFileTypes)
 
-            print("WTF")
             Log.d("loaded image sequence")
             let callbacks = self.makeCallbacks()
 
@@ -221,31 +220,31 @@ public final class ImageSequenceViewModel {
 
         // get the full number of images in the sequcne
         callbacks.imageSequenceSizeClosure = { imageSequenceSize in
-            Task { @MainActor in
-                self.imageSequenceSize = imageSequenceSize
+            Task { @MainActor [weak self] in
+                self?.imageSequenceSize = imageSequenceSize
                 Log.i("read imageSequenceSize \(imageSequenceSize)")
-                self.set(numberOfFrames: imageSequenceSize)
+                self?.set(numberOfFrames: imageSequenceSize)
             }
         }
 
         callbacks.frameOutliersLoadedCallback = { frameIndex, outliersLoaded in
-            Task { @MainActor in
-                self.frames[frameIndex].outliersLoaded = outliersLoaded
+            Task { @MainActor [weak self] in
+                self?.frames[frameIndex].outliersLoaded = outliersLoaded
             }
         }
         
         callbacks.frameStateChangeCallback = { frame, state in
-            Task { @MainActor in
-                self.frames[frame.frameIndex].frameState = state
-              await self.refresh(frame: frame)
+            Task { @MainActor [weak self] in
+                self?.frames[frame.frameIndex].frameState = state
+                await self?.refresh(frame: frame)
             }
         }
 
         // called when we should check a frame
         callbacks.frameCheckClosure = { newFrame in
-            Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
-            Task { @MainActor in
-              await self.addToViewModel(frame: newFrame)
+            //Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
+            Task { @MainActor [weak self] in
+              await self?.addToViewModel(frame: newFrame)
             }
         }
         

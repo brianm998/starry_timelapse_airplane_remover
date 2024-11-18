@@ -35,6 +35,7 @@ public final class ViewModel {
     var labelText: String = "Started"
 
     var isLoadingImageSequence = false
+    var loadingImageSequenceFilename: String?
 
     var amountLoaded = 0.0
     var numberLoaded = 0
@@ -58,11 +59,13 @@ public final class ViewModel {
 
     func startup(withConfigFile jsonConfigFilename: String) async throws {
         isLoadingImageSequence = true
+        loadingImageSequenceFilename = jsonConfigFilename
         imageSequence = try await ImageSequenceViewModel(withConfig: jsonConfigFilename) { numberLoaded, amountLoaded in
             self.amountLoaded = amountLoaded
             self.numberLoaded = numberLoaded
         }
         isLoadingImageSequence = false
+        loadingImageSequenceFilename = nil
         numberLoaded = 0
         amountLoaded = 0.0
 
@@ -71,10 +74,12 @@ public final class ViewModel {
 
     func startup(withConfig config: ConfigManager) async throws {
         isLoadingImageSequence = true
+        loadingImageSequenceFilename = await config.config().imageSequenceDirname
         imageSequence = try await ImageSequenceViewModel(with: config) { numberLoaded, amountLoaded in
             self.amountLoaded = amountLoaded
             self.numberLoaded = numberLoaded
         }
+        loadingImageSequenceFilename = nil
         isLoadingImageSequence = false
         numberLoaded = 0
         amountLoaded = 0.0
@@ -84,12 +89,13 @@ public final class ViewModel {
 
     func startup(withNewImageSequence imageSequenceDirname: String) async throws {
         isLoadingImageSequence = true
+        loadingImageSequenceFilename = imageSequenceDirname
         imageSequence = try await ImageSequenceViewModel(withNewImageSequence: imageSequenceDirname) { numberLoaded, amountLoaded in
             self.amountLoaded = amountLoaded
             self.numberLoaded = numberLoaded
         }
-
         isLoadingImageSequence = false
+        loadingImageSequenceFilename = nil
         numberLoaded = 0
         amountLoaded = 0.0
 

@@ -66,6 +66,7 @@
 		D3FBFA212CE91B3800A23FC6 /* CircularProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA202CE91B3800A23FC6 /* CircularProgressView.swift */; };
 		D3FBFA232CE91B4700A23FC6 /* ImageSequenceLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA222CE91B4700A23FC6 /* ImageSequenceLoadingView.swift */; };
 		D3FBFA252CEA485600A23FC6 /* IgnoreBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA242CEA485600A23FC6 /* IgnoreBarView.swift */; };
+		D3FBFA272CEAC0FF00A23FC6 /* InfoDialogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA262CEAC0FF00A23FC6 /* InfoDialogView.swift */; };
 		D3FF93DF2C75745C00A98088 /* MultiChoiceSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */; };
 /* End PBXBuildFile section */
 
@@ -146,6 +147,7 @@
 		D3FBFA202CE91B3800A23FC6 /* CircularProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularProgressView.swift; sourceTree = "<group>"; };
 		D3FBFA222CE91B4700A23FC6 /* ImageSequenceLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSequenceLoadingView.swift; sourceTree = "<group>"; };
 		D3FBFA242CEA485600A23FC6 /* IgnoreBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IgnoreBarView.swift; sourceTree = "<group>"; };
+		D3FBFA262CEAC0FF00A23FC6 /* InfoDialogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoDialogView.swift; sourceTree = "<group>"; };
 		D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MultiChoiceSheetView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -210,6 +212,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D3FBFA262CEAC0FF00A23FC6 /* InfoDialogView.swift */,
 				D3FBFA242CEA485600A23FC6 /* IgnoreBarView.swift */,
 				D3FBFA222CE91B4700A23FC6 /* ImageSequenceLoadingView.swift */,
 				D3FBFA202CE91B3800A23FC6 /* CircularProgressView.swift */,
@@ -465,6 +468,7 @@
 				D33FFC232A2D48F300F38194 /* FrameView.swift in Sources */,
 				D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */,
 				D33FFC1E2A2D39BA00F38194 /* ProgressBars.swift in Sources */,
+				D3FBFA272CEAC0FF00A23FC6 /* InfoDialogView.swift in Sources */,
 				D3FBFA152CE460AD00A23FC6 /* AppDelegate.swift in Sources */,
 				D33FFC202A2D3BCD00F38194 /* FrameViewModel.swift in Sources */,
 				D33FFC242A2D48F300F38194 /* FrameEditView.swift in Sources */,
