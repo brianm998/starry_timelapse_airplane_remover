@@ -5,110 +5,121 @@ import StarCore
 import Zoomable
 import logging
 
-@MainActor
+fileprivate let frameSaveMonitor = FileSystemMonitor(max: 16) // guess, make configurable?
+
+@MainActor @Observable
 class FrameSaveQueue {
 
-    class Purgatory {
-        var timerTask: Task<Void,Never>
-        let frame: FrameAirplaneRemover
-        let block: @Sendable () async -> Void
-        let wait_time: TimeInterval // minimum time to wait in purgatory
-        
-        init(frame: FrameAirplaneRemover,
-             waitTime: TimeInterval = 5,
-             block: @escaping @Sendable () async -> Void)
-        {
-            self.frame = frame
-            self.wait_time = waitTime
-            self.timerTask = Task<Void,Never> {
-                try? await Task.sleep(nanoseconds: UInt64(waitTime * 1_000_000_000))
-                do {
-                    try Task.checkCancellation()
-                    await block()
-                } catch { }
-            }
-            self.block = block
-        }
-    }
-
-    var purgatory: [Int: Purgatory] = [:] // both indexed by frameIndex
-
-    // 
-    var saving: [Int: FrameAirplaneRemover] = [:]
-
-    
-    var sizeUpdatedCompletion: ((Int) async -> Void)? 
-    
-    func sizeUpdated(_ completion: @escaping (Int) async -> Void) {
-        sizeUpdatedCompletion = completion
-    }
-    
     init() { }
 
-    func frameIsInPurgatory(_ frameIndex: Int) -> Bool {
-        return purgatory.keys.contains(frameIndex)
-    }
-    
-    func doneSaving(frame frameIndex: Int) async {
-        self.saving[frameIndex] = nil
-        if let sizeUpdatedCompletion {
-            await sizeUpdatedCompletion(self.saving.count)
-        }
-    }
-    
-    // no purgatory
-    func saveNow(frame: FrameAirplaneRemover,
-                 completionClosure: @Sendable @escaping () async -> Void) async
-    {
-        Log.i("saveNow for frame \(frame.frameIndex)")
-        // check to see if it's not already being saved
-        if self.saving[frame.frameIndex] != nil {
-            // another save is in progress
-            Log.i("setting frame \(frame.frameIndex) to readyToSave because already saving frame \(frame.frameIndex)")
-            //self.readyToSave(frame: frame, waitTime: 5, completionClosure: completionClosure)
-        } else {
-            Log.i("actually saving frame \(frame.frameIndex)")
-            self.saving[frame.frameIndex] = frame
-            if let sizeUpdatedCompletion {
-                await sizeUpdatedCompletion(self.saving.count)
-            }
-            do {
-                try await frame.loadOutliers()
-                try await frame.finish()
-                await frame.changesHandled()
+    var savingCount: Int = 0
+    var pendingSavingCount: Int = 0
+    var purgatoryCount: Int = 0
 
-                // XXX this VVV doesn't always update in the UI without user action
-                await self.doneSaving(frame: frame.frameIndex)
-                await completionClosure()
-                
-            } catch {
-                Log.e("error \(error)")
-            }
-        }
-    }
-
-    func endPurgatory(for frameIndex: Int) {
-        Log.i("ending purgatory for frame \(frameIndex)")
-        self.purgatory[frameIndex] = nil
-    }
-    
     func readyToSave(frame: FrameAirplaneRemover,
-                     waitTime: TimeInterval = 12,
-                     completionClosure: @Sendable @escaping () async -> Void) async {
+                     waitTime: TimeInterval = 20,
+                     completionClosure: @Sendable @escaping () async -> Void) async
+    {
+        Task.detached {
+            if await frame.savingState() == .savePending { return }
+            
+            Log.d("frame \(frame.frameIndex) added to purgatory")
+            await frame.set(frameSavingState: .inPurgatory)
+            // not in purgatory already
+            // previous tasks are canceled inside here VVV
+            await frame.startSaveTimerTask(waitTime: waitTime) {
+                Log.d("frame \(frame.frameIndex) exiting purgatory")
 
-        if let _ = purgatory[frame.frameIndex] {
-            Log.i("frame \(frame.frameIndex) is already in purgatory")
-        } else {
-            Log.i("frame \(frame.frameIndex) entering purgatory")
-            let candidate = Purgatory(frame: frame, waitTime: waitTime) { 
-                Log.i("purgatory has ended for frame \(frame.frameIndex)")
-              await self.endPurgatory(for: frame.frameIndex)
-              await self.saveNow(frame: frame, completionClosure: completionClosure)
+                // only save if it is still in purgatory
+                let savingState = await frame.savingState()
+                if savingState == .inPurgatory {
+                    try await self.saveNow(frame: frame, completionClosure: completionClosure)
+                } 
             }
-            Log.i("starting purgatory for frame \(frame.frameIndex)")
-            purgatory[frame.frameIndex] = candidate
         }
+    }
+    
+    func saveNow(frame: FrameAirplaneRemover,
+                 completionClosure: @Sendable @escaping () async -> Void) async throws
+    {
+        Log.d("frame \(frame.frameIndex) saveNow")
+        try Task.checkCancellation()
+        await frame.set(frameSavingState: .savePending)
+        try await frameSaveMonitor.save() {
+            await frame.set(frameSavingState: .saving)
+            Log.d("frame \(frame.frameIndex) saveNow for real")
+            do {
+                let _ = try await Task.detached {
+                    try await frame.loadOutliers()
+                    try await frame.finish()
+                    await frame.changesHandled()
+                }.value
+            } catch {
+                Log.e("frame \(frame.frameIndex) frame save error: \(error)")
+            }
+          await frame.set(frameSavingState: .notSaving)
+            await completionClosure()
+        }
+    }
+
+    public func frameSavingStateChanged(for frame: FrameAirplaneRemover,
+                                        from oldState: FrameSavingState,
+                                        to newState: FrameSavingState) 
+    {
+
+        switch newState {
+        case .notSaving:
+            switch oldState {
+            case .notSaving:
+                break
+            case .inPurgatory:
+                purgatoryCount -= 1
+            case .savePending:
+                pendingSavingCount -= 1
+            case .saving:
+                savingCount -= 1
+            }
+        case .inPurgatory:
+            switch oldState {
+            case .notSaving:
+                purgatoryCount += 1
+            case .inPurgatory:
+                break
+            case .savePending:
+                purgatoryCount += 1
+                pendingSavingCount -= 1
+            case .saving:
+                purgatoryCount += 1
+                savingCount -= 1
+            }
+        case .savePending:
+            switch oldState {
+            case .notSaving:
+                pendingSavingCount += 1
+            case .inPurgatory:
+                pendingSavingCount += 1
+                purgatoryCount -= 1
+            case .savePending:
+                break
+            case .saving:
+                pendingSavingCount += 1
+                savingCount -= 1
+            }
+        case .saving:
+            switch oldState {
+            case .notSaving:
+                savingCount += 1
+            case .inPurgatory:
+                savingCount += 1
+                purgatoryCount -= 1
+            case .savePending:
+                savingCount += 1
+                pendingSavingCount -= 1
+            case .saving:
+                break
+            }
+        }
+        Log.d("saving state changed")
     }
 }
-
 

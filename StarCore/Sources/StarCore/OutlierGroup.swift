@@ -299,6 +299,14 @@ public actor OutlierGroup: CustomStringConvertible,
     nonisolated public func hash(into hasher: inout Hasher) {
         hasher.combine(id)
         hasher.combine(frameIndex)
+        hasher.combine(pixelSet.count)
+    }
+    
+    public func asyncHash(into hasher: inout Hasher) {
+        self.hash(into: &hasher)
+        if let _shouldPaint {
+            hasher.combine(_shouldPaint)
+        }
     }
 
     // a local cache of other nearby groups - NO LONGER CACHED AFTER SWIFT 6 :( 

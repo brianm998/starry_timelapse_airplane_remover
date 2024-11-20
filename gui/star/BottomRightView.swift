@@ -18,12 +18,19 @@ struct BottomRightView: View {
                 let frameView = viewModel.currentFrameView
                 
                 VStack(alignment: .trailing) {
-                    let numChanged = viewModel.numberOfFramesChanged
-                    if numChanged > 0 {
-                        Text("\(numChanged) frames changed")
+                    let numPurgatory = viewModel.frameSaveQueue.purgatoryCount
+                    if numPurgatory > 0 {
+                        Text("\(numPurgatory) frames in purgatory")
+                          .foregroundColor(.purple)
+                    }
+
+                    let numPending = viewModel.frameSaveQueue.pendingSavingCount
+                    if numPending > 0 {
+                        Text("\(numPending) frames waiting to save")
                           .foregroundColor(.yellow)
                     }
-                    let numSaving = viewModel.frameSaveQueueSize
+                    
+                    let numSaving = viewModel.frameSaveQueue.savingCount
                     if numSaving > 0 {
                         Text("saving \(numSaving) frames")
                           .foregroundColor(.green)

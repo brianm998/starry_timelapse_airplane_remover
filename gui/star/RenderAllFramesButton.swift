@@ -22,7 +22,7 @@ struct RenderAllFramesButton: View {
             self.viewModel.renderingAllFrames = true
             let frameSaveQueue = viewModel.frameSaveQueue
             Task {
-                await withTaskGroup(of: Void.self) { taskGroup in
+                try await withThrowingTaskGroup(of: Void.self) { taskGroup in
 //                await withLimitedTaskGroup(of: Void.self) { taskGroup in
 /// does this break things when saving thousands of frames at once?
 
@@ -31,7 +31,7 @@ struct RenderAllFramesButton: View {
                         if let frame = frameView.frame {
                             taskGroup.addTask() {
                                 await counter.increment()
-                                await frameSaveQueue.saveNow(frame: frame) {
+                                try await frameSaveQueue.saveNow(frame: frame) {
                                     await viewModel.refresh(frame: frame)
                                     /*
                                      if frame.frameIndex == viewModel.currentIndex {
@@ -49,7 +49,7 @@ struct RenderAllFramesButton: View {
                         }
                     }
                     
-                    await taskGroup.waitForAll()
+                    try await taskGroup.waitForAll()
                 }
             }
         }

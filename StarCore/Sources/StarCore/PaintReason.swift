@@ -4,7 +4,8 @@ import Foundation
 public enum PaintReason: Equatable,
                          CaseIterable,
                          Codable,
-                         Sendable
+                         Sendable,
+                         Hashable
 {
    case goodScore(Double)            // percent score
    case looksLikeALine(Double)       

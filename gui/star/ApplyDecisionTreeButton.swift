@@ -10,7 +10,7 @@ struct ApplyDecisionTreeButton: View {
                 do {
                     if let frame = viewModel.currentFrame {
                         await frame.applyDecisionTreeToAutoSelectedOutliers()
-                        await viewModel.render(frame: frame) {
+                        try? await viewModel.render(frame: frame) {
                             Task {
                                 await viewModel.refresh(frame: frame)
                                 await viewModel.setOutlierGroups(forFrame: frame)

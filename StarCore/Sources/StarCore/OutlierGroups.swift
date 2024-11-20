@@ -29,6 +29,12 @@ public actor OutlierGroups {
         members[member.id] = member
     }
 
+    public func asyncHash(into hasher: inout Hasher) async {
+        for (_, member) in members {
+            hasher.combine(member)
+        }
+    }
+
     public func getMembers() -> [UInt16: OutlierGroup] { members }
     
     // image data from an image with non zero pixels set with an outlier id
@@ -357,7 +363,7 @@ public actor OutlierGroups {
         for group in members.values {
             // collate paint reasons for each group
             if let shouldPaint = await group.shouldPaint() {
-                Log.d("frame \(frameIndex) group \(group.id) shouldPaint \(shouldPaint)")
+                //Log.d("frame \(frameIndex) group \(group.id) shouldPaint \(shouldPaint)")
                 outlierGroupPaintData[group.id] = shouldPaint
             }
         }

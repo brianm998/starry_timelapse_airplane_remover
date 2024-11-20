@@ -20,6 +20,13 @@ You should have received a copy of the GNU General Public License along with sta
 
 // the first pass is done upon init, finding and pruning outlier groups
 
+public enum FrameSavingState: Sendable {
+    case notSaving
+    case inPurgatory
+    case savePending
+    case saving
+}
+
 @MainActor
 @Observable
 public class FrameObserver {
@@ -57,6 +64,14 @@ public class FrameObserver {
 
 final public actor FrameAirplaneRemover: Equatable, Hashable {
 
+    fileprivate var frameSavingState: FrameSavingState = .notSaving {
+        didSet {
+            if let frameSavingStateChangeCallback = self.callbacks.frameSavingStateChangeCallback {
+                frameSavingStateChangeCallback(self, oldValue, frameSavingState)
+            }
+        }
+    }
+    
     fileprivate var state: FrameProcessingState = .unprocessed {
         didSet {
             if let frameStateChangeCallback = self.callbacks.frameStateChangeCallback {
@@ -76,10 +91,33 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         self.state = state
     }
     
+    public func set(frameSavingState: FrameSavingState) {
+        Log.i("frame \(frameIndex) transitioning to saving state \(frameSavingState)")
+        self.frameSavingState = frameSavingState
+    }
+    
     public func processingState() -> FrameProcessingState { return state }
+
+    public func savingState() -> FrameSavingState { return frameSavingState } 
     
     nonisolated public func hash(into hasher: inout Hasher) {
         hasher.combine(frameIndex)
+    }
+
+    public func hashValue() async -> Int {
+        var hasher = Hasher()
+        await self.asyncHash(into: &hasher)
+        return hasher.finalize()
+    }
+    
+    public func asyncHash(into hasher: inout Hasher) async {
+        self.hash(into: &hasher)
+
+        hasher.combine(self.state)
+        
+        if let outlierGroups {
+            await outlierGroups.asyncHash(into: &hasher)
+        }
     }
     
     nonisolated public let width: Int
@@ -119,8 +157,32 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
+    private var saveTimerTask: Task<Void,Never>?
+    
+    public func startSaveTimerTask(waitTime: TimeInterval = 12,
+                                   closure: @Sendable @escaping () async throws -> Void)
+    {
+        if let saveTimerTask { saveTimerTask.cancel() }
+
+        saveTimerTask = Task {
+          do {
+            try? await Task.sleep(nanoseconds: UInt64(waitTime*1_000_000_000))
+            try Task.checkCancellation()
+            try await closure()
+          } catch {
+            Log.e("error: \(error)")
+          }
+          saveTimerTask = nil
+        }
+    }
+    
     // when this happens, re-calculate and send to all the combine subjects
     public func markAsChanged() async {
+
+        // cancel the save timer,
+        // whatever process modified this frame can stick it back in purgatory
+        if let saveTimerTask { saveTimerTask.cancel() }
+        
         //Log.d("mark as changed")
         self.state = .userModified
         //Task { await self.updateCombineSubjects() }

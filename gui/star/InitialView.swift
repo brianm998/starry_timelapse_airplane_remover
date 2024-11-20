@@ -223,7 +223,7 @@ struct InitialView: View {
             do {
                 try await viewModel.startup(withNewImageSequence: path)
                 Task { @MainActor in
-                    await viewModel.imageSequence?.initialLoadInProgress = true
+                    viewModel.imageSequence?.initialLoadInProgress = true
                 }
                 try await viewModel.imageSequence?.eraser?.run()
             } catch {
@@ -242,7 +242,7 @@ struct InitialView: View {
             do {
               try await viewModel.startup(withConfigFile: previously_opened_sheet_showing_item)
                 Task { @MainActor in
-                    await viewModel.imageSequence?.initialLoadInProgress = true
+                    viewModel.imageSequence?.initialLoadInProgress = true
                 }
                 try await viewModel.imageSequence?.eraser?.run()
             } catch {

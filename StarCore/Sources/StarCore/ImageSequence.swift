@@ -59,6 +59,8 @@ public actor ImageSequence {
         if !FileManager.default.fileExists(atPath: dirname) {
             throw "\(dirname) does not exist"
         }
+      
+        // runs on the main thread and blocks when the SAN is starting
         let contents = try FileManager.default.contentsOfDirectory(atPath: dirname)
         contents.forEach { file in
             supportedImageFileTypes.forEach { type in

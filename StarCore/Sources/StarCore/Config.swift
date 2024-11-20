@@ -293,6 +293,8 @@ public struct Callbacks: Sendable {
 
     public var frameStateChangeCallback: (@Sendable (FrameAirplaneRemover, FrameProcessingState) -> ())?
 
+    public var frameSavingStateChangeCallback: (@Sendable (FrameAirplaneRemover, FrameSavingState, FrameSavingState) -> ())?
+
     public var exisingFrameStateChangeCallback: (@Sendable (Int) -> ())?
 
     // called for the user to see a frame

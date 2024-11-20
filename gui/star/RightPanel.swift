@@ -135,7 +135,7 @@ struct RightPanel: View {
                     Button() {
                         Task {
                             if let frame = viewModel.currentFrame {
-                                await viewModel.render(frame: frame, closure: nil)
+                                try? await viewModel.render(frame: frame, now: true)
                             }
                         }
                     } label: {

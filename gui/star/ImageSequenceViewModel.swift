@@ -120,6 +120,7 @@ public final class ImageSequenceViewModel {
         let config = configManager.config()
 
         self.config = configManager
+
         
         // XXX move this
         // overwrite global constants constant :( make this better
@@ -139,6 +140,7 @@ public final class ImageSequenceViewModel {
             Log.d("loaded image sequence")
             let callbacks = self.makeCallbacks()
 
+            
             let imageSequenceSize = await imageSequence.filenames.count
             
             if let imageSequenceSizeClosure = callbacks.imageSequenceSizeClosure {
@@ -207,12 +209,6 @@ public final class ImageSequenceViewModel {
 
             self.initialLoadInProgress = false
         }
-
-        frameSaveQueue.sizeUpdated() { newSize in
-            await MainActor.run {
-                self.frameSaveQueueSize = newSize
-            }
-        }
     }
     
     func makeCallbacks() -> Callbacks {
@@ -248,12 +244,20 @@ public final class ImageSequenceViewModel {
             }
         }
         
+        callbacks.frameSavingStateChangeCallback = { frame, oldState, newState in
+            Task { @MainActor [weak self] in
+                self?.frameSaveQueue.frameSavingStateChanged(for: frame,
+                                                             from: oldState,
+                                                             to: newState)
+            }
+        }
+        
         return callbacks
     }
 
 //    @Environment(\.openWindow) private var openWindow
 
-    var frameSaveQueueSize: Int = 0
+//    var frameSaveQueueSize: Int = 0
     
     var frameSaveQueue = FrameSaveQueue()
 
@@ -434,23 +438,6 @@ public final class ImageSequenceViewModel {
         return nil
     }
 
-    // XX set this up to use combine
-    var numberOfFramesChanged: Int {
-        0                       // XXX is this used anymore
-    }
-
-    /*
-    var OLD_numberOfFramesChanged: Int {
-        var ret = frameSaveQueue?.purgatory.count ?? 0
-        if let currentFrame = self.currentFrame,
-           currentFrame.hasChanges(),
-           !(frameSaveQueue?.frameIsInPurgatory(currentFrame.frameIndex) ?? false)
-        {
-            ret += 1            // XXX make sure the current frame isn't in purgatory
-        }
-        return ret
-    }*/
-    
     var loadingOutlierGroups: Bool {
         for frame in frames { if frame.loadingOutlierViews { return true } }
         return false
@@ -708,7 +695,7 @@ public extension ImageSequenceViewModel {
 
                 if renderImmediately {
                     // XXX make render here an option in settings
-                    await render(frame: frame) {
+                    try await render(frame: frame) {
                    //     await MainActor.run {
                             await self.refresh(frame: frame)
                    //     }
@@ -734,7 +721,7 @@ public extension ImageSequenceViewModel {
 
                 if renderImmediately {
                     // XXX make render here an option in settings
-                    await self.render(frame: frame) {
+                    try await self.render(frame: frame) {
                   //      await MainActor.run {
                             await self.refresh(frame: frame)
                      //   }
@@ -793,7 +780,7 @@ public extension ImageSequenceViewModel {
                         Task {
                             await frame.applyDecisionTreeToAllOutliers()
                             
-                            await self.render(frame: frame) {
+                            try await self.render(frame: frame) {
                                 Task {
                                     await self.refresh(frame: frame)
                                     await self.setOutlierGroups(forFrame: frame)
@@ -823,7 +810,7 @@ public extension ImageSequenceViewModel {
 
             await frame.applyDecisionTreeToAllOutliers()
 
-            await self.render(frame: frame) {
+            try await self.render(frame: frame) {
                 Task {
                     await self.refresh(frame: frame)
                     await self.setOutlierGroups(forFrame: frame)
@@ -834,16 +821,30 @@ public extension ImageSequenceViewModel {
         }
     }
     
-    func render(frame: FrameAirplaneRemover, closure: (@Sendable () async -> Void)? = nil) async {
-        self.renderingCurrentFrame = true // XXX might not be right anymore
-        await self.frameSaveQueue.saveNow(frame: frame) {
-            await self.refresh(frame: frame)
-            await MainActor.run {
-                self.renderingCurrentFrame = false
-                //                await MainActor.run {
-                //                }
+    func render(frame: FrameAirplaneRemover,
+                now saveNow: Bool = false,
+                closure: (@Sendable () async -> Void)? = nil) async throws
+    {
+//        self.renderingCurrentFrame = true // XXX might not be right anymore
+
+
+        if saveNow {
+            try await self.frameSaveQueue.saveNow(frame: frame) {
+                await self.refresh(frame: frame)
+                await MainActor.run {
+//                    self.renderingCurrentFrame = false
+                    //                await MainActor.run {
+                    //                }
+                }
+                await closure?()
             }
-            await closure?()
+        } else {
+
+            await self.frameSaveQueue.readyToSave(frame: frame) {
+                await self.refresh(frame: frame)
+                await closure?()
+            }
+
         }
     }
 

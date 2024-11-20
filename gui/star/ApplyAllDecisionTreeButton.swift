@@ -17,7 +17,7 @@ struct ApplyAllDecisionTreeButton: View {
                         Log.d("doh")
                         await frame.applyDecisionTreeToAllOutliers()
                         Log.d("doh")
-                        await viewModel.render(frame: frame) {
+                        try? await viewModel.render(frame: frame) {
                             Log.d("doh")
                             Task {
                                 await viewModel.refresh(frame: frame)

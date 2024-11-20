@@ -279,7 +279,7 @@ struct MultiSelectSheetView: View {
                                 // save outlier paintability changes here
                                 await frame.writeOutliersPaintReasons()
                                 Task {
-                                    await viewModel.render(frame: frame, closure: nil)
+                                    try? await viewModel.render(frame: frame, closure: nil)
                                 }
                                 
                             } catch {
@@ -326,7 +326,7 @@ struct MultiSelectSheetView: View {
                         await frame.writeOutliersPaintReasons()
 
                         Task {
-                            await viewModel.render(frame: frame, closure: nil)
+                            try? await viewModel.render(frame: frame, now: false)
                         }
                         
                         await MainActor.run {
@@ -371,7 +371,7 @@ struct MultiSelectSheetView: View {
                             await frame.writeOutliersPaintReasons()
 
                             Task {
-                                await viewModel.render(frame: frame, closure: nil)
+                                try? await viewModel.render(frame: frame, now: false)
                             }
                             
                             await MainActor.run {
