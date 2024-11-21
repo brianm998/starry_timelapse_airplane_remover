@@ -39,11 +39,21 @@ extension FrameAirplaneRemover {
                 // XXX log here
             }
             // still have stored sequences with this format
-            return try await loadOutliersFromImageFile()
+            if let outlierGroups = try await loadOutliersFromImageFile() {
+                // when loading from the older format, store in the new one
+
+                let config = await configManager.config()
+                let dirname = "\(config.outlierOutputDirname)/\(frameIndex)"
+                
+                try await outlierGroups.writeOutliersBinary(to: dirname)
+                return outlierGroups
+            }
+
+            return nil
         }
     }
 
-    public var blobBinaryFilename: String {
+    public var blobBinaryFilename: String { // not used anymore?
         get async {
             let config = await configManager.config()
             return "\(config.outlierOutputDirname)/\(frameIndex)/\(BlobBinarySaver.outlierBinaryFilename)"
