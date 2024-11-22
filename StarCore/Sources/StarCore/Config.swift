@@ -90,7 +90,7 @@ public struct Config: Codable, Sendable, Transferable {
     }
 
     // returns a stored json config file
-    fileprivate static func read(fromJsonFilename filename: String) throws -> Config {
+    static func read(fromJsonFilename filename: String) throws -> Config {
         let config_url = NSURL(fileURLWithPath: filename, isDirectory: false) as URL
 
         let config_data = try Data(contentsOf: config_url)
@@ -278,6 +278,272 @@ public struct Config: Codable, Sendable, Transferable {
         } catch {
             Log.e("\(error)")
         }
+    }
+
+    public func dirForImage(ofType type: FrameViewMode,
+                            atSize size: ImageDisplaySize = .original) -> String?
+    {
+        switch type {
+        case .original:
+            switch size {
+            case .original:
+                return "\(self.imageSequencePath)/\(self.imageSequenceDirname)"
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-previews"
+            case .thumbnail:
+                return "\(self.outputPath)/\(self.basename)-thumbnails"
+            }
+        case .aligned:
+            switch size {
+            case .original:
+                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-aligned"
+
+            case .preview:
+                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-aligned-previews"
+            case .thumbnail:
+                return nil
+            }
+        case .subtraction:
+            switch size {
+            case .original:
+                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-aligned-subtracted"
+            case .preview:
+                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-aligned-subtracted-previews"
+            case .thumbnail:
+                return nil
+            }
+        case .blobs:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-blobs-preview"
+            case .thumbnail:
+                return nil
+            }
+        case .filter1:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-blobs-filter1-preview"
+            case .thumbnail:
+                return nil
+            }
+        case .filter2:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-blobs-filter2-preview"
+            case .thumbnail:
+                return nil
+            }
+        case .filter3:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-blobs-filter3-preview"
+            case .thumbnail:
+                return nil
+            }
+        case .filter4:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-blobs-filter4-preview"
+            case .thumbnail:
+                return nil
+            }
+        case .filter5:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-blobs-filter5-preview"
+            case .thumbnail:
+                return nil
+            }
+        case .filter6:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-blobs-filter6-preview"
+            case .thumbnail:
+                return nil
+            }
+        case .filter7:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-blobs-filter7-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .filter8:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-blobs-filter8-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .filter9:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-blobs-filter9-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .filter10:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-blobs-filter10-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .filter11:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-blobs-filter11-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .filter12:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-blobs-filter12-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .filter13:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-blobs-filter13-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .filter14:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-blobs-filter14-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .filter15:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-blobs-filter15-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .filter16:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-blobs-filter16-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .paintMask:
+            switch size {
+            case .original:
+                return "\(self.outputPath)/\(self.basename)-paintMask"
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-paintMask-preview"
+            case .thumbnail:
+                return nil
+            }
+        case .validation:
+            switch size {
+            case .original:
+                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-validated-outlier-images"
+            case .preview:
+                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-validated-outlier-images-previews"
+            case .thumbnail:
+                return nil
+            }
+        case .processed:
+            switch size {
+            case .original:
+                return "\(self.outputPath)/\(self.basename)"
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-processed-previews"
+            case .thumbnail:
+                return nil
+            }
+        }
+    }
+
+    public var allImageDirnames: [String] {
+        var ret: [String] = []
+        
+        if let dir = self.dirForImage(ofType: .aligned) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .subtraction) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .validation) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .processed) { ret.append(dir) }
+        
+        if self.writeFramePreviewFiles {
+            if let dir = self.dirForImage(ofType: .original, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .aligned, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .subtraction, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .validation, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .blobs, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .filter1, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .filter2, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .filter3, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .filter4, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .filter5, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .filter6, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .filter7, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .filter8, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .filter9, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .filter10, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .filter11, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .filter12, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .filter13, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .filter14, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .filter15, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .filter16, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .paintMask, atSize: .preview) { ret.append(dir) }
+        }
+        if self.writeFrameThumbnailFiles {
+            if let dir = self.dirForImage(ofType: .original, atSize: .thumbnail) { ret.append(dir) }
+        }
+        if self.writeFrameProcessedPreviewFiles {
+            if let dir = self.dirForImage(ofType: .processed, atSize: .preview) { ret.append(dir) }
+        }
+        return ret
     }
 }
 

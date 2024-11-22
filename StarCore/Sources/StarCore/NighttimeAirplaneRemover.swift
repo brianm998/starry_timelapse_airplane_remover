@@ -343,7 +343,8 @@ public actor NighttimeAirplaneRemover {
                                                    outputFilename: outputFilename,
                                                    baseName: baseName,
                                                    fullyProcess: fullyProcess,
-                                                   writeOutputFiles: writeOutputFiles)
+                                                   writeOutputFiles: writeOutputFiles,
+                                                   imageSavedClosure: nil)
         {
             // run when frame has completed processing
             await self.decrementNumberLeft()

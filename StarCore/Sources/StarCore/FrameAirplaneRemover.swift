@@ -239,12 +239,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 baseName: String,       // source filename without path
                 fullyProcess: Bool = true,
                 writeOutputFiles: Bool = true,
+                imageSavedClosure: (@Sendable (PixelatedImage, FrameViewMode, ImageDisplaySize) -> Void)? = nil,
                 completion: (@Sendable () async -> Void)? = nil) async throws
     {
         // the image accessor always has the orignal config
         self.imageAccessor = ImageAccessor(config: await configManager.config(),
                                            imageSequence: imageSequence,
-                                           baseFileName: baseName)
+                                           baseFileName: baseName,
+                                           imageSavedClosure: imageSavedClosure)
         self.fullyProcess = fullyProcess
         self.writeOutputFiles = writeOutputFiles
         self.configManager = configManager
@@ -262,7 +264,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if ImageSequence.imageHeight == 0 {
             ImageSequence.imageHeight = height
         }
-        
+
         self.bytesPerPixel = bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
 

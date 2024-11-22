@@ -444,7 +444,7 @@ public class BlobProcessor {
         guard let frame else { fatalError("need frame") } // XXX ???
         let frameIndex = frame.frameIndex
         let imageAccessor = frame.imageAccessor
-        
+      
         var subtractionArray: [UInt16] = []
         var subtractionImage: PixelatedImage?
         do {

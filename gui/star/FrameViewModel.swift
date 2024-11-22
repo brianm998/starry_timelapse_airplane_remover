@@ -17,7 +17,7 @@ public class FrameViewModel {
 
     let viewModel: ImageSequenceViewModel
 
-    var existingImages: [FrameViewMode] = []
+    var existingImages: Set<FrameViewMode> = []
     
     var frameObserver = FrameObserver()
 
@@ -29,53 +29,38 @@ public class FrameViewModel {
 
     var isCurrentFrame: Bool = false
 
-    func hasImage(type: FrameViewMode) -> Bool {
-        for existingType in existingImages {
-            if existingType == type { return true }
-        }
-        return false
-    }
+    func hasImage(type: FrameViewMode) -> Bool { existingImages.contains(type) }
     
     let frameIndex: Int
+
+    func savedImage(_ image: PixelatedImage, ofType type: FrameViewMode, atSize size: ImageDisplaySize) {
+        existingImages.insert(type)
+        if size == .preview {
+            switch type {
+            case .processed:
+                if let image = image.nsImage {
+                    self.processedPreviewImage = Image(nsImage: image)
+                      .resizable()
+                }
+            case .original:
+                if let image = image.nsImage {
+                    self.previewImage = Image(nsImage: image)
+                      .resizable()
+                }
+            default:
+                 break
+            }
+        }
+    }
+    
     var frame: FrameAirplaneRemover? {
         didSet {
-    //        Log.d("frame \(frameIndex) set frame to \(String(describing: frame))")
+            //        Log.d("frame \(frameIndex) set frame to \(String(describing: frame))")
 
             cancelBag.removeAll()
             if let frame {
                 Task {
                     await frame.set(observer: frameObserver)
-                    /*
-
-                     
-
-                     XXX not hooked up to the UI or from the frame either yet :(
-
-
-
-
-                     VVV these go away
-                     
-                    // XXX run on main actor?
-                    await frame.numberOfPositiveOutliersPublisher()
-                      .sink { [weak self] value in
-                          print("EAT ME \(value) positive")
-                          self?.numberOfPositiveOutliers = value
-                      } 
-                      .store(in: &cancelBag)
-
-                    await frame.numberOfNegativeOutliersPublisher()
-                      .sink { [weak self] value in
-                          self?.numberOfNegativeOutliers = value
-                      } 
-                      .store(in: &cancelBag)
-
-                    await frame.numberOfUnknownOutliersPublisher()
-                      .sink { [weak self] value in
-                          self?.numberOfUndecidedOutliers = value
-                      } 
-                      .store(in: &cancelBag)
- */
                 }
             }
         }

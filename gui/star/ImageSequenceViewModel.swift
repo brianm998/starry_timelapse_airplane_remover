@@ -114,14 +114,13 @@ public final class ImageSequenceViewModel {
 
         self.frameViewMode = .original
     }
- 
+
     init(with configManager: ConfigManager, closure: (Int, Double) -> Void) async throws {
 
         let config = configManager.config()
 
         self.config = configManager
 
-        
         // XXX move this
         // overwrite global constants constant :( make this better
         constants = Constants(detectionType: config.detectionType)
@@ -139,7 +138,6 @@ public final class ImageSequenceViewModel {
 
             Log.d("loaded image sequence")
             let callbacks = self.makeCallbacks()
-
             
             let imageSequenceSize = await imageSequence.filenames.count
             
@@ -171,7 +169,12 @@ public final class ImageSequenceViewModel {
                                                        outputFilename: "\(config.outputPath)/\(config.basename)",
                                                        baseName: basename,
                                                        fullyProcess: false,
-                                                       writeOutputFiles: true)
+                                                       writeOutputFiles: true,
+                                                       imageSavedClosure: { image, type, size in
+                                                           Task { @MainActor in 
+                                                               self.frames[frameIndex].savedImage(image, ofType: type, atSize: size)
+                                                           }
+                                                       })
                     }
                     if let callback = callbacks.frameCheckClosure {
                         await MainActor.run {
@@ -232,7 +235,6 @@ public final class ImageSequenceViewModel {
         callbacks.frameStateChangeCallback = { frame, state in
             Task { @MainActor [weak self] in
                 self?.frames[frame.frameIndex].frameState = state
-                await self?.refresh(frame: frame)
             }
         }
 
@@ -257,8 +259,6 @@ public final class ImageSequenceViewModel {
 
 //    @Environment(\.openWindow) private var openWindow
 
-//    var frameSaveQueueSize: Int = 0
-    
     var frameSaveQueue = FrameSaveQueue()
 
     var frameOpacity: Double = 1.0
@@ -452,7 +452,7 @@ public final class ImageSequenceViewModel {
     }
     
     func refresh(frame: FrameAirplaneRemover) async {
-        //Log.d("refreshing frame \(frame.frameIndex)")
+        Log.d("refreshing frame \(frame.frameIndex)")
         
         // load the view frames from the main image
         
@@ -460,58 +460,24 @@ public final class ImageSequenceViewModel {
 
         var outlierTask: Task<Void,Never>?
 
-        //            if self.frames[frame.frameIndex].outlierViews == nil {
-        //                outlierTask = Task { await self.setOutlierGroups(forFrame: frame) }
-        //            }
         
-        let acc = frame.imageAccessor
-        /*
-         Task.detached {
-         // check to see if the aligned image exists, but the preview does not
-         if acc.imageExists(ofType: .aligned, atSize: .original),
-         !acc.imageExists(ofType: .aligned, atSize: .preview)
-         {
-         // make an aligned preview
-         // other previews are made in loadImage, but we don't want to always
-         // load all full size aligned images, so we make previews here
-         try? await acc.writeMissingImage(ofType: .aligned, andSize: .preview)
-         }
-         }
-         */          
+        let acc = await frame.imageAccessor
+
         let prTask = Task.detached { await acc.loadImage(type: .processed,  atSize: .preview)?.resizable() }
         let opTask = Task.detached { await acc.loadImage(type: .original,   atSize: .preview)?.resizable() }
         let otTask = Task.detached { await acc.loadImage(type: .original,   atSize: .thumbnail) }
 
-        /*
-         XXX check here to see if we have only the original and processed, defer the others 
-         */
-
         // set list of view modes for this frame
-        // waiting only for processed and originals
-        let existingImages = await Task.detached {
-            var existingImages: [FrameViewMode] = []
-            for type in FrameViewMode.allCases {
-                if acc.imageExists(ofType: .original, atSize: .preview) {
-                    existingImages.append(.original)
-                }
-                if acc.imageExists(ofType: .processed, atSize: .preview) {
-                    existingImages.append(.processed)
-                }
-            }
-            return existingImages
-        }.value
 
-        Task.detached {
-            // check for the reset in the background
-            var existingImages: [FrameViewMode] = []
+        if self.frames[frame.frameIndex].existingImages.count == 0 {
+            var existingImages: Set<FrameViewMode> = []
             for type in FrameViewMode.allCases {
                 if acc.imageExists(ofType: type, atSize: .preview) {
-                    existingImages.append(type)
+                    existingImages.insert(type)
                 }
             }
-            await MainActor.run {
-                self.frames[frame.frameIndex].existingImages = existingImages
-            }
+
+            self.frames[frame.frameIndex].existingImages = existingImages
         }
 
         if let image = await prTask.value {
@@ -525,8 +491,6 @@ public final class ImageSequenceViewModel {
         }
 
         if let outlierTask { await outlierTask.value }
-        
-        self.frames[frame.frameIndex].existingImages = existingImages
     }
 
     func append(frame: FrameAirplaneRemover) async {
@@ -696,9 +660,6 @@ public extension ImageSequenceViewModel {
                 if renderImmediately {
                     // XXX make render here an option in settings
                     try await render(frame: frame) {
-                   //     await MainActor.run {
-                            await self.refresh(frame: frame)
-                   //     }
                     }
                 }
             }
@@ -722,9 +683,6 @@ public extension ImageSequenceViewModel {
                 if renderImmediately {
                     // XXX make render here an option in settings
                     try await self.render(frame: frame) {
-                  //      await MainActor.run {
-                            await self.refresh(frame: frame)
-                     //   }
                     }
                 }
             }
@@ -751,7 +709,7 @@ public extension ImageSequenceViewModel {
                                     frameView.outliersLoaded = .loading
                                 }
                                 await self.findOutliers(frame: frame)
-                                await self.refresh(frame: frame)
+                                //await self.refresh(frame: frame)
                                 await self.setOutlierGroups(forFrame: frame)
                                 await MainActor.run {
                                     frameView.outliersLoaded = .loaded
@@ -782,7 +740,7 @@ public extension ImageSequenceViewModel {
                             
                             try await self.render(frame: frame) {
                                 Task {
-                                    await self.refresh(frame: frame)
+                                    //await self.refresh(frame: frame)
                                     await self.setOutlierGroups(forFrame: frame)
                                     await MainActor.run {
                                         self.numberOfFramesProcessed += 1
@@ -812,7 +770,6 @@ public extension ImageSequenceViewModel {
 
             try await self.render(frame: frame) {
                 Task {
-                    await self.refresh(frame: frame)
                     await self.setOutlierGroups(forFrame: frame)
                 }
             }
@@ -830,18 +787,10 @@ public extension ImageSequenceViewModel {
 
         if saveNow {
             try await self.frameSaveQueue.saveNow(frame: frame) {
-                await self.refresh(frame: frame)
-                await MainActor.run {
-//                    self.renderingCurrentFrame = false
-                    //                await MainActor.run {
-                    //                }
-                }
                 await closure?()
             }
         } else {
-
             await self.frameSaveQueue.readyToSave(frame: frame) {
-                await self.refresh(frame: frame)
                 await closure?()
             }
 
@@ -1026,5 +975,4 @@ public extension ImageSequenceViewModel {
                             forwards: true)
         }
     }
-
 }

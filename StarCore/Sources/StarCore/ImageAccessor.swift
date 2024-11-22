@@ -1,4 +1,6 @@
 import Foundation
+import kht_bridge
+import ShellOut
 import CoreGraphics
 import logging
 import Cocoa
@@ -70,25 +72,33 @@ public protocol ImageAccess: Sendable {
     func deleteImage(ofType imageType: FrameViewMode,
                      atSize size: ImageDisplaySize) throws
 
+    func dirAndNameForImage(ofType type: FrameViewMode,
+                            atSize size: ImageDisplaySize) -> (String, String)?
+    
     func deleteAllImages()
+
 }
 
 // read and write access to different image types for a given frame
 public struct ImageAccessor: ImageAccess, Sendable {
     let config: Config
-    let baseDirName: String
     let baseFileName: String
     let imageSequence: ImageSequence
-
-    public init(config: Config, imageSequence: ImageSequence, baseFileName: String) {
+    let imageSavedClosure: (@Sendable (PixelatedImage, FrameViewMode, ImageDisplaySize) -> Void)?
+    
+    public init(config: Config,
+                imageSequence: ImageSequence,
+                baseFileName: String,
+                imageSavedClosure: (@Sendable (PixelatedImage, FrameViewMode, ImageDisplaySize) -> Void)? = nil)
+    {
         // the dirname (not full path) of where the main output files will sit
         self.config = config
-        self.baseDirName = config.basename
         self.baseFileName = baseFileName
         self.imageSequence = imageSequence
+        self.imageSavedClosure = imageSavedClosure
         mkdirs()                // XXX called more than needed
     }
-    
+
     var previewSize: NSSize {
         let previewWidth = config.previewWidth
         let previewHeight = config.previewHeight
@@ -101,57 +111,21 @@ public struct ImageAccessor: ImageAccess, Sendable {
         return NSSize(width: thumbnailWidth, height: thumbnailHeight)
     }
 
-    nonisolated func mkdir(ofType type: FrameViewMode,
-                           andSize size: ImageDisplaySize = .original) 
+    func mkdir(ofType type: FrameViewMode,
+               andSize size: ImageDisplaySize = .original) 
     {
-        if let dirname = dirForImage(ofType: type, atSize: size) {
+        if let dirname = config.dirForImage(ofType: type, atSize: size) {
             StarCore.mkdir(dirname)
         }
     }
-    
-    nonisolated private func mkdirs() {
-        mkdir(ofType: .aligned)
-        mkdir(ofType: .subtraction)
-//        mkdir(ofType: .blobs)
-//        mkdir(ofType: .filter1)
-//        mkdir(ofType: .filter2)
-//        mkdir(ofType: .filter3)
-//        mkdir(ofType: .filter4)
-//        mkdir(ofType: .filter5)
-//        mkdir(ofType: .filter6)
-//        mkdir(ofType: .paintMask)
-        mkdir(ofType: .validation)
-        mkdir(ofType: .processed)
-        
-        if config.writeFramePreviewFiles {
-            mkdir(ofType: .original, andSize: .preview)
-            mkdir(ofType: .aligned, andSize: .preview)
-            mkdir(ofType: .subtraction, andSize: .preview)
-            mkdir(ofType: .validation, andSize: .preview)
-            mkdir(ofType: .blobs, andSize: .preview)
-            mkdir(ofType: .filter1, andSize: .preview)
-            mkdir(ofType: .filter2, andSize: .preview)
-            mkdir(ofType: .filter3, andSize: .preview)
-            mkdir(ofType: .filter4, andSize: .preview)
-            mkdir(ofType: .filter5, andSize: .preview)
-            mkdir(ofType: .filter6, andSize: .preview)
-            mkdir(ofType: .filter7, andSize: .preview)
-            mkdir(ofType: .filter8, andSize: .preview)
-            mkdir(ofType: .filter9, andSize: .preview)
-            mkdir(ofType: .filter10, andSize: .preview)
-            mkdir(ofType: .filter11, andSize: .preview)
-            mkdir(ofType: .filter12, andSize: .preview)
-            mkdir(ofType: .filter13, andSize: .preview)
-            mkdir(ofType: .filter14, andSize: .preview)
-            mkdir(ofType: .filter15, andSize: .preview)
-            mkdir(ofType: .filter16, andSize: .preview)
-            mkdir(ofType: .paintMask, andSize: .preview)
-        }
-        if config.writeFrameThumbnailFiles {
-            mkdir(ofType: .original, andSize: .thumbnail)
-        }
-        if config.writeFrameProcessedPreviewFiles {
-            mkdir(ofType: .processed, andSize: .preview)
+
+    public func dirForImage(ofType type: FrameViewMode, atSize size: ImageDisplaySize) -> String? {
+        config.dirForImage(ofType: type, atSize: size)
+    }
+
+    private func mkdirs() {
+        for dirname in config.allImageDirnames {
+            StarCore.mkdir(dirname)
         }
     }
 
@@ -317,8 +291,11 @@ public struct ImageAccessor: ImageAccess, Sendable {
                 if canCreate {
                     // write to file
                     FileManager.default.createFile(atPath: filename,
-                                           contents: dataToSave,
-                                           attributes: nil)
+                                                   contents: dataToSave,
+                                                   attributes: nil)
+
+                    // callback to tell what has changed
+                    imageSavedClosure?(image, type, size)
                 }
             }
         } else {
@@ -326,255 +303,40 @@ public struct ImageAccessor: ImageAccess, Sendable {
         }
     }
 
-    nonisolated public func dirForImage(ofType type: FrameViewMode,
-                                        atSize size: ImageDisplaySize) -> String?
-    {
-        switch type {
-        case .original:
-            switch size {
-            case .original:
-                return "\(config.imageSequencePath)/\(config.imageSequenceDirname)"
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-previews"
-            case .thumbnail:
-                return "\(config.outputPath)/\(baseDirName)-thumbnails"
-            }
-        case .aligned:
-            switch size {
-            case .original:
-                return "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned"
-
-            case .preview:
-                return "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-previews"
-            case .thumbnail:
-                return nil
-            }
-        case .subtraction:
-            switch size {
-            case .original:
-                return "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-subtracted"
-            case .preview:
-                return "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-subtracted-previews"
-            case .thumbnail:
-                return nil
-            }
-        case .blobs:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-preview"
-            case .thumbnail:
-                return nil
-            }
-        case .filter1:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter1-preview"
-            case .thumbnail:
-                return nil
-            }
-        case .filter2:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter2-preview"
-            case .thumbnail:
-                return nil
-            }
-        case .filter3:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter3-preview"
-            case .thumbnail:
-                return nil
-            }
-        case .filter4:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter4-preview"
-            case .thumbnail:
-                return nil
-            }
-        case .filter5:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter5-preview"
-            case .thumbnail:
-                return nil
-            }
-        case .filter6:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter6-preview"
-            case .thumbnail:
-                return nil
-            }
-        case .filter7:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter7-preview"
-            case .thumbnail:
-                return nil
-            }
-
-        case .filter8:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter8-preview"
-            case .thumbnail:
-                return nil
-            }
-
-        case .filter9:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter9-preview"
-            case .thumbnail:
-                return nil
-            }
-
-        case .filter10:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter10-preview"
-            case .thumbnail:
-                return nil
-            }
-
-        case .filter11:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter11-preview"
-            case .thumbnail:
-                return nil
-            }
-
-        case .filter12:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter12-preview"
-            case .thumbnail:
-                return nil
-            }
-
-        case .filter13:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter13-preview"
-            case .thumbnail:
-                return nil
-            }
-
-        case .filter14:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter14-preview"
-            case .thumbnail:
-                return nil
-            }
-
-        case .filter15:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter15-preview"
-            case .thumbnail:
-                return nil
-            }
-
-        case .filter16:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter16-preview"
-            case .thumbnail:
-                return nil
-            }
-
-        case .paintMask:
-            switch size {
-            case .original:
-                return "\(config.outputPath)/\(baseDirName)-paintMask"
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-paintMask-preview"
-            case .thumbnail:
-                return nil
-            }
-        case .validation:
-            switch size {
-            case .original:
-                return "\(config.outputPath)/\(config.imageSequenceDirname)-star-validated-outlier-images"
-            case .preview:
-                return "\(config.outputPath)/\(config.imageSequenceDirname)-star-validated-outlier-images-previews"
-            case .thumbnail:
-                return nil
-            }
-        case .processed:
-            switch size {
-            case .original:
-                return "\(config.outputPath)/\(baseDirName)"
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-processed-previews"
-            case .thumbnail:
-                return nil
-            }
-        }
-    }
-
-    nonisolated private func nameForImage(ofType type: FrameViewMode,
+    private func nameForImage(ofType type: FrameViewMode,
                                           atSize size: ImageDisplaySize) -> String?
     {
-        if let dir = dirForImage(ofType: type, atSize: size) {
+        if let (dirname, filename) = dirAndNameForImage(ofType: type, atSize: size) {
+            return "\(dirname)/\(filename)"
+        }
+        return nil
+    }
+
+    public func dirAndNameForImage(ofType type: FrameViewMode,
+                                                atSize size: ImageDisplaySize) -> (String, String)?
+    {
+        if let dir = config.dirForImage(ofType: type, atSize: size) {
             switch size {
             case .original:
                 switch type {
                 case .subtraction:
-                    return "\(dir)/\(baseFileName)"
+                    return (dir, baseFileName)
                 case .aligned:
-                    return "\(dir)/\(baseFileName)"
+                    return (dir, baseFileName)
                 case .original:
-                    return "\(dir)/\(baseFileName)"
+                    return (dir, baseFileName)
                 case .processed:
-                    return "\(dir)/\(baseFileName)"
+                    return (dir, baseFileName)
                 case .validation:
-                    return "\(dir)/\(baseFileName)"
+                    return (dir, baseFileName)
                 default:
                     return nil  // no full frame images for these other types
                 }
             case .preview:
-                return "\(dir)/\(baseFileName).jpg"
+                return (dir, "\(baseFileName).jpg")
+
             case .thumbnail:
-                return "\(dir)/\(baseFileName).jpg"
+                return (dir, "\(baseFileName).jpg")
             }
         }
         return nil
@@ -660,4 +422,3 @@ public struct ImageAccessor: ImageAccess, Sendable {
 
     
 }
-

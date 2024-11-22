@@ -137,8 +137,9 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
             numSimilarOutlierGroups[treeKey] = 0
             numDifferentOutlierGroups[treeKey] = 0
         }
+
+        let configManager = try await ConfigManager(configFilename: jsonConfigFileName)
         
-        let config = try await Config.read(fromJsonFilename: jsonConfigFileName)
         Log.d("got config from \(jsonConfigFileName)")
         
         var callbacks = Callbacks()
@@ -153,7 +154,7 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
             Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
         }
         
-        let eraser = try await NighttimeAirplaneRemover(with: config,
+        let eraser = try await NighttimeAirplaneRemover(with: configManager,
                                                         callbacks: callbacks,
                                                         processExistingFiles: true,
                                                         fullyProcess: false)
@@ -297,7 +298,9 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
     {
         var positiveData: [OutlierFeatureData] = []
         var negativeData: [OutlierFeatureData] = []
-        let config = try await Config.read(fromJsonFilename: jsonConfigFileName)
+
+        let configManager = try await ConfigManager(configFilename: jsonConfigFileName)
+
         Log.d("got config from \(jsonConfigFileName)")
         
         var callbacks = Callbacks()
@@ -310,7 +313,7 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
             Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
         }
         
-        let eraser = try await NighttimeAirplaneRemover(with: config,
+        let eraser = try await NighttimeAirplaneRemover(with: configManager,
                                                         callbacks: callbacks,
                                                         processExistingFiles: true,
                                                         fullyProcess: false)

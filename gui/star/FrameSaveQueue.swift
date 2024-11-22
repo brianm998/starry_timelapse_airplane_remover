@@ -10,7 +10,7 @@ fileprivate let frameSaveMonitor = FileSystemMonitor(max: 16) // guess, make con
 @MainActor @Observable
 class FrameSaveQueue {
 
-    init() { }
+    init() { } 
 
     var savingCount: Int = 0
     var pendingSavingCount: Int = 0
