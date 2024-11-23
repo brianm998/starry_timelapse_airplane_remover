@@ -74,10 +74,16 @@ public class ImageCache: @unchecked Sendable {
     }
 }
 
-fileprivate func loadImageInt(filename: String) async throws -> NSImage? {
+public func loadImageInt(filename: String) async throws -> NSImage? {
     //print("ImageCache loadImageInt(filename: \(filename))")
     let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
     let request = URLRequest(url: imageURL as URL)
     let (data, _) = try await URLSession.shared.data(for: request)
     return NSImage(data: data)
 }
+
+public func loadImageIntSync(filename: String) throws -> NSImage? {
+    NSImage(data: try Data(contentsOf: URL(fileURLWithPath: filename)))
+}
+
+

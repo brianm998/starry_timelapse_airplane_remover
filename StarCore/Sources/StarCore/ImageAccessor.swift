@@ -5,7 +5,7 @@ import CoreGraphics
 import logging
 import Cocoa
 import SwiftUI
-
+import Semaphore
 
 /*
 
@@ -163,8 +163,8 @@ public struct ImageAccessor: Sendable {
                                                atSize: size)
                 {
                     if FileManager.default.fileExists(atPath: filename) {
-                        return try await imageSequence.getImage(withName: filename).image()
-                        //return try await PixelatedImage(fromFile: filename)
+                        //return try await imageSequence.getImage(withName: filename).image()
+                        return try await PixelatedImage(fromFile: filename)
                     } else {
                         // no file
                         // if this is not a request for an original file, then try
@@ -368,38 +368,81 @@ public struct ImageAccessor: Sendable {
                                   ofType type: FrameViewMode,
                                   andSize size: ImageDisplaySize) async throws
     {
-        _ = try await makeMissingImage(frameIndex: frameIndex,
+        Log.d("frameIndex \(frameIndex)")
+        if let filename = nameForImage(frameIndex: frameIndex,
                                        ofType: type,
-                                       andSize: size)
+                                       atSize: .original),
+           let outputFilename = nameForImage(frameIndex: frameIndex,
+                                             ofType: type,
+                                             atSize: size)
+        {
+            Log.d("frameIndex \(frameIndex)")
+            if let smallerSize = sizeOf(size)
+            {
+                Log.d("frameIndex \(frameIndex)")
+                if let nsImage = try loadImageIntSync(filename: filename)
+                {
+                    Log.d("frameIndex \(frameIndex)")
+                    if let smallerImage = nsImage.resized(to: smallerSize)
+                    {
+                        Log.d("frameIndex \(frameIndex)")
+                        if let dataToSave = smallerImage.jpegData
+                        {
+                            Log.d("frameIndex \(frameIndex)")
+                            if FileManager.default.fileExists(atPath: outputFilename) {
+                                Log.i("overwriting already existing file \(outputFilename)")
+                                try FileManager.default.removeItem(atPath: outputFilename)
+                            }
+
+                            // write to file
+                            FileManager.default.createFile(atPath: outputFilename,
+                                                           contents: dataToSave,
+                                                           attributes: nil)
+                        }
+                    }
+                }
+            }
+        }
     }
     
     public func makeMissingImage(frameIndex: Int,
                                  ofType type: FrameViewMode,
-                                 andSize size: ImageDisplaySize) async throws -> NSImage?
+                                 andSize size: ImageDisplaySize,
+                                 semaphore: AsyncSemaphore? = nil) async throws -> NSImage?
     {
+        Log.d("start with frame \(frameIndex)")
         if let filename = nameForImage(frameIndex: frameIndex,
                                        ofType: type,
                                        atSize: size),
            let smallerSize = sizeOf(size),
            let fullResImage = try await load(frameIndex: frameIndex,
                                              type: type,
-                                             atSize: .original),
-           let scaledImageData = fullResImage.nsImage(ofSize: smallerSize)
+                                             atSize: .original)
         {
-            let dataToSave = scaledImageData.jpegData
+            Log.d("loaded 1 for frame \(frameIndex)")
+
+            semaphore?.signal()
             
-            if FileManager.default.fileExists(atPath: filename) {
-                Log.i("overwriting already existing file \(filename)")
-                try FileManager.default.removeItem(atPath: filename)
+            if let scaledImageData = fullResImage.nsImage(ofSize: smallerSize) {
+                Log.d("loaded 2 for frame \(frameIndex)")
+                let dataToSave = scaledImageData.jpegData
+                
+                if FileManager.default.fileExists(atPath: filename) {
+                    Log.i("overwriting already existing file \(filename)")
+                    try FileManager.default.removeItem(atPath: filename)
+                }
+
+                // write to file
+                FileManager.default.createFile(atPath: filename,
+                                               contents: dataToSave,
+                                               attributes: nil)
+
+                return scaledImageData
             }
-
-            // write to file
-            FileManager.default.createFile(atPath: filename,
-                                           contents: dataToSave,
-                                           attributes: nil)
-
-            return scaledImageData
+        } else {
+            semaphore?.signal()
         }
+        Log.d("done with frame \(frameIndex)")
         return nil
     }
     
@@ -422,5 +465,39 @@ public struct ImageAccessor: Sendable {
         return nil
     }
 
-    
+    public func writeMissingImages(atSize size: ImageDisplaySize) async throws {
+        let imageSequenceSize = imageSequence.filenames.count
+        if self.imageExists(frameIndex: 0,
+                            ofType: .original,
+                            atSize: size),
+           self.imageExists(frameIndex: imageSequenceSize-1,
+                            ofType: .original,
+                            atSize: size)
+        {
+            // nop
+        } else {
+            try await Task.detached {
+//                let semaphore = AsyncSemaphore(value: 100) // XXX arbitrary
+                try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+                    for i in 0..<imageSequenceSize {
+                        if !self.imageExists(frameIndex: i,
+                                             ofType: .original,
+                                             atSize: size)
+                        {
+                            try? await Task.sleep(nanoseconds: 1_000_000)
+//                            await semaphore.wait()
+                            taskGroup.addTask() {
+                                Log.d("making missing image for frame \(i)")
+                                let _ = try await self.writeMissingImage(frameIndex: i,
+                                                                        ofType: .original,
+                                                                        andSize: size)
+//                                semaphore.signal()
+                            }
+                        }
+                    }
+                    try await taskGroup.waitForAll()
+                }
+            }.value
+        }
+    }
 }

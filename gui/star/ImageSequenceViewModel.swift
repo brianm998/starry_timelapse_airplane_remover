@@ -129,46 +129,54 @@ public final class ImageSequenceViewModel {
         if let ignoreLowerPixels = config.ignoreLowerPixels {
             self.ignoreLowerPixels = CGFloat(ignoreLowerPixels) // XXX need to sync back the other dir
         }
+            
+        Log.d("loaded config \(config.imageSequenceDirname)")
+        
+        let imageSequence = try ImageSequence(dirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
+                                              supportedImageFileTypes: config.supportedImageFileTypes)
+
+        Log.d("loaded image sequence")
+        let callbacks = self.makeCallbacks()
+        
+        let imageSequenceSize = await imageSequence.filenames.count
+        
+        if let imageSequenceSizeClosure = callbacks.imageSequenceSizeClosure {
+            imageSequenceSizeClosure(imageSequenceSize)
+        }
+        
+        let imageInfo = try await imageSequence.getImageInfo()
+
+        IMAGE_WIDTH = Double(imageInfo.imageWidth)
+        IMAGE_HEIGHT = Double(imageInfo.imageHeight)
+        
+        Log.d("loaded imageInfo \(imageInfo)")
+
+        let filenames = await imageSequence.filenames
+
+        var frameIndexToBaseNameMap: [Int: String] = [:]
+        
+        for (frameIndex, filename) in filenames.enumerated() {
+            frameIndexToBaseNameMap[frameIndex] = removePath(fromString: filename)
+        }
+
+        // make image accessor here now
+        // the image accessor always has the orignal config
+        let imageAccessor = ImageAccessor(config: configManager.config(),
+                                          imageSequence: imageSequence,
+                                          frameIndexToBaseNameMap: frameIndexToBaseNameMap) { frameIndex, image, type, size in
+            Task { @MainActor in 
+                self.frames[frameIndex].savedImage(image, ofType: type, atSize: size)
+            }
+        }
+
+        Log.d("make missing previews")
+        try await imageAccessor.writeMissingImages(atSize: .preview)
+        Log.d("done with make missing previews")
+//        Log.d("make missing thumbnails")
+//        try await imageAccessor.writeMissingImages(atSize: .thumbnail)
+//        Log.d("done make missing thumbnails")
+
         try await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
-            
-            Log.d("loaded config \(config.imageSequenceDirname)")
-            
-            let imageSequence = try ImageSequence(dirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
-                                                  supportedImageFileTypes: config.supportedImageFileTypes)
-
-            Log.d("loaded image sequence")
-            let callbacks = self.makeCallbacks()
-            
-            let imageSequenceSize = await imageSequence.filenames.count
-            
-            if let imageSequenceSizeClosure = callbacks.imageSequenceSizeClosure {
-                imageSequenceSizeClosure(imageSequenceSize)
-            }
-            
-            let imageInfo = try await imageSequence.getImageInfo()
-
-            IMAGE_WIDTH = Double(imageInfo.imageWidth)
-            IMAGE_HEIGHT = Double(imageInfo.imageHeight)
-            
-            Log.d("loaded imageInfo \(imageInfo)")
-
-            let filenames = await imageSequence.filenames
-
-            var frameIndexToBaseNameMap: [Int: String] = [:]
-            
-            for (frameIndex, filename) in filenames.enumerated() {
-                frameIndexToBaseNameMap[frameIndex] = removePath(fromString: filename)
-            }
-
-            // make image accessor here now
-            // the image accessor always has the orignal config
-            let imageAccessor = ImageAccessor(config: configManager.config(),
-                                              imageSequence: imageSequence,
-                                              frameIndexToBaseNameMap: frameIndexToBaseNameMap) { frameIndex, image, type, size in
-                Task { @MainActor in 
-                    self.frames[frameIndex].savedImage(image, ofType: type, atSize: size)
-                }
-            }
             
             for (frameIndex, filename) in filenames.enumerated() {
 
@@ -227,7 +235,7 @@ public final class ImageSequenceViewModel {
             self.initialLoadInProgress = false
         }
     }
-    
+
     func makeCallbacks() -> Callbacks {
         var callbacks = Callbacks()
 
