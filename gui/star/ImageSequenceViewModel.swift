@@ -3,6 +3,7 @@ import SwiftUI
 import Cocoa
 import StarCore
 import Zoomable
+import Semaphore
 import logging
 
 public enum VideoPlayMode: String, Equatable, CaseIterable {
@@ -105,7 +106,7 @@ public final class ImageSequenceViewModel {
         let configFilename = "\(config.basename)-config.json"
         
         let configManager = ConfigManager(configFilename: configFilename, config: config)
-        
+
         try await self.init(with: configManager, closure: closure)
 
         if config.writeOutlierGroupFiles {
@@ -128,7 +129,6 @@ public final class ImageSequenceViewModel {
         if let ignoreLowerPixels = config.ignoreLowerPixels {
             self.ignoreLowerPixels = CGFloat(ignoreLowerPixels) // XXX need to sync back the other dir
         }
-        
         try await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
             
             Log.d("loaded config \(config.imageSequenceDirname)")
@@ -155,7 +155,7 @@ public final class ImageSequenceViewModel {
             for (frameIndex, filename) in await imageSequence.filenames.enumerated() {
                 
                 Log.d("add task at frameIndex \(frameIndex)")
-            
+
                 taskGroup.addTask() {
                     let basename = removePath(fromString: filename)
                     let frame = try await frameLoadMonitor.load() {
@@ -242,7 +242,7 @@ public final class ImageSequenceViewModel {
         callbacks.frameCheckClosure = { newFrame in
             //Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
             Task { @MainActor [weak self] in
-              await self?.addToViewModel(frame: newFrame)
+                await self?.addToViewModel(frame: newFrame)
             }
         }
         
@@ -458,14 +458,23 @@ public final class ImageSequenceViewModel {
         
         // look for saved versions of these
 
-        var outlierTask: Task<Void,Never>?
+        // let outlierTask: Task<Void,Never>?
 
-        
-        let acc = await frame.imageAccessor
+        let acc = frame.imageAccessor
 
-        let prTask = Task.detached { await acc.loadImage(type: .processed,  atSize: .preview)?.resizable() }
-        let opTask = Task.detached { await acc.loadImage(type: .original,   atSize: .preview)?.resizable() }
-        let otTask = Task.detached { await acc.loadImage(type: .original,   atSize: .thumbnail) }
+        let prTask = Task.detached {
+            await acc.loadImage(type: .processed,
+                                atSize: .preview)?.resizable()
+        }
+        let opTask = Task.detached {
+            await acc.loadImage(type: .original,
+                                atSize: .preview)?.resizable()
+        }
+
+        let otTask = Task.detached {
+            await acc.loadImage(type: .original,
+                                atSize: .thumbnail)
+        }
 
         // set list of view modes for this frame
 
@@ -490,11 +499,12 @@ public final class ImageSequenceViewModel {
             self.frames[frame.frameIndex].thumbnailImage = image
         }
 
-        if let outlierTask { await outlierTask.value }
+        Log.d("done refreshing frame \(frame.frameIndex)")
+        //if let outlierTask { await outlierTask.value }
     }
 
-    func append(frame: FrameAirplaneRemover) async {
-        //Log.d("appending frame \(frame.frameIndex)")
+  func append(frame: FrameAirplaneRemover) async {
+        Log.d("appending frame \(frame.frameIndex)")
 
         guard frame.frameIndex >= 0,
               frame.frameIndex < self.frames.count
@@ -515,7 +525,7 @@ public final class ImageSequenceViewModel {
                 }
             }
             if haveAll {
-//                Log.d("WE HAVE THEM ALL")
+                Log.d("WE HAVE THEM ALL")
 //                await MainActor.run {
                     self.initialLoadInProgress = false
 //                }
@@ -607,9 +617,6 @@ public final class ImageSequenceViewModel {
         //Log.d("addToViewModel(frame: \(newFrame.frameIndex))")
 
         if self.config == nil {
-            // XXX why this doesn't work initially befounds me,
-            // but without doing this here there is no config present...
-            //self.config = self.config
             Log.e("FUCK, config is nil")
         }
         if self.frameWidth != CGFloat(newFrame.width) ||
@@ -694,43 +701,50 @@ public extension ImageSequenceViewModel {
 //    var isProcessingFrames = false
     
     func processAllFrames() {
+        // XXX this crashed the machine with too much ram :(
         // XXX keep track of how many processed here
         if isProcessingAllFrames { return }
         isProcessingAllFrames = true
     
-        Task {
+        Task.detached { [self] in
+            let semaphore = AsyncSemaphore(value: 20) // 20 frames processing at once XXX constant
             // XXX a crude version of the FinalProcessor, could be better
             try? await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
-                for frameView in self.frames {
-                    if let frame = frameView.frame {
+                for frameView in await self.frames {
+                    if let frame = await frameView.frame {
+                        // XXX wait here on a number running actor above a certain number
+
+                        await semaphore.wait()
+                        
                         taskGroup.addTask() {
-                            try await frameProcessingMonitor.load() {
+//                            try await frameProcessingMonitor.load() {
                                 await MainActor.run {
                                     frameView.outliersLoaded = .loading
                                 }
-                                await self.findOutliers(frame: frame)
+                                await self.findOutliersAndRender(frame: frame)
                                 //await self.refresh(frame: frame)
                                 await self.setOutlierGroups(forFrame: frame)
                                 await MainActor.run {
                                     frameView.outliersLoaded = .loaded
                                 }
+                                semaphore.signal()
                                 return frame
                             }
-                        }
+  //                      }
                     }
                 }
 
                 // grab them one by one, and process when proces
 
                 for try await frame in taskGroup {
-                    let numNeighbors = config?.config().numberFinalProcessingNeighborsNeeded ?? 1
+                  let numNeighbors = await self.config?.config().numberFinalProcessingNeighborsNeeded ?? 1
                     var minFrameIndex = frame.frameIndex - numNeighbors
                     var maxFrameIndex = frame.frameIndex + numNeighbors
                     if minFrameIndex < 0 { minFrameIndex = 0 }
-                    if maxFrameIndex >= self.frames.count { maxFrameIndex = self.frames.count - 1 }
+                  if await maxFrameIndex >= self.frames.count { maxFrameIndex = await self.frames.count - 1 }
                     var positiveCount = 0
                     for i in minFrameIndex...maxFrameIndex {
-                        if let frame = frames[i].frame,
+                      if let frame = await self.frames[i].frame,
                            await frame.outlierGroups != nil { positiveCount += 1 }
                     }
                     if positiveCount == numNeighbors*2 + 1 {
@@ -753,12 +767,14 @@ public extension ImageSequenceViewModel {
                     }
                 }
             }
-            isProcessingAllFrames = false
+            await MainActor.run {
+                self.isProcessingAllFrames = false
+            }
         }
     }
 
     // used to re-process a particular frame 
-    func findOutliers(frame: FrameAirplaneRemover) async {
+    func findOutliersAndRender(frame: FrameAirplaneRemover) async {
         let frameView = self.frames[frame.frameIndex] 
         frameView.outlierViews = nil
         //frameView.loadingOutliersViews = true
@@ -976,3 +992,4 @@ public extension ImageSequenceViewModel {
         }
     }
 }
+

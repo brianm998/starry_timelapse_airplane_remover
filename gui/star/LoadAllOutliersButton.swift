@@ -42,7 +42,7 @@ struct LoadAllOutliersButton: View {
                             //Log.d("frame \(frameView.frameIndex) attempting to load outliers")
                             if let frame = await frameView.frame {
                                 //Log.d("frame \(frameView.frameIndex) adding task to load outliers")
-                                try await taskGroup.addTask(/*priority: .userInitiated*/) {
+                                taskGroup.addTask(/*priority: .userInitiated*/) {
                                     // XXX style the button during this flow?
                                     //Log.d("actually loading outliers for frame \(frame.frameIndex)")
                                     try await frame.loadOutliers()

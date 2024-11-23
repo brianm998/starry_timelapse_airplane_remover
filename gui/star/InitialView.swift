@@ -94,7 +94,6 @@ struct InitialView: View {
             //              .dropDestination(for: Config.self) { items, _ in
             //                  if items.count > 0 {
             //                      let config = items[0]
-            //                      print("FUCKING config \(items)")
             //                  }
             //                  return true
             //              }
@@ -110,7 +109,6 @@ struct InitialView: View {
                 pasteboardItem, _ in
                 if let pasteboardItem {
                     if let url = URL(string: pasteboardItem.rawValue) {
-                        print("FUCKING url \(url)")
 
                         // handle json config files
                         // and directories full of files
@@ -146,7 +144,6 @@ struct InitialView: View {
                                 }
                             }
                         } else {
-                            print("FUCKING FUCK url \(url)")
                             Task { @MainActor in
                                 self.handle(error: "File does not exist: \(url.path)")
                             }

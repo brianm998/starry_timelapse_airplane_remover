@@ -35,6 +35,7 @@ struct UserPreferences: Codable, Sendable {
     }
     
     mutating func justOpened(filename: String) {
+        print("FUCKING JUST OPENED filename \(filename)")
         self.recentlyOpenedSequencelist[filename] = Date().timeIntervalSince1970
     }
     

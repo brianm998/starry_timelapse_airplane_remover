@@ -99,9 +99,13 @@ public final class ViewModel {
         numberLoaded = 0
         amountLoaded = 0.0
 
-        if let config = imageSequence?.config
-        {
-          self.userPreferences.justOpened(filename: config.jsonFilename())
+        // XXX check to see if we should create previews here
+
+        
+        if let configManager = imageSequence?.config {
+            let config = await configManager.config()
+            configManager.save()
+            self.userPreferences.justOpened(filename: "\(config.outputPath)/\(configManager.jsonFilename())")
         }
     }
 }
