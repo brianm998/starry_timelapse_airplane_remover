@@ -49,7 +49,7 @@ public final class ImageSequenceViewModel {
     var backgroundColor = ViewModel.defaultBackgroundColor
 
     convenience init(withConfig jsonConfigFilename: String,
-                     closure: (Int, Double) -> Void) async throws
+                     closure: @escaping @Sendable (Int, Double, Int, Double) -> Void) async throws
     {
         Log.d("outlier_json_startup with \(jsonConfigFilename)")
         // first read config from json
@@ -60,7 +60,7 @@ public final class ImageSequenceViewModel {
     }
     
     convenience init(withNewImageSequence imageSequenceDirname: String,
-                     closure: (Int, Double) -> Void) async throws
+                     closure: @Sendable @escaping (Int, Double, Int, Double) -> Void) async throws
     {
 
         let shouldWriteOutlierGroupFiles = true // XXX see what happens
@@ -116,7 +116,7 @@ public final class ImageSequenceViewModel {
         self.frameViewMode = .original
     }
 
-    init(with configManager: ConfigManager, closure: (Int, Double) -> Void) async throws {
+    init(with configManager: ConfigManager, closure: @Sendable @escaping (Int, Double, Int, Double) -> Void) async throws {
 
         let config = configManager.config()
 
@@ -170,7 +170,16 @@ public final class ImageSequenceViewModel {
         }
 
         Log.d("make missing previews")
-        try await imageAccessor.writeMissingImages(atSize: .preview)
+
+        var numberPreviewsSaved = 0
+        try await imageAccessor.writeMissingImages() { numberSaved in
+            Task { @MainActor in
+                numberPreviewsSaved += 1
+                let amountPreviewsSaved = Double(numberPreviewsSaved)/Double(imageSequenceSize)
+                closure(numberPreviewsSaved, amountPreviewsSaved, 0, 0)
+            }
+                
+        }
         Log.d("done with make missing previews")
 //        Log.d("make missing thumbnails")
 //        try await imageAccessor.writeMissingImages(atSize: .thumbnail)
@@ -215,7 +224,7 @@ public final class ImageSequenceViewModel {
                 numberOfLoadedFrames += 1
                 // call the callback here on the main thread
                 let update = Double(numberOfLoadedFrames)/Double(imageSequenceSize)
-                closure(numberOfLoadedFrames, update)
+                closure(numberPreviewsSaved, 1, numberOfLoadedFrames, update)
                 incomingFrames[frame.frameIndex] = frame
             }
 

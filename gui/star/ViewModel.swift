@@ -39,7 +39,9 @@ public final class ViewModel {
 
     var amountLoaded = 0.0
     var numberLoaded = 0
-    
+    var numberPreviewsSaved = 0
+    var amountPreviewsSaved = 0.0
+
     //var backgroundColor = Color(red: 0.4, green: 0.4, blue: 0.4)
     var backgroundColor = ViewModel.defaultBackgroundColor
 
@@ -60,14 +62,20 @@ public final class ViewModel {
     func startup(withConfigFile jsonConfigFilename: String) async throws {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = jsonConfigFilename
-        imageSequence = try await ImageSequenceViewModel(withConfig: jsonConfigFilename) { numberLoaded, amountLoaded in
-            self.amountLoaded = amountLoaded
-            self.numberLoaded = numberLoaded
+        imageSequence = try await ImageSequenceViewModel(withConfig: jsonConfigFilename) { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
+            Task { @MainActor in
+                self.amountLoaded = amountLoaded
+                self.numberLoaded = numberLoaded
+                self.numberPreviewsSaved = numberPreviewsSaved
+                self.amountPreviewsSaved = amountPreviewsSaved
+            }
         }
         isLoadingImageSequence = false
         loadingImageSequenceFilename = nil
         numberLoaded = 0
         amountLoaded = 0.0
+        numberPreviewsSaved = 0
+        amountPreviewsSaved = 0.0
 
         self.userPreferences.justOpened(filename: jsonConfigFilename) // make sure this works
     }
@@ -75,14 +83,20 @@ public final class ViewModel {
     func startup(withConfig config: ConfigManager) async throws {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = await config.config().imageSequenceDirname
-        imageSequence = try await ImageSequenceViewModel(with: config) { numberLoaded, amountLoaded in
-            self.amountLoaded = amountLoaded
-            self.numberLoaded = numberLoaded
+        imageSequence = try await ImageSequenceViewModel(with: config) { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
+            Task { @MainActor in
+                self.amountLoaded = amountLoaded
+                self.numberLoaded = numberLoaded
+                self.numberPreviewsSaved = numberPreviewsSaved
+                self.amountPreviewsSaved = amountPreviewsSaved
+            }
         }
         loadingImageSequenceFilename = nil
         isLoadingImageSequence = false
         numberLoaded = 0
         amountLoaded = 0.0
+        numberPreviewsSaved = 0
+        amountPreviewsSaved = 0.0
 
         // just opened handled in InitialView where we know the full path
     }
@@ -90,18 +104,24 @@ public final class ViewModel {
     func startup(withNewImageSequence imageSequenceDirname: String) async throws {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = imageSequenceDirname
-        imageSequence = try await ImageSequenceViewModel(withNewImageSequence: imageSequenceDirname) { numberLoaded, amountLoaded in
-            self.amountLoaded = amountLoaded
-            self.numberLoaded = numberLoaded
+
+        // XXX check to see if we should create previews here
+        
+        imageSequence = try await ImageSequenceViewModel(withNewImageSequence: imageSequenceDirname) { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
+            Task { @MainActor in
+                self.amountLoaded = amountLoaded
+                self.numberLoaded = numberLoaded
+                self.numberPreviewsSaved = numberPreviewsSaved
+                self.amountPreviewsSaved = amountPreviewsSaved
+            }
         }
         isLoadingImageSequence = false
         loadingImageSequenceFilename = nil
         numberLoaded = 0
         amountLoaded = 0.0
+        numberPreviewsSaved = 0
+        amountPreviewsSaved = 0.0
 
-        // XXX check to see if we should create previews here
-
-        
         if let configManager = imageSequence?.config {
             let config = await configManager.config()
             configManager.save()

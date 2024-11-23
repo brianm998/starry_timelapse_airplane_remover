@@ -364,46 +364,6 @@ public struct ImageAccessor: Sendable {
         }
     }
     
-    public func writeMissingImage(frameIndex: Int,
-                                  ofType type: FrameViewMode,
-                                  andSize size: ImageDisplaySize) async throws
-    {
-        Log.d("frameIndex \(frameIndex)")
-        if let filename = nameForImage(frameIndex: frameIndex,
-                                       ofType: type,
-                                       atSize: .original),
-           let outputFilename = nameForImage(frameIndex: frameIndex,
-                                             ofType: type,
-                                             atSize: size)
-        {
-            Log.d("frameIndex \(frameIndex)")
-            if let smallerSize = sizeOf(size)
-            {
-                Log.d("frameIndex \(frameIndex)")
-                if let nsImage = try loadImageIntSync(filename: filename)
-                {
-                    Log.d("frameIndex \(frameIndex)")
-                    if let smallerImage = nsImage.resized(to: smallerSize)
-                    {
-                        Log.d("frameIndex \(frameIndex)")
-                        if let dataToSave = smallerImage.jpegData
-                        {
-                            Log.d("frameIndex \(frameIndex)")
-                            if FileManager.default.fileExists(atPath: outputFilename) {
-                                Log.i("overwriting already existing file \(outputFilename)")
-                                try FileManager.default.removeItem(atPath: outputFilename)
-                            }
-
-                            // write to file
-                            FileManager.default.createFile(atPath: outputFilename,
-                                                           contents: dataToSave,
-                                                           attributes: nil)
-                        }
-                    }
-                }
-            }
-        }
-    }
     
     public func makeMissingImage(frameIndex: Int,
                                  ofType type: FrameViewMode,
@@ -465,14 +425,20 @@ public struct ImageAccessor: Sendable {
         return nil
     }
 
-    public func writeMissingImages(atSize size: ImageDisplaySize) async throws {
+    public func writeMissingImages(_ closure: @Sendable @escaping (Int) -> Void) async throws {
         let imageSequenceSize = imageSequence.filenames.count
         if self.imageExists(frameIndex: 0,
                             ofType: .original,
-                            atSize: size),
+                            atSize: .preview),
            self.imageExists(frameIndex: imageSequenceSize-1,
                             ofType: .original,
-                            atSize: size)
+                            atSize: .preview),
+           self.imageExists(frameIndex: 0,
+                            ofType: .original,
+                            atSize: .thumbnail),
+           self.imageExists(frameIndex: imageSequenceSize-1,
+                            ofType: .original,
+                            atSize: .thumbnail)
         {
             // nop
         } else {
@@ -480,24 +446,73 @@ public struct ImageAccessor: Sendable {
 //                let semaphore = AsyncSemaphore(value: 100) // XXX arbitrary
                 try await withThrowingTaskGroup(of: Void.self) { taskGroup in
                     for i in 0..<imageSequenceSize {
-                        if !self.imageExists(frameIndex: i,
-                                             ofType: .original,
-                                             atSize: size)
-                        {
-                            try? await Task.sleep(nanoseconds: 1_000_000)
-//                            await semaphore.wait()
-                            taskGroup.addTask() {
-                                Log.d("making missing image for frame \(i)")
-                                let _ = try await self.writeMissingImage(frameIndex: i,
-                                                                        ofType: .original,
-                                                                        andSize: size)
-//                                semaphore.signal()
-                            }
+                        try? await Task.sleep(nanoseconds: 1_000_000)
+                        //                            await semaphore.wait()
+                        taskGroup.addTask() {
+                            Log.d("making missing image for frame \(i)")
+                            let _ = try await self.writeMissingImages(frameIndex: i,
+                                                                      ofType: .original)
+                            closure(i)
+                            //                                semaphore.signal()
                         }
                     }
                     try await taskGroup.waitForAll()
                 }
             }.value
+        }
+    }
+
+    public func writeMissingImages(frameIndex: Int,
+                                   ofType type: FrameViewMode) async throws
+    {
+        if let filename = nameForImage(frameIndex: frameIndex,
+                                       ofType: type,
+                                       atSize: .original),
+           let previewFilename = nameForImage(frameIndex: frameIndex,
+                                             ofType: type,
+                                             atSize: .preview),
+           let thumbnailFilename = nameForImage(frameIndex: frameIndex,
+                                             ofType: type,
+                                             atSize: .thumbnail)
+        {
+            
+            let previewExists = FileManager.default.fileExists(atPath: previewFilename)
+            let thumbnailExists = FileManager.default.fileExists(atPath: thumbnailFilename)
+
+            if previewExists, thumbnailExists { return }
+            
+            if let nsImage = try loadImageIntSync(filename: filename)
+            {
+                if !previewExists,
+                   let previewSize = sizeOf(.preview)
+                {
+                    if let smallerImage = nsImage.resized(to: previewSize)
+                    {
+                        if let dataToSave = smallerImage.jpegData
+                        {
+                            // write to file
+                            FileManager.default.createFile(atPath: previewFilename,
+                                                           contents: dataToSave,
+                                                           attributes: nil)
+                        }
+                    }
+                }
+
+                if !thumbnailExists,
+                   let thumbnailSize = sizeOf(.thumbnail)
+                {
+                    if let smallerImage = nsImage.resized(to: thumbnailSize)
+                    {
+                        if let dataToSave = smallerImage.jpegData
+                        {
+                            // write to file
+                            FileManager.default.createFile(atPath: thumbnailFilename,
+                                                           contents: dataToSave,
+                                                           attributes: nil)
+                        }
+                    }
+                }
+            }
         }
     }
 }

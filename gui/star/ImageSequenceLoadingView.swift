@@ -22,20 +22,38 @@ struct ImageSequenceLoadingView: View {
             }
             Spacer()
             ZStack {
-                CircularProgressView(progress: $viewModel.amountLoaded)
-                  .frame(maxWidth: 500, maxHeight: 500)
-                Spacer()
-                  .frame(maxHeight: 50)
-                if viewModel.amountLoaded == 1.0 {
-                    VStack {
-                        Text("All \(viewModel.numberLoaded) frames loaded")
-                          .foregroundColor(.green)
-                        ProgressView()
+                if viewModel.amountPreviewsSaved != 1.0 {
+                    CircularProgressView(progress: $viewModel.amountPreviewsSaved)
+                      .frame(maxWidth: 500, maxHeight: 500)
+                    Spacer()
+                      .frame(maxHeight: 50)
+                    if viewModel.amountPreviewsSaved == 1.0 {
+                        VStack {
+                            Text("All \(viewModel.numberPreviewsSaved) previews created")
+                              .foregroundColor(.green)
+                            ProgressView()
+                              .foregroundColor(.white)
+                        }
+                    } else {
+                      Text("\(viewModel.numberPreviewsSaved) previews created")
                           .foregroundColor(.white)
                     }
                 } else {
-                    Text("\(viewModel.numberLoaded) frames loaded")
-                      .foregroundColor(.white)
+                    CircularProgressView(progress: $viewModel.amountLoaded)
+                      .frame(maxWidth: 500, maxHeight: 500)
+                    Spacer()
+                      .frame(maxHeight: 50)
+                    if viewModel.amountLoaded == 1.0 {
+                        VStack {
+                            Text("All \(viewModel.numberLoaded) frames loaded")
+                              .foregroundColor(.green)
+                            ProgressView()
+                              .foregroundColor(.white)
+                        }
+                    } else {
+                        Text("\(viewModel.numberLoaded) frames loaded")
+                          .foregroundColor(.white)
+                    }
                 }
             }
             Spacer()
@@ -46,6 +64,7 @@ struct ImageSequenceLoadingView: View {
                 Text("Cancel")
                   .font(.largeTitle)
             }
+              .buttonStyle(ShrinkingButton())
             Spacer()
         }
           .frame(maxWidth: .infinity, maxHeight: .infinity)
