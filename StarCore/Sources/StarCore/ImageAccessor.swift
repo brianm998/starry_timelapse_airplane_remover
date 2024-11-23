@@ -27,60 +27,8 @@ public enum ImageDisplaySize: Sendable {
     case thumbnail
 }
 
-
-public protocol ImageAccess: Sendable {
-    // does this image exist?
-    func imageExists(ofType imageType: FrameViewMode,
-                     atSize size: ImageDisplaySize) -> Bool
-
-    // save image, will rescale and jpeg if necessary
-    func save(_ image: PixelatedImage,
-              as type: FrameViewMode,
-              atSize size: ImageDisplaySize,
-              overwrite: Bool) async throws
-
-    // load an image of some type and size
-    func load(type imageType: FrameViewMode,
-              atSize size: ImageDisplaySize) async throws -> PixelatedImage?
-
-    func saveFinal(_ image: PixelatedImage,
-                   as type: FrameViewMode,
-                   atSize size: ImageDisplaySize,
-                   overwrite: Bool) async throws
-
-    // load an image of some type and size
-    func loadFinal(type imageType: FrameViewMode,
-                   atSize size: ImageDisplaySize) async throws -> PixelatedImage?
-
-    // load an image of some type and size for the GUI as a SwiftUI Image
-    func loadImage(type imageType: FrameViewMode,
-                   atSize size: ImageDisplaySize) async -> Image?
-
-    // bypass loading restrictions
-    func loadInt(type imageType: FrameViewMode,
-                 atSize size: ImageDisplaySize) async -> PixelatedImage?
-
-    func dirForImage(ofType type: FrameViewMode,
-                     atSize size: ImageDisplaySize) -> String?
-
-    func urlForImage(ofType imageType: FrameViewMode,
-                     atSize size: ImageDisplaySize) -> URL?
-
-    func writeMissingImage(ofType type: FrameViewMode,
-                           andSize size: ImageDisplaySize) async throws
-
-    func deleteImage(ofType imageType: FrameViewMode,
-                     atSize size: ImageDisplaySize) throws
-
-    func dirAndNameForImage(ofType type: FrameViewMode,
-                            atSize size: ImageDisplaySize) -> (String, String)?
-    
-    func deleteAllImages()
-
-}
-
 // read and write access to different image types for a given frame
-public struct ImageAccessor: ImageAccess, Sendable {
+public struct ImageAccessor: Sendable {
     let config: Config
     let baseFileName: String
     let imageSequence: ImageSequence

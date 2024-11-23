@@ -222,7 +222,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // if this is false, just write out outlier data
     let writeOutputFiles: Bool
 
-    nonisolated public let imageAccessor: ImageAccess
+    nonisolated public let imageAccessor: ImageAccessor
 
     private let completion: (() async -> Void)?
     

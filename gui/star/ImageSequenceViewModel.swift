@@ -152,7 +152,14 @@ public final class ImageSequenceViewModel {
             
             Log.d("loaded imageInfo \(imageInfo)")
 
-            for (frameIndex, filename) in await imageSequence.filenames.enumerated() {
+            let filenames = await imageSequence.filenames
+
+            var frameIndexToBaseNameMap: [Int: String] = [:]
+            
+            for (frameIndex, filename) in filenames.enumerated() {
+                frameIndexToBaseNameMap[frameIndex] = removePath(fromString: filename)
+            }
+            for (frameIndex, filename) in filenames.enumerated() {
                 
                 Log.d("add task at frameIndex \(frameIndex)")
 

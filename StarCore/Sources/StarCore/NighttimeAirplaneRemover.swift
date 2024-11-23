@@ -74,13 +74,22 @@ public actor NighttimeAirplaneRemover {
     
         var _methodList: [Int : @Sendable () async throws -> FrameAirplaneRemover] = [:]
         
+        var frameIndexToBaseNameMap: [Int: String] = [:]
+        
         for (index, imageFilename) in imageSequence.filenames.enumerated() {
+
+            // grab image accessor data here
+            
             let basename = removePath(fromString: imageFilename)
+            frameIndexToBaseNameMap[index] = basename
+            
             let outputFilename = "\(outputDirname)/\(basename)"
             if FileManager.default.fileExists(atPath: outputFilename) {
                 existingOutputFiles[index] = true
             }                                  
         }
+
+        
         
         for (index, outputFileAlreadyExists) in existingOutputFiles.enumerated() {
             if !outputFileAlreadyExists {
