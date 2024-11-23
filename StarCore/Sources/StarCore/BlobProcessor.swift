@@ -450,7 +450,10 @@ public class BlobProcessor {
         do {
             // try to load the image subtraction from a pre-processed file
 
-            if let image = try await imageAccessor.load(type: .subtraction, atSize: .original) {
+            if let image = try await imageAccessor.load(frameIndex: frameIndex,
+                                                        type: .subtraction,
+                                                        atSize: .original)
+            {
                 Log.d("frame \(frameIndex) loaded subtraction image")
                 subtractionImage = image
                 switch image.imageData {
@@ -461,7 +464,9 @@ public class BlobProcessor {
                 }
                 Log.d("frame \(frameIndex) loaded outlier amounts from subtraction image")
 
-                try await imageAccessor.save(image, as: .subtraction,
+                try await imageAccessor.save(image,
+                                             frameIndex: frameIndex,
+                                             as: .subtraction,
                                              atSize: .preview, overwrite: false)
                 Log.d("frame \(frameIndex) saved subtraction image preview") 
             }
@@ -484,7 +489,9 @@ public class BlobProcessor {
             Log.d("frame \(frameIndex) loaded subtractionArray with \(subtractionArray.count) items")
         }
 
-        guard let originalImage = try await imageAccessor.load(type: .original, atSize: .original)
+        guard let originalImage = try await imageAccessor.load(frameIndex: frameIndex,
+                                                               type: .original,
+                                                               atSize: .original)
         else { throw "couldn't load original file for blobbing" }
 
         return (subtractionArray, originalImage)

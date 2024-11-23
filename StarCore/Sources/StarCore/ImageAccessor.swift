@@ -30,18 +30,18 @@ public enum ImageDisplaySize: Sendable {
 // read and write access to different image types for a given frame
 public struct ImageAccessor: Sendable {
     let config: Config
-    let baseFileName: String
+    let frameIndexToBaseNameMap: [Int: String]
     let imageSequence: ImageSequence
-    let imageSavedClosure: (@Sendable (PixelatedImage, FrameViewMode, ImageDisplaySize) -> Void)?
+    let imageSavedClosure: (@Sendable (Int, PixelatedImage, FrameViewMode, ImageDisplaySize) -> Void)?
     
     public init(config: Config,
                 imageSequence: ImageSequence,
-                baseFileName: String,
-                imageSavedClosure: (@Sendable (PixelatedImage, FrameViewMode, ImageDisplaySize) -> Void)? = nil)
+                frameIndexToBaseNameMap: [Int: String],
+                imageSavedClosure: (@Sendable (Int, PixelatedImage, FrameViewMode, ImageDisplaySize) -> Void)? = nil)
     {
         // the dirname (not full path) of where the main output files will sit
         self.config = config
-        self.baseFileName = baseFileName
+        self.frameIndexToBaseNameMap = frameIndexToBaseNameMap
         self.imageSequence = imageSequence
         self.imageSavedClosure = imageSavedClosure
         mkdirs()                // XXX called more than needed
@@ -77,14 +77,18 @@ public struct ImageAccessor: Sendable {
         }
     }
 
-    public func loadImage(type imageType: FrameViewMode,
+    public func loadImage(frameIndex: Int,
+                          type imageType: FrameViewMode,
                           atSize size: ImageDisplaySize) async -> Image?
     {
-        if let url = urlForImage(ofType: imageType, atSize: size),
+        if let url = urlForImage(frameIndex: frameIndex, ofType: imageType, atSize: size),
            let image = NSImage(contentsOf: url)
         {
             return Image(nsImage: image)
-        } else if let image = try? await makeMissingImage(ofType: imageType, andSize: size) {
+        } else if let image = try? await makeMissingImage(frameIndex: frameIndex,
+                                                          ofType: imageType,
+                                                          andSize: size)
+        {
             return Image(nsImage: image)
         } else {
             Log.w("cannot load image of type \(imageType) at size \(size)")
@@ -92,10 +96,14 @@ public struct ImageAccessor: Sendable {
         return nil
     }
 
-    public func urlForImage(ofType imageType: FrameViewMode,
+    public func urlForImage(frameIndex: Int,
+                            ofType imageType: FrameViewMode,
                             atSize size: ImageDisplaySize) -> URL?
     {
-        if let filename = nameForImage(ofType: imageType, atSize: size) {
+        if let filename = nameForImage(frameIndex: frameIndex,
+                                       ofType: imageType,
+                                       atSize: size)
+        {
             if FileManager.default.fileExists(atPath: filename) {
                 return URL(fileURLWithPath: filename)
             } else {
@@ -107,10 +115,13 @@ public struct ImageAccessor: Sendable {
         return nil
     }
 
-    public func imageExists(ofType imageType: FrameViewMode,
+    public func imageExists(frameIndex: Int,
+                            ofType imageType: FrameViewMode,
                             atSize size: ImageDisplaySize) -> Bool
     {
-        if let filename = nameForImage(ofType: imageType, atSize: size),
+        if let filename = nameForImage(frameIndex: frameIndex,
+                                       ofType: imageType,
+                                       atSize: size),
            FileManager.default.fileExists(atPath: filename)
         {
             return true
@@ -120,27 +131,37 @@ public struct ImageAccessor: Sendable {
     }
 
     // load using the file system monitor
-    public func loadFinal(type imageType: FrameViewMode,
+    public func loadFinal(frameIndex: Int,
+                          type imageType: FrameViewMode,
                           atSize size: ImageDisplaySize) async throws -> PixelatedImage?
     {
-        try await finalFileSystemMonitor.load() { await self.loadInt(type: imageType, atSize: size) }
+        try await finalFileSystemMonitor.load() {
+            await self.loadInt(frameIndex: frameIndex, type: imageType, atSize: size)
+        }
     }
 
     // load using the file system monitor
-    public func load(type imageType: FrameViewMode,
+    public func load(frameIndex: Int,
+                     type imageType: FrameViewMode,
                      atSize size: ImageDisplaySize) async throws -> PixelatedImage?
     {
-        try await fileSystemMonitor.load() { await self.loadInt(type: imageType, atSize: size) }
+        try await fileSystemMonitor.load() {
+            await self.loadInt(frameIndex: frameIndex, type: imageType, atSize: size)
+        }
     }
 
-    public func loadInt(type imageType: FrameViewMode,
-                         atSize size: ImageDisplaySize) async -> PixelatedImage?
+    public func loadInt(frameIndex: Int,
+                        type imageType: FrameViewMode,
+                        atSize size: ImageDisplaySize) async -> PixelatedImage?
     {
         var numRetries = 4
 
         while numRetries > 0 {
             do {
-                if let filename = nameForImage(ofType: imageType, atSize: size) {
+                if let filename = nameForImage(frameIndex: frameIndex,
+                                               ofType: imageType,
+                                               atSize: size)
+                {
                     if FileManager.default.fileExists(atPath: filename) {
                         return try await imageSequence.getImage(withName: filename).image()
                         //return try await PixelatedImage(fromFile: filename)
@@ -152,7 +173,9 @@ public struct ImageAccessor: Sendable {
                         case .original:
                             return nil  // original does not exist, nothing to return
                         default:
-                            return try await createMissingImage(ofType: imageType, andSize: size)
+                            return try await createMissingImage(frameIndex: frameIndex,
+                                                                ofType: imageType,
+                                                                andSize: size)
                         }
                     }
                 }
@@ -181,26 +204,30 @@ public struct ImageAccessor: Sendable {
     
     // save using the file system monitor
     public func saveFinal(_ image: PixelatedImage,
+                          frameIndex: Int,
                           as type: FrameViewMode,
                           atSize size: ImageDisplaySize,
                           overwrite: Bool) async throws
     {
         try await finalFileSystemMonitor.save() {
-          try await self.saveInt(image,
-                                 as: type,
-                                 atSize: size,
-                                 overwrite: overwrite)
+            try await self.saveInt(image,
+                                   frameIndex: frameIndex,
+                                   as: type,
+                                   atSize: size,
+                                   overwrite: overwrite)
         }
     }
             
     // save using the file system monitor
     public func save(_ image: PixelatedImage,
+                     frameIndex: Int,
                      as type: FrameViewMode,
                      atSize size: ImageDisplaySize,
                      overwrite: Bool) async throws
     {
         try await fileSystemMonitor.save() {
           try await self.saveInt(image,
+                                 frameIndex: frameIndex,
                                  as: type,
                                  atSize: size,
                                  overwrite: overwrite)
@@ -209,11 +236,15 @@ public struct ImageAccessor: Sendable {
             
     // make this use the file access guard
     private func saveInt(_ image: PixelatedImage,
+                         frameIndex: Int,
                          as type: FrameViewMode,
                          atSize size: ImageDisplaySize,
                          overwrite: Bool) async throws
     {
-        if let filename = nameForImage(ofType: type, atSize: size) {
+        if let filename = nameForImage(frameIndex: frameIndex,
+                                       ofType: type,
+                                       atSize: size)
+        {
             var dataToSave: Data? = nil
             switch size {
             case .original:
@@ -243,7 +274,7 @@ public struct ImageAccessor: Sendable {
                                                    attributes: nil)
 
                     // callback to tell what has changed
-                    imageSavedClosure?(image, type, size)
+                    imageSavedClosure?(frameIndex, image, type, size)
                 }
             }
         } else {
@@ -251,19 +282,26 @@ public struct ImageAccessor: Sendable {
         }
     }
 
-    private func nameForImage(ofType type: FrameViewMode,
-                                          atSize size: ImageDisplaySize) -> String?
+    private func nameForImage(frameIndex: Int,
+                              ofType type: FrameViewMode,
+                              atSize size: ImageDisplaySize) -> String?
     {
-        if let (dirname, filename) = dirAndNameForImage(ofType: type, atSize: size) {
+        if let (dirname, filename) = dirAndNameForImage(frameIndex: frameIndex,
+                                                        ofType: type,
+                                                        atSize: size)
+        {
             return "\(dirname)/\(filename)"
         }
         return nil
     }
 
-    public func dirAndNameForImage(ofType type: FrameViewMode,
-                                                atSize size: ImageDisplaySize) -> (String, String)?
+    public func dirAndNameForImage(frameIndex: Int,
+                                   ofType type: FrameViewMode,
+                                   atSize size: ImageDisplaySize) -> (String, String)?
     {
-        if let dir = config.dirForImage(ofType: type, atSize: size) {
+        if let dir = config.dirForImage(ofType: type, atSize: size),
+           let baseFileName = frameIndexToBaseNameMap[frameIndex]
+        {
             switch size {
             case .original:
                 switch type {
@@ -301,39 +339,51 @@ public struct ImageAccessor: Sendable {
         }
     }
 
-    public func deleteImage(ofType imageType: FrameViewMode,
+    public func deleteImage(frameIndex: Int,
+                            ofType imageType: FrameViewMode,
                             atSize size: ImageDisplaySize) throws
     {
-        if let filename = nameForImage(ofType: imageType, atSize: size) {
+        if let filename = nameForImage(frameIndex: frameIndex,
+                                       ofType: imageType,
+                                       atSize: size)
+        {
             try FileManager.default.removeItem(atPath: filename)
         }
     }
 
-  public func deleteAllImages() {    // XXX except for original
+    public func deleteAllImages(frameIndex: Int) {    // XXX except for original
         for type in FrameViewMode.allCases {
             switch type {
             case .original:
                 break           // don't delete the orignal images
 
             default:
-                try? deleteImage(ofType: type, atSize: .original)
-                try? deleteImage(ofType: type, atSize: .preview)
+                try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .original)
+                try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .preview)
             }
         }
     }
     
-    public func writeMissingImage(ofType type: FrameViewMode,
+    public func writeMissingImage(frameIndex: Int,
+                                  ofType type: FrameViewMode,
                                   andSize size: ImageDisplaySize) async throws
     {
-        _ = try await makeMissingImage(ofType: type, andSize: size)
+        _ = try await makeMissingImage(frameIndex: frameIndex,
+                                       ofType: type,
+                                       andSize: size)
     }
     
-    public func makeMissingImage(ofType type: FrameViewMode,
-                                  andSize size: ImageDisplaySize) async throws -> NSImage?
+    public func makeMissingImage(frameIndex: Int,
+                                 ofType type: FrameViewMode,
+                                 andSize size: ImageDisplaySize) async throws -> NSImage?
     {
-        if let filename = nameForImage(ofType: type, atSize: size),
+        if let filename = nameForImage(frameIndex: frameIndex,
+                                       ofType: type,
+                                       atSize: size),
            let smallerSize = sizeOf(size),
-           let fullResImage = try await load(type: type, atSize: .original),
+           let fullResImage = try await load(frameIndex: frameIndex,
+                                             type: type,
+                                             atSize: .original),
            let scaledImageData = fullResImage.nsImage(ofSize: smallerSize)
         {
             let dataToSave = scaledImageData.jpegData
@@ -353,11 +403,15 @@ public struct ImageAccessor: Sendable {
         return nil
     }
     
-    private func createMissingImage(ofType type: FrameViewMode,
+    private func createMissingImage(frameIndex: Int,
+                                    ofType type: FrameViewMode,
                                     andSize size: ImageDisplaySize)
       async throws -> PixelatedImage?
     {
-        if let scaledImageData = try await makeMissingImage(ofType: type, andSize: size) {
+        if let scaledImageData = try await makeMissingImage(frameIndex: frameIndex,
+                                                            ofType: type,
+                                                            andSize: size)
+        {
             if let cgImage = scaledImageData.cgImage(forProposedRect: nil,
                                                      context: nil,
                                                      hints: nil)

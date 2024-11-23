@@ -239,14 +239,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 baseName: String,       // source filename without path
                 fullyProcess: Bool = true,
                 writeOutputFiles: Bool = true,
-                imageSavedClosure: (@Sendable (PixelatedImage, FrameViewMode, ImageDisplaySize) -> Void)? = nil,
+                imageAccessor: ImageAccessor,
                 completion: (@Sendable () async -> Void)? = nil) async throws
     {
-        // the image accessor always has the orignal config
-        self.imageAccessor = ImageAccessor(config: await configManager.config(),
-                                           imageSequence: imageSequence,
-                                           baseFileName: baseName,
-                                           imageSavedClosure: imageSavedClosure)
+        self.imageAccessor = imageAccessor
         self.fullyProcess = fullyProcess
         self.writeOutputFiles = writeOutputFiles
         self.configManager = configManager
@@ -279,7 +275,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             otherFilename = imageSequence.filenames[frameIndex+1]
         }
 
-        if imageAccessor.imageExists(ofType: .processed, atSize: .original) {
+        if imageAccessor.imageExists(frameIndex: frameIndex,
+                                     ofType: .processed,
+                                     atSize: .original)
+        {
             self.state = .complete
         }
         
@@ -327,12 +326,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
 //        let accessor = imageAccessor
         
-        if let alignedFrame = try await imageAccessor.load(type: .aligned, atSize: .original) {
+        if let alignedFrame = try await imageAccessor.load(frameIndex: frameIndex,
+                                                           type: .aligned,
+                                                           atSize: .original)
+        {
             Log.d("frame \(frameIndex) loaded existing aligned frame")
             return alignedFrame
         } else {
             Log.d("frame \(frameIndex) creating aligned frame")
-            if let dirname = imageAccessor.dirForImage(ofType: .aligned, atSize: .original) {
+            if let dirname = imageAccessor.dirForImage(ofType: .aligned,
+                                                       atSize: .original)
+            {
                 Log.d("frame \(frameIndex) creating aligned frame in \(dirname)")
                 self.set(state: .starAlignment)
 
@@ -349,8 +353,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 Log.d("frame \(frameIndex) alignedFilename \(String(describing: alignedFilename))")
                 if let alignedFilename {
                     Log.d("frame \(frameIndex) got aligned filename \(alignedFilename)")
-                    if let alignedFrame = try await imageAccessor.load(type: .aligned, atSize: .original) {
-                        try await imageAccessor.save(alignedFrame, as: .aligned, atSize: .preview, overwrite: false)
+                    if let alignedFrame = try await imageAccessor.load(frameIndex: frameIndex,
+                                                                       type: .aligned,
+                                                                       atSize: .original)
+                    {
+                        try await imageAccessor.save(alignedFrame,
+                                                     frameIndex: frameIndex,
+                                                     as: .aligned,
+                                                     atSize: .preview,
+                                                     overwrite: false)
                         return alignedFrame
                     } else {
                         Log.e("frame \(frameIndex) could not load aligned frame")
@@ -420,8 +431,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         self.set(state: .loadingImages)
 
         var (image, otherFrame) = try await finalFileSystemMonitor.load() {
-            await (imageAccessor.loadInt(type: .original, atSize: .original),
-                   imageAccessor.loadInt(type: .aligned, atSize: .original))
+            await (imageAccessor.loadInt(frameIndex: frameIndex,
+                                         type: .original,
+                                         atSize: .original),
+                   imageAccessor.loadInt(frameIndex: frameIndex,
+                                         type: .aligned,
+                                         atSize: .original))
         }
 
         guard let image = image//try await imageAccessor.loadFinal(type: .original, atSize: .original)
@@ -429,8 +444,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         if self.writeOutputFiles {
             self.set(state: .loadingImages1)
-            try await imageAccessor.saveFinal(image, as: .original, atSize: .preview, overwrite: false)
-            try await imageAccessor.saveFinal(image, as: .original, atSize: .thumbnail, overwrite: false)
+            try await imageAccessor.saveFinal(image, 
+                                              frameIndex: frameIndex,
+                                              as: .original,
+                                              atSize: .preview,
+                                              overwrite: false)
+            try await imageAccessor.saveFinal(image,
+                                              frameIndex: frameIndex,
+                                              as: .original,
+                                              atSize: .thumbnail,
+                                              overwrite: false)
         }
 
         
@@ -465,10 +488,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // write frame out as processed versions
             do {
                 Log.d("frame \(self.frameIndex) processed file")
-                try await imageAccessor.saveFinal(processedImage, as: .processed,
-                                                  atSize: .original, overwrite: true)
+                try await imageAccessor.saveFinal(processedImage,
+                                                  frameIndex: frameIndex,
+                                                  as: .processed,
+                                                  atSize: .original,
+                                                  overwrite: true)
                 Log.d("frame \(self.frameIndex) writing processed preview")
-                try await imageAccessor.saveFinal(processedImage, as: .processed,
+                try await imageAccessor.saveFinal(processedImage,
+                                                  frameIndex: frameIndex,
+                                                  as: .processed,
                                                   atSize: .preview, overwrite: true)
             } catch {
                 // XXX for some reason this error gets missed if we don't catch it here :(
@@ -479,11 +507,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 Log.d("frame \(self.frameIndex) getting validating image")
                 let validationImage = await outlierGroups.validationImage()
                 Log.d("frame \(self.frameIndex) writing validated image")
-                try await imageAccessor.saveFinal(validationImage, as: .validation,
-                                                  atSize: .original, overwrite: false)
+                try await imageAccessor.saveFinal(validationImage,
+                                                  frameIndex: frameIndex,
+                                                  as: .validation,
+                                                  atSize: .original,
+                                                  overwrite: false)
                 Log.d("frame \(self.frameIndex) writing validated preview")
-                try await imageAccessor.saveFinal(validationImage, as: .validation,
-                                                  atSize: .preview, overwrite: false)
+                try await imageAccessor.saveFinal(validationImage,
+                                                  frameIndex: frameIndex,
+                                                  as: .validation,
+                                                  atSize: .preview,
+                                                  overwrite: false)
             }
             Log.d("frame \(self.frameIndex) done writing toutut files")
         }

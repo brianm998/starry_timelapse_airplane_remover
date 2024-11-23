@@ -17,7 +17,7 @@ struct ReProcessCurrentFrameButton: View {
     private func action() {
         Task {
             if let frame = viewModel.currentFrame {
-                frame.imageAccessor.deleteAllImages()
+                frame.imageAccessor.deleteAllImages(frameIndex: frame.frameIndex)
                 viewModel.frameViewMode = .original
 
                 let binaryBlobFilename = await frame.blobBinaryFilename

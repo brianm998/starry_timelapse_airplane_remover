@@ -70,7 +70,10 @@ extension FrameAirplaneRemover {
     public func loadOutliersFromImageFile() async throws -> OutlierGroups? {
         let startTime = Date().timeIntervalSinceReferenceDate
 
-        guard let subtractionImage = try await self.imageAccessor.load(type: .subtraction, atSize: .original)
+        guard let subtractionImage =
+                try await self.imageAccessor.load(frameIndex: frameIndex,
+                                                  type: .subtraction,
+                                                  atSize: .original)
         else {
             Log.i("couldn't load subtraction image for loading outliers")
             return nil
@@ -268,7 +271,10 @@ extension FrameAirplaneRemover {
            - don't apply decision tree, use the validation image instead
          */
 
-        if let image = try await imageAccessor.load(type: .validation, atSize: .original) {
+        if let image = try await imageAccessor.load(frameIndex: frameIndex,
+                                                    type: .validation,
+                                                    atSize: .original)
+        {
             switch image.imageData {
             case .eightBit(let validationArr):
                 await classifyOutliers(with: validationArr)
@@ -356,8 +362,10 @@ extension FrameAirplaneRemover {
                                        grayscale8BitImageData: blobImageData)
         let (_) = await (/*try imageAccessor.save(blobImage, as: fuck,
                                                    atSize: .original, overwrite: true),*/
-                            try imageAccessor.save(blobImage, as: fuck,
-                                                   atSize: .preview, overwrite: true))
+          try imageAccessor.save(blobImage,
+                                 frameIndex: frameIndex,
+                                 as: fuck,
+                                 atSize: .preview, overwrite: true))
         
     }
 

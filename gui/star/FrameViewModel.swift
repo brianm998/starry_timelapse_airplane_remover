@@ -103,7 +103,7 @@ public class FrameViewModel {
                     }*/
 
                     
-                    AsyncImage(url: frame.imageAccessor.urlForImage(ofType: type, atSize: .preview)) { image in
+                    AsyncImage(url: frame.imageAccessor.urlForImage(frameIndex: frame.frameIndex, ofType: type, atSize: .preview)) { image in
                         image.resizable()
                     } placeholder: {
                         initialImage

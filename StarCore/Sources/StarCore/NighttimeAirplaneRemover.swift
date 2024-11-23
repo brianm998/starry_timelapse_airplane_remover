@@ -63,7 +63,7 @@ public actor NighttimeAirplaneRemover {
 
     let processExistingFiles: Bool
     
-    func assembleMethodList() throws -> MethodList<FrameAirplaneRemover> {
+    func assembleMethodList() async throws -> MethodList<FrameAirplaneRemover> {
         /*
            read all existing output files 
            sort them into frame order
@@ -89,7 +89,9 @@ public actor NighttimeAirplaneRemover {
             }                                  
         }
 
-        
+        let imageAccessor = ImageAccessor(config: await configManager.config(),
+                                          imageSequence: imageSequence,
+                                          frameIndexToBaseNameMap: frameIndexToBaseNameMap)    
         
         for (index, outputFileAlreadyExists) in existingOutputFiles.enumerated() {
             if !outputFileAlreadyExists {
@@ -117,7 +119,8 @@ public actor NighttimeAirplaneRemover {
                     //let image = await self.imageSequence.getImage(withName: imageFilename)
                     return try await self.processFrame(number: index,
                                                        outputFilename: outputFilename,
-                                                       baseName: basename) 
+                                                       baseName: basename,
+                                                       imageAccessor: imageAccessor) 
                 }
             } else {
                 // update progress monitor via this callback
@@ -234,7 +237,7 @@ public actor NighttimeAirplaneRemover {
         self.shouldProcess = [Bool](repeating: processExistingFiles, count: imageSequence.filenames.count)
         self.existingOutputFiles = [Bool](repeating: false, count: imageSequence.filenames.count)
         self.fullyProcess = fullyProcess
-        self.methodList = try assembleMethodList()
+        self.methodList = try await assembleMethodList()
 
         let imageSequenceSize = /*self.*/imageSequence.filenames.count
 
@@ -339,7 +342,8 @@ public actor NighttimeAirplaneRemover {
     // called async check access to shared data
     func processFrame(number index: Int,
                       outputFilename: String,
-                      baseName: String) async throws -> FrameAirplaneRemover
+                      baseName: String,
+                      imageAccessor: ImageAccessor) async throws -> FrameAirplaneRemover
     {
         await numberLeft.increment()
         let frame = try await FrameAirplaneRemover(with: configManager,
@@ -353,7 +357,7 @@ public actor NighttimeAirplaneRemover {
                                                    baseName: baseName,
                                                    fullyProcess: fullyProcess,
                                                    writeOutputFiles: writeOutputFiles,
-                                                   imageSavedClosure: nil)
+                                                   imageAccessor: imageAccessor)
         {
             // run when frame has completed processing
             await self.decrementNumberLeft()

@@ -29,7 +29,10 @@ extension FrameAirplaneRemover {
 
         let accessor = imageAccessor
         
-        if let image = try await imageAccessor.load(type: .subtraction, atSize: .original) {
+        if let image = try await imageAccessor.load(frameIndex: frameIndex,
+                                                    type: .subtraction,
+                                                    atSize: .original)
+        {
             return image
         }
 
@@ -38,7 +41,9 @@ extension FrameAirplaneRemover {
 
 
         // load the original
-        guard let image = try await accessor.load(type: .original, atSize: .original)
+        guard let image = try await accessor.load(frameIndex: frameIndex,
+                                                  type: .original,
+                                                  atSize: .original)
         else {
             Log.e("frame \(frameIndex) couldn't load original image")
             // XXX these should really throw an error, and that really should
@@ -49,7 +54,9 @@ extension FrameAirplaneRemover {
         Log.d("frame \(frameIndex) got orig image")
         
         // load or create the aligned frame
-        var alignedFrame = try await accessor.load(type: .aligned, atSize: .original)
+        var alignedFrame = try await accessor.load(frameIndex: frameIndex,
+                                                   type: .aligned,
+                                                   atSize: .original)
         if alignedFrame == nil {
             // try creating the star aligned image if we can't load it
             alignedFrame = try await starAlignedImage()
@@ -78,10 +85,16 @@ extension FrameAirplaneRemover {
         if config.writeOutlierGroupFiles {
             // write out image of outlier amounts
             do {
-                try await accessor.save(subtractionImage, as: .subtraction,
-                                             atSize: .original, overwrite: false)
-                try await accessor.save(subtractionImage, as: .subtraction,
-                                             atSize: .preview, overwrite: false)
+                try await accessor.save(subtractionImage,
+                                        frameIndex: frameIndex,
+                                        as: .subtraction,
+                                        atSize: .original,
+                                        overwrite: false)
+                try await accessor.save(subtractionImage,
+                                        frameIndex: frameIndex,
+                                        as: .subtraction,
+                                        atSize: .preview,
+                                        overwrite: false)
             } catch {
                 Log.e("frame \(frameIndex) can't write subtraction image: \(error)")
             }

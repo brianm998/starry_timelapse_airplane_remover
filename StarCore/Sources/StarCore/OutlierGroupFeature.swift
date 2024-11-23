@@ -508,8 +508,10 @@ fileprivate func calculateBorderBrightness(of group: OutlierGroup) async -> Doub
     if let frame = await group.frame {
         do {
             let accessor = frame.imageAccessor
-            if let originalImage = try await accessor.loadFinal(type: .original,
-                                                                atSize: .original)
+            if let originalImage =
+                 try await accessor.loadFinal(frameIndex: frame.frameIndex,
+                                              type: .original,
+                                              atSize: .original)
             {
                 return originalImage.borderBrightness(of: group.pixelSet)
             }

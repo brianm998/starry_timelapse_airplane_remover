@@ -159,8 +159,19 @@ public final class ImageSequenceViewModel {
             for (frameIndex, filename) in filenames.enumerated() {
                 frameIndexToBaseNameMap[frameIndex] = removePath(fromString: filename)
             }
+
+            // make image accessor here now
+            // the image accessor always has the orignal config
+            let imageAccessor = ImageAccessor(config: configManager.config(),
+                                              imageSequence: imageSequence,
+                                              frameIndexToBaseNameMap: frameIndexToBaseNameMap) { frameIndex, image, type, size in
+                Task { @MainActor in 
+                    self.frames[frameIndex].savedImage(image, ofType: type, atSize: size)
+                }
+            }
+            
             for (frameIndex, filename) in filenames.enumerated() {
-                
+
                 Log.d("add task at frameIndex \(frameIndex)")
 
                 taskGroup.addTask() {
@@ -177,11 +188,7 @@ public final class ImageSequenceViewModel {
                                                        baseName: basename,
                                                        fullyProcess: false,
                                                        writeOutputFiles: true,
-                                                       imageSavedClosure: { image, type, size in
-                                                           Task { @MainActor in 
-                                                               self.frames[frameIndex].savedImage(image, ofType: type, atSize: size)
-                                                           }
-                                                       })
+                                                       imageAccessor: imageAccessor)
                     }
                     if let callback = callbacks.frameCheckClosure {
                         await MainActor.run {
@@ -470,16 +477,19 @@ public final class ImageSequenceViewModel {
         let acc = frame.imageAccessor
 
         let prTask = Task.detached {
-            await acc.loadImage(type: .processed,
+            await acc.loadImage(frameIndex: frame.frameIndex,
+                                type: .processed,
                                 atSize: .preview)?.resizable()
         }
         let opTask = Task.detached {
-            await acc.loadImage(type: .original,
+            await acc.loadImage(frameIndex: frame.frameIndex,
+                                type: .original,
                                 atSize: .preview)?.resizable()
         }
 
         let otTask = Task.detached {
-            await acc.loadImage(type: .original,
+            await acc.loadImage(frameIndex: frame.frameIndex,
+                                type: .original,
                                 atSize: .thumbnail)
         }
 
@@ -488,7 +498,10 @@ public final class ImageSequenceViewModel {
         if self.frames[frame.frameIndex].existingImages.count == 0 {
             var existingImages: Set<FrameViewMode> = []
             for type in FrameViewMode.allCases {
-                if acc.imageExists(ofType: type, atSize: .preview) {
+                if acc.imageExists(frameIndex: frame.frameIndex,
+                                   ofType: type,
+                                   atSize: .preview)
+                {
                     existingImages.insert(type)
                 }
             }

@@ -17,7 +17,8 @@ public struct FrameEditImageView: View {
             let frameView = self.viewModel.currentFrameView
 
             if let nextFrame = frameView.frame {
-                if let url = nextFrame.imageAccessor.urlForImage(ofType: viewModel.frameViewMode,
+                if let url = nextFrame.imageAccessor.urlForImage(frameIndex: nextFrame.frameIndex,
+                                                                 ofType: viewModel.frameViewMode,
                                                                  atSize: .original)
                 {
                     AsyncImage(url: url) { phase in
@@ -27,7 +28,8 @@ public struct FrameEditImageView: View {
                             self.previewImage
                         }
                     }
-                } else if let url = nextFrame.imageAccessor.urlForImage(ofType: viewModel.frameViewMode,
+                } else if let url = nextFrame.imageAccessor.urlForImage(frameIndex: nextFrame.frameIndex,
+                                                                        ofType: viewModel.frameViewMode,
                                                                         atSize: .preview) {
                     AsyncImage(url: url) { phase in
                         if let image = phase.image {
