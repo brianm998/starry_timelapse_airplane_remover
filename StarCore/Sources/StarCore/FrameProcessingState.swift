@@ -116,6 +116,62 @@ public enum FrameProcessingState: Int,
         }
     }
 
+    public var isReadyForInterframeProcessing: Bool {
+        switch self {
+        case .unprocessed:
+            return false
+        case .starAlignment:
+            return false
+        case .subtractingNeighbor:
+            return false
+        case .assemblingPixels:
+            return false
+        case .sortingPixels:
+            return false
+        case .detectingBlobs:
+            return false
+        case .isolatedBlobRemoval1:
+            return false
+        case .isolatedBlobRemoval2:
+            return false
+        case .isolatedBlobRemoval3:
+            return false
+        case .isolatedBlobRemoval4:
+            return false
+        case .smallLinearBlobAbsorbtion:
+            return false
+        case .largerLinearBlobAbsorbtion:
+            return false
+        case .finalCrunch:
+            return false
+        case .populatingOutlierGroups:
+            return false
+        case .readyForInterFrameProcessing:
+            return true
+        case .interFrameProcessing:
+            return true
+        case .outlierProcessingComplete:
+            return true
+        case .finishing:
+            return true
+        case .writingOutlierValues:
+            return true
+        case .userModified:
+            return true
+        case .loadingImages:
+            return true
+        case .loadingImages1:
+            return true
+        case .painting:
+            return true
+        case .painting2:
+            return true
+        case .writingOutputFile:
+            return true
+        case .complete:
+            return true
+        }
+    }
     public var color: Color {
         switch self {
         case .unprocessed:
