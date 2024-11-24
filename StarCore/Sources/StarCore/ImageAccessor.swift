@@ -163,8 +163,8 @@ public struct ImageAccessor: Sendable {
                                                atSize: size)
                 {
                     if FileManager.default.fileExists(atPath: filename) {
-                        //return try await imageSequence.getImage(withName: filename).image()
-                        return try await PixelatedImage(fromFile: filename)
+                        return try await imageSequence.getImage(withName: filename).image()
+                        //return try await PixelatedImage(fromFile: filename)
                     } else {
                         // no file
                         // if this is not a request for an original file, then try

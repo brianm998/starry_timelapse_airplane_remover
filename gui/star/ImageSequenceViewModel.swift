@@ -80,6 +80,8 @@ public final class ImageSequenceViewModel {
     // how long the arrows are
     var outlierArrowLength: CGFloat = 70 // relative to the frame width above
 
+    let finalProcessingCount = BooleanActor()
+    
     var frameSize: CGSize {
         var ret = CGSize()
         ret.width = frameWidth
@@ -782,7 +784,7 @@ public extension ImageSequenceViewModel {
 
         Log.d("processAllFrames start")
         
-        Task.detached(priority: .high) { [self] in
+        Task.detached(priority: .medium) { [self] in
             // XXX a crude version of the FinalProcessor, could be better
             Log.d("processAllFrames 1")
             try? await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
@@ -790,6 +792,11 @@ public extension ImageSequenceViewModel {
                     if let frame = await frameView.frame {
                         taskGroup.addTask() {
                             await processingSemaphore.wait()
+
+                            while await self.finalProcessingCount.isMoreThanZero() {
+                                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                            }
+                            
                             if await !frame.processingState().isReadyForInterframeProcessing {
                                 // this frame needs to have outliers found
                                 await MainActor.run {
@@ -866,12 +873,21 @@ public extension ImageSequenceViewModel {
         if positiveCount == maxFrameIndex - minFrameIndex + 1 {
             // we can now move this one further
             Task.detached(priority: .high) {
+
+                // mark that we're processing
+                await self.finalProcessingCount.increase()
+                
                 await finalSemaphore.wait()
                 Log.d("finalProcess currentIndex \(currentIndex)")
-                if await frame.processingState() != .complete { 
-                    await frame.applyDecisionTreeToAllOutliers()
+                if await frame.processingState() != .complete {
+
+                    await frame.set(state: .interFrameProcessing)
                     
-                    try await self.render(frame: frame) {
+                    await frame.applyDecisionTreeToAllOutliers()
+
+                    await frame.set(state: .finishing)
+                    
+                    try await self.render(frame: frame, now: true) {
                         Task {
                             await self.setOutlierGroups(forFrame: frame)
                             await MainActor.run {
@@ -884,6 +900,7 @@ public extension ImageSequenceViewModel {
                         self.numberOfFramesProcessed += 1
                     }
                 }
+                await self.finalProcessingCount.decrease()
                 finalSemaphore.signal()
             }
             Log.d("final process done at index \(currentIndex)")
@@ -1125,3 +1142,11 @@ public extension ImageSequenceViewModel {
     }
 }
 
+public actor BooleanActor {
+    private var value: Int = 0
+
+    public func increase() { value += 1 }
+    public func decrease() { value -= 1 }
+
+    public func isMoreThanZero() -> Bool { value > 0 }
+}
