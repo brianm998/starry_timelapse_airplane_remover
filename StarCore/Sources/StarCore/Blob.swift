@@ -18,7 +18,7 @@ public actor Blob: CustomStringConvertible,
     nonisolated(unsafe) public var id: UInt16
     public let frameIndex: Int
     public var pixels: Set<SortablePixel> = []
-    public let statusTracker: PixelStatusTracker?
+    public weak var statusTracker: PixelStatusTracker?
     
     public func getPixels() -> Set<SortablePixel> { pixels }
 
