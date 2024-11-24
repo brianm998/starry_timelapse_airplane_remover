@@ -345,15 +345,22 @@ struct OutlierGroupTable: View {
     ]
 
     var body: some View {
+        @Bindable var viewModel = viewModel
 
-        if let viewModel = viewModel.imageSequence {
-        
-//        let displayDtSizeColumn = viewModel.outlierGroupTableDisplayGroups[.size] ?? true
-        //let displayDtSizeColumn = true
-      @Bindable var viewModel = viewModel
+        return ZStack {
+            if let viewModel = viewModel.imageSequence {
+                self.mainView(viewModel)
+                //        let displayDtSizeColumn = viewModel.outlierGroupTableDisplayGroups[.size] ?? true
+                //let displayDtSizeColumn = true
+            } else {
+                Text("Loading")
+            }
+        }
+    }
 
-            return
-        HStack {
+    func mainView(_ viewModel: ImageSequenceViewModel) -> some View {
+        @Bindable var viewModel = viewModel
+        return HStack {
             Spacer()
             VStack {
                 Spacer()
@@ -457,9 +464,8 @@ struct OutlierGroupTable: View {
         }.navigationTitle(viewModel.outlierGroupWindowFrame == nil ?
                                   OTHER_WINDOW_TITLE :
                                   "\(OUTLIER_WINDOW_PREFIX) for frame \(viewModel.outlierGroupWindowFrame!.frameIndex)")
-        } else {
-            return Text("Loading")
-        }
     }
+
 }
+
 
