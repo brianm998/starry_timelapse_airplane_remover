@@ -222,7 +222,8 @@ public class BlobProcessor {
           // try to split up blobs with more than one line in them
 
           .frameState(.filter11),
-          
+
+          // this appears to be slow
           .lineSplit(.init(minAvgDistance: 5,
                            maxLineFillAmount: 0.5,
                            minBlobsize: 500,

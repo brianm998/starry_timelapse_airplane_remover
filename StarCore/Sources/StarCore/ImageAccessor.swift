@@ -226,14 +226,14 @@ public struct ImageAccessor: Sendable {
                      overwrite: Bool) async throws
     {
         try await fileSystemMonitor.save() {
-          try await self.saveInt(image,
-                                 frameIndex: frameIndex,
-                                 as: type,
-                                 atSize: size,
-                                 overwrite: overwrite)
+            try await self.saveInt(image,
+                                   frameIndex: frameIndex,
+                                   as: type,
+                                   atSize: size,
+                                   overwrite: overwrite)
         }
     }
-            
+    
     // make this use the file access guard
     private func saveInt(_ image: PixelatedImage,
                          frameIndex: Int,
@@ -241,45 +241,47 @@ public struct ImageAccessor: Sendable {
                          atSize size: ImageDisplaySize,
                          overwrite: Bool) async throws
     {
-        if let filename = nameForImage(frameIndex: frameIndex,
-                                       ofType: type,
-                                       atSize: size)
-        {
-            var dataToSave: Data? = nil
-            switch size {
-            case .original:
-                try image.writeTIFFEncoding(toFilename: filename)
-            case .preview:
-                dataToSave = image.nsImage(ofSize: previewSize)?.jpegData
-            case .thumbnail:
-                dataToSave = image.nsImage(ofSize: thumbnailSize)?.jpegData
-            }
-            if let dataToSave = dataToSave {
-                // only used for previews and thumbnails
-                var canCreate = true
-                if FileManager.default.fileExists(atPath: filename) {
-                    if overwrite {
-                        Log.i("overwriting already existing file \(filename)")
-                        try FileManager.default.removeItem(atPath: filename)
-                    } else {
-                        Log.i("not overwriting already existing file \(filename)")
-                        canCreate = false
+        try await Task.detached(priority: .medium) {
+            if let filename = nameForImage(frameIndex: frameIndex,
+                                           ofType: type,
+                                           atSize: size)
+            {
+                var dataToSave: Data? = nil
+                switch size {
+                case .original:
+                    try image.writeTIFFEncoding(toFilename: filename)
+                case .preview:
+                    dataToSave = image.nsImage(ofSize: previewSize)?.jpegData
+                case .thumbnail:
+                    dataToSave = image.nsImage(ofSize: thumbnailSize)?.jpegData
+                }
+                if let dataToSave = dataToSave {
+                    // only used for previews and thumbnails
+                    var canCreate = true
+                    if FileManager.default.fileExists(atPath: filename) {
+                        if overwrite {
+                            Log.i("overwriting already existing file \(filename)")
+                            try FileManager.default.removeItem(atPath: filename)
+                        } else {
+                            Log.i("not overwriting already existing file \(filename)")
+                            canCreate = false
+                        }
+                    }
+
+                    if canCreate {
+                        // write to file
+                        FileManager.default.createFile(atPath: filename,
+                                                       contents: dataToSave,
+                                                       attributes: nil)
+
+                        // callback to tell what has changed
+                        imageSavedClosure?(frameIndex, image, type, size)
                     }
                 }
-
-                if canCreate {
-                    // write to file
-                    FileManager.default.createFile(atPath: filename,
-                                                   contents: dataToSave,
-                                                   attributes: nil)
-
-                    // callback to tell what has changed
-                    imageSavedClosure?(frameIndex, image, type, size)
-                }
+            } else {
+                Log.w("no place to save image of type \(type) at size \(size)")
             }
-        } else {
-            Log.w("no place to save image of type \(type) at size \(size)")
-        }
+        }.value
     }
 
     private func nameForImage(frameIndex: Int,

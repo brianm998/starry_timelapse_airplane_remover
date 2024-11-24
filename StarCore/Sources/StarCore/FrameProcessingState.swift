@@ -132,7 +132,7 @@ public enum FrameProcessingState: Int,
         case .userModified:
             return "classified"
         case .writingOutlierValues:
-            return "writing outlier classification values"
+            return "writing classification values"
         case .waitingToLoadImages:
             return "waiting to load images"
         case .loadingImages:

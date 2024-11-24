@@ -47,6 +47,7 @@
 		D386FA2F298B617400878B56 /* starUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2E298B617400878B56 /* starUITestsLaunchTests.swift */; };
 		D39EEDF42C027AD800DD5BC4 /* ClearUndecidedButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39EEDF32C027AD700DD5BC4 /* ClearUndecidedButton.swift */; };
 		D3A0D3AE2CF383DF00FD2E9E /* ExpandUpButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */; };
+		D3A0D3B02CF3AEB800FD2E9E /* FinalGUIProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A0D3AF2CF3AEB800FD2E9E /* FinalGUIProcessor.swift */; };
 		D3A54A6F29AFAD2C00C50709 /* UserPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */; };
 		D3B29C9E2B2FE23F00754C10 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29C9D2B2FE23F00754C10 /* StarCore */; };
 		D3B29CA42B2FE31800754C10 /* KHTSwift in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CA32B2FE31800754C10 /* KHTSwift */; };
@@ -133,6 +134,7 @@
 		D386FA2E298B617400878B56 /* starUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = starUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		D39EEDF32C027AD700DD5BC4 /* ClearUndecidedButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ClearUndecidedButton.swift; sourceTree = "<group>"; };
 		D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpandUpButton.swift; sourceTree = "<group>"; };
+		D3A0D3AF2CF3AEB800FD2E9E /* FinalGUIProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinalGUIProcessor.swift; sourceTree = "<group>"; };
 		D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UserPreferences.swift; sourceTree = "<group>"; };
 		D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupTable.swift; sourceTree = "<group>"; };
 		D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StarCommands.swift; sourceTree = "<group>"; };
@@ -214,6 +216,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D3A0D3AF2CF3AEB800FD2E9E /* FinalGUIProcessor.swift */,
 				D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */,
 				D3FBFA262CEAC0FF00A23FC6 /* InfoDialogView.swift */,
 				D3FBFA242CEA485600A23FC6 /* IgnoreBarView.swift */,
@@ -488,6 +491,7 @@
 				D3FBFA1F2CE8FF0500A23FC6 /* ImageSequenceViewModel.swift in Sources */,
 				D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */,
 				D33FFC182A2D007800F38194 /* PaintAllButton.swift in Sources */,
+				D3A0D3B02CF3AEB800FD2E9E /* FinalGUIProcessor.swift in Sources */,
 				D32F6DBA2A4E6FCE00704870 /* BottomRightView.swift in Sources */,
 				D33FFC162A2CFF4700F38194 /* LoadAllOutliersButton.swift in Sources */,
 				D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */,
