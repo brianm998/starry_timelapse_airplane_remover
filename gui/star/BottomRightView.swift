@@ -74,7 +74,7 @@ struct BottomRightView: View {
 
                 EditableFrameNumberView()
 
-                toggleViews()
+                ExpandUpButton($viewModel.showFilmstrip)
                 
               .sheet(isPresented: $viewModel.multiChoiceSheetShowing) {
                   if let multiChoiceOutlierView = viewModel.multiChoiceOutlierView {
@@ -118,29 +118,6 @@ struct BottomRightView: View {
 
                     EditableFrameNumberView()
                 }
-            }
-        }
-    }
-
-    func toggleViews() -> some View {
-        VStack {
-            HStack(alignment: .bottom) {
-                Button() {
-                    viewModel.showFilmstrip = !viewModel.showFilmstrip
-                } label: {
-                    if viewModel.showFilmstrip {
-                        Image(systemName: "chevron.right.2")
-                          .rotationEffect(.degrees(90))
-                          .foregroundColor(.gray)
-                          .cursor(.resizeDown, tag: "bottomRightPanel")
-                    } else {
-                        Image(systemName: "chevron.right.2")
-                          .rotationEffect(.degrees(-90))
-                          .foregroundColor(.gray)
-                          .cursor(.resizeUp, tag: "bottomRightPanel")
-                    }
-                }
-                  .buttonStyle(PlainButtonStyle())
             }
         }
     }

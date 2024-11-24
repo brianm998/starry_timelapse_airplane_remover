@@ -30,23 +30,6 @@ struct LeftPanel: View {
                     
                     self.frameModeView
                     
-                    Spacer()
-                      .frame(maxHeight: 10)
-
-                    Button() {
-                        viewModel.showAllFrameViewModes = !viewModel.showAllFrameViewModes
-                    } label: {
-                        if viewModel.showAllFrameViewModes {
-                            Image(systemName: "chevron.right.2")
-                              .rotationEffect(.degrees(90))
-                              .foregroundColor(.gray)
-                        } else {
-                            Image(systemName: "chevron.right.2")
-                              .rotationEffect(.degrees(-90))
-                              .foregroundColor(.gray)
-                        }
-                    }
-                      .buttonStyle(PlainButtonStyle())
                 }
                 //                          .frame(maxWidth: 200)
             }
@@ -74,16 +57,49 @@ struct LeftPanel: View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .leading) {
             Text("Processing stats")
+              .foregroundColor(.white)
+            Spacer()
+              .frame(maxHeight: 4)
             Grid(alignment: .leading) {
-                ForEach(FrameProcessingState.allCases, id: \.self) { state in
+                if viewModel.showAllFrameProcessingStates {
+                    // show all the detailed processing states
+                    ForEach(FrameProcessingState.allCases, id: \.self) { state in
+                        GridRow {
+                            Text("\(viewModel.frameStateMap[state]?.count ?? 0)")
+                              .foregroundColor(.white)
+                            Text(state.message)
+                              .foregroundColor(.white)
+                        }
+                    }
+                } else {
+                    // just show unprocessed, processing, and complete
                     GridRow {
-                        Text("\(viewModel.frameStateMap[state]?.count ?? 0)")
+                        Text("\(viewModel.frameStateMap[.unprocessed]?.count ?? 0)")
                           .foregroundColor(.white)
-                        Text(state.message)
+                        Text(FrameProcessingState.unprocessed.message)
+                          .foregroundColor(.white)
+                    }
+
+                    GridRow {
+                        Text("\(viewModel.numberOfFramesProcessingNow)")
+                          .foregroundColor(.white)
+                        Text("processing")
+                          .foregroundColor(.white)
+                    }
+
+                    GridRow {
+                        Text("\(viewModel.frameStateMap[.complete]?.count ?? 0)")
+                          .foregroundColor(.white)
+                        Text(FrameProcessingState.complete.message)
                           .foregroundColor(.white)
                     }
                 }
             }
+
+            Spacer()
+              .frame(maxHeight: 10)
+            
+            ExpandUpButton($viewModel.showAllFrameProcessingStates)
         }
     }
     
@@ -120,6 +136,11 @@ struct LeftPanel: View {
                       or with star processing applied.
                       """) // XXX does this work anymore?
               .cornerRadius(5)
+
+            Spacer()
+              .frame(maxHeight: 10)
+
+            ExpandUpButton($viewModel.showAllFrameViewModes)
         }
     }
     
@@ -141,3 +162,4 @@ struct LeftPanel: View {
         
     }
 }
+

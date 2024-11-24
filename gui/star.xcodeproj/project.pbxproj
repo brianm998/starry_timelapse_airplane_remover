@@ -46,6 +46,7 @@
 		D386FA2D298B617400878B56 /* starUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2C298B617400878B56 /* starUITests.swift */; };
 		D386FA2F298B617400878B56 /* starUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2E298B617400878B56 /* starUITestsLaunchTests.swift */; };
 		D39EEDF42C027AD800DD5BC4 /* ClearUndecidedButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39EEDF32C027AD700DD5BC4 /* ClearUndecidedButton.swift */; };
+		D3A0D3AE2CF383DF00FD2E9E /* ExpandUpButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */; };
 		D3A54A6F29AFAD2C00C50709 /* UserPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */; };
 		D3B29C9E2B2FE23F00754C10 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29C9D2B2FE23F00754C10 /* StarCore */; };
 		D3B29CA42B2FE31800754C10 /* KHTSwift in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CA32B2FE31800754C10 /* KHTSwift */; };
@@ -131,6 +132,7 @@
 		D386FA2C298B617400878B56 /* starUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = starUITests.swift; sourceTree = "<group>"; };
 		D386FA2E298B617400878B56 /* starUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = starUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		D39EEDF32C027AD700DD5BC4 /* ClearUndecidedButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ClearUndecidedButton.swift; sourceTree = "<group>"; };
+		D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpandUpButton.swift; sourceTree = "<group>"; };
 		D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UserPreferences.swift; sourceTree = "<group>"; };
 		D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupTable.swift; sourceTree = "<group>"; };
 		D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StarCommands.swift; sourceTree = "<group>"; };
@@ -212,6 +214,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */,
 				D3FBFA262CEAC0FF00A23FC6 /* InfoDialogView.swift */,
 				D3FBFA242CEA485600A23FC6 /* IgnoreBarView.swift */,
 				D3FBFA222CE91B4700A23FC6 /* ImageSequenceLoadingView.swift */,
@@ -450,6 +453,7 @@
 				D33FFC282A2D4F7E00F38194 /* FilmstripView.swift in Sources */,
 				D33FFC262A2D4E8600F38194 /* FilmstripImageView.swift in Sources */,
 				D3636C562CE087B000514D39 /* ReProcessCurrentFrameButton.swift in Sources */,
+				D3A0D3AE2CF383DF00FD2E9E /* ExpandUpButton.swift in Sources */,
 				D3FF93DF2C75745C00A98088 /* MultiChoiceSheetView.swift in Sources */,
 				D3636C522CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift in Sources */,
 				D3058E1B2AC0745C00C58F1D /* MultiSelectSheetView.swift in Sources */,
@@ -591,7 +595,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				SDKROOT = macosx14.0;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -645,7 +649,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				SDKROOT = macosx14.0;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -674,7 +678,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.7.0;
-				ONLY_ACTIVE_ARCH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-weak_framework",
@@ -717,7 +721,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.7.0;
-				ONLY_ACTIVE_ARCH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-weak_framework",

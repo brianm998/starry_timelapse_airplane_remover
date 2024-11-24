@@ -40,7 +40,12 @@ public let frameProcessingMonitor = FileSystemMonitor(max: 32) // XXX make this 
 // used for loading frames, loading 20 at a time is faster than 1000
 fileprivate let frameLoadMonitor = FileSystemMonitor(max: 20)
 
-fileprivate let finalSemaphore = AsyncSemaphore(value: 20)
+// used for finding outliers in frames when processing
+fileprivate let processingSemaphore = AsyncSemaphore(value: 20)
+
+// used for final processing (categorizing, painting, saving)
+fileprivate let finalSemaphore = AsyncSemaphore(value: 40)
+
 
 // view model for a sequence of images
 @MainActor @Observable
@@ -148,6 +153,8 @@ public final class ImageSequenceViewModel {
     var multiSelectSheetShowing = false
 
     var showAllFrameViewModes = false
+
+    var showAllFrameProcessingStates = false
 
     var multiSelectionType: MultiSelectionType = .all
     var multiSelectionPaintType: MultiSelectionPaintType = .clear
@@ -425,6 +432,20 @@ public final class ImageSequenceViewModel {
         return callbacks
     }
 
+    var numberOfFramesProcessingNow: Int {
+        var total = 0
+        for (state, frameSet) in frameStateMap {
+            switch state {
+            case .unprocessed:
+                break
+            case .complete:
+                break
+            default:
+                total += frameSet.count
+            }
+        }
+        return total
+    }
 
     var windowTitle: String {
         if let sequenceDirname = self.config?.config().imageSequenceDirname {
@@ -761,16 +782,16 @@ public extension ImageSequenceViewModel {
 
         Log.d("processAllFrames start")
         
-        Task.detached { [self] in
-            let semaphore = AsyncSemaphore(value: 24) // 24 frames processing at once XXX constant
+        Task.detached(priority: .high) { [self] in
             // XXX a crude version of the FinalProcessor, could be better
             Log.d("processAllFrames 1")
             try? await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
                 for frameView in await self.frames {
                     if let frame = await frameView.frame {
                         taskGroup.addTask() {
-                            await semaphore.wait()
-                            if await !frame.processingState().isReadyForInterframeProcessing { 
+                            await processingSemaphore.wait()
+                            if await !frame.processingState().isReadyForInterframeProcessing {
+                                // this frame needs to have outliers found
                                 await MainActor.run {
                                     frameView.outliersLoaded = .loading
                                 }
@@ -779,14 +800,14 @@ public extension ImageSequenceViewModel {
                                     frameView.outliersLoaded = .loaded
                                 }
                             } else {
-                                // XXX add here
+                                // this frame should already have outliers,  just load them
                                 try await frame.loadOutliers(loadOnly: true)
                                 await MainActor.run {
                                     self.numberOfFramesProcessed += 1
                                     frameView.outliersLoaded = .loaded
                                 }
                             }
-                            semaphore.signal()
+                            processingSemaphore.signal()
                             return frame
                         }
                     }
@@ -844,7 +865,7 @@ public extension ImageSequenceViewModel {
 
         if positiveCount == maxFrameIndex - minFrameIndex + 1 {
             // we can now move this one further
-            Task.detached {
+            Task.detached(priority: .high) {
                 await finalSemaphore.wait()
                 Log.d("finalProcess currentIndex \(currentIndex)")
                 if await frame.processingState() != .complete { 

@@ -112,6 +112,10 @@ import StarDecisionTrees
     - don't try to load outliers when switching to a frame in processing mode
     - don't try to save frame when switching from a frame in processing mode
     - better status on filmstrip, with helper text on hover
+    - add 'are you sure' popup when closing when processing
+    - add a stop processing button (cancel the processing task)
+    - render frame button is sometimes disabled when it shouldn't be
+    - frames end up waiting for interframe processing too long, and pile up
  */
 
  

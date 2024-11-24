@@ -52,6 +52,7 @@ public enum FrameProcessingState: Int,
 
     case writingOutlierValues
     
+    case waitingToLoadImages
     case loadingImages
     case loadingImages1
     case painting
@@ -101,6 +102,8 @@ public enum FrameProcessingState: Int,
             return "user modified"
         case .writingOutlierValues:
             return "writing outlier classification values"
+        case .waitingToLoadImages:
+            return "waiting to load images"
         case .loadingImages:
             return "loading images"
         case .loadingImages1:
@@ -158,6 +161,8 @@ public enum FrameProcessingState: Int,
             return true
         case .userModified:
             return true
+        case .waitingToLoadImages:
+            return true
         case .loadingImages:
             return true
         case .loadingImages1:
@@ -213,6 +218,8 @@ public enum FrameProcessingState: Int,
         case .writingOutlierValues:
             return .yellow
         case .userModified:
+            return .yellow
+        case .waitingToLoadImages:
             return .yellow
         case .loadingImages:
             return .yellow

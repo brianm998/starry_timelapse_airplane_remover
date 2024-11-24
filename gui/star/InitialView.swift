@@ -33,15 +33,14 @@ struct InitialView: View {
             Spacer()
               .frame(maxHeight: 100)
 
-            
-            Text("Choose an option to get started")
-            .font(.title)
+            Text("Drop an image sequence or existing config file anywhere here")
+              .font(.title)
               .foregroundColor(.white)
             Text("or")
               .font(.title)
               .foregroundColor(.white)
-            Text("Drop an image sequence or existing config file here")
-              .font(.title)
+            Text("Choose an option below to get started")
+            .font(.title)
               .foregroundColor(.white)
 
             Spacer()
@@ -51,16 +50,17 @@ struct InitialView: View {
                 VStack {
                     HStack {
                         
+                        Button(action: self.loadImageSequence) {
+                            Text("Load Image Sequence").font(.largeTitle)
+                        }.buttonStyle(ShrinkingButton())
+                          .help("Load an image sequence yet to be processed by star")
+                        
                         Button(action: self.loadConfig) {
                             Text("Load Config").font(.largeTitle)
                         }.buttonStyle(ShrinkingButton())
                           .help("Load a json config file from a previous run of star")
 //                          .cursor3(.pointingHand)
                         
-                        Button(action: self.loadImageSequence) {
-                            Text("Load Image Sequence").font(.largeTitle)
-                        }.buttonStyle(ShrinkingButton())
-                          .help("Load an image sequence yet to be processed by star")
                     }
                     if viewModel.userPreferences.recentlyOpenedSequencelist.count > 0 {
                         HStack {

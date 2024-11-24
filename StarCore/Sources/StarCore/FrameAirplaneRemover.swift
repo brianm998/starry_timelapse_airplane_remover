@@ -27,6 +27,8 @@ public enum FrameSavingState: Sendable {
     case saving
 }
 
+public let finalMonitor = FileSystemMonitor(max: 32)
+
 @MainActor
 @Observable
 public class FrameObserver {
@@ -428,10 +430,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         Log.i("frame \(self.frameIndex) finishing")
 
-        self.set(state: .loadingImages)
+        self.set(state: .waitingToLoadImages)
 
-        var (image, otherFrame) = try await finalFileSystemMonitor.load() {
-            await (imageAccessor.loadInt(frameIndex: frameIndex,
+       var (image,  otherFrame) = try await finalMonitor.load() {
+            await self.set(state: .loadingImages)
+            return await (imageAccessor.loadInt(frameIndex: frameIndex,
                                          type: .original,
                                          atSize: .original),
                    imageAccessor.loadInt(frameIndex: frameIndex,
