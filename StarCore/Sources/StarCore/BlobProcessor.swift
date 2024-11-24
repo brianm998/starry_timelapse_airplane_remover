@@ -45,7 +45,7 @@ public class BlobProcessor {
 
     weak var frame: FrameAirplaneRemover?
     fileprivate var steps: [BlobProcessingType] = []
-    
+
     public init(frame: FrameAirplaneRemover) {
         self.frame = frame
 
@@ -420,6 +420,7 @@ public class BlobProcessor {
             }
             Log.d("frame \(frame.frameIndex) now has \(blobMap.count) blobs")
         }
+        self.steps = [] // steps can have retain cycles, allow deallocation by removing them here
         return blobMap
     }
 
