@@ -98,6 +98,20 @@ import StarDecisionTrees
   - orange unknown outlier groups not clickable directly (but are clickable on arrows)
     check to see if selection works or not
 
+    NEEDED for decent GUI release:
+
+    * processing X more frames doesn't update during processing
+    * processed previews don't load immediately after processing (should stay in ram)
+    * add left panel updates on frame status (similar to cli)
+    * on restart after not fully completing processing, finished files are re-done :(
+    - more hand holding for setting ignore bar and starting processing
+      - detect frame state, see when to tell user about ignore area
+      - detect if all frames are processed or not, and ask the user startup to process or not
+    * frames get set to user modified when they haven't been 
+    - ui jumps when waiting to save frames show up
+    - don't try to load outliers when switching to a frame in processing mode
+    - don't try to save frame when switching from a frame in processing mode
+    - better status on filmstrip, with helper text on hover
  */
 
  

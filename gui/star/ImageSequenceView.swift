@@ -11,12 +11,6 @@ struct ImageSequenceView: View {
     var body: some View {
         @Bindable var viewModel = viewModel
         return VStack {
-            
-            let shouldShowProgress = // XXX fuck this
-              false && (
-              viewModel.renderingCurrentFrame            ||
-              viewModel.updatingFrameBatch               ||
-              viewModel.renderingAllFrames)
 
             ZStack(alignment: .center) {
                 // selected frame 
@@ -48,7 +42,6 @@ struct ImageSequenceView: View {
             Spacer()
             // buttons below the selected frame 
             BottomControls()
-//              .disabled(self.viewModel.inTransition || self.viewModel.loadingOutliers)
             
             if viewModel.interactionMode == .edit,
                viewModel.showFilmstrip
@@ -61,7 +54,7 @@ struct ImageSequenceView: View {
                 Spacer().frame(minHeight: 15, maxHeight: 25)
             }
             
-            // scub slider at the bottom
+            // scrub slider at the bottom
             if viewModel.imageSequenceSize > 0 {
                 ScrubSliderView()
             }

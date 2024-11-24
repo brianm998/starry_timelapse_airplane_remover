@@ -51,6 +51,125 @@ public final class ImageSequenceViewModel {
 
     var backgroundColor = ViewModel.defaultBackgroundColor
 
+    var frameStateMap: [FrameProcessingState: Set<FrameAirplaneRemover>] = [:]
+
+    var frameSaveQueue = FrameSaveQueue()
+
+    var frameOpacity: Double = 1.0
+    
+    var videoPlayMode: VideoPlayMode = .forward
+    
+    var videoPlaying = false
+
+    var leftPanelShowing = true
+    var rightPanelShowing = true
+    
+    var fastAdvancementType: FastAdvancementType = .normal
+
+    // if fastAdvancementType == .normal, fast forward and reverse do a set number of frames
+    var fastSkipAmount = 20
+    
+    var frameWidth: CGFloat = 600 // placeholders until first frame is read
+    var frameHeight: CGFloat = 450
+
+    // how long the arrows are
+    var outlierArrowLength: CGFloat = 70 // relative to the frame width above
+
+    var frameSize: CGSize {
+        var ret = CGSize()
+        ret.width = frameWidth
+        ret.height = frameHeight
+        return ret
+    }
+    
+    var arrowLength: CGFloat {
+        self.frameWidth/self.outlierArrowLength
+    }
+    
+    var arrowHeight: CGFloat {
+        self.frameWidth/self.outlierArrowHeight
+    }
+
+    var lineWidth: CGFloat { self.arrowHeight/8 }
+
+    // how high they are (if pointing sideways)
+    var outlierArrowHeight: CGFloat = 180
+    
+    // view class for each frame in the sequence in order
+    var frames: [FrameViewModel] = []
+
+    // the view mode that we set this image with
+
+    var initialLoadInProgress = false
+    var loadingAllOutliers = false
+    var loadingOutliers = false
+    
+    var numberOfFramesWithOutliersLoaded = 0
+    
+    var numberOfFramesLoaded = 0
+
+    var outlierGroupTableRows: [OutlierGroupTableRow] = []
+    var outlierGroupWindowFrame: FrameAirplaneRemover?
+
+    var selectedOutliers = Set<OutlierGroupTableRow.ID>()
+
+    var selectionMode = SelectionMode.paint
+    var renderingCurrentFrame = false
+
+    var isProcessingAllFrames = false
+    var numberOfFramesProcessed = 0
+
+    var showIgnoreLowerBar = false
+    
+    var ignoreLowerPixels: CGFloat = 0
+
+    var outlierOpacity = 1.0
+
+    var interactionMode: InteractionMode = .scrub
+
+    var previousInteractionMode: InteractionMode = .scrub
+
+    var previousFrameViewMode = FrameViewMode.processed
+
+    // should we show full resolution images on the main frame?
+    // faster low res previews otherwise
+    var showFullResolution = false
+
+    var showFilmstrip = true
+
+    // causes tapping an outlier to open a dialog with multiple choices
+    var multiChoice = false
+
+    var renderingAllFrames = false
+    var updatingFrameBatch = false
+
+    var videoPlaybackFramerate = 30
+
+    var multiSelectSheetShowing = false
+
+    var showAllFrameViewModes = false
+
+    var multiSelectionType: MultiSelectionType = .all
+    var multiSelectionPaintType: MultiSelectionPaintType = .clear
+
+    var multiChoiceSheetShowing = false
+    var multiChoicePaintType: MultiChoicePaintType = .clear
+    var multiChoiceType: MultiSelectionType = .all
+
+    // the outlier grop we're starting a multi choice from
+    var multiChoiceOutlierView: OutlierGroupView?
+    
+    var selectionStart: CGPoint? 
+    var selectionEnd: CGPoint?
+    
+    var number_of_frames: Int = 50
+    
+    // the frame number of the frame we're currently showing
+    var currentIndex = 0
+
+    // number of frames in the sequence we're processing
+    var imageSequenceSize: Int = 0
+
     convenience init(withConfig jsonConfigFilename: String,
                      closure: @escaping @Sendable (Int, Double, Int, Double) -> Void) async throws
     {
@@ -266,9 +385,24 @@ public final class ImageSequenceViewModel {
             }
         }
         
-        callbacks.frameStateChangeCallback = { frame, state in
+        callbacks.frameStateChangeCallback = { frame, newState in
             Task { @MainActor [weak self] in
-                self?.frames[frame.frameIndex].frameState = state
+                guard let self else { return }
+                self.frames[frame.frameIndex].frameState = newState
+
+                for state in FrameProcessingState.allCases {
+                    if state == newState { continue }
+                    if var stateItems = self.frameStateMap[state] {
+                        stateItems.remove(frame)
+                        self.frameStateMap[state] = stateItems
+                    }
+                }
+                if var set = self.frameStateMap[newState] {
+                    set.insert(frame)
+                    self.frameStateMap[newState] = set
+                } else {
+                    self.frameStateMap[newState] = [frame]
+                }
             }
         }
 
@@ -291,77 +425,6 @@ public final class ImageSequenceViewModel {
         return callbacks
     }
 
-//    @Environment(\.openWindow) private var openWindow
-
-    var frameSaveQueue = FrameSaveQueue()
-
-    var frameOpacity: Double = 1.0
-    
-    var videoPlayMode: VideoPlayMode = .forward
-    
-    var videoPlaying = false
-
-    var leftPanelShowing = true
-    var rightPanelShowing = true
-    
-    var fastAdvancementType: FastAdvancementType = .normal
-
-    // if fastAdvancementType == .normal, fast forward and reverse do a set number of frames
-    var fastSkipAmount = 20
-    
-    var frameWidth: CGFloat = 600 // placeholders until first frame is read
-    var frameHeight: CGFloat = 450
-
-    // how long the arrows are
-    var outlierArrowLength: CGFloat = 70 // relative to the frame width above
-
-    var frameSize: CGSize {
-        var ret = CGSize()
-        ret.width = frameWidth
-        ret.height = frameHeight
-        return ret
-    }
-    
-    var arrowLength: CGFloat {
-        self.frameWidth/self.outlierArrowLength
-    }
-    
-    var arrowHeight: CGFloat {
-        self.frameWidth/self.outlierArrowHeight
-    }
-
-    var lineWidth: CGFloat { self.arrowHeight/8 }
-
-    // how high they are (if pointing sideways)
-    var outlierArrowHeight: CGFloat = 180
-    
-    // view class for each frame in the sequence in order
-    var frames: [FrameViewModel] = []
-
-    // the view mode that we set this image with
-
-    var initialLoadInProgress = false
-    var loadingAllOutliers = false
-    var loadingOutliers = false
-    
-    var numberOfFramesWithOutliersLoaded = 0
-    
-    var numberOfFramesLoaded = 0
-
-    var outlierGroupTableRows: [OutlierGroupTableRow] = []
-    var outlierGroupWindowFrame: FrameAirplaneRemover?
-
-    var selectedOutliers = Set<OutlierGroupTableRow.ID>()
-
-    var selectionMode = SelectionMode.paint
-    var renderingCurrentFrame = false
-
-    var isProcessingAllFrames = false
-    var numberOfFramesProcessed = 0
-
-    var showIgnoreLowerBar = false
-    
-    var ignoreLowerPixels: CGFloat = 0
 
     var windowTitle: String {
         if let sequenceDirname = self.config?.config().imageSequenceDirname {
@@ -388,12 +451,6 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    var outlierOpacity = 1.0
-
-    var interactionMode: InteractionMode = .scrub
-
-    var previousInteractionMode: InteractionMode = .scrub
-
     // enum for how we show each frame
     var frameViewMode = FrameViewMode.processed {
         didSet {
@@ -401,48 +458,6 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    var previousFrameViewMode = FrameViewMode.processed
-
-    // should we show full resolution images on the main frame?
-    // faster low res previews otherwise
-    var showFullResolution = false
-
-    var showFilmstrip = true
-
-    // causes tapping an outlier to open a dialog with multiple choices
-    var multiChoice = false
-
-    var renderingAllFrames = false
-    var updatingFrameBatch = false
-
-    var videoPlaybackFramerate = 30
-
-    var multiSelectSheetShowing = false
-
-    var showAllFrameViewModes = false
-
-    var multiSelectionType: MultiSelectionType = .all
-    var multiSelectionPaintType: MultiSelectionPaintType = .clear
-
-    var multiChoiceSheetShowing = false
-    var multiChoicePaintType: MultiChoicePaintType = .clear
-    var multiChoiceType: MultiSelectionType = .all
-
-    // the outlier grop we're starting a multi choice from
-    var multiChoiceOutlierView: OutlierGroupView?
-    
-    var selectionStart: CGPoint? 
-    var selectionEnd: CGPoint?
-    
-    var number_of_frames: Int = 50
-    
-    // the frame number of the frame we're currently showing
-    var currentIndex = 0
-
-    // number of frames in the sequence we're processing
-    var imageSequenceSize: Int = 0
-
-    var inTransition = false
 
     fileprivate var videoPlaybackTask: Task<Void,Never>?
     
@@ -807,6 +822,8 @@ public extension ImageSequenceViewModel {
                       currentIndex: Int,
                       numNeighbors: Int) async -> Bool
     {
+        guard currentIndex >= 0,
+              currentIndex < frames.count else { return false }
         guard let frame = frames[currentIndex].frame else { return false }
 
         if await frame.processingState() == .complete { return true }

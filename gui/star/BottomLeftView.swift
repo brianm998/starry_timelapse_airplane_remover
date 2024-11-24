@@ -36,7 +36,7 @@ struct BottomLeftView: View {
 
                         StarPicker(selection: $viewModel.interactionMode) { value, isEnabled in
                             Text(value.rawValue)
-                              .foregroundColor(isEnabled ? .black : .gray)
+                              .foregroundColor(isEnabled ? .black : .yellow)
                             //                                  .onTapGesture { _ in
                             //                                      viewModel.frameViewMode = value
                             //                                  }
@@ -58,7 +58,7 @@ struct BottomLeftView: View {
                         if value == .original || value == .processed {
                             if viewModel.currentFrameView.hasImage(type: value) {
                                 Text(value.shortName)
-                                  .foregroundColor(isEnabled ? .black : .gray)
+                                  .foregroundColor(isEnabled ? .black : .yellow)
                                   .padding(4)
                                   .onTapGesture { _ in
                                       viewModel.frameViewMode = value
