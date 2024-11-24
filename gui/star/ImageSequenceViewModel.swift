@@ -179,6 +179,8 @@ public final class ImageSequenceViewModel {
     // number of frames in the sequence we're processing
     var imageSequenceSize: Int = 0
 
+    var finalProcessor: FinalGUIProcessor?
+    
     convenience init(withConfig jsonConfigFilename: String,
                      closure: @escaping @Sendable (Int, Double, Int, Double) -> Void) async throws
     {
@@ -302,6 +304,8 @@ public final class ImageSequenceViewModel {
 
         Log.d("make missing previews")
 
+        self.finalProcessor = FinalGUIProcessor(self)
+        
         var numberPreviewsSaved = 0
         try await imageAccessor.writeMissingImages() { numberSaved in
             Task { @MainActor in
@@ -787,128 +791,15 @@ public extension ImageSequenceViewModel {
         Task.detached(priority: .medium) { [self] in
             // XXX a crude version of the FinalProcessor, could be better
             Log.d("processAllFrames 1")
-            try? await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
-                for frameView in await self.frames {
-                    if let frame = await frameView.frame {
-                        taskGroup.addTask() {
-                            await processingSemaphore.wait()
 
-                            if await !frame.processingState().isReadyForInterframeProcessing {
-                                while await self.finalProcessingCount.isMoreThanZero() {
-                                    try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-                                }
-                                
-                                // this frame needs to have outliers found
-                                await MainActor.run {
-                                    frameView.outliersLoaded = .loading
-                                }
-                                await self.findOutliers(frame: frame)
-                                await MainActor.run {
-                                    frameView.outliersLoaded = .loaded
-                                }
-                            } else {
-                                // this frame should already have outliers,  just load them
-                                try await frame.loadOutliers(loadOnly: true)
-                                await MainActor.run {
-                                    self.numberOfFramesProcessed += 1
-                                    frameView.outliersLoaded = .loaded
-                                }
-                            }
-                            processingSemaphore.signal()
-                            return frame
-                        }
-                    }
-                }
-
-                Log.d("processAllFrames 2")
-
-                
-                var currentIndex = 0
-                let numNeighbors = await self.config?.config().numberFinalProcessingNeighborsNeeded ?? 1
-                
-                for try await frame in taskGroup {
-                    Log.d("got frame \(frame) currentIndex \(currentIndex)")
-                    while await self.finalProcess(frames: self.frames,
-                                                  currentIndex: currentIndex,
-                                                  numNeighbors: numNeighbors)
-                    {
-                        currentIndex += 1
-                    }
-                }
-                Log.d("processAllFrames done")
-            }
+            await finalProcessor?.processAllFrames()
+            
             await MainActor.run {
                 self.isProcessingAllFrames = false
             }
         }
     }
 
-    // process frames that are ready for inter frame processing
-    // apply decision tree to outliers
-    // render processed output file
-    func finalProcess(frames: [FrameViewModel],
-                      currentIndex: Int,
-                      numNeighbors: Int) async -> Bool
-    {
-        guard currentIndex >= 0,
-              currentIndex < frames.count else { return false }
-        guard let frame = frames[currentIndex].frame else { return false }
-
-        if await frame.processingState() == .complete { return true }
-        
-        var minFrameIndex = frame.frameIndex - numNeighbors
-        var maxFrameIndex = frame.frameIndex + numNeighbors
-        if minFrameIndex < 0 { minFrameIndex = 0 }
-        if maxFrameIndex >= frames.count { maxFrameIndex = frames.count - 1 }
-        var positiveCount = 0
-        for i in minFrameIndex...maxFrameIndex {
-            if let frame = frames[i].frame,
-               await frame.processingState().isReadyForInterframeProcessing
-            {
-                positiveCount += 1
-            }
-        }
-
-
-        if positiveCount == maxFrameIndex - minFrameIndex + 1 {
-            // we can now move this one further
-            Task.detached(priority: .high) {
-
-                // mark that we're processing
-                await self.finalProcessingCount.increase()
-                
-                await finalSemaphore.wait()
-                Log.d("finalProcess currentIndex \(currentIndex)")
-                if await frame.processingState() != .complete {
-
-                    await frame.set(state: .interFrameProcessing)
-                    
-                    await frame.applyDecisionTreeToAllOutliers()
-
-                    await frame.set(state: .outlierProcessingComplete)
-//                    await frame.set(state: .finishing)
-                    
-                    try await self.render(frame: frame, now: true) {
-                        Task {
-                            await self.setOutlierGroups(forFrame: frame)
-                            await MainActor.run {
-                                self.numberOfFramesProcessed += 1
-                            }
-                        }
-                    }
-                } else {
-                    await MainActor.run {
-                        self.numberOfFramesProcessed += 1
-                    }
-                }
-                await self.finalProcessingCount.decrease()
-                finalSemaphore.signal()
-            }
-            Log.d("final process done at index \(currentIndex)")
-            return true
-        }
-        return false
-    }
 
     // used to re-process a particular frame 
     func findOutliersAndRender(frame: FrameAirplaneRemover) async {
@@ -948,9 +839,6 @@ public extension ImageSequenceViewModel {
                 now saveNow: Bool = false,
                 closure: (@Sendable () async -> Void)? = nil) async throws
     {
-//        self.renderingCurrentFrame = true // XXX might not be right anymore
-
-
         if saveNow {
             try await self.frameSaveQueue.saveNow(frame: frame) {
                 await closure?()
@@ -959,7 +847,6 @@ public extension ImageSequenceViewModel {
             await self.frameSaveQueue.readyToSave(frame: frame) {
                 await closure?()
             }
-
         }
     }
 
@@ -1150,4 +1037,149 @@ public actor BooleanActor {
     public func decrease() { value -= 1 }
 
     public func isMoreThanZero() -> Bool { value > 0 }
+}
+
+public actor FinalGUIProcessor {
+    weak var viewModel: ImageSequenceViewModel?
+    
+    public init(_ viewModel: ImageSequenceViewModel) {
+        self.viewModel = viewModel
+    }
+
+    func processAllFrames() async {
+        guard let viewModel else { return }
+        
+        try? await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
+            for frameView in await viewModel.frames {
+                if let frame = await frameView.frame {
+                    taskGroup.addTask() {
+                        await processingSemaphore.wait()
+                        
+                        if await !frame.processingState().isReadyForInterframeProcessing {
+                            while await viewModel.finalProcessingCount.isMoreThanZero() {
+                                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                            }
+                            
+                            // this frame needs to have outliers found
+                            await MainActor.run {
+                                frameView.outliersLoaded = .loading
+                            }
+                            await self.findOutliers(frame: frame)
+                            await MainActor.run {
+                                frameView.outliersLoaded = .loaded
+                            }
+                        } else {
+                            // this frame should already have outliers,  just load them
+                            try await frame.loadOutliers(loadOnly: true)
+                            await MainActor.run {
+                                viewModel.numberOfFramesProcessed += 1
+                                frameView.outliersLoaded = .loaded
+                            }
+                        }
+                        processingSemaphore.signal()
+                        return frame
+                    }
+                }
+            }
+
+            Log.d("processAllFrames 2")
+
+            
+            var currentIndex = 0
+            let numNeighbors = await viewModel.config?.config().numberFinalProcessingNeighborsNeeded ?? 1
+            
+            for try await frame in taskGroup {
+                Log.d("got frame \(frame) currentIndex \(currentIndex)")
+                while await self.finalProcess(frames: viewModel.frames,
+                                              currentIndex: currentIndex,
+                                              numNeighbors: numNeighbors)
+                {
+                    currentIndex += 1
+                }
+            }
+            Log.d("processAllFrames done")
+        }
+    }
+
+    // find outliers but don't render now
+    func findOutliers(frame: FrameAirplaneRemover) async {
+        do {
+            try await frame.loadOutliers()
+            Task { @MainActor in
+                if let frameView = await viewModel?.frames[frame.frameIndex] {
+                    frameView.outlierViews = nil
+                }
+                await viewModel?.setOutlierGroups(forFrame: frame)
+            }
+            await frame.set(state: .readyForInterFrameProcessing)
+        } catch {
+            Log.e("error finding outliers for frame \(frame.frameIndex): \(error)")
+        }
+    }
+
+    // process frames that are ready for inter frame processing
+    // apply decision tree to outliers
+    // render processed output file
+    func finalProcess(frames: [FrameViewModel],
+                      currentIndex: Int,
+                      numNeighbors: Int) async -> Bool
+    {
+        guard let viewModel else { return false }
+        guard currentIndex >= 0,
+              currentIndex < frames.count else { return false }
+        guard let frame = await frames[currentIndex].frame else { return false }
+
+        if await frame.processingState() == .complete { return true }
+        
+        var minFrameIndex = frame.frameIndex - numNeighbors
+        var maxFrameIndex = frame.frameIndex + numNeighbors
+        if minFrameIndex < 0 { minFrameIndex = 0 }
+        if maxFrameIndex >= frames.count { maxFrameIndex = frames.count - 1 }
+        var positiveCount = 0
+        for i in minFrameIndex...maxFrameIndex {
+            if let frame = await frames[i].frame,
+               await frame.processingState().isReadyForInterframeProcessing
+            {
+                positiveCount += 1
+            }
+        }
+
+        if positiveCount == maxFrameIndex - minFrameIndex + 1 {
+            // we can now move this one further
+            Task.detached(priority: .high) {
+
+                // mark that we're processing
+                await viewModel.finalProcessingCount.increase()
+                
+                await finalSemaphore.wait()
+                Log.d("finalProcess currentIndex \(currentIndex)")
+                if await frame.processingState() != .complete {
+
+                    await frame.set(state: .interFrameProcessing)
+                    
+                    await frame.applyDecisionTreeToAllOutliers()
+
+                    await frame.set(state: .outlierProcessingComplete)
+
+                    try await viewModel.frameSaveQueue.saveNow(frame: frame) { 
+                        Task {
+                            await viewModel.setOutlierGroups(forFrame: frame)
+                            await MainActor.run {
+                                viewModel.numberOfFramesProcessed += 1
+                            }
+                        }
+                    }
+                } else {
+                    await MainActor.run {
+                        viewModel.numberOfFramesProcessed += 1
+                    }
+                }
+                await viewModel.finalProcessingCount.decrease()
+                finalSemaphore.signal()
+            }
+            Log.d("final process done at index \(currentIndex)")
+            return true
+        }
+        return false
+    }
 }

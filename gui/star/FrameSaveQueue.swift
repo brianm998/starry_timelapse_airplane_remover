@@ -42,23 +42,25 @@ class FrameSaveQueue {
     func saveNow(frame: FrameAirplaneRemover,
                  completionClosure: @Sendable @escaping () async -> Void) async throws
     {
-        Log.d("frame \(frame.frameIndex) saveNow")
-        try Task.checkCancellation()
-        await frame.set(frameSavingState: .savePending)
-        try await frameSaveMonitor.save() {
-            await frame.set(frameSavingState: .saving)
-            Log.d("frame \(frame.frameIndex) saveNow for real")
-            do {
-                let _ = try await Task.detached {
-                    try await frame.loadOutliers()
-                    try await frame.finish()
-                    await frame.changesHandled()
-                }.value
-            } catch {
-                Log.e("frame \(frame.frameIndex) frame save error: \(error)")
+        Task.detached(priority: .high) {
+            Log.d("frame \(frame.frameIndex) saveNow")
+            try Task.checkCancellation()
+            await frame.set(frameSavingState: .savePending)
+            try await frameSaveMonitor.save() {
+                await frame.set(frameSavingState: .saving)
+                Log.d("frame \(frame.frameIndex) saveNow for real")
+                do {
+                    let _ = try await Task.detached {
+                        try await frame.loadOutliers()
+                        try await frame.finish()
+                        await frame.changesHandled()
+                    }.value
+                } catch {
+                    Log.e("frame \(frame.frameIndex) frame save error: \(error)")
+                }
+                await frame.set(frameSavingState: .notSaving)
+                await completionClosure()
             }
-          await frame.set(frameSavingState: .notSaving)
-            await completionClosure()
         }
     }
 
