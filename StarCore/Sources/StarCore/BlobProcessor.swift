@@ -109,7 +109,7 @@ public class BlobProcessor {
 
           .save(.blobs),          
 
-          .frameState(.isolatedBlobRemoval1),
+          .frameState(.filter1),
 
 
           // find really close linear blobs
@@ -120,12 +120,14 @@ public class BlobProcessor {
 
           .save(.filter1),
 
-          .frameState(.isolatedBlobRemoval2),
+          .frameState(.filter2),
 
           .borderBrightnessLessThan(0.4),
 
           .save(.filter2),
 
+          .frameState(.filter3),
+          
           // a first pass at cutting out individual blobs based upon size, brightness
           // or being too close to the bottom
           .process() { blobs in
@@ -157,6 +159,7 @@ public class BlobProcessor {
           },
           .save(.filter3),
           
+          .frameState(.filter4),
           // a first pass on dim isolated blob removal
           .dimIsolatedBlobRemover(.init(scanSize: 50,
                                         requiredNeighbors: 2)),
@@ -167,7 +170,7 @@ public class BlobProcessor {
           
 
           .save(.filter4),
-          .frameState(.isolatedBlobRemoval3),
+          .frameState(.filter5),
 
           // remove smaller disconected blobs
           .disconnectedBlobRemover(.init(scanSize: 60,
@@ -175,17 +178,16 @@ public class BlobProcessor {
                                          requiredNeighbors: 2)),
 
           .save(.filter5),
-          .frameState(.smallLinearBlobAbsorbtion),
           
+          .frameState(.filter6),
           // find really close linear blobs
           .linearBlobConnector(.init(scanSize: 20,
                                      blobsSmallerThan: 120,
                                      lineBorder: 10)),
 
-          .frameState(.isolatedBlobRemoval4),
-          
           .save(.filter6),
 
+          .frameState(.filter7),
           // remove larger disconected blobs
           .disconnectedBlobRemover(.init(scanSize: 60,
                                          blobsSmallerThan: 50,
@@ -194,22 +196,23 @@ public class BlobProcessor {
           .save(.filter7),
 
 
+          .frameState(.filter8),
           .isolatedBlobRemover(.init(scanSize: 12,
                                      requiredNeighbors: 1,
                                      minBlobSize: 24)),
         
           .save(.filter8),
 
-          .frameState(.largerLinearBlobAbsorbtion),
+          .frameState(.filter9),
 
           // try to do more line adjustment after removing some isolated blobs
           .linearBlobConnector(.init(scanSize: 20,
                                      blobsSmallerThan: 200)),
 
-          .frameState(.finalCrunch),
-
           .save(.filter9),
 
+          .frameState(.filter10),
+          
           .isolatedBlobRemover(.init(scanSize: 6,
                                      requiredNeighbors: 1,
                                      minBlobSize: 50)),
@@ -218,6 +221,8 @@ public class BlobProcessor {
 
           // try to split up blobs with more than one line in them
 
+          .frameState(.filter11),
+          
           .lineSplit(.init(minAvgDistance: 5,
                            maxLineFillAmount: 0.5,
                            minBlobsize: 500,
@@ -228,6 +233,8 @@ public class BlobProcessor {
 
           .save(.filter11),
           
+          .frameState(.filter12),
+          
           // reconnect some lines that may have been split up
           .linearBlobConnector(.init(scanSize: 2, 
                                      blobsSmallerThan: 80,
@@ -235,6 +242,8 @@ public class BlobProcessor {
 
           .save(.filter12),
 
+          .frameState(.filter13),
+          
           // blob line trim
           .blobLineTrim(.init(minLineLength: 65,
                               minLineFillAmount: 0.9,
@@ -242,16 +251,22 @@ public class BlobProcessor {
 
           .save(.filter13),
           
+          .frameState(.filter14),
+          
           // split up blobs based upon user input
           .process(applyUserSlices),
 
           .save(.filter14),
 
+          .frameState(.filter15),
+          
           // final pass on getting rid of really small blobs
           .smallBlobRemover(.init(minBlobSize: 24)),
           
           .save(.filter15),
         
+          .frameState(.filter16),
+          
           // any really big blobs with lots of small bunches that are dim can go away
           .process() { blobs in
               var ret: [UInt16: Blob] = [:]

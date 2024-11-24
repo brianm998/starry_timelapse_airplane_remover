@@ -35,13 +35,24 @@ public enum FrameProcessingState: Int,
     case assemblingPixels
     case sortingPixels
     case detectingBlobs
-    case isolatedBlobRemoval1
-    case isolatedBlobRemoval2
-    case isolatedBlobRemoval3
-    case isolatedBlobRemoval4
-    case smallLinearBlobAbsorbtion
-    case largerLinearBlobAbsorbtion
-    case finalCrunch
+
+    case filter1
+    case filter2
+    case filter3
+    case filter4
+    case filter5
+    case filter6
+    case filter7
+    case filter8
+    case filter9
+    case filter10
+    case filter11
+    case filter12
+    case filter13
+    case filter14
+    case filter15
+    case filter16
+    
     case populatingOutlierGroups
     case readyForInterFrameProcessing
     case interFrameProcessing
@@ -74,20 +85,40 @@ public enum FrameProcessingState: Int,
             return "sorting pixels"
         case .detectingBlobs:
             return "detecting blobs"
-        case .isolatedBlobRemoval1:
-            return "isolated blob removal phase 1"
-        case .isolatedBlobRemoval2:
-            return "isolated blob removal phase 2"
-        case .isolatedBlobRemoval3:
-            return "isolated blob removal phase 3"
-        case .isolatedBlobRemoval4:
-            return "isolated blob removal phase 4"
-        case .smallLinearBlobAbsorbtion:
-            return "small linear blob absorbtion"
-        case .largerLinearBlobAbsorbtion:
-            return "larger linear blob absorbtion"
-        case .finalCrunch:
-            return "final crunch"
+
+        case .filter1:
+            return "filter 1"
+        case .filter2:
+            return "filter 2"
+        case .filter3:
+            return "filter 3"
+        case .filter4:
+            return "filter 4"
+        case .filter5:
+            return "filter 5"
+        case .filter6:
+            return "filter 6"
+        case .filter7:
+            return "filter 7"
+        case .filter8:
+            return "filter 8"
+        case .filter9:
+            return "filter 9"
+        case .filter10:
+            return "filter 10"
+        case .filter11:
+            return "filter 11"
+        case .filter12:
+            return "filter 12"
+        case .filter13:
+            return "filter 13"
+        case .filter14:
+            return "filter 14"
+        case .filter15:
+            return "filter 15"
+        case .filter16:
+            return "filter 16"
+            
         case .populatingOutlierGroups:
             return "populating outlier groups"
         case .readyForInterFrameProcessing: // XXX not covered in progress monitor
@@ -99,7 +130,7 @@ public enum FrameProcessingState: Int,
         case .finishing:
             return "finishing"
         case .userModified:
-            return "user modified"
+            return "classified"
         case .writingOutlierValues:
             return "writing outlier classification values"
         case .waitingToLoadImages:
@@ -133,19 +164,37 @@ public enum FrameProcessingState: Int,
             return false
         case .detectingBlobs:
             return false
-        case .isolatedBlobRemoval1:
+        case .filter1:
             return false
-        case .isolatedBlobRemoval2:
+        case .filter2:
             return false
-        case .isolatedBlobRemoval3:
+        case .filter3:
             return false
-        case .isolatedBlobRemoval4:
+        case .filter4:
             return false
-        case .smallLinearBlobAbsorbtion:
+        case .filter5:
             return false
-        case .largerLinearBlobAbsorbtion:
+        case .filter6:
             return false
-        case .finalCrunch:
+        case .filter7:
+            return false
+        case .filter8:
+            return false
+        case .filter9:
+            return false
+        case .filter10:
+            return false
+        case .filter11:
+            return false
+        case .filter12:
+            return false
+        case .filter13:
+            return false
+        case .filter14:
+            return false
+        case .filter15:
+            return false
+        case .filter16:
             return false
         case .populatingOutlierGroups:
             return false
@@ -177,6 +226,7 @@ public enum FrameProcessingState: Int,
             return true
         }
     }
+
     public var color: Color {
         switch self {
         case .unprocessed:
@@ -191,19 +241,37 @@ public enum FrameProcessingState: Int,
             return .cyan
         case .detectingBlobs:
             return .yellow
-        case .isolatedBlobRemoval1:
-            return .orange
-        case .isolatedBlobRemoval2:
-            return .blue
-        case .isolatedBlobRemoval3:
-            return .cyan
-        case .isolatedBlobRemoval4:
-            return .blue
-        case .smallLinearBlobAbsorbtion:
+        case .filter1:
             return .yellow
-        case .largerLinearBlobAbsorbtion:
+        case .filter2:
             return .yellow
-        case .finalCrunch:
+        case .filter3:
+            return .yellow
+        case .filter4:
+            return .yellow
+        case .filter5:
+            return .yellow
+        case .filter6:
+            return .yellow
+        case .filter7:
+            return .yellow
+        case .filter8:
+            return .yellow
+        case .filter9:
+            return .yellow
+        case .filter10:
+            return .yellow
+        case .filter11:
+            return .yellow
+        case .filter12:
+            return .yellow
+        case .filter13:
+            return .yellow
+        case .filter14:
+            return .yellow
+        case .filter15:
+            return .yellow
+        case .filter16:
             return .yellow
         case .populatingOutlierGroups:
             return .yellow

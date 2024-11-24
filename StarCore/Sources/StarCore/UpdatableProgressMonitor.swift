@@ -155,31 +155,67 @@ public actor UpdatableProgressMonitor {
             updates.append(update)
         }
 
-        if let update = progressLine(for: .isolatedBlobRemoval1) {
+        if let update = progressLine(for: .filter1) {
             updates.append(update)
         }
 
-        if let update = progressLine(for: .isolatedBlobRemoval2) {
+        if let update = progressLine(for: .filter2) {
             updates.append(update)
         }
 
-        if let update = progressLine(for: .isolatedBlobRemoval3) {
+        if let update = progressLine(for: .filter3) {
             updates.append(update)
         }
 
-        if let update = progressLine(for: .isolatedBlobRemoval4) {
+        if let update = progressLine(for: .filter4) {
             updates.append(update)
         }
 
-        if let update = progressLine(for: .smallLinearBlobAbsorbtion) {
+        if let update = progressLine(for: .filter5) {
             updates.append(update)
         }
 
-        if let update = progressLine(for: .largerLinearBlobAbsorbtion) {
+        if let update = progressLine(for: .filter6) {
             updates.append(update)
         }
-        
-        if let update = progressLine(for: .finalCrunch) {
+
+        if let update = progressLine(for: .filter7) {
+            updates.append(update)
+        }
+
+        if let update = progressLine(for: .filter8) {
+            updates.append(update)
+        }
+
+        if let update = progressLine(for: .filter9) {
+            updates.append(update)
+        }
+
+        if let update = progressLine(for: .filter10) {
+            updates.append(update)
+        }
+
+        if let update = progressLine(for: .filter11) {
+            updates.append(update)
+        }
+
+        if let update = progressLine(for: .filter12) {
+            updates.append(update)
+        }
+
+        if let update = progressLine(for: .filter13) {
+            updates.append(update)
+        }
+
+        if let update = progressLine(for: .filter14) {
+            updates.append(update)
+        }
+
+        if let update = progressLine(for: .filter15) {
+            updates.append(update)
+        }
+
+        if let update = progressLine(for: .filter16) {
             updates.append(update)
         }
         

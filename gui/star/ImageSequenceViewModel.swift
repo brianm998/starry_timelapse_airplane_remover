@@ -793,11 +793,11 @@ public extension ImageSequenceViewModel {
                         taskGroup.addTask() {
                             await processingSemaphore.wait()
 
-                            while await self.finalProcessingCount.isMoreThanZero() {
-                                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-                            }
-                            
                             if await !frame.processingState().isReadyForInterframeProcessing {
+                                while await self.finalProcessingCount.isMoreThanZero() {
+                                    try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                                }
+                                
                                 // this frame needs to have outliers found
                                 await MainActor.run {
                                     frameView.outliersLoaded = .loading
@@ -885,7 +885,8 @@ public extension ImageSequenceViewModel {
                     
                     await frame.applyDecisionTreeToAllOutliers()
 
-                    await frame.set(state: .finishing)
+                    await frame.set(state: .outlierProcessingComplete)
+//                    await frame.set(state: .finishing)
                     
                     try await self.render(frame: frame, now: true) {
                         Task {
