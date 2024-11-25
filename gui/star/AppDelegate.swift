@@ -27,7 +27,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
 
-        let viewModel = ViewModel()
+     //   let viewModel = ViewModel()
         
         _window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1280, height: 960),

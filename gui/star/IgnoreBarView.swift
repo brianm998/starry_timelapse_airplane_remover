@@ -96,7 +96,7 @@ public struct IgnoreBarView: View {
               if viewModel.ignoreLowerPixels > viewModel.frameHeight {
                   viewModel.ignoreLowerPixels = viewModel.frameHeight
               }
-              if var configManager = viewModel.config {
+              if let configManager = viewModel.config {
                   // set the final value in the config
                   var config = configManager.config()
                   config.ignoreLowerPixels = Int(viewModel.ignoreLowerPixels)

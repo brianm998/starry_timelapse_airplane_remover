@@ -65,33 +65,40 @@ struct LeftPanel: View {
                     // show all the detailed processing states
                     ForEach(FrameProcessingState.allCases, id: \.self) { state in
                         GridRow {
-                            Text("\(viewModel.frameStateMap[state]?.count ?? 0)")
-                              .foregroundColor(.white)
+                            let count = viewModel.frameStateMap[state]?.count ?? 0
+                            let color: Color = count == 0 ? .gray : .white
+                            Text("\(count)")
+                              .foregroundColor(color)
                             Text(state.message)
-                              .foregroundColor(.white)
+                              .foregroundColor(color)
                         }
                     }
                 } else {
                     // just show unprocessed, processing, and complete
                     GridRow {
-                        Text("\(viewModel.frameStateMap[.unprocessed]?.count ?? 0)")
-                          .foregroundColor(.white)
+                        let count = viewModel.frameStateMap[.unprocessed]?.count ?? 0
+                        let color: Color = count == 0 ? .gray : .white
+                        Text("\(count)")
+                          .foregroundColor(color)
                         Text(FrameProcessingState.unprocessed.message)
-                          .foregroundColor(.white)
+                          .foregroundColor(color)
                     }
 
                     GridRow {
+                        let color: Color = viewModel.numberOfFramesProcessingNow == 0 ? .gray : .white
                         Text("\(viewModel.numberOfFramesProcessingNow)")
-                          .foregroundColor(.white)
+                          .foregroundColor(color)
                         Text("processing")
-                          .foregroundColor(.white)
+                          .foregroundColor(color)
                     }
 
                     GridRow {
-                        Text("\(viewModel.frameStateMap[.complete]?.count ?? 0)")
-                          .foregroundColor(.white)
+                        let count = viewModel.frameStateMap[.complete]?.count ?? 0
+                        let color: Color = count == 0 ? .gray : .white
+                        Text("\(count)")
+                          .foregroundColor(color)
                         Text(FrameProcessingState.complete.message)
-                          .foregroundColor(.white)
+                          .foregroundColor(color)
                     }
                 }
             }

@@ -39,7 +39,7 @@ public actor DimIsolatedBlobRemover {
     public struct Args: Sendable {
         let scanSize: Int // how far in each direction to look for neighbors
         let requiredNeighbors: Int // how many neighbors do we need to find?
-        let minBlobSize: Int       // blobs smaller than this are ignored
+        let minBlobSize: Int       // blobs smaller than this are processed
         
         public init(scanSize: Int = 12,
                     requiredNeighbors: Int = 1,

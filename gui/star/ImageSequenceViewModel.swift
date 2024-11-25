@@ -38,7 +38,7 @@ public enum InteractionMode: String, Equatable, CaseIterable {
 public let frameProcessingMonitor = FileSystemMonitor(max: 32) // XXX make this configurable
 
 // used for loading frames, loading 20 at a time is faster than 1000
-fileprivate let frameLoadMonitor = FileSystemMonitor(max: 20)
+fileprivate let frameLoadMonitor = FileSystemMonitor(max: 28) // XXX makd this configurable
 
 
 // view model for a sequence of images
@@ -733,7 +733,7 @@ public extension ImageSequenceViewModel {
                                    to shouldPaint: Bool,
                                    renderImmediately: Bool = true)
     {
-        let reason = PaintReason.userSelected(shouldPaint)
+    //    let reason = PaintReason.userSelected(shouldPaint)
         
         if let frame = frameView.frame {
             // update the real actor in the background

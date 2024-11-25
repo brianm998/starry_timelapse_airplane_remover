@@ -18,7 +18,7 @@ struct RenderAllFramesButton: View {
     
     var body: some View {
         let action: () -> Void = {
-            let foobar = viewModel
+          //  let foobar = viewModel
             self.viewModel.renderingAllFrames = true
             let frameSaveQueue = viewModel.frameSaveQueue
             Task {

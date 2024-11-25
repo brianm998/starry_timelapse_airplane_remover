@@ -33,15 +33,19 @@ public actor SmallBlobRemover {
     
     public struct Args: Sendable {
         let minBlobSize: Int       // blobs smaller than this are ignored
+        let intensityFloor: UInt16 // all blobs above this are ignored
         
-        public init(minBlobSize: Int = 24) {
+        public init(minBlobSize: Int = 24, intensityFloor: UInt16 = 10000) {
             self.minBlobSize = minBlobSize
+            self.intensityFloor = intensityFloor
         }
     }
 
     public func process(_ args: Args) async {
         for (_, blob) in blobMap {
-            if await blob.size() <= args.minBlobSize {
+            if await blob.size() <= args.minBlobSize,
+               await blob.medianIntensity() < args.intensityFloor
+            {
                 blobMap.removeValue(forKey: blob.id)
             }
         }
