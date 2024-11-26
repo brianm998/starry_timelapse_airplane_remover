@@ -162,23 +162,22 @@ public class BlobProcessor {
           .frameState(.filter4),
           // a first pass on dim isolated blob removal
           .dimIsolatedBlobRemover(.init(scanSize: 20,
-                                        requiredNeighbors: 2)),
-          
-
-          // remove isolated blobs
-          .isolatedBlobRemover(.init(minNeighborSize: 6, scanSize: 24)),
-          
+                                        requiredNeighbors: 2,
+                                        intensityFloor: 5000)),
           
           .save(.filter4),
           .frameState(.filter5),
 
+          // remove isolated blobs
+          .isolatedBlobRemover(.init(minNeighborSize: 4, scanSize: 24)),
+          
+          .save(.filter5),
+          .frameState(.filter6),
+          
           // remove smaller disconected blobs
           .disconnectedBlobRemover(.init(scanSize: 30,
                                          blobsSmallerThan: 18,
                                          requiredNeighbors: 2)),
-
-          .save(.filter5),
-          .frameState(.filter6),
           
           // find really close linear blobs
           .linearBlobConnector(.init(scanSize: 20,
@@ -240,16 +239,10 @@ public class BlobProcessor {
                            minLineCount: 10)),
 
 
-          .save(.filter12),
-          .frameState(.filter13),
-          
           // reconnect some lines that may have been split up
           .linearBlobConnector(.init(scanSize: 2, 
                                      blobsSmallerThan: 80,
                                      lineBorder: 2)),
-
-          .save(.filter13),
-          .frameState(.filter14),
           
           // blob line trim
           .blobLineTrim(.init(minLineLength: 65,
@@ -257,13 +250,25 @@ public class BlobProcessor {
                               trimAmount: 16)),
 
 
+          .save(.filter12),
+          .frameState(.filter13),
+          
           // pass on getting rid of small but larger, dimmer blobs
-          .smallBlobRemover(.init(minBlobSize: 50,
-                                  intensityFloor: 7500)),
+          // XXX this needs to take into account distance from others, it's killing us
+          //.smallBlobRemover(.init(minBlobSize: 50,
+          //intensityFloor: 7500)),
+          .dimIsolatedBlobRemover(.init(scanSize: 20,
+                                        requiredNeighbors: 2,
+                                        minBlobSize: 50,
+                                        intensityFloor: 6500)),
 
+
+          .save(.filter13),
+          .frameState(.filter14),
+
+          
           // pass on getting rid of small but larger, dimmer blobs
-          .smallBlobRemover(.init(minBlobSize: 10,
-                                  intensityFloor: 12000)),
+          .smallBlobRemover(.init(minBlobSize: 10)),
 
           .save(.filter14),
           .frameState(.filter15),

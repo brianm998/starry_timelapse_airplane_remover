@@ -35,7 +35,7 @@ public actor SmallBlobRemover {
         let minBlobSize: Int       // blobs smaller than this are ignored
         let intensityFloor: UInt16 // all blobs above this are ignored
         
-        public init(minBlobSize: Int = 24, intensityFloor: UInt16 = 10000) {
+        public init(minBlobSize: Int = 24, intensityFloor: UInt16 = UInt16.max) {
             self.minBlobSize = minBlobSize
             self.intensityFloor = intensityFloor
         }

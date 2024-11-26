@@ -40,14 +40,17 @@ public actor DimIsolatedBlobRemover {
         let scanSize: Int // how far in each direction to look for neighbors
         let requiredNeighbors: Int // how many neighbors do we need to find?
         let minBlobSize: Int       // blobs smaller than this are processed
+        let intensityFloor: UInt16? // use this intensity floor, or median intensity?
         
         public init(scanSize: Int = 12,
                     requiredNeighbors: Int = 1,
-                    minBlobSize: Int = 24)
+                    minBlobSize: Int = 24,
+                    intensityFloor: UInt16? = nil)
         {
             self.scanSize = scanSize
             self.requiredNeighbors = requiredNeighbors
             self.minBlobSize = minBlobSize
+            self.intensityFloor = intensityFloor
         }
     }
 
@@ -84,7 +87,12 @@ public actor DimIsolatedBlobRemover {
                                                                   scanSize: args.scanSize,
                                                                   requiredNeighbors: args.requiredNeighbors)
             { otherBlob in
-                await otherBlob.medianIntensity() > quarterBlobMedianIntensity
+                let intensity = await otherBlob.medianIntensity()
+                if let intensityFloor = args.intensityFloor {
+                    return intensity > intensityFloor
+                } else {
+                    return intensity > quarterBlobMedianIntensity
+                }
             }
                                                           
             if otherBlobsNearby.count < args.requiredNeighbors {

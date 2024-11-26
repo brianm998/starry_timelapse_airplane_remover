@@ -74,7 +74,7 @@ public final class ImageSequenceViewModel {
     // how long the arrows are
     var outlierArrowLength: CGFloat = 70 // relative to the frame width above
 
-    let finalProcessingCount = BooleanActor()
+    let finalProcessingCount = CountActor()
     
     var frameSize: CGSize {
         var ret = CGSize()
@@ -803,7 +803,7 @@ public extension ImageSequenceViewModel {
 
             await frame.applyDecisionTreeToAllOutliers()
 
-            try await self.render(frame: frame) {
+            try await self.render(frame: frame, now: true) {
                 Task {
                     await self.setOutlierGroups(forFrame: frame)
                 }
@@ -1008,12 +1008,13 @@ public extension ImageSequenceViewModel {
     }
 }
 
-public actor BooleanActor {
+public actor CountActor {
     private var value: Int = 0
 
     public func increase() { value += 1 }
     public func decrease() { value -= 1 }
-
+    
+    public func isMore(than: Int) -> Bool { value > than }
     public func isMoreThanZero() -> Bool { value > 0 }
 }
 
