@@ -22,7 +22,7 @@ perl -pi -e 's/ONLY_ACTIVE_ARCH = YES/ONLY_ACTIVE_ARCH = NO/'  star.xcodeproj/pr
 # build the archive
 xcodebuild \
     -project "star.xcodeproj" \
-    -scheme "star" \
+    -scheme "Star Release" \
     -configuration "Release" \
     -archivePath "${BUILD_DIR}/star.xcarchive" \
     archive
