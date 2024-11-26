@@ -792,6 +792,30 @@ public extension ImageSequenceViewModel {
         }
     }
 
+    // fully reprocess this frame
+    func reprocess(_ frame: FrameAirplaneRemover) async {
+        Task {
+            if let frame = self.currentFrame {
+                frame.imageAccessor.deleteAllImages(frameIndex: frame.frameIndex)
+                self.frameViewMode = .original
+                self.currentFrameView.existingImages = [.original]
+                
+                let binaryBlobFilename = await frame.blobBinaryFilename
+                // get rid of the outlier files
+                do {
+                    Log.d("trying to remove \(binaryBlobFilename)")
+                    try FileManager.default.removeItem(atPath: binaryBlobFilename)
+                } catch {
+                    Log.e("error removing \(binaryBlobFilename): \(error)")
+                }
+                // re-find them
+                await self.findOutliersAndRender(frame: frame)
+            } else {
+                // XXX probably should do something here
+            }
+        }
+    }
+    
     // used to re-process a particular frame 
     func findOutliersAndRender(frame: FrameAirplaneRemover) async {
         let frameView = self.frames[frame.frameIndex] 

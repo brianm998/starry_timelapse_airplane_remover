@@ -115,7 +115,9 @@ import StarDecisionTrees
     - add 'are you sure' popup when closing when processing
     - add a stop processing button (cancel the processing task)
     - render frame button is sometimes disabled when it shouldn't be
-    - frames end up waiting for interframe processing too long, and pile up
+    * frames end up waiting for interframe processing too long, and pile up
+    - load all outliers on unprocessed frame starts processing when there are no outliers :(
+    - memory leaks lead to crash on processing long sequences
  */
 
  

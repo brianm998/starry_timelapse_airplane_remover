@@ -132,23 +132,35 @@ struct RightPanel: View {
 
                             let frameView = viewModel.currentFrameView
 
-                    Button() {
-                        Task {
-                            if let frame = viewModel.currentFrame {
-                                try? await viewModel.render(frame: frame, now: true)
+                            Button() {
+                                Task {
+                                    if let frame = viewModel.currentFrame {
+                                        try? await viewModel.reprocess(frame)
+                                    }
+                                }
+                            } label: {
+                                Text(viewModel.currentFrame.frameState? == .complete : "ReProcess Frame" : "Process Frame")
                             }
-                        }
-                    } label: {
-                        Text("Render Frame")
-                    }
-                      .disabled(viewModel.isProcessingAllFrames ||
-                                frameView.frameState == .complete ||
-                                frameView.outlierViews == nil ||
-                                viewModel.renderingCurrentFrame)
+                              .disabled(viewModel.isProcessingAllFrames ||
+                                        viewModel.renderingCurrentFrame)
+                            
+                            Button() {
+                                Task {
+                                    if let frame = viewModel.currentFrame {
+                                        try? await viewModel.render(frame: frame, now: true)
+                                    }
+                                }
+                            } label: {
+                                Text("Render Frame")
+                            }
+                              .disabled(viewModel.isProcessingAllFrames ||
+                                          frameView.frameState == .complete ||
+                                          frameView.outlierViews == nil ||
+                                          viewModel.renderingCurrentFrame)
                         }
                     }
                       .defaultScrollAnchor(.bottom)
-
+                    
                     Spacer()
                     
                     Button() {
