@@ -239,11 +239,6 @@ public class BlobProcessor {
                            minLineCount: 10)),
 
 
-          // reconnect some lines that may have been split up
-          .linearBlobConnector(.init(scanSize: 2, 
-                                     blobsSmallerThan: 80,
-                                     lineBorder: 2)),
-          
           // blob line trim
           .blobLineTrim(.init(minLineLength: 65,
                               minLineFillAmount: 0.9,
@@ -266,9 +261,17 @@ public class BlobProcessor {
           .save(.filter13),
           .frameState(.filter14),
 
+          // reconnect some lines that may have been split up
+          .linearBlobConnector(.init(scanSize: 20, 
+                                     blobsSmallerThan: 80,
+                                     lineBorder: 2)),
           
+          .isolatedBlobRemover(.init(scanSize: 10,
+                                     requiredNeighbors: 2,
+                                     minBlobSize: 8)),
+        
           // pass on getting rid of small but larger, dimmer blobs
-          .smallBlobRemover(.init(minBlobSize: 10)),
+          //.smallBlobRemover(.init(minBlobSize: 10)),
 
           .save(.filter14),
           .frameState(.filter15),
