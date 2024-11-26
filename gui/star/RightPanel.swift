@@ -135,11 +135,11 @@ struct RightPanel: View {
                             Button() {
                                 Task {
                                     if let frame = viewModel.currentFrame {
-                                        try? await viewModel.reprocess(frame)
+                                        await viewModel.reprocess(frame)
                                     }
                                 }
                             } label: {
-                                Text(viewModel.currentFrame.frameState? == .complete : "ReProcess Frame" : "Process Frame")
+                                Text( "Process Frame")
                             }
                               .disabled(viewModel.isProcessingAllFrames ||
                                         viewModel.renderingCurrentFrame)

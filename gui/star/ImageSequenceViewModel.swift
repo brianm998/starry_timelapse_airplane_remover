@@ -174,6 +174,8 @@ public final class ImageSequenceViewModel {
     var imageSequenceSize: Int = 0
 
     var finalProcessor: FinalGUIProcessor?
+
+    var shouldShowInitialInstructions: Bool = false
     
     convenience init(withConfig jsonConfigFilename: String,
                      closure: @escaping @Sendable (Int, Double, Int, Double) -> Void) async throws
@@ -222,7 +224,7 @@ public final class ImageSequenceViewModel {
             inputImageSequenceName = inputImageSequenceDirname
         }
 
-        let config = Config(outputPath: inputImageSequencePath,
+        var config = Config(outputPath: inputImageSequencePath,
                             imageSequenceName: inputImageSequenceName,
                             imageSequencePath: inputImageSequencePath,
                             writeOutlierGroupFiles: shouldWriteOutlierGroupFiles,
@@ -230,6 +232,8 @@ public final class ImageSequenceViewModel {
                             writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
                             writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
 
+        config.ignoreLowerPixels = 200
+        
         let configFilename = "\(config.basename)-config.json"
         
         let configManager = ConfigManager(configFilename: configFilename, config: config)
@@ -239,7 +243,9 @@ public final class ImageSequenceViewModel {
         if config.writeOutlierGroupFiles {
             mkdir(config.outlierOutputDirname)
         }
-
+        self.interactionMode = .edit
+        self.shouldShowInitialInstructions = true
+        self.showIgnoreLowerBar = true
         self.frameViewMode = .original
     }
 

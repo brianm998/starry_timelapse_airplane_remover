@@ -8,10 +8,7 @@ struct ImageSequenceLoadingView: View {
     var body: some View {
         @Bindable var viewModel = viewModel
 
-        // XXX needs a title, name of sequence being loaded
-        // XXX needs a cancel button if it takes forever
         // XXX needs to show error messages when they occur
-        // XXX can still be waiting time after the spinner finishes, figure out why
 
         VStack {
             Spacer()

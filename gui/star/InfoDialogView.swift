@@ -43,6 +43,7 @@ struct InfoDialogView: View {
                             viewModel.showInfoDialog = false
                         } label: {
                             Text("Close")
+                              .buttonStyle(ShrinkingButton())
                         }
                     }
                       .padding(20)

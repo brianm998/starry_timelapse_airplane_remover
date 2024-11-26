@@ -10,7 +10,8 @@ struct ImageSequenceView: View {
     
     var body: some View {
         @Bindable var viewModel = viewModel
-        return VStack {
+        return ZStack {
+            VStack {
 
             ZStack(alignment: .center) {
                 // selected frame 
@@ -62,6 +63,11 @@ struct ImageSequenceView: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .padding([.bottom, .leading, .trailing])
           .background(viewModel.backgroundColor)
+
+            if viewModel.shouldShowInitialInstructions {
+                InitialInstructionsView()
+            }
+        }
         /* XXX fix this
           .alert(isPresented: $viewModel.showErrorAlert) {
               Alert(title: Text("Error"),
