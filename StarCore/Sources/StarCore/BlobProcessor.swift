@@ -113,7 +113,7 @@ public class BlobProcessor {
 
 
           // find really close linear blobs
-          .linearBlobConnector(.init(scanSize: 16, 
+          .linearBlobConnector(.init(scanSize: 32, 
                                      blobsSmallerThan: 120,
                                      lineBorder: 12)),
 
@@ -214,7 +214,7 @@ public class BlobProcessor {
           
           // pass on getting rid of small dim blobs
           .smallBlobRemover(.init(minBlobSize: 24,
-                                  intensityFloor: 10000)),
+                                  intensityFloor: 5000)),
 
 
           .save(.filter10),
@@ -248,25 +248,24 @@ public class BlobProcessor {
           .save(.filter12),
           .frameState(.filter13),
           
+          // reconnect some lines that may have been split up
+          .linearBlobConnector(.init(scanSize: 40, 
+                                     blobsSmallerThan: 180,
+                                     lineBorder: 2)),
+          
           // pass on getting rid of small but larger, dimmer blobs
           // XXX this needs to take into account distance from others, it's killing us
           //.smallBlobRemover(.init(minBlobSize: 50,
           //intensityFloor: 7500)),
-          .dimIsolatedBlobRemover(.init(scanSize: 20,
+          .dimIsolatedBlobRemover(.init(scanSize: 50,
                                         requiredNeighbors: 2,
                                         minBlobSize: 50,
-                                        intensityFloor: 6500)),
-
+                                        intensityFloor: 4500)),
 
           .save(.filter13),
           .frameState(.filter14),
 
-          // reconnect some lines that may have been split up
-          .linearBlobConnector(.init(scanSize: 20, 
-                                     blobsSmallerThan: 80,
-                                     lineBorder: 2)),
-          
-          .isolatedBlobRemover(.init(scanSize: 10,
+          .isolatedBlobRemover(.init(scanSize: 40,
                                      requiredNeighbors: 2,
                                      minBlobSize: 8)),
         
