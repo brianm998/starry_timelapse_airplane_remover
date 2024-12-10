@@ -27,7 +27,7 @@ public final class Constants: Sendable {
     public func blobProcessor(for frame: FrameAirplaneRemover) -> AbstractBlobProcessor{
         switch self.detectionType {
         case .mild:
-            return BlobProcessor(frame: frame)
+            return MildBlobProcessor(frame: frame)
         case .strong:
             return StrongBlobProcessor(frame: frame)
         case .excessive:
