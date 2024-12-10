@@ -25,6 +25,7 @@ struct InitialInstructionsView: View {
                         Spacer()
                           .frame(maxHeight: 10)
                         
+                      // this copy could be better, more consise and to the point
                         Text("""
                                Before processing a new image sequence, it is a good idea to set a bottom area to not process.
                                This can speed up proccessing, ignoring the ground in the video.

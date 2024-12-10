@@ -4,10 +4,10 @@ import Semaphore
 import logging
 
 // used for finding outliers in frames when processing
-fileprivate let processingSemaphore = AsyncSemaphore(value: 28) // XXX make this configurable
+fileprivate let processingSemaphore = AsyncSemaphore(value: 10) // XXX make this configurable
 
 // used for final processing (categorizing, painting, saving)
-fileprivate let finalSemaphore = AsyncSemaphore(value: 40)
+fileprivate let finalSemaphore = AsyncSemaphore(value: 40) // XXX make this configurable
 
 public actor FinalGUIProcessor {
     weak var viewModel: ImageSequenceViewModel?

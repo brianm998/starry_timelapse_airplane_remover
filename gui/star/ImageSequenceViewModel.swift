@@ -76,6 +76,8 @@ public final class ImageSequenceViewModel {
 
     let finalProcessingCount = CountActor()
     
+    var detectionType = DetectionType.strong
+
     var frameSize: CGSize {
         var ret = CGSize()
         ret.width = frameWidth

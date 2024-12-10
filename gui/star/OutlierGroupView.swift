@@ -13,16 +13,16 @@ struct OutlierGroupView: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        @Bindable var groupViewModel = groupViewModel
         ZStack() {
-            let frameWidth = self.groupViewModel.viewModel.frameWidth
-            let frameHeight = self.groupViewModel.viewModel.frameHeight
-            let bounds = self.groupViewModel.bounds
-            let unknown_paint = self.groupViewModel.paintObserver.shouldPaint?.willPaint == nil
-            let will_paint = self.groupViewModel.paintObserver.shouldPaint?.willPaint ?? false
-            let paint_color = self.groupViewModel.groupColor
-            let arrow_length = self.groupViewModel.viewModel.arrowLength
-            let arrow_height = self.groupViewModel.viewModel.arrowHeight
-            let line_width = self.groupViewModel.viewModel.lineWidth
+            let frameWidth = groupViewModel.viewModel.frameWidth
+            let frameHeight = groupViewModel.viewModel.frameHeight
+            let bounds = groupViewModel.bounds
+            let unknown_paint = groupViewModel.paintObserver.shouldPaint?.willPaint == nil
+            let will_paint = groupViewModel.paintObserver.shouldPaint?.willPaint ?? false
+            let arrow_length = groupViewModel.viewModel.arrowLength
+            let arrow_height = groupViewModel.viewModel.arrowHeight
+            let line_width = groupViewModel.viewModel.lineWidth
             let center_x = CGFloat(bounds.center.x)
             let center_y = CGFloat(bounds.center.y)
 
@@ -37,7 +37,7 @@ struct OutlierGroupView: View {
 
             let half_arrow_length = arrow_length/2
 
-            if self.groupViewModel.arrowSelected || will_paint || unknown_paint {
+            if groupViewModel.arrowSelected || will_paint || unknown_paint {
                 // arrow indicators on the side of the image
 
                 // arrow on left side
@@ -65,7 +65,7 @@ struct OutlierGroupView: View {
                           y: half_arrow_length + half_frame_height)
             }
             
-            if self.groupViewModel.arrowSelected {
+            if groupViewModel.arrowSelected {
                 
                 // lines across the frame between the arrows and outlier group bounds
                 let left_line_width = CGFloat(bounds.min.x)
@@ -111,81 +111,102 @@ struct OutlierGroupView: View {
                           y: bounds_center_y-half_frame_height +
                             bottom_line_height / 2 + half_bounds_height)
             }
-            
-            ZStack(alignment: .topLeading) {
-                if self.groupViewModel.arrowSelected {
-                    // underlay for when this outlier group is hovered over
-                    Rectangle() // fill that is transparent
-                      .foregroundColor(paint_color)
-                      .opacity(1.0/8)
-                    Rectangle() // a border that's not transparent
-                      .stroke(style: StrokeStyle(lineWidth: 4))
-                      .foregroundColor(paint_color)
-                      .blendMode(.difference)
-                      .opacity(0.5)
 
-                    if self.groupViewModel.lineIsLoading {
-                        Text("calculating line ...")
-                          .foregroundColor(.white)
-                    }
-                    
-                    // draw line here
-                    if let line = self.groupViewModel.line {
-                        Path { path in
-                            path.addLines(self.groupViewModel.pointsForLineOnBounds)
-                            path.closeSubpath()
-                        }
-                          .stroke(.white, lineWidth: 8)
-                          .opacity(0.33)
-                    } else if !self.groupViewModel.lineIsLoading,
-                              !self.groupViewModel.hasLine
-                    {
-                        Text("No Line")
-                          .foregroundColor(.red)
-                    }
-                    
-                }
-                // the actual outlier group image
-                Image(nsImage: self.groupViewModel.image)
-                  .renderingMode(.template) // makes this VV color work
-                  .foregroundColor(paint_color)
-                  .blendMode(.hardLight)
-
+            if groupViewModel.group.size > 50 {
+                self.outlierView
+                  .onHover { groupViewModel.selectArrow($0) }
                 
-            }
-              .offset(x: CGFloat(bounds.min.x) - half_frame_width + half_bounds_width,
-                      y: CGFloat(bounds.min.y) - half_frame_height + half_bounds_height)
-              .frame(width: bounds_width,
-                     height: bounds_height)
-              .onHover { self.groupViewModel.selectArrow($0) }
-            
-            // tap gesture toggles paintability of the tapped group
-              .onTapGesture {
-                  Task {
-                      let origShouldPaint = await self.groupViewModel.group.shouldPaint() 
-
-                      await MainActor.run {
-                          if let origShouldPaint {
-                              // change the paintability of this outlier group
-                              // set it to user selected opposite previous value
-                              
-                              if self.groupViewModel.viewModel.selectionMode == .details {
-                                  handleDetailsMode()
-                              } else if self.groupViewModel.viewModel.multiChoice {
-                                  openMultiChoiceSheet()
+                // tap gesture toggles paintability of the tapped group
+                  .onTapGesture {
+                      Task {
+                          let origShouldPaint = await groupViewModel.group.shouldPaint() 
+                          
+                          await MainActor.run {
+                              if let origShouldPaint {
+                                  // change the paintability of this outlier group
+                                  // set it to user selected opposite previous value
+                                  
+                                  if groupViewModel.viewModel.selectionMode == .details {
+                                      handleDetailsMode()
+                                  } else if groupViewModel.viewModel.multiChoice {
+                                      openMultiChoiceSheet()
+                                  } else {
+                                      togglePaintReason(origShouldPaint)
+                                  }
                               } else {
-                                  togglePaintReason(origShouldPaint)
+                                  // handle outliers without a paint decision 
+                                  togglePaintReason()
                               }
-                          } else {
-                              // handle outliers without a paint decision 
-                              togglePaintReason()
                           }
                       }
                   }
-              }
+                
+            } else {
+                self.outlierView
+            }
         }
     }
 
+    var outlierView: some View {
+        let bounds = self.groupViewModel.bounds
+        let frameWidth = self.groupViewModel.viewModel.frameWidth
+        let frameHeight = self.groupViewModel.viewModel.frameHeight
+        let half_bounds_height = CGFloat(bounds.height/2)
+        let half_bounds_width = CGFloat(bounds.width/2)
+        let paint_color = self.groupViewModel.groupColor
+        let half_frame_height = frameHeight/2
+        let half_frame_width = frameWidth/2
+        let bounds_height = CGFloat(bounds.height)
+        let bounds_width = CGFloat(bounds.width)
+
+        return ZStack(alignment: .topLeading) {
+            if self.groupViewModel.arrowSelected {
+                // underlay for when this outlier group is hovered over
+                Rectangle() // fill that is transparent
+                  .foregroundColor(paint_color)
+                  .opacity(1.0/8)
+                Rectangle() // a border that's not transparent
+                  .stroke(style: StrokeStyle(lineWidth: 4))
+                  .foregroundColor(paint_color)
+                  .blendMode(.difference)
+                  .opacity(0.5)
+
+                if self.groupViewModel.lineIsLoading {
+                    Text("calculating line ...")
+                      .foregroundColor(.white)
+                }
+                
+                // draw line here
+                if let line = self.groupViewModel.line {
+                    Path { path in
+                        path.addLines(self.groupViewModel.pointsForLineOnBounds)
+                        path.closeSubpath()
+                    }
+                      .stroke(.white, lineWidth: 8)
+                      .opacity(0.33)
+                } else if !self.groupViewModel.lineIsLoading,
+                          !self.groupViewModel.hasLine
+                {
+                    Text("No Line")
+                      .foregroundColor(.red)
+                }
+                
+            }
+            // the actual outlier group image
+            Image(nsImage: self.groupViewModel.image)
+              .renderingMode(.template) // makes this VV color work
+              .foregroundColor(paint_color)
+              .blendMode(.hardLight)
+
+            
+        }
+          .offset(x: CGFloat(bounds.min.x) - half_frame_width + half_bounds_width,
+                  y: CGFloat(bounds.min.y) - half_frame_height + half_bounds_height)
+          .frame(width: bounds_width,
+                 height: bounds_height)
+
+    }
+    
     // used when user taps on outlier group in with selection mode set to details
     func handleDetailsMode() {
         Task {

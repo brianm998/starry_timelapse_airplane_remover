@@ -82,7 +82,7 @@ public final class ViewModel {
 
     func startup(withConfig config: ConfigManager) async throws {
         isLoadingImageSequence = true
-        loadingImageSequenceFilename = await config.config().imageSequenceDirname
+        loadingImageSequenceFilename = config.config().imageSequenceDirname
         imageSequence = try await ImageSequenceViewModel(with: config) { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
             Task { @MainActor in
                 self.amountLoaded = amountLoaded
@@ -123,7 +123,7 @@ public final class ViewModel {
         amountPreviewsSaved = 0.0
 
         if let configManager = imageSequence?.config {
-            let config = await configManager.config()
+            let config = configManager.config()
             configManager.save()
             self.userPreferences.justOpened(filename: "\(config.outputPath)/\(configManager.jsonFilename())")
         }

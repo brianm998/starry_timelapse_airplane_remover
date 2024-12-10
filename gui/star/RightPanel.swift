@@ -132,18 +132,28 @@ struct RightPanel: View {
 
                             let frameView = viewModel.currentFrameView
 
-                            Button() {
-                                Task {
-                                    if let frame = viewModel.currentFrame {
-                                        await viewModel.reprocess(frame)
+                                Button() {
+                                    Task {
+                                        if let frame = viewModel.currentFrame {
+                                            await viewModel.reprocess(frame)
+                                        }
+                                    }
+                                } label: {
+                                    Text("Process as")
+                                }
+                                  .disabled(viewModel.isProcessingAllFrames ||
+                                              viewModel.renderingCurrentFrame)
+
+                                Picker("", selection: $viewModel.detectionType) {
+                                    ForEach(DetectionType.allCases, id: \.self) { value in
+                                        Text(value.rawValue).tag(value)
                                     }
                                 }
-                            } label: {
-                                Text( "Process Frame")
-                            }
-                              .disabled(viewModel.isProcessingAllFrames ||
-                                        viewModel.renderingCurrentFrame)
-                            
+                                  .frame(maxWidth: 120)
+                                  .onChange(of: viewModel.detectionType) { 
+                                      constants = Constants(detectionType: viewModel.detectionType)
+                                  }
+
                             Button() {
                                 Task {
                                     if let frame = viewModel.currentFrame {
@@ -151,7 +161,7 @@ struct RightPanel: View {
                                     }
                                 }
                             } label: {
-                                Text("Render Frame")
+                                Text("Render Updates")
                             }
                               .disabled(viewModel.isProcessingAllFrames ||
                                           frameView.frameState == .complete ||
