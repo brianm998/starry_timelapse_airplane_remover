@@ -110,8 +110,11 @@ extension FrameAirplaneRemover {
     public func findOutliers() async throws {
         
         mkdir(await self.outliersDirname)
+
+
+        let blobProcessor = constants.blobProcessor(for: self)
         
-        let blobMap = try await BlobProcessor(frame: self).run()
+        let blobMap = try await blobProcessor.run()
 
         let blobBinarySaver = BlobBinarySaver(blobMap: blobMap)
         await blobBinarySaver.save(to: self.outliersDirname)
@@ -354,7 +357,8 @@ extension FrameAirplaneRemover {
         var blobImageData = [UInt8](repeating: 0, count: width*height)
         for blob in blobs {
             for pixel in await blob.getPixels() {
-                blobImageData[pixel.y*width+pixel.x] = 0xFF // make different per blob?
+                let imageIntensity = pixel.intensity >> 8
+                blobImageData[pixel.y*width+pixel.x] = UInt8(imageIntensity)//0xFF // make different per blob?
             }
         }
         let fuck = frameImageType

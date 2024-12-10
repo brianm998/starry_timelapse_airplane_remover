@@ -42,16 +42,19 @@ public actor DisconnectedBlobRemover {
         let blobsSmallerThan: Int  // ignore blobs larger than this
         let blobsLargerThan: Int   // ignore blobs smaller than this
         let requiredNeighbors: Int // how many neighbors do we need?
+        let intensityThreshold: UInt16 // blobs brighter than this are ignored
 
         public init(scanSize: Int = 28,
                     blobsSmallerThan: Int = 24,
                     blobsLargerThan: Int = 0,
-                    requiredNeighbors: Int = 4)
+                    requiredNeighbors: Int = 4,
+                    intensityThreshold: UInt16 = 5000)
         {
             self.scanSize = scanSize
             self.blobsSmallerThan = blobsSmallerThan
             self.blobsLargerThan = blobsLargerThan
             self.requiredNeighbors = requiredNeighbors
+            self.intensityThreshold = intensityThreshold
         }
     }
 
@@ -71,6 +74,8 @@ public actor DisconnectedBlobRemover {
                 return
             }
 
+            if await blob.medianIntensity() > args.intensityThreshold { return }
+            
             // find a cloud of neighbors 
             let (neighborCloud, newProcessedBlobs) =
               await analyzer.neighborCloud(of: blob,

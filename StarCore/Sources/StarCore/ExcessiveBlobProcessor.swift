@@ -13,68 +13,12 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-/*
-
- problems:
-
-  - line split on real lines can split them when it shoudln't
- 
- */
-
 // load and process all blobs for a frame, using a defined sequence of steps
-public class BlobProcessor: AbstractBlobProcessor {
+public class ExcessiveBlobProcessor: AbstractBlobProcessor {
 
     override public init(frame: FrameAirplaneRemover) {
         super.init(frame: frame)
 
-        /*
-
-         Next steps after moving border brightness outside of the FullFrameBlobber
-         and into a new OutlierGroup classification feature:
-
-
-         develop a working lineTrim() method for Blobs
-
-         use things like line length, median distance from line, etc
-         to figure out if line based trimming makes sense for each blob
-
-         if the percentage of blobs anywhere the line is low, then don't touch it
-
-         if there is a calculated line which goes very close to more than half
-         of the pixels, then remove the farthest 10% that are more than X pixels
-         from the line, then iterate again by re-calculating the line and trying again
-
-         Keep track of all of these removed pixels, and try to see if there is another
-         line to be found within.  Can help for cases with airplanes close to horizon
-
-
-
-         
-         use linear blob connector on larger blobs like before
-         
-         */
-
-        
-
-        
-        /*
-         Outlier Detection Logic is defined by the following set of steps
-
-         starting with:
-         
-          - align neighboring frame
-          - subtract aligned frame from this frame
-          - sort pixels on subtracted frame by intensity
-          - detect blobs from sorted pixels
-
-          with lots of steps in the middle to refine the list of blobs
-
-          ending with:
-          
-          - save image of final blobs before promotion to outlier groups
-          - promote remaining blobs to outlier groups for further analysis
-         */
-        
         self.steps = [
           // align neighbor frame, subtract it, sort pixels
           .initiate(setup),
@@ -92,7 +36,7 @@ public class BlobProcessor: AbstractBlobProcessor {
 
           // find really close linear blobs
           .linearBlobConnector(.init(scanSize: 32, 
-                                     blobsSmallerThan: 120,
+                                     blobsSmallerThan: 180,
                                      lineBorder: 12)),
 
 
@@ -100,7 +44,7 @@ public class BlobProcessor: AbstractBlobProcessor {
 
           .frameState(.filter2),
 
-          .borderBrightnessLessThan(0.4),
+          .borderBrightnessLessThan(0.6),
 
           .save(.filter2),
 
@@ -108,19 +52,24 @@ public class BlobProcessor: AbstractBlobProcessor {
           
           // a first pass at cutting out individual blobs based upon size, brightness
           // or being too close to the bottom
+
           .process() { blobs in
               var ret: [UInt16: Blob] = [:]
 
               for (_, blob) in blobs {
                   // anything this small is noise
-                  if await blob.size() <= constants.blobberMinBlobSize {
+
+                  let blobIntensity = await blob.medianIntensity()
+                  
+                  if await blob.size() <= constants.blobberMinBlobSize,
+                     blobIntensity < 24000 // XXX constant
+                  {
                       //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size()) <= \(constants.blobberMinBlobSize)")
                       continue
                   }
 
-                  // these blobs are just too dim
-                  if await blob.medianIntensity() < constants.blobberMinBlobIntensity {
-                      Log.d("frame \(frame.frameIndex) dumping blob \(blob) of median intensity \(await blob.medianIntensity()) <= \(constants.blobberMinBlobIntensity)")
+                  if blobIntensity < constants.blobberMinBlobIntensity {
+                      //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of median intensity \(await blob.medianIntensity()) <= \(constants.blobberMinBlobIntensity)")
                       continue
                   }
                   
@@ -140,7 +89,7 @@ public class BlobProcessor: AbstractBlobProcessor {
           .frameState(.filter4),
           // a first pass on dim isolated blob removal
           .dimIsolatedBlobRemover(.init(scanSize: 20,
-                                        requiredNeighbors: 2,
+                                        requiredNeighbors: 1,
                                         intensityFloor: 5000)),
           
           .save(.filter4),
@@ -153,9 +102,10 @@ public class BlobProcessor: AbstractBlobProcessor {
           .frameState(.filter6),
           
           // remove smaller disconected blobs
-          .disconnectedBlobRemover(.init(scanSize: 30,
+          .disconnectedBlobRemover(.init(scanSize: 60,
                                          blobsSmallerThan: 18,
-                                         requiredNeighbors: 2)),
+                                         requiredNeighbors: 2,
+                                         intensityThreshold: 15000)),
           
           // find really close linear blobs
           .linearBlobConnector(.init(scanSize: 20,
@@ -169,7 +119,7 @@ public class BlobProcessor: AbstractBlobProcessor {
           // remove larger disconected blobs
           .disconnectedBlobRemover(.init(scanSize: 30,
                                          blobsSmallerThan: 50,
-                                         blobsLargerThan: 18,
+                                         blobsLargerThan: 8,
                                          requiredNeighbors: 2)),
           .save(.filter7),
           .frameState(.filter8),
@@ -243,10 +193,23 @@ public class BlobProcessor: AbstractBlobProcessor {
           .save(.filter13),
           .frameState(.filter14),
 
-          .isolatedBlobRemover(.init(scanSize: 40,
-                                     requiredNeighbors: 2,
-                                     minBlobSize: 8)),
-        
+
+          .process() { blobs in
+              var ret: [UInt16: Blob] = [:]
+
+              for (_, blob) in blobs {
+                let blobSize = await blob.size()
+                  if blobSize <= constants.blobberMinBlobSize {
+                      //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size()) <= \(constants.blobberMinBlobSize)")
+                      continue
+                  }
+
+                  // this blob has passed these checks, keep it for now
+                  ret[blob.id] = blob
+              }
+              return ret
+          },
+
           // pass on getting rid of small but larger, dimmer blobs
           //.smallBlobRemover(.init(minBlobSize: 10)),
 
@@ -255,8 +218,8 @@ public class BlobProcessor: AbstractBlobProcessor {
 
 
           // a final pass at isolated removal
-          .isolatedBlobRemover(.init(scanSize: 36,
-                                     requiredNeighbors: 2,
+          .isolatedBlobRemover(.init(scanSize: 50,
+                                     requiredNeighbors: 1,
                                      minBlobSize: 30)),
           
           

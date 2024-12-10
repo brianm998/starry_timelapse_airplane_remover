@@ -23,13 +23,24 @@ public final class Constants: Sendable {
     public init(detectionType: DetectionType) {
         self.detectionType = detectionType
     }
+
+    public func blobProcessor(for frame: FrameAirplaneRemover) -> AbstractBlobProcessor{
+        switch self.detectionType {
+        case .mild:
+            return BlobProcessor(frame: frame)
+        case .strong:
+            return StrongBlobProcessor(frame: frame)
+        case .excessive:
+            return ExcessiveBlobProcessor(frame: frame)
+        }
+    }
     
     // pixels with less changed intensity than this cannot start blobs
     // lower values give more blobs
     public var blobberMinPixelIntensity: UInt16 {
         switch self.detectionType {
         case .mild:
-            return 7000
+            return 6000
         case .strong:
             return 6000
         case .excessive:
@@ -44,7 +55,7 @@ public final class Constants: Sendable {
     public var blobberMinContrast: Double {
         switch self.detectionType {
         case .mild:
-            return 50        
+            return 60        
         case .strong:
             return 60 
         case .excessive:
@@ -58,7 +69,7 @@ public final class Constants: Sendable {
     public var blobberSmallBlobQualifier: BlobQualifier {
         switch self.detectionType {
         case .mild:
-            return .init(size: 25, medianIntensity: 3500)
+            return .init(size: 10, medianIntensity: 3500)
         case .strong:
             return .init(size: 10, medianIntensity: 3500)
         case .excessive:
@@ -71,7 +82,7 @@ public final class Constants: Sendable {
     public var blobberMinBlobSize: Int {
         switch self.detectionType {
         case .mild:
-            return 8         
+            return 5
         case .strong:
             return 5
         case .excessive:
@@ -84,7 +95,7 @@ public final class Constants: Sendable {
     public var finalMinBlobSize: Int {
         switch self.detectionType {
         case .mild:
-            return 40      
+            return 20      
         case .strong:
             return 20
         case .excessive:
@@ -97,7 +108,7 @@ public final class Constants: Sendable {
     public var blobberMinBlobIntensity: UInt16 {
         switch self.detectionType {
         case .mild:
-            return 2500      
+            return 1500      
         case .strong:
             return 1500
         case .excessive:
@@ -110,7 +121,7 @@ public final class Constants: Sendable {
     public var finalSmallDimBlobQualifier: BlobQualifier {
         switch self.detectionType {
         case .mild:
-            return .init(size: 50, medianIntensity: 12000)
+            return .init(size: 30, medianIntensity: 10000)
         case .strong:
             return .init(size: 30, medianIntensity: 10000)
         case .excessive:
@@ -123,7 +134,7 @@ public final class Constants: Sendable {
     public var finalMediumDimBlobQualifier: BlobQualifier {
         switch self.detectionType {
         case .mild:
-            return .init(size: 60, medianIntensity: 15000)
+            return .init(size: 50, medianIntensity: 15000)
         case .strong:
             return .init(size: 50, medianIntensity: 15000)
         case .excessive:
@@ -136,7 +147,7 @@ public final class Constants: Sendable {
     public var finalLargeDimBlobQualifier: BlobQualifier {
         switch self.detectionType {
         case .mild:
-            return .init(size: 150, medianIntensity: 5000)
+            return .init(size: 120, medianIntensity: 3000)
         case .strong:
             return .init(size: 120, medianIntensity: 3000)
         case .excessive:
