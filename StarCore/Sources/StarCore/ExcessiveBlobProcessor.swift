@@ -188,22 +188,7 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           .save(.filter13),
           .frameState(.filter14),
 
-
-          .process() { blobs in
-              var ret: [UInt16: Blob] = [:]
-
-              for (_, blob) in blobs {
-                let blobSize = await blob.size()
-                  if blobSize <= constants.blobberMinBlobSize {
-                      //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size()) <= \(constants.blobberMinBlobSize)")
-                      continue
-                  }
-
-                  // this blob has passed these checks, keep it for now
-                  ret[blob.id] = blob
-              }
-              return ret
-          },
+          .smallDimBlobRemover(.init()),
 
           // pass on getting rid of small but larger, dimmer blobs
           //.smallBlobRemover(.init(minBlobSize: 10)),

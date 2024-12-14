@@ -25,7 +25,6 @@ public typealias BlobMap = [UInt16:Blob]
 public enum BlobProcessingType {
     case save(FrameViewMode)
     case frameState(FrameProcessingState)
-    case processWithOriginalImage((BlobMap,PixelatedImage) async throws -> BlobMap)
     case process((BlobMap) async throws -> BlobMap)
     case dimIsolatedBlobRemover(DimIsolatedBlobRemover.Args)
     case isolatedBlobRemover(IsolatedBlobRemover.Args)
@@ -36,6 +35,7 @@ public enum BlobProcessingType {
     case lineSplit(BlobLineSplitter.Args)
     case blobDupeCheck(String)
     case smallBlobRemover(SmallBlobRemover.Args)
+    case smallDimBlobRemover(SmallDimBlobRemover.Args)
 }
 
 // load and process all blobs for a frame, using a defined sequence of steps
@@ -66,15 +66,18 @@ public class AbstractBlobProcessor {
             case .process(let method):
                 blobMap = try await method(blobMap)
 
-            case .processWithOriginalImage(let method):
-                blobMap = try await method(blobMap, originalImage)
-                
             case .smallBlobRemover(let args): // no analyzer
                 let remover = SmallBlobRemover(blobMap: blobMap,
                                                frameIndex: frame.frameIndex)
 
                 await remover.process(args)
                 blobMap = await remover.blobMap()
+
+            case .smallDimBlobRemover(let args):
+                let remover = SmallDimBlobRemover(blobMap: blobMap,
+                                                  frameIndex: frame.frameIndex)
+                await remover.process(args)
+                blobMap = remover.blobMap
                 
             case .blobDupeCheck(let step): // uses analyzer
                 let _ = await BlobDupeCheck(blobMap: blobMap,
