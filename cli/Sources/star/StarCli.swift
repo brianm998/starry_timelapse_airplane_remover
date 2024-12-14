@@ -271,7 +271,7 @@ struct StarCli: AsyncParsableCommand {
                     // overwrite global constants constant 
                     // not really thread safe,
                     // but we only do it here before starting any other threads.
-                    constants = Constants(detectionType: config.detectionType)
+                    await constants.set(detectionType: config.detectionType)
 
                 } catch {
                     print("\(error)")
@@ -328,8 +328,7 @@ struct StarCli: AsyncParsableCommand {
                 
                 config.writeOutlierClassificationValues = shouldWriteOutlierClassificationValues
 
-                // overwrite global constants constant :( make this better
-                constants = Constants(detectionType: config.detectionType)
+                await constants.set(detectionType: config.detectionType)
                 
                 config.ignoreLowerPixels = ignoreLowerPixels
                 Log.nameSuffix = inputImageSequenceName

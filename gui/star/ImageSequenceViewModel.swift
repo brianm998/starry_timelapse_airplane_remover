@@ -257,9 +257,7 @@ public final class ImageSequenceViewModel {
 
         self.config = configManager
 
-        // XXX move this
-        // overwrite global constants constant :( make this better
-        constants = Constants(detectionType: config.detectionType)
+        await constants.set(detectionType: config.detectionType)
 
         if let ignoreLowerPixels = config.ignoreLowerPixels {
             self.ignoreLowerPixels = CGFloat(ignoreLowerPixels) // XXX need to sync back the other dir

@@ -4,6 +4,8 @@ import StarCore
 // this is the menu bar at the top of the screen
 
 struct StarCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
+
     let viewModel: ViewModel
 
     var body: some Commands {
@@ -38,6 +40,12 @@ struct StarCommands: Commands {
                   .environment(viewModel)
                 LoadAllOutliersButton(loadingType: .all)
                   .environment(viewModel)
+                Button(action: {
+                           openWindow(id: StarApp.blobProcessingStepsWindowName)
+                       },
+                       label: {
+                           Text("Blob Processing Window")
+                       })
             }
         }
 

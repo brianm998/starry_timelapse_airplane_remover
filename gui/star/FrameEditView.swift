@@ -149,7 +149,7 @@ struct FrameEditView: View {
                                   self.viewModel.outlierGroupTableRows = elements
                                   //Log.d("outlierGroupTableRows \(viewModel.outlierGroupTableRows.count)")
                                   if self.viewModel.shouldShowOutlierGroupTableWindow() {
-                                      openWindow(id: "foobar") 
+                                      openWindow(id: StarApp.outlierGroupTableWindowName) 
                                   }
 
                                   viewModel.selectionStart = nil

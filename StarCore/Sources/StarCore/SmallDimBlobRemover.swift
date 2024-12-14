@@ -44,9 +44,11 @@ public class SmallDimBlobRemover {
     public func process(_ args: Args) async {
         var ret: [UInt16: Blob] = [:]
 
+        let blobberMinBlobSize = await constants.blobberMinBlobSize
+        
         for (_, blob) in blobMap {
             let blobSize = await blob.size()
-            if blobSize <= constants.blobberMinBlobSize {
+            if blobSize <= blobberMinBlobSize {
                 //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size()) <= \(constants.blobberMinBlobSize)")
                 continue
             }

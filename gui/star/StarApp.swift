@@ -38,7 +38,7 @@ import StarDecisionTrees
   * fix final queue usage from UI so it doesn't crash by trying to save the same frame twice
 
   - allow showing changed frames too
-
+  
   * try a play button for playing a preview
   * of both rendered and original
 
@@ -118,14 +118,32 @@ import StarDecisionTrees
     * frames end up waiting for interframe processing too long, and pile up
     - load all outliers on unprocessed frame starts processing when there are no outliers :(
     - memory leaks lead to crash on processing long sequences
+
+
+  Next steps for custom blob gui:
+
+    * convert all anonomous process methods to named methods or new processing enum cases
+    - create new window UI that can read the list of steps and show it to the user
+    - make GUIBlobProcessor, which allows 
+    - allow seeing the settings being used at each step
+    - allow creating a custom set of steps starting with an existing one
+    - allow keeping track of how a frame was processed for later
+    - allow changing the order of steps
+    - allow adding new steps
+    - allow deleting steps
+    - allow saving and reading steps from json (codable enum?)
+    - need to have helper text for what the values do
+    - find way to get processing methods into json and back
+      - make new enum of processing type?
  */
 
  
-// XXX no longer used at all,
-// get the OuterGroupTable window working
-// get the menu bar working too
 @main
 struct StarApp: App {
+
+    public static let outlierGroupTableWindowName = "outlierGroupTableWindow"
+    public static let blobProcessingStepsWindowName = "blobProcessingStepsWindow"
+    
     init() {
         Task {
             for window in NSApp.windows {
@@ -147,18 +165,23 @@ struct StarApp: App {
     }
     
     var body: some Scene {
-        let viewModel = ViewModel() // XXX how to move this into the content view ?
+        let viewModel = ViewModel()
         
-        WindowGroup {
-            ContentView()
+        WindowGroup(id: StarApp.blobProcessingStepsWindowName) {
+            BlobProcessingView()
               .environment(viewModel)
         }
 
-        WindowGroup(id: "foobar") { // XXX hardcoded constant should be centralized
+        WindowGroup(id: StarApp.outlierGroupTableWindowName) {
             OutlierGroupTable()
               { 
                   // XXX don't really care it's dismissed
               }
+              .environment(viewModel)
+        }
+
+        WindowGroup {
+            ContentView()
               .environment(viewModel)
         }.commands {
             StarCommands(viewModel: viewModel)

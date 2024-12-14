@@ -13,26 +13,33 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-// public global
-nonisolated(unsafe) public var constants = Constants(detectionType: .strong)
+// public global is safe because it's an actor
+public let constants = Constants(detectionType: .strong)
 
-public final class Constants: Sendable {
+public actor Constants {
 
-    public let detectionType: DetectionType
+    private var detectionType: DetectionType
 
     public init(detectionType: DetectionType) {
         self.detectionType = detectionType
     }
 
-    public func blobProcessor(for frame: FrameAirplaneRemover) -> AbstractBlobProcessor{
-        switch self.detectionType {
-        case .mild:
-            return MildBlobProcessor(frame: frame)
-        case .strong:
-            return StrongBlobProcessor(frame: frame)
-        case .excessive:
-            return ExcessiveBlobProcessor(frame: frame)
+    public func getDetectionType() -> DetectionType { detectionType }
+    
+    public func set(detectionType: DetectionType) async {
+        self.detectionType = detectionType
+        didChangeClosure?(detectionType)
+        if let didChangeClosure {
+          //  await MainActor.run {
+                didChangeClosure(detectionType)
+          //  }
         }
+    }
+
+    private var didChangeClosure: ((DetectionType) -> Void)? = nil
+    
+    public func didChange(_ closure: @escaping (DetectionType) -> Void) {
+        self.didChangeClosure = closure
     }
     
     // pixels with less changed intensity than this cannot start blobs
@@ -52,6 +59,12 @@ public final class Constants: Sendable {
     // percentage darker than their seed pixel
     // larger values make any individiual blob bigger,
     // and may increase the total number of blobs due to their size
+
+    // how close to zero (in percentage) can the intensity of pixels decrease before
+    // being left out of a blob
+    // zero means that only pixels of minimumLocalMaximum or higher will be in blobs
+    // 50 means that all pixels half as bright or more than the maximum will be in a blob
+    // 100 means that all pixels will be in a blob
     public var blobberMinContrast: Double {
         switch self.detectionType {
         case .mild:
@@ -170,7 +183,7 @@ public final class Constants: Sendable {
 }
 
 // allows blobs if they are bigger or more intense than this
-public struct BlobQualifier {
+public struct BlobQualifier: Sendable {
     let size: Int
     let medianIntensity: UInt16
 

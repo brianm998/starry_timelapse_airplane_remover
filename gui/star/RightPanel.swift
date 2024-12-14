@@ -150,8 +150,10 @@ struct RightPanel: View {
                                     }
                                 }
                                   .frame(maxWidth: 120)
-                                  .onChange(of: viewModel.detectionType) { 
-                                      constants = Constants(detectionType: viewModel.detectionType)
+                                  .onChange(of: viewModel.detectionType) {
+                                    Task {
+                                      await constants.set(detectionType: viewModel.detectionType)
+                                    }
                                   }
 
                             Button() {

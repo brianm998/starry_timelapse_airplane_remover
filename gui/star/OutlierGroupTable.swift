@@ -353,7 +353,10 @@ struct OutlierGroupTable: View {
                 //        let displayDtSizeColumn = viewModel.outlierGroupTableDisplayGroups[.size] ?? true
                 //let displayDtSizeColumn = true
             } else {
-                Text("Loading")
+                VStack {
+                    Text("No Image sequence loaded.")
+                    Text("Load an image sequence in the main star window, and then select details for some outlier groups to see their data here.")
+                }
             }
         }
     }

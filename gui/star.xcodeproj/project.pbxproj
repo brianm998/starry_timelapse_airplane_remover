@@ -35,6 +35,7 @@
 		D33FFC262A2D4E8600F38194 /* FilmstripImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC252A2D4E8600F38194 /* FilmstripImageView.swift */; };
 		D33FFC282A2D4F7E00F38194 /* FilmstripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC272A2D4F7E00F38194 /* FilmstripView.swift */; };
 		D33FFC2A2A2E1A8900F38194 /* OutlierGroupViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC292A2E1A8900F38194 /* OutlierGroupViewModel.swift */; };
+		D35309452D0DE4F200C4AFFF /* BlobProcessingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35309442D0DE4F200C4AFFF /* BlobProcessingView.swift */; };
 		D3636C522CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3636C512CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift */; };
 		D3636C562CE087B000514D39 /* ReProcessCurrentFrameButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3636C552CE087B000514D39 /* ReProcessCurrentFrameButton.swift */; };
 		D364FD7F2C1F4357006FB43A /* libStarDecisionTrees.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */; };
@@ -120,6 +121,7 @@
 		D33FFC252A2D4E8600F38194 /* FilmstripImageView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FilmstripImageView.swift; sourceTree = "<group>"; };
 		D33FFC272A2D4F7E00F38194 /* FilmstripView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FilmstripView.swift; sourceTree = "<group>"; };
 		D33FFC292A2E1A8900F38194 /* OutlierGroupViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupViewModel.swift; sourceTree = "<group>"; };
+		D35309442D0DE4F200C4AFFF /* BlobProcessingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobProcessingView.swift; sourceTree = "<group>"; };
 		D3636C512CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindOutliersOnCurrentFrameButton.swift; sourceTree = "<group>"; };
 		D3636C552CE087B000514D39 /* ReProcessCurrentFrameButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReProcessCurrentFrameButton.swift; sourceTree = "<group>"; };
 		D366BB392AF84766004C9125 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = SOURCE_ROOT; };
@@ -218,6 +220,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D35309442D0DE4F200C4AFFF /* BlobProcessingView.swift */,
 				D3CD86782CF5815100D2D53F /* InitialInstructionsView.swift */,
 				D3A0D3AF2CF3AEB800FD2E9E /* FinalGUIProcessor.swift */,
 				D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */,
@@ -463,6 +466,7 @@
 				D3FF93DF2C75745C00A98088 /* MultiChoiceSheetView.swift in Sources */,
 				D3636C522CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift in Sources */,
 				D3058E1B2AC0745C00C58F1D /* MultiSelectSheetView.swift in Sources */,
+				D35309452D0DE4F200C4AFFF /* BlobProcessingView.swift in Sources */,
 				D3A54A6F29AFAD2C00C50709 /* UserPreferences.swift in Sources */,
 				D33FFC122A2CF92900F38194 /* VideoPlaybackButtons.swift in Sources */,
 				D32F6DAA2A4D17CF00704870 /* ScrubSliderView.swift in Sources */,

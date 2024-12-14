@@ -22,6 +22,7 @@ import Semaphore
 // We need to line up all of the frames in order so that each frame can access
 // some number of neighboring frames in each data when calculating partulcar features.
 
+// used by the cli, the gui has it's on version of this
 public actor FinalProcessor {
 
     private var frames: [FrameAirplaneRemover?]

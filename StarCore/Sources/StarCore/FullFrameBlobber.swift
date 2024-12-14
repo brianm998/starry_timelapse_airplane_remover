@@ -55,13 +55,6 @@ public class FullFrameBlobber {
 
     public let pixelStatusTracker: PixelStatusTracker
     
-    // how close to zero (in percentage) can the intensity of pixels decrease before
-    // being left out of a blob
-    // zero means that only pixels of minimumLocalMaximum or higher will be in blobs
-    // 50 means that all pixels half as bright or more than the maximum will be in a blob
-    // 100 means that all pixels will be in a blob
-    let minContrast: Double
-
     private var newBlobId: UInt16 = 1 // start at one as zero means no blob
     
     // neighbor search policies
@@ -89,10 +82,10 @@ public class FullFrameBlobber {
                 subtractionPixelData: [UInt16],
                 originalImage: PixelatedImage,
                 frameIndex: Int,
-                neighborType: NeighborType)
+                neighborType: NeighborType) async
     {
         // pixels that are local maximums, but have a value lower than this are ignored
-        let minIntensity = constants.blobberMinPixelIntensity
+        let minIntensity = await constants.blobberMinPixelIntensity
         self.pixelStatusTracker = PixelStatusTracker(frameIndex: frameIndex,
                                                      imageWidth: imageWidth,
                                                      imageHeight: imageHeight)
@@ -103,7 +96,6 @@ public class FullFrameBlobber {
         self.originalImage = originalImage
         self.frameIndex = frameIndex
         self.neighborType = neighborType
-        self.minContrast = constants.blobberMinContrast
 
         guard subtractionPixelData.count == imageWidth*imageHeight else {
             fatalError("subtractionPixelData.count \(subtractionPixelData.count) is not imageWidth*imageHeight \(imageWidth*imageHeight)")
@@ -122,6 +114,8 @@ public class FullFrameBlobber {
             maxY = imageHeight - ignoreLowerPixels
             if maxY < 0 { maxY = 0 }
         }
+
+        let blobberMinContrast = await constants.blobberMinContrast
         
         for x in 0..<imageWidth {
             for y in 0..<maxY {
@@ -140,7 +134,7 @@ public class FullFrameBlobber {
                     let contrast = diff / max * 100
 
                     // some pixels are too dim to even track
-                    if contrast < minContrast {
+                    if contrast < blobberMinContrast {
                         let pixel = SortablePixel(x: x, y: y, intensity: intensity)
                         pixels[x][y] = pixel
                     }
@@ -352,7 +346,8 @@ public class FullFrameBlobber {
         //Log.d("expanding initially seed blob")
 
         var seedPixels: [SortablePixel] = [firstSeed]
-
+        let blobberMinContrast = await constants.blobberMinContrast
+        
         while let seedPixel = seedPixels.popLast() {
             // set this pixel to be part of this blob
             await blob.add(pixel: seedPixel)
@@ -363,7 +358,7 @@ public class FullFrameBlobber {
                 if await pixelStatusTracker.status(of: neighbor) == .unknown {
                     // if unknown status, check contrast with initial seed pixel
                     let firstSeedContrast = firstSeed.contrast(with: neighbor)
-                    if firstSeedContrast < minContrast {
+                    if firstSeedContrast < blobberMinContrast {
                         //Log.v("contrast \(firstSeedContrast) seedPixel.intensity neighbor.intensity \(neighbor.intensity) firstSeed.intensity \(firstSeed.intensity)")
                         seedPixels.append(neighbor)
                     } else {

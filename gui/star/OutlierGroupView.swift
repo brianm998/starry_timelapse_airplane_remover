@@ -239,7 +239,7 @@ struct OutlierGroupView: View {
                         self.groupViewModel.viewModel.selectedOutliers = [new_row.id]
 
                         if self.groupViewModel.viewModel.shouldShowOutlierGroupTableWindow() {
-                            openWindow(id: "foobar") 
+                            openWindow(id: StarApp.outlierGroupTableWindowName) 
                         }
                     }
                 } else {

@@ -60,7 +60,7 @@ public class AbstractBlobProcessor {
         var blobMap: BlobMap = [:]
 
         // align neighbor frame, subtract it, sort pixels
-        var (subtractionArray, originalImage) = try await self.setup()
+        let (subtractionArray, originalImage) = try await self.setup()
 
         // create the first blobs from subtraction image
         blobMap = try await self.findBlobs(subtractionArray: subtractionArray,
@@ -86,7 +86,7 @@ public class AbstractBlobProcessor {
                 await remover.process(args)
                 blobMap = await remover.blobMap()
 
-            case .smallDimBlobRemover(let args):
+            case .smallDimBlobRemover(let args): // no analyzer
                 let remover = SmallDimBlobRemover(blobMap: blobMap,
                                                   frameIndex: frame.frameIndex)
                 await remover.process(args)
@@ -215,16 +215,19 @@ public class AbstractBlobProcessor {
     internal func trimWithConstants(_ blobMap: [UInt16:Blob]) async throws -> BlobMap {
         var ret: [UInt16: Blob] = [:]
 
+        let blobberMinBlobSize = await constants.blobberMinBlobSize
+        let blobberMinBlobIntensity = await constants.blobberMinBlobIntensity
+        let blobberMinSmallBlobIntensity = await constants.blobberMinSmallBlobIntensity
+        
         for (_, blob) in blobMap {
             // anything this small is noise
 
             let blobIntensity = await blob.medianIntensity()
             
-            if await blob.size() <= constants.blobberMinBlobSize {
-                //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size()) <= \(constants.blobberMinBlobSize)")
+            if await blob.size() <= blobberMinBlobSize {
+                //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size()) <= \(blobberMinBlobSize)")
 
-                if let blobberMinSmallBlobIntensity = constants.blobberMinSmallBlobIntensity
-                {
+                if let blobberMinSmallBlobIntensity {
                     if blobIntensity < blobberMinSmallBlobIntensity {
                         continue
                     } else {
@@ -235,8 +238,8 @@ public class AbstractBlobProcessor {
                 }
             }
 
-            if blobIntensity < constants.blobberMinBlobIntensity {
-                //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of median intensity \(await blob.medianIntensity()) <= \(constants.blobberMinBlobIntensity)")
+            if blobIntensity < blobberMinBlobIntensity {
+                //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of median intensity \(await blob.medianIntensity()) <= \(blobberMinBlobIntensity)")
                 continue
             }
             
@@ -347,13 +350,13 @@ public class AbstractBlobProcessor {
         // airplanes show up as lines or dots in a line
         // because the image subtracted from this frame had the sky aligned,
         // the ground may get moved, and therefore may contain blobs as well.
-        let blobber = FullFrameBlobber(config: await frame.configManager.config(),
-                                       imageWidth: frame.width,
-                                       imageHeight: frame.height,
-                                       subtractionPixelData: subtractionArray,
-                                       originalImage: originalImage,
-                                       frameIndex: frame.frameIndex,
-                                       neighborType: .eight)//.fourCardinal
+        let blobber = await FullFrameBlobber(config: await frame.configManager.config(),
+                                             imageWidth: frame.width,
+                                             imageHeight: frame.height,
+                                             subtractionPixelData: subtractionArray,
+                                             originalImage: originalImage,
+                                             frameIndex: frame.frameIndex,
+                                             neighborType: .eight)//.fourCardinal
 
         blobber.sortPixels()
         
