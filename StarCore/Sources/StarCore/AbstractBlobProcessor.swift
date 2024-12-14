@@ -23,8 +23,6 @@ public typealias BlobMap = [UInt16:Blob]
  */
 
 public enum BlobProcessingType {
-    case initiate // subtraction image and original image
-    case create
     case save(FrameViewMode)
     case frameState(FrameProcessingState)
     case processWithOriginalImage((BlobMap,PixelatedImage) async throws -> BlobMap)
@@ -54,25 +52,23 @@ public class AbstractBlobProcessor {
     public func run() async throws -> BlobMap {
         guard let frame else { throw "need frame" }
         var blobMap: BlobMap = [:]
-        
-        var subtractionArray: [UInt16]?
-        var originalImage: PixelatedImage?
+
+        // align neighbor frame, subtract it, sort pixels
+        var (subtractionArray, originalImage) = try await self.setup()
+
+        // create the first blobs from subtraction image
+        blobMap = try await self.findBlobs(subtractionArray: subtractionArray,
+                                           originalImage: originalImage)
 
         for step in steps {
             switch step {
-            case .initiate:
-                (subtractionArray, originalImage) = try await self.setup()
-
-            case .create:
-                blobMap = try await self.findBlobs(subtractionArray: subtractionArray!,
-                                                   originalImage: originalImage!)
 
             case .process(let method):
                 blobMap = try await method(blobMap)
 
             case .processWithOriginalImage(let method):
-                blobMap = try await method(blobMap, originalImage!)
-
+                blobMap = try await method(blobMap, originalImage)
+                
             case .smallBlobRemover(let args): // no analyzer
                 let remover = SmallBlobRemover(blobMap: blobMap,
                                                frameIndex: frame.frameIndex)
@@ -98,7 +94,7 @@ public class AbstractBlobProcessor {
                 var ret: [UInt16: Blob] = [:]
                 for (_, blob) in blobMap {
                     let medianIntensity = await blob.medianIntensity()
-                    if await originalImage!.borderBrightness(of: blob.pixels) < amount ||
+                    if await originalImage.borderBrightness(of: blob.pixels) < amount ||
                        medianIntensity > 10000 // XXX constant
                     {
                         ret[blob.id] = blob
