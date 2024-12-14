@@ -111,10 +111,9 @@ extension FrameAirplaneRemover {
         
         mkdir(await self.outliersDirname)
 
-
-        let blobProcessor = await constants.getDetectionType().blobProcessor(for: self)
+        let blobProcessor = await constants.getDetectionType().blobProcessor
         
-        let blobMap = try await blobProcessor.run()
+        let blobMap = try await blobProcessor.process(frame: self)
 
         let blobBinarySaver = BlobBinarySaver(blobMap: blobMap)
         await blobBinarySaver.save(to: self.outliersDirname)

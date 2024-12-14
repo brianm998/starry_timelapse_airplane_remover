@@ -28,7 +28,7 @@ public enum BlobFunctionType {
     case removeReallyBigBlobsWithSmallDimBunches
 }
 
-public enum BlobProcessingType {
+public enum BlobProcessingType: Hashable {
     case save(FrameViewMode)
     case frameState(FrameProcessingState)
     case process(BlobFunctionType)
@@ -48,15 +48,13 @@ public enum BlobProcessingType {
 public class AbstractBlobProcessor {
 
     internal weak var frame: FrameAirplaneRemover?
-    internal var steps: [BlobProcessingType] = []
+    public var steps: [BlobProcessingType] = []
 
-    public init(frame: FrameAirplaneRemover) {
-        self.frame = frame
-    }
+    public init() { }
 
     // runs each step in sequence and returns the result
-    public func run() async throws -> BlobMap {
-        guard let frame else { throw "need frame" }
+    public func process(frame: FrameAirplaneRemover) async throws -> BlobMap {
+        self.frame = frame
         var blobMap: BlobMap = [:]
 
         // align neighbor frame, subtract it, sort pixels

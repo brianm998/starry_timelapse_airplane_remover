@@ -24,8 +24,8 @@ You should have received a copy of the GNU General Public License along with sta
 // load and process all blobs for a frame, using a defined sequence of steps
 public class MildBlobProcessor: AbstractBlobProcessor {
 
-    override public init(frame: FrameAirplaneRemover) {
-        super.init(frame: frame)
+    override public init() {
+        super.init()
 
         /*
 

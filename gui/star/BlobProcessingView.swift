@@ -12,11 +12,7 @@ struct BlobProcessingView: View {
         
         Group {
             if let viewModel = viewModel.imageSequence {
-                Text("Blob Processing Steps")
-                if let detectionType {
-                    Text("Currently using \(detectionType.rawValue) detection type")
-                }
-
+                self.mainView
             } else {
                 VStack {
                     Text("No Image sequence loaded.")
@@ -34,5 +30,25 @@ struct BlobProcessingView: View {
                   }
               }
           }
+    }
+
+    var mainView: some View {
+        VStack {
+            Text("Blob Processing Steps")
+
+            if let detectionType {
+                Text("Currently using \(detectionType.rawValue) detection type")
+                /*
+                 read list of steps from processor, and show them to the user in a
+                 scrollable list
+                 
+                 */
+                ScrollView {
+                    ForEach(detectionType.blobProcessor.steps, id: \.self) { step in 
+                        Text("STEP \(step)")
+                    }
+                }
+            }
+        }
     }
 }

@@ -18,14 +18,14 @@ public enum DetectionType: String, Codable, CaseIterable, Sendable {
     case strong     // get more airplanes than normal and not take forever
     case excessive  // takes much longer, finds a LOT more bad signals
 
-    func blobProcessor(for frame: FrameAirplaneRemover) -> AbstractBlobProcessor {
+    public var blobProcessor: AbstractBlobProcessor {
         switch self {
         case .mild:
-            return MildBlobProcessor(frame: frame)
+            return MildBlobProcessor()
         case .strong:
-            return StrongBlobProcessor(frame: frame)
+            return StrongBlobProcessor()
         case .excessive:
-            return ExcessiveBlobProcessor(frame: frame)
+            return ExcessiveBlobProcessor()
         }
     }
 }

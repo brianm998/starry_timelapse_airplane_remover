@@ -80,16 +80,16 @@ public struct PixelatedImage: Sendable {
                grayscale16BitImageData imageData: [UInt16])
     {
         self.init(width: width,
-                 height: height,
-                 imageData: DataFormat(from: imageData),
-                 bitsPerPixel: 16,
-                 bytesPerRow: 2*width,
-                 bitsPerComponent: 16,
-                 bytesPerPixel: 2,
-                 bitmapInfo: .byteOrder16Little, 
-                 componentsPerPixel: 1,
-                 colorSpace: CGColorSpaceCreateDeviceGray(),
-                 ciFormat: .L16)
+                  height: height,
+                  imageData: DataFormat(from: imageData),
+                  bitsPerPixel: 16,
+                  bytesPerRow: 2*width,
+                  bitsPerComponent: 16,
+                  bytesPerPixel: 2,
+                  bitmapInfo: .byteOrder16Little, 
+                  componentsPerPixel: 1,
+                  colorSpace: CGColorSpaceCreateDeviceGray(),
+                  ciFormat: .L16)
     }
 
     public init(width: Int,
@@ -97,29 +97,29 @@ public struct PixelatedImage: Sendable {
                 grayscale8BitImageData imageData: [UInt8])
     {
         self.init(width: width,
-                 height: height,
-                 imageData: DataFormat(from: imageData),
-                 bitsPerPixel: 8,
-                 bytesPerRow: width,
-                 bitsPerComponent: 8,
-                 bytesPerPixel: 1,
-                 bitmapInfo: .byteOrderDefault, 
-                 componentsPerPixel: 1,
-                 colorSpace: CGColorSpaceCreateDeviceGray(),
-                 ciFormat: .L8)
+                  height: height,
+                  imageData: DataFormat(from: imageData),
+                  bitsPerPixel: 8,
+                  bytesPerRow: width,
+                  bitsPerComponent: 8,
+                  bytesPerPixel: 1,
+                  bitmapInfo: .byteOrderDefault, 
+                  componentsPerPixel: 1,
+                  colorSpace: CGColorSpaceCreateDeviceGray(),
+                  ciFormat: .L8)
     }
     
     public init(width: Int,
-               height: Int,
-               imageData: DataFormat,
-               bitsPerPixel: Int,
-               bytesPerRow: Int,
-               bitsPerComponent: Int,
-               bytesPerPixel: Int,
-               bitmapInfo: CGBitmapInfo,
-               componentsPerPixel: Int,
-               colorSpace: CGColorSpace,
-               ciFormat: CIFormat)    
+                height: Int,
+                imageData: DataFormat,
+                bitsPerPixel: Int,
+                bytesPerRow: Int,
+                bitsPerComponent: Int,
+                bytesPerPixel: Int,
+                bitmapInfo: CGBitmapInfo,
+                componentsPerPixel: Int,
+                colorSpace: CGColorSpace,
+                ciFormat: CIFormat)    
     {
         self.width = width
         self.height = height
@@ -151,6 +151,9 @@ public struct PixelatedImage: Sendable {
     init?(_ image: CGImage) {
         //Log.w("START")
         // assert(image.colorSpace?.model == .rgb)
+
+        if Thread.isMainThread { Log.w("ON MAIN THREAD") }
+        
         self.width = image.width
         self.height = image.height
         self.bitsPerPixel = image.bitsPerPixel

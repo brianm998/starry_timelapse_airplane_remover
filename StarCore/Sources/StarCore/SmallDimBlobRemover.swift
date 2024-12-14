@@ -29,7 +29,7 @@ public class SmallDimBlobRemover {
         self.frameIndex = frameIndex
     }
 
-    public struct Args: Sendable {
+    public struct Args: Sendable, Hashable, Equatable {
         let sizeFloor: Int?         // if set with intenisty floor, then blobs that 
         let intensityFloor: UInt16? // are smaller and less intense will be discarded
         

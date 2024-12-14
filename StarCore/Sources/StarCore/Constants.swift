@@ -30,9 +30,7 @@ public actor Constants {
         self.detectionType = detectionType
         didChangeClosure?(detectionType)
         if let didChangeClosure {
-          //  await MainActor.run {
-                didChangeClosure(detectionType)
-          //  }
+            didChangeClosure(detectionType)
         }
     }
 

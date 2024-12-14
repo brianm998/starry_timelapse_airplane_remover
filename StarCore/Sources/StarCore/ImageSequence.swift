@@ -105,6 +105,7 @@ public actor ImageSequence {
     }
     
     private func getImageInt(withName filename: String) -> ImageLoader {
+        if Thread.isMainThread { Log.w("ON MAIN THREAD") }
         Log.d("getImage(withName: \(filename))")
         if let image = images[filename] {
             Log.d("image was cached")
@@ -133,7 +134,7 @@ public actor ImageSequence {
             // this is a rule of thumb, not exact
             _maxImages = Int(memorySizeBytes / UInt64(bytesPerImage)) / 5 // XXX hardcoded constant
 
-            let neverGoOverMax = 100 // XXX hardcoded max
+            let neverGoOverMax = 50 // XXX hardcoded max
             if _maxImages > neverGoOverMax { _maxImages = neverGoOverMax }
             
             maxImages = _maxImages

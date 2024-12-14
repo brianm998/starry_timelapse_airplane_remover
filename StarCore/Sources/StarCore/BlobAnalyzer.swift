@@ -95,6 +95,8 @@ final public class BlobAnalyzer: @unchecked Sendable {
         self.height = height
         self.frameIndex = frameIndex
 
+        let startTime = Date().timeIntervalSince1970
+        
         var _blobRefs = [UInt16](repeating: 0, count: width*height)
         
         Log.d("frame \(frameIndex) has \(blobMap.count) blobs")
@@ -118,6 +120,9 @@ final public class BlobAnalyzer: @unchecked Sendable {
             }
         }
         self.blobRefs = _blobRefs
+        let endTime = Date().timeIntervalSince1970
+
+        Log.d("blob analyzer init took \(endTime-startTime) seconds")
     }
 
     // skips blobs that are absorbed during iteration
