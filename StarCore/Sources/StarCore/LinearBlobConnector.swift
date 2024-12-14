@@ -41,6 +41,7 @@ public actor LinearBlobConnector {
     }
 
     public struct Args: Sendable, Hashable, Equatable {
+
         let scanSize: Int         // how far in each direction to look for neighbors
         let blobsSmallerThan: Int // ignore blobs larger than this
         let blobsLargerThan: Int  // ignore blobs smaller than this
@@ -48,6 +49,74 @@ public actor LinearBlobConnector {
         let maxAverageLineDistance: Double // don't process full blobs with > average line dist
         let adjecentPixelsOnIteration: Int // how far to iterate on adject pixels
         let maxIterationCount: Int // maximum times to iterate on line improvement
+        
+        public enum ArgType: CaseIterable {
+            case scanSize
+            case blobsSmallerThan
+            case blobsLargerThan
+            case lineBorder
+            case maxAverageLineDistance
+            case adjecentPixelsOnIteration
+            case maxIterationCount
+        }
+
+        public func value(for type: ArgType) -> Double? {
+            switch type {
+            case .scanSize:
+                return Double(scanSize)
+            case .blobsSmallerThan:
+                return Double(blobsSmallerThan)
+            case .blobsLargerThan:
+                return Double(blobsLargerThan)
+            case .lineBorder:
+                return Double(lineBorder)
+            case .maxAverageLineDistance:
+                return maxAverageLineDistance
+            case .adjecentPixelsOnIteration:
+                return Double(adjecentPixelsOnIteration)
+            case .maxIterationCount:
+                return Double(maxIterationCount)
+            }
+        }
+        /*
+        public func typeFor(type: ArgType) -> String {
+            switch type {
+            case .scanSize:
+                return Int.Type
+            case .blobsSmallerThan:
+                return Int.Self
+            case .blobsLargerThan:
+                return Int.Self
+            case .lineBorder:
+                return Int.Self
+            case .maxAverageLineDistance:
+                return Double.Self
+            case .adjecentPixelsOnIteration:
+                return Int.Self
+            case .maxIterationCount:
+                return Int.Self
+            }
+        }
+         */
+
+        public func description(for type: ArgType) -> String {
+            switch type {
+            case .scanSize:
+                return "how far in each direction to look for neighbors"
+            case .blobsSmallerThan:
+                return "ignore blobs larger than this"
+            case .blobsLargerThan:
+                return "ignore blobs smaller than this"
+            case .lineBorder:
+                return "how much further to look at the ends of the line"
+            case .maxAverageLineDistance:
+                return "don't process full blobs with > average line dist"
+            case .adjecentPixelsOnIteration:
+                return "how far to iterate on adject pixels"
+            case .maxIterationCount:
+                return "maximum times to iterate on line improvement"
+            }
+        }
         
         public init(scanSize: Int = 28,
                     blobsSmallerThan: Int = 24, 
