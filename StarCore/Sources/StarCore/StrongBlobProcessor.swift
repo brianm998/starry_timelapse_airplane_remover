@@ -65,7 +65,7 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
           // a first pass at cutting out individual blobs based upon size, brightness
           // or being too close to the bottom
 
-          .process(trimWithConstants),
+          .process(.trimWithConstants),
 
           .save(.filter3),
           
@@ -192,13 +192,13 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
           
           
           // split up blobs based upon user input
-          .process(applyUserSlices),
+          .process(.applyUserSlices),
 
           .save(.filter15),
           .frameState(.filter16),
           
           // any really big blobs with lots of small bunches that are dim can go away
-          .process(removeReallyBigBlobsWithSmallDimBunches),
+          .process(.removeReallyBigBlobsWithSmallDimBunches),
 
           // check to see if any pixel is in more than one blob
           //.blobDupeCheck("end"),

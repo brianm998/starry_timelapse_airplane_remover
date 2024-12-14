@@ -48,37 +48,8 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           // a first pass at cutting out individual blobs based upon size, brightness
           // or being too close to the bottom
 
-          .process() { blobs in
-              var ret: [UInt16: Blob] = [:]
+          .process(.trimWithConstants),
 
-              for (_, blob) in blobs {
-                  // anything this small is noise
-
-                  let blobIntensity = await blob.medianIntensity()
-                  
-                  if await blob.size() <= constants.blobberMinBlobSize,
-                     blobIntensity < 24000 // XXX constant
-                  {
-                      //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size()) <= \(constants.blobberMinBlobSize)")
-                      continue
-                  }
-
-                  if blobIntensity < constants.blobberMinBlobIntensity {
-                      //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of median intensity \(await blob.medianIntensity()) <= \(constants.blobberMinBlobIntensity)")
-                      continue
-                  }
-                  
-                  // only keep smaller blobs if they are bright enough
-                  if !(await constants.blobberSmallBlobQualifier.allows(blob)) {
-                      //Log.d("frame \(frame.frameIndex) dumping blob \(blob)")
-                      continue
-                  }
-
-                  // this blob has passed these checks, keep it for now
-                  ret[blob.id] = blob
-              }
-              return ret
-          },
           .save(.filter3),
           
           .frameState(.filter4),
@@ -204,13 +175,13 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           
           
           // split up blobs based upon user input
-          .process(applyUserSlices),
+          .process(.applyUserSlices),
 
           .save(.filter15),
           .frameState(.filter16),
           
           // any really big blobs with lots of small bunches that are dim can go away
-          .process(removeReallyBigBlobsWithSmallDimBunches),
+          .process(.removeReallyBigBlobsWithSmallDimBunches),
 
           // check to see if any pixel is in more than one blob
           //.blobDupeCheck("end"),

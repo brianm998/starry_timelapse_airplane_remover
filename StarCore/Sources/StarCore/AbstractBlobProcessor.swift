@@ -22,10 +22,16 @@ public typealias BlobMap = [UInt16:Blob]
  
  */
 
+public enum BlobFunctionType {
+    case trimWithConstants
+    case applyUserSlices
+    case removeReallyBigBlobsWithSmallDimBunches
+}
+
 public enum BlobProcessingType {
     case save(FrameViewMode)
     case frameState(FrameProcessingState)
-    case process((BlobMap) async throws -> BlobMap)
+    case process(BlobFunctionType)
     case dimIsolatedBlobRemover(DimIsolatedBlobRemover.Args)
     case isolatedBlobRemover(IsolatedBlobRemover.Args)
     case disconnectedBlobRemover(DisconnectedBlobRemover.Args)
@@ -63,9 +69,16 @@ public class AbstractBlobProcessor {
         for step in steps {
             switch step {
 
-            case .process(let method):
-                blobMap = try await method(blobMap)
-
+            case .process(let functionType):
+                switch functionType {
+                case .trimWithConstants:
+                    blobMap = try await trimWithConstants(blobMap)
+                case .applyUserSlices:
+                    blobMap = try await applyUserSlices(blobMap)
+                case .removeReallyBigBlobsWithSmallDimBunches:
+                    blobMap = try await removeReallyBigBlobsWithSmallDimBunches(blobMap)
+                }
+                
             case .smallBlobRemover(let args): // no analyzer
                 let remover = SmallBlobRemover(blobMap: blobMap,
                                                frameIndex: frame.frameIndex)
@@ -209,7 +222,17 @@ public class AbstractBlobProcessor {
             
             if await blob.size() <= constants.blobberMinBlobSize {
                 //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size()) <= \(constants.blobberMinBlobSize)")
-                continue
+
+                if let blobberMinSmallBlobIntensity = constants.blobberMinSmallBlobIntensity
+                {
+                    if blobIntensity < blobberMinSmallBlobIntensity {
+                        continue
+                    } else {
+                        // pass through smaller bright blobs
+                    }
+                } else {
+                    continue
+                }
             }
 
             if blobIntensity < constants.blobberMinBlobIntensity {

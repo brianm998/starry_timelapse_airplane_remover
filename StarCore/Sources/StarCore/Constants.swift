@@ -90,6 +90,19 @@ public final class Constants: Sendable {
         }
     }
 
+    // blobs smaller than this are ignored at the beginning of blob processing
+    // smaller values give more blobs
+    public var blobberMinSmallBlobIntensity: UInt16? {
+        switch self.detectionType {
+        case .mild:
+            return nil
+        case .strong:
+            return nil
+        case .excessive:
+            return 24000
+        }
+    }
+
     // blobs smaller than this are discarded at the end of blob processing
     // smaller values give more blobs 
     public var finalMinBlobSize: Int {

@@ -232,11 +232,11 @@ public struct Config: Codable, Sendable, Transferable {
     // 0.6.5 re-worked blob detection again, added separate DetectionType
     // 0.6.6 re-wrote outlier saving, using one image per frame for outlier data now
     // 0.6.7 y-axis outlier images, two new classfication features
-    // 0.7.0 updated FullFrameBlobber, added BlobProcessor and LinearBlobConnector, KHT works now
+    // 0.7.0 swift 6, blob updates, gui a lot better, KHT works, display lines, etc
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.7.0"
+    public static let latestVersion = "0.7.1"
     
     public var basename: String {
         let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)-\(self.detectionType.rawValue)"
