@@ -230,28 +230,7 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           .frameState(.filter16),
           
           // any really big blobs with lots of small bunches that are dim can go away
-          .process() { blobs in
-              var ret: [UInt16: Blob] = [:]
-
-              for (_, blob) in blobs {
-                  let blobSize = await blob.size()
-
-                  if blobSize > 1000,
-                     await blob.bunchCount() > 100,
-                     await blob.medianBunchSize() < 10,
-                     await blob.medianIntensity() < 6000
-                  {
-                      Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(blobSize) bunch count \(await blob.bunchCount()) medianBunchSize \(await blob.medianBunchSize()) medianIntensity \(await blob.medianIntensity())")
-                      // try processing this further by getting rid of dim blobs?
-                      // for now just kick it out
-                      await blob.removePixels(dimmerThan: 6000)
-                      ret[blob.id] = blob
-                  } else {
-                      ret[blob.id] = blob
-                  }
-              }
-              return ret
-          },
+          .process(removeReallyBigBlobsWithSmallDimBunches),
 
           // check to see if any pixel is in more than one blob
           //.blobDupeCheck("end"),
