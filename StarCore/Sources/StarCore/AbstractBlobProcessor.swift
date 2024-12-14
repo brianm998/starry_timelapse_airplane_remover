@@ -23,8 +23,8 @@ public typealias BlobMap = [UInt16:Blob]
  */
 
 public enum BlobProcessingType {
-    case initiate(() async throws -> ([UInt16], PixelatedImage)) // subtraction image and original image
-    case create(([UInt16], PixelatedImage) async throws -> BlobMap)
+    case initiate // subtraction image and original image
+    case create
     case save(FrameViewMode)
     case frameState(FrameProcessingState)
     case processWithOriginalImage((BlobMap,PixelatedImage) async throws -> BlobMap)
@@ -54,17 +54,18 @@ public class AbstractBlobProcessor {
     public func run() async throws -> BlobMap {
         guard let frame else { throw "need frame" }
         var blobMap: BlobMap = [:]
-
+        
         var subtractionArray: [UInt16]?
         var originalImage: PixelatedImage?
 
         for step in steps {
             switch step {
-            case .initiate(let method):
-                (subtractionArray, originalImage) = try await method()
+            case .initiate:
+                (subtractionArray, originalImage) = try await self.setup()
 
-            case .create(let method):
-                blobMap = try await method(subtractionArray!, originalImage!)
+            case .create:
+                blobMap = try await self.findBlobs(subtractionArray: subtractionArray!,
+                                                   originalImage: originalImage!)
 
             case .process(let method):
                 blobMap = try await method(blobMap)

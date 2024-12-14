@@ -39,10 +39,10 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
         
         self.steps = [
           // align neighbor frame, subtract it, sort pixels
-          .initiate(setup),
+          .initiate,
         
           // create the first blobs from subtraction image
-          .create(findBlobs),
+          .create,
 
           // check to see if any pixel is in more than one blob
           //.blobDupeCheck("init"),
