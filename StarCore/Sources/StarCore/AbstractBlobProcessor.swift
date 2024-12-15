@@ -23,7 +23,7 @@ public typealias BlobMap = [UInt16:Blob]
  */
 
 public enum BlobFunctionType {
-    case applyUserSlices
+    case applyUserSlices        // XXX get rid of this enum 
 }
 
 public enum BlobProcessingType: Hashable {

@@ -6,6 +6,9 @@ import logging
 struct BlobProcessingView: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
     @State var detectionType: DetectionType? = nil
+
+    @State var detectionTypeToCopyFrom: DetectionType? = nil
+    @State var stepsLoaded = false
     
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -75,100 +78,136 @@ struct BlobProcessingView: View {
                            and make further analysis slower as well.  It can be used on a frame by frame
                            basis to get that small few bits of signal that the other detection types may miss.
                            """)
+                case .custom:
+                    Text("""
+                           A custom detection type can be modified by the user at runtime to see what happens when processing one or more frames.
+                           It will typically start as a copy of another detection type.
+                           """)
                 }
 
-                
-                /*
-                 read list of steps from processor, and show them to the user in a
-                 scrollable list
-                 */
-                ScrollView {
-                    VStack(alignment: .leading) {
-                        VStack(alignment: .leading) {
-                            Text("Setup")
-                              .foregroundColor(.white)
-                              .font(.largeTitle)
-                            Text("To begin processing each frame we must first:")
-                            Text(" - Create a star aligned image")
-                            Text(" - Subtract the star aligned image from the frame being processed")
-                            Text("Both of these can be loaded from file if they are available from before.")
-                            Text("There are no configurable parameters here")
-                        }
-                          .padding(10)
-                          .background(.gray)
-                          .padding(1)
-                        
-                        ForEach(detectionType.blobProcessor.steps, id: \.self) { step in
-                            switch step {
-                            case .findBlobs(let args):
-                                findBlobsView(args)
-                                
-                            case .process(let functionType):
-                                processView(functionType)
-
-                            case .smallBlobRemover(let args):
-                                smallBlobRemoverView(args)
-
-                            case .smallDimBlobRemover(let args):
-                                smallDimBlobRemoverView(args)
-
-                            case .blobDupeCheck(let step):
-                                blobDupeCheckView(step)
-
-                            case .lineSplit(let args):
-                                lineSplitView(args)
-
-                            case .borderBrightnessBlobRemover(let args):
-                                borderBrightnessLessThanView(args)
-
-                            case .linearBlobConnector(let args):
-                                linearBlobConnectorView(args)
-
-                            case .blobLineTrim(let args):
-                                blobLineTrimView(args)
-
-                            case .isolatedBlobRemover(let args):
-                                isolatedBlobRemoverView(args)
-
-                            case .disconnectedBlobRemover(let args):
-                                disconnectedBlobRemoverView(args)
-
-                            case .dimIsolatedBlobRemover(let args):
-                                dimIsolatedBlobRemoverView(args)
-                                
-                            case .save(let imageType):
-                                saveView(imageType)
-
-                            case .frameState(let processingState):
-                                frameStateView(processingState)
-
-                            case .removeReallyBigBlobsWithSmallDimBunches(let args):
-                                removeReallyBigBlobsWithSmallDimBunchesView(args)
-
-                            case .trimWithConstants(let args):
-                                trimWithConstantsView(args)
-
+                if detectionType.blobProcessor.steps.count == 0,
+                   !stepsLoaded
+                {
+                    Text("You have loaded an empty set of steps")
+                      .foregroundColor(.white)
+                      .font(.largeTitle)
+                    
+                    Text("Please choose an existing detection type to start from") 
+                    Picker("", selection: $detectionTypeToCopyFrom) {
+                        ForEach(DetectionType.allCases, id: \.self) { value in
+                            if value == .custom {
+                                Group { }
+                            } else {
+                                Text(value.rawValue).tag(value)
                             }
                         }
-                          .padding(10)
-                          .background(.gray)
-                          .padding(1)
-
+                    }
+                      .frame(maxWidth: 240)
+                      .onChange(of: detectionTypeToCopyFrom) {
+                          if let detectionTypeToCopyFrom,
+                             let customProcessor = detectionType.blobProcessor as? CustomBlobProcessor
+                          {
+                              print("FUCKING DO SHIT HERE \(detectionTypeToCopyFrom)")
+                              customProcessor.copySteps(from: detectionTypeToCopyFrom.blobProcessor)
+                              stepsLoaded = true
+                          }
+                      }
+                    
+                } else {
+                    
+                    
+                    /*
+                     read list of steps from processor, and show them to the user in a
+                     scrollable list
+                     */
+                    ScrollView {
                         VStack(alignment: .leading) {
-                            Text("Blob Processing Complete")
-                              .foregroundColor(.white)
-                              .font(.largeTitle)
-                            Text("""
-                                   At this point, the blobs are promoted to outlier groups.
-                                   This allows both manual and machine learning classification
-                                   of the remaning data before we use this information to
-                                   potentially modify certain pixels in each frame
-                                   """)
+                            VStack(alignment: .leading) {
+                                Text("Setup")
+                                  .foregroundColor(.white)
+                                  .font(.largeTitle)
+                                Text("To begin processing each frame we must first:")
+                                Text(" - Create a star aligned image")
+                                Text(" - Subtract the star aligned image from the frame being processed")
+                                Text("Both of these can be loaded from file if they are available from before.")
+                                Text("There are no configurable parameters here")
+                            }
+                              .padding(10)
+                              .background(.gray)
+                              .padding(1)
+                            
+                            ForEach(detectionType.blobProcessor.steps, id: \.self) { step in
+                                switch step {
+                                case .findBlobs(let args):
+                                    findBlobsView(args)
+                                    
+                                case .process(let functionType):
+                                    processView(functionType)
+
+                                case .smallBlobRemover(let args):
+                                    smallBlobRemoverView(args)
+
+                                case .smallDimBlobRemover(let args):
+                                    smallDimBlobRemoverView(args)
+
+                                case .blobDupeCheck(let step):
+                                    blobDupeCheckView(step)
+
+                                case .lineSplit(let args):
+                                    lineSplitView(args)
+
+                                case .borderBrightnessBlobRemover(let args):
+                                    borderBrightnessLessThanView(args)
+
+                                case .linearBlobConnector(let args):
+                                    linearBlobConnectorView(args)
+
+                                case .blobLineTrim(let args):
+                                    blobLineTrimView(args)
+
+                                case .isolatedBlobRemover(let args):
+                                    isolatedBlobRemoverView(args)
+
+                                case .disconnectedBlobRemover(let args):
+                                    disconnectedBlobRemoverView(args)
+
+                                case .dimIsolatedBlobRemover(let args):
+                                    dimIsolatedBlobRemoverView(args)
+                                    
+                                case .save(let imageType):
+                                    saveView(imageType)
+
+                                case .frameState(let processingState):
+                                    frameStateView(processingState)
+
+                                case .removeReallyBigBlobsWithSmallDimBunches(let args):
+                                    removeReallyBigBlobsWithSmallDimBunchesView(args)
+
+                                case .trimWithConstants(let args):
+                                    trimWithConstantsView(args)
+
+                                }
+                            }
+                              .padding(10)
+                              .background(.gray)
+                              .padding(1)
+
+                            VStack(alignment: .leading) {
+                                Text("Blob Processing Complete")
+                                  .foregroundColor(.white)
+                                  .font(.largeTitle)
+                                Text("""
+                                       At this point, the blobs are promoted to outlier groups.
+                                       This allows both manual and machine learning classification
+                                       of the remaning data before we use this information to
+                                       potentially modify certain pixels in each frame
+                                       """)
+                            }
+                              .padding(10)
+                              .background(.gray)
+                              .padding(1)
+                            
                         }
-                          .padding(10)
-                          .background(.gray)
-                          .padding(1)
-                        
                     }
                 }
             }
