@@ -16,6 +16,11 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
+public protocol Argable<Types> where Types: CaseIterable {
+  associatedtype Types
+  func value(for type: Types) -> Double?
+  func description(for type: Types) -> String
+}
 
 // recurse on finding nearby blobs to find groups of neighbors in a set
 // use the KHT to try to combine some of them into a line (if we get a good enough line)
@@ -40,8 +45,10 @@ public actor LinearBlobConnector {
         analyzer.mapOfBlobs()
     }
 
-    public struct Args: Sendable, Hashable, Equatable {
-
+  public struct Args: Sendable, Hashable, Equatable, Argable {
+    
+        public typealias Types = ArgType
+      
         let scanSize: Int         // how far in each direction to look for neighbors
         let blobsSmallerThan: Int // ignore blobs larger than this
         let blobsLargerThan: Int  // ignore blobs smaller than this
@@ -49,8 +56,8 @@ public actor LinearBlobConnector {
         let maxAverageLineDistance: Double // don't process full blobs with > average line dist
         let adjecentPixelsOnIteration: Int // how far to iterate on adject pixels
         let maxIterationCount: Int // maximum times to iterate on line improvement
-        
-        public enum ArgType: CaseIterable {
+
+        public enum ArgType: CaseIterable, Hashable {
             case scanSize
             case blobsSmallerThan
             case blobsLargerThan

@@ -33,7 +33,7 @@ struct BlobProcessingView: View {
     }
 
     var mainView: some View {
-        VStack {
+        VStack(alignment: .leading) {
             Text("Blob Processing Steps")
 
             if let detectionType {
@@ -45,8 +45,8 @@ struct BlobProcessingView: View {
                  
                  */
                 ScrollView {
-                    ForEach(detectionType.blobProcessor.steps, id: \.self) { step in
-                        Group {
+                    VStack(alignment: .leading) {
+                        ForEach(detectionType.blobProcessor.steps, id: \.self) { step in
                             switch step {
                             case .process(let functionType):
                                 processView(functionType)
@@ -121,29 +121,12 @@ struct BlobProcessingView: View {
     }
 
     private func linearBlobConnectorView(_ args: LinearBlobConnector.Args) -> some View {
-        VStack(alignment: .leading) {
-            Text("Linear Blob Connector")
-            Text("This step recurses on finding nearby blobs to find groups of neighbors in a set.\nIt then tries to combine some of them into a line (if we get a good enough line)")
-            Text("Arguments:")
-            Grid(alignment: .leading) {
-                GridRow {
-                    Text("Name")
-                    Text("Value")
-                    Text("Description")
-                }
-                ForEach(LinearBlobConnector.Args.ArgType.allCases, id: \.self) { argType in
-                    GridRow {
-                        Text("\(argType)")
-                        if let value = args.value(for: argType) {
-                            Text("\(value)")
-                        } else {
-                            Group { }
-                        }
-                        Text(args.description(for: argType))
-                    }
-                }
-            }
-        }
+        let title = "Linear Blob Connector"
+        let description = "This step recurses on finding nearby blobs to find groups of neighbors in a set.\nIt then tries to combine some of them into a line (if we get a good enough line)"
+        return stepView(title: title,
+                        description: description,
+                        args: args,
+                        array: LinearBlobConnector.Args.ArgType.allCases)
     }
 
     private func blobLineTrimView(_ args: BlobLineTrim.Args) -> some View {
@@ -168,5 +151,41 @@ struct BlobProcessingView: View {
 
     private func frameStateView(_ processingState: FrameProcessingState) -> some View {
         Text("Set Frame Processing State to \(processingState.message)")
+    }
+
+
+    private func stepView<T: Hashable>(title: String,
+                                       description: String,
+                                       args: any Argable<T>,
+                                       array: [T]) -> some View
+    {
+        VStack(alignment: .leading) {
+            Text(title)
+              .foregroundColor(.blue)
+            Text(description)
+            Text("Arguments:")
+            Grid(alignment: .leading) {
+                GridRow {
+                    Text("Name")
+                      .foregroundColor(.white)
+                    Text("Value")
+                      .foregroundColor(.white)
+                    Text("Description")
+                      .foregroundColor(.white)
+                }
+
+                ForEach(array, id: \.self) { argType in
+                    GridRow {
+                        Text("\(argType)")
+                        if let value = args.value(for: argType) {
+                            Text(String(format: "%.2f", value))
+                        } else {
+                            Group { }
+                        }
+                        Text(args.description(for: argType))
+                    }
+                }
+            }
+        }
     }
 }
