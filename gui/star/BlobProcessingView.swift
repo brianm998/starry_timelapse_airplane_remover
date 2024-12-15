@@ -107,6 +107,9 @@ struct BlobProcessingView: View {
 
                             case .frameState(let processingState):
                                 frameStateView(processingState)
+
+                            case .removeReallyBigBlobsWithSmallDimBunches(let args):
+                                removeReallyBigBlobsWithSmallDimBunchesView(args)
                             }
                         }
                           .padding(10)
@@ -129,10 +132,6 @@ struct BlobProcessingView: View {
                 Text("Apply User Slices")
                   .foregroundColor(.blue)
                 Text("Apply any existing user slices to blobs")
-            case .removeReallyBigBlobsWithSmallDimBunches:
-                Text("Remove Really Big Blobs With Small Dim Bunches")
-                  .foregroundColor(.blue)
-                Text("This attempts to get rid of really big blobs with lots of small dim bunches")
             }
         }
     }
@@ -230,6 +229,13 @@ struct BlobProcessingView: View {
         }
     }
 
+    private func removeReallyBigBlobsWithSmallDimBunchesView(_ args: RemoveReallyBigBlobsWithSmallDimBunches.Args) -> some View {
+        stepView(title: "Remove Really Big Blobs With Small Dim Bunches",
+                 description: "Trims dimmer pixels out of large cloud like blobs.",
+                 args: args,
+                 array: RemoveReallyBigBlobsWithSmallDimBunches.Args.ArgType.allCases)
+    }
+    
     private func stepView<T: Hashable>(title: String,
                                        description: String,
                                        args: any Argable<T>,

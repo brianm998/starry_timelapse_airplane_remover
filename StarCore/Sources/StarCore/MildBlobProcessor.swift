@@ -220,7 +220,11 @@ public class MildBlobProcessor: AbstractBlobProcessor {
           .frameState(.filter16),
           
           // any really big blobs with lots of small bunches that are dim can go away
-          .process(.removeReallyBigBlobsWithSmallDimBunches),
+          .removeReallyBigBlobsWithSmallDimBunches(.init(minBlobSize: 1000,
+                                                         minBunchCount: 100,
+                                                         maxBunchSize: 10,
+                                                         intensityCeiling: 6000,
+                                                         removePixelsDimmerThan:  6000)),
 
           // check to see if any pixel is in more than one blob
           //.blobDupeCheck("end"),

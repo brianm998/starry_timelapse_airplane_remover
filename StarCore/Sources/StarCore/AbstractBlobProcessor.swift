@@ -25,7 +25,6 @@ public typealias BlobMap = [UInt16:Blob]
 public enum BlobFunctionType {
     case trimWithConstants
     case applyUserSlices
-    case removeReallyBigBlobsWithSmallDimBunches
 }
 
 public enum BlobProcessingType: Hashable {
@@ -42,6 +41,7 @@ public enum BlobProcessingType: Hashable {
     case blobDupeCheck(String)
     case smallBlobRemover(SmallBlobRemover.Args)
     case smallDimBlobRemover(SmallDimBlobRemover.Args)
+    case removeReallyBigBlobsWithSmallDimBunches(RemoveReallyBigBlobsWithSmallDimBunches.Args)
 }
 
 // load and process all blobs for a frame, using a defined sequence of steps
@@ -73,8 +73,6 @@ public class AbstractBlobProcessor {
                     blobMap = try await trimWithConstants(blobMap)
                 case .applyUserSlices:
                     blobMap = try await applyUserSlices(blobMap)
-                case .removeReallyBigBlobsWithSmallDimBunches:
-                    blobMap = try await removeReallyBigBlobsWithSmallDimBunches(blobMap)
                 }
                 
             case .smallBlobRemover(let args): // no analyzer
@@ -178,6 +176,13 @@ public class AbstractBlobProcessor {
             case .frameState(let processingState):
                 await frame.set(state: processingState)
 
+
+            case .removeReallyBigBlobsWithSmallDimBunches(let args): // no analyzer
+                let remover = RemoveReallyBigBlobsWithSmallDimBunches(blobMap: blobMap,
+                                                                      frameIndex: frame.frameIndex)
+                await remover.process(args)
+                blobMap = await remover.blobMap()
+                
             }
             Log.d("frame \(frame.frameIndex) now has \(blobMap.count) blobs")
         }
@@ -187,29 +192,6 @@ public class AbstractBlobProcessor {
 
     // Mark - internals
 
-    internal func removeReallyBigBlobsWithSmallDimBunches(_ blobMap: [UInt16:Blob]) async throws -> BlobMap {
-        var ret: [UInt16: Blob] = [:]
-
-        for (_, blob) in blobMap {
-            let blobSize = await blob.size()
-
-            if blobSize > 1000,
-               await blob.bunchCount() > 100,
-               await blob.medianBunchSize() < 10,
-               await blob.medianIntensity() < 6000
-            {
-                //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(blobSize) bunch count \(await blob.bunchCount()) medianBunchSize \(await blob.medianBunchSize()) medianIntensity \(await blob.medianIntensity())")
-                // try processing this further by getting rid of dim blobs?
-                // for now just kick it out
-                await blob.removePixels(dimmerThan: 6000)
-                ret[blob.id] = blob
-            } else {
-                ret[blob.id] = blob
-            }
-        }
-        return ret
-    }
-    
     internal func trimWithConstants(_ blobMap: [UInt16:Blob]) async throws -> BlobMap {
         var ret: [UInt16: Blob] = [:]
 
