@@ -36,8 +36,48 @@ struct BlobProcessingView: View {
         VStack(alignment: .leading) {
             Text("Blob Processing Steps")
 
-            if let detectionType {
-                Text("Currently using \(detectionType.rawValue) detection type")
+            if let detectionType,
+               let imageSequence = viewModel.imageSequence
+            {
+                @Bindable var imageSequence = imageSequence
+                
+                Picker("Current Detection Type", selection: $imageSequence.detectionType) {
+                    ForEach(DetectionType.allCases, id: \.self) { value in
+                        Text(value.rawValue).tag(value)
+                    }
+                }
+                  .frame(maxWidth: 240)
+                  .onChange(of: imageSequence.detectionType) {
+                      Task {
+                          await constants.set(detectionType: imageSequence.detectionType)
+                      }
+                  }
+
+                switch imageSequence.detectionType {
+                case .mild:
+                    Text("""
+                           The Mild detection type is fastest, and detects a small number of blobs.
+                           It will get the vast majority of large bright streaks out of the video,
+                           smaller and dimmer signal may not be found.
+                           """)
+                case .strong:
+                    Text("""
+                           The Strong detection type has been tuned to find more of the signal we want,
+                           at the expense of ending up with more noise.  
+                           The signal that may still not be noticed here includes when an airplane
+                           is seen as a series of small dim dots in the image.
+                           """)
+                case .excessive:
+                    Text("""
+                           The Excessive detection type can produce an excessive amount of blob data.
+                           This generally will include any signal that you want to mask out,
+                           but usually also includes a lot more noise.  This will slow down processing,
+                           and make further analysis slower as well.  It can be used on a frame by frame
+                           basis to get that small few bits of signal that the other detection types may miss.
+                           """)
+                }
+
+                
                 /*
                  read list of steps from processor, and show them to the user in a
                  scrollable list
@@ -48,8 +88,9 @@ struct BlobProcessingView: View {
                             Text("Setup")
                               .foregroundColor(.white)
                               .font(.largeTitle)
-                            Text(" - Create the star aligned image")
-                            Text(" - Subtraction of the aligned image from the frame being processed")
+                            Text("To begin processing each frame we must first:")
+                            Text(" - Create a star aligned image")
+                            Text(" - Subtract the star aligned image from the frame being processed")
                             Text("Both of these can be loaded from file if they are available from before.")
                             Text("There are no configurable parameters here")
                         }
@@ -140,7 +181,7 @@ struct BlobProcessingView: View {
             case .applyUserSlices:
                 Text("Apply User Slices")
                   .foregroundColor(.white)
-                  .font(.largeTitle)
+                  .font(.title2)
                 Text("Apply any existing user slices to blobs")
             }
         }
@@ -182,7 +223,7 @@ struct BlobProcessingView: View {
         VStack(alignment: .leading) {
             Text("Blob Dupe Check")
               .foregroundColor(.white)
-              .font(.largeTitle)
+              .font(.title2)
             Text("look for duplicate blobs, and log them as step \(step) if any are found")
         }
     }
@@ -243,7 +284,7 @@ struct BlobProcessingView: View {
       HStack(alignment: .firstTextBaseline) {
             Text("Save Image")
               .foregroundColor(.white)
-              .font(.largeTitle)
+              .font(.title2)
             Text(imageType.longName)
         }
     }
@@ -252,7 +293,7 @@ struct BlobProcessingView: View {
       HStack(alignment: .firstTextBaseline) {
             Text("Set Frame Processing State")
               .foregroundColor(.white)
-              .font(.largeTitle)
+              .font(.title2)
             Text(processingState.message)
         }
     }
