@@ -33,6 +33,7 @@ You should have received a copy of the GNU General Public License along with sta
 public class FullFrameBlobber {
 
     private let config: Config
+    private let args: BlobFinder.Args
     
     // sorted by brightness
     public var sortedPixels: [SortablePixel] = []
@@ -77,6 +78,7 @@ public class FullFrameBlobber {
     }
     
     public init(config: Config,
+                args: BlobFinder.Args,
                 imageWidth: Int,
                 imageHeight: Int,
                 subtractionPixelData: [UInt16],
@@ -85,11 +87,12 @@ public class FullFrameBlobber {
                 neighborType: NeighborType) async
     {
         // pixels that are local maximums, but have a value lower than this are ignored
-        let minIntensity = await constants.blobberMinPixelIntensity
+        let minIntensity = args.minPixelIntensity
         self.pixelStatusTracker = PixelStatusTracker(frameIndex: frameIndex,
                                                      imageWidth: imageWidth,
                                                      imageHeight: imageHeight)
         self.config = config
+        self.args = args
         self.imageWidth = imageWidth
         self.imageHeight = imageHeight
         self.subtractionPixelData = subtractionPixelData
@@ -115,7 +118,7 @@ public class FullFrameBlobber {
             if maxY < 0 { maxY = 0 }
         }
 
-        let blobberMinContrast = await constants.blobberMinContrast
+        let minContrast = args.minContrast
         
         for x in 0..<imageWidth {
             for y in 0..<maxY {
@@ -134,7 +137,7 @@ public class FullFrameBlobber {
                     let contrast = diff / max * 100
 
                     // some pixels are too dim to even track
-                    if contrast < blobberMinContrast {
+                    if contrast < minContrast {
                         let pixel = SortablePixel(x: x, y: y, intensity: intensity)
                         pixels[x][y] = pixel
                     }
@@ -346,7 +349,7 @@ public class FullFrameBlobber {
         //Log.d("expanding initially seed blob")
 
         var seedPixels: [SortablePixel] = [firstSeed]
-        let blobberMinContrast = await constants.blobberMinContrast
+        let minContrast = args.minContrast
         
         while let seedPixel = seedPixels.popLast() {
             // set this pixel to be part of this blob
@@ -358,7 +361,7 @@ public class FullFrameBlobber {
                 if await pixelStatusTracker.status(of: neighbor) == .unknown {
                     // if unknown status, check contrast with initial seed pixel
                     let firstSeedContrast = firstSeed.contrast(with: neighbor)
-                    if firstSeedContrast < blobberMinContrast {
+                    if firstSeedContrast < minContrast {
                         //Log.v("contrast \(firstSeedContrast) seedPixel.intensity neighbor.intensity \(neighbor.intensity) firstSeed.intensity \(firstSeed.intensity)")
                         seedPixels.append(neighbor)
                     } else {

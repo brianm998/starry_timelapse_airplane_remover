@@ -46,29 +46,22 @@ struct BlobProcessingView: View {
                     VStack(alignment: .leading) {
                         VStack(alignment: .leading) {
                             Text("Setup")
-                              .foregroundColor(.blue)
-                            Text("use the subtraction and original image for this frame to find an initial set of blobs")
+                              .foregroundColor(.white)
+                              .font(.largeTitle)
+                            Text(" - Create the star aligned image")
+                            Text(" - Subtraction of the aligned image from the frame being processed")
+                            Text("Both of these can be loaded from file if they are available from before.")
+                            Text("There are no configurable parameters here")
                         }
                           .padding(10)
                           .background(.gray)
                           .padding(1)
                         
-                        VStack(alignment: .leading) {
-                            Text("Find Blobs")
-                              .foregroundColor(.blue)
-                            Text("""
-                                   Detect blobs of difference in brightness in the subtraction array
-                                   airplanes show up as lines or dots in a line
-                                   because the image subtracted from this frame had the sky aligned,
-                                   the ground may get moved, and therefore may contain blobs as well.
-                                   """)
-                        }
-                          .padding(10)
-                          .background(.gray)
-                          .padding(1)
-
                         ForEach(detectionType.blobProcessor.steps, id: \.self) { step in
                             switch step {
+                            case .findBlobs(let args):
+                                findBlobsView(args)
+                                
                             case .process(let functionType):
                                 processView(functionType)
 
@@ -119,6 +112,22 @@ struct BlobProcessingView: View {
                           .padding(10)
                           .background(.gray)
                           .padding(1)
+
+                        VStack(alignment: .leading) {
+                            Text("Blob Processing Complete")
+                              .foregroundColor(.white)
+                              .font(.largeTitle)
+                            Text("""
+                                   At this point, the blobs are promoted to outlier groups.
+                                   This allows both manual and machine learning classification
+                                   of the remaning data before we use this information to
+                                   potentially modify certain pixels in each frame
+                                   """)
+                        }
+                          .padding(10)
+                          .background(.gray)
+                          .padding(1)
+                        
                     }
                 }
             }
@@ -130,12 +139,31 @@ struct BlobProcessingView: View {
             switch blobFunctionType {
             case .applyUserSlices:
                 Text("Apply User Slices")
-                  .foregroundColor(.blue)
+                  .foregroundColor(.white)
+                  .font(.largeTitle)
                 Text("Apply any existing user slices to blobs")
             }
         }
     }
 
+    private func findBlobsView(_ args: BlobFinder.Args) -> some View {
+        stepView(title: "Initial Blob Detection",
+                 description: """
+                   This initial step analyses both the original frame image and the subtraction
+                   image to try to find neighboring groups (blobs) of pixels that are brighter
+                   in the subtraction image by the given criteria.
+                   After this step, the blobs found here can be processed further so that we can
+                   separate signal from noise.
+                   The signal we want is from transiently brigher streaks coming from airplanes and satellites.
+                   Noise falls into many categories, as it's anything that we don't want to modify.
+                   This can be caused by moving clouds, imperfect star alignment,
+                   ground being rotated due to star alignment, meteors,
+                   and a number of other factores.   
+                   """,
+                 args: args,
+                 array: BlobFinder.Args.ArgType.allCases)
+    }
+    
     private func smallBlobRemoverView(_ args: SmallBlobRemover.Args) -> some View {
         stepView(title: "Small Blob Remover",
                  description: "gets rid of dimmer blobs off by themselves",
@@ -153,7 +181,8 @@ struct BlobProcessingView: View {
     private func blobDupeCheckView(_ step: String) -> some View {
         VStack(alignment: .leading) {
             Text("Blob Dupe Check")
-              .foregroundColor(.blue)
+              .foregroundColor(.white)
+              .font(.largeTitle)
             Text("look for duplicate blobs, and log them as step \(step) if any are found")
         }
     }
@@ -211,17 +240,19 @@ struct BlobProcessingView: View {
     }
 
     private func saveView(_ imageType: FrameViewMode) -> some View {
-        VStack(alignment: .leading) {
+      HStack(alignment: .firstTextBaseline) {
             Text("Save Image")
-              .foregroundColor(.blue)
-            Text("of type \(imageType.longName)")
+              .foregroundColor(.white)
+              .font(.largeTitle)
+            Text(imageType.longName)
         }
     }
 
     private func frameStateView(_ processingState: FrameProcessingState) -> some View {
-        VStack(alignment: .leading) {
+      HStack(alignment: .firstTextBaseline) {
             Text("Set Frame Processing State")
-              .foregroundColor(.blue)
+              .foregroundColor(.white)
+              .font(.largeTitle)
             Text(processingState.message)
         }
     }
@@ -248,10 +279,13 @@ struct BlobProcessingView: View {
     {
         VStack(alignment: .leading) {
             Text(title)
-              .foregroundColor(.blue)
+              .foregroundColor(.white)
+              .font(.largeTitle)
             Text(description)
-            Text("Arguments:")
-            Grid(alignment: .leading) {
+            Spacer()
+              .frame(maxHeight: 10)
+            Text("Parameters which can affect how this step operates:")
+            Grid(alignment: .topLeading) {
                 GridRow {
                     Text("Name")
                       .foregroundColor(.white)
@@ -260,6 +294,7 @@ struct BlobProcessingView: View {
                     Text("Description")
                       .foregroundColor(.white)
                 }
+                .padding(.vertical, 2)
 
                 ForEach(array, id: \.self) { argType in
                     GridRow {
@@ -275,6 +310,7 @@ struct BlobProcessingView: View {
                         }
                         Text(args.description(for: argType))
                     }
+                    .padding(.vertical, 2)
                 }
             }
         }

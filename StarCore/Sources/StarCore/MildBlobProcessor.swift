@@ -80,9 +80,12 @@ public class MildBlobProcessor: AbstractBlobProcessor {
 
         self.steps = [
 
+          .findBlobs(.init(minPixelIntensity: 6000,
+                           minContrast: 60)),
+
           // check to see if any pixel is in more than one blob
           //.blobDupeCheck("init"),
-
+        
           .save(.blobs),          
 
           .frameState(.filter1),

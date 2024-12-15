@@ -30,6 +30,7 @@ public enum BlobProcessingType: Hashable {
     case save(FrameViewMode)
     case frameState(FrameProcessingState)
     case process(BlobFunctionType)
+    case findBlobs(BlobFinder.Args)
     case dimIsolatedBlobRemover(DimIsolatedBlobRemover.Args)
     case isolatedBlobRemover(IsolatedBlobRemover.Args)
     case disconnectedBlobRemover(DisconnectedBlobRemover.Args)
@@ -60,13 +61,15 @@ public class AbstractBlobProcessor {
         // align neighbor frame, subtract it, sort pixels
         let (subtractionArray, originalImage) = try await self.setup()
 
-        // create the first blobs from subtraction image
-        blobMap = try await self.findBlobs(subtractionArray: subtractionArray,
-                                           originalImage: originalImage)
-
         for step in steps {
             switch step {
 
+            case .findBlobs(let args):
+                blobMap = await BlobFinder().process(args, 
+                                                     subtractionArray: subtractionArray,
+                                                     originalImage: originalImage,
+                                                     frame: frame)
+                
             case .process(let functionType):
                 switch functionType {
                 case .applyUserSlices:
@@ -278,33 +281,6 @@ public class AbstractBlobProcessor {
         return (subtractionArray, originalImage)
     }
 
-    internal func findBlobs(subtractionArray: [UInt16], originalImage: PixelatedImage) async throws -> BlobMap {
-        guard let frame else { fatalError("need frame") } // XXX ???
-        
-        // detect blobs of difference in brightness in the subtraction array
-        // airplanes show up as lines or dots in a line
-        // because the image subtracted from this frame had the sky aligned,
-        // the ground may get moved, and therefore may contain blobs as well.
-        let blobber = await FullFrameBlobber(config: await frame.configManager.config(),
-                                             imageWidth: frame.width,
-                                             imageHeight: frame.height,
-                                             subtractionPixelData: subtractionArray,
-                                             originalImage: originalImage,
-                                             frameIndex: frame.frameIndex,
-                                             neighborType: .eight)//.fourCardinal
-
-        blobber.sortPixels()
-        
-        await frame.set(state: .detectingBlobs)
-        
-        // run the blobber
-        await blobber.process()
-        
-        Log.d("frame \(frame.frameIndex) blobber done")
-
-        return blobber.blobMap
-    }
-    
     // re-run something repeatedly
     internal func iterate(closure: (Bool) async -> Int, max: Int = 8) async {
 

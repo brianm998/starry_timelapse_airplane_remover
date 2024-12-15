@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License along with sta
 // public global is safe because it's an actor
 public let constants = Constants(detectionType: .strong)
 
-public actor Constants {
+public actor Constants {        // XXX rename this
 
     private var detectionType: DetectionType
 
@@ -38,40 +38,6 @@ public actor Constants {
     
     public func didChange(_ closure: @escaping (DetectionType) -> Void) {
         self.didChangeClosure = closure
-    }
-    
-    // pixels with less changed intensity than this cannot start blobs
-    // lower values give more blobs
-    public var blobberMinPixelIntensity: UInt16 {
-        switch self.detectionType {
-        case .mild:
-            return 6000
-        case .strong:
-            return 6000
-        case .excessive:
-            return 4500
-        }
-    }
-
-    // blobs can grow until they get this
-    // percentage darker than their seed pixel
-    // larger values make any individiual blob bigger,
-    // and may increase the total number of blobs due to their size
-
-    // how close to zero (in percentage) can the intensity of pixels decrease before
-    // being left out of a blob
-    // zero means that only pixels of minimumLocalMaximum or higher will be in blobs
-    // 50 means that all pixels half as bright or more than the maximum will be in a blob
-    // 100 means that all pixels will be in a blob
-    public var blobberMinContrast: Double {
-        switch self.detectionType {
-        case .mild:
-            return 60        
-        case .strong:
-            return 60 
-        case .excessive:
-            return 62
-        }
     }
 }
 
