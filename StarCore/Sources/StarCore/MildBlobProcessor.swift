@@ -106,9 +106,11 @@ public class MildBlobProcessor: AbstractBlobProcessor {
           .frameState(.filter3),
           
           // a first pass at cutting out individual blobs based upon size, brightness
-          // or being too close to the bottom
+
           .trimWithConstants(.init(minBlobSize: 5,
-                                   minBlobIntensity: 1500)),
+                                   minBlobIntensity: 1500,
+                                   qualifierSize: 10,
+                                   qualifierMedianIntensity: 3500)),
 
           .save(.filter3),
           

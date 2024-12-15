@@ -48,7 +48,9 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           // a first pass at cutting out individual blobs based upon size, brightness
           .trimWithConstants(.init(minBlobSize: 4,
                                    minSmallBlobIntensity: 2400,
-                                   minBlobIntensity: 1200)),
+                                   minBlobIntensity: 1200,
+                                   qualifierSize: 8,
+                                   qualifierMedianIntensity: 3000)),
 
           .save(.filter3),
           

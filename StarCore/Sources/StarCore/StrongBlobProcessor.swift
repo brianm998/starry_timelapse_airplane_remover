@@ -66,7 +66,9 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
           // a first pass at cutting out individual blobs based upon size, brightness
 
           .trimWithConstants(.init(minBlobSize: 5,
-                                   minBlobIntensity: 1500)),
+                                   minBlobIntensity: 1500,
+                                   qualifierSize: 10,
+                                   qualifierMedianIntensity: 3500)),
 
 
           .save(.filter3),

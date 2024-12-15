@@ -73,33 +73,5 @@ public actor Constants {
             return 62
         }
     }
-
-    // if a blob is smaller than size,
-    // then discard it if it's median intensity is less than this
-    // larger values give fewer blobs
-    public var blobberSmallBlobQualifier: BlobQualifier {
-        switch self.detectionType {
-        case .mild:
-            return .init(size: 10, medianIntensity: 3500)
-        case .strong:
-            return .init(size: 10, medianIntensity: 3500)
-        case .excessive:
-            return .init(size: 8, medianIntensity: 3000)
-        }
-    }
-    
 }
 
-// allows blobs if they are bigger or more intense than this
-public struct BlobQualifier: Sendable {
-    let size: Int
-    let medianIntensity: UInt16
-
-    // is this blob allowed?
-    func allows(_ blob: Blob) async -> Bool {
-        let blobSize = await blob.size()
-        let intensity = await blob.medianIntensity()
-        
-        return !(blobSize < size && intensity < medianIntensity)
-    }
-}

@@ -32,6 +32,8 @@ public class BlobTrimmerWithConstants {
         let minBlobSize: Int        // blobs smaller than this are discarded
         let minSmallBlobIntensity: UInt16? 
         let minBlobIntensity: UInt16
+        let qualifierSize: Int
+        let qualifierMedianIntensity: UInt16
         
         public typealias Types = ArgType
         
@@ -43,6 +45,10 @@ public class BlobTrimmerWithConstants {
                 return "if set, allow smaller blobs brighter than this to persist.\nSmaller values give more blobs."
             case .minBlobSize:
                 return "Blobs smaller than this are discarded.\nSmaller values give more blobs."
+            case .qualifierSize:
+                return "Size used for the qualifier" // XXX 
+            case .qualifierMedianIntensity:
+                return "Intensity used for the qualifier" // XXXx
             }
         }
 
@@ -50,6 +56,8 @@ public class BlobTrimmerWithConstants {
             case minBlobSize
             case minSmallBlobIntensity
             case minBlobIntensity
+            case qualifierSize
+            case qualifierMedianIntensity
         }
 
         public func isInteger(_ type: ArgType) -> Bool { true }
@@ -61,6 +69,10 @@ public class BlobTrimmerWithConstants {
             case .minSmallBlobIntensity:
                 return true
             case .minBlobSize:
+                return false
+            case .qualifierSize:
+                return false
+            case .qualifierMedianIntensity:
                 return false
             }
         }
@@ -80,16 +92,26 @@ public class BlobTrimmerWithConstants {
                 
             case .minBlobSize:
                 return Double(minBlobSize)
+
+            case .qualifierSize:
+                return Double(qualifierSize)
+
+            case .qualifierMedianIntensity:
+                return Double(qualifierMedianIntensity)
             }
         }
 
         public init(minBlobSize: Int,
                     minSmallBlobIntensity: UInt16? = nil,
-                    minBlobIntensity: UInt16)
+                    minBlobIntensity: UInt16,
+                    qualifierSize: Int,
+                    qualifierMedianIntensity: UInt16)
         {
             self.minBlobSize = minBlobSize
             self.minSmallBlobIntensity = minSmallBlobIntensity
             self.minBlobIntensity = minBlobIntensity
+            self.qualifierSize = qualifierSize
+            self.qualifierMedianIntensity = qualifierMedianIntensity
         }
     }
 
@@ -121,7 +143,7 @@ public class BlobTrimmerWithConstants {
             }
             
             // only keep smaller blobs if they are bright enough
-            if !(await constants.blobberSmallBlobQualifier.allows(blob)) { // XXX fix this
+            if !(await allows(blob, args: args)) {
                 //Log.d("frame \(frame.frameIndex) dumping blob \(blob)")
                 continue
             }
@@ -131,4 +153,12 @@ public class BlobTrimmerWithConstants {
         }
         blobMap = ret
     }
+
+    fileprivate func allows(_ blob: Blob, args: Args) async -> Bool {
+        let blobSize = await blob.size()
+        let intensity = await blob.medianIntensity()
+        
+        return !(blobSize < args.qualifierSize && intensity < args.qualifierMedianIntensity)
+    }
+    
 }
