@@ -30,6 +30,7 @@ public class SmallDimBlobRemover {
     }
 
     public struct Args: Sendable, Hashable, Equatable, Argable {
+        let minBlobSize: Int        // blobs smaller than this are discarded
         let sizeFloor: Int?         // if set with intenisty floor, then blobs that 
         let intensityFloor: UInt16? // are smaller and less intense will be discarded
         
@@ -41,17 +42,29 @@ public class SmallDimBlobRemover {
                 return "if set with intenisty floor, then blobs that" // XXX fix this
             case .intensityFloor:
                 return "are smaller and less intense will be discarded"
+            case .minBlobSize:
+                return "Blobs smaller than this are ignored"
             }
         }
 
         public enum ArgType: CaseIterable, Hashable {
+            case minBlobSize
             case sizeFloor
-            case  intensityFloor
+            case intensityFloor
         }
 
         public func isInteger(_ type: ArgType) -> Bool { true }
         
-        public func isOptional(_ type: ArgType) -> Bool { true }
+        public func isOptional(_ type: ArgType) -> Bool {
+            switch type {
+            case .minBlobSize:
+                return false
+            case .sizeFloor:
+                return true
+            case .intensityFloor:
+                return true
+            }
+        }
         
         public func value(for type: ArgType) -> Double? {
             switch type {
@@ -67,12 +80,16 @@ public class SmallDimBlobRemover {
                 } else {
                     return nil
                 }
+            case .minBlobSize:
+                return Double(minBlobSize)
             }
         }
 
-        public init(sizeFloor: Int? = nil,
+        public init(minBlobSize: Int,
+                    sizeFloor: Int? = nil,
                     intensityFloor: UInt16? = nil)
         {
+            self.minBlobSize = minBlobSize
             self.sizeFloor = sizeFloor
             self.intensityFloor = intensityFloor
         }
@@ -80,13 +97,11 @@ public class SmallDimBlobRemover {
 
     public func process(_ args: Args) async {
         var ret: [UInt16: Blob] = [:]
-
-        let blobberMinBlobSize = await constants.blobberMinBlobSize
         
         for (_, blob) in blobMap {
             let blobSize = await blob.size()
-            if blobSize <= blobberMinBlobSize {
-                //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size()) <= \(constants.blobberMinBlobSize)")
+            if blobSize <= args.minBlobSize {
+                //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size()) <= \(args.minBlobSize)")
                 continue
             }
             if let sizeFloor = args.sizeFloor,

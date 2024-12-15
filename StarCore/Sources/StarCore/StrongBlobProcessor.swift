@@ -177,7 +177,7 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
           .save(.filter13),
           .frameState(.filter14),
 
-          .smallDimBlobRemover(.init(sizeFloor: 10, intensityFloor: 10000)),
+          .smallDimBlobRemover(.init(minBlobSize: 5, sizeFloor: 10, intensityFloor: 10000)),
 
           // pass on getting rid of small but larger, dimmer blobs
           //.smallBlobRemover(.init(minBlobSize: 10)),

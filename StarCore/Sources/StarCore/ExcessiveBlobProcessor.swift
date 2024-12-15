@@ -159,8 +159,8 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           .save(.filter13),
           .frameState(.filter14),
 
-          .smallDimBlobRemover(.init()),
-
+          .smallDimBlobRemover(.init(minBlobSize: 4)),
+          
           // pass on getting rid of small but larger, dimmer blobs
           //.smallBlobRemover(.init(minBlobSize: 10)),
 

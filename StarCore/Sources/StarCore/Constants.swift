@@ -90,7 +90,7 @@ public actor Constants {
     
     // blobs smaller than this are ignored at the beginning of blob processing
     // smaller values give more blobs
-    public var blobberMinBlobSize: Int {
+    public var blobberMinBlobSize: Int { // XXX trim w/ constants
         switch self.detectionType {
         case .mild:
             return 5
@@ -103,7 +103,7 @@ public actor Constants {
 
     // blobs smaller than this are ignored at the beginning of blob processing
     // smaller values give more blobs
-    public var blobberMinSmallBlobIntensity: UInt16? {
+    public var blobberMinSmallBlobIntensity: UInt16? { // XXX trim w/ constants
         switch self.detectionType {
         case .mild:
             return nil
@@ -114,22 +114,9 @@ public actor Constants {
         }
     }
 
-    // blobs smaller than this are discarded at the end of blob processing
-    // smaller values give more blobs 
-    public var finalMinBlobSize: Int {
-        switch self.detectionType {
-        case .mild:
-            return 20      
-        case .strong:
-            return 20
-        case .excessive:
-            return 15
-        }
-    }
-
     // blobs with less median intensity than this are ignored
     // lower values give more blobs
-    public var blobberMinBlobIntensity: UInt16 {
+    public var blobberMinBlobIntensity: UInt16 { // XXX trim w/ constants
         switch self.detectionType {
         case .mild:
             return 1500      
@@ -137,45 +124,6 @@ public actor Constants {
             return 1500
         case .excessive:
             return 1200
-        }
-    }
-
-    // blobs smaller and dimmer than this are discarded at the end
-    // smaller values give more blobs
-    public var finalSmallDimBlobQualifier: BlobQualifier {
-        switch self.detectionType {
-        case .mild:
-            return .init(size: 30, medianIntensity: 10000)
-        case .strong:
-            return .init(size: 30, medianIntensity: 10000)
-        case .excessive:
-            return .init(size: 20, medianIntensity: 8000)
-        }
-    }
-
-    // blobs smaller and dimmer than this are discarded at the end
-    // smaller values give more blobs
-    public var finalMediumDimBlobQualifier: BlobQualifier {
-        switch self.detectionType {
-        case .mild:
-            return .init(size: 50, medianIntensity: 15000)
-        case .strong:
-            return .init(size: 50, medianIntensity: 15000)
-        case .excessive:
-            return .init(size: 30, medianIntensity: 10000)
-        }
-    }
-
-    // blobs smaller and dimmer than this are discarded at the end
-    // smaller values give more blobs
-    public var finalLargeDimBlobQualifier: BlobQualifier {
-        switch self.detectionType {
-        case .mild:
-            return .init(size: 120, medianIntensity: 3000)
-        case .strong:
-            return .init(size: 120, medianIntensity: 3000)
-        case .excessive:
-            return .init(size: 80, medianIntensity: 2000)
         }
     }
 }

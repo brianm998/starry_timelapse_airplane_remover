@@ -124,8 +124,8 @@ import StarDecisionTrees
 
     * convert all anonomous process methods to named methods or new processing enum cases
     * create new window UI that can read the list of steps and show it to the user
-    - move process(BlobFunctionType) to args format like others
-    - move borderBrignessLessThan to args format
+    * move process(BlobFunctionType) to args format like others
+    * move borderBrignessLessThan to args format
     - make GUIBlobProcessor, which allows 
     - allow seeing the settings being used at each step
     - allow creating a custom set of steps starting with an existing one
