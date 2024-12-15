@@ -88,44 +88,6 @@ public actor Constants {
         }
     }
     
-    // blobs smaller than this are ignored at the beginning of blob processing
-    // smaller values give more blobs
-    public var blobberMinBlobSize: Int { // XXX trim w/ constants
-        switch self.detectionType {
-        case .mild:
-            return 5
-        case .strong:
-            return 5
-        case .excessive:
-            return 4
-        }
-    }
-
-    // blobs smaller than this are ignored at the beginning of blob processing
-    // smaller values give more blobs
-    public var blobberMinSmallBlobIntensity: UInt16? { // XXX trim w/ constants
-        switch self.detectionType {
-        case .mild:
-            return nil
-        case .strong:
-            return nil
-        case .excessive:
-            return 24000
-        }
-    }
-
-    // blobs with less median intensity than this are ignored
-    // lower values give more blobs
-    public var blobberMinBlobIntensity: UInt16 { // XXX trim w/ constants
-        switch self.detectionType {
-        case .mild:
-            return 1500      
-        case .strong:
-            return 1500
-        case .excessive:
-            return 1200
-        }
-    }
 }
 
 // allows blobs if they are bigger or more intense than this

@@ -110,6 +110,10 @@ struct BlobProcessingView: View {
 
                             case .removeReallyBigBlobsWithSmallDimBunches(let args):
                                 removeReallyBigBlobsWithSmallDimBunchesView(args)
+
+                            case .trimWithConstants(let args):
+                                trimWithConstantsView(args)
+
                             }
                         }
                           .padding(10)
@@ -124,10 +128,6 @@ struct BlobProcessingView: View {
     private func processView(_ blobFunctionType: BlobFunctionType) -> some View {
         VStack(alignment: .leading) {
             switch blobFunctionType {
-            case .trimWithConstants:
-                Text("Trim with Constants")
-                  .foregroundColor(.blue)
-                Text("Trims with constants")
             case .applyUserSlices:
                 Text("Apply User Slices")
                   .foregroundColor(.blue)
@@ -232,7 +232,15 @@ struct BlobProcessingView: View {
                  args: args,
                  array: RemoveReallyBigBlobsWithSmallDimBunches.Args.ArgType.allCases)
     }
-    
+
+
+    private func trimWithConstantsView(_ args: BlobTrimmerWithConstants.Args) -> some View {
+        stepView(title: "Blob Trimmer with Constants",
+                 description: "Removes blobs that don't fit the given criteria",
+                 args: args,
+                 array: BlobTrimmerWithConstants.Args.ArgType.allCases)
+    }
+
     private func stepView<T: Hashable>(title: String,
                                        description: String,
                                        args: any Argable<T>,
@@ -263,7 +271,7 @@ struct BlobProcessingView: View {
                                 Text(String(format: "%.2f", value))
                             }
                         } else {
-                            Group { }
+                            Text("")
                         }
                         Text(args.description(for: argType))
                     }

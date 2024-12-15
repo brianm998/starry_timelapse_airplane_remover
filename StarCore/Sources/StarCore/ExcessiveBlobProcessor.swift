@@ -46,9 +46,9 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           .frameState(.filter3),
           
           // a first pass at cutting out individual blobs based upon size, brightness
-          // or being too close to the bottom
-
-          .process(.trimWithConstants),
+          .trimWithConstants(.init(minBlobSize: 4,
+                                   minSmallBlobIntensity: 2400,
+                                   minBlobIntensity: 1200)),
 
           .save(.filter3),
           

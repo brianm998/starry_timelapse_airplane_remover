@@ -23,7 +23,6 @@ public typealias BlobMap = [UInt16:Blob]
  */
 
 public enum BlobFunctionType {
-    case trimWithConstants
     case applyUserSlices
 }
 
@@ -42,6 +41,7 @@ public enum BlobProcessingType: Hashable {
     case smallBlobRemover(SmallBlobRemover.Args)
     case smallDimBlobRemover(SmallDimBlobRemover.Args)
     case removeReallyBigBlobsWithSmallDimBunches(RemoveReallyBigBlobsWithSmallDimBunches.Args)
+    case trimWithConstants(BlobTrimmerWithConstants.Args)
 }
 
 // load and process all blobs for a frame, using a defined sequence of steps
@@ -69,8 +69,6 @@ public class AbstractBlobProcessor {
 
             case .process(let functionType):
                 switch functionType {
-                case .trimWithConstants:
-                    blobMap = try await trimWithConstants(blobMap)
                 case .applyUserSlices:
                     blobMap = try await applyUserSlices(blobMap)
                 }
@@ -176,6 +174,12 @@ public class AbstractBlobProcessor {
                                                                       frameIndex: frame.frameIndex)
                 await remover.process(args)
                 blobMap = await remover.blobMap()
+
+            case .trimWithConstants(let args):
+                let trimmer = BlobTrimmerWithConstants(blobMap: blobMap,
+                                                       frameIndex: frame.frameIndex)
+                await trimmer.process(args)
+                blobMap = trimmer.blobMap
                 
             }
             Log.d("frame \(frame.frameIndex) now has \(blobMap.count) blobs")
@@ -186,49 +190,6 @@ public class AbstractBlobProcessor {
 
     // Mark - internals
 
-    internal func trimWithConstants(_ blobMap: [UInt16:Blob]) async throws -> BlobMap {
-        var ret: [UInt16: Blob] = [:]
-
-        let blobberMinBlobSize = await constants.blobberMinBlobSize
-        let blobberMinBlobIntensity = await constants.blobberMinBlobIntensity
-        let blobberMinSmallBlobIntensity = await constants.blobberMinSmallBlobIntensity
-        
-        for (_, blob) in blobMap {
-            // anything this small is noise
-
-            let blobIntensity = await blob.medianIntensity()
-            
-            if await blob.size() <= blobberMinBlobSize {
-                //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size()) <= \(blobberMinBlobSize)")
-
-                if let blobberMinSmallBlobIntensity {
-                    if blobIntensity < blobberMinSmallBlobIntensity {
-                        continue
-                    } else {
-                        // pass through smaller bright blobs
-                    }
-                } else {
-                    continue
-                }
-            }
-
-            if blobIntensity < blobberMinBlobIntensity {
-                //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of median intensity \(await blob.medianIntensity()) <= \(blobberMinBlobIntensity)")
-                continue
-            }
-            
-            // only keep smaller blobs if they are bright enough
-            if !(await constants.blobberSmallBlobQualifier.allows(blob)) {
-                //Log.d("frame \(frame.frameIndex) dumping blob \(blob)")
-                continue
-            }
-
-            // this blob has passed these checks, keep it for now
-            ret[blob.id] = blob
-        }
-        return ret
-    }
-    
     // slice up blobs as directed by the user
     internal func applyUserSlices(_ blobMap: [UInt16:Blob]) async throws -> BlobMap {
         guard let frame else { return [:] }
