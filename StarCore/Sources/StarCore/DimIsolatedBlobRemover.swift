@@ -36,12 +36,62 @@ public actor DimIsolatedBlobRemover {
         analyzer.mapOfBlobs()
     }
     
-    public struct Args: Sendable, Hashable, Equatable {
+    public struct Args: Sendable, Hashable, Equatable, Argable {
         let scanSize: Int // how far in each direction to look for neighbors
         let requiredNeighbors: Int // how many neighbors do we need to find?
         let minBlobSize: Int       // blobs smaller than this are processed
         let intensityFloor: UInt16? // use this intensity floor, or median intensity?
         
+        public typealias Types = ArgType
+
+        public func description(for type: ArgType) -> String {
+            switch type {
+            case .scanSize:
+                return "how far in each direction to look for neighbors"
+            case .requiredNeighbors:
+                return "how many neighbors do we need to find?"
+            case .minBlobSize:
+                return "blobs smaller than this are processed"
+            case .intensityFloor:
+                return "use this intensity floor, or median intensity?"
+            }
+        }
+
+        public enum ArgType: CaseIterable, Hashable {
+            case scanSize
+            case requiredNeighbors
+            case minBlobSize
+            case intensityFloor
+        }
+
+        public func isInteger(_ type: ArgType) -> Bool { true }
+
+        public func isOptional(_ type: ArgType) -> Bool {
+            switch type {
+            case .intensityFloor:
+                return true
+            default:
+                return false
+            }
+        }
+        
+        public func value(for type: ArgType) -> Double? {
+            switch type {
+            case .scanSize:
+                return Double(scanSize)
+            case .requiredNeighbors:
+                return Double(requiredNeighbors)
+            case .minBlobSize:
+                return Double(minBlobSize)
+            case .intensityFloor:
+                if let intensityFloor {
+                    return Double(intensityFloor)
+                } else {
+                    return nil
+                }
+            }
+        }
+
         public init(scanSize: Int = 12,
                     requiredNeighbors: Int = 1,
                     minBlobSize: Int = 24,

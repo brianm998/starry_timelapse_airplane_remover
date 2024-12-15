@@ -17,9 +17,11 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 public protocol Argable<Types> where Types: CaseIterable {
-  associatedtype Types
-  func value(for type: Types) -> Double?
-  func description(for type: Types) -> String
+    associatedtype Types
+    func value(for type: Types) -> Double?
+    func description(for type: Types) -> String
+    func isInteger(_ type: Types) -> Bool
+    func isOptional(_ type: Types) -> Bool
 }
 
 // recurse on finding nearby blobs to find groups of neighbors in a set
@@ -45,10 +47,7 @@ public actor LinearBlobConnector {
         analyzer.mapOfBlobs()
     }
 
-  public struct Args: Sendable, Hashable, Equatable, Argable {
-    
-        public typealias Types = ArgType
-      
+    public struct Args: Sendable, Hashable, Equatable, Argable {
         let scanSize: Int         // how far in each direction to look for neighbors
         let blobsSmallerThan: Int // ignore blobs larger than this
         let blobsLargerThan: Int  // ignore blobs smaller than this
@@ -57,54 +56,7 @@ public actor LinearBlobConnector {
         let adjecentPixelsOnIteration: Int // how far to iterate on adject pixels
         let maxIterationCount: Int // maximum times to iterate on line improvement
 
-        public enum ArgType: CaseIterable, Hashable {
-            case scanSize
-            case blobsSmallerThan
-            case blobsLargerThan
-            case lineBorder
-            case maxAverageLineDistance
-            case adjecentPixelsOnIteration
-            case maxIterationCount
-        }
-
-        public func value(for type: ArgType) -> Double? {
-            switch type {
-            case .scanSize:
-                return Double(scanSize)
-            case .blobsSmallerThan:
-                return Double(blobsSmallerThan)
-            case .blobsLargerThan:
-                return Double(blobsLargerThan)
-            case .lineBorder:
-                return Double(lineBorder)
-            case .maxAverageLineDistance:
-                return maxAverageLineDistance
-            case .adjecentPixelsOnIteration:
-                return Double(adjecentPixelsOnIteration)
-            case .maxIterationCount:
-                return Double(maxIterationCount)
-            }
-        }
-        /*
-        public func typeFor(type: ArgType) -> String {
-            switch type {
-            case .scanSize:
-                return Int.Type
-            case .blobsSmallerThan:
-                return Int.Self
-            case .blobsLargerThan:
-                return Int.Self
-            case .lineBorder:
-                return Int.Self
-            case .maxAverageLineDistance:
-                return Double.Self
-            case .adjecentPixelsOnIteration:
-                return Int.Self
-            case .maxIterationCount:
-                return Int.Self
-            }
-        }
-         */
+        public typealias Types = ArgType
 
         public func description(for type: ArgType) -> String {
             switch type {
@@ -125,6 +77,45 @@ public actor LinearBlobConnector {
             }
         }
         
+        public enum ArgType: CaseIterable, Hashable {
+            case scanSize
+            case blobsSmallerThan
+            case blobsLargerThan
+            case lineBorder
+            case maxAverageLineDistance
+            case adjecentPixelsOnIteration
+            case maxIterationCount
+        }
+
+        public func isInteger(_ type: ArgType) -> Bool {
+            switch type {
+            case .maxAverageLineDistance:
+                return false
+            default:
+                return true
+            }
+        }
+        public func isOptional(_ type: ArgType) -> Bool { false }
+        
+        public func value(for type: ArgType) -> Double? {
+            switch type {
+            case .scanSize:
+                return Double(scanSize)
+            case .blobsSmallerThan:
+                return Double(blobsSmallerThan)
+            case .blobsLargerThan:
+                return Double(blobsLargerThan)
+            case .lineBorder:
+                return Double(lineBorder)
+            case .maxAverageLineDistance:
+                return maxAverageLineDistance
+            case .adjecentPixelsOnIteration:
+                return Double(adjecentPixelsOnIteration)
+            case .maxIterationCount:
+                return Double(maxIterationCount)
+            }
+        }
+
         public init(scanSize: Int = 28,
                     blobsSmallerThan: Int = 24, 
                     blobsLargerThan: Int = 0,

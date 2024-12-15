@@ -37,13 +37,57 @@ public actor DisconnectedBlobRemover {
         analyzer.mapOfBlobs()
     }
     
-    public struct Args: Sendable, Hashable, Equatable {
+    public struct Args: Sendable, Hashable, Equatable, Argable {
         let scanSize: Int          // how far in each direction to look for neighbors
         let blobsSmallerThan: Int  // ignore blobs larger than this
         let blobsLargerThan: Int   // ignore blobs smaller than this
         let requiredNeighbors: Int // how many neighbors do we need?
         let intensityThreshold: UInt16 // blobs brighter than this are ignored
 
+        public typealias Types = ArgType
+
+        public func description(for type: ArgType) -> String {
+            switch type {
+            case .scanSize:
+                return "how far in each direction to look for neighbors"
+            case .requiredNeighbors:
+                return "how many neighbors do we need?"
+            case .blobsSmallerThan:
+                return "ignore blobs larger than this"
+            case .blobsLargerThan:
+                return "ignore blobs smaller than this"
+            case .intensityThreshold:
+                return "blobs brighter than this are ignored"
+            }
+        }
+
+        public enum ArgType: CaseIterable, Hashable {
+            case scanSize
+            case blobsSmallerThan
+            case blobsLargerThan
+            case requiredNeighbors
+            case intensityThreshold
+        }
+
+        public func isInteger(_ type: ArgType) -> Bool { true }
+        
+        public func isOptional(_ type: ArgType) -> Bool { false }
+        
+        public func value(for type: ArgType) -> Double? {
+            switch type {
+            case .scanSize:
+                return Double(scanSize)
+            case .requiredNeighbors:
+                return Double(requiredNeighbors)
+            case .blobsSmallerThan:
+                return Double(blobsSmallerThan)
+            case .blobsLargerThan:
+                return Double(blobsLargerThan)
+            case .intensityThreshold:
+                return Double(intensityThreshold)
+            }
+        }
+        
         public init(scanSize: Int = 28,
                     blobsSmallerThan: Int = 24,
                     blobsLargerThan: Int = 0,

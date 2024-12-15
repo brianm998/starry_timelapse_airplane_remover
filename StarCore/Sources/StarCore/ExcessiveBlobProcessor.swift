@@ -38,7 +38,7 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
 
           .frameState(.filter2),
 
-          .borderBrightnessLessThan(0.6),
+          .borderBrightnessLessThan(0.6, 10000),
 
           .save(.filter2),
 

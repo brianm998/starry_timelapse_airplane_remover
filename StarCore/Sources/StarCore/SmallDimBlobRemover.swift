@@ -29,10 +29,47 @@ public class SmallDimBlobRemover {
         self.frameIndex = frameIndex
     }
 
-    public struct Args: Sendable, Hashable, Equatable {
+    public struct Args: Sendable, Hashable, Equatable, Argable {
         let sizeFloor: Int?         // if set with intenisty floor, then blobs that 
         let intensityFloor: UInt16? // are smaller and less intense will be discarded
         
+        public typealias Types = ArgType
+        
+        public func description(for type: ArgType) -> String {
+            switch type {
+            case .sizeFloor:
+                return "if set with intenisty floor, then blobs that" // XXX fix this
+            case .intensityFloor:
+                return "are smaller and less intense will be discarded"
+            }
+        }
+
+        public enum ArgType: CaseIterable, Hashable {
+            case sizeFloor
+            case  intensityFloor
+        }
+
+        public func isInteger(_ type: ArgType) -> Bool { true }
+        
+        public func isOptional(_ type: ArgType) -> Bool { true }
+        
+        public func value(for type: ArgType) -> Double? {
+            switch type {
+            case .sizeFloor:
+                if let sizeFloor {
+                    return Double(sizeFloor)
+                } else {
+                    return nil
+                }
+            case .intensityFloor:
+                if let intensityFloor {
+                    return Double(intensityFloor)
+                } else {
+                    return nil
+                }
+            }
+        }
+
         public init(sizeFloor: Int? = nil,
                     intensityFloor: UInt16? = nil)
         {

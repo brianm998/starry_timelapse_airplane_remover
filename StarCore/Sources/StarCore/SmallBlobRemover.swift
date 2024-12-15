@@ -31,10 +31,39 @@ public actor SmallBlobRemover {
     
     public func blobMap() async -> [UInt16:Blob] { blobMap }
     
-    public struct Args: Sendable, Hashable, Equatable {
+    public struct Args: Sendable, Hashable, Equatable, Argable {
         let minBlobSize: Int       // blobs smaller than this are ignored
         let intensityFloor: UInt16 // all blobs above this are ignored
         
+        public typealias Types = ArgType
+
+        public func description(for type: ArgType) -> String {
+            switch type {
+            case .minBlobSize:
+                return "blobs smaller than this are ignored"
+            case .intensityFloor:
+                return "all blobs above this are ignored"
+            }
+        }
+
+        public enum ArgType: CaseIterable, Hashable {
+            case minBlobSize
+            case intensityFloor
+        }
+
+        public func isInteger(_ type: ArgType) -> Bool { true }
+        
+        public func isOptional(_ type: ArgType) -> Bool { false }
+        
+        public func value(for type: ArgType) -> Double? {
+            switch type {
+            case .minBlobSize:
+                return Double(minBlobSize)
+            case .intensityFloor:
+                return Double(intensityFloor)
+            }
+        }
+
         public init(minBlobSize: Int = 24, intensityFloor: UInt16 = UInt16.max) {
             self.minBlobSize = minBlobSize
             self.intensityFloor = intensityFloor

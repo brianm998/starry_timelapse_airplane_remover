@@ -123,7 +123,9 @@ import StarDecisionTrees
   Next steps for custom blob gui:
 
     * convert all anonomous process methods to named methods or new processing enum cases
-    - create new window UI that can read the list of steps and show it to the user
+    * create new window UI that can read the list of steps and show it to the user
+    - move process(BlobFunctionType) to args format like others
+    - move borderBrignessLessThan to args format
     - make GUIBlobProcessor, which allows 
     - allow seeing the settings being used at each step
     - allow creating a custom set of steps starting with an existing one
@@ -134,7 +136,7 @@ import StarDecisionTrees
     - allow saving and reading steps from json (codable enum?)
     - need to have helper text for what the values do
     - find way to get processing methods into json and back
-      - make new enum of processing type?
+      * make new enum of processing type?
  */
 
  

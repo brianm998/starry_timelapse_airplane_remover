@@ -27,10 +27,44 @@ public actor BlobLineTrim {
         self.blobMap = blobMap
     }
     
-    public struct Args: Sendable, Hashable, Equatable {
+    public struct Args: Sendable, Hashable, Equatable, Argable {
         let minLineLength: Double     // blobs with less line length are not processed
         let minLineFillAmount: Double // blobs with less line fill amount are not processed
         let trimAmount: Double        // trim  pixels further from the line than this
+
+        public typealias Types = ArgType
+        
+        public func description(for type: ArgType) -> String {
+            switch type {
+            case .minLineLength:
+                return "blobs with less line length are not processed"
+            case .minLineFillAmount:
+                return "blobs with less line fill amount are not processed"
+            case .trimAmount:
+                return "trim  pixels further from the line than this"
+            }
+        }
+
+        public enum ArgType: CaseIterable, Hashable {
+            case minLineLength
+            case minLineFillAmount
+            case trimAmount
+        }
+
+        public func isInteger(_ type: ArgType) -> Bool { false }
+        
+        public func isOptional(_ type: ArgType) -> Bool { false }
+        
+        public func value(for type: ArgType) -> Double? {
+            switch type {
+            case .minLineLength:
+                return minLineLength
+            case .minLineFillAmount:
+                return minLineFillAmount
+            case .trimAmount:
+                return trimAmount
+            }
+        }
 
         public init(minLineLength: Double,
                     minLineFillAmount: Double,

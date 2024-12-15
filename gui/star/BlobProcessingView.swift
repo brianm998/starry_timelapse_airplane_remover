@@ -10,7 +10,7 @@ struct BlobProcessingView: View {
     var body: some View {
         @Bindable var viewModel = viewModel
         
-        Group {
+        VStack(alignment: .leading) {
             if let viewModel = viewModel.imageSequence {
                 self.mainView
             } else {
@@ -38,14 +38,35 @@ struct BlobProcessingView: View {
 
             if let detectionType {
                 Text("Currently using \(detectionType.rawValue) detection type")
-                Text("Before running these steps, each frame will first have an aligned neibnor image subtracted from it, and then an initial blob detection phase will be run.  XXX Expose constants used to allow tweaking XXX") 
                 /*
                  read list of steps from processor, and show them to the user in a
                  scrollable list
-                 
                  */
                 ScrollView {
                     VStack(alignment: .leading) {
+                        VStack(alignment: .leading) {
+                            Text("Setup")
+                              .foregroundColor(.blue)
+                            Text("use the subtraction and original image for this frame to find an initial set of blobs")
+                        }
+                          .padding(10)
+                          .background(.gray)
+                          .padding(1)
+                        
+                        VStack(alignment: .leading) {
+                            Text("Find Blobs")
+                              .foregroundColor(.blue)
+                            Text("""
+                                   Detect blobs of difference in brightness in the subtraction array
+                                   airplanes show up as lines or dots in a line
+                                   because the image subtracted from this frame had the sky aligned,
+                                   the ground may get moved, and therefore may contain blobs as well.
+                                   """)
+                        }
+                          .padding(10)
+                          .background(.gray)
+                          .padding(1)
+
                         ForEach(detectionType.blobProcessor.steps, id: \.self) { step in
                             switch step {
                             case .process(let functionType):
@@ -63,8 +84,8 @@ struct BlobProcessingView: View {
                             case .lineSplit(let args):
                                 lineSplitView(args)
 
-                            case .borderBrightnessLessThan(let amount):
-                                borderBrightnessLessThanView(amount)
+                            case .borderBrightnessLessThan(let amount, let medianIntensityFloor):
+                                borderBrightnessLessThanView(amount, medianIntensityFloor: medianIntensityFloor)
 
                             case .linearBlobConnector(let args):
                                 linearBlobConnectorView(args)
@@ -88,6 +109,7 @@ struct BlobProcessingView: View {
                                 frameStateView(processingState)
                             }
                         }
+                          .padding(10)
                           .background(.gray)
                           .padding(1)
                     }
@@ -97,62 +119,116 @@ struct BlobProcessingView: View {
     }
 
     private func processView(_ blobFunctionType: BlobFunctionType) -> some View {
-        Text("processView")
+        VStack(alignment: .leading) {
+            switch blobFunctionType {
+            case .trimWithConstants:
+                Text("Trim with Constants")
+                  .foregroundColor(.blue)
+                Text("Trims with constants")
+            case .applyUserSlices:
+                Text("Apply User Slices")
+                  .foregroundColor(.blue)
+                Text("Apply any existing user slices to blobs")
+            case .removeReallyBigBlobsWithSmallDimBunches:
+                Text("Remove Really Big Blobs With Small Dim Bunches")
+                  .foregroundColor(.blue)
+                Text("This attempts to get rid of really big blobs with lots of small dim bunches")
+            }
+        }
     }
 
     private func smallBlobRemoverView(_ args: SmallBlobRemover.Args) -> some View {
-        Text("smallBlobRemoverView")
+        stepView(title: "Small Blob Remover",
+                 description: "gets rid of dimmer blobs off by themselves",
+                 args: args,
+                 array: SmallBlobRemover.Args.ArgType.allCases)
     }
 
     private func smallDimBlobRemoverView(_ args: SmallDimBlobRemover.Args) -> some View {
-        Text("smallDimBlobRemoverView")
+        stepView(title: "Small Dim Blob Remover",
+                 description: "gets rid of dimmer blobs off by themselves",
+                 args: args,
+                 array: SmallDimBlobRemover.Args.ArgType.allCases)
     }
 
     private func blobDupeCheckView(_ step: String) -> some View {
-        Text("blobDupeCheckView")
+        VStack(alignment: .leading) {
+            Text("Blob Dupe Check")
+              .foregroundColor(.blue)
+            Text("look for duplicate blobs, and log them as step \(step) if any are found")
+        }
     }
 
     private func lineSplitView(_ args: BlobLineSplitter.Args) -> some View {
-        Text("lineSplitView")
+        stepView(title: "Linear Blob Connector",
+                 description: "gets rid of small blobs by themselves in nowhere",
+                 args: args,
+                 array: BlobLineSplitter.Args.ArgType.allCases)
     }
 
-    private func borderBrightnessLessThanView(_ amount: Double) -> some View {
-        Text("borderBrightnessLessThanView")
+    private func borderBrightnessLessThanView(_ amount: Double, medianIntensityFloor: UInt16) -> some View {
+        let amountStr = String(format: "%.2f", amount)
+        let medianIntensityStr = String(format: "%d", Int(medianIntensityFloor))
+        return VStack(alignment: .leading) {
+            Text("Border Brightness Less Than View Brightness")
+              .foregroundColor(.blue)
+            Text("This step only keeps blobs that have either a border brightness level vs the original image of \(amountStr) or a median intensity of \(medianIntensityStr)")
+        }
     }
 
     private func linearBlobConnectorView(_ args: LinearBlobConnector.Args) -> some View {
-        let title = "Linear Blob Connector"
         let description = "This step recurses on finding nearby blobs to find groups of neighbors in a set.\nIt then tries to combine some of them into a line (if we get a good enough line)"
-        return stepView(title: title,
+        return stepView(title: "Linear Blob Connector",
                         description: description,
                         args: args,
                         array: LinearBlobConnector.Args.ArgType.allCases)
     }
 
     private func blobLineTrimView(_ args: BlobLineTrim.Args) -> some View {
-        Text("blobLineTrimView")
+        stepView(title: "Blob Line Trim",
+                 description: "trim pixels that are too far from a blobs's line",
+                 args: args,
+                 array: BlobLineTrim.Args.ArgType.allCases)
     }
 
     private func isolatedBlobRemoverView(_ args: IsolatedBlobRemover.Args) -> some View {
-        Text("isolatedBlobRemoverView")
+        stepView(title: "Isolated Blob Remover",
+                 description: "gets rid of small blobs by themselves in nowhere",
+                 args: args,
+                 array: IsolatedBlobRemover.Args.ArgType.allCases)
     }
 
     private func disconnectedBlobRemoverView(_ args: DisconnectedBlobRemover.Args) -> some View {
-        Text("disconnectedBlobRemoverView")
+        let description = "recurse on finding nearby blobs to isolate groups of neighbors as a set\nuse the size of the neighbor set to determine if we keep a blob or not"
+
+        return stepView(title: "Disconnected Blob Remover",
+                 description: description,
+                 args: args,
+                 array: DisconnectedBlobRemover.Args.ArgType.allCases)
     }
 
     private func dimIsolatedBlobRemoverView(_ args: DimIsolatedBlobRemover.Args) -> some View {
-        Text("dimIsolatedBlobRemoverView")
+        stepView(title: "Dim Isolated Blob Remover",
+                 description: "gets rid of dimmer blobs off by themselves",
+                 args: args,
+                 array: DimIsolatedBlobRemover.Args.ArgType.allCases)
     }
 
     private func saveView(_ imageType: FrameViewMode) -> some View {
-        Text("Save image of \(imageType.longName)")
+        VStack(alignment: .leading) {
+            Text("Save Image")
+              .foregroundColor(.blue)
+            Text("of type \(imageType.longName)")
+        }
     }
 
     private func frameStateView(_ processingState: FrameProcessingState) -> some View {
-        Text("Set Frame Processing State to \(processingState.message)")
+        VStack(alignment: .leading) {
+            Text("Set Frame Processing State")
+              .foregroundColor(.blue)
+            Text(processingState.message)
+        }
     }
-
 
     private func stepView<T: Hashable>(title: String,
                                        description: String,
@@ -178,7 +254,11 @@ struct BlobProcessingView: View {
                     GridRow {
                         Text("\(argType)")
                         if let value = args.value(for: argType) {
-                            Text(String(format: "%.2f", value))
+                            if args.isInteger(argType) {
+                                Text(String(format: "%d", Int(value)))
+                            } else {
+                                Text(String(format: "%.2f", value))
+                            }
                         } else {
                             Group { }
                         }

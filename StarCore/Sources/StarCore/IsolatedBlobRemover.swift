@@ -36,12 +36,51 @@ public actor IsolatedBlobRemover {
         analyzer.mapOfBlobs()
     }
     
-    public struct Args: Sendable, Hashable, Equatable {
+    public struct Args: Sendable, Hashable, Equatable, Argable {
         let minNeighborSize: Int   // how big does a neighbor need to be to count?
         let scanSize: Int          // how far in each direction to look for neighbors
         let requiredNeighbors: Int // how many neighbors does each one need?
         let minBlobSize: Int       // blobs larger than this are ignored
 
+        public typealias Types = ArgType
+
+        public func description(for type: ArgType) -> String {
+            switch type {
+            case .minNeighborSize:
+                return "how big does a neighbor need to be to count?"
+            case .scanSize:
+                return "how far in each direction to look for neighbors"
+            case .requiredNeighbors:
+                return "how many neighbors does each one need?"
+            case .minBlobSize:
+                return "blobs larger than this are ignored"
+            }
+        }
+
+        public enum ArgType: CaseIterable, Hashable {
+            case minNeighborSize
+            case scanSize
+            case requiredNeighbors
+            case minBlobSize
+        }
+
+        public func isInteger(_ type: ArgType) -> Bool { true }
+        
+        public func isOptional(_ type: ArgType) -> Bool { false }
+        
+        public func value(for type: ArgType) -> Double? {
+            switch type {
+            case .minNeighborSize:
+                return Double(minNeighborSize)
+            case .scanSize:
+                return Double(scanSize)
+            case .requiredNeighbors:
+                return Double(requiredNeighbors)
+            case .minBlobSize:
+                return Double(minBlobSize)
+            }
+        }
+        
         public init(minNeighborSize: Int = 0,
                     scanSize: Int = 12,     
                     requiredNeighbors: Int = 1,

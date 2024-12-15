@@ -31,7 +31,7 @@ public actor BlobLineSplitter {
     
     public func blobMap() -> [UInt16:Blob] { blobs }
     
-    public struct Args: Sendable, Hashable, Equatable {
+    public struct Args: Sendable, Hashable, Equatable, Argable {
 
         // used here
         let minAvgDistance: Double // need avg pixel distance more than this
@@ -43,6 +43,77 @@ public actor BlobLineSplitter {
         let maxDistance: Double  // pixels at least this far away from a line give zero score
         let minLineScore: Double // sub lines must have at least this score to be included
         let minLineCount: Int    // sub lines must have at least this number of pixels
+
+        public typealias Types = ArgType
+
+        public func description(for type: ArgType) -> String {
+            switch type {
+            case .minAvgDistance:
+                return "need avg pixel distance more than this"
+            case .maxLineFillAmount:
+                return "need line fill amount less than this"
+            case .minBlobsize: 
+                return "need blobs bigger than this"
+            case .maxLines:
+                return "max number of lines to look at"
+            case .maxDistance:
+                return "pixels at least this far away from a line give zero score"
+            case .minLineScore:
+                return "sub lines must have at least this score to be included"
+            case .minLineCount:
+                return "sub lines must have at least this number of pixels"
+            }
+        }
+
+        public enum ArgType: CaseIterable, Hashable {
+            case minAvgDistance
+            case maxLineFillAmount
+            case minBlobsize
+            case maxLines
+            case maxDistance
+            case minLineScore
+            case minLineCount
+        }
+
+        public func isInteger(_ type: ArgType) -> Bool {
+            switch type {
+            case .minAvgDistance:
+                return false
+            case .maxLineFillAmount:
+                return false
+            case .minBlobsize: 
+                return true
+            case .maxLines:
+                return true
+            case .maxDistance:
+                return false
+            case .minLineScore:
+                return false
+            case .minLineCount:
+                return true
+            }
+        }
+        
+        public func isOptional(_ type: ArgType) -> Bool { false }
+        
+        public func value(for type: ArgType) -> Double? {
+            switch type {
+            case .minAvgDistance:
+                return minAvgDistance
+            case .maxLineFillAmount:
+                return maxLineFillAmount
+            case .minBlobsize: 
+                return Double(minBlobsize)
+            case .maxLines:
+                return Double(maxLines)
+            case .maxDistance:
+                return maxDistance
+            case .minLineScore:
+                return minLineScore
+            case .minLineCount:
+                return Double(minLineCount)
+            }
+        }
 
         public init(
           minAvgDistance: Double,
