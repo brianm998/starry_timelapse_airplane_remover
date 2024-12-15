@@ -38,7 +38,8 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
 
           .frameState(.filter2),
 
-          .borderBrightnessLessThan(0.6, 10000),
+          .borderBrightnessBlobRemover(.init(maxBrightness: 0.6,
+                                             medianIntensityFloor: 10000)),
 
           .save(.filter2),
 

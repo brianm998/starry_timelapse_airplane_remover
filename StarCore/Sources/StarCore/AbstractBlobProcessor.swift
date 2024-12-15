@@ -36,7 +36,7 @@ public enum BlobProcessingType: Hashable {
     case disconnectedBlobRemover(DisconnectedBlobRemover.Args)
     case linearBlobConnector(LinearBlobConnector.Args)
     case blobLineTrim(BlobLineTrim.Args)
-    case borderBrightnessLessThan(Double,UInt16)
+    case borderBrightnessBlobRemover(BorderBrightnessBlobRemover.Args)
     case lineSplit(BlobLineSplitter.Args)
     case blobDupeCheck(String)
     case smallBlobRemover(SmallBlobRemover.Args)
@@ -102,19 +102,13 @@ public class AbstractBlobProcessor {
                 blobMap = await splitter.blobMap()
 
                 
-            case .borderBrightnessLessThan(let amount, let medianItensityFloor): // no analyzer
-                var ret: [UInt16: Blob] = [:]
-                for (_, blob) in blobMap {
-                    let medianIntensity = await blob.medianIntensity()
-                    if await originalImage.borderBrightness(of: blob.pixels) < amount ||
-                         medianIntensity > medianItensityFloor
-                    {
-                        ret[blob.id] = blob
-                    }
-                }
-                blobMap = ret
-                
-                
+            case .borderBrightnessBlobRemover(let args):
+                let remover = BorderBrightnessBlobRemover(blobMap: blobMap,
+                                                          frameIndex: frame.frameIndex)
+                await remover.process(args, originalImage: originalImage)
+                blobMap = await remover.blobMap()
+
+
             case .linearBlobConnector(let args): // uses analyzer
                 let connector = await LinearBlobConnector(blobMap: blobMap,
                                                           width: frame.width,

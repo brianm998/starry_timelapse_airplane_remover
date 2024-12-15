@@ -11,7 +11,7 @@ struct BlobProcessingView: View {
         @Bindable var viewModel = viewModel
         
         VStack(alignment: .leading) {
-            if let viewModel = viewModel.imageSequence {
+          if viewModel.imageSequence != nil {
                 self.mainView
             } else {
                 VStack {
@@ -84,8 +84,8 @@ struct BlobProcessingView: View {
                             case .lineSplit(let args):
                                 lineSplitView(args)
 
-                            case .borderBrightnessLessThan(let amount, let medianIntensityFloor):
-                                borderBrightnessLessThanView(amount, medianIntensityFloor: medianIntensityFloor)
+                            case .borderBrightnessBlobRemover(let args):
+                                borderBrightnessLessThanView(args)
 
                             case .linearBlobConnector(let args):
                                 linearBlobConnectorView(args)
@@ -165,14 +165,11 @@ struct BlobProcessingView: View {
                  array: BlobLineSplitter.Args.ArgType.allCases)
     }
 
-    private func borderBrightnessLessThanView(_ amount: Double, medianIntensityFloor: UInt16) -> some View {
-        let amountStr = String(format: "%.2f", amount)
-        let medianIntensityStr = String(format: "%d", Int(medianIntensityFloor))
-        return VStack(alignment: .leading) {
-            Text("Border Brightness Less Than View Brightness")
-              .foregroundColor(.blue)
-            Text("This step only keeps blobs that have either a border brightness level vs the original image of \(amountStr) or a median intensity of \(medianIntensityStr)")
-        }
+    private func borderBrightnessLessThanView(_ args: BorderBrightnessBlobRemover.Args) -> some View {
+        stepView(title: "Border Brightness Less Than View Brightness",
+                 description: "This steps only keeps blobs that meet one or both of the following criteria.",
+                 args: args,
+                 array: BorderBrightnessBlobRemover.Args.ArgType.allCases)
     }
 
     private func linearBlobConnectorView(_ args: LinearBlobConnector.Args) -> some View {

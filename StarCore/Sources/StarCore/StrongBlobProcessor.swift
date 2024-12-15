@@ -56,7 +56,8 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
 
           .frameState(.filter2),
 
-          .borderBrightnessLessThan(0.4, 10000),
+          .borderBrightnessBlobRemover(.init(maxBrightness: 0.4,
+                                             medianIntensityFloor: 10000)),
 
           .save(.filter2),
 
