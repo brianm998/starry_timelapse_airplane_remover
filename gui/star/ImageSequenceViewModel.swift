@@ -804,7 +804,24 @@ public extension ImageSequenceViewModel {
             if let frame = self.currentFrame {
                 frame.imageAccessor.deleteAllImages(frameIndex: frame.frameIndex)
                 self.frameViewMode = .original
-                self.currentFrameView.existingImages = [.original]
+
+                var existingImages: Set<FrameViewMode> = [.original]
+                
+                if frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
+                                                   ofType: .aligned,
+                                                   atSize: .original)
+                {
+                    existingImages.insert(.aligned)
+                }
+
+                if frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
+                                                   ofType: .subtraction,
+                                                   atSize: .original)
+                {
+                    existingImages.insert(.subtraction)
+                }
+
+                self.currentFrameView.existingImages = existingImages
                 
                 let binaryBlobFilename = await frame.blobBinaryFilename
                 // get rid of the outlier files

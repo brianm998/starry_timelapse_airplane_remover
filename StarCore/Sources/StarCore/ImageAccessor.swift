@@ -357,7 +357,13 @@ public struct ImageAccessor: Sendable {
         for type in FrameViewMode.allCases {
             switch type {
             case .original:
-                break           // don't delete the orignal images
+                break           // don't delete the original images
+
+            case .aligned:
+                break     
+
+            case .subtraction:
+                break        
 
             default:
                 try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .original)
