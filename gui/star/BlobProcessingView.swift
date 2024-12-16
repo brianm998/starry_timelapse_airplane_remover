@@ -83,6 +83,13 @@ struct BlobProcessingView: View {
                            basis to get that small few bits of signal that the other detection types may miss.
                            """)
                 case .custom:
+//                    Text("replace these steps with one of the following")
+//                    self.customCopyPicker
+
+                    /*
+                     XXX this replace is broken, as the values do not change upon replace :(
+                     */
+                    
                     Text("""
                            A custom detection type can be modified by the user at runtime to see what happens when processing one or more frames.
                            It will typically start as a copy of another detection type.
@@ -97,26 +104,8 @@ struct BlobProcessingView: View {
                       .font(.largeTitle)
                     
                     Text("Please choose an existing detection type to start from") 
-                    Picker("", selection: $detectionTypeToCopyFrom) {
-                        ForEach(DetectionType.allCases, id: \.self) { value in
-                            if value == .custom {
-                                Group { }
-                            } else {
-                                Text(value.rawValue).tag(value)
-                            }
-                        }
-                    }
-                      .frame(maxWidth: 240)
-                      .onChange(of: detectionTypeToCopyFrom) {
-                          if let detectionTypeToCopyFrom,
-                             let customProcessor = detectionType.blobProcessor as? CustomBlobProcessor
-                          {
-                              print("FUCKING DO SHIT HERE \(detectionTypeToCopyFrom)")
-                              customProcessor.copySteps(from: detectionTypeToCopyFrom.blobProcessor)
-                              stepsLoaded = true
-                          }
-                      }
-                    
+
+                    self.customCopyPicker
                 } else {
                     
                     
@@ -223,6 +212,31 @@ struct BlobProcessingView: View {
                 }
             }
         }
+    }
+
+    var customCopyPicker: some View {
+        Picker("", selection: $detectionTypeToCopyFrom) {
+            ForEach(DetectionType.allCases, id: \.self) { value in
+                if value == .custom {
+                    Group { }
+                } else {
+                    Text(value.rawValue).tag(value)
+                }
+            }
+        }
+          .frame(maxWidth: 240)
+          .onChange(of: detectionTypeToCopyFrom) {
+              if let detectionTypeToCopyFrom,
+                 let detectionType,
+                 let customProcessor = detectionType.blobProcessor as? CustomBlobProcessor
+              {
+                  print("FUCKING DO SHIT HERE \(detectionTypeToCopyFrom)")
+//                  self.valueMap = [:]
+                  customProcessor.copySteps(from: detectionTypeToCopyFrom.blobProcessor)
+                  stepsLoaded = true
+              }
+          }
+        
     }
 
     private func applyUserSlicesView() -> some View {
