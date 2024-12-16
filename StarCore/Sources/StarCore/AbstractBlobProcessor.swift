@@ -47,8 +47,6 @@ public class AbstractBlobProcessor {
     internal weak var frame: FrameAirplaneRemover?
     public var steps: [BlobProcessingType] = []
 
-    public init() { }
-
     // runs each step in sequence and returns the result
     public func process(frame: FrameAirplaneRemover) async throws -> BlobMap {
         self.frame = frame

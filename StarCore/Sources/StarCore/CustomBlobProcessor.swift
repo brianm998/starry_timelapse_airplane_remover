@@ -28,6 +28,56 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
         self.steps = other.steps
     }
 
+    public override init() {
+        super.init()
+        do {
+            try self.readStepsFromFile()
+        } catch {
+            Log.e("couldn't read steps from file: \(error)")
+        }
+    }
+
+    private func readStepsFromFile() throws {
+        let config_url = NSURL(fileURLWithPath: self.jsonFilename, isDirectory: false) as URL
+        let config_data = try Data(contentsOf: config_url)
+        let decoder = JSONDecoder()
+        self.steps = try decoder.decode([BlobProcessingType].self, from: config_data)
+    }
+    
+    private var jsonFilename: String {
+        var filename = "star_custom_processor_steps.json"
+        let env = ProcessInfo.processInfo.environment
+        if let homedir = env["HOME"] {
+            return "\(homedir)/\(filename)"
+        } else {
+            // with no homedir, put it in tmp?
+            return "/tmp/\(filename)"
+        }
+    }
+
+    public func saveStepsToFile() {
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+
+        let fullPath = self.jsonFilename
+
+        do {
+            let jsonData = try encoder.encode(self.steps)
+
+            if FileManager.default.fileExists(atPath: fullPath) {
+                try FileManager.default.removeItem(atPath: fullPath)
+            }
+            
+            Log.i("creating \(fullPath)")                      
+            FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
+            Log.i("created \(fullPath)")                      
+            
+        } catch {
+            Log.e("failed to create \(fullPath): \(error)")
+        }
+    }
+    
     public func doubleUpdate<T>(_ argsToUpdate: any Argable<T>, _ argType: T, _ value: Double, _ stepIndex: Int) {
         print("doubleUpdate args \(argsToUpdate) argType \(argType) value \(value) index \(index)")
         let currentStep = steps[stepIndex]
@@ -38,6 +88,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.doubleUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .findBlobs(updatedArgs)
+                saveStepsToFile()
             }
             
         case .applyUserSlices:
@@ -49,6 +100,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.doubleUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .smallBlobRemover(updatedArgs)
+                saveStepsToFile()
             }
     
         case .smallDimBlobRemover(let args):
@@ -57,6 +109,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.doubleUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .smallDimBlobRemover(updatedArgs)
+                saveStepsToFile()
             }
   
         case .blobDupeCheck(let step):
@@ -68,6 +121,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.doubleUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .lineSplit(updatedArgs)
+                saveStepsToFile()
             }
 
         case .borderBrightnessBlobRemover(let args):
@@ -76,6 +130,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.doubleUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .borderBrightnessBlobRemover(updatedArgs)
+                saveStepsToFile()
             }
 
         case .linearBlobConnector(let args):
@@ -84,6 +139,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.doubleUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .linearBlobConnector(updatedArgs)
+                saveStepsToFile()
             }
 
         case .blobLineTrim(let args):
@@ -92,6 +148,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.doubleUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .blobLineTrim(updatedArgs)
+                saveStepsToFile()
             }
 
         case .isolatedBlobRemover(let args):
@@ -100,6 +157,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.doubleUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .isolatedBlobRemover(updatedArgs)
+                saveStepsToFile()
             }
 
         case .disconnectedBlobRemover(let args):
@@ -108,6 +166,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.doubleUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .disconnectedBlobRemover(updatedArgs)
+                saveStepsToFile()
             }
 
         case .dimIsolatedBlobRemover(let args):
@@ -116,6 +175,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.doubleUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .dimIsolatedBlobRemover(updatedArgs)
+                saveStepsToFile()
             }
             
         case .save(let imageType):
@@ -130,6 +190,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.doubleUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .removeReallyBigBlobsWithSmallDimBunches(updatedArgs)
+                saveStepsToFile()
             }
 
         case .trimWithConstants(let args):
@@ -138,6 +199,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.doubleUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .trimWithConstants(updatedArgs)
+                saveStepsToFile()
             }
         }
     }
@@ -152,6 +214,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.intUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .findBlobs(updatedArgs)
+                saveStepsToFile()
             }
             
         case .applyUserSlices:
@@ -163,6 +226,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.intUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .smallBlobRemover(updatedArgs)
+                saveStepsToFile()
             }
     
         case .smallDimBlobRemover(let args):
@@ -171,6 +235,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.intUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .smallDimBlobRemover(updatedArgs)
+                saveStepsToFile()
             }
   
         case .blobDupeCheck(let step):
@@ -182,6 +247,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.intUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .lineSplit(updatedArgs)
+                saveStepsToFile()
             }
 
         case .borderBrightnessBlobRemover(let args):
@@ -190,6 +256,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.intUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .borderBrightnessBlobRemover(updatedArgs)
+                saveStepsToFile()
             }
 
         case .linearBlobConnector(let args):
@@ -198,6 +265,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.intUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .linearBlobConnector(updatedArgs)
+                saveStepsToFile()
             }
 
         case .blobLineTrim(let args):
@@ -206,6 +274,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.intUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .blobLineTrim(updatedArgs)
+                saveStepsToFile()
             }
 
         case .isolatedBlobRemover(let args):
@@ -214,6 +283,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.intUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .isolatedBlobRemover(updatedArgs)
+                saveStepsToFile()
             }
 
         case .disconnectedBlobRemover(let args):
@@ -222,6 +292,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.intUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .disconnectedBlobRemover(updatedArgs)
+                saveStepsToFile()
             }
 
         case .dimIsolatedBlobRemover(let args):
@@ -230,6 +301,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.intUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .dimIsolatedBlobRemover(updatedArgs)
+                saveStepsToFile()
             }
             
         case .save(let imageType):
@@ -244,6 +316,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.intUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .removeReallyBigBlobsWithSmallDimBunches(updatedArgs)
+                saveStepsToFile()
             }
 
         case .trimWithConstants(let args):
@@ -252,6 +325,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.intUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .trimWithConstants(updatedArgs)
+                saveStepsToFile()
             }
         }
     }
