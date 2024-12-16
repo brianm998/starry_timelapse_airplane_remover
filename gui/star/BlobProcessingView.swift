@@ -26,6 +26,10 @@ struct BlobProcessingView: View {
           .navigationTitle("Star Blob Processing")
           .onAppear {
               Task.detached {
+                  let detectionType = await constants.getDetectionType()
+                  await MainActor.run {
+                      self.detectionType = detectionType
+                  }
                   await constants.didChange() { detectionType in
                       Task { @MainActor in
                           self.detectionType = detectionType
