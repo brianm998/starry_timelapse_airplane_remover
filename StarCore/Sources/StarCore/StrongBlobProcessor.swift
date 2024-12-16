@@ -200,7 +200,7 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
           
           
           // split up blobs based upon user input
-          .process(.applyUserSlices),
+          .applyUserSlices,
 
           .save(.filter15),
           .frameState(.filter16),

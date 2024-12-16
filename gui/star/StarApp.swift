@@ -126,35 +126,31 @@ import StarDecisionTrees
     * create new window UI that can read the list of steps and show it to the user
     * move process(BlobFunctionType) to args format like others
     * move borderBrignessLessThan to args format
-    - make GUIBlobProcessor, which allows 
-    - allow seeing the settings being used at each step
-    - allow creating a custom set of steps starting with an existing one
+    * make GUIBlobProcessor, which allows 
+    * allow seeing the settings being used at each step
+    * allow creating a custom set of steps starting with an existing one
     - allow keeping track of how a frame was processed for later
     - allow changing the order of steps
     - allow adding new steps
     - allow deleting steps
-    - allow saving and reading steps from json (codable enum?)
-    - need to have helper text for what the values do
-    - find way to get processing methods into json and back
-      * make new enum of processing type?
+    * need to have helper text for what the values do
+    * find way to get processing methods into json and back
+    - allow saving and current state to json
+    - allow reading saved json when starting up custom processor 
+    - allow switching from one custom back to a default 
  */
 
  
 @main
 struct StarApp: App {
 
+    @Environment(\.openWindow) private var openWindow
+
     public static let outlierGroupTableWindowName = "outlierGroupTableWindow"
     public static let blobProcessingStepsWindowName = "blobProcessingStepsWindow"
+    public static let mainWindowName = "mainWindow"
     
     init() {
-        Task {
-            for window in NSApp.windows {
-                if window.title.hasPrefix("Outlier") {
-                    window.close()
-                }
-            }
-        }
-
         // maybe move this elsewhere
         Task { 
             await StarCore.currentClassifier.set() {
@@ -164,11 +160,13 @@ struct StarApp: App {
         
         Log.add(handler: ConsoleLogHandler(at: .debug), for: .console)
         Log.i("Starting Up")
+
+        openWindow(id: StarApp.mainWindowName)
     }
     
     var body: some Scene {
         let viewModel = ViewModel()
-        
+
         WindowGroup(id: StarApp.blobProcessingStepsWindowName) {
             BlobProcessingView()
               .environment(viewModel)
@@ -182,10 +180,12 @@ struct StarApp: App {
               .environment(viewModel)
         }
 
-        WindowGroup {
+        WindowGroup(id: StarApp.mainWindowName) {
             ContentView()
               .environment(viewModel)
-        }.commands {
+        }
+        .defaultLaunchBehavior(.presented)
+        .commands {
             StarCommands(viewModel: viewModel)
         }
 

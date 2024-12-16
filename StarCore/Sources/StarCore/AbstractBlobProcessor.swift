@@ -22,14 +22,10 @@ public typealias BlobMap = [UInt16:Blob]
  
  */
 
-public enum BlobFunctionType: Codable {
-    case applyUserSlices        // XXX get rid of this enum 
-}
-
 public enum BlobProcessingType: Hashable, Codable {
     case save(FrameViewMode)
     case frameState(FrameProcessingState)
-    case process(BlobFunctionType)
+    case applyUserSlices
     case findBlobs(BlobFinder.Args)
     case dimIsolatedBlobRemover(DimIsolatedBlobRemover.Args)
     case isolatedBlobRemover(IsolatedBlobRemover.Args)
@@ -70,11 +66,8 @@ public class AbstractBlobProcessor {
                                                      originalImage: originalImage,
                                                      frame: frame)
                 
-            case .process(let functionType):
-                switch functionType {
-                case .applyUserSlices:
-                    blobMap = try await applyUserSlices(blobMap)
-                }
+            case .applyUserSlices:
+                blobMap = try await applyUserSlices(blobMap)
                 
             case .smallBlobRemover(let args): // no analyzer
                 let remover = SmallBlobRemover(blobMap: blobMap,

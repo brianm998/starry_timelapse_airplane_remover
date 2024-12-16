@@ -40,8 +40,8 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                 steps[stepIndex] = .findBlobs(updatedArgs)
             }
             
-        case .process(let functionType):
-            break
+        case .applyUserSlices:
+           break
             
         case .smallBlobRemover(let args):
             if let argsToUpdate = argsToUpdate as? SmallBlobRemover.Args,
@@ -154,7 +154,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                 steps[stepIndex] = .findBlobs(updatedArgs)
             }
             
-        case .process(let functionType):
+        case .applyUserSlices:
             break
             
         case .smallBlobRemover(let args):

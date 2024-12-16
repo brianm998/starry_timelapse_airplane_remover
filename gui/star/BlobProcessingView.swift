@@ -148,8 +148,8 @@ struct BlobProcessingView: View {
                                     case .findBlobs(let args):
                                         findBlobsView(args, stepIndex: stepIndex)
                                         
-                                    case .process(let functionType):
-                                        processView(functionType)
+                                    case .applyUserSlices:
+                                        applyUserSlicesView()
 
                                     case .smallBlobRemover(let args):
                                         smallBlobRemoverView(args, stepIndex: stepIndex)
@@ -221,15 +221,12 @@ struct BlobProcessingView: View {
         }
     }
 
-    private func processView(_ blobFunctionType: BlobFunctionType) -> some View {
+    private func applyUserSlicesView() -> some View {
         VStack(alignment: .leading) {
-            switch blobFunctionType {
-            case .applyUserSlices:
-                Text("Apply User Slices")
-                  .foregroundColor(.white)
-                  .font(.title2)
-                Text("Apply any existing user slices to blobs")
-            }
+            Text("Apply User Slices")
+              .foregroundColor(.white)
+              .font(.title2)
+            Text("Apply any existing user slices to blobs")
         }
     }
 

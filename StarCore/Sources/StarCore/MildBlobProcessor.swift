@@ -213,7 +213,7 @@ public class MildBlobProcessor: AbstractBlobProcessor {
           .frameState(.filter14),
           
           // split up blobs based upon user input
-          .process(.applyUserSlices),
+          .applyUserSlices,
 
           .save(.filter14),
 
