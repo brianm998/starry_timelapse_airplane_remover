@@ -136,43 +136,45 @@ struct BlobProcessingView: View {
                               .background(.gray)
                               .padding(1)
                             
-                            ForEach(detectionType.blobProcessor.steps, id: \.self) { step in
+                            //ForEach(detectionType.blobProcessor.steps, id: \.self) { step in
+                            ForEach(detectionType.blobProcessor.steps.indices) { stepIndex in 
+                                let step = detectionType.blobProcessor.steps[stepIndex]
                                 switch step {
                                 case .findBlobs(let args):
-                                    findBlobsView(args)
+                                    findBlobsView(args, stepIndex: stepIndex)
                                     
                                 case .process(let functionType):
                                     processView(functionType)
 
                                 case .smallBlobRemover(let args):
-                                    smallBlobRemoverView(args)
+                                    smallBlobRemoverView(args, stepIndex: stepIndex)
 
                                 case .smallDimBlobRemover(let args):
-                                    smallDimBlobRemoverView(args)
+                                    smallDimBlobRemoverView(args, stepIndex: stepIndex)
 
                                 case .blobDupeCheck(let step):
                                     blobDupeCheckView(step)
 
                                 case .lineSplit(let args):
-                                    lineSplitView(args)
+                                    lineSplitView(args, stepIndex: stepIndex)
 
                                 case .borderBrightnessBlobRemover(let args):
-                                    borderBrightnessLessThanView(args)
+                                    borderBrightnessLessThanView(args, stepIndex: stepIndex)
 
                                 case .linearBlobConnector(let args):
-                                    linearBlobConnectorView(args)
+                                    linearBlobConnectorView(args, stepIndex: stepIndex)
 
                                 case .blobLineTrim(let args):
-                                    blobLineTrimView(args)
+                                    blobLineTrimView(args, stepIndex: stepIndex)
 
                                 case .isolatedBlobRemover(let args):
-                                    isolatedBlobRemoverView(args)
+                                    isolatedBlobRemoverView(args, stepIndex: stepIndex)
 
                                 case .disconnectedBlobRemover(let args):
-                                    disconnectedBlobRemoverView(args)
+                                    disconnectedBlobRemoverView(args, stepIndex: stepIndex)
 
                                 case .dimIsolatedBlobRemover(let args):
-                                    dimIsolatedBlobRemoverView(args)
+                                    dimIsolatedBlobRemoverView(args, stepIndex: stepIndex)
                                     
                                 case .save(let imageType):
                                     saveView(imageType)
@@ -181,10 +183,10 @@ struct BlobProcessingView: View {
                                     frameStateView(processingState)
 
                                 case .removeReallyBigBlobsWithSmallDimBunches(let args):
-                                    removeReallyBigBlobsWithSmallDimBunchesView(args)
+                                    removeReallyBigBlobsWithSmallDimBunchesView(args, stepIndex: stepIndex)
 
                                 case .trimWithConstants(let args):
-                                    trimWithConstantsView(args)
+                                    trimWithConstantsView(args, stepIndex: stepIndex)
 
                                 }
                             }
@@ -226,7 +228,9 @@ struct BlobProcessingView: View {
         }
     }
 
-    private func findBlobsView(_ args: BlobFinder.Args) -> some View {
+    private func findBlobsView(_ args: BlobFinder.Args,
+                               stepIndex: Int) -> some View
+    {
         stepView(title: "Initial Blob Detection",
                  description: """
                    This initial step analyses both the original frame image and the subtraction
@@ -234,28 +238,35 @@ struct BlobProcessingView: View {
                    in the subtraction image by the given criteria.
                    After this step, the blobs found here can be processed further so that we can
                    separate signal from noise.
-                   The signal we want is from transiently brigher streaks coming from airplanes and satellites.
+                   The signal we want is from transiently brighter streaks coming from airplanes and satellites.
                    Noise falls into many categories, as it's anything that we don't want to modify.
                    This can be caused by moving clouds, imperfect star alignment,
                    ground being rotated due to star alignment, meteors,
                    and a number of other factores.   
                    """,
                  args: args,
-                 array: BlobFinder.Args.ArgType.allCases)
+                 array: BlobFinder.Args.ArgType.allCases,
+                 stepIndex: stepIndex)
     }
     
-    private func smallBlobRemoverView(_ args: SmallBlobRemover.Args) -> some View {
+    private func smallBlobRemoverView(_ args: SmallBlobRemover.Args,
+                                      stepIndex: Int) -> some View
+    {
         stepView(title: "Small Blob Remover",
                  description: "gets rid of dimmer blobs off by themselves",
                  args: args,
-                 array: SmallBlobRemover.Args.ArgType.allCases)
+                 array: SmallBlobRemover.Args.ArgType.allCases,
+                 stepIndex: stepIndex)
     }
 
-    private func smallDimBlobRemoverView(_ args: SmallDimBlobRemover.Args) -> some View {
+    private func smallDimBlobRemoverView(_ args: SmallDimBlobRemover.Args,
+                                         stepIndex: Int) -> some View
+    {
         stepView(title: "Small Dim Blob Remover",
                  description: "gets rid of dimmer blobs off by themselves",
                  args: args,
-                 array: SmallDimBlobRemover.Args.ArgType.allCases)
+                 array: SmallDimBlobRemover.Args.ArgType.allCases,
+                 stepIndex: stepIndex)
     }
 
     private func blobDupeCheckView(_ step: String) -> some View {
@@ -267,56 +278,77 @@ struct BlobProcessingView: View {
         }
     }
 
-    private func lineSplitView(_ args: BlobLineSplitter.Args) -> some View {
+    private func lineSplitView(_ args: BlobLineSplitter.Args,
+                               stepIndex: Int) -> some View
+    {
         stepView(title: "Linear Blob Connector",
                  description: "gets rid of small blobs by themselves in nowhere",
                  args: args,
-                 array: BlobLineSplitter.Args.ArgType.allCases)
+                 array: BlobLineSplitter.Args.ArgType.allCases,
+                 stepIndex: stepIndex)
     }
 
-    private func borderBrightnessLessThanView(_ args: BorderBrightnessBlobRemover.Args) -> some View {
+    private func borderBrightnessLessThanView(_ args: BorderBrightnessBlobRemover.Args,
+                                              stepIndex: Int) -> some View
+    {
         stepView(title: "Border Brightness Less Than View Brightness",
                  description: "This steps only keeps blobs that meet one or both of the following criteria.",
                  args: args,
-                 array: BorderBrightnessBlobRemover.Args.ArgType.allCases)
+                 array: BorderBrightnessBlobRemover.Args.ArgType.allCases,
+                 stepIndex: stepIndex)
     }
 
-    private func linearBlobConnectorView(_ args: LinearBlobConnector.Args) -> some View {
+    private func linearBlobConnectorView(_ args: LinearBlobConnector.Args,
+                                         stepIndex: Int) -> some View
+    {
         let description = "This step recurses on finding nearby blobs to find groups of neighbors in a set.\nIt then tries to combine some of them into a line (if we get a good enough line)"
         return stepView(title: "Linear Blob Connector",
                         description: description,
                         args: args,
-                        array: LinearBlobConnector.Args.ArgType.allCases)
+                        array: LinearBlobConnector.Args.ArgType.allCases,
+                        stepIndex: stepIndex)
     }
 
-    private func blobLineTrimView(_ args: BlobLineTrim.Args) -> some View {
+    private func blobLineTrimView(_ args: BlobLineTrim.Args,
+                                  stepIndex: Int) -> some View
+    {
         stepView(title: "Blob Line Trim",
                  description: "trim pixels that are too far from a blobs's line",
                  args: args,
-                 array: BlobLineTrim.Args.ArgType.allCases)
+                 array: BlobLineTrim.Args.ArgType.allCases,
+                 stepIndex: stepIndex)
     }
 
-    private func isolatedBlobRemoverView(_ args: IsolatedBlobRemover.Args) -> some View {
+    private func isolatedBlobRemoverView(_ args: IsolatedBlobRemover.Args,
+                                         stepIndex: Int) -> some View
+    {
         stepView(title: "Isolated Blob Remover",
                  description: "gets rid of small blobs by themselves in nowhere",
                  args: args,
-                 array: IsolatedBlobRemover.Args.ArgType.allCases)
+                 array: IsolatedBlobRemover.Args.ArgType.allCases,
+                 stepIndex: stepIndex)
     }
 
-    private func disconnectedBlobRemoverView(_ args: DisconnectedBlobRemover.Args) -> some View {
+    private func disconnectedBlobRemoverView(_ args: DisconnectedBlobRemover.Args,
+                                             stepIndex: Int) -> some View
+    {
         let description = "recurse on finding nearby blobs to isolate groups of neighbors as a set\nuse the size of the neighbor set to determine if we keep a blob or not"
 
         return stepView(title: "Disconnected Blob Remover",
-                 description: description,
-                 args: args,
-                 array: DisconnectedBlobRemover.Args.ArgType.allCases)
+                        description: description,
+                        args: args,
+                        array: DisconnectedBlobRemover.Args.ArgType.allCases,
+                        stepIndex: stepIndex)
     }
 
-    private func dimIsolatedBlobRemoverView(_ args: DimIsolatedBlobRemover.Args) -> some View {
+    private func dimIsolatedBlobRemoverView(_ args: DimIsolatedBlobRemover.Args,
+                                            stepIndex: Int) -> some View
+    {
         stepView(title: "Dim Isolated Blob Remover",
                  description: "gets rid of dimmer blobs off by themselves",
                  args: args,
-                 array: DimIsolatedBlobRemover.Args.ArgType.allCases)
+                 array: DimIsolatedBlobRemover.Args.ArgType.allCases,
+                 stepIndex: stepIndex)
     }
 
     private func saveView(_ imageType: FrameViewMode) -> some View {
@@ -337,25 +369,40 @@ struct BlobProcessingView: View {
         }
     }
 
-    private func removeReallyBigBlobsWithSmallDimBunchesView(_ args: RemoveReallyBigBlobsWithSmallDimBunches.Args) -> some View {
+    private func removeReallyBigBlobsWithSmallDimBunchesView(_ args: RemoveReallyBigBlobsWithSmallDimBunches.Args,
+                                                             stepIndex: Int) -> some View
+    {
         stepView(title: "Remove Really Big Blobs With Small Dim Bunches",
                  description: "Trims dimmer pixels out of large cloud like blobs.",
                  args: args,
-                 array: RemoveReallyBigBlobsWithSmallDimBunches.Args.ArgType.allCases)
+                 array: RemoveReallyBigBlobsWithSmallDimBunches.Args.ArgType.allCases,
+                 stepIndex: stepIndex)
     }
 
 
-    private func trimWithConstantsView(_ args: BlobTrimmerWithConstants.Args) -> some View {
+    private func trimWithConstantsView(_ args: BlobTrimmerWithConstants.Args,
+                                       stepIndex: Int) -> some View
+    {
         stepView(title: "Blob Trimmer with Constants",
                  description: "Removes blobs that don't fit the given criteria",
                  args: args,
-                 array: BlobTrimmerWithConstants.Args.ArgType.allCases)
+                 array: BlobTrimmerWithConstants.Args.ArgType.allCases,
+                 stepIndex: stepIndex)
     }
 
+    // keeps track of all text field editable values as strings
+    @State private var valueMap: [AnyHashable: String] = [:]
+
+    private func binding(for value: AnyHashable) -> Binding<String> {
+        .init(get: { self.valueMap[value, default: ""] },
+              set: { self.valueMap[value] = $0 })
+    }
+    
     private func stepView<T: Hashable>(title: String,
                                        description: String,
                                        args: any Argable<T>,
-                                       array: [T]) -> some View
+                                       array: [T],
+                                       stepIndex: Int) -> some View
     {
         VStack(alignment: .leading) {
             Text(title)
@@ -376,17 +423,61 @@ struct BlobProcessingView: View {
                 }
                 .padding(.vertical, 2)
 
-                ForEach(array, id: \.self) { argType in
+                //ForEach(array, id: \.self) { argType in
+                ForEach(array.indices) { index in // index of paramters in list
+                    let argType = array[index]
                     GridRow {
                         Text("\(argType)")
-                        if let value = args.value(for: argType) {
+
+                        let value = args.value(for: argType)
+                        
+                        if detectionType == .custom {
+                            // editable text fields
+
                             if args.isInteger(argType) {
-                                Text(String(format: "%d", Int(value)))
-                            } else {
-                                Text(String(format: "%.2f", value))
+                                TextField("", text: binding(for: argType))
+                                  .frame(maxWidth: 100)
+                                  .onAppear {
+                                      if let value {
+                                          binding(for: argType).wrappedValue = String(format: "%d", Int(value))
+                                      }
+                                  }
+                                  .onSubmit {
+                                      if let intValue = Int(binding(for: argType).wrappedValue),
+                                         let customProcessor = DetectionType.custom.blobProcessor as? CustomBlobProcessor
+                                      { 
+                                          customProcessor.intUpdate(args, argType, intValue, stepIndex)
+                                      }
+                                  }
+                                
+                             } else {
+                                TextField("", // not integer (real number)
+                                          text: binding(for: argType))
+                                  .frame(maxWidth: 100)
+                                  .onAppear {
+                                      if let value {
+                                          binding(for: argType).wrappedValue = String(format: "%.2f", value)
+                                      }
+                                  }
+                                  .onSubmit {
+                                      if let doubleValue = Double(binding(for: argType).wrappedValue),
+                                         let customProcessor = DetectionType.custom.blobProcessor as? CustomBlobProcessor
+                                      {
+                                          customProcessor.doubleUpdate(args, argType, doubleValue, stepIndex)
+                                      }
+                                  }
                             }
                         } else {
-                            Text("")
+                            // read only view
+                            if let value {
+                                if args.isInteger(argType) {
+                                    Text(String(format: "%d", Int(value)))
+                                } else {
+                                    Text(String(format: "%.2f", value))
+                                }
+                            } else {
+                                Text("")
+                            }
                         }
                         Text(args.description(for: argType))
                     }

@@ -101,6 +101,47 @@ public class BlobTrimmerWithConstants {
             }
         }
 
+        public func doubleUpdate(for type: ArgType, value: Double) -> Args? { nil }
+        
+        public func intUpdate(for type: ArgType, value: Int) -> Args? {
+            switch type {
+            case .minBlobIntensity:
+                return Args(minBlobSize: self.minBlobSize,
+                            minSmallBlobIntensity: self.minSmallBlobIntensity,
+                            minBlobIntensity: UInt16(value),
+                            qualifierSize: self.qualifierSize,
+                            qualifierMedianIntensity: self.qualifierMedianIntensity)
+                
+            case .minSmallBlobIntensity:
+                return Args(minBlobSize: self.minBlobSize,
+                            minSmallBlobIntensity: UInt16(value),
+                            minBlobIntensity: self.minBlobIntensity,
+                            qualifierSize: self.qualifierSize,
+                            qualifierMedianIntensity: self.qualifierMedianIntensity)
+                
+            case .minBlobSize:
+                return Args(minBlobSize: value,
+                            minSmallBlobIntensity: self.minSmallBlobIntensity,
+                            minBlobIntensity: self.minBlobIntensity,
+                            qualifierSize: self.qualifierSize,
+                            qualifierMedianIntensity: self.qualifierMedianIntensity)
+
+            case .qualifierSize:
+                return Args(minBlobSize: self.minBlobSize,
+                            minSmallBlobIntensity: self.minSmallBlobIntensity,
+                            minBlobIntensity: self.minBlobIntensity,
+                            qualifierSize: value,
+                            qualifierMedianIntensity: self.qualifierMedianIntensity)
+
+            case .qualifierMedianIntensity:
+                return Args(minBlobSize: self.minBlobSize,
+                            minSmallBlobIntensity: self.minSmallBlobIntensity,
+                            minBlobIntensity: self.minBlobIntensity,
+                            qualifierSize: self.qualifierSize,
+                            qualifierMedianIntensity: UInt16(value))
+            }
+        }        
+        
         public init(minBlobSize: Int,
                     minSmallBlobIntensity: UInt16? = nil,
                     minBlobIntensity: UInt16,

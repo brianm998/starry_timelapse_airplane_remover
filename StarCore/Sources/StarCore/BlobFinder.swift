@@ -72,6 +72,26 @@ public class BlobFinder {
             }
         }
 
+        public func doubleUpdate(for type: ArgType, value: Double) -> Args? {
+            switch type {
+            case .minPixelIntensity:
+                return nil
+            case .minContrast:
+                return Args(minPixelIntensity: self.minPixelIntensity,
+                            minContrast: value)
+            }
+        }
+
+        public func intUpdate(for type: ArgType, value: Int) -> Args? {
+            switch type {
+            case .minPixelIntensity:
+                return Args(minPixelIntensity: UInt16(value),
+                            minContrast: self.minContrast)
+            case .minContrast:
+                return nil
+            }
+        }
+
         public init(minPixelIntensity: UInt16,
                     minContrast: Double)
         {

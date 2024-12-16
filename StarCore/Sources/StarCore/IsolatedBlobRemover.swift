@@ -81,6 +81,35 @@ public actor IsolatedBlobRemover {
             }
         }
         
+        public func doubleUpdate(for type: ArgType, value: Double) -> Args? { nil }
+        
+        public func intUpdate(for type: ArgType, value: Int) -> Args? {
+            switch type {
+            case .minNeighborSize:
+                return Args(minNeighborSize: value,
+                            scanSize: self.scanSize,
+                            requiredNeighbors: self.requiredNeighbors,
+                            minBlobSize: self.minBlobSize)
+            case .scanSize:
+                return Args(minNeighborSize: self.minNeighborSize,
+                            scanSize: value,
+                            requiredNeighbors: self.requiredNeighbors,
+                            minBlobSize: self.minBlobSize)
+
+            case .requiredNeighbors:
+                return Args(minNeighborSize: self.minNeighborSize,
+                            scanSize: self.scanSize,
+                            requiredNeighbors: value,
+                            minBlobSize: self.minBlobSize)
+
+            case .minBlobSize:
+                return Args(minNeighborSize: self.minNeighborSize,
+                            scanSize: self.scanSize,
+                            requiredNeighbors: self.requiredNeighbors,
+                            minBlobSize: value)
+            }
+        }
+
         public init(minNeighborSize: Int = 0,
                     scanSize: Int = 12,     
                     requiredNeighbors: Int = 1,

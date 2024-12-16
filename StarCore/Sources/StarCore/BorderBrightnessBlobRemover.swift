@@ -70,6 +70,26 @@ public actor BorderBrightnessBlobRemover {
             }
         }
 
+        public func doubleUpdate(for type: ArgType, value: Double) -> Args? {
+            switch type {
+            case .maxBrightness:
+                return Args(maxBrightness: value,
+                            medianIntensityFloor: self.medianIntensityFloor)
+            case .medianIntensityFloor:
+                return nil
+            }
+        }
+
+        public func intUpdate(for type: ArgType, value: Int) -> Args? {
+            switch type {
+            case .maxBrightness:
+                return nil
+            case .medianIntensityFloor:
+                return Args(maxBrightness: self.maxBrightness,
+                            medianIntensityFloor: UInt16(value))
+            }
+        }
+        
         public init(maxBrightness: Double,
                     medianIntensityFloor: UInt16)
         {

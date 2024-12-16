@@ -88,6 +88,47 @@ public actor DisconnectedBlobRemover {
             }
         }
         
+        public func doubleUpdate(for type: ArgType, value: Double) -> Args? { nil }
+        
+        public func intUpdate(for type: ArgType, value: Int) -> Args? {
+            switch type {
+            case .scanSize:
+                return Args(scanSize: value,
+                            blobsSmallerThan: self.blobsSmallerThan,
+                            blobsLargerThan: self.blobsLargerThan,
+                            requiredNeighbors: self.requiredNeighbors,
+                            intensityThreshold: self.intensityThreshold)
+
+            case .requiredNeighbors:
+                return Args(scanSize: self.scanSize,
+                            blobsSmallerThan: self.blobsSmallerThan,
+                            blobsLargerThan: self.blobsLargerThan,
+                            requiredNeighbors: value,
+                            intensityThreshold: self.intensityThreshold)
+
+            case .blobsSmallerThan:
+                return Args(scanSize: self.scanSize,
+                            blobsSmallerThan: value,
+                            blobsLargerThan: self.blobsLargerThan,
+                            requiredNeighbors: self.requiredNeighbors,
+                            intensityThreshold: self.intensityThreshold)
+
+            case .blobsLargerThan:
+                return Args(scanSize: self.scanSize,
+                            blobsSmallerThan: self.blobsSmallerThan,
+                            blobsLargerThan: value,
+                            requiredNeighbors: self.requiredNeighbors,
+                            intensityThreshold: self.intensityThreshold)
+
+            case .intensityThreshold:
+                return Args(scanSize: self.scanSize,
+                            blobsSmallerThan: self.blobsSmallerThan,
+                            blobsLargerThan: self.blobsLargerThan,
+                            requiredNeighbors: self.requiredNeighbors,
+                            intensityThreshold: UInt16(value))
+            }
+        }
+        
         public init(scanSize: Int = 28,
                     blobsSmallerThan: Int = 24,
                     blobsLargerThan: Int = 0,

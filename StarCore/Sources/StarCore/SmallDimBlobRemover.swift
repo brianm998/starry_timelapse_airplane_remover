@@ -85,6 +85,28 @@ public class SmallDimBlobRemover {
             }
         }
 
+        public func doubleUpdate(for type: ArgType, value: Double) -> Args? { nil }
+
+        public func intUpdate(for type: ArgType, value: Int) -> Args? {
+            switch type {
+
+            case .minBlobSize:
+                return Args(minBlobSize: value,
+                            sizeFloor: self.sizeFloor,
+                            intensityFloor: self.intensityFloor)
+
+            case .sizeFloor:
+                return Args(minBlobSize: self.minBlobSize,
+                            sizeFloor: value,
+                            intensityFloor: self.intensityFloor)
+
+            case .intensityFloor:
+                return Args(minBlobSize: self.minBlobSize,
+                            sizeFloor: self.sizeFloor,
+                            intensityFloor: UInt16(value))
+            }
+        }
+
         public init(minBlobSize: Int,
                     sizeFloor: Int? = nil,
                     intensityFloor: UInt16? = nil)

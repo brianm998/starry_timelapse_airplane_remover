@@ -116,6 +116,92 @@ public actor LinearBlobConnector {
             }
         }
 
+        public func doubleUpdate(for type: ArgType, value: Double) -> Args? {
+            switch type {
+            case .scanSize:
+                return nil
+            case .blobsSmallerThan:
+                return nil
+            case .blobsLargerThan:
+                return nil
+            case .lineBorder:
+                return nil
+            case .maxAverageLineDistance:
+                return Args(scanSize: self.scanSize,
+                            blobsSmallerThan: self.blobsSmallerThan,
+                            blobsLargerThan: self.blobsLargerThan,
+                            lineBorder: self.lineBorder,
+                            maxAverageLineDistance: value,
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
+                            maxIterationCount: self.maxIterationCount)
+            case .adjecentPixelsOnIteration:
+                return nil
+            case .maxIterationCount:
+                return nil
+            }
+        }
+        
+        public func intUpdate(for type: ArgType, value: Int) -> Args? {
+            switch type {
+            case .scanSize:
+                return Args(scanSize: value,
+                            blobsSmallerThan: self.blobsSmallerThan,
+                            blobsLargerThan: self.blobsLargerThan,
+                            lineBorder: self.lineBorder,
+                            maxAverageLineDistance: self.maxAverageLineDistance,
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
+                            maxIterationCount: self.maxIterationCount)
+
+            case .blobsSmallerThan:
+                return Args(scanSize: self.scanSize,
+                            blobsSmallerThan: value,
+                            blobsLargerThan: self.blobsLargerThan,
+                            lineBorder: self.lineBorder,
+                            maxAverageLineDistance: self.maxAverageLineDistance,
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
+                            maxIterationCount: self.maxIterationCount)
+
+            case .blobsLargerThan:
+                return Args(scanSize: self.scanSize,
+                            blobsSmallerThan: self.blobsSmallerThan,
+                            blobsLargerThan: value,
+                            lineBorder: self.lineBorder,
+                            maxAverageLineDistance: self.maxAverageLineDistance,
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
+                            maxIterationCount: self.maxIterationCount)
+
+            case .lineBorder:
+                return Args(scanSize: self.scanSize,
+                            blobsSmallerThan: self.blobsSmallerThan,
+                            blobsLargerThan: self.blobsLargerThan,
+                            lineBorder: value,
+                            maxAverageLineDistance: self.maxAverageLineDistance,
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
+                            maxIterationCount: self.maxIterationCount)
+
+            case .maxAverageLineDistance:
+                return nil
+
+            case .adjecentPixelsOnIteration:
+                return Args(scanSize: self.scanSize,
+                            blobsSmallerThan: self.blobsSmallerThan,
+                            blobsLargerThan: self.blobsLargerThan,
+                            lineBorder: self.lineBorder,
+                            maxAverageLineDistance: self.maxAverageLineDistance,
+                            adjecentPixelsOnIteration: value,
+                            maxIterationCount: self.maxIterationCount)
+
+            case .maxIterationCount:
+                return Args(scanSize: self.scanSize,
+                            blobsSmallerThan: self.blobsSmallerThan,
+                            blobsLargerThan: self.blobsLargerThan,
+                            lineBorder: self.lineBorder,
+                            maxAverageLineDistance: self.maxAverageLineDistance,
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
+                            maxIterationCount: value)
+            }
+        }
+        
         public init(scanSize: Int = 28,
                     blobsSmallerThan: Int = 24, 
                     blobsLargerThan: Int = 0,

@@ -64,6 +64,21 @@ public actor SmallBlobRemover {
             }
         }
 
+        public func doubleUpdate(for type: ArgType, value: Double) -> Args? { nil }
+
+        public func intUpdate(for type: ArgType, value: Int) -> Args? {
+            switch type {
+
+            case .minBlobSize:
+                return Args(minBlobSize: value,
+                            intensityFloor: self.intensityFloor)
+
+            case .intensityFloor:
+                return Args(minBlobSize: self.minBlobSize,
+                            intensityFloor: UInt16(value))
+            }
+        }
+
         public init(minBlobSize: Int = 24, intensityFloor: UInt16 = UInt16.max) {
             self.minBlobSize = minBlobSize
             self.intensityFloor = intensityFloor

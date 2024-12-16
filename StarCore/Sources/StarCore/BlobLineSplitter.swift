@@ -115,6 +115,97 @@ public actor BlobLineSplitter {
             }
         }
 
+        public func doubleUpdate(for type: ArgType, value: Double) -> Args? {
+            switch type {
+            case .minAvgDistance:
+                return Args(minAvgDistance: value,
+                            maxLineFillAmount: self.maxLineFillAmount,
+                            minBlobsize: self.minBlobsize,
+                            maxLines: self.maxLines,
+                            maxDistance: self.maxDistance,
+                            minLineScore: self.minLineScore,
+                            minLineCount: self.minLineCount)
+
+            case .maxLineFillAmount:
+                return Args(minAvgDistance: self.minAvgDistance,
+                            maxLineFillAmount: value,
+                            minBlobsize: self.minBlobsize,
+                            maxLines: self.maxLines,
+                            maxDistance: self.maxDistance,
+                            minLineScore: self.minLineScore,
+                            minLineCount: self.minLineCount)
+
+            case .minBlobsize: 
+                return nil
+
+            case .maxLines:
+                return nil
+
+            case .maxDistance:
+                return Args(minAvgDistance: self.minAvgDistance,
+                            maxLineFillAmount: self.maxLineFillAmount,
+                            minBlobsize: self.minBlobsize,
+                            maxLines: self.maxLines,
+                            maxDistance: value,
+                            minLineScore: self.minLineScore,
+                            minLineCount: self.minLineCount)
+
+            case .minLineScore:
+                return Args(minAvgDistance: self.minAvgDistance,
+                            maxLineFillAmount: self.maxLineFillAmount,
+                            minBlobsize: self.minBlobsize,
+                            maxLines: self.maxLines,
+                            maxDistance: self.maxDistance,
+                            minLineScore: value,
+                            minLineCount: self.minLineCount)
+                
+            case .minLineCount:
+                return nil
+            }
+        }
+
+        public func intUpdate(for type: ArgType, value: Int) -> Args? {
+            switch type {
+            case .minAvgDistance:
+                return nil
+            case .maxLineFillAmount:
+                return nil
+
+            case .minBlobsize: 
+                return Args(minAvgDistance: self.minAvgDistance,
+                            maxLineFillAmount: self.maxLineFillAmount,
+                            minBlobsize: value,
+                            maxLines: self.maxLines,
+                            maxDistance: self.maxDistance,
+                            minLineScore: self.minLineScore,
+                            minLineCount: self.minLineCount)
+
+            case .maxLines:
+                return Args(minAvgDistance: self.minAvgDistance,
+                            maxLineFillAmount: self.maxLineFillAmount,
+                            minBlobsize: self.minBlobsize,
+                            maxLines: value,
+                            maxDistance: self.maxDistance,
+                            minLineScore: self.minLineScore,
+                            minLineCount: self.minLineCount)
+
+            case .maxDistance:
+                return nil
+
+            case .minLineScore:
+                return nil
+
+            case .minLineCount:
+                return Args(minAvgDistance: self.minAvgDistance,
+                            maxLineFillAmount: self.maxLineFillAmount,
+                            minBlobsize: self.minBlobsize,
+                            maxLines: self.maxLines,
+                            maxDistance: self.maxDistance,
+                            minLineScore: self.minLineScore,
+                            minLineCount: value)
+            }
+        }
+        
         public init(
           minAvgDistance: Double,
           maxLineFillAmount: Double,

@@ -82,6 +82,47 @@ public actor RemoveReallyBigBlobsWithSmallDimBunches {
             }
         }
 
+        public func doubleUpdate(for type: ArgType, value: Double) -> Args? { nil }
+        
+        public func intUpdate(for type: ArgType, value: Int) -> Args? {
+            switch type {
+            case .minBlobSize:
+                return Args(minBlobSize: value,
+                            minBunchCount: self.minBunchCount,
+                            maxBunchSize: self.maxBunchSize,
+                            intensityCeiling: self.intensityCeiling,
+                            removePixelsDimmerThan: self.removePixelsDimmerThan)
+                
+            case .minBunchCount:
+                return Args(minBlobSize: self.minBlobSize,
+                            minBunchCount: value,
+                            maxBunchSize: self.maxBunchSize,
+                            intensityCeiling: self.intensityCeiling,
+                            removePixelsDimmerThan: self.removePixelsDimmerThan)
+
+            case .maxBunchSize:
+                return Args(minBlobSize: self.minBlobSize,
+                            minBunchCount: self.minBunchCount,
+                            maxBunchSize: value,
+                            intensityCeiling: self.intensityCeiling,
+                            removePixelsDimmerThan: self.removePixelsDimmerThan)
+
+            case .intensityCeiling:
+                return Args(minBlobSize: self.minBlobSize,
+                            minBunchCount: self.minBunchCount,
+                            maxBunchSize: self.maxBunchSize,
+                            intensityCeiling: UInt16(value),
+                            removePixelsDimmerThan: self.removePixelsDimmerThan)
+
+            case .removePixelsDimmerThan:
+                return Args(minBlobSize: self.minBlobSize,
+                            minBunchCount: self.minBunchCount,
+                            maxBunchSize: self.maxBunchSize,
+                            intensityCeiling: self.intensityCeiling,
+                            removePixelsDimmerThan: UInt16(value))
+            }
+        }
+
         public init(minBlobSize: Int = 1000,
                     minBunchCount: Int = 100,
                     maxBunchSize: Int = 10,

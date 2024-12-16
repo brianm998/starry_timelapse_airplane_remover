@@ -66,6 +66,27 @@ public actor BlobLineTrim {
             }
         }
 
+        public func doubleUpdate(for type: ArgType, value: Double) -> Args? {
+            switch type {
+            case .minLineLength:
+                return Args(minLineLength: value,
+                            minLineFillAmount: self.minLineFillAmount,
+                            trimAmount: self.trimAmount)
+
+            case .minLineFillAmount:
+                return Args(minLineLength: self.minLineLength,
+                            minLineFillAmount: value,
+                            trimAmount: self.trimAmount)
+        
+            case .trimAmount:
+                return Args(minLineLength: self.minLineLength,
+                            minLineFillAmount: self.minLineFillAmount,
+                            trimAmount: value)
+            }
+        }
+        
+        public func intUpdate(for type: ArgType, value: Int) -> Args? { nil }
+
         public init(minLineLength: Double,
                     minLineFillAmount: Double,
                     trimAmount: Double)
