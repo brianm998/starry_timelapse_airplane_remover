@@ -22,14 +22,7 @@ You should have received a copy of the GNU General Public License along with sta
  */
 
 // load and process all blobs for a frame, using a defined sequence of steps
-@Observable
 public class CustomBlobProcessor: AbstractBlobProcessor {
-
-    override public init() {
-        super.init()
-
-//        self.steps = [ ]
-    }
 
     public func copySteps(from other: AbstractBlobProcessor) {
         self.steps = other.steps

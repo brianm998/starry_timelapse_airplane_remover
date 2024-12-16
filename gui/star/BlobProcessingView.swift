@@ -137,57 +137,62 @@ struct BlobProcessingView: View {
                               .padding(1)
                             
                             //ForEach(detectionType.blobProcessor.steps, id: \.self) { step in
-                            ForEach(detectionType.blobProcessor.steps.indices) { stepIndex in 
-                                let step = detectionType.blobProcessor.steps[stepIndex]
-                                switch step {
-                                case .findBlobs(let args):
-                                    findBlobsView(args, stepIndex: stepIndex)
-                                    
-                                case .process(let functionType):
-                                    processView(functionType)
+                            //print("detectionType.blobProcessor.steps.count \(detectionType.blobProcessor.steps.count)")
+                            
+                            ForEach(detectionType.blobProcessor.steps.indices) { stepIndex in
+                                if stepIndex >= detectionType.blobProcessor.steps.count {
+                                    Text("WRONG INDEX: \(stepIndex) >= \(detectionType.blobProcessor.steps.count)")
+                                } else {
+                                    let step = detectionType.blobProcessor.steps[stepIndex]
+                                    switch step {
+                                    case .findBlobs(let args):
+                                        findBlobsView(args, stepIndex: stepIndex)
+                                        
+                                    case .process(let functionType):
+                                        processView(functionType)
 
-                                case .smallBlobRemover(let args):
-                                    smallBlobRemoverView(args, stepIndex: stepIndex)
+                                    case .smallBlobRemover(let args):
+                                        smallBlobRemoverView(args, stepIndex: stepIndex)
 
-                                case .smallDimBlobRemover(let args):
-                                    smallDimBlobRemoverView(args, stepIndex: stepIndex)
+                                    case .smallDimBlobRemover(let args):
+                                        smallDimBlobRemoverView(args, stepIndex: stepIndex)
 
-                                case .blobDupeCheck(let step):
-                                    blobDupeCheckView(step)
+                                    case .blobDupeCheck(let step):
+                                        blobDupeCheckView(step)
 
-                                case .lineSplit(let args):
-                                    lineSplitView(args, stepIndex: stepIndex)
+                                    case .lineSplit(let args):
+                                        lineSplitView(args, stepIndex: stepIndex)
 
-                                case .borderBrightnessBlobRemover(let args):
-                                    borderBrightnessLessThanView(args, stepIndex: stepIndex)
+                                    case .borderBrightnessBlobRemover(let args):
+                                        borderBrightnessLessThanView(args, stepIndex: stepIndex)
 
-                                case .linearBlobConnector(let args):
-                                    linearBlobConnectorView(args, stepIndex: stepIndex)
+                                    case .linearBlobConnector(let args):
+                                        linearBlobConnectorView(args, stepIndex: stepIndex)
 
-                                case .blobLineTrim(let args):
-                                    blobLineTrimView(args, stepIndex: stepIndex)
+                                    case .blobLineTrim(let args):
+                                        blobLineTrimView(args, stepIndex: stepIndex)
 
-                                case .isolatedBlobRemover(let args):
-                                    isolatedBlobRemoverView(args, stepIndex: stepIndex)
+                                    case .isolatedBlobRemover(let args):
+                                        isolatedBlobRemoverView(args, stepIndex: stepIndex)
 
-                                case .disconnectedBlobRemover(let args):
-                                    disconnectedBlobRemoverView(args, stepIndex: stepIndex)
+                                    case .disconnectedBlobRemover(let args):
+                                        disconnectedBlobRemoverView(args, stepIndex: stepIndex)
 
-                                case .dimIsolatedBlobRemover(let args):
-                                    dimIsolatedBlobRemoverView(args, stepIndex: stepIndex)
-                                    
-                                case .save(let imageType):
-                                    saveView(imageType)
+                                    case .dimIsolatedBlobRemover(let args):
+                                        dimIsolatedBlobRemoverView(args, stepIndex: stepIndex)
+                                        
+                                    case .save(let imageType):
+                                        saveView(imageType)
 
-                                case .frameState(let processingState):
-                                    frameStateView(processingState)
+                                    case .frameState(let processingState):
+                                        frameStateView(processingState)
 
-                                case .removeReallyBigBlobsWithSmallDimBunches(let args):
-                                    removeReallyBigBlobsWithSmallDimBunchesView(args, stepIndex: stepIndex)
+                                    case .removeReallyBigBlobsWithSmallDimBunches(let args):
+                                        removeReallyBigBlobsWithSmallDimBunchesView(args, stepIndex: stepIndex)
 
-                                case .trimWithConstants(let args):
-                                    trimWithConstantsView(args, stepIndex: stepIndex)
-
+                                    case .trimWithConstants(let args):
+                                        trimWithConstantsView(args, stepIndex: stepIndex)
+                                    }
                                 }
                             }
                               .padding(10)

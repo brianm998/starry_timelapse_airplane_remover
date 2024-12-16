@@ -187,8 +187,11 @@ public class AbstractBlobProcessor {
             }
             Log.d("frame \(frame.frameIndex) now has \(blobMap.count) blobs")
         }
-        self.steps = [] // steps can have retain cycles, allow deallocation by removing them here
         return blobMap
+    }
+
+    deinit {
+        self.steps = [] // steps can have retain cycles, allow deallocation by removing them here
     }
 
     // Mark - internals
