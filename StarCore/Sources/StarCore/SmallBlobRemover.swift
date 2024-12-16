@@ -31,7 +31,7 @@ public actor SmallBlobRemover {
     
     public func blobMap() async -> [UInt16:Blob] { blobMap }
     
-    public struct Args: Sendable, Hashable, Equatable, Argable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
         let minBlobSize: Int       // blobs smaller than this are ignored
         let intensityFloor: UInt16 // all blobs above this are ignored
         

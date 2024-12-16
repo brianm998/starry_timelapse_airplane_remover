@@ -31,7 +31,7 @@ public actor BlobLineSplitter {
     
     public func blobMap() -> [UInt16:Blob] { blobs }
     
-    public struct Args: Sendable, Hashable, Equatable, Argable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
 
         // used here
         let minAvgDistance: Double // need avg pixel distance more than this

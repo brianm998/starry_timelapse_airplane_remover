@@ -36,7 +36,7 @@ public actor DimIsolatedBlobRemover {
         analyzer.mapOfBlobs()
     }
     
-    public struct Args: Sendable, Hashable, Equatable, Argable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
         let scanSize: Int // how far in each direction to look for neighbors
         let requiredNeighbors: Int // how many neighbors do we need to find?
         let minBlobSize: Int       // blobs smaller than this are processed

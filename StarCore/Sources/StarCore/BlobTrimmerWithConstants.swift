@@ -28,7 +28,7 @@ public class BlobTrimmerWithConstants {
         self.frameIndex = frameIndex
     }
 
-    public struct Args: Sendable, Hashable, Equatable, Argable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
         let minBlobSize: Int        // blobs smaller than this are discarded
         let minSmallBlobIntensity: UInt16? 
         let minBlobIntensity: UInt16

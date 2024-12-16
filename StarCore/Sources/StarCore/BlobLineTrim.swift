@@ -27,7 +27,7 @@ public actor BlobLineTrim {
         self.blobMap = blobMap
     }
     
-    public struct Args: Sendable, Hashable, Equatable, Argable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
         let minLineLength: Double     // blobs with less line length are not processed
         let minLineFillAmount: Double // blobs with less line fill amount are not processed
         let trimAmount: Double        // trim  pixels further from the line than this

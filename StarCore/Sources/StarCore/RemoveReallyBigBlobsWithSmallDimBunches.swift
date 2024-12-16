@@ -31,7 +31,7 @@ public actor RemoveReallyBigBlobsWithSmallDimBunches {
     
     public func blobMap() async -> [UInt16:Blob] { blobMap }
     
-    public struct Args: Sendable, Hashable, Equatable, Argable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
         let minBlobSize: Int
         let minBunchCount: Int
         let maxBunchSize: Int

@@ -47,7 +47,7 @@ public actor LinearBlobConnector {
         analyzer.mapOfBlobs()
     }
 
-    public struct Args: Sendable, Hashable, Equatable, Argable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
         let scanSize: Int         // how far in each direction to look for neighbors
         let blobsSmallerThan: Int // ignore blobs larger than this
         let blobsLargerThan: Int  // ignore blobs smaller than this

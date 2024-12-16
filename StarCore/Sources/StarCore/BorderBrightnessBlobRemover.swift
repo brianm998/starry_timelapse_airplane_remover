@@ -30,7 +30,7 @@ public actor BorderBrightnessBlobRemover {
     
     public func blobMap() async -> [UInt16:Blob] { blobMap }
     
-    public struct Args: Sendable, Hashable, Equatable, Argable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
         let maxBrightness: Double
         let medianIntensityFloor: UInt16
         

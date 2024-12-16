@@ -22,11 +22,11 @@ public typealias BlobMap = [UInt16:Blob]
  
  */
 
-public enum BlobFunctionType {
+public enum BlobFunctionType: Codable {
     case applyUserSlices        // XXX get rid of this enum 
 }
 
-public enum BlobProcessingType: Hashable {
+public enum BlobProcessingType: Hashable, Codable {
     case save(FrameViewMode)
     case frameState(FrameProcessingState)
     case process(BlobFunctionType)

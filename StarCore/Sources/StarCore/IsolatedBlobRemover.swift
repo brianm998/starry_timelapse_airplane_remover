@@ -36,7 +36,7 @@ public actor IsolatedBlobRemover {
         analyzer.mapOfBlobs()
     }
     
-    public struct Args: Sendable, Hashable, Equatable, Argable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
         let minNeighborSize: Int   // how big does a neighbor need to be to count?
         let scanSize: Int          // how far in each direction to look for neighbors
         let requiredNeighbors: Int // how many neighbors does each one need?

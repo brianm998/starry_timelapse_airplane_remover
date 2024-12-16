@@ -21,7 +21,7 @@ public class BlobFinder {
 
     public init() { }
 
-    public struct Args: Sendable, Hashable, Equatable, Argable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
         let minPixelIntensity: UInt16
         let minContrast: Double
         
