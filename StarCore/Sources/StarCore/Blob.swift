@@ -90,8 +90,21 @@ public actor Blob: CustomStringConvertible,
 
         var index: Int = 0
 
+        var pixelCountForSave = pixels.count
+        var pixelsToSave = pixels
+        
+        if pixelCountForSave >= UInt16.max {
+            // if a blob has more than 65536 pixels, that's a problem.
+            // both because we store its size in 16 bits, and also because
+            // our use case doesn't really have any blobs this big that matter
+            // trim it down to size, throwing away the dimmest pixels.
+            pixelCountForSave = Int(UInt16.max) - 1
+            let sortedPixels = pixels.sorted { $0.intensity > $1.intensity }
+            pixelsToSave = Set(sortedPixels[0..<pixelCountForSave])
+        }
+        
         // can crash if pixels.count > UInt16.max 
-        let pixelCount = UInt16(pixels.count)
+        let pixelCount = UInt16(pixelCountForSave)
 
         array[index] = self.id
         index += 1
@@ -99,7 +112,7 @@ public actor Blob: CustomStringConvertible,
         array[index] = pixelCount
         index += 1
 
-        for pixel in pixels {
+        for pixel in pixelsToSave {
             array[index] = UInt16(pixel.x)
             index += 1
 
