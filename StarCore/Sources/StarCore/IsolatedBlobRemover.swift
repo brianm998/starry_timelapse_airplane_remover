@@ -53,7 +53,7 @@ public actor IsolatedBlobRemover {
             case .requiredNeighbors:
                 return "how many neighbors does each one need?"
             case .minBlobSize:
-                return "blobs larger than this are ignored"
+                return "blobs larger than this will not be removed"
             }
         }
 

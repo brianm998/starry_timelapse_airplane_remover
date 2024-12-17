@@ -47,13 +47,18 @@ public actor DimIsolatedBlobRemover {
         public func description(for type: ArgType) -> String {
             switch type {
             case .scanSize:
-                return "how far in each direction to look for neighbors"
+                return "How far in each direction to look for neighbors?.\nLooking farther gives more blobs."
             case .requiredNeighbors:
-                return "how many neighbors do we need to find?"
+                return "How many neighbors do we need to find?\nHigher values give fewer blobs."
             case .minBlobSize:
-                return "blobs smaller than this are processed"
+                return "blobs smaller than this are processed.\nLarger values give fewer blobs."
             case .intensityFloor:
-                return "use this intensity floor, or median intensity?"
+                return """
+                  If this is set, nearby blobs must have more intensity than this value
+                  to count as a neighbor.  If this value is not set, the first three quarters
+                  of the brightest blobs in the frame will count as neighbors.
+                  Lower values give more blobs.
+                  """
             }
         }
 

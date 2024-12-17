@@ -47,6 +47,8 @@ public class AbstractBlobProcessor {
     internal weak var frame: FrameAirplaneRemover?
     public var steps: [BlobProcessingType] = []
 
+    internal func shouldRunStep(atIndex index: Int) -> Bool { true }
+    
     // runs each step in sequence and returns the result
     public func process(frame: FrameAirplaneRemover) async throws -> BlobMap {
         self.frame = frame
@@ -55,7 +57,15 @@ public class AbstractBlobProcessor {
         // align neighbor frame, subtract it, sort pixels
         let (subtractionArray, originalImage) = try await self.setup()
 
-        for step in steps {
+        for stepIndex in 0..<steps.count {
+            let step = steps[stepIndex]
+
+            if !shouldRunStep(atIndex: stepIndex) {
+                print("shouldRunStep at index \(stepIndex) NO")
+                continue
+            }
+            
+            print("shouldRunStep at index \(stepIndex) YES")
             switch step {
 
             case .findBlobs(let args):

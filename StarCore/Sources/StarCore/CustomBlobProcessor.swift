@@ -24,6 +24,8 @@ You should have received a copy of the GNU General Public License along with sta
 // load and process all blobs for a frame, using a defined sequence of steps
 public class CustomBlobProcessor: AbstractBlobProcessor {
 
+    private var shouldDisable: [Bool]?
+    
     public func copySteps(from other: AbstractBlobProcessor) {
         self.steps = other.steps
     }
@@ -37,6 +39,21 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
         }
     }
 
+    override internal func shouldRunStep(atIndex index: Int) -> Bool {
+        if let shouldDisable {
+            if index >= 0,
+               index < shouldDisable.count
+            {
+                print("shouldRunStep \(index) !\(shouldDisable[index])")
+                return !shouldDisable[index]
+            } else {
+                return true
+            }
+        } else {
+            return true
+        }
+    }
+    
     private func readStepsFromFile() throws {
         let config_url = NSURL(fileURLWithPath: self.jsonFilename, isDirectory: false) as URL
         let config_data = try Data(contentsOf: config_url)
@@ -45,7 +62,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
     }
     
     private var jsonFilename: String {
-        var filename = "star_custom_processor_steps.json"
+        var filename = ".star_custom_processor_steps.json"
         let env = ProcessInfo.processInfo.environment
         if let homedir = env["HOME"] {
             return "\(homedir)/\(filename)"
@@ -55,6 +72,21 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
         }
     }
 
+    public func shouldDisable<T>(_ argsToUpdate: any Argable<T>, _ value: Bool, _ stepIndex: Int) {
+        var local: [Bool] = []
+        if let shouldDisable {
+            local = shouldDisable
+        } else {
+            local = [Bool](repeating: false, count: self.steps.count)
+        }
+        if stepIndex >= 0,
+           stepIndex < local.count
+        {
+            local[stepIndex] = value
+            shouldDisable = local
+        }
+    }
+    
     public func saveStepsToFile() {
 
         let encoder = JSONEncoder()

@@ -39,9 +39,9 @@ public actor BorderBrightnessBlobRemover {
         public func description(for type: ArgType) -> String {
             switch type {
             case .maxBrightness:
-                return "Blobs with border brightness vs the original image less than this "
+                return "Blobs with border brightness vs the original image less than this\nLarger values give more blobs."
             case .medianIntensityFloor:
-                return "Blobs with median intensity greater than this"
+                return "Blobs with median intensity greater than this\nLower values give more blobs."
             }
         }
 
