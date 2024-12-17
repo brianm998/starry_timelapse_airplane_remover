@@ -45,6 +45,7 @@ public actor BlobLineSplitter {
         let minLineCount: Int    // sub lines must have at least this number of pixels
 
         public typealias Types = ArgType
+        public var id: Self { self }
 
         public func description(for type: ArgType) -> String {
             switch type {

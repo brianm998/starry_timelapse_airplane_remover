@@ -6,7 +6,15 @@ import SwiftUI
 
 
 // different ways that an individual frame from a sequence can be displayed
-public enum FrameViewMode: String, Equatable, CaseIterable, Sendable, Codable {
+public enum FrameViewMode: String,
+                           Equatable,
+                           CaseIterable,
+                           Sendable,
+                           Codable,
+                           Identifiable
+{
+    public var id: Self { self }
+
     case original               // source frame with no changes
     case aligned                // aligned neighbor frame
     case subtraction            // the result of subtracting an aligned neighbor frame

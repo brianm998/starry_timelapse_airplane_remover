@@ -22,7 +22,13 @@ public typealias BlobMap = [UInt16:Blob]
  
  */
 
-public enum BlobProcessingType: Hashable, Codable {
+public enum BlobProcessingType: Hashable,
+                                Codable,
+                                Equatable,
+                                Identifiable
+{
+    public var id: Self { self }
+    
     case save(FrameViewMode)
     case frameState(FrameProcessingState)
     case applyUserSlices

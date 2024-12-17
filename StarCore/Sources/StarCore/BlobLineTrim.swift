@@ -27,12 +27,13 @@ public actor BlobLineTrim {
         self.blobMap = blobMap
     }
     
-    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         let minLineLength: Double     // blobs with less line length are not processed
         let minLineFillAmount: Double // blobs with less line fill amount are not processed
         let trimAmount: Double        // trim  pixels further from the line than this
 
         public typealias Types = ArgType
+        public var id: Self { self }
         
         public func description(for type: ArgType) -> String {
             switch type {

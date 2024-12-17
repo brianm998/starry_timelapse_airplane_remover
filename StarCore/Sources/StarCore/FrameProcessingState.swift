@@ -27,8 +27,11 @@ public enum LoopReturn: Sendable {
 public enum FrameProcessingState: Int,
                                   CaseIterable,
                                   Codable,
-                                  Sendable
+                                  Sendable,
+                                  Identifiable
 {
+    public var id: Self { self }
+    
     case unprocessed
     case starAlignment    
     case subtractingNeighbor

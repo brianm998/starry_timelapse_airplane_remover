@@ -31,11 +31,12 @@ public actor SmallBlobRemover {
     
     public func blobMap() async -> [UInt16:Blob] { blobMap }
     
-    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         let minBlobSize: Int       // blobs smaller than this are ignored
         let intensityFloor: UInt16 // all blobs above this are ignored
         
         public typealias Types = ArgType
+        public var id: Self { self }
 
         public func description(for type: ArgType) -> String {
             switch type {

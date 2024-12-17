@@ -29,12 +29,13 @@ public class SmallDimBlobRemover {
         self.frameIndex = frameIndex
     }
 
-    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         let minBlobSize: Int        // blobs smaller than this are discarded
         let sizeFloor: Int?         // if set with intenisty floor, then blobs that 
         let intensityFloor: UInt16? // are smaller and less intense will be discarded
         
         public typealias Types = ArgType
+        public var id: Self { self }
         
         public func description(for type: ArgType) -> String {
             switch type {

@@ -28,7 +28,7 @@ public class BlobTrimmerWithConstants {
         self.frameIndex = frameIndex
     }
 
-    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         let minBlobSize: Int        // blobs smaller than this are discarded
         let minSmallBlobIntensity: UInt16? 
         let minBlobIntensity: UInt16
@@ -36,6 +36,7 @@ public class BlobTrimmerWithConstants {
         let qualifierMedianIntensity: UInt16
         
         public typealias Types = ArgType
+        public var id: Self { self }
         
         public func description(for type: ArgType) -> String {
             switch type {

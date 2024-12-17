@@ -36,13 +36,14 @@ public actor IsolatedBlobRemover {
         analyzer.mapOfBlobs()
     }
     
-    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         let minNeighborSize: Int   // how big does a neighbor need to be to count?
         let scanSize: Int          // how far in each direction to look for neighbors
         let requiredNeighbors: Int // how many neighbors does each one need?
         let minBlobSize: Int       // blobs larger than this are ignored
 
         public typealias Types = ArgType
+        public var id: Self { self }
 
         public func description(for type: ArgType) -> String {
             switch type {

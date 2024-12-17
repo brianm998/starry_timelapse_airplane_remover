@@ -37,7 +37,7 @@ public actor DisconnectedBlobRemover {
         analyzer.mapOfBlobs()
     }
     
-    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         let scanSize: Int          // how far in each direction to look for neighbors
         let blobsSmallerThan: Int  // ignore blobs larger than this
         let blobsLargerThan: Int   // ignore blobs smaller than this
@@ -45,6 +45,7 @@ public actor DisconnectedBlobRemover {
         let intensityThreshold: UInt16 // blobs brighter than this are ignored
 
         public typealias Types = ArgType
+        public var id: Self { self }
 
         public func description(for type: ArgType) -> String {
             switch type {

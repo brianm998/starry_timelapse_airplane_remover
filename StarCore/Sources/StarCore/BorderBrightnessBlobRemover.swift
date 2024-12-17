@@ -30,11 +30,12 @@ public actor BorderBrightnessBlobRemover {
     
     public func blobMap() async -> [UInt16:Blob] { blobMap }
     
-    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         let maxBrightness: Double
         let medianIntensityFloor: UInt16
         
         public typealias Types = ArgType
+        public var id: Self { self }
 
         public func description(for type: ArgType) -> String {
             switch type {

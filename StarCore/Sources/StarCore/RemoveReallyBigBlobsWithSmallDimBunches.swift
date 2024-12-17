@@ -31,7 +31,7 @@ public actor RemoveReallyBigBlobsWithSmallDimBunches {
     
     public func blobMap() async -> [UInt16:Blob] { blobMap }
     
-    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         let minBlobSize: Int
         let minBunchCount: Int
         let maxBunchSize: Int
@@ -39,6 +39,7 @@ public actor RemoveReallyBigBlobsWithSmallDimBunches {
         let removePixelsDimmerThan: UInt16
         
         public typealias Types = ArgType
+        public var id: Self { self }
 
         public func description(for type: ArgType) -> String {
             switch type {

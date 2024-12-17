@@ -21,10 +21,12 @@ public class BlobFinder {
 
     public init() { }
 
-    public struct Args: Sendable, Hashable, Equatable, Argable, Codable {
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         let minPixelIntensity: UInt16
         let minContrast: Double
         
+        public var id: Self { self }
+
         public typealias Types = ArgType
         
         public func description(for type: ArgType) -> String {
