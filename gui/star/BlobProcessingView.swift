@@ -184,9 +184,9 @@ struct BlobProcessingView: View {
                                     trimWithConstantsView(args, stepIndex: stepIndex)
                                 }
                             }
+                              .background(.gray)
+                              .padding(1)
                         }
-                          .background(.gray)
-                          .padding(1)
 
                         VStack(alignment: .leading) {
                             Text("Blob Processing Complete")
@@ -226,13 +226,10 @@ struct BlobProcessingView: View {
                  let detectionType,
                  let customProcessor = detectionType.blobProcessor as? CustomBlobProcessor
               {
-                  print("FUCKING DO SHIT HERE \(detectionTypeToCopyFrom)")
-//                  self.valueMap = [:]
                   customProcessor.copySteps(from: detectionTypeToCopyFrom.blobProcessor)
                   stepsLoaded = true
               }
           }
-        
     }
 
     private func applyUserSlicesView() -> some View {
@@ -473,9 +470,10 @@ struct StepView<T: Hashable>: View {
                     }
                       .padding(.vertical, 2)
 
-                    ForEach(array.indices) { index in // index of paramters in list
+                    // index of paramters in list
+                    ForEach(Array(array.enumerated()), id: \.element) { index, value in
                         StepRowView(args,
-                                    argType: array[index],
+                                    argType: value,
                                     stepIndex: stepIndex,
                                     detectionType: $detectionType)
                           .padding(.vertical, 2)
