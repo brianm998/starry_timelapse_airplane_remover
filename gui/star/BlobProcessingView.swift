@@ -266,7 +266,8 @@ struct BlobProcessingView: View {
                    """,
                  args: args,
                  array: BlobFinder.Args.ArgType.allCases,
-                 stepIndex: stepIndex)
+                 stepIndex: stepIndex,
+                 showDisableButton: false)
     }
     
     private func smallBlobRemoverView(_ args: SmallBlobRemover.Args,
@@ -301,8 +302,8 @@ struct BlobProcessingView: View {
     private func lineSplitView(_ args: BlobLineSplitter.Args,
                                stepIndex: Int) -> some View
     {
-        stepView(title: "Linear Blob Connector",
-                 description: "gets rid of small blobs by themselves in nowhere",
+        stepView(title: "Line Splitter",
+                 description: "tries to split up blobs into multiple lines if possible",
                  args: args,
                  array: BlobLineSplitter.Args.ArgType.allCases,
                  stepIndex: stepIndex)
@@ -411,99 +412,143 @@ struct BlobProcessingView: View {
     }
 
     // keeps track of all text field editable values as strings
-    @State private var valueMap: [AnyHashable: String] = [:]
+    @State private var stringValueMap: [AnyHashable: String] = [:]
 
-    private func binding(for value: AnyHashable) -> Binding<String> {
-        .init(get: { self.valueMap[value, default: ""] },
-              set: { self.valueMap[value] = $0 })
+    private func stringBinding(for value: AnyHashable) -> Binding<String> {
+        .init(get: { self.stringValueMap[value, default: ""] },
+              set: { self.stringValueMap[value] = $0 })
     }
     
+    // keeps track of all text field editable values as strings
+    @State private var boolValueMap: [AnyHashable: Bool] = [:]
+
+    private func boolBinding(for value: AnyHashable) -> Binding<Bool> {
+        .init(get: { self.boolValueMap[value, default: false] },
+              set: { self.boolValueMap[value] = $0 })
+    }
+
     private func stepView<T: Hashable>(title: String,
                                        description: String,
                                        args: any Argable<T>,
                                        array: [T],
-                                       stepIndex: Int) -> some View
+                                       stepIndex: Int,
+                                       showDisableButton: Bool = true) -> some View
     {
-        VStack(alignment: .leading) {
-            Text(title)
-              .foregroundColor(.white)
-              .font(.largeTitle)
-            Text(description)
-            Spacer()
-              .frame(maxHeight: 10)
-            Text("Parameters which can affect how this step operates:")
-            Grid(alignment: .topLeading) {
-                GridRow {
-                    Text("Name")
-                      .foregroundColor(.white)
-                    Text("Value")
-                      .foregroundColor(.white)
-                    Text("Description")
-                      .foregroundColor(.white)
-                }
-                .padding(.vertical, 2)
-
-                //ForEach(array, id: \.self) { argType in
-                ForEach(array.indices) { index in // index of paramters in list
-                    let argType = array[index]
+        ZStack {
+            VStack(alignment: .leading) {
+                Text(title)
+                  .foregroundColor(.white)
+                  .font(.largeTitle)
+                Text(description)
+                Spacer()
+                  .frame(maxHeight: 10)
+                Text("Parameters which can affect how this step operates:")
+                Grid(alignment: .topLeading) {
                     GridRow {
-                        Text("\(argType)")
-
-                        let value = args.value(for: argType)
-                        
-                        if detectionType == .custom {
-                            // editable text fields
-
-                            if args.isInteger(argType) {
-                                TextField("", text: binding(for: argType))
-                                  .frame(maxWidth: 100)
-                                  .onAppear {
-                                      if let value {
-                                          binding(for: argType).wrappedValue = String(format: "%d", Int(value))
-                                      }
-                                  }
-                                  .onSubmit {
-                                      if let intValue = Int(binding(for: argType).wrappedValue),
-                                         let customProcessor = DetectionType.custom.blobProcessor as? CustomBlobProcessor
-                                      { 
-                                          customProcessor.intUpdate(args, argType, intValue, stepIndex)
-                                      }
-                                  }
-                                
-                             } else {
-                                TextField("", // not integer (real number)
-                                          text: binding(for: argType))
-                                  .frame(maxWidth: 100)
-                                  .onAppear {
-                                      if let value {
-                                          binding(for: argType).wrappedValue = String(format: "%.2f", value)
-                                      }
-                                  }
-                                  .onSubmit {
-                                      if let doubleValue = Double(binding(for: argType).wrappedValue),
-                                         let customProcessor = DetectionType.custom.blobProcessor as? CustomBlobProcessor
-                                      {
-                                          customProcessor.doubleUpdate(args, argType, doubleValue, stepIndex)
-                                      }
-                                  }
-                            }
-                        } else {
-                            // read only view
-                            if let value {
-                                if args.isInteger(argType) {
-                                    Text(String(format: "%d", Int(value)))
-                                } else {
-                                    Text(String(format: "%.2f", value))
-                                }
-                            } else {
-                                Text("")
-                            }
-                        }
-                        Text(args.description(for: argType))
+                        Text("Name")
+                          .foregroundColor(.white)
+                        Text("Value")
+                          .foregroundColor(.white)
+                        Text("Description")
+                          .foregroundColor(.white)
                     }
-                    .padding(.vertical, 2)
+                      .padding(.vertical, 2)
+
+                    //ForEach(array, id: \.self) { argType in
+                    ForEach(array.indices) { index in // index of paramters in list
+                        self.stepRowView(args, argType: array[index], stepIndex: stepIndex)
+                          .padding(.vertical, 2)
+                    }
                 }
             }
+              .layoutPriority(10)
+            
+            if detectionType == .custom,
+               showDisableButton
+            {
+                HStack(alignment: .top) {
+                    Spacer()
+                      .layoutPriority(0)
+                    VStack(alignment: .trailing) {
+                        Spacer()
+                          .frame(maxHeight: 10)
+                        
+                        Toggle("Disable", isOn: boolBinding(for: stepIndex))
+                          .toggleStyle(.switch)
+                          .onChange(of: boolBinding(for: stepIndex).wrappedValue) { _, newValue in
+                              if let customProcessor = DetectionType.custom.blobProcessor as? CustomBlobProcessor
+                              {
+                                  customProcessor.shouldDisable(args, newValue, stepIndex)
+                              }
+                          }
+                        
+                        Spacer()
+                    }
+                }
+            }
+        }
+    }
+
+    // view for each parameter for this step, as a GridRow with three elements
+    private func stepRowView<T: Hashable>(_ args: any Argable<T>,
+                                          argType: T,
+                                          stepIndex: Int) -> some View
+    {
+        GridRow {
+            Text("\(argType)")
+
+            let value = args.value(for: argType)
+            
+            if detectionType == .custom {
+                // editable text fields
+
+                if args.isInteger(argType) {
+                    TextField("", text: stringBinding(for: argType))
+                      .frame(maxWidth: 80)
+                      .onAppear {
+                          if let value {
+                              stringBinding(for: argType).wrappedValue = String(format: "%d", Int(value))
+                          }
+                      }
+                      .onSubmit {
+                          if let intValue = Int(stringBinding(for: argType).wrappedValue),
+                             let customProcessor = DetectionType.custom.blobProcessor as? CustomBlobProcessor
+                          { 
+                              customProcessor.intUpdate(args, argType, intValue, stepIndex)
+                          }
+                      }
+                    
+                } else {
+                    TextField("", // not integer (real number)
+                              text: stringBinding(for: argType))
+                      .frame(maxWidth: 80)
+                      .onAppear {
+                          if let value {
+                              stringBinding(for: argType).wrappedValue = String(format: "%.2f", value)
+                          }
+                      }
+                      .onSubmit {
+                          if let doubleValue = Double(stringBinding(for: argType).wrappedValue),
+                             let customProcessor = DetectionType.custom.blobProcessor as? CustomBlobProcessor
+                          {
+                              customProcessor.doubleUpdate(args, argType, doubleValue, stepIndex)
+                          }
+                      }
+                }
+            } else {
+                // read only view
+                if let value {
+                    if args.isInteger(argType) {
+                        Text(String(format: "%d", Int(value)))
+                    } else {
+                        Text(String(format: "%.2f", value))
+                    }
+                } else {
+                    Text("")
+                }
+            }
+            Text(args.description(for: argType))
+
         }
     }
 }
