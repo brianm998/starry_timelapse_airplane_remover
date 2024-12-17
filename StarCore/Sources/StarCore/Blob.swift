@@ -248,6 +248,15 @@ public actor Blob: CustomStringConvertible,
             return nil
         }
     }
+
+    // removes all pixels below the given intensity floor
+    public func intensityTrim(by intensityFloor: UInt16) {
+        for pixel in pixels {
+            if pixel.intensity < intensityFloor {
+                pixels.remove(pixel)
+            }
+        }
+    }
     
     // trims outlying pixels from the group, especially
     // ones with very few neighboring pixels

@@ -182,6 +182,10 @@ struct BlobProcessingView: View {
 
                                 case .trimWithConstants(let args):
                                     trimWithConstantsView(args, stepIndex: stepIndex)
+
+                                case .largeDimBlobCleaner(let args):
+                                    largeDimBlobCleanerView(args, stepIndex: stepIndex)
+                                    
                                 }
                             }
                               .background(.gray)
@@ -416,6 +420,17 @@ struct BlobProcessingView: View {
                  description: "Removes blobs that don't fit the given criteria",
                  args: args,
                  array: BlobTrimmerWithConstants.Args.ArgType.allCases,
+                 stepIndex: stepIndex,
+                 detectionType: $detectionType)
+    }
+
+    private func largeDimBlobCleanerView(_ args: LargeDimBlobCleaner.Args,
+                                         stepIndex: Int) -> some View
+    {
+        StepView(title: "Large Dim Blob Cleaner",
+                 description: "Cleans out dim pixels from large dim blobs",
+                 args: args,
+                 array: LargeDimBlobCleaner.Args.ArgType.allCases,
                  stepIndex: stepIndex,
                  detectionType: $detectionType)
     }

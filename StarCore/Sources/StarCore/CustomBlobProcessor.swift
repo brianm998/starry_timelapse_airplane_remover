@@ -233,6 +233,15 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                 steps[stepIndex] = .trimWithConstants(updatedArgs)
                 saveStepsToFile()
             }
+
+        case .largeDimBlobCleaner(let args):
+            if let argsToUpdate = argsToUpdate as? LargeDimBlobCleaner.Args,
+               let argType = argType as? LargeDimBlobCleaner.Args.ArgType,
+               let updatedArgs = argsToUpdate.doubleUpdate(for: argType, value: value)
+            {
+                steps[stepIndex] = .largeDimBlobCleaner(updatedArgs)
+                saveStepsToFile()
+            }
         }
     }
 
@@ -357,6 +366,15 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = argsToUpdate.intUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .trimWithConstants(updatedArgs)
+                saveStepsToFile()
+            }
+
+        case .largeDimBlobCleaner(let args):
+            if let argsToUpdate = argsToUpdate as? LargeDimBlobCleaner.Args,
+               let argType = argType as? LargeDimBlobCleaner.Args.ArgType,
+               let updatedArgs = argsToUpdate.intUpdate(for: argType, value: value)
+            {
+                steps[stepIndex] = .largeDimBlobCleaner(updatedArgs)
                 saveStepsToFile()
             }
         }

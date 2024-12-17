@@ -41,7 +41,7 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
 
           .frameState(.filter2),
 
-          .borderBrightnessBlobRemover(.init(maxBrightness: 0.5,
+          .borderBrightnessBlobRemover(.init(maxBrightness: 0.65,
                                              medianIntensityFloor: 10000)),
 
           .save(.filter2),
@@ -103,20 +103,10 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           .save(.filter8),
           .frameState(.filter9),
 
-          // try to do more line adjustment after removing some isolated blobs
-//          .linearBlobConnector(.init(scanSize: 32,
-//                                     blobsSmallerThan: 180)),
-
-
+          .largeDimBlobCleaner(.init(minBlobSize: 1000,
+                                     intensityFloor: 2000)),
           
-          .isolatedBlobRemover(.init(scanSize: 50,
-                                     requiredNeighbors: 1,
-                                     minBlobSize: 24)),
-
           // try to split up blobs with more than one line in them
-
-          .save(.filter9),
-          .frameState(.filter10),
 
           // this appears to be slow
           .lineSplit(.init(minAvgDistance: 5,
@@ -127,13 +117,17 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
                            minLineScore: 12,
                            minLineCount: 10)),
 
-          .save(.filter10),
-          .frameState(.filter11),
+          .save(.filter9),
+          .frameState(.filter10),
+
 
           // blob line trim
           .blobLineTrim(.init(minLineLength: 65,
                               minLineFillAmount: 0.9,
                               trimAmount: 16)),
+
+          .save(.filter10),
+          .frameState(.filter11),
 
           // reconnect some lines that may have been split up
           .linearBlobConnector(.init(scanSize: 40, 

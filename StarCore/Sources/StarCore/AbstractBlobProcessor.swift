@@ -45,6 +45,7 @@ public enum BlobProcessingType: Hashable,
     case smallDimBlobRemover(SmallDimBlobRemover.Args)
     case removeReallyBigBlobsWithSmallDimBunches(RemoveReallyBigBlobsWithSmallDimBunches.Args)
     case trimWithConstants(BlobTrimmerWithConstants.Args)
+    case largeDimBlobCleaner(LargeDimBlobCleaner.Args)
 }
 
 // load and process all blobs for a frame, using a defined sequence of steps
@@ -190,6 +191,12 @@ public class AbstractBlobProcessor {
                                                        frameIndex: frame.frameIndex)
                 await trimmer.process(args)
                 blobMap = trimmer.blobMap
+
+            case .largeDimBlobCleaner(let args):
+                let cleaner = LargeDimBlobCleaner(blobMap: blobMap,
+                                                  frameIndex: frame.frameIndex)
+                await cleaner.process(args)
+                blobMap = await cleaner.blobMap()
                 
             }
             Log.d("frame \(frame.frameIndex) now has \(blobMap.count) blobs")
