@@ -190,25 +190,24 @@ struct BlobProcessingView: View {
                             }
                               .background(.gray)
                               .padding(1)
-                        }
 
-                        VStack(alignment: .leading) {
-                            Text("Blob Processing Complete")
-                              .foregroundColor(.white)
-                              .font(.largeTitle)
-                            Text("""
-                                   At this point, the blobs are promoted to outlier groups.
-                                   This allows both manual and machine learning classification
-                                   of the remaning data before we use this information to
-                                   potentially modify certain pixels in each frame
-                                   """)
+                            VStack(alignment: .leading) {
+                                Text("Blob Processing Complete")
+                                  .foregroundColor(.white)
+                                  .font(.largeTitle)
+                                Text("""
+                                       At this point, the blobs are promoted to outlier groups.
+                                       This allows both manual and machine learning classification
+                                       of the remaning data before we use this information to
+                                       potentially modify certain pixels in each frame
+                                       """)
+                            }
+                              .padding(10)
+                              .background(.gray)
+                              .padding(1)
+                            
                         }
-                          .padding(10)
-                          .background(.gray)
-                          .padding(1)
-                        
                     }
-
                 }
             }
         }

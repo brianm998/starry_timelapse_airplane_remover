@@ -37,7 +37,7 @@ struct OutlierGroupView: View {
 
             let half_arrow_length = arrow_length/2
 
-            if groupViewModel.arrowSelected || will_paint || unknown_paint {
+            if groupViewModel.arrowSelected || will_paint || unknown_paint || groupViewModel.isSelected {
                 // arrow indicators on the side of the image
 
                 // arrow on left side
@@ -65,7 +65,7 @@ struct OutlierGroupView: View {
                           y: half_arrow_length + half_frame_height)
             }
             
-            if groupViewModel.arrowSelected {
+            if groupViewModel.arrowSelected || groupViewModel.isSelected {
                 
                 // lines across the frame between the arrows and outlier group bounds
                 let left_line_width = CGFloat(bounds.min.x)
@@ -160,7 +160,7 @@ struct OutlierGroupView: View {
         let bounds_width = CGFloat(bounds.width)
 
         return ZStack(alignment: .topLeading) {
-            if self.groupViewModel.arrowSelected {
+            if self.groupViewModel.arrowSelected || self.groupViewModel.isSelected {
                 // underlay for when this outlier group is hovered over
                 Rectangle() // fill that is transparent
                   .foregroundColor(paint_color)

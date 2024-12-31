@@ -115,7 +115,7 @@ class OutlierGroupViewModel: Identifiable {
     }
     
     var groupColor: Color {
-        if isSelected { return .blue }
+        if isSelected { return .orange }
 
         if let will_paint = self.paintObserver.shouldPaint {
           if will_paint.willPaint {
@@ -129,7 +129,8 @@ class OutlierGroupViewModel: Identifiable {
     }
     
     var arrowColor: Color {
-
+        if isSelected { return .blue }
+        
         if let will_paint = self.paintObserver.shouldPaint {
             if self.arrowSelected {            
               if will_paint.willPaint {
