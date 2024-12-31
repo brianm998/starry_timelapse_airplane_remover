@@ -16,14 +16,18 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-// gets rid of dimmer blobs off by themselves 
+// A wrapper for the FullFrameBlobber that has Argable Args so it can easily run in the
+// BlobProcessor and be exposed to the gui.
 public class BlobFinder {
 
     public init() { }
 
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         let minPixelIntensity: UInt16
-        let minContrast: Double
+        let startContrastSize: Int
+        let endContrastSize: Int
+        let startMinContrast: Double
+        let endMinContrast: Double
         
         public var id: Self { self }
 
@@ -33,7 +37,13 @@ public class BlobFinder {
             switch type {
             case .minPixelIntensity:
                 return "Pixels in the subtraction image with less changed intensity than this cannot start blobs.\nLower values give more blobs."
-            case .minContrast: 
+            case .startContrastSize:
+                return "the blob size at which the contrast change starts"
+            case .endContrastSize:
+                return "the blob size at which the contrast change ends"
+            case .startMinContrast:
+                return "write this"
+            case .endMinContrast: 
                 return """
                   blobs can grow until they get this
                   percentage darker than their seed pixel
@@ -51,14 +61,23 @@ public class BlobFinder {
 
         public enum ArgType: CaseIterable, Hashable {
             case minPixelIntensity
-            case minContrast
+            case startContrastSize
+            case endContrastSize
+            case startMinContrast
+            case endMinContrast
         }
 
         public func isInteger(_ type: ArgType) -> Bool {
             switch type {
             case .minPixelIntensity:
                 return true
-            case .minContrast:
+            case .startContrastSize:
+                return true
+            case .endContrastSize:
+                return true
+            case .startMinContrast:
+                return false
+            case .endMinContrast:
                 return false
             }
         }
@@ -69,8 +88,14 @@ public class BlobFinder {
             switch type {
             case .minPixelIntensity:
                 return Double(minPixelIntensity)
-            case .minContrast:
-                return minContrast
+            case .startContrastSize:
+                return Double(startContrastSize)
+            case .endContrastSize:
+                return Double(endContrastSize)
+            case .startMinContrast:
+                return startMinContrast
+            case .endMinContrast:
+                return endMinContrast
             }
         }
 
@@ -78,9 +103,22 @@ public class BlobFinder {
             switch type {
             case .minPixelIntensity:
                 return nil
-            case .minContrast:
+            case .startContrastSize:
+                return nil
+            case .endContrastSize:
+                return nil
+            case .startMinContrast:
                 return Args(minPixelIntensity: self.minPixelIntensity,
-                            minContrast: value)
+                            startContrastSize: self.startContrastSize,
+                            endContrastSize: self.endContrastSize,
+                            startMinContrast: value,
+                            endMinContrast: self.endMinContrast)
+            case .endMinContrast:
+                return Args(minPixelIntensity: self.minPixelIntensity,
+                            startContrastSize: self.startContrastSize,
+                            endContrastSize: self.endContrastSize,
+                            startMinContrast: self.startMinContrast,
+                            endMinContrast: value)
             }
         }
 
@@ -88,17 +126,43 @@ public class BlobFinder {
             switch type {
             case .minPixelIntensity:
                 return Args(minPixelIntensity: UInt16(value),
-                            minContrast: self.minContrast)
-            case .minContrast:
+                            startContrastSize: self.startContrastSize,
+                            endContrastSize: self.endContrastSize,
+                            startMinContrast: self.startMinContrast,
+                            endMinContrast: self.endMinContrast)
+
+            case .startContrastSize:
+                return Args(minPixelIntensity: self.minPixelIntensity,
+                            startContrastSize: value,
+                            endContrastSize: self.endContrastSize,
+                            startMinContrast: self.startMinContrast,
+                            endMinContrast: self.endMinContrast)
+
+            case .endContrastSize:
+                return Args(minPixelIntensity: self.minPixelIntensity,
+                            startContrastSize: self.startContrastSize,
+                            endContrastSize: value,
+                            startMinContrast: self.startMinContrast,
+                            endMinContrast: self.endMinContrast)
+                
+            case .startMinContrast:
+                return nil
+            case .endMinContrast:
                 return nil
             }
         }
 
         public init(minPixelIntensity: UInt16,
-                    minContrast: Double)
+                    startContrastSize: Int,
+                    endContrastSize: Int,
+                    startMinContrast: Double,
+                    endMinContrast: Double)
         {
             self.minPixelIntensity = minPixelIntensity
-            self.minContrast = minContrast
+            self.startContrastSize = startContrastSize
+            self.endContrastSize = endContrastSize
+            self.startMinContrast = startMinContrast
+            self.endMinContrast = endMinContrast
         }
     }
 

@@ -106,6 +106,7 @@ public class FullFrameBlobber {
         
         Log.v("frame \(frameIndex) blobbing image of size (\(imageWidth), \(imageHeight))")
 
+        // XXX make this a row major single array
         pixels = [[SortablePixel?]](repeating: [SortablePixel?](repeating: nil,
                                                                 count: imageHeight),
                                     count: imageWidth)
@@ -118,7 +119,7 @@ public class FullFrameBlobber {
             if maxY < 0 { maxY = 0 }
         }
 
-        let minContrast = args.minContrast
+        let minContrast = args.startMinContrast
         
         for x in 0..<imageWidth {
             for y in 0..<maxY {
@@ -130,6 +131,9 @@ public class FullFrameBlobber {
                     pixels[x][y] = pixel
                     sortedPixels.append(pixel)
                 } else {
+
+                    // XXX check if this step is necessary
+                    
                     // these pixels are dimmer, and might get added to the pixels multi array
                     let diff = Double(abs(Int32(intensity) - Int32(minIntensity)))
                     let max = Double(max(intensity, minIntensity))
@@ -345,11 +349,25 @@ public class FullFrameBlobber {
         return ret
     }
 
+    private func calculateMinContrast(for blobSize: Int) -> Double {
+        if blobSize < args.startContrastSize {
+            return args.startMinContrast
+        } else if blobSize >= args.endContrastSize {
+            return args.endMinContrast
+        } else {
+            // between the start and end
+            let sizeGap = Double(abs(args.endContrastSize - args.startContrastSize))
+            let contrastGap = Double(abs(args.startMinContrast - args.endMinContrast))
+            let gapAmount = Double(blobSize-args.startContrastSize)
+            return args.startMinContrast - gapAmount/sizeGap*contrastGap
+        }
+    }
+    
     public func expand(blob: Blob, seedPixel firstSeed: SortablePixel) async {
         //Log.d("expanding initially seed blob")
 
         var seedPixels: [SortablePixel] = [firstSeed]
-        let minContrast = args.minContrast
+        let minContrast = args.startMinContrast
         
         while let seedPixel = seedPixels.popLast() {
             // set this pixel to be part of this blob
@@ -361,7 +379,7 @@ public class FullFrameBlobber {
                 if await pixelStatusTracker.status(of: neighbor) == .unknown {
                     // if unknown status, check contrast with initial seed pixel
                     let firstSeedContrast = firstSeed.contrast(with: neighbor)
-                    if firstSeedContrast < minContrast {
+                    if firstSeedContrast < calculateMinContrast(for: await blob.size()) {
                         //Log.v("contrast \(firstSeedContrast) seedPixel.intensity neighbor.intensity \(neighbor.intensity) firstSeed.intensity \(firstSeed.intensity)")
                         seedPixels.append(neighbor)
                     } else {

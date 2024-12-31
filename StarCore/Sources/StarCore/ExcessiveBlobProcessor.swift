@@ -21,7 +21,10 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
         self.steps = [
 
           .findBlobs(.init(minPixelIntensity: 4000,
-                           minContrast: 86)),
+                           startContrastSize: 10,
+                           endContrastSize: 200,
+                           startMinContrast: 86,
+                           endMinContrast: 50)),
 
           // check to see if any pixel is in more than one blob
           //.blobDupeCheck("init"),
