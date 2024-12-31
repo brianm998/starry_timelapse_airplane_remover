@@ -21,40 +21,179 @@ fileprivate struct LineSplitResult {
 
 // use the KHT to find lines, and then return the one which best fits the input data,
 // i.e. has the lowest mean distance of pixels to the line
-public struct HoughLineFinder {
+public struct HoughLineFinder: Sendable {
 
     let data: [SortablePixel]
     let bounds: BoundingBox
     let medianIntensity: UInt16
     let maxIntensity: UInt16
     let frameIndex: Int
-
+    let args: Args
+    
     public init(pixels: [SortablePixel],
                 bounds: BoundingBox,
                 medianIntensity: UInt16,
                 maxIntensity: UInt16,
-                frameIndex: Int)
+                frameIndex: Int) async
     {
-        data = pixels
+        self.data = pixels
+        self.args = await constants.getHoughLineFinderArgs()
         self.bounds = bounds
         self.frameIndex = frameIndex
         self.maxIntensity = maxIntensity
         self.medianIntensity = medianIntensity
     }
-    
-    // it's best to keep the important pixel data away from the middle of the image,
-    // as the KHT uses the center of the image as the origin for its lines.
-    // we get better results this way, instead of giving the KHT algorithm a small image with a
-    // line right through the middle of it
-    
-    let imageDataBorderSize = 80
-    
+
+    public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
+        
+        var imageDataBorderSize: Int
+        var minThetaDiff: Double // degrees
+        var minRhoDiff: Double
+        var maxLineConstant: Int// max number of of hough lines to look at
+        var maxDistanceFromLine: Double
+
+        public typealias Types = ArgType
+
+        public var id: Self { self }
+
+        public func description(for type: ArgType) -> String {
+            switch type {
+            case .imageDataBorderSize:
+                return """
+                  it's best to keep the important pixel data away from the middle of the image,
+                  as the KHT uses the center of the image as the origin for its lines.
+                  we get better results this way, instead of giving the KHT algorithm a small image with a
+                  line right through the middle of it
+                  """
+            case .minThetaDiff:
+                return "fill this in"
+            case .minRhoDiff:
+                return "fill this in"
+            case .maxLineConstant:
+                return "fill this in"
+            case .maxDistanceFromLine:
+                return "fill this in"
+            }
+        }
+
+        public enum ArgType: CaseIterable, Hashable {
+            case imageDataBorderSize
+            case minThetaDiff
+            case minRhoDiff
+            case maxLineConstant
+            case maxDistanceFromLine
+        }
+
+        public func isInteger(_ type: ArgType) -> Bool {
+            switch type {
+            case .imageDataBorderSize:
+                return true
+            case .minThetaDiff:
+                return false
+            case .minRhoDiff:
+                return false
+            case .maxLineConstant:
+                return true
+            case .maxDistanceFromLine:
+                return false
+            }
+        }
+
+        public func isOptional(_ type: ArgType) -> Bool { false }
+        
+        public func value(for type: ArgType) -> Double? {
+            switch type {
+            case .imageDataBorderSize:
+                return Double(imageDataBorderSize)
+            case .minThetaDiff:
+                return minThetaDiff
+            case .minRhoDiff:
+                return minRhoDiff
+            case .maxLineConstant:
+                return Double(maxLineConstant)
+            case .maxDistanceFromLine:
+                return maxDistanceFromLine
+            }
+        }
+        
+        public func doubleUpdate(for type: ArgType, value: Double) -> Args? {
+            switch type {
+            case .imageDataBorderSize:
+                return nil
+
+            case .minThetaDiff:
+                return Args(imageDataBorderSize: self.imageDataBorderSize,
+                            minThetaDiff: value,
+                            minRhoDiff: self.minRhoDiff,
+                            maxLineConstant: self.maxLineConstant,
+                            maxDistanceFromLine: self.maxDistanceFromLine)
+
+            case .minRhoDiff:
+                return Args(imageDataBorderSize: self.imageDataBorderSize,
+                            minThetaDiff: self.minThetaDiff,
+                            minRhoDiff: value,
+                            maxLineConstant: self.maxLineConstant,
+                            maxDistanceFromLine: self.maxDistanceFromLine)
+
+            case .maxLineConstant:
+                return nil
+
+            case .maxDistanceFromLine:
+                return Args(imageDataBorderSize: self.imageDataBorderSize,
+                            minThetaDiff: self.minThetaDiff,
+                            minRhoDiff: self.minRhoDiff,
+                            maxLineConstant: self.maxLineConstant,
+                            maxDistanceFromLine: value)
+            }
+        }
+        
+        public func intUpdate(for type: ArgType, value: Int) -> Args? {
+            switch type {
+            case .imageDataBorderSize:
+                return Args(imageDataBorderSize: value,
+                            minThetaDiff: self.minThetaDiff,
+                            minRhoDiff: self.minRhoDiff,
+                            maxLineConstant: self.maxLineConstant,
+                            maxDistanceFromLine: self.maxDistanceFromLine)
+
+            case .minThetaDiff:
+                return nil
+
+            case .minRhoDiff:
+                return nil
+
+            case .maxLineConstant:
+                return Args(imageDataBorderSize: self.imageDataBorderSize,
+                            minThetaDiff: self.minThetaDiff,
+                            minRhoDiff: self.minRhoDiff,
+                            maxLineConstant: value,
+                            maxDistanceFromLine: self.maxDistanceFromLine)
+
+            case .maxDistanceFromLine:
+                return nil
+            }
+        }
+        
+        public init(imageDataBorderSize: Int = 80*6,
+                    minThetaDiff: Double = 10, // degrees
+                    minRhoDiff: Double = 10,
+                    maxLineConstant: Int = 800,
+                    maxDistanceFromLine: Double = 12)
+        {
+            self.imageDataBorderSize = imageDataBorderSize
+            self.minThetaDiff = minThetaDiff
+            self.minRhoDiff = minRhoDiff
+            self.maxLineConstant = maxLineConstant
+            self.maxDistanceFromLine = maxDistanceFromLine
+        }
+    }
+        
     public var imageDataWidth: Int {
-        self.bounds.width+imageDataBorderSize*6
+        self.bounds.width+args.imageDataBorderSize
     }
 
     public var imageDataHeight: Int {
-        self.bounds.height+imageDataBorderSize*6
+        self.bounds.height+args.imageDataBorderSize
     }
 
     public func imageData(ignoringPixlesDimmerThan minIntensity: UInt16 = 0) -> [UInt8] {
@@ -126,8 +265,6 @@ public struct HoughLineFinder {
                 var linesToProcess: [Line] = []
                 if let optimalLine { linesToProcess.append(optimalLine) }
 
-                let minThetaDiff: Double = 10 // XXX degrees XXX should be parameter
-                let minRhoDiff: Double = 10
                 
                 if sortedResults.count > 0 {
                     // we found at least one sorted result
@@ -139,8 +276,8 @@ public struct HoughLineFinder {
                         var shouldProcessThisLine = true
 
                         for existingLine in linesToProcess {
-                            if abs(existingLine.theta-result.line.theta) < minThetaDiff || 
-                               abs(existingLine.rho-result.line.rho) < minRhoDiff
+                            if abs(existingLine.theta-result.line.theta) < self.args.minThetaDiff ||
+                                abs(existingLine.rho-result.line.rho) < self.args.minRhoDiff
                             {
                                 shouldProcessThisLine = false
                                 break
@@ -158,7 +295,7 @@ public struct HoughLineFinder {
                         let standardLine = line.standardLine
                         for pixel in pixelsToKeep {
                             let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
-                            if distance < 12 { // XXX constant should be arg
+                            if distance < self.args.maxDistanceFromLine { 
 
                                 // this line gets this pixel
                                 if var pixelList = pixelsForLines[line] {
@@ -224,10 +361,9 @@ public struct HoughLineFinder {
     public var line: Line? {
         let pixelImage = self.pixelImage
         
-        let maxLineConstant = 800 // XXX constant for how many lines to look at
         
         if let image = pixelImage.nsImage {
-            let lines = kernelHoughTransform(image: image, maxResults: maxLineConstant)
+            let lines = kernelHoughTransform(image: image, maxResults: args.maxLineConstant)
 //            for (index, line) in lines.enumerated() {
 //                Log.d("line \(index): \(line)")
 //            }
@@ -242,13 +378,13 @@ public struct HoughLineFinder {
                 var bestScore: Double = 0
                 var bestLineIndex = 0
                 var max = lines.count
-                if max > maxLineConstant { max = maxLineConstant } 
+                if max > args.maxLineConstant { max = args.maxLineConstant } 
                 
                 for i in 0..<max {
                     let originZeroLine = self.originZeroLine(from: lines[i])
 
                     let lineScore = pixelScore(for: originZeroLine,
-                                               maxDistance: 24)
+                                               maxDistance: self.args.maxDistanceFromLine)
                     
                     if lineScore > bestScore {
                         //Log.d("line \(i) is best theta \(lines[i].theta) avg median max \(avg) \(median) \(max)")

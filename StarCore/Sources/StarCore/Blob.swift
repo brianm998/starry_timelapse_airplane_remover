@@ -174,13 +174,15 @@ public actor Blob: CustomStringConvertible,
     // a line computed from the pixels,
     // the best fitting line we have, if any
     public var line: Line? {
-        if let _blobLine { return _blobLine }
-        _blobLine = HoughLineFinder(pixels: Array(self.pixels),
-                                    bounds: self.boundingBox(),
-                                    medianIntensity: self.medianIntensity(),
-                                    maxIntensity: self.maxIntensity(),
-                                    frameIndex: frameIndex).line
-        return _blobLine
+        get async {
+            if let _blobLine { return _blobLine }
+            _blobLine = await HoughLineFinder(pixels: Array(self.pixels),
+                                              bounds: self.boundingBox(),
+                                              medianIntensity: self.medianIntensity(),
+                                              maxIntensity: self.maxIntensity(),
+                                              frameIndex: frameIndex).line
+            return _blobLine
+        }
     }
 
 
@@ -194,9 +196,9 @@ public actor Blob: CustomStringConvertible,
      
      */
     // use KHT to see if we have more than one line in this group of pixels
-    public func lineSplit(args: BlobLineSplitter.Args) -> [[SortablePixel]]
+    public func lineSplit(args: BlobLineSplitter.Args) async -> [[SortablePixel]]
     {
-        let hlf = HoughLineFinder(pixels: Array(self.pixels),
+        let hlf = await HoughLineFinder(pixels: Array(self.pixels),
                                   bounds: self.boundingBox(),
                                   medianIntensity: self.medianIntensity(),
                                   maxIntensity: self.maxIntensity(),
@@ -217,21 +219,23 @@ public actor Blob: CustomStringConvertible,
     private var _averageDistanceFromIdealLine: Double? 
     
     public var averageDistanceFromIdealLine: Double {
-        if let _averageDistanceFromIdealLine {
-            return _averageDistanceFromIdealLine
+        get async {
+            if let _averageDistanceFromIdealLine {
+                return _averageDistanceFromIdealLine
+            }
+            if let line = await self.originZeroLine {
+                let ret = averageDistance(from: line)
+                _averageDistanceFromIdealLine = ret
+                return ret
+            }
+            //Log.d("frame \(frameIndex) blob \(self) averageDistanceFromIdealLine has no lines :(")
+            _averageDistanceFromIdealLine = 420420420
+            return 420420420
         }
-        if let line = self.originZeroLine {
-            let ret = averageDistance(from: line)
-            _averageDistanceFromIdealLine = ret
-            return ret
-        }
-        //Log.d("frame \(frameIndex) blob \(self) averageDistanceFromIdealLine has no lines :(")
-        _averageDistanceFromIdealLine = 420420420
-        return 420420420
     }
 
-    public func lineLength() -> Double? {
-        if let line = self.originZeroLine {
+    public func lineLength() async -> Double? {
+        if let line = await self.originZeroLine {
             let (_, lineLength) = averageDistanceAndLineLength(from: line)
             return lineLength
         } else {
@@ -239,8 +243,8 @@ public actor Blob: CustomStringConvertible,
         }
     }
 
-    public func medianDistanceFromIdealLine() -> (Double, Double)? {
-        if let line = self.originZeroLine {
+    public func medianDistanceFromIdealLine() async -> (Double, Double)? {
+        if let line = await self.originZeroLine {
             let (_, lineLength) = averageDistanceAndLineLength(from: line)
             let (_, median, _) = averageMedianMaxDistance(from: line)
             return (median, lineLength)
@@ -260,8 +264,8 @@ public actor Blob: CustomStringConvertible,
     
     // trims outlying pixels from the group, especially
     // ones with very few neighboring pixels
-    public func fancyLineTrim(by minNeighbors: Int = 3) {
-        if let line = self.originZeroLine {
+    public func fancyLineTrim(by minNeighbors: Int = 3) async {
+        if let line = await self.originZeroLine {
             var newPixels = Set<SortablePixel>()
             
             let standardLine = line.standardLine
@@ -433,8 +437,8 @@ public actor Blob: CustomStringConvertible,
     
     // trims outlying pixels from the group, ones that are not
     // close enough to the ideal line for this group
-    public func lineTrim() {
-        if let line = self.originZeroLine {
+    public func lineTrim() async {
+        if let line = await self.originZeroLine {
             var newPixels = Set<SortablePixel>()
             
             let standardLine = line.standardLine
@@ -457,8 +461,8 @@ public actor Blob: CustomStringConvertible,
     
     // trims outlying pixels from the group, ones that are not
     // close enough to the ideal line for this group
-    public func lineTrim(by maxDistance: Double = 12) {
-        if let line = self.originZeroLine {
+    public func lineTrim(by maxDistance: Double = 12) async {
+        if let line = await self.originZeroLine {
             var newPixels = Set<SortablePixel>()
             
             let standardLine = line.standardLine
@@ -538,8 +542,10 @@ public actor Blob: CustomStringConvertible,
 
     // a line with (0,0) origin calculated from the pixels in this blob, if possible
     public var originZeroLine: Line? {
-        if let line { return originZeroLine(from: line) }
-        return nil
+        get async {
+            if let line = await self.line { return await originZeroLine(from: line) }
+            return nil
+        }
     }
 
     public func originZeroLine(from line: Line) -> Line {
@@ -698,11 +704,11 @@ public actor Blob: CustomStringConvertible,
     }
 
 
-    public func lineFillAmount() -> Double {
+    public func lineFillAmount() async -> Double {
         if let _lineFillAmount { return _lineFillAmount }
 
         var ret = 0.0
-        if let line = self.line {
+        if let line = await self.line {
             ret = calculateLineFillAmount(from: line,
                                           with: self.boundingBox(),
                                           and: self.pixelValues,
@@ -743,38 +749,42 @@ public actor Blob: CustomStringConvertible,
 
     // a point close to the center of this blob if it's a line, relative to its boundingBox
     public var centralLineCoord: DoubleCoord? {
-        let center = self.boundingBox().centerDouble
-        if let line = self.originZeroLine {
-            let standardLine = line.standardLine
-            
-            switch line.iterationOrientation {
-            case .horizontal:
-                return DoubleCoord(x: center.x,
-                                   y: standardLine.y(forX: Double(center.x)))
-            case .vertical:
-                return DoubleCoord(x: standardLine.x(forY: Double(center.y)),
-                                   y: center.y)
+        get async {
+            let center = self.boundingBox().centerDouble
+            if let line = await self.originZeroLine {
+                let standardLine = line.standardLine
+                
+                switch line.iterationOrientation {
+                case .horizontal:
+                    return DoubleCoord(x: center.x,
+                                       y: standardLine.y(forX: Double(center.x)))
+                case .vertical:
+                    return DoubleCoord(x: standardLine.x(forY: Double(center.y)),
+                                       y: center.y)
+                }
             }
-        }
-        return nil
+            return nil
+        } 
     }
     
     // a point close to the center of this blob if it's a line, with origin zero 
     public var originZeroCentralLineCoord: DoubleCoord? {
-        let center = self.boundingBox().centerDouble
-        if let line = self.originZeroLine {
-            let standardLine = line.standardLine
-            
-            switch line.iterationOrientation {
-            case .horizontal:
-                return DoubleCoord(x: center.x,
-                                   y: standardLine.y(forX: Double(center.x)))
-            case .vertical:
-                return DoubleCoord(x: standardLine.x(forY: Double(center.y)),
-                                   y: center.y)
+        get async {
+            let center = self.boundingBox().centerDouble
+            if let line = await self.originZeroLine {
+                let standardLine = line.standardLine
+                
+                switch line.iterationOrientation {
+                case .horizontal:
+                    return DoubleCoord(x: center.x,
+                                       y: standardLine.y(forX: Double(center.x)))
+                case .vertical:
+                    return DoubleCoord(x: standardLine.x(forY: Double(center.y)),
+                                       y: center.y)
+                }
             }
+            return nil
         }
-        return nil
     }
     
     public func outlierGroup(at frameIndex: Int) -> OutlierGroup {

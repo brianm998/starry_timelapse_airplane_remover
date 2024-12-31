@@ -20,6 +20,8 @@ public actor Constants {        // XXX rename this
 
     private var detectionType: DetectionType
 
+    private var houghLineFinderArgs: HoughLineFinder.Args = .init()
+
     public init(detectionType: DetectionType) {
         self.detectionType = detectionType
     }
@@ -28,16 +30,22 @@ public actor Constants {        // XXX rename this
     
     public func set(detectionType: DetectionType) async {
         self.detectionType = detectionType
-        didChangeClosure?(detectionType)
-        if let didChangeClosure {
-            didChangeClosure(detectionType)
+        contentTypeDidChangeClosure?(detectionType)
+        if let contentTypeDidChangeClosure {
+            contentTypeDidChangeClosure(detectionType)
         }
     }
 
-    private var didChangeClosure: ((DetectionType) -> Void)? = nil
+    private var contentTypeDidChangeClosure: ((DetectionType) -> Void)? = nil
     
     public func didChange(_ closure: @escaping (DetectionType) -> Void) {
-        self.didChangeClosure = closure
+        self.contentTypeDidChangeClosure = closure
+    }
+
+    public func getHoughLineFinderArgs() -> HoughLineFinder.Args { houghLineFinderArgs }
+
+    public func set(houghLineFinderArgs: HoughLineFinder.Args) async {
+        self.houghLineFinderArgs = houghLineFinderArgs
     }
 }
 
