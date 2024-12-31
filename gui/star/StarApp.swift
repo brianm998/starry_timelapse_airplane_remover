@@ -137,7 +137,15 @@ import StarDecisionTrees
     * find way to get processing methods into json and back
     - allow saving and current state to json
     - allow reading saved json when starting up custom processor 
-    - allow switching from one custom back to a default 
+    - allow switching from one custom back to a default
+
+  Blobber improvements;
+    - process brighter pixels through the set of steps first, without dim ones,
+      then do one or more dimmer passes later
+    - use a variable min contrast, which changes as the blob expands.
+      have a beginning min contrast, which linearly contracts to a final min contrast
+      over a given blob size
+    
  */
 
  
@@ -173,10 +181,7 @@ struct StarApp: App {
         }
 
         WindowGroup(id: StarApp.outlierGroupTableWindowName) {
-            OutlierGroupTable()
-              { 
-                  // XXX don't really care it's dismissed
-              }
+            OutlierWindowView()
               .environment(viewModel)
         }
 

@@ -25,11 +25,10 @@ struct LoadAllOutliersButton: View {
             Task.detached {
                 do {
                     let startTime = Date().timeIntervalSinceReferenceDate
-
                     
                     try await withThrowingTaskGroup(of: Void.self) { taskGroup in
                         Log.d("load all outliers button pressed 2x")
-                        let max_concurrent = ProcessInfo.processInfo.activeProcessorCount
+                        //let max_concurrent = ProcessInfo.processInfo.activeProcessorCount
                         // this gets "Too many open files" with more than 2000 images :(
                         for frameView in await viewModel.frames {
                             if loadingType == .fromCurrentFrame,

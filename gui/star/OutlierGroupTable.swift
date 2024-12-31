@@ -14,6 +14,7 @@ enum WillPaintType: Comparable {
 }
 
 struct OutlierGroupTableRow: Identifiable {
+  
     let id = UUID()
     
     let name: UInt16
@@ -115,33 +116,217 @@ struct OutlierGroupTableRow: Identifiable {
     }
 }
 
+@MainActor @Observable
+public final class OutlierWindowViewModel { // XXX PUT IN A SEPARATE FILE 
+
+    public var isSidePanelShowing = false
+    
+    public var showCenterX = false
+    public var showCenterY = false
+    public var showWidth = true
+    public var showHeight = true
+    public var showMinX = false
+    public var showMinY = false
+    public var showMaxX = false
+    public var showMaxY = false
+    public var showHypotenuse = true
+    public var showAspectRatio = true
+    public var showFillAmount = true
+    public var showSurfaceAreaRatio = true
+    public var showAveragebrightness = true
+    public var showMedianBrightness = true
+    public var showMaxBrightness = true
+    public var showNumberOfNearbyOutliersInSameFrame = true
+    public var showMaxHoughTransformCount = true
+    public var showPixelBorderAmount = true
+    public var showAverageLineVariance = true
+    public var showLineLength = true
+    public var showNearbyDirectOverlapScore = true
+    public var showBoundingBoxOverlapScore = true
+    public var showLineFillAmount = true
+    public var showBorderBrightness = true
+    public var showBunchCount = true
+    public var showMedianBunchSize = true
+    public var showMaxBunchSize = true
+    
+    public func selectAll() {
+        setAll(to: true)
+    }
+
+    public func clearAll() {
+        setAll(to: false)
+    }
+
+    public func setAll(to value: Bool) {
+        showCenterX = value
+        showCenterY = value
+        showWidth = value
+        showHeight = value
+        showMinX = value
+        showMinY = value
+        showMaxX = value
+        showMaxY = value
+        showHypotenuse = value
+        showAspectRatio = value
+        showFillAmount = value
+        showSurfaceAreaRatio = value
+        showAveragebrightness = value
+        showMedianBrightness = value
+        showMaxBrightness = value
+        showNumberOfNearbyOutliersInSameFrame = value
+        showMaxHoughTransformCount = value
+        showPixelBorderAmount = value
+        showAverageLineVariance = value
+        showLineLength = value
+        showNearbyDirectOverlapScore = value
+        showBoundingBoxOverlapScore = value
+        showLineFillAmount = value
+        showBorderBrightness = value
+        showBunchCount = value
+        showMedianBunchSize = value
+        showMaxBunchSize = value
+    }
+}
+
+struct OutlierWindowView: View { // XXX PUT IN A SEPARATE FILE 
+    @Environment(ViewModel.self) var viewModel: ViewModel
+    let outlierWindowViewModel = OutlierWindowViewModel()
+
+    var body: some View {
+        HStack {
+            OutlierGroupTable() { }
+              .environment(outlierWindowViewModel)
+            tableControls
+              .environment(outlierWindowViewModel)
+        }
+    }
+
+    
+    var tableControls: some View {
+        Group {
+            if outlierWindowViewModel.isSidePanelShowing {
+                openTableControls
+            } else {
+                closedTableControls
+            }
+        }
+    }
+
+    var closedTableControls: some View {
+        @Bindable var outlierWindowViewModel = outlierWindowViewModel
+        return
+          VStack(alignment: .leading) {
+              HStack(alignment: .top) {
+                  Button() {
+                      outlierWindowViewModel.isSidePanelShowing = true
+                  } label: {
+                      Image(systemName: "chevron.left.2")
+                        .foregroundColor(.gray)
+                  }
+                    .buttonStyle(PlainButtonStyle())
+              }
+              Spacer()
+          }
+    }
+
+    var openTableControls: some View {
+            
+        @Bindable var outlierWindowViewModel = outlierWindowViewModel
+        return ScrollView {
+            VStack(alignment: .leading) {
+                HStack {
+                    Button() {
+                        outlierWindowViewModel.isSidePanelShowing = false
+                    } label: {
+                        Image(systemName: "chevron.right.2")
+                          .foregroundColor(.gray)
+                    }
+                      .buttonStyle(PlainButtonStyle())
+
+                    
+                    Text("Select which columns to show")
+                }
+                HStack {
+                    Button() {
+                        outlierWindowViewModel.selectAll()
+                    } label: {
+                        Text("Select All")
+                          .buttonStyle(ShrinkingButton())
+                    }
+
+                    Button() {
+                        outlierWindowViewModel.clearAll()
+                    } label: {
+                        Text("Clear All")
+                          .buttonStyle(ShrinkingButton())
+                    }
+                }
+                
+                Toggle("CenterX", isOn: $outlierWindowViewModel.showCenterX)
+                Toggle("CenterY", isOn: $outlierWindowViewModel.showCenterY)
+                Toggle("Width", isOn: $outlierWindowViewModel.showWidth)
+                Toggle("Height", isOn: $outlierWindowViewModel.showHeight)
+                Toggle("MinX", isOn: $outlierWindowViewModel.showMinX)
+                Toggle("MinY", isOn: $outlierWindowViewModel.showMinY)
+                Toggle("MaxX", isOn: $outlierWindowViewModel.showMaxX)
+                Toggle("MaxY", isOn: $outlierWindowViewModel.showMaxY)
+                Toggle("Hypotenuse", isOn: $outlierWindowViewModel.showHypotenuse)
+                Toggle("AspectRatio", isOn: $outlierWindowViewModel.showAspectRatio)
+                Toggle("FillAmount", isOn: $outlierWindowViewModel.showFillAmount)
+                Toggle("SurfaceAreaRatio", isOn: $outlierWindowViewModel.showSurfaceAreaRatio)
+                Toggle("Averagebrightness", isOn: $outlierWindowViewModel.showAveragebrightness)
+                Toggle("MedianBrightness", isOn: $outlierWindowViewModel.showMedianBrightness)
+                Toggle("MaxBrightness", isOn: $outlierWindowViewModel.showMaxBrightness)
+                Toggle("NumberOfNearbyOutliersInSameFrame",
+                       isOn: $outlierWindowViewModel.showNumberOfNearbyOutliersInSameFrame)
+                Toggle("MaxHoughTransformCount", isOn: $outlierWindowViewModel.showMaxHoughTransformCount)
+                Toggle("PixelBorderAmount", isOn: $outlierWindowViewModel.showPixelBorderAmount)
+                Toggle("AverageLineVariance", isOn: $outlierWindowViewModel.showAverageLineVariance)
+                Toggle("LineLength", isOn: $outlierWindowViewModel.showLineLength)
+                Toggle("NearbyDirectOverlapScore", isOn: $outlierWindowViewModel.showNearbyDirectOverlapScore)
+                Toggle("BoundingBoxOverlapScore", isOn: $outlierWindowViewModel.showBoundingBoxOverlapScore)
+                Toggle("LineFillAmount", isOn: $outlierWindowViewModel.showLineFillAmount)
+                Toggle("BorderBrightness", isOn: $outlierWindowViewModel.showBorderBrightness)
+                Toggle("BunchCount", isOn: $outlierWindowViewModel.showBunchCount)
+                Toggle("MedianBunchSize", isOn: $outlierWindowViewModel.showMedianBunchSize)
+                Toggle("MaxBunchSize", isOn: $outlierWindowViewModel.showMaxBunchSize)
+            }
+        }
+    }
+}
+
 struct OutlierGroupTable: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
+    @Environment(OutlierWindowViewModel.self) var outlierWindowViewModel: OutlierWindowViewModel
 
     var closure: () -> Void
+
+    public init(_ closure: @escaping () -> Void) {
+        self.closure = closure
+    }
 
     var nameColumn: DTColumn {
         TableColumn("id", value: \.id) { (row: OutlierGroupTableRow) in
             Text(String(row.name))
-        }.width(min: 40, ideal: 60, max: 100)
+        }//}.width(min: 40, ideal: 60, max: 100)
     }
     
     var sizeColumn: DTColumn {
         TableColumn("size", value: \.size) { (row: OutlierGroupTableRow) in
             Text(String(row.size))
-        }.width(min: 30, ideal: 40, max: 80)
+        }.width(min: 40, ideal: 40, max: 80)
     }
 
     var xColumn: DTColumn {
         TableColumn("X", value: \.centerX) { (row: OutlierGroupTableRow) in
             Text(String(row.centerX))
-        }.width(min: 30, ideal: 40, max: 80)
+        }//}.width(min: 30, ideal: 40, max: 80)
     }
 
     var yColumn: DTColumn {
         TableColumn("Y", value: \.centerY) { (row: OutlierGroupTableRow) in
             Text(String(row.centerY))
-        }.width(min: 30, ideal: 40, max: 80)
+        }//}.width(min: 30, ideal: 40, max: 80)
     }
 
     func image(for type: WillPaintType) -> Image {
@@ -162,182 +347,18 @@ struct OutlierGroupTable: View {
         TableColumn("paint",
                     value: \OutlierGroupTableRow.willPaintType) { (row: OutlierGroupTableRow) in
             image(for: row.willPaintType)
-        }.width(min: 10, ideal: 20, max: 40)
+        }.width(min: 10, ideal: 20, max: 80)
     }
     
     // add paint reason
-    
-    var dtSizeColumn: DTColumn {
-        self.tableColumn(for: "size", value: \.dt_size) { $0.dt_size }
-    }
-    
-    var dtWidthColumn: DTColumn {
-        self.tableColumn(for: "width", value: \.dt_width) { $0.dt_width }
-    }
-    
-    var dtHeightColumn: DTColumn {
-        self.tableColumn(for: "height", value: \.dt_height) { $0.dt_height }
-    }
 
-    var dtCenterXColumn: DTColumn {
-        self.tableColumn(for: "centerX", value: \.dt_centerX) { $0.dt_centerX }
-    }
-
-    var dtCenterYColumn: DTColumn {
-        self.tableColumn(for: "centerY", value: \.dt_centerY) { $0.dt_centerY }
-    }
-
-    var dtMinXColumn: DTColumn {
-        self.tableColumn(for: "minX", value: \.dt_minX) { $0.dt_minX }
-    }
-
-    var dtMinYColumn: DTColumn {
-        self.tableColumn(for: "minY", value: \.dt_minY) { $0.dt_minY }
-    }
-
-    var dtMaxXColumn: DTColumn {
-        self.tableColumn(for: "maxX", value: \.dt_maxX) { $0.dt_maxX }
-    }
-
-    var dtMaxYColumn: DTColumn {
-        self.tableColumn(for: "maxY", value: \.dt_maxY) { $0.dt_maxY }
-    }
-
-    var dtHypotenuseColumn: DTColumn {
-        self.tableColumn(for: "hypotenuse", value: \.dt_hypotenuse) { $0.dt_hypotenuse }
-    }
-
-    var dtAspectRatioColumn: DTColumn {
-        self.tableColumn(for: "aspectRatio", value: \.dt_aspectRatio) { $0.dt_aspectRatio }
-    }
-
-    var dtFillAmountColumn: DTColumn {
-        self.tableColumn(for: "fillAmount", value: \.dt_fillAmount) { $0.dt_fillAmount }
-    }
-
-    var dtSurfaceAreaRatioColumn: DTColumn {
-        self.tableColumn(for: "surfaceAreaRatio", value: \.dt_surfaceAreaRatio) { row in
-            row.dt_surfaceAreaRatio
-        }
-    }
-
-
-//    private func unSixteenBitVersion(ofPercentage percentage: Double) -> Double {
-//        return (percentage/Double(0xFFFF))*100
-        //return UInt16((percentage/100)*Double(0xFFFF))
-//    }
-    
-
-    
-    var dtAveragebrightnessColumn: DTColumn {
-        self.tableColumn(for: "averagebrightness", value: \.dt_averagebrightness) { row in
-            row.dt_averagebrightness
-        }
-    }
-
-    var dtMedianBrightnessColumn: DTColumn {
-        self.tableColumn(for: "medianBrightness", value: \.dt_medianBrightness) { row in
-            row.dt_medianBrightness
-        }
-    }
-
-    var dtMaxBrightnessColumn: DTColumn {
-        self.tableColumn(for: "maxBrightness", value: \.dt_maxBrightness) { row in
-            row.dt_maxBrightness
-        }
-    }
-
-    var dtNumberOfNearbyOutliersInSameFrameColumn: DTColumn {
-        self.tableColumn(for: "numberOfNearbyOutliersInSameFrame",
-                         value: \.dt_numberOfNearbyOutliersInSameFrame) { row in
-            row.dt_numberOfNearbyOutliersInSameFrame
-        }
-    }
-
-    var dtMaxHoughTransformCountColumn: DTColumn {
-        self.tableColumn(for: "maxHoughTransformCount",
-                         value: \.dt_maxHoughTransformCount) { row in
-            row.dt_maxHoughTransformCount
-        }
-    }
-
-    var dtPixelBorderAmount: DTColumn {
-        self.tableColumn(for: "pixelBorderAmount",
-                         value: \.dt_pixelBorderAmount) { row in
-            row.dt_pixelBorderAmount
-        }
-    }
-
-    var dtAverageLineVariance: DTColumn {
-        self.tableColumn(for: "averageLineVariance",
-                         value: \.dt_averageLineVariance) { row in
-            row.dt_averageLineVariance
-        }
-    }
-    
-    var dtLineLength: DTColumn {
-        self.tableColumn(for: "lineLength",
-                         value: \.dt_lineLength) { row in
-            row.dt_lineLength
-        }
-    }
-
-    var dtNearbyDirectOverlapScore: DTColumn {
-        self.tableColumn(for: "nearbyDirectOverlapScore",
-                         value: \.dt_nearbyDirectOverlapScore) { row in
-            row.dt_nearbyDirectOverlapScore
-        }
-    }
-
-    var dtLineFillAmount: DTColumn {
-        self.tableColumn(for: "lineFillAmount",
-                         value: \.dt_lineFillAmount) { row in
-            row.dt_lineFillAmount
-        }
-    }
-
-    var dtBoundingBoxOverlapScore: DTColumn {
-        self.tableColumn(for: "boundingBoxOverlapScore",
-                         value: \.dt_boundingBoxOverlapScore) { row in
-            row.dt_boundingBoxOverlapScore
-        }
-    }
-
-    var dtBorderBrightness: DTColumn {
-        self.tableColumn(for: "borderBrightness",
-                         value: \.dt_borderBrightness) { row in
-            row.dt_borderBrightness
-        }
-    }
-
-    var dtBunchCount: DTColumn {
-        self.tableColumn(for: "bunchCount",
-                         value: \.dt_bunchCount) { row in
-            row.dt_bunchCount
-        }
-    }
-
-    var dtMedianBunchSize: DTColumn {
-        self.tableColumn(for: "medianBunchSize",
-                         value: \.dt_medianBunchSize) { row in
-            row.dt_medianBunchSize
-        }
-    }
-
-    var dtMaxBunchSize: DTColumn {
-        self.tableColumn(for: "maxBunchSize",
-                         value: \.dt_maxBunchSize) { row in
-            row.dt_maxBunchSize
-        }
-    }
-    
     func tableColumn(for name: String,
                      value: KeyPath<OutlierGroupTableRow,Double>,
                      closure: @escaping (OutlierGroupTableRow) -> Double) -> DTColumn
     {
         TableColumn(name, value: value) { (row: OutlierGroupTableRow) in
             Text(String(format: "%.5g", closure(row)))
-        }.width(min: 40, ideal: 60, max: 100)
+        }//}.width(min: 40, ideal: 60, max: 100)
     }
 
     @State var sortOrder: [KeyPathComparator<OutlierGroupTableRow>] = [
@@ -372,53 +393,169 @@ struct OutlierGroupTable: View {
                       selection: $viewModel.selectedOutliers,
                       sortOrder: $sortOrder)
                 {
+                    /*
+                     XXX fix this, it fucking sucks
+
+                     add a side bar for selecting what blob info items are show in for each blob, there are soo many
+                     default to a smaller set that seems reasonable
+                    
+                     
+                     */
+                    
                     // current compiler can't take more than 10 columns at once here
+
+                    // nameColumn // not sure why we need to know the id here, make it optional?
+                    willPaintColumn
+                    self.sizeColumn
+
+    // not used now, it's ugly being scaled w/ image size, we show actual pixels in gui
+//    var dtSizeColumn: DTColumn {
+//        self.tableColumn(for: "size", value: \.dt_size) { $0.dt_size }
+//    }
+    
+
+                    
                     Group {
-                        nameColumn
-                        willPaintColumn
-                        self.sizeColumn
-                        //dtSizeColumn
-                        //dtWidthColumn
-                        //dtHeightColumn
+                        if self.outlierWindowViewModel.showWidth {
+                            self.tableColumn(for: "width", value: \.dt_width) { $0.dt_width }
+                        }
+
+                        if self.outlierWindowViewModel.showHeight {
+                            self.tableColumn(for: "height", value: \.dt_height) { $0.dt_height }
+                        }
+                        
+                        if self.outlierWindowViewModel.showCenterX {
+                            self.tableColumn(for: "centerX", value: \.dt_centerX) { $0.dt_centerX }
+                        }
+                        if self.outlierWindowViewModel.showCenterY {
+                            //yColumn
+                            self.tableColumn(for: "centerY", value: \.dt_centerY) { $0.dt_centerY }
+                        }
+
                     }
 
                     Group {
-//                        if displayDtSizeColumn {
-                        //            }
-                        xColumn
-                        yColumn
-                        //dtCenterXColumn
-                        //dtCenterYColumn
-                        //dtMinXColumn
-                        //dtMinYColumn
-                        //dtMaxXColumn
-                    }
-                    Group {
-                        dtMaxYColumn
-                        dtHypotenuseColumn
-                        dtAspectRatioColumn
-                        dtFillAmountColumn
-                        dtSurfaceAreaRatioColumn
-                        dtAveragebrightnessColumn
-                        dtMedianBrightnessColumn
-                        dtMaxBrightnessColumn
-                    }
-                    Group {
-                        dtNumberOfNearbyOutliersInSameFrameColumn
-                        dtPixelBorderAmount
-                        dtAverageLineVariance
-                        dtLineLength
-                        dtNearbyDirectOverlapScore
-                    }
-                    Group {
-                        dtLineFillAmount
-                        dtBoundingBoxOverlapScore
-                        dtBorderBrightness
-                        dtBunchCount
-                        dtMedianBunchSize
-                        dtMaxBunchSize
-                    }
+                        if self.outlierWindowViewModel.showMinX {
+                            self.tableColumn(for: "minX", value: \.dt_minX) { $0.dt_minX }
+                        }
+                        if self.outlierWindowViewModel.showMinY {
+                            self.tableColumn(for: "minY", value: \.dt_minY) { $0.dt_minY }
+                        }
+                        if self.outlierWindowViewModel.showMaxX {
+                            self.tableColumn(for: "maxX", value: \.dt_maxX) { $0.dt_maxX }
+                        }
+                        if self.outlierWindowViewModel.showMaxY {
+                            self.tableColumn(for: "maxY", value: \.dt_maxY) { $0.dt_maxY }
+                        }
 
+                        if self.outlierWindowViewModel.showHypotenuse {
+                            self.tableColumn(for: "hypotenuse", value: \.dt_hypotenuse) { $0.dt_hypotenuse }
+                        }
+
+                        if self.outlierWindowViewModel.showAspectRatio {
+                            self.tableColumn(for: "aspectRatio", value: \.dt_aspectRatio) { $0.dt_aspectRatio }
+                        }
+                        if self.outlierWindowViewModel.showFillAmount {
+                            self.tableColumn(for: "fillAmount", value: \.dt_fillAmount) { $0.dt_fillAmount }
+                        }
+                        if self.outlierWindowViewModel.showSurfaceAreaRatio {
+                            self.tableColumn(for: "surfaceAreaRatio", value: \.dt_surfaceAreaRatio) { row in
+                                row.dt_surfaceAreaRatio
+                            }
+                        }
+                        if self.outlierWindowViewModel.showAveragebrightness {
+                            self.tableColumn(for: "averagebrightness", value: \.dt_averagebrightness) { row in
+                                row.dt_averagebrightness
+                            }
+                        }
+                    }
+                    Group {
+                        if self.outlierWindowViewModel.showMedianBrightness {
+                            self.tableColumn(for: "medianBrightness", value: \.dt_medianBrightness) { row in
+                                row.dt_medianBrightness
+                            }
+                        }
+
+                        if self.outlierWindowViewModel.showMaxBrightness {
+                            self.tableColumn(for: "maxBrightness", value: \.dt_maxBrightness) { row in
+                                row.dt_maxBrightness
+                            }
+                        }
+                        if self.outlierWindowViewModel.showNumberOfNearbyOutliersInSameFrame {
+                            self.tableColumn(for: "numberOfNearbyOutliersInSameFrame",
+                                             value: \.dt_numberOfNearbyOutliersInSameFrame) { row in
+                                row.dt_numberOfNearbyOutliersInSameFrame
+                            }
+                        }
+                        if self.outlierWindowViewModel.showMaxHoughTransformCount {
+                            self.tableColumn(for: "maxHoughTransformCount",
+                                             value: \.dt_maxHoughTransformCount) { row in
+                                row.dt_maxHoughTransformCount
+                            }
+                        }
+                        if self.outlierWindowViewModel.showPixelBorderAmount {
+                            self.tableColumn(for: "pixelBorderAmount",
+                                             value: \.dt_pixelBorderAmount) { row in
+                                row.dt_pixelBorderAmount
+                            }
+                        }
+                        if self.outlierWindowViewModel.showAverageLineVariance {
+                            self.tableColumn(for: "averageLineVariance",
+                                             value: \.dt_averageLineVariance) { row in
+                                row.dt_averageLineVariance
+                            }
+                        }
+                        if self.outlierWindowViewModel.showLineLength {
+                            self.tableColumn(for: "lineLength",
+                                             value: \.dt_lineLength) { row in
+                                row.dt_lineLength
+                            }
+                        }
+                        if self.outlierWindowViewModel.showNearbyDirectOverlapScore {
+                            self.tableColumn(for: "nearbyDirectOverlapScore",
+                                             value: \.dt_nearbyDirectOverlapScore) { row in
+                                row.dt_nearbyDirectOverlapScore
+                            }
+                        }
+                    }
+                    Group {
+                        if self.outlierWindowViewModel.showBoundingBoxOverlapScore {
+                            self.tableColumn(for: "boundingBoxOverlapScore",
+                                             value: \.dt_boundingBoxOverlapScore) { row in
+                                row.dt_boundingBoxOverlapScore
+                            }
+                        }
+                        if self.outlierWindowViewModel.showLineFillAmount {
+                            self.tableColumn(for: "lineFillAmount",
+                                             value: \.dt_lineFillAmount) { row in
+                                row.dt_lineFillAmount
+                            }
+                        }
+                        if self.outlierWindowViewModel.showBorderBrightness {
+                            self.tableColumn(for: "borderBrightness",
+                                             value: \.dt_borderBrightness) { row in
+                                row.dt_borderBrightness
+                            }
+                        }
+                        if self.outlierWindowViewModel.showBunchCount {
+                            self.tableColumn(for: "bunchCount",
+                                             value: \.dt_bunchCount) { row in
+                                row.dt_bunchCount
+                            }
+                        }
+                        if self.outlierWindowViewModel.showMedianBunchSize {
+                            self.tableColumn(for: "medianBunchSize",
+                                             value: \.dt_medianBunchSize) { row in
+                                row.dt_medianBunchSize
+                            }
+                        }
+                        if self.outlierWindowViewModel.showMaxBunchSize {
+                            self.tableColumn(for: "maxBunchSize",
+                                             value: \.dt_maxBunchSize) { row in
+                                row.dt_maxBunchSize
+                            }
+                        }
+                    }
                 } .onChange(of: viewModel.selectedOutliers) {newValue in 
                     Log.d("selected outliers \(newValue)")
                     if let frame = viewModel.outlierGroupWindowFrame {

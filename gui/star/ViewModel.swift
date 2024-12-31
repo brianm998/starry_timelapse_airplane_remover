@@ -16,10 +16,8 @@ public final class ViewModel {
             userPreferences = newPrefs
         }
     }
-
     
 //    @Environment(\.openWindow) private var openWindow
-
     
     func report(error: String) {
         self.showErrorAlert = true
