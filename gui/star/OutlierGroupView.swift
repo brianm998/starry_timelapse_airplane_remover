@@ -320,6 +320,5 @@ struct OutlierGroupView: View {
           .blendMode(.difference)
           .opacity(0.5)
     }
-    
 }
 

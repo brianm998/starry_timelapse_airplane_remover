@@ -36,7 +36,6 @@ struct OutlierWindowView: View {
                 }
                 Spacer()
                 houghLineArgs
-//                  .environment(outlierWindowViewModel)
             }
         }
     }
@@ -48,6 +47,7 @@ struct OutlierWindowView: View {
                             description: "Arguments for the hough line finder",
                             args: houghLineFinderArgs,
                             array: HoughLineFinder.Args.ArgType.allCases)
+                  .environment(outlierWindowViewModel)
             } else {
                 Text("Loading Args")
             }
@@ -154,6 +154,8 @@ struct ArgableView<T: Hashable>: View {
     let description: String
     let args: any Argable<T>
     let array: [T]
+
+    @Environment(OutlierWindowViewModel.self) var outlierWindowViewModel: OutlierWindowViewModel
     
     public init(title: String,
                 description: String,
@@ -196,7 +198,10 @@ struct ArgableView<T: Hashable>: View {
                                               let argType = argType as? HoughLineFinder.Args.ArgType,
                                               let updatedArgs = args.intUpdate(for: argType, value: intValue)
                                            {
-                                               Task { await constants.set(houghLineFinderArgs: updatedArgs) }
+                                               Task {
+                                                   await constants.set(houghLineFinderArgs: updatedArgs)
+                                                   await outlierWindowViewModel.loadLineInfo()
+                                               }
                                            }
                                        },
                                        doubleUpdate: { args, argType, doubleValue in
@@ -204,7 +209,10 @@ struct ArgableView<T: Hashable>: View {
                                               let argType = argType as? HoughLineFinder.Args.ArgType,
                                               let updatedArgs = args.doubleUpdate(for: argType, value: doubleValue)
                                            {
-                                               Task { await constants.set(houghLineFinderArgs: updatedArgs) }
+                                               Task {
+                                                   await constants.set(houghLineFinderArgs: updatedArgs)
+                                                   await outlierWindowViewModel.loadLineInfo()
+                                               }
                                            }
                                        })
                           .padding(.vertical, 2)
@@ -299,13 +307,13 @@ struct HoughLinesTableView: View {
                       sortOrder: $sortOrder)
                 {
                     TableColumn("Score", value: \.score) { row in
-                        Text(String(row.score))
+                        Text(String(Int(row.score)))
                     }
                     TableColumn("Theta", value: \.line.theta) { row in
-                        Text(String(row.line.theta))
+                        Text(String(format: "%.2f", row.line.theta))
                     }
                     TableColumn("Rho", value: \.line.rho) { row in
-                        Text(String(row.line.rho))
+                        Text(String(format: "%.2f", row.line.rho))
                     }
                     TableColumn("Votes", value: \.line.votes) { row in
                         Text(String(row.line.votes))
@@ -321,18 +329,6 @@ struct HoughLinesTableView: View {
             } else {
                 Text("Please select a single group above to see its lines here")
             }
-
-
         }
-        /*
-
-         This table needs to have columns for:
-
-         - theta (in degrees)
-         - rho (in pixels)
-         - count (Int)
-         - line score (Double)
-         
-         */
     }
 }
