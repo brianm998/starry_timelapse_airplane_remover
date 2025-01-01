@@ -120,6 +120,11 @@ struct OutlierGroupTableRow: Identifiable {
 public final class OutlierWindowViewModel { // XXX PUT IN A SEPARATE FILE 
 
     public var isSidePanelShowing = false
+    public var houghLineFinderArgs: HoughLineFinder.Args?
+
+    init() {
+        Task { houghLineFinderArgs = await constants.getHoughLineFinderArgs() }
+    }
     
     public var showCenterX = false
     public var showCenterY = false
@@ -193,14 +198,32 @@ struct OutlierWindowView: View { // XXX PUT IN A SEPARATE FILE
     let outlierWindowViewModel = OutlierWindowViewModel()
 
     var body: some View {
-        HStack {
-            OutlierGroupTable() { }
-              .environment(outlierWindowViewModel)
-            tableControls
-              .environment(outlierWindowViewModel)
+        VStack {
+            HStack {
+                OutlierGroupTable() { }
+                  .environment(outlierWindowViewModel)
+                tableControls
+                  .environment(outlierWindowViewModel)
+            }
+            HStack {
+                houghLineArgs
+                  .environment(outlierWindowViewModel)
+            }
         }
     }
 
+    var houghLineArgs: some View {
+        Group {
+            if let houghLineFinderArgs = outlierWindowViewModel.houghLineFinderArgs {
+                ArgableView(title: "Hough Line Arguments",
+                            description: "blah blah",
+                            args: houghLineFinderArgs,
+                            array: HoughLineFinder.Args.ArgType.allCases)
+            } else {
+                Text("Loading Args")
+            }
+        }
+    }
     
     var tableControls: some View {
         Group {
@@ -609,3 +632,135 @@ struct OutlierGroupTable: View {
 }
 
 
+// XXX NEW FILE
+
+struct ArgableView<T: Hashable>: View {
+    let title: String
+    let description: String
+    let args: any Argable<T>
+    let array: [T]
+    
+    public init(title: String,
+                description: String,
+                args: any Argable<T>,
+                array: [T])
+    {
+        self.title = title
+        self.description = description
+        self.args = args
+        self.array = array
+    }
+
+    var body: some View {
+        ZStack {
+            VStack(alignment: .leading) {
+                Text(title)
+                  .foregroundColor(.black)
+                  .font(.largeTitle)
+                Text(description)
+                Spacer()
+                  .frame(maxHeight: 10)
+                Text("Parameters which can affect how this step operates:")
+                Grid(alignment: .topLeading) {
+                    GridRow {
+                        Text("Name")
+                          .foregroundColor(.black)
+                        Text("Value")
+                          .foregroundColor(.black)
+                        Text("Description")
+                          .foregroundColor(.black)
+                    }
+                      .padding(.vertical, 2)
+
+                    // index of paramters in list
+                    ForEach(Array(array.enumerated()), id: \.element) { index, value in
+                        ArgableRowView(args,
+                                       argType: value,
+                                       intUpdate: { args, argType, intValue in
+                                           if let args = args as? HoughLineFinder.Args,
+                                              let argType = argType as? HoughLineFinder.Args.ArgType,
+                                              let updatedArgs = args.intUpdate(for: argType, value: intValue)
+                                           {
+                                               Task { await constants.set(houghLineFinderArgs: updatedArgs) }
+                                           }
+                                       },
+                                       doubleUpdate: { args, argType, doubleValue in
+                                           if let args = args as? HoughLineFinder.Args,
+                                              let argType = argType as? HoughLineFinder.Args.ArgType,
+                                              let updatedArgs = args.doubleUpdate(for: argType, value: doubleValue)
+                                           {
+                                               Task { await constants.set(houghLineFinderArgs: updatedArgs) }
+                                           }
+                                       })
+                          .padding(.vertical, 2)
+                    }
+                }
+            }
+              .layoutPriority(10)
+        }
+          .padding(10)
+    }
+}
+
+// view for each parameter for this step, as a GridRow with three elements
+struct ArgableRowView<T: Hashable>: View {
+
+    let args: any Argable<T>
+    let argType: T
+    let intUpdate: (any Argable<T>, T, Int) -> Void
+    let doubleUpdate: (any Argable<T>, T, Double) -> Void
+    
+    @State var stringValue = ""
+    
+    init(_ args: any Argable<T>,
+         argType: T,
+         intUpdate: @escaping (any Argable<T>, T, Int) -> Void,
+         doubleUpdate: @escaping (any Argable<T>, T, Double) -> Void)
+    {
+        self.args = args
+        self.argType = argType
+        self.intUpdate = intUpdate
+        self.doubleUpdate = doubleUpdate
+    }
+
+    var body: some View {
+        GridRow {
+            Text("\(argType)")
+
+            let value = args.value(for: argType)
+            
+            if args.isInteger(argType) {
+                TextField("", text: $stringValue)
+                  .frame(maxWidth: 80)
+                  .onAppear {
+                      if let value {
+                          stringValue = String(format: "%d", Int(value))
+                      }
+                  }
+                  .onSubmit {
+                      if let intValue = Int(stringValue) {
+                          intUpdate(args, argType, intValue)
+                      }
+                  }
+                
+            } else {
+                TextField("", // not integer (real number)
+                          text: $stringValue)
+                  .frame(maxWidth: 80)
+                  .onAppear {
+                      if let value {
+                          stringValue = String(format: "%.2f", value)
+                      }
+                  }
+                  .onSubmit {
+                      if let doubleValue = Double(stringValue) {
+                          doubleUpdate(args, argType, doubleValue)
+                      }
+                  }
+            }
+
+            Text(args.description(for: argType))
+
+        }
+    }
+}
