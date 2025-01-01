@@ -392,6 +392,18 @@ public struct BoundingBox: Codable,
 
         return ret
     }
+
+    public func allIntersections(with line: StandardLine) -> [DoubleCoord] {
+        let minY = Double(min.y)
+        let minX = Double(min.x)
+        let maxY = Double(max.y)
+        let maxX = Double(max.x)
+
+        return [DoubleCoord(x: minX, y: line.y(forX: minX)),
+                DoubleCoord(x: maxX, y: line.y(forX: maxX)),
+                DoubleCoord(x: line.x(forY: minY), y: minY),
+                DoubleCoord(x: line.x(forY: maxY), y: maxY)]
+    }
 }
 
 // the distance between the center point of the box described and the exit of the line from it

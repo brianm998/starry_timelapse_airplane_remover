@@ -67,7 +67,7 @@ class OutlierGroupViewModel: Identifiable {
     var pointsForLineOnBounds: [CGPoint] {
         if let line {
             let zeroCentered = self.group.bounds.zeroCentered
-            let points = zeroCentered.intersections(with: line.standardLine)
+            let points = zeroCentered.allIntersections(with: line.standardLine)
             return points.map { CGPoint(x: $0.x, y: $0.y) }
         }
         return []

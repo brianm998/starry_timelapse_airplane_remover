@@ -44,7 +44,10 @@ struct OutlierWindowView: View {
         Group {
             if let houghLineFinderArgs = outlierWindowViewModel.houghLineFinderArgs {
                 ArgableView(title: "Hough Line Arguments",
-                            description: "Arguments for the hough line finder",
+                            description: """
+                              Arguments for the hough line finder.
+                              Updating values here will generate new lines with the new values.
+                              """,
                             args: houghLineFinderArgs,
                             array: HoughLineFinder.Args.ArgType.allCases)
                   .environment(outlierWindowViewModel)

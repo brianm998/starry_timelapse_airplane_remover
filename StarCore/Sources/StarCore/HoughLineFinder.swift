@@ -60,19 +60,22 @@ public struct HoughLineFinder: Sendable {
             switch type {
             case .imageDataBorderSize:
                 return """
-                  it's best to keep the important pixel data away from the middle of the image,
-                  as the KHT uses the center of the image as the origin for its lines.
-                  we get better results this way, instead of giving the KHT algorithm a small image with a
-                  line right through the middle of it
+                  it's best to keep the important pixel data
+                  away from the middle of the image,
+                  as the KHT uses the center of the image
+                  as the origin for its lines.
+                  we get better results this way,
+                  instead of giving the KHT algorithm a small
+                  image with a line right through the middle of it.
                   """
             case .minThetaDiff:
-                return "fill this in"
+                return "Used by line split only"
             case .minRhoDiff:
-                return "fill this in"
+                return "Used by line split only"
             case .maxLineConstant:
-                return "fill this in"
+                return "Return no more than this many lines, sorted by number of votes"
             case .maxDistanceFromLine:
-                return "fill this in"
+                return "Pixels furter than this from a line will not count to the score of that line"
             }
         }
 
