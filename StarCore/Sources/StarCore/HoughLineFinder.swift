@@ -176,12 +176,21 @@ public struct HoughLineFinder: Sendable {
                 return nil
             }
         }
-        
-        public init(imageDataBorderSize: Int = 80*6,
+        /*
+
+         XXX
+
+         sometimes imageDataBorderSize == 0 is best
+         othertimes we get the best line with imageDataBorderSize == 5000
+
+         try a multi approach which does both, and chooses the best line score
+         
+         */
+        public init(imageDataBorderSize: Int = 4000,
                     minThetaDiff: Double = 10, // degrees
                     minRhoDiff: Double = 10,
-                    maxLineConstant: Int = 800,
-                    maxDistanceFromLine: Double = 12)
+                    maxLineConstant: Int = 300,
+                    maxDistanceFromLine: Double = 6)
         {
             self.imageDataBorderSize = imageDataBorderSize
             self.minThetaDiff = minThetaDiff
@@ -192,11 +201,19 @@ public struct HoughLineFinder: Sendable {
     }
         
     public var imageDataWidth: Int {
-        self.bounds.width+args.imageDataBorderSize
+        if self.bounds.width < self.bounds.height {
+            return self.bounds.width+args.imageDataBorderSize
+        } else {
+            return self.bounds.width
+        }
     }
 
     public var imageDataHeight: Int {
-        self.bounds.height+args.imageDataBorderSize
+        if self.bounds.height < self.bounds.width {
+            return self.bounds.height+args.imageDataBorderSize
+        } else {
+            return self.bounds.height
+        }
     }
 
     public func imageData(ignoringPixlesDimmerThan minIntensity: UInt16 = 0) -> [UInt8] {
@@ -253,8 +270,7 @@ public struct HoughLineFinder: Sendable {
                      */
                     
                     let originZeroLine = self.originZeroLine(from: lines[i])
-                    let linePixelScore = pixelScore(for: originZeroLine,
-                                                    maxDistance: args.maxDistance)
+                    let linePixelScore = pixelScore(for: originZeroLine)
 
                     if linePixelScore > args.minLineScore {
                         results.append(LineSplitResult(score: linePixelScore,
@@ -331,17 +347,21 @@ public struct HoughLineFinder: Sendable {
         return ([], [])
     }
 
-    public func pixelScore(for line: Line, maxDistance: Double = 5) -> Double {
+    public func pixelScore(for line: Line) -> Double {
         let standardLine = line.standardLine
         var ret: Double = 0.0
         for pixel in data {
             let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
-            if distance <= maxDistance {
-                // 0 for maxDistance or furter from the line
-                // 1 for spot on the line
-                ret += ((maxDistance-distance)/maxDistance)*Double(pixel.intensity)
+
+            let intensity = Double(pixel.intensity)/0xFFFF
+            
+            if distance < 1 {
+                ret += intensity
+            } else {
+                ret += intensity/(distance*distance)
             }
         }
+
         return ret
     }
     
@@ -376,8 +396,7 @@ public struct HoughLineFinder: Sendable {
             for i in 0..<lines.count {
                 let originZeroLine = self.originZeroLine(from: lines[i])
 
-                let lineScore = pixelScore(for: originZeroLine,
-                                           maxDistance: self.args.maxDistanceFromLine)
+                let lineScore = pixelScore(for: originZeroLine)
                 ret.append(LineInfo(line: lines[i], score: lineScore))
             }
         }
@@ -409,8 +428,7 @@ public struct HoughLineFinder: Sendable {
                 for i in 0..<max {
                     let originZeroLine = self.originZeroLine(from: lines[i])
 
-                    let lineScore = pixelScore(for: originZeroLine,
-                                               maxDistance: self.args.maxDistanceFromLine)
+                    let lineScore = pixelScore(for: originZeroLine)
                     
                     if lineScore > bestScore {
                         //Log.d("line \(i) is best theta \(lines[i].theta) avg median max \(avg) \(median) \(max)")

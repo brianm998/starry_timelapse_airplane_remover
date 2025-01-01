@@ -197,22 +197,24 @@ struct ArgableView<T: Hashable>: View {
                         ArgableRowView(args,
                                        argType: value,
                                        intUpdate: { args, argType, intValue in
-                                           if let args = args as? HoughLineFinder.Args,
-                                              let argType = argType as? HoughLineFinder.Args.ArgType,
-                                              let updatedArgs = args.intUpdate(for: argType, value: intValue)
-                                           {
-                                               Task {
+                                           Task {
+                                               let args = await constants.getHoughLineFinderArgs()
+                                               if let argType = argType as? HoughLineFinder.Args.ArgType,
+                                                  let updatedArgs = args.intUpdate(for: argType, value: intValue)
+                                               {
+                                                   Log.d("updatedArgs \(updatedArgs)")
                                                    await constants.set(houghLineFinderArgs: updatedArgs)
                                                    await outlierWindowViewModel.loadLineInfo()
                                                }
                                            }
                                        },
                                        doubleUpdate: { args, argType, doubleValue in
-                                           if let args = args as? HoughLineFinder.Args,
-                                              let argType = argType as? HoughLineFinder.Args.ArgType,
-                                              let updatedArgs = args.doubleUpdate(for: argType, value: doubleValue)
-                                           {
-                                               Task {
+                                           Task {
+                                               let args = await constants.getHoughLineFinderArgs()
+                                               if let argType = argType as? HoughLineFinder.Args.ArgType,
+                                                  let updatedArgs = args.doubleUpdate(for: argType, value: doubleValue)
+                                               {
+                                                   Log.d("updatedArgs \(updatedArgs)")
                                                    await constants.set(houghLineFinderArgs: updatedArgs)
                                                    await outlierWindowViewModel.loadLineInfo()
                                                }
@@ -310,7 +312,7 @@ struct HoughLinesTableView: View {
                       sortOrder: $sortOrder)
                 {
                     TableColumn("Score", value: \.score) { row in
-                        Text(String(Int(row.score)))
+                        Text(String(format: "%.2f", row.score))
                     }
                     TableColumn("Theta", value: \.line.theta) { row in
                         Text(String(format: "%.2f", row.line.theta))

@@ -44,8 +44,8 @@ public actor Constants {        // XXX rename this
 
     public func getHoughLineFinderArgs() -> HoughLineFinder.Args { houghLineFinderArgs }
 
-    public func set(houghLineFinderArgs: HoughLineFinder.Args) async {
-        self.houghLineFinderArgs = houghLineFinderArgs
+    public func set(houghLineFinderArgs newArgs: HoughLineFinder.Args) async {
+        self.houghLineFinderArgs = newArgs
     }
 }
 

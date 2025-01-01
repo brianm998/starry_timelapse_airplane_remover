@@ -145,10 +145,4 @@ class OutlierGroupViewModel: Identifiable {
             return .orange
         }
     }
-/*
-    var view: some View {
-        OutlierGroupView(groupViewModel: self)
-          .environment(viewModel)
-    }
-  */  
 }
