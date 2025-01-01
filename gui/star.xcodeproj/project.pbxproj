@@ -36,6 +36,8 @@
 		D33FFC282A2D4F7E00F38194 /* FilmstripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC272A2D4F7E00F38194 /* FilmstripView.swift */; };
 		D33FFC2A2A2E1A8900F38194 /* OutlierGroupViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC292A2E1A8900F38194 /* OutlierGroupViewModel.swift */; };
 		D35309452D0DE4F200C4AFFF /* BlobProcessingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35309442D0DE4F200C4AFFF /* BlobProcessingView.swift */; };
+		D35618732D24CCF80001814D /* OutlierWindowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35618722D24CCF80001814D /* OutlierWindowViewModel.swift */; };
+		D35618742D24CCF80001814D /* OutlierWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35618712D24CCF80001814D /* OutlierWindowView.swift */; };
 		D3636C522CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3636C512CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift */; };
 		D3636C562CE087B000514D39 /* ReProcessCurrentFrameButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3636C552CE087B000514D39 /* ReProcessCurrentFrameButton.swift */; };
 		D364FD7F2C1F4357006FB43A /* libStarDecisionTrees.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */; };
@@ -122,6 +124,8 @@
 		D33FFC272A2D4F7E00F38194 /* FilmstripView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FilmstripView.swift; sourceTree = "<group>"; };
 		D33FFC292A2E1A8900F38194 /* OutlierGroupViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupViewModel.swift; sourceTree = "<group>"; };
 		D35309442D0DE4F200C4AFFF /* BlobProcessingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobProcessingView.swift; sourceTree = "<group>"; };
+		D35618712D24CCF80001814D /* OutlierWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutlierWindowView.swift; sourceTree = "<group>"; };
+		D35618722D24CCF80001814D /* OutlierWindowViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutlierWindowViewModel.swift; sourceTree = "<group>"; };
 		D3636C512CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindOutliersOnCurrentFrameButton.swift; sourceTree = "<group>"; };
 		D3636C552CE087B000514D39 /* ReProcessCurrentFrameButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReProcessCurrentFrameButton.swift; sourceTree = "<group>"; };
 		D366BB392AF84766004C9125 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = SOURCE_ROOT; };
@@ -220,6 +224,8 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D35618712D24CCF80001814D /* OutlierWindowView.swift */,
+				D35618722D24CCF80001814D /* OutlierWindowViewModel.swift */,
 				D35309442D0DE4F200C4AFFF /* BlobProcessingView.swift */,
 				D3CD86782CF5815100D2D53F /* InitialInstructionsView.swift */,
 				D3A0D3AF2CF3AEB800FD2E9E /* FinalGUIProcessor.swift */,
@@ -473,6 +479,8 @@
 				D386FA13298B617300878B56 /* ContentView.swift in Sources */,
 				D32F6DB92A4E6FCE00704870 /* BottomLeftView.swift in Sources */,
 				D32F6DB62A4D330C00704870 /* StarApp.swift in Sources */,
+				D35618732D24CCF80001814D /* OutlierWindowViewModel.swift in Sources */,
+				D35618742D24CCF80001814D /* OutlierWindowView.swift in Sources */,
 				D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */,
 				D32F6DB32A4D2BF800704870 /* ApplyAllDecisionTreeButton.swift in Sources */,
 				D332F70529B64004009E2796 /* ShrinkingButton.swift in Sources */,

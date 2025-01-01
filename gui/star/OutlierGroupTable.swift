@@ -116,207 +116,7 @@ struct OutlierGroupTableRow: Identifiable {
     }
 }
 
-@MainActor @Observable
-public final class OutlierWindowViewModel { // XXX PUT IN A SEPARATE FILE 
 
-    public var isSidePanelShowing = false
-    public var houghLineFinderArgs: HoughLineFinder.Args?
-
-    init() {
-        Task { houghLineFinderArgs = await constants.getHoughLineFinderArgs() }
-    }
-    
-    public var showCenterX = false
-    public var showCenterY = false
-    public var showWidth = true
-    public var showHeight = true
-    public var showMinX = false
-    public var showMinY = false
-    public var showMaxX = false
-    public var showMaxY = false
-    public var showHypotenuse = true
-    public var showAspectRatio = true
-    public var showFillAmount = true
-    public var showSurfaceAreaRatio = true
-    public var showAveragebrightness = true
-    public var showMedianBrightness = true
-    public var showMaxBrightness = true
-    public var showNumberOfNearbyOutliersInSameFrame = true
-    public var showMaxHoughTransformCount = true
-    public var showPixelBorderAmount = true
-    public var showAverageLineVariance = true
-    public var showLineLength = true
-    public var showNearbyDirectOverlapScore = true
-    public var showBoundingBoxOverlapScore = true
-    public var showLineFillAmount = true
-    public var showBorderBrightness = true
-    public var showBunchCount = true
-    public var showMedianBunchSize = true
-    public var showMaxBunchSize = true
-    
-    public func selectAll() {
-        setAll(to: true)
-    }
-
-    public func clearAll() {
-        setAll(to: false)
-    }
-
-    public func setAll(to value: Bool) {
-        showCenterX = value
-        showCenterY = value
-        showWidth = value
-        showHeight = value
-        showMinX = value
-        showMinY = value
-        showMaxX = value
-        showMaxY = value
-        showHypotenuse = value
-        showAspectRatio = value
-        showFillAmount = value
-        showSurfaceAreaRatio = value
-        showAveragebrightness = value
-        showMedianBrightness = value
-        showMaxBrightness = value
-        showNumberOfNearbyOutliersInSameFrame = value
-        showMaxHoughTransformCount = value
-        showPixelBorderAmount = value
-        showAverageLineVariance = value
-        showLineLength = value
-        showNearbyDirectOverlapScore = value
-        showBoundingBoxOverlapScore = value
-        showLineFillAmount = value
-        showBorderBrightness = value
-        showBunchCount = value
-        showMedianBunchSize = value
-        showMaxBunchSize = value
-    }
-}
-
-struct OutlierWindowView: View { // XXX PUT IN A SEPARATE FILE 
-    @Environment(ViewModel.self) var viewModel: ViewModel
-    let outlierWindowViewModel = OutlierWindowViewModel()
-
-    var body: some View {
-        VStack {
-            HStack {
-                OutlierGroupTable() { }
-                  .environment(outlierWindowViewModel)
-                tableControls
-                  .environment(outlierWindowViewModel)
-            }
-            HStack {
-                houghLineArgs
-                  .environment(outlierWindowViewModel)
-            }
-        }
-    }
-
-    var houghLineArgs: some View {
-        Group {
-            if let houghLineFinderArgs = outlierWindowViewModel.houghLineFinderArgs {
-                ArgableView(title: "Hough Line Arguments",
-                            description: "blah blah",
-                            args: houghLineFinderArgs,
-                            array: HoughLineFinder.Args.ArgType.allCases)
-            } else {
-                Text("Loading Args")
-            }
-        }
-    }
-    
-    var tableControls: some View {
-        Group {
-            if outlierWindowViewModel.isSidePanelShowing {
-                openTableControls
-            } else {
-                closedTableControls
-            }
-        }
-    }
-
-    var closedTableControls: some View {
-        @Bindable var outlierWindowViewModel = outlierWindowViewModel
-        return
-          VStack(alignment: .leading) {
-              HStack(alignment: .top) {
-                  Button() {
-                      outlierWindowViewModel.isSidePanelShowing = true
-                  } label: {
-                      Image(systemName: "chevron.left.2")
-                        .foregroundColor(.gray)
-                  }
-                    .buttonStyle(PlainButtonStyle())
-              }
-              Spacer()
-          }
-    }
-
-    var openTableControls: some View {
-            
-        @Bindable var outlierWindowViewModel = outlierWindowViewModel
-        return ScrollView {
-            VStack(alignment: .leading) {
-                HStack {
-                    Button() {
-                        outlierWindowViewModel.isSidePanelShowing = false
-                    } label: {
-                        Image(systemName: "chevron.right.2")
-                          .foregroundColor(.gray)
-                    }
-                      .buttonStyle(PlainButtonStyle())
-
-                    
-                    Text("Select which columns to show")
-                }
-                HStack {
-                    Button() {
-                        outlierWindowViewModel.selectAll()
-                    } label: {
-                        Text("Select All")
-                          .buttonStyle(ShrinkingButton())
-                    }
-
-                    Button() {
-                        outlierWindowViewModel.clearAll()
-                    } label: {
-                        Text("Clear All")
-                          .buttonStyle(ShrinkingButton())
-                    }
-                }
-                
-                Toggle("CenterX", isOn: $outlierWindowViewModel.showCenterX)
-                Toggle("CenterY", isOn: $outlierWindowViewModel.showCenterY)
-                Toggle("Width", isOn: $outlierWindowViewModel.showWidth)
-                Toggle("Height", isOn: $outlierWindowViewModel.showHeight)
-                Toggle("MinX", isOn: $outlierWindowViewModel.showMinX)
-                Toggle("MinY", isOn: $outlierWindowViewModel.showMinY)
-                Toggle("MaxX", isOn: $outlierWindowViewModel.showMaxX)
-                Toggle("MaxY", isOn: $outlierWindowViewModel.showMaxY)
-                Toggle("Hypotenuse", isOn: $outlierWindowViewModel.showHypotenuse)
-                Toggle("AspectRatio", isOn: $outlierWindowViewModel.showAspectRatio)
-                Toggle("FillAmount", isOn: $outlierWindowViewModel.showFillAmount)
-                Toggle("SurfaceAreaRatio", isOn: $outlierWindowViewModel.showSurfaceAreaRatio)
-                Toggle("Averagebrightness", isOn: $outlierWindowViewModel.showAveragebrightness)
-                Toggle("MedianBrightness", isOn: $outlierWindowViewModel.showMedianBrightness)
-                Toggle("MaxBrightness", isOn: $outlierWindowViewModel.showMaxBrightness)
-                Toggle("NumberOfNearbyOutliersInSameFrame",
-                       isOn: $outlierWindowViewModel.showNumberOfNearbyOutliersInSameFrame)
-                Toggle("MaxHoughTransformCount", isOn: $outlierWindowViewModel.showMaxHoughTransformCount)
-                Toggle("PixelBorderAmount", isOn: $outlierWindowViewModel.showPixelBorderAmount)
-                Toggle("AverageLineVariance", isOn: $outlierWindowViewModel.showAverageLineVariance)
-                Toggle("LineLength", isOn: $outlierWindowViewModel.showLineLength)
-                Toggle("NearbyDirectOverlapScore", isOn: $outlierWindowViewModel.showNearbyDirectOverlapScore)
-                Toggle("BoundingBoxOverlapScore", isOn: $outlierWindowViewModel.showBoundingBoxOverlapScore)
-                Toggle("LineFillAmount", isOn: $outlierWindowViewModel.showLineFillAmount)
-                Toggle("BorderBrightness", isOn: $outlierWindowViewModel.showBorderBrightness)
-                Toggle("BunchCount", isOn: $outlierWindowViewModel.showBunchCount)
-                Toggle("MedianBunchSize", isOn: $outlierWindowViewModel.showMedianBunchSize)
-                Toggle("MaxBunchSize", isOn: $outlierWindowViewModel.showMaxBunchSize)
-            }
-        }
-    }
-}
 
 struct OutlierGroupTable: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
@@ -416,15 +216,6 @@ struct OutlierGroupTable: View {
                       selection: $viewModel.selectedOutliers,
                       sortOrder: $sortOrder)
                 {
-                    /*
-                     XXX fix this, it fucking sucks
-
-                     add a side bar for selecting what blob info items are show in for each blob, there are soo many
-                     default to a smaller set that seems reasonable
-                    
-                     
-                     */
-                    
                     // current compiler can't take more than 10 columns at once here
 
                     // nameColumn // not sure why we need to know the id here, make it optional?
@@ -436,8 +227,6 @@ struct OutlierGroupTable: View {
 //        self.tableColumn(for: "size", value: \.dt_size) { $0.dt_size }
 //    }
     
-
-                    
                     Group {
                         if self.outlierWindowViewModel.showWidth {
                             self.tableColumn(for: "width", value: \.dt_width) { $0.dt_width }
@@ -581,6 +370,7 @@ struct OutlierGroupTable: View {
                     }
                 } .onChange(of: viewModel.selectedOutliers) {newValue in 
                     Log.d("selected outliers \(newValue)")
+                    Task { await outlierWindowViewModel.loadLineInfo() }
                     if let frame = viewModel.outlierGroupWindowFrame {
                         let frameView = viewModel.frames[frame.frameIndex]
                         if let outlierViews = frameView.outlierViews {
@@ -588,6 +378,7 @@ struct OutlierGroupTable: View {
                             for outlierView in outlierViews {
                                 outlierView.isSelected = false
                             }
+                            outlierWindowViewModel.selectedOutliers = []
                             
                             //var outlier_is_selected = false
                             for value in newValue {
@@ -598,6 +389,8 @@ struct OutlierGroupTable: View {
                                             // set this outlier view to selected
                                             Log.d("outlier \(outlierView.name) is selected)")
                                             outlierView.isSelected = true
+
+                                            outlierWindowViewModel.selectedOutliers.append(outlierView.group)
                                             break
                                         }
                                     }
@@ -631,136 +424,3 @@ struct OutlierGroupTable: View {
 
 }
 
-
-// XXX NEW FILE
-
-struct ArgableView<T: Hashable>: View {
-    let title: String
-    let description: String
-    let args: any Argable<T>
-    let array: [T]
-    
-    public init(title: String,
-                description: String,
-                args: any Argable<T>,
-                array: [T])
-    {
-        self.title = title
-        self.description = description
-        self.args = args
-        self.array = array
-    }
-
-    var body: some View {
-        ZStack {
-            VStack(alignment: .leading) {
-                Text(title)
-                  .foregroundColor(.black)
-                  .font(.largeTitle)
-                Text(description)
-                Spacer()
-                  .frame(maxHeight: 10)
-                Text("Parameters which can affect how this step operates:")
-                Grid(alignment: .topLeading) {
-                    GridRow {
-                        Text("Name")
-                          .foregroundColor(.black)
-                        Text("Value")
-                          .foregroundColor(.black)
-                        Text("Description")
-                          .foregroundColor(.black)
-                    }
-                      .padding(.vertical, 2)
-
-                    // index of paramters in list
-                    ForEach(Array(array.enumerated()), id: \.element) { index, value in
-                        ArgableRowView(args,
-                                       argType: value,
-                                       intUpdate: { args, argType, intValue in
-                                           if let args = args as? HoughLineFinder.Args,
-                                              let argType = argType as? HoughLineFinder.Args.ArgType,
-                                              let updatedArgs = args.intUpdate(for: argType, value: intValue)
-                                           {
-                                               Task { await constants.set(houghLineFinderArgs: updatedArgs) }
-                                           }
-                                       },
-                                       doubleUpdate: { args, argType, doubleValue in
-                                           if let args = args as? HoughLineFinder.Args,
-                                              let argType = argType as? HoughLineFinder.Args.ArgType,
-                                              let updatedArgs = args.doubleUpdate(for: argType, value: doubleValue)
-                                           {
-                                               Task { await constants.set(houghLineFinderArgs: updatedArgs) }
-                                           }
-                                       })
-                          .padding(.vertical, 2)
-                    }
-                }
-            }
-              .layoutPriority(10)
-        }
-          .padding(10)
-    }
-}
-
-// view for each parameter for this step, as a GridRow with three elements
-struct ArgableRowView<T: Hashable>: View {
-
-    let args: any Argable<T>
-    let argType: T
-    let intUpdate: (any Argable<T>, T, Int) -> Void
-    let doubleUpdate: (any Argable<T>, T, Double) -> Void
-    
-    @State var stringValue = ""
-    
-    init(_ args: any Argable<T>,
-         argType: T,
-         intUpdate: @escaping (any Argable<T>, T, Int) -> Void,
-         doubleUpdate: @escaping (any Argable<T>, T, Double) -> Void)
-    {
-        self.args = args
-        self.argType = argType
-        self.intUpdate = intUpdate
-        self.doubleUpdate = doubleUpdate
-    }
-
-    var body: some View {
-        GridRow {
-            Text("\(argType)")
-
-            let value = args.value(for: argType)
-            
-            if args.isInteger(argType) {
-                TextField("", text: $stringValue)
-                  .frame(maxWidth: 80)
-                  .onAppear {
-                      if let value {
-                          stringValue = String(format: "%d", Int(value))
-                      }
-                  }
-                  .onSubmit {
-                      if let intValue = Int(stringValue) {
-                          intUpdate(args, argType, intValue)
-                      }
-                  }
-                
-            } else {
-                TextField("", // not integer (real number)
-                          text: $stringValue)
-                  .frame(maxWidth: 80)
-                  .onAppear {
-                      if let value {
-                          stringValue = String(format: "%.2f", value)
-                      }
-                  }
-                  .onSubmit {
-                      if let doubleValue = Double(stringValue) {
-                          doubleUpdate(args, argType, doubleValue)
-                      }
-                  }
-            }
-
-            Text(args.description(for: argType))
-
-        }
-    }
-}

@@ -29,7 +29,7 @@ public struct HoughLineFinder: Sendable {
     let maxIntensity: UInt16
     let frameIndex: Int
     let args: Args
-    
+
     public init(pixels: [SortablePixel],
                 bounds: BoundingBox,
                 medianIntensity: UInt16,
@@ -356,7 +356,30 @@ public struct HoughLineFinder: Sendable {
                                   height: self.imageDataHeight,
                                   grayscale8BitImageData: imageData)
         }
-     }
+    }
+
+    public struct LineInfo: Identifiable {
+        public let id = UUID()
+        
+        public let line: Line
+        public let score: Double
+    }
+    
+    public var lineData: [LineInfo] {
+        var ret: [LineInfo] = []
+        if let image = pixelImage.nsImage {
+            let lines = kernelHoughTransform(image: image, maxResults: args.maxLineConstant)
+
+            for i in 0..<lines.count {
+                let originZeroLine = self.originZeroLine(from: lines[i])
+
+                let lineScore = pixelScore(for: originZeroLine,
+                                           maxDistance: self.args.maxDistanceFromLine)
+                ret.append(LineInfo(line: lines[i], score: lineScore))
+            }
+        }
+        return ret
+    }
     
     public var line: Line? {
         let pixelImage = self.pixelImage

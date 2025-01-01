@@ -68,20 +68,26 @@ public actor OutlierGroup: CustomStringConvertible,
     fileprivate var lineLoaded = false
     fileprivate var shouldLoadLine = true
     
-    fileprivate func set(line: Line) {
+    public func set(line: Line) {
         _line = line
         lineLoaded = true
+    }
+
+    public var lineFinder: HoughLineFinder {
+        get async {
+          await HoughLineFinder(pixels: Array(self.pixelSet),
+                            bounds: self.bounds,
+                            medianIntensity: self.medianIntensity(),
+                            maxIntensity: self.maxIntensity(),
+                            frameIndex: self.frameIndex)
+        }
     }
     
     public func line() async -> Line? {
         if shouldLoadLine {
             shouldLoadLine = false
             return await Task<Line?,Never>.detached {
-                if let line = await HoughLineFinder(pixels: Array(self.pixelSet),
-                                                    bounds: self.bounds,
-                                                    medianIntensity: self.medianIntensity(),
-                                                    maxIntensity: self.maxIntensity(),
-                                                    frameIndex: self.frameIndex).line
+                if let line = await self.lineFinder.line
                 {
                     await self.set(line: line)
                     return line
