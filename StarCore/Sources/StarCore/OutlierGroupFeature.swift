@@ -359,7 +359,7 @@ fileprivate func calculateNumberOfNearbyOutliersInSameFrame(of group: OutlierGro
     {
         return Double(nearbyGroups.count)
     } else {
-        fatalError("Died on frame \(group.frameIndex)")
+        return 0//fatalError("Died on frame \(group.frameIndex)")
     }
 
 }
