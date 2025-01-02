@@ -34,6 +34,8 @@ public struct CombinedHoughLineFinder: Sendable {
                 maxIntensity: UInt16,
                 frameIndex: Int) async
     {
+        // for some reason, sometimes we get better lines by padding the input data on the ends
+        // this combination exists to find the best lines from all of them.
         self.normalFinder = await .init(pixels: pixels,
                                         bounds: bounds,
                                         medianIntensity: medianIntensity,

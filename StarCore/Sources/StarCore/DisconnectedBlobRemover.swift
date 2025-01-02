@@ -187,7 +187,7 @@ public actor DisconnectedBlobRemover {
                     await analyzer.remove(blob: blob)
                 }
             } else {
-                Log.i("blob of size \(await blob.size()) has \(neighborCloud.count) neighbors")
+                //Log.i("blob of size \(await blob.size()) has \(neighborCloud.count) neighbors")
             }
         }
     }

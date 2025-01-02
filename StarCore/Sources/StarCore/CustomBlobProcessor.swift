@@ -44,7 +44,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
             if index >= 0,
                index < shouldDisable.count
             {
-                print("shouldRunStep \(index) !\(shouldDisable[index])")
+                Log.d("shouldRunStep \(index) !\(shouldDisable[index])")
                 return !shouldDisable[index]
             } else {
                 return true

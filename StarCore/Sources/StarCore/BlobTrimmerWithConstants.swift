@@ -41,7 +41,7 @@ public class BlobTrimmerWithConstants {
         public func description(for type: ArgType) -> String {
             switch type {
             case .minBlobIntensity:
-                return "blobs with intensity less than this are discarded.\nSmaller vlaues give more blobs."
+                return "blobs with intensity less than this are discarded.\nSmaller values give more blobs."
             case .minSmallBlobIntensity:
                 return "if set, allow smaller blobs brighter than this to persist.\nSmaller values give more blobs."
             case .minBlobSize:
@@ -161,12 +161,18 @@ public class BlobTrimmerWithConstants {
         var ret: [UInt16: Blob] = [:]
         
         for (_, blob) in blobMap {
-            // anything this small is noise
 
+            let blobSize = await blob.size()
             let blobIntensity = await blob.medianIntensity()
             
-            if await blob.size() <= args.minBlobSize {
-                //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size()) <= \(args.minBlobSize)")
+            if blobSize < args.qualifierSize && blobIntensity < args.qualifierMedianIntensity {
+                // only keep smaller blobs if they are bright enough
+                continue
+            }
+
+            // anything this small is noise
+            if await blobSize <= args.minBlobSize {
+                //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blobSize) <= \(args.minBlobSize)")
 
                 if let minSmallBlobIntensity = args.minSmallBlobIntensity {
                     if blobIntensity < minSmallBlobIntensity {
@@ -184,23 +190,9 @@ public class BlobTrimmerWithConstants {
                 continue
             }
             
-            // only keep smaller blobs if they are bright enough
-            if !(await allows(blob, args: args)) {
-                //Log.d("frame \(frame.frameIndex) dumping blob \(blob)")
-                continue
-            }
-
             // this blob has passed these checks, keep it for now
             ret[blob.id] = blob
         }
         blobMap = ret
     }
-
-    fileprivate func allows(_ blob: Blob, args: Args) async -> Bool {
-        let blobSize = await blob.size()
-        let intensity = await blob.medianIntensity()
-        
-        return !(blobSize < args.qualifierSize && intensity < args.qualifierMedianIntensity)
-    }
-    
 }

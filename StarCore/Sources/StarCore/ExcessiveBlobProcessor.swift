@@ -20,11 +20,11 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
         super.init()
         self.steps = [
 
-          .findBlobs(.init(minPixelIntensity: 4000,
+          .findBlobs(.init(minPixelIntensity: 6000,
                            startContrastSize: 10,
-                           endContrastSize: 200,
+                           endContrastSize: 50,
                            startMinContrast: 86,
-                           endMinContrast: 50)),
+                           endMinContrast: 0)),
 
           // check to see if any pixel is in more than one blob
           //.blobDupeCheck("init"),
@@ -44,7 +44,7 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
 
           .frameState(.filter2),
 
-          .borderBrightnessBlobRemover(.init(maxBrightness: 0.65,
+          .borderBrightnessBlobRemover(.init(maxBrightness: 0.65,                                            
                                              medianIntensityFloor: 10000)),
 
           .save(.filter2),
@@ -52,10 +52,10 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           .frameState(.filter3),
           
           // a first pass at cutting out individual blobs based upon size, brightness
-          .trimWithConstants(.init(minBlobSize: 15,
+          .trimWithConstants(.init(minBlobSize: 10,
                                    minBlobIntensity: 1000,
-                                   qualifierSize: 10,
-                                   qualifierMedianIntensity: 3500)),
+                                   qualifierSize: 18,
+                                   qualifierMedianIntensity: 10000)),
 
           .save(.filter3),
           

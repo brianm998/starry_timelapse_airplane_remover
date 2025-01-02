@@ -31,11 +31,11 @@ public actor DimIsolatedBlobRemover {
                                       height: height,
                                       frameIndex: frameIndex)
     }
-    
+
     public func blobMap() async -> [UInt16:Blob] {
         analyzer.mapOfBlobs()
     }
-    
+
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         let scanSize: Int // how far in each direction to look for neighbors
         let requiredNeighbors: Int // how many neighbors do we need to find?
