@@ -19,6 +19,74 @@ fileprivate struct LineSplitResult {
     let line: Line
 }
 
+
+public struct CombinedHoughLineFinder: Sendable {
+
+    let farFinder: HoughLineFinder
+    let normalFinder: HoughLineFinder
+    let midFinder: HoughLineFinder
+    let zeroFinder: HoughLineFinder
+    let wtfFinder: HoughLineFinder
+    
+    public init(pixels: [SortablePixel],
+                bounds: BoundingBox,
+                medianIntensity: UInt16,
+                maxIntensity: UInt16,
+                frameIndex: Int) async
+    {
+        self.normalFinder = await .init(pixels: pixels,
+                                        bounds: bounds,
+                                        medianIntensity: medianIntensity,
+                                        maxIntensity: maxIntensity,
+                                        frameIndex: frameIndex) 
+        self.zeroFinder = await .init(pixels: pixels,
+                                      bounds: bounds,
+                                      medianIntensity: medianIntensity,
+                                      maxIntensity: maxIntensity,
+                                      frameIndex: frameIndex,
+                                      imageDataBorderSize: 0)
+        self.midFinder = await .init(pixels: pixels,
+                                      bounds: bounds,
+                                      medianIntensity: medianIntensity,
+                                      maxIntensity: maxIntensity,
+                                      frameIndex: frameIndex,
+                                      imageDataBorderSize: 2000)
+        self.wtfFinder = await .init(pixels: pixels,
+                                     bounds: bounds,
+                                     medianIntensity: medianIntensity,
+                                     maxIntensity: maxIntensity,
+                                     frameIndex: frameIndex,
+                                     imageDataBorderSize: 5000)
+        self.farFinder = await .init(pixels: pixels,
+                                     bounds: bounds,
+                                     medianIntensity: medianIntensity,
+                                     maxIntensity: maxIntensity,
+                                     frameIndex: frameIndex,
+                                     imageDataBorderSize: 6000)
+    }
+
+    public var lineData: [HoughLineFinder.LineInfo] {
+        self.normalFinder.lineData +
+        self.midFinder.lineData +
+        self.zeroFinder.lineData +
+        self.farFinder.lineData +
+        self.wtfFinder.lineData
+    }
+
+    public var line: Line? {
+        var data = self.lineData
+
+        data.sort { $0.score > $1.score }
+
+        if data.count > 0 {
+            return data[0].line
+        } else {
+            return nil
+        }
+    }
+
+}
+
 // use the KHT to find lines, and then return the one which best fits the input data,
 // i.e. has the lowest mean distance of pixels to the line
 public struct HoughLineFinder: Sendable {
@@ -30,11 +98,14 @@ public struct HoughLineFinder: Sendable {
     let frameIndex: Int
     let args: Args
 
+    let _imageDataBorderSize: Int?
+
     public init(pixels: [SortablePixel],
                 bounds: BoundingBox,
                 medianIntensity: UInt16,
                 maxIntensity: UInt16,
-                frameIndex: Int) async
+                frameIndex: Int,
+                imageDataBorderSize: Int? = nil) async
     {
         self.data = pixels
         self.args = await constants.getHoughLineFinderArgs()
@@ -42,6 +113,7 @@ public struct HoughLineFinder: Sendable {
         self.frameIndex = frameIndex
         self.maxIntensity = maxIntensity
         self.medianIntensity = medianIntensity
+        self._imageDataBorderSize = imageDataBorderSize
     }
 
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
@@ -189,7 +261,7 @@ public struct HoughLineFinder: Sendable {
         public init(imageDataBorderSize: Int = 4000,
                     minThetaDiff: Double = 10, // degrees
                     minRhoDiff: Double = 10,
-                    maxLineConstant: Int = 300,
+                    maxLineConstant: Int = 200,
                     maxDistanceFromLine: Double = 6)
         {
             self.imageDataBorderSize = imageDataBorderSize
@@ -202,7 +274,7 @@ public struct HoughLineFinder: Sendable {
         
     public var imageDataWidth: Int {
         if self.bounds.width < self.bounds.height {
-            return self.bounds.width+args.imageDataBorderSize
+            return self.bounds.width+self.imageDataBorderSize
         } else {
             return self.bounds.width
         }
@@ -210,7 +282,7 @@ public struct HoughLineFinder: Sendable {
 
     public var imageDataHeight: Int {
         if self.bounds.height < self.bounds.width {
-            return self.bounds.height+args.imageDataBorderSize
+            return self.bounds.height+self.imageDataBorderSize
         } else {
             return self.bounds.height
         }
@@ -366,19 +438,9 @@ public struct HoughLineFinder: Sendable {
     }
     
     var pixelImage: PixelatedImage {
-        if medianIntensity != 0,
-           maxIntensity/medianIntensity > 2
-        {
-            let imageData = self.imageData(ignoringPixlesDimmerThan: medianIntensity)
-            return PixelatedImage(width: self.imageDataWidth,
-                                  height: self.imageDataHeight,
-                                  grayscale8BitImageData: imageData)
-        } else {
-            let imageData = self.imageData()
-            return PixelatedImage(width: self.imageDataWidth,
-                                  height: self.imageDataHeight,
-                                  grayscale8BitImageData: imageData)
-        }
+         PixelatedImage(width: self.imageDataWidth,
+                        height: self.imageDataHeight,
+                        grayscale8BitImageData: self.imageData())
     }
 
     public struct LineInfo: Identifiable {
@@ -386,6 +448,7 @@ public struct HoughLineFinder: Sendable {
         
         public let line: Line
         public let score: Double
+        public let border: Int
     }
     
     public var lineData: [LineInfo] {
@@ -397,15 +460,24 @@ public struct HoughLineFinder: Sendable {
                 let originZeroLine = self.originZeroLine(from: lines[i])
 
                 let lineScore = pixelScore(for: originZeroLine)
-                ret.append(LineInfo(line: lines[i], score: lineScore))
+                ret.append(LineInfo(line: lines[i],
+                                    score: lineScore,
+                                    border: self.imageDataBorderSize))
             }
         }
         return ret
     }
     
+    public var imageDataBorderSize: Int {
+        if let _imageDataBorderSize {
+            return _imageDataBorderSize
+        } else {
+            return args.imageDataBorderSize
+        }
+    }
+    
     public var line: Line? {
         let pixelImage = self.pixelImage
-        
         
         if let image = pixelImage.nsImage {
             let lines = kernelHoughTransform(image: image, maxResults: args.maxLineConstant)

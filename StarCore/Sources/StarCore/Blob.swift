@@ -176,11 +176,11 @@ public actor Blob: CustomStringConvertible,
     public var line: Line? {
         get async {
             if let _blobLine { return _blobLine }
-            _blobLine = await HoughLineFinder(pixels: Array(self.pixels),
-                                              bounds: self.boundingBox(),
-                                              medianIntensity: self.medianIntensity(),
-                                              maxIntensity: self.maxIntensity(),
-                                              frameIndex: frameIndex).line
+            _blobLine = await CombinedHoughLineFinder(pixels: Array(self.pixels),
+                                                      bounds: self.boundingBox(),
+                                                      medianIntensity: self.medianIntensity(),
+                                                      maxIntensity: self.maxIntensity(),
+                                                      frameIndex: frameIndex).line
             return _blobLine
         }
     }
@@ -199,11 +199,11 @@ public actor Blob: CustomStringConvertible,
     public func lineSplit(args: BlobLineSplitter.Args) async -> [[SortablePixel]]
     {
         let hlf = await HoughLineFinder(pixels: Array(self.pixels),
-                                  bounds: self.boundingBox(),
-                                  medianIntensity: self.medianIntensity(),
-                                  maxIntensity: self.maxIntensity(),
-                                  frameIndex: frameIndex)
-
+                                        bounds: self.boundingBox(),
+                                        medianIntensity: self.medianIntensity(),
+                                        maxIntensity: self.maxIntensity(),
+                                        frameIndex: frameIndex)
+        
         let (pixelsToKeep, newPixelSets) =
           hlf.lineSplit(args: args, optimalLine: hlf.line)
         

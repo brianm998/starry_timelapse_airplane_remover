@@ -143,7 +143,8 @@ struct FrameEditView: View {
                                   let new_row = await OutlierGroupTableRow(group)
                                   await _outlierGroupTableRows.append(new_row)
                               }
-                              let elements = await _outlierGroupTableRows.getElements()
+                              var elements = await _outlierGroupTableRows.getElements()
+                              elements.sort { $0.size > $1.size }
                               await MainActor.run {
                                   self.viewModel.outlierGroupWindowFrame = frame
                                   self.viewModel.outlierGroupTableRows = elements

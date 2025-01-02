@@ -73,13 +73,13 @@ public actor OutlierGroup: CustomStringConvertible,
         lineLoaded = true
     }
 
-    public var lineFinder: HoughLineFinder {
+    public var lineFinder: CombinedHoughLineFinder {
         get async {
-          await HoughLineFinder(pixels: Array(self.pixelSet),
-                            bounds: self.bounds,
-                            medianIntensity: self.medianIntensity(),
-                            maxIntensity: self.maxIntensity(),
-                            frameIndex: self.frameIndex)
+          await CombinedHoughLineFinder(pixels: Array(self.pixelSet),
+                                        bounds: self.bounds,
+                                        medianIntensity: self.medianIntensity(),
+                                        maxIntensity: self.maxIntensity(),
+                                        frameIndex: self.frameIndex)
         }
     }
     

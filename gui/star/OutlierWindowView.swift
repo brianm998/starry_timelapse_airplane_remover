@@ -323,6 +323,9 @@ struct HoughLinesTableView: View {
                     TableColumn("Votes", value: \.line.votes) { row in
                         Text(String(row.line.votes))
                     }
+                    TableColumn("Border", value: \.border) { row in
+                        Text(String(row.border))
+                    }
                 }
                   .onChange(of: outlierWindowViewModel.selectedLines) { old, newValue in
                       outlierWindowViewModel.didSelect(ids: newValue)
