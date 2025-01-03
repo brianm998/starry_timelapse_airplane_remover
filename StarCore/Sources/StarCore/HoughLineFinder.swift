@@ -300,10 +300,12 @@ public struct HoughLineFinder: Sendable {
 
         for pixel in data {
             if pixel.intensity > minIntensity {
-                let imageIndex = (pixel.y - minY)*imageDataWidth + 
-                  (pixel.x - minX)
-                //imageData[imageIndex] = 0xFF
-                imageData[imageIndex] = UInt8(pixel.intensity>>8)
+                let imageIndex = (pixel.y - minY)*imageDataWidth + (pixel.x - minX)
+
+                imageData[imageIndex] = 0xFF
+
+                // XXX this can give zeros, and result in no lines :(
+                //imageData[imageIndex] = UInt8(pixel.intensity>>8)
             }
         }
 
