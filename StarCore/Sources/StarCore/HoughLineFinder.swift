@@ -27,6 +27,9 @@ public struct CombinedHoughLineFinder: Sendable {
     let midFinder: HoughLineFinder
     let zeroFinder: HoughLineFinder
     let wtfFinder: HoughLineFinder
+
+
+    let bounds: BoundingBox
     
     public init(pixels: [SortablePixel],
                 bounds: BoundingBox,
@@ -34,6 +37,8 @@ public struct CombinedHoughLineFinder: Sendable {
                 maxIntensity: UInt16,
                 frameIndex: Int) async
     {
+        self.bounds = bounds
+        
         // for some reason, sometimes we get better lines by padding the input data on the ends
         // this combination exists to find the best lines from all of them.
         self.normalFinder = await .init(pixels: pixels,
@@ -68,11 +73,33 @@ public struct CombinedHoughLineFinder: Sendable {
     }
 
     public var lineData: [HoughLineFinder.LineInfo] {
-        self.normalFinder.lineData +
-        self.midFinder.lineData +
-        self.zeroFinder.lineData +
-        self.farFinder.lineData +
-        self.wtfFinder.lineData
+        var base = self.normalFinder.lineData +
+          self.midFinder.lineData +
+          self.zeroFinder.lineData +
+          self.farFinder.lineData +
+          self.wtfFinder.lineData
+
+        // as a last ditch, add in two lines, from each opposite corners of the bounding box
+        // this might be better than the line we get from KHT :(
+
+        let f1 = Line(point1: DoubleCoord(x: 0.1, y: 0.1), // avoid having line pass through origin
+                      point2: DoubleCoord(x: Double(bounds.width),
+                                          y: Double(bounds.height)),
+                      votes: 66)
+
+        let f1Score = self.wtfFinder.pixelScore(for: self.wtfFinder.originZeroLine(from: f1))
+
+        base.append(.init(line: f1, score: f1Score, border: -1))
+
+        let f2 = Line(point1: DoubleCoord(x: Double(bounds.width), y: 0),
+                      point2: DoubleCoord(x: 0, y: Double(bounds.height)),
+                      votes: 68)
+
+        let f2Score = self.wtfFinder.pixelScore(for: self.wtfFinder.originZeroLine(from: f2))
+
+        base.append(.init(line: f2, score: f2Score, border: -2))
+
+        return base
     }
 
     public var line: Line? {
