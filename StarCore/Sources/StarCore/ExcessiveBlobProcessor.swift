@@ -20,7 +20,7 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
         super.init()
         self.steps = [
 
-          .findBlobs(.init(minPixelIntensity: 6000,
+          .findBlobs(.init(minPixelIntensity: 4800,
                            startContrastSize: 10,
                            endContrastSize: 50,
                            startMinContrast: 86,
@@ -36,7 +36,7 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
 
           // find really close linear blobs
           .linearBlobConnector(.init(scanSize: 32, 
-                                     blobsSmallerThan: 180,
+                                     blobsSmallerThan: 480,
                                      lineBorder: 12)),
 
 
@@ -44,22 +44,17 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
 
           .frameState(.filter2),
 
-          .borderBrightnessBlobRemover(.init(maxBrightness: 0.65,                                            
+          .borderBrightnessBlobRemover(.init(maxBrightness: 0.65,
                                              medianIntensityFloor: 10000)),
 
           .save(.filter2),
 
           .frameState(.filter3),
           
-          // a first pass at cutting out individual blobs based upon size, brightness
-          .trimWithConstants(.init(minBlobSize: 10,
-                                   minBlobIntensity: 1000,
-                                   qualifierSize: 18,
-                                   qualifierMedianIntensity: 10000)),
-
           .save(.filter3),
           
           .frameState(.filter4),
+
           // a first pass on dim isolated blob removal
           .dimIsolatedBlobRemover(.init(scanSize: 80,
                                         requiredNeighbors: 1,
@@ -82,65 +77,65 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
                                          intensityThreshold: 15000)),
           
           // find really close linear blobs
-//          .linearBlobConnector(.init(scanSize: 32,
-//                                     blobsSmallerThan: 180,
-//                                     lineBorder: 12)),
+          .linearBlobConnector(.init(scanSize: 32,
+                                     blobsSmallerThan: 480,
+                                     lineBorder: 12)),
 
           .save(.filter6),
 
           .frameState(.filter7),
+
+          // a first pass at cutting out individual blobs based upon size, brightness
+          .trimWithConstants(.init(minBlobSize: 20,
+                                   minBlobIntensity: 3000,
+                                   qualifierSize: 15,
+                                   qualifierMedianIntensity: 4000)),
+
+          
+          .save(.filter7),
+          .frameState(.filter8),
 
           // remove larger disconected blobs
           .disconnectedBlobRemover(.init(scanSize: 60,
                                          blobsSmallerThan: 18,
                                          blobsLargerThan: 2,
                                          requiredNeighbors: 2)),
-          .save(.filter7),
-          .frameState(.filter8),
           
           .isolatedBlobRemover(.init(minNeighborSize: 4,
                                      scanSize: 50,
                                      requiredNeighbors: 1,
                                      minBlobSize: 24)),
-        
+
           .save(.filter8),
           .frameState(.filter9),
 
           .largeDimBlobCleaner(.init(minBlobSize: 1000,
                                      intensityFloor: 2000)),
           
-          // try to split up blobs with more than one line in them
-
-          // this appears to be slow
-          .lineSplit(.init(minAvgDistance: 5,
-                           maxLineFillAmount: 0.5,
-                           minBlobsize: 500,
-                           maxLines: 8000,
-                           maxDistance: 12,
-                           minLineScore: 12,
-                           minLineCount: 10)),
-
           .save(.filter9),
           .frameState(.filter10),
 
 
-          // blob line trim
-          .blobLineTrim(.init(minLineLength: 65,
-                              minLineFillAmount: 0.9,
-                              trimAmount: 16)),
-
-          .save(.filter10),
-          .frameState(.filter11),
 
           // reconnect some lines that may have been split up
           .linearBlobConnector(.init(scanSize: 40, 
-                                     blobsSmallerThan: 180,
+                                     blobsSmallerThan: 480,
                                      lineBorder: 2)),
+          .save(.filter10),
+          .frameState(.filter11),
+          
+
+          // another pass at cutting out individual blobs based upon size, brightness
+          .trimWithConstants(.init(minBlobSize: 10,
+                                   minBlobIntensity: 1000,
+                                   qualifierSize: 18,
+                                   qualifierMedianIntensity: 10000)),
+
 
           .save(.filter11),
           .frameState(.filter12),
+
           
-        
           // pass on getting rid of small dim blobs
           .smallBlobRemover(.init(minBlobSize: 6,
                                   intensityFloor: 1000)),
