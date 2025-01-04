@@ -198,12 +198,12 @@ public actor Blob: CustomStringConvertible,
     // use KHT to see if we have more than one line in this group of pixels
     public func lineSplit(args: BlobLineSplitter.Args) async -> [[SortablePixel]]
     {
-        let hlf = await HoughLineFinder(pixels: Array(self.pixels),
-                                        bounds: self.boundingBox(),
-                                        medianIntensity: self.medianIntensity(),
-                                        maxIntensity: self.maxIntensity(),
-                                        frameIndex: frameIndex)
-        
+        let hlf = await CombinedHoughLineFinder(pixels: Array(self.pixels),
+                                                bounds: self.boundingBox(),
+                                                medianIntensity: self.medianIntensity(),
+                                                maxIntensity: self.maxIntensity(),
+                                                frameIndex: frameIndex)
+
         let (pixelsToKeep, newPixelSets) =
           hlf.lineSplit(args: args, optimalLine: hlf.line)
         
