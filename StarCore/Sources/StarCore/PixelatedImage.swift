@@ -446,6 +446,90 @@ public struct PixelatedImage: Sendable {
         // higher is brighter
         return brighterCount/dimmerCount
     }
+
+    // splits image into a matrix of chunked elements of a max size
+    public func splitIntoMatrix(maxWidth: Int,
+                                maxHeight: Int,
+                                overlapPercent: Double = 0) -> [ImageMatrixElement]
+    {
+        // XXX only works on grayscale
+        // XXX add a check for this
+
+        // move x and y by overlapPercent of maxWidth and maxHeight every time
+
+        // keep the overlap between 0...90 percent
+        var realOverlap = overlapPercent
+        if overlapPercent < 0 { realOverlap = 0 } 
+        if overlapPercent >= 90 { realOverlap = 90 } // at least 10 percent move
+
+        // how far apart the starting point for each matrix element is from neighbors
+        let xAdjust = Int(Double(maxWidth)*(100-realOverlap)/100)
+        let yAdjust = Int(Double(maxHeight)*(100-realOverlap)/100)
+
+        Log.i("matrix xAdjust \(xAdjust) yAdjust \(yAdjust)")
+
+        // starting point for each matrix element
+        var xOffset = 0
+        var yOffset = 0
+        
+        var matrix: [ImageMatrixElement] = []
+        while xOffset < width {
+            yOffset = 0
+            while yOffset < height {
+                //Log.i("matrix xOffset \(xOffset) yOffset \(yOffset)")
+                var matrixWidth = maxWidth
+                if xOffset + matrixWidth > width {
+                    matrixWidth = width - xOffset
+                }
+                var matrixHeight = maxHeight
+                if yOffset + matrixHeight > height {
+                    matrixHeight = height - yOffset
+                }
+                if matrixWidth > 0,
+                   matrixHeight > 0
+                {
+                    switch imageData {
+                    case .sixteenBit(let arr):
+                        var matrixImageData = [UInt16](repeating: 0, count: matrixWidth*matrixHeight)
+                        for y in 0..<matrixHeight {
+                            arr.withUnsafeBufferPointer { sourcePtr in
+                                if let baseAddress = sourcePtr.baseAddress {
+                                    memmove(&matrixImageData[y*matrixWidth],
+                                            baseAddress + (y+yOffset)*width+xOffset,
+                                            matrixWidth*2)
+                                } else {
+                                    Log.w("cannot memmove")
+                                }
+                            }
+                        }
+
+                        let matrixImage = PixelatedImage(width: matrixWidth,
+                                                         height: matrixHeight,
+                                                         grayscale16BitImageData: matrixImageData)
+                        if let nsImage = matrixImage.nsImage {
+                            let element = ImageMatrixElement(x: xOffset,
+                                                             y: yOffset,
+                                                             image: nsImage)
+                            
+                            //Log.i("matrix element [\(xOffset), \(yOffset)] image width \(matrixWidth) matrix height \(matrixHeight)")
+                            matrix.append(element)
+                        } else {
+                            Log.w("unable to make image")
+                        }
+                    case .eightBit(_):
+                        Log.e("eight bit not yet implemented")
+                        break       // XXX do this too
+                        
+                    }
+                }
+                yOffset += yAdjust
+            }
+            xOffset += xAdjust
+        }
+        Log.i("matrix  has \(matrix.count) rows")
+        return matrix
+    }
+    
 }
 
 fileprivate func isImage(_ image: PixelatedImage,
@@ -531,4 +615,40 @@ extension Array<UInt8> {
         let data = self.withUnsafeBufferPointer { Data(buffer: $0) }
         return data
     }
+}
+
+public class ImageMatrixElement: Hashable, CustomStringConvertible {
+    public let x: Int                  // offset in original image
+    public let y: Int
+    public let width: Int
+    public let height: Int
+    
+    public var image: NSImage // don't keep this image around forever
+    
+    public init(x: Int,
+                y: Int,
+                image: NSImage)
+    {
+        self.x = x
+        self.y = y
+        self.image = image
+        self.width = Int(image.size.width)
+        self.height = Int(image.size.height)
+    }
+
+//        let lines = kernelHoughTransform(image: image, maxResults: args.maxLineConstant)
+    
+    public static func == (lhs: ImageMatrixElement, rhs: ImageMatrixElement) -> Bool {
+        return lhs.x == rhs.x && lhs.y == rhs.y &&
+           lhs.width == rhs.width && lhs.height == rhs.height
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(x)
+        hasher.combine(y)
+        hasher.combine(width)
+        hasher.combine(height)
+    }
+    
+    public var description: String { "MatrixElement: [\(x), \(y)] -> [\(width), \(height)]" }
 }
