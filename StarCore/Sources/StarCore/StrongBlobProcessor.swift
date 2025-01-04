@@ -68,33 +68,22 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
                                              medianIntensityFloor: 10000)),
 
           .save(.filter2),
-
           .frameState(.filter3),
           
-          // a first pass at cutting out individual blobs based upon size, brightness
-
-          .trimWithConstants(.init(minBlobSize: 5,
-                                   minBlobIntensity: 1500,
-                                   qualifierSize: 10,
-                                   qualifierMedianIntensity: 3500)),
-
-
-          .save(.filter3),
           
-          .frameState(.filter4),
           // a first pass on dim isolated blob removal
           .dimIsolatedBlobRemover(.init(scanSize: 20,
                                         requiredNeighbors: 1,
                                         intensityFloor: 5000)),
           
-          .save(.filter4),
-          .frameState(.filter5),
+          .save(.filter3),
+          .frameState(.filter4),
 
           // remove isolated blobs
           .isolatedBlobRemover(.init(minNeighborSize: 4, scanSize: 24)),
           
-          .save(.filter5),
-          .frameState(.filter6),
+          .save(.filter4),
+          .frameState(.filter5),
           
           // remove smaller disconected blobs
           .disconnectedBlobRemover(.init(scanSize: 60,
@@ -102,6 +91,9 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
                                          requiredNeighbors: 2,
                                          intensityThreshold: 15000)),
           
+          .save(.filter5),
+          .frameState(.filter6),
+
           // find really close linear blobs
           .linearBlobConnector(.init(scanSize: 20,
                                      blobsSmallerThan: 120,
@@ -175,6 +167,15 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
           .linearBlobConnector(.init(scanSize: 40, 
                                      blobsSmallerThan: 180,
                                      lineBorder: 2)),
+
+
+          // a first pass at cutting out individual blobs based upon size, brightness
+
+          .trimWithConstants(.init(minBlobSize: 5,
+                                   minBlobIntensity: 1500,
+                                   qualifierSize: 10,
+                                   qualifierMedianIntensity: 3500)),
+
           
           // pass on getting rid of small but larger, dimmer blobs
           // XXX this needs to take into account distance from others, it's killing us
