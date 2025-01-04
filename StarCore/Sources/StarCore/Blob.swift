@@ -543,7 +543,7 @@ public actor Blob: CustomStringConvertible,
     // a line with (0,0) origin calculated from the pixels in this blob, if possible
     public var originZeroLine: Line? {
         get async {
-            if let line = await self.line { return await originZeroLine(from: line) }
+            if let line = await self.line { return originZeroLine(from: line) }
             return nil
         }
     }
