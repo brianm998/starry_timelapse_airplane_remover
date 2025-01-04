@@ -139,4 +139,68 @@ extension Line {
             }
         }
     }
+
+    public func asyncIterate(between coord1: DoubleCoord,
+                             and coord2: DoubleCoord,
+                             numberOfAdjecentPixels: Int = 0, // iterate in the parallel direction this many pixels
+                             closure: (Int, Int, IterationOrientation) async -> Void) async
+    {
+        let standardLine = self.standardLine
+
+        //Log.i("self.standardLine \(self.standardLine)")
+        
+        switch self.iterationOrientation {
+        case .horizontal:
+            var minX = coord1.x
+            var maxX = coord2.x
+            if coord2.x < minX {
+                minX = coord2.x
+                maxX = coord1.x
+            }
+            for x in Int(minX)...Int(maxX) {
+                let y = Int(standardLine.y(forX: Double(x)))
+                if x >= 0,
+                   y >= 0
+                {
+                    if numberOfAdjecentPixels > 0 {
+                        // cover some number of pixels on the perpendicular direction 
+                        for sideY in y-numberOfAdjecentPixels...y+numberOfAdjecentPixels {
+                            if sideY >= 0 {
+                                await closure(x, sideY, .horizontal)
+                            }
+                        }
+                    } else {
+                        // only cover one pixel per iteration
+                        await closure(x, y, .horizontal)
+                    }
+                }
+            }
+            
+        case .vertical:
+            var minY = coord1.y
+            var maxY = coord2.y
+            if coord2.y < minY {
+                minY = coord2.y
+                maxY = coord1.y
+            }
+            for y in Int(minY)...Int(maxY) {
+                let x = Int(standardLine.x(forY: Double(y)))
+                if x >= 0,
+                   y >= 0
+                {
+                    if numberOfAdjecentPixels > 0 {
+                        // cover some number of pixels on the perpendicular direction 
+                        for sideX in x-numberOfAdjecentPixels...x+numberOfAdjecentPixels {
+                            if sideX >= 0 {
+                                await closure(sideX, y, .vertical)
+                            }
+                        }
+                    } else {
+                        // only cover one pixel per iteration
+                        await closure(x, y, .vertical)
+                    }
+                }
+            }
+        }
+    }
 }
