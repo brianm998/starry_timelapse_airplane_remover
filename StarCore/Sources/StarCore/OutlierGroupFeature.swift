@@ -402,7 +402,8 @@ fileprivate func calculateNearbyDirectOverlapScore(of group: OutlierGroup) async
         if numberFrames == 0 { return 0 }
         return Double(matchCount)/(Double(numberFrames)*Double(pixelCount))
     } else {
-        fatalError("NO FRAME for nearbyDirectOverlapScore @ index \(group.frameIndex)")
+        return 0
+//        fatalError("NO FRAME for nearbyDirectOverlapScore @ index \(group.frameIndex)")
     }
 }
 
@@ -460,7 +461,8 @@ fileprivate func calculateBoundingBoxOverlapScore(of group: OutlierGroup) async 
         if numberFrames == 0 { return 0 }
         return Double(matchCount)/(Double(numberFrames)*Double(group.bounds.width*group.bounds.height))
     } else {
-        fatalError("NO FRAME for boundingBoxOverlapScore @ index \(group.frameIndex)")
+        return 0
+//        fatalError("NO FRAME for boundingBoxOverlapScore @ index \(group.frameIndex)")
     }
 }
     
