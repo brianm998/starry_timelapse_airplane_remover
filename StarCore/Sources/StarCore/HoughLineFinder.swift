@@ -72,6 +72,11 @@ public struct CombinedHoughLineFinder: Sendable {
                                      imageDataBorderSize: 6000)
     }
 
+
+    public func originZeroLine(from line: Line) -> Line {
+        self.wtfFinder.originZeroLine(from: line)
+    }
+    
     public var lineData: [HoughLineFinder.LineInfo] {
         var base = self.normalFinder.lineData +
           self.midFinder.lineData +
@@ -121,6 +126,7 @@ public struct CombinedHoughLineFinder: Sendable {
 public struct HoughLineFinder: Sendable {
 
     let data: [SortablePixel]
+    
     let bounds: BoundingBox
     let medianIntensity: UInt16
     let maxIntensity: UInt16
@@ -317,7 +323,7 @@ public struct HoughLineFinder: Sendable {
         }
     }
 
-    public func imageData(ignoringPixlesDimmerThan minIntensity: UInt16 = 0) -> [UInt8] {
+    private func imageData() -> [UInt8] {
         var imageData = [UInt8](repeating: 0, count: self.imageDataWidth * self.imageDataHeight)
         
         //Log.d("frame \(frameIndex) blob image data with \(pixels.count) pixels")
@@ -326,14 +332,12 @@ public struct HoughLineFinder: Sendable {
         let minY = self.bounds.min.y
 
         for pixel in data {
-            if pixel.intensity > minIntensity {
-                let imageIndex = (pixel.y - minY)*imageDataWidth + (pixel.x - minX)
+            let imageIndex = (pixel.y - minY)*imageDataWidth + (pixel.x - minX)
 
-                imageData[imageIndex] = 0xFF
+            imageData[imageIndex] = 0xFF
 
-                // XXX this can give zeros, and result in no lines :(
-                //imageData[imageIndex] = UInt8(pixel.intensity>>8)
-            }
+            // XXX this can give zeros, and result in no lines :(
+            //imageData[imageIndex] = UInt8(pixel.intensity>>8)
         }
 
         return imageData
@@ -348,7 +352,6 @@ public struct HoughLineFinder: Sendable {
       // first return value is the original, possibly reduced, set of pixels we started with
       // the second return value is a list of any sub-blobs we found that are close to another line
     {
-
         let pixelImage = self.pixelImage
         if let image = pixelImage.nsImage {
             let lines = kernelHoughTransform(image: image, maxResults: args.maxLines)

@@ -186,6 +186,8 @@ struct BlobProcessingView: View {
                                 case .largeDimBlobCleaner(let args):
                                     largeDimBlobCleanerView(args, stepIndex: stepIndex)
                                     
+                                case .houghLineMatrixBlobConnector(let args):
+                                    houghLineMatrixBlobConnectorView(args, stepIndex: stepIndex)
                                 }
                             }
                               .background(.gray)
@@ -430,6 +432,20 @@ struct BlobProcessingView: View {
                  description: "Cleans out dim pixels from large dim blobs",
                  args: args,
                  array: LargeDimBlobCleaner.Args.ArgType.allCases,
+                 stepIndex: stepIndex,
+                 detectionType: $detectionType)
+    }
+
+    private func houghLineMatrixBlobConnectorView(_ args: HoughLineMatrixBlobConnector.Args,
+                                                  stepIndex: Int) -> some View
+    {
+        StepView(title: "Hough Line Matrix Blob Connector",
+                 description: """
+                   Finds lines from the full blob map image,
+                   and connects blobs that match those lines.
+                   """,
+                 args: args,
+                 array: HoughLineMatrixBlobConnector.Args.ArgType.allCases,
                  stepIndex: stepIndex,
                  detectionType: $detectionType)
     }

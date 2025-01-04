@@ -33,7 +33,13 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
 
           .frameState(.filter1),
 
-
+          .houghLineMatrixBlobConnector(.init(elementWidth: 800,
+                                              elementHeight: 400,
+                                              overlapPercent: 20,
+                                              maxHoughLines: 8000,
+                                              lineIterationPixelRaius: 10,
+                                              maxBlobDistance: 50)),
+          
           // find really close linear blobs
           .linearBlobConnector(.init(scanSize: 32, 
                                      blobsSmallerThan: 480,

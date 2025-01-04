@@ -230,6 +230,14 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                 steps[stepIndex] = .largeDimBlobCleaner(updatedArgs)
                 saveStepsToFile()
             }
+
+        case .houghLineMatrixBlobConnector(let args):
+            if let argType = argType as? HoughLineMatrixBlobConnector.Args.ArgType,
+               let updatedArgs = args.doubleUpdate(for: argType, value: value)
+            {
+                steps[stepIndex] = .houghLineMatrixBlobConnector(updatedArgs)
+                saveStepsToFile()
+            }
         }
     }
 
@@ -350,6 +358,14 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = args.intUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .largeDimBlobCleaner(updatedArgs)
+                saveStepsToFile()
+            }
+
+        case .houghLineMatrixBlobConnector(let args):
+            if let argType = argType as? HoughLineMatrixBlobConnector.Args.ArgType,
+               let updatedArgs = args.intUpdate(for: argType, value: value)
+            {
+                steps[stepIndex] = .houghLineMatrixBlobConnector(updatedArgs)
                 saveStepsToFile()
             }
         }

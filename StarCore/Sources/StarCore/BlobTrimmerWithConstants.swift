@@ -171,7 +171,7 @@ public class BlobTrimmerWithConstants {
             }
 
             // anything this small is noise
-            if await blobSize <= args.minBlobSize {
+            if blobSize <= args.minBlobSize {
                 //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blobSize) <= \(args.minBlobSize)")
 
                 if let minSmallBlobIntensity = args.minSmallBlobIntensity {

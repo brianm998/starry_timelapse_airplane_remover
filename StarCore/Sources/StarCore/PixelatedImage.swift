@@ -76,8 +76,8 @@ public struct PixelatedImage: Sendable {
     }
     
     public init(width: Int,
-               height: Int,
-               grayscale16BitImageData imageData: [UInt16])
+                height: Int,
+                grayscale16BitImageData imageData: [UInt16])
     {
         self.init(width: width,
                   height: height,
@@ -218,7 +218,37 @@ public struct PixelatedImage: Sendable {
             break
         }
     }
-
+    
+    func sortablePixels(baseX: Int, baseY: Int) -> [SortablePixel] {
+        var ret: [SortablePixel] = []
+        switch imageData {
+        case .sixteenBit(let arr):
+            for x in 0..<width {
+                for y in 0..<height {
+                    let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
+                    if arr[offset] != 0 {
+                        ret.append(SortablePixel(x: x + baseX,
+                                                 y: y + baseY,
+                                                 intensity: arr[offset]))
+                    }
+                }
+            }
+            
+        case .eightBit(let arr):
+            for x in 0..<width {
+                for y in 0..<height {
+                    let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
+                    if arr[offset] != 0 {
+                        ret.append(SortablePixel(x: x + baseX,
+                                                 y: y + baseY,
+                                                 intensity: UInt16(arr[offset])))
+                    }
+                }
+            }
+        }
+        return ret
+    }
+    
     func intensity(at pixel: SortablePixel) -> UInt {
         intensity(atX: pixel.x, andY: pixel.y)
     }
@@ -506,16 +536,14 @@ public struct PixelatedImage: Sendable {
                         let matrixImage = PixelatedImage(width: matrixWidth,
                                                          height: matrixHeight,
                                                          grayscale16BitImageData: matrixImageData)
-                        if let nsImage = matrixImage.nsImage {
-                            let element = ImageMatrixElement(x: xOffset,
-                                                             y: yOffset,
-                                                             image: nsImage)
-                            
-                            //Log.i("matrix element [\(xOffset), \(yOffset)] image width \(matrixWidth) matrix height \(matrixHeight)")
-                            matrix.append(element)
-                        } else {
-                            Log.w("unable to make image")
-                        }
+
+                        let element = ImageMatrixElement(x: xOffset,
+                                                         y: yOffset,
+                                                         image: matrixImage)
+                        
+                        //Log.i("matrix element [\(xOffset), \(yOffset)] image width \(matrixWidth) matrix height \(matrixHeight)")
+                        matrix.append(element)
+
                     case .eightBit(_):
                         Log.e("eight bit not yet implemented")
                         break       // XXX do this too
@@ -623,26 +651,33 @@ public class ImageMatrixElement: Hashable, CustomStringConvertible {
     public let width: Int
     public let height: Int
     
-    public var image: NSImage // don't keep this image around forever
+    public let image: PixelatedImage
     
     public init(x: Int,
                 y: Int,
-                image: NSImage)
+                image: PixelatedImage)
     {
         self.x = x
         self.y = y
         self.image = image
-        self.width = Int(image.size.width)
-        self.height = Int(image.size.height)
+        self.width = Int(image.width)
+        self.height = Int(image.height)
     }
 
-//        let lines = kernelHoughTransform(image: image, maxResults: args.maxLineConstant)
+    public var sortablePixels: [SortablePixel] {
+        image.sortablePixels(baseX: x, baseY: y)
+    }
     
     public static func == (lhs: ImageMatrixElement, rhs: ImageMatrixElement) -> Bool {
         return lhs.x == rhs.x && lhs.y == rhs.y &&
            lhs.width == rhs.width && lhs.height == rhs.height
     }
 
+    public var bounds: BoundingBox {
+        BoundingBox(min: Coord(x: x, y: y),
+                    max: Coord(x: x+width, y: y+height))
+    }
+    
     public func hash(into hasher: inout Hasher) {
         hasher.combine(x)
         hasher.combine(y)

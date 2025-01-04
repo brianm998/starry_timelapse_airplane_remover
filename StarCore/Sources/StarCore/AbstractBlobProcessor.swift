@@ -46,6 +46,7 @@ public enum BlobProcessingType: Hashable,
     case removeReallyBigBlobsWithSmallDimBunches(RemoveReallyBigBlobsWithSmallDimBunches.Args)
     case trimWithConstants(BlobTrimmerWithConstants.Args)
     case largeDimBlobCleaner(LargeDimBlobCleaner.Args)
+    case houghLineMatrixBlobConnector(HoughLineMatrixBlobConnector.Args)
 }
 
 // load and process all blobs for a frame, using a defined sequence of steps
@@ -198,7 +199,17 @@ public class AbstractBlobProcessor {
                 await cleaner.process(args)
                 blobMap = await cleaner.blobMap()
                 
+            case .houghLineMatrixBlobConnector(let args):
+                let connector = await HoughLineMatrixBlobConnector(blobMap: blobMap,
+                                                                   width: frame.width,
+                                                                   height: frame.height,
+                                                                   frameIndex: frame.frameIndex)
+                await connector.process(args)
+                blobMap = connector.blobMap()
             }
+
+
+
             Log.d("frame \(frame.frameIndex) now has \(blobMap.count) blobs")
         }
         return blobMap

@@ -25,8 +25,16 @@ public actor ProcessedBlobs {
         blobs.contains(id)
     }
 
+    func contains(_ blob: Blob) -> Bool {
+        blobs.contains(blob.id)
+    }
+
     func insert(_ id: UInt16) {
         _ = blobs.insert(id)
+    }
+
+    func insert(_ blob: Blob) {
+        _ = blobs.insert(blob.id)
     }
 
     func union(with otherSet: ProcessedBlobs) async {

@@ -42,11 +42,25 @@ final public class BlobAnalyzer: @unchecked Sendable {
 
     internal var maxBlobId: UInt16 = 0
 
+    var pixelatedImage: PixelatedImage {
+        .init(width: self.width,
+              height: self.height,
+              grayscale16BitImageData: blobRefs)
+    }
     
     func blobs(with blobIdSet: Set<UInt16>) -> [Blob] {
         blobIdSet.compactMap { blobMap[$0] }
     }
 
+    func blob(at x: Int, and y: Int) -> Blob? {
+        let index = y*width+x
+        if index < blobRefs.count {
+            let blobId = blobRefs[index]
+            if blobId != 0 { return blobMap[blobId] }
+        }
+        return nil
+    }
+    
     func update(blob: Blob) async {
         blobMap[blob.id] = blob
 
@@ -73,6 +87,18 @@ final public class BlobAnalyzer: @unchecked Sendable {
             let index = pixel.y*width+pixel.x
             if blobRefs[index] == blob.id {
                 blobRefs[index] = 0
+            }
+        }
+    }
+
+    func replace(blob: Blob, with other: Blob) async {
+        blobMap.removeValue(forKey: blob.id)
+
+        // update blob refs
+        for pixel in await blob.getPixels() {
+            let index = pixel.y*width+pixel.x
+            if blobRefs[index] == blob.id {
+                blobRefs[index] = other.id
             }
         }
     }
