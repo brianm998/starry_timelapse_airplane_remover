@@ -47,12 +47,15 @@ public actor LinearBlobExtender {
         let adjecentPixelsOnIteration: Int // how far to iterate on adject pixels
         let maxIterationCount: Int // maximum times to iterate on line improvement
         let scoreMultiplier: Double
+        let sideIterationPixels: Int // how far to iterate on each side of the line
 
         public typealias Types = ArgType
         public var id: Self { self }
 
         public func description(for type: ArgType) -> String {
             switch type {
+            case .sideIterationPixels:
+                return "how far to iterate on each side of the line"
             case .minBlobSize:
                 return "blobs smaller than this are ignored"
             case .lineExtension:
@@ -75,9 +78,17 @@ public actor LinearBlobExtender {
             case adjecentPixelsOnIteration
             case maxIterationCount
             case scoreMultiplier
+            case sideIterationPixels
         }
 
-        public func isInteger(_ type: ArgType) -> Bool { true }
+        public func isInteger(_ type: ArgType) -> Bool {
+            switch type {
+            case .scoreMultiplier:
+                return false
+            default:
+                return true
+            }
+        }
 
         public func isOptional(_ type: ArgType) -> Bool { false }
         
@@ -95,6 +106,8 @@ public actor LinearBlobExtender {
                 return Double(maxIterationCount)
             case .scoreMultiplier:
                 return scoreMultiplier
+            case .sideIterationPixels:
+                return Double(sideIterationPixels)
             }
         }
 
@@ -106,7 +119,8 @@ public actor LinearBlobExtender {
                             innerSearch: self.innerSearch,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: self.maxIterationCount,
-                            scoreMultiplier: value)
+                            scoreMultiplier: value,
+                            sideIterationPixels: self.sideIterationPixels)
             default:
                 return nil
             }
@@ -120,14 +134,16 @@ public actor LinearBlobExtender {
                             innerSearch: self.innerSearch,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: self.maxIterationCount,
-                            scoreMultiplier: self.scoreMultiplier)
+                            scoreMultiplier: self.scoreMultiplier,
+                            sideIterationPixels: self.sideIterationPixels)
             case .lineExtension:
                 return Args(minBlobSize: self.minBlobSize,
                             lineExtension: value,
                             innerSearch: self.innerSearch,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: self.maxIterationCount,
-                            scoreMultiplier: self.scoreMultiplier)
+                            scoreMultiplier: self.scoreMultiplier,
+                            sideIterationPixels: self.sideIterationPixels)
 
             case .innerSearch:
                 return Args(minBlobSize: self.minBlobSize,
@@ -135,7 +151,8 @@ public actor LinearBlobExtender {
                             innerSearch: value,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: self.maxIterationCount,
-                            scoreMultiplier: self.scoreMultiplier)
+                            scoreMultiplier: self.scoreMultiplier,
+                            sideIterationPixels: self.sideIterationPixels)
 
             case .adjecentPixelsOnIteration:
                 return Args(minBlobSize: self.minBlobSize,
@@ -143,7 +160,8 @@ public actor LinearBlobExtender {
                             innerSearch: self.innerSearch,
                             adjecentPixelsOnIteration: value,
                             maxIterationCount: self.maxIterationCount,
-                            scoreMultiplier: self.scoreMultiplier)
+                            scoreMultiplier: self.scoreMultiplier,
+                            sideIterationPixels: self.sideIterationPixels)
 
             case .maxIterationCount:
                 return Args(minBlobSize: self.minBlobSize,
@@ -151,9 +169,18 @@ public actor LinearBlobExtender {
                             innerSearch: self.innerSearch,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: value,
-                            scoreMultiplier: self.scoreMultiplier)
+                            scoreMultiplier: self.scoreMultiplier,
+                            sideIterationPixels: self.sideIterationPixels)
             case .scoreMultiplier:
                 return nil
+            case .sideIterationPixels:
+                return Args(minBlobSize: self.minBlobSize,
+                            lineExtension: self.lineExtension,
+                            innerSearch: self.innerSearch,
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
+                            maxIterationCount: self.maxIterationCount,
+                            scoreMultiplier: self.scoreMultiplier,
+                            sideIterationPixels: value)
             }
         }
         
@@ -162,7 +189,8 @@ public actor LinearBlobExtender {
                     innerSearch: Int,
                     adjecentPixelsOnIteration: Int, // XXX not used :(
                     maxIterationCount: Int,
-                    scoreMultiplier: Double)
+                    scoreMultiplier: Double,
+                    sideIterationPixels: Int)
         {
             self.minBlobSize = minBlobSize
             self.lineExtension = lineExtension
@@ -170,6 +198,7 @@ public actor LinearBlobExtender {
             self.adjecentPixelsOnIteration = adjecentPixelsOnIteration
             self.maxIterationCount = maxIterationCount
             self.scoreMultiplier = scoreMultiplier
+            self.sideIterationPixels = sideIterationPixels
         }
     }
 

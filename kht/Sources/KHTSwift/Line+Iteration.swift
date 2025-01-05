@@ -33,6 +33,7 @@ extension Line {
     // iteration stops when closure returns false
     public func iterate(_ iterationDirection: IterationDirection,
                         from centralCoord: DoubleCoord,
+                        numberOfAdjecentPixels: Int = 0, // iterate in the parallel direction this many pixels
                         closure: (Int, Int, IterationOrientation) -> Bool)
     {
         let standardLine = self.standardLine
@@ -43,7 +44,13 @@ extension Line {
             var currentX = Int(centralCoord.x)
             var currentY = Int(standardLine.y(forX: Double(currentX)))
 
-            while(closure(currentX, currentY, .horizontal)) {
+            //while(closure(currentX, currentY, .horizontal)) {
+            while(sideIterate(on: closure,
+                              moving: .horizontal,
+                              x: currentX,
+                              y: currentY,
+                              numberOfAdjecentPixels: numberOfAdjecentPixels))
+            {
                 switch iterationDirection {
                 case .forwards:
                     currentX += 1
@@ -61,7 +68,14 @@ extension Line {
             var currentY = Int(centralCoord.y)
             var currentX = Int(standardLine.x(forY: Double(currentY)))
 
-            while(closure(currentX, currentY, .vertical)) {
+            //while(closure(currentX, currentY, .vertical)) {
+            while(sideIterate(on: closure,
+                              moving: .vertical,
+                              x: currentX,
+                              y: currentY,
+                              numberOfAdjecentPixels: numberOfAdjecentPixels))
+            {
+
                 switch iterationDirection {
                 case .forwards:
                     currentY += 1
@@ -75,9 +89,41 @@ extension Line {
             }
         }        
     }
+
+    private func sideIterate(on closure: (Int, Int, IterationOrientation) -> Bool,
+                             moving iterationOrientation: IterationOrientation,
+                             x: Int,
+                             y: Int,
+                             numberOfAdjecentPixels: Int) -> Bool
+    {
+        if numberOfAdjecentPixels == 0 {
+            return closure(x, y, iterationOrientation)
+        } else {
+            switch iterationOrientation {
+            case .horizontal:
+                // side iterate vertically on Y axis
+                for sideY in y-numberOfAdjecentPixels...y+numberOfAdjecentPixels {
+                    if sideY >= 0 {
+                        let success = closure(x, sideY, .horizontal)
+                        if !success { return false }
+                    }
+                }
+            case .vertical:
+                // side iterate horizontally on X axis
+                for sideX in x-numberOfAdjecentPixels...x+numberOfAdjecentPixels {
+                    if sideX >= 0 {
+                        let success = closure(sideX, y, .vertical)
+                        if !success { return false }
+                    }
+                }
+            }
+            return true
+        }
+    }
     
     public func asyncIterate(_ iterationDirection: IterationDirection,
                              from centralCoord: DoubleCoord,
+                             numberOfAdjecentPixels: Int = 0, // iterate in the parallel direction this many pixels
                              closure: @Sendable (Int, Int, IterationOrientation) async -> Bool) async
     {
         let standardLine = self.standardLine
@@ -88,7 +134,13 @@ extension Line {
             var currentX = Int(centralCoord.x)
             var currentY = Int(standardLine.y(forX: Double(currentX)))
 
-            while(await closure(currentX, currentY, .horizontal)) {
+            //while(await closure(currentX, currentY, .horizontal)) {
+            while(await asyncSideIterate(on: closure,
+                                         moving: .horizontal,
+                                         x: currentX,
+                                         y: currentY,
+                                         numberOfAdjecentPixels: numberOfAdjecentPixels))
+            {
                 switch iterationDirection {
                 case .forwards:
                     currentX += 1
@@ -106,7 +158,13 @@ extension Line {
             var currentY = Int(centralCoord.y)
             var currentX = Int(standardLine.x(forY: Double(currentY)))
 
-            while(await closure(currentX, currentY, .vertical)) {
+            //while(await closure(currentX, currentY, .vertical)) {
+            while(await asyncSideIterate(on: closure,
+                                         moving: .vertical,
+                                         x: currentX,
+                                         y: currentY,
+                                         numberOfAdjecentPixels: numberOfAdjecentPixels))
+            {
                 switch iterationDirection {
                 case .forwards:
                     currentY += 1
@@ -120,7 +178,38 @@ extension Line {
             }
         }        
     }
-    
+
+    private func asyncSideIterate(on closure: @Sendable (Int, Int, IterationOrientation) async -> Bool,
+                                  moving iterationOrientation: IterationOrientation,
+                                  x: Int,
+                                  y: Int,
+                                  numberOfAdjecentPixels: Int) async -> Bool
+    {
+        if numberOfAdjecentPixels == 0 {
+            return await closure(x, y, iterationOrientation)
+        } else {
+            switch iterationOrientation {
+            case .horizontal:
+                // side iterate vertically on Y axis
+                for sideY in y-numberOfAdjecentPixels...y+numberOfAdjecentPixels {
+                    if sideY >= 0 {
+                        let success = await closure(x, sideY, .horizontal)
+                        if !success { return false }
+                    }
+                }
+            case .vertical:
+                // side iterate horizontally on X axis
+                for sideX in x-numberOfAdjecentPixels...x+numberOfAdjecentPixels {
+                    if sideX >= 0 {
+                        let success = await closure(sideX, y, .vertical)
+                        if !success { return false }
+                    }
+                }
+            }
+            return true
+        }
+    }
+
     public func iterate(between coord1: DoubleCoord,
                         and coord2: DoubleCoord,
                         numberOfAdjecentPixels: Int = 0, // iterate in the parallel direction this many pixels

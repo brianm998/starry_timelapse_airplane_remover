@@ -48,7 +48,7 @@ public class HoughLineMatrixBlobConnector {
         let elementHeight: Int // size in pixels of the height of each matrix element
         let overlapPercent: Double // percent that each element overlaps its neighbors
         let maxHoughLines: Int     // max number of hough lines to iterate over
-        let lineIterationPixelRaius: Int // pixel radius on line iteration
+        let sideIterationPixels: Int // pixel radius on line iteration
         let maxBlobDistance: Double // max blob distance on line before being connected
         
         public typealias Types = ArgType
@@ -64,7 +64,7 @@ public class HoughLineMatrixBlobConnector {
                 return "percent that each element overlaps its neighbors"
             case .maxHoughLines:
                 return "max number of hough lines to iterate over"
-            case .lineIterationPixelRaius:
+            case .sideIterationPixels:
                 return "pixel radius on line iteration"
             case .maxBlobDistance:
                 return "max blob distance on line before being connected"
@@ -76,7 +76,7 @@ public class HoughLineMatrixBlobConnector {
             case elementHeight
             case overlapPercent
             case maxHoughLines
-            case lineIterationPixelRaius
+            case sideIterationPixels
             case maxBlobDistance
         }
         
@@ -102,8 +102,8 @@ public class HoughLineMatrixBlobConnector {
                 return overlapPercent
             case .maxHoughLines:
                 return Double(maxHoughLines)
-            case .lineIterationPixelRaius:
-                return Double(lineIterationPixelRaius)
+            case .sideIterationPixels:
+                return Double(sideIterationPixels)
             case .maxBlobDistance:
                 return maxBlobDistance
             }
@@ -116,7 +116,7 @@ public class HoughLineMatrixBlobConnector {
                             elementHeight: self.elementHeight,
                             overlapPercent: value,
                             maxHoughLines: self.maxHoughLines,
-                            lineIterationPixelRaius: self.lineIterationPixelRaius,
+                            sideIterationPixels: self.sideIterationPixels,
                             maxBlobDistance: self.maxBlobDistance)
 
             case .maxBlobDistance:
@@ -124,7 +124,7 @@ public class HoughLineMatrixBlobConnector {
                             elementHeight: self.elementHeight,
                             overlapPercent: self.overlapPercent,
                             maxHoughLines: self.maxHoughLines,
-                            lineIterationPixelRaius: self.lineIterationPixelRaius,
+                            sideIterationPixels: self.sideIterationPixels,
                             maxBlobDistance: value)
 
             default:
@@ -139,14 +139,14 @@ public class HoughLineMatrixBlobConnector {
                             elementHeight: self.elementHeight,
                             overlapPercent: self.overlapPercent,
                             maxHoughLines: self.maxHoughLines,
-                            lineIterationPixelRaius: self.lineIterationPixelRaius,
+                            sideIterationPixels: self.sideIterationPixels,
                             maxBlobDistance: self.maxBlobDistance)
             case .elementHeight:
                 return Args(elementWidth: self.elementWidth,
                             elementHeight: value,
                             overlapPercent: self.overlapPercent,
                             maxHoughLines: self.maxHoughLines,
-                            lineIterationPixelRaius: self.lineIterationPixelRaius,
+                            sideIterationPixels: self.sideIterationPixels,
                             maxBlobDistance: self.maxBlobDistance)
             case .overlapPercent:
                 return nil
@@ -155,14 +155,14 @@ public class HoughLineMatrixBlobConnector {
                             elementHeight: self.elementHeight,
                             overlapPercent: self.overlapPercent,
                             maxHoughLines: value,
-                            lineIterationPixelRaius: self.lineIterationPixelRaius,
+                            sideIterationPixels: self.sideIterationPixels,
                             maxBlobDistance: self.maxBlobDistance)
-            case .lineIterationPixelRaius:
+            case .sideIterationPixels:
                 return Args(elementWidth: self.elementWidth,
                             elementHeight: self.elementHeight,
                             overlapPercent: self.overlapPercent,
                             maxHoughLines: self.maxHoughLines,
-                            lineIterationPixelRaius: value,
+                            sideIterationPixels: value,
                             maxBlobDistance: self.maxBlobDistance)
             case .maxBlobDistance:
                 return nil
@@ -173,14 +173,14 @@ public class HoughLineMatrixBlobConnector {
                     elementHeight: Int,
                     overlapPercent: Double,
                     maxHoughLines: Int,
-                    lineIterationPixelRaius: Int,
+                    sideIterationPixels: Int,
                     maxBlobDistance: Double)
         {
             self.elementWidth = elementWidth
             self.elementHeight = elementHeight
             self.overlapPercent = overlapPercent
             self.maxHoughLines = maxHoughLines
-            self.lineIterationPixelRaius = lineIterationPixelRaius
+            self.sideIterationPixels = sideIterationPixels
             self.maxBlobDistance = maxBlobDistance
         }
     }
@@ -263,7 +263,7 @@ public class HoughLineMatrixBlobConnector {
                     // iterate through blob data on each line
                     await originZeroLine.asyncIterate(between: intersections[0],
                                                       and: intersections[1],
-                                                      numberOfAdjecentPixels: args.lineIterationPixelRaius)
+                                                      numberOfAdjecentPixels: args.sideIterationPixels)
                     { x, y, direction in
                         if let blob = analyzer.blob(at: x, and: y) {
                             // skip already seen blobs on this element iteration

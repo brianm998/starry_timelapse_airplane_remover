@@ -36,7 +36,7 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
                                               elementHeight: 400,
                                               overlapPercent: 30,
                                               maxHoughLines: 2000,
-                                              lineIterationPixelRaius: 0,
+                                              sideIterationPixels: 3,
                                               maxBlobDistance: 30)),
           
           .save(.filter1),
@@ -58,7 +58,8 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
                                     innerSearch: 5,
                                     adjecentPixelsOnIteration: 5,
                                     maxIterationCount: 4,
-                                    scoreMultiplier: 2.1)),
+                                    scoreMultiplier: 2.1,
+                                    sideIterationPixels: 0)), // XXX try this??
 
           .save(.filter3),
           .frameState(.filter4),
@@ -176,7 +177,9 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
 
           .nonLinearBlobRemover(.init(minBlobSize: 0,
                                       medianIntensity: 10000,
-                                      lengthOverFillAmount: 9)),
+                                      lengthOverFillAmount: 10,
+                                      minLineFillAmount: 3,
+                                      maxLineFillAmount: 15)),
 
           .save(.filter16),
         ]
