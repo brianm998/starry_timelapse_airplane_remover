@@ -46,6 +46,7 @@ public actor LinearBlobExtender {
         let innerSearch: Int       // how far along the line to look within the bounding box
         let adjecentPixelsOnIteration: Int // how far to iterate on adject pixels
         let maxIterationCount: Int // maximum times to iterate on line improvement
+        let scoreMultiplier: Double
 
         public typealias Types = ArgType
         public var id: Self { self }
@@ -62,6 +63,8 @@ public actor LinearBlobExtender {
                 return "how far to iterate on adject pixels"
             case .maxIterationCount:
                 return "maximum times to iterate on line improvement"
+            case .scoreMultiplier:
+                return "multipler to allow smaller scores to still count.  Larger values give larger blobs"
             }
         }
         
@@ -71,6 +74,7 @@ public actor LinearBlobExtender {
             case innerSearch
             case adjecentPixelsOnIteration
             case maxIterationCount
+            case scoreMultiplier
         }
 
         public func isInteger(_ type: ArgType) -> Bool { true }
@@ -89,10 +93,24 @@ public actor LinearBlobExtender {
                 return Double(adjecentPixelsOnIteration)
             case .maxIterationCount:
                 return Double(maxIterationCount)
+            case .scoreMultiplier:
+                return scoreMultiplier
             }
         }
 
-        public func doubleUpdate(for type: ArgType, value: Double) -> Args? { nil }
+        public func doubleUpdate(for type: ArgType, value: Double) -> Args? {
+            switch type {
+            case .scoreMultiplier:
+                return Args(minBlobSize: self.minBlobSize,
+                            lineExtension: self.lineExtension,
+                            innerSearch: self.innerSearch,
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
+                            maxIterationCount: self.maxIterationCount,
+                            scoreMultiplier: value)
+            default:
+                return nil
+            }
+        }
         
         public func intUpdate(for type: ArgType, value: Int) -> Args? {
             switch type {
@@ -101,34 +119,41 @@ public actor LinearBlobExtender {
                             lineExtension: self.lineExtension,
                             innerSearch: self.innerSearch,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
-                            maxIterationCount: self.maxIterationCount)
+                            maxIterationCount: self.maxIterationCount,
+                            scoreMultiplier: self.scoreMultiplier)
             case .lineExtension:
                 return Args(minBlobSize: self.minBlobSize,
                             lineExtension: value,
                             innerSearch: self.innerSearch,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
-                            maxIterationCount: self.maxIterationCount)
+                            maxIterationCount: self.maxIterationCount,
+                            scoreMultiplier: self.scoreMultiplier)
 
             case .innerSearch:
                 return Args(minBlobSize: self.minBlobSize,
                             lineExtension: self.lineExtension,
                             innerSearch: value,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
-                            maxIterationCount: self.maxIterationCount)
+                            maxIterationCount: self.maxIterationCount,
+                            scoreMultiplier: self.scoreMultiplier)
 
             case .adjecentPixelsOnIteration:
                 return Args(minBlobSize: self.minBlobSize,
                             lineExtension: self.lineExtension,
                             innerSearch: self.innerSearch,
                             adjecentPixelsOnIteration: value,
-                            maxIterationCount: self.maxIterationCount)
+                            maxIterationCount: self.maxIterationCount,
+                            scoreMultiplier: self.scoreMultiplier)
 
             case .maxIterationCount:
                 return Args(minBlobSize: self.minBlobSize,
                             lineExtension: self.lineExtension,
                             innerSearch: self.innerSearch,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
-                            maxIterationCount: value)
+                            maxIterationCount: value,
+                            scoreMultiplier: self.scoreMultiplier)
+            case .scoreMultiplier:
+                return nil
             }
         }
         
@@ -136,13 +161,15 @@ public actor LinearBlobExtender {
                     lineExtension: Int,
                     innerSearch: Int,
                     adjecentPixelsOnIteration: Int, // XXX not used :(
-                    maxIterationCount: Int)
+                    maxIterationCount: Int,
+                    scoreMultiplier: Double)
         {
             self.minBlobSize = minBlobSize
             self.lineExtension = lineExtension
             self.innerSearch = innerSearch
             self.adjecentPixelsOnIteration = adjecentPixelsOnIteration
             self.maxIterationCount = maxIterationCount
+            self.scoreMultiplier = scoreMultiplier
         }
     }
 
@@ -284,7 +311,7 @@ public actor LinearBlobExtender {
                        let newScore = await blobCopy.blobLineScore()
                     {
                         //Log.d("frame \(frameIndex) processing blob \(iterationBlob) @ [\(x), \(y)] oldScore \(oldScore) newScore \(newScore)")
-                        if newScore*3 > oldScore { // XXX constant XXX
+                        if newScore*args.scoreMultiplier > oldScore {
                             await analyzer.replace(blob: newBlob, with: blobCopy)
                             await processedBlobs.insert(newBlob.id)
 

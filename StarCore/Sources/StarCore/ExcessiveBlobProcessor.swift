@@ -57,7 +57,8 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
                                     lineExtension: 15,
                                     innerSearch: 5,
                                     adjecentPixelsOnIteration: 5,
-                                    maxIterationCount: 4)),
+                                    maxIterationCount: 4,
+                                    scoreMultiplier: 2.1)),
 
           .save(.filter3),
           .frameState(.filter4),
@@ -173,7 +174,9 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           // check to see if any pixel is in more than one blob
           //.blobDupeCheck("end"),
 
-          .nonLinearBlobRemover(.init(lengthOverFillAmount: 10)),
+          .nonLinearBlobRemover(.init(minBlobSize: 0,
+                                      medianIntensity: 10000,
+                                      lengthOverFillAmount: 9)),
 
           .save(.filter16),
         ]
