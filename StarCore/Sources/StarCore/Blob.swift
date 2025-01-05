@@ -452,7 +452,8 @@ public actor Blob: CustomStringConvertible,
     
     // trims outlying pixels from the group, ones that are not
     // close enough to the ideal line for this group
-    public func lineTrim() async {
+    public func lineTrim() async -> Set<SortablePixel>  {
+        var discardedPixels = Set<SortablePixel>()
         if let line = await self.originZeroLine {
             var newPixels = Set<SortablePixel>()
             
@@ -465,6 +466,8 @@ public actor Blob: CustomStringConvertible,
                 let pixelDistance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
                 if pixelDistance <= maxDistanceFromLine {
                     newPixels.update(with: pixel)
+                } else {
+                    discardedPixels.update(with: pixel)
                 }
             }
             let diff = self.pixels.count - newPixels.count
@@ -472,11 +475,13 @@ public actor Blob: CustomStringConvertible,
             Log.d("blog \(self) trimming \(diff) pixels")
             reset()
         }
+        return discardedPixels
     }
     
     // trims outlying pixels from the group, ones that are not
     // close enough to the ideal line for this group
-    public func lineTrim(by maxDistance: Double = 12) async {
+    public func lineTrim(by maxDistance: Double = 12) async -> Set<SortablePixel> {
+        var discardedPixels = Set<SortablePixel>()
         if let line = await self.originZeroLine {
             var newPixels = Set<SortablePixel>()
             
@@ -486,6 +491,8 @@ public actor Blob: CustomStringConvertible,
                 let pixelDistance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
                 if pixelDistance <= maxDistance {
                     newPixels.update(with: pixel)
+                } else {
+                    discardedPixels.update(with: pixel)
                 }
             }
             let diff = self.pixels.count - newPixels.count
@@ -493,6 +500,7 @@ public actor Blob: CustomStringConvertible,
             Log.d("blog \(self) trimming \(diff) pixels")
             reset()
         }
+        return discardedPixels
     }
     
     // assumes line has 0,0 origin

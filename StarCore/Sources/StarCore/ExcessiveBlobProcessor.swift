@@ -79,9 +79,14 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           .save(.filter5),
           .frameState(.filter6),
 
+
+          .blobLineTrim(.init(minLineLength: 30,
+                              minLineFillAmount: 10,
+                              trimAmount: 10)),
+          
           // remove isolated blobs
-          .isolatedBlobRemover(.init(minNeighborSize: 4,
-                                     scanSize: 50)),
+//          .isolatedBlobRemover(.init(minNeighborSize: 4,
+//                                     scanSize: 50)),
           
 
           .save(.filter6),

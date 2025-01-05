@@ -21,10 +21,12 @@ public actor BlobLineTrim {
 
     var blobMap: [UInt16: Blob]
     let frameIndex: Int
+    var maxBlobID: UInt16 = 0
     
     init(blobMap: [UInt16: Blob], frameIndex: Int) {
         self.frameIndex = frameIndex
         self.blobMap = blobMap
+        for (id, _) in blobMap { if id > maxBlobID { maxBlobID = id } }
     }
     
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
@@ -106,8 +108,16 @@ public actor BlobLineTrim {
                 let lineFillAmount = await blob.lineFillAmount()
 
                 if lineFillAmount > args.minLineFillAmount {
-                    // XXX trim that shit
-                    await blob.lineTrim(by: args.trimAmount)
+                    // trim that shit
+                    let trimmedPixels = await blob.lineTrim(by: args.trimAmount)
+                    if trimmedPixels.count > 0 {
+                        // make another blob from any trimmed pixels
+                        maxBlobID += 1
+                        let newBlob = Blob(trimmedPixels,
+                                           id: maxBlobID,
+                                           frameIndex: frameIndex)
+                        blobMap[newBlob.id] = newBlob
+                    }
                 }
             }
         }
