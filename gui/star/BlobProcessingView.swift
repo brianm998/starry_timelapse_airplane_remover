@@ -159,6 +159,9 @@ struct BlobProcessingView: View {
                                 case .linearBlobConnector(let args):
                                     linearBlobConnectorView(args, stepIndex: stepIndex)
 
+                                case .linearBlobExtender(let args):
+                                    linearBlobExtenderView(args, stepIndex: stepIndex)
+
                                 case .blobLineTrim(let args):
                                     blobLineTrimView(args, stepIndex: stepIndex)
 
@@ -188,6 +191,10 @@ struct BlobProcessingView: View {
                                     
                                 case .houghLineMatrixBlobConnector(let args):
                                     houghLineMatrixBlobConnectorView(args, stepIndex: stepIndex)
+
+                                case .nonLinearBlobRemover(let args):
+                                    nonLinearBlobRemoverView(args, stepIndex: stepIndex)
+                                    
                                 }
                             }
                               .background(.gray)
@@ -336,6 +343,18 @@ struct BlobProcessingView: View {
                         detectionType: $detectionType)
     }
 
+    private func linearBlobExtenderView(_ args: LinearBlobExtender.Args,
+                                         stepIndex: Int) -> some View
+    {
+        let description = "This step looks along the blob line for other nearby blobs"
+        return StepView(title: "Linear Blob Extender",
+                        description: description,
+                        args: args,
+                        array: LinearBlobExtender.Args.ArgType.allCases,
+                        stepIndex: stepIndex,
+                        detectionType: $detectionType)
+    }
+
     private func blobLineTrimView(_ args: BlobLineTrim.Args,
                                   stepIndex: Int) -> some View
     {
@@ -449,7 +468,21 @@ struct BlobProcessingView: View {
                  stepIndex: stepIndex,
                  detectionType: $detectionType)
     }
+
+    private func nonLinearBlobRemoverView(_ args: NonLinearBlobRemover.Args,
+                                                  stepIndex: Int) -> some View
+    {
+        StepView(title: "Non Linear Blob Remover",
+                 description: """
+                   Gets rid of blobs with a line, that aren't on that line.
+                   """,
+                 args: args,
+                 array: NonLinearBlobRemover.Args.ArgType.allCases,
+                 stepIndex: stepIndex,
+                 detectionType: $detectionType)
+    }
 }
+
 
 struct StepView<T: Hashable>: View {
     let title: String

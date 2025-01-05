@@ -187,16 +187,26 @@ public class HoughLineMatrixBlobConnector {
 
     public func process(_ args: Args) async {
 
+
+        let startTime = Date().timeIntervalSince1970
         
         // first, assemble matrix from the blobrefs in the analyzer
         let fullFrameImage = analyzer.pixelatedImage
 
+        let t1 = Date().timeIntervalSince1970
+        
         let matrix = fullFrameImage.splitIntoMatrix(maxWidth: args.elementWidth,
                                                     maxHeight: args.elementHeight,
                                                     overlapPercent: args.overlapPercent)
 
+        let t2 = Date().timeIntervalSince1970
+
+
+        var iteratedLines = 0
+        
         // for each matrix element:
         for element in matrix {
+            let elementStartTime = Date().timeIntervalSince1970
             var processedBlobs: Set<Blob> = []
             
             // find lines
@@ -208,9 +218,37 @@ public class HoughLineMatrixBlobConnector {
             var lines = finder.lineData
             lines.sort { $0.score > $1.score }
 
+            if lines.count > args.maxHoughLines {
+                lines = Array(lines[0..<args.maxHoughLines])
+            }
+            
+            // how many blobs are in this element?
+
+            var existingBlobs: Set<UInt16> = []
+            
+            switch element.image.imageData {
+            case .sixteenBit(let arr):
+                for i in 0..<arr.count {
+                    if arr[i] != 0 {
+                        existingBlobs.insert(arr[i])
+                    }
+                }
+                break
+            case .eightBit(let arr):
+                break
+                
+            }
+
             // iterate over lines in order of score
             for line in lines {
 
+                //let lineStartTime = Date().timeIntervalSince1970
+
+                // don't iterate on further lines if all blobs have been looked at already
+                if processedBlobs.count == existingBlobs.count { break }
+
+                //if line.score < 2 { break } // XXX constant
+                
                 var lastSeenBlob: Blob?
                 var lastSeenX: Int?
                 var lastSeenY: Int?
@@ -223,6 +261,8 @@ public class HoughLineMatrixBlobConnector {
                 // if we have more than one itersection, iterate through them
                 if intersections.count > 1 {
 
+                    iteratedLines += 1
+                    
                     // iterate through blob data on each line
                     await originZeroLine.asyncIterate(between: intersections[0],
                                                       and: intersections[1],
@@ -251,7 +291,17 @@ public class HoughLineMatrixBlobConnector {
                                     //  when another blob is encountered,
                                     // see how far along the line we've gotten since the last one
                                     if distance < args.maxBlobDistance {
-                                        // if close enough, combine the blobs 
+                                        // if close enough, combine the blobs
+
+                                        /*
+
+                                         may help to check to see if the blobs lines are aligned
+                                         if not, then maybe don't combine them here,
+                                         and maybe don't mark this blob as having been seen on this
+                                         element iteration
+                                         
+                                         */
+                                        
                                         await previousBlob.absorb(blob, always: true)
                                         await analyzer.replace(blob: blob, with: previousBlob)
                                     } else {
@@ -268,8 +318,20 @@ public class HoughLineMatrixBlobConnector {
                         }
                     }
                 }
+                //let lineEndTime = Date().timeIntervalSince1970
+//                Log.d("XXX times line finished in \(lineEndTime-lineStartTime)")
             }
+            let elementEndTime = Date().timeIntervalSince1970
+            Log.d("XXX times element finished in \(elementEndTime-elementStartTime)")
         }
+        let t3 = Date().timeIntervalSince1970
+
+        let totalTime = t3-startTime
+        let t3Time = t3-t2
+        let t2Time = t2-t1
+        let t1Time = t1-startTime
+
+        Log.d("XXX times totalTime \(totalTime) t1Time \(t1Time) t2Time \(t2Time) t3Time \(t3Time) iteratedLines \(iteratedLines) matrix.count \(matrix.count)")
     }
 }
 

@@ -64,12 +64,16 @@ public actor OutlierGroup: CustomStringConvertible,
     // lazy calculcated properties
 
     fileprivate var _line: Line? = nil
+    fileprivate var lineScore: Double? = nil
 
     fileprivate var lineLoaded = false
     fileprivate var shouldLoadLine = true
+
+    public func getLineScore() -> Double? { lineScore }
     
-    public func set(line: Line) {
-        _line = line
+    public func set(line: HoughLineFinder.LineInfo) {
+        _line = line.line
+        lineScore = line.score
         lineLoaded = true
     }
 
@@ -90,7 +94,7 @@ public actor OutlierGroup: CustomStringConvertible,
                 if let line = await self.lineFinder.line
                 {
                     await self.set(line: line)
-                    return line
+                    return line.line
                 } else {
                     return nil
                 }

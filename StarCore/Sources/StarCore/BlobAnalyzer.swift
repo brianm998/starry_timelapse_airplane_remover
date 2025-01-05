@@ -54,7 +54,9 @@ final public class BlobAnalyzer: @unchecked Sendable {
 
     func blob(at x: Int, and y: Int) -> Blob? {
         let index = y*width+x
-        if index < blobRefs.count {
+        if index >= 0,
+           index < blobRefs.count
+        {
             let blobId = blobRefs[index]
             if blobId != 0 { return blobMap[blobId] }
         }
@@ -92,6 +94,7 @@ final public class BlobAnalyzer: @unchecked Sendable {
     }
 
     func replace(blob: Blob, with other: Blob) async {
+        blobMap[other.id] = other
         blobMap.removeValue(forKey: blob.id)
 
         // update blob refs

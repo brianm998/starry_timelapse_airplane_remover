@@ -367,7 +367,6 @@ public class FullFrameBlobber {
         //Log.d("expanding initially seed blob")
 
         var seedPixels: [SortablePixel] = [firstSeed]
-        let minContrast = args.startMinContrast
         
         while let seedPixel = seedPixels.popLast() {
             // set this pixel to be part of this blob

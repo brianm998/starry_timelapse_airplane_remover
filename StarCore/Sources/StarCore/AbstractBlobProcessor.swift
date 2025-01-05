@@ -37,6 +37,7 @@ public enum BlobProcessingType: Hashable,
     case isolatedBlobRemover(IsolatedBlobRemover.Args)
     case disconnectedBlobRemover(DisconnectedBlobRemover.Args)
     case linearBlobConnector(LinearBlobConnector.Args)
+    case linearBlobExtender(LinearBlobExtender.Args)
     case blobLineTrim(BlobLineTrim.Args)
     case borderBrightnessBlobRemover(BorderBrightnessBlobRemover.Args)
     case lineSplit(BlobLineSplitter.Args)
@@ -47,6 +48,7 @@ public enum BlobProcessingType: Hashable,
     case trimWithConstants(BlobTrimmerWithConstants.Args)
     case largeDimBlobCleaner(LargeDimBlobCleaner.Args)
     case houghLineMatrixBlobConnector(HoughLineMatrixBlobConnector.Args)
+    case nonLinearBlobRemover(NonLinearBlobRemover.Args)
 }
 
 // load and process all blobs for a frame, using a defined sequence of steps
@@ -128,6 +130,15 @@ public class AbstractBlobProcessor {
                 blobMap = await connector.blobMap()
 
 
+            case .linearBlobExtender(let args): // uses analyzer
+                let extender = await LinearBlobExtender(blobMap: blobMap,
+                                                          width: frame.width,
+                                                          height: frame.height,
+                                                          frameIndex: frame.frameIndex)
+                await extender.process(args)
+                blobMap = await extender.blobMap()
+
+
             case .blobLineTrim(let args): // no analyzer
                 let trimmer = BlobLineTrim(blobMap: blobMap, frameIndex: frame.frameIndex)
                 blobMap = await trimmer.process(args)
@@ -206,6 +217,12 @@ public class AbstractBlobProcessor {
                                                                    frameIndex: frame.frameIndex)
                 await connector.process(args)
                 blobMap = connector.blobMap()
+
+            case .nonLinearBlobRemover(let args):
+                let remover = await NonLinearBlobRemover(blobMap: blobMap,
+                                                         frameIndex: frame.frameIndex)
+                await remover.process(args)
+                blobMap = remover.blobMap
             }
 
 

@@ -669,7 +669,7 @@ public class ImageMatrixElement: Hashable, CustomStringConvertible {
     }
     
     public static func == (lhs: ImageMatrixElement, rhs: ImageMatrixElement) -> Bool {
-        return lhs.x == rhs.x && lhs.y == rhs.y &&
+         lhs.x == rhs.x && lhs.y == rhs.y &&
            lhs.width == rhs.width && lhs.height == rhs.height
     }
 

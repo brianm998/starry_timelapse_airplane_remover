@@ -76,6 +76,51 @@ extension Line {
         }        
     }
     
+    public func asyncIterate(_ iterationDirection: IterationDirection,
+                             from centralCoord: DoubleCoord,
+                             closure: @Sendable (Int, Int, IterationOrientation) async -> Bool) async
+    {
+        let standardLine = self.standardLine
+        switch self.iterationOrientation {
+        case .horizontal:
+
+            // start at the middle
+            var currentX = Int(centralCoord.x)
+            var currentY = Int(standardLine.y(forX: Double(currentX)))
+
+            while(await closure(currentX, currentY, .horizontal)) {
+                switch iterationDirection {
+                case .forwards:
+                    currentX += 1
+                    
+                case .backwards:
+                    currentX -= 1
+                    
+                }
+                //if currentX < 0 { break }
+                currentY = Int(standardLine.y(forX: Double(currentX)))
+            }
+            
+        case .vertical:
+            // start at the middle
+            var currentY = Int(centralCoord.y)
+            var currentX = Int(standardLine.x(forY: Double(currentY)))
+
+            while(await closure(currentX, currentY, .vertical)) {
+                switch iterationDirection {
+                case .forwards:
+                    currentY += 1
+                    
+                case .backwards:
+                    currentY -= 1
+                    
+                }
+                //if currentY < 0 { break }
+                currentX = Int(standardLine.x(forY: Double(currentY)))
+            }
+        }        
+    }
+    
     public func iterate(between coord1: DoubleCoord,
                         and coord2: DoubleCoord,
                         numberOfAdjecentPixels: Int = 0, // iterate in the parallel direction this many pixels

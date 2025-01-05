@@ -225,7 +225,8 @@ public enum OutlierGroupFeature: String,
                 return 0
             }
         case .lineFillAmount:
-            return await calculateLineFillAmount(of: group)
+            //return await calculateLineFillAmount(of: group)
+            return await group.getLineScore() ?? 0
         case .borderBrightness:
             return await calculateBorderBrightness(of: group)
         case .bunchCount:

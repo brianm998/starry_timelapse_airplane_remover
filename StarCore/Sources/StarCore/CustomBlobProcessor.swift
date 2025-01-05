@@ -169,6 +169,14 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                 saveStepsToFile()
             }
 
+        case .linearBlobExtender(let args):
+            if let argType = argType as? LinearBlobExtender.Args.ArgType,
+               let updatedArgs = args.doubleUpdate(for: argType, value: value)
+            {
+                steps[stepIndex] = .linearBlobExtender(updatedArgs)
+                saveStepsToFile()
+            }
+
         case .blobLineTrim(let args):
             if let argType = argType as? BlobLineTrim.Args.ArgType,
                let updatedArgs = args.doubleUpdate(for: argType, value: value)
@@ -236,6 +244,14 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = args.doubleUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .houghLineMatrixBlobConnector(updatedArgs)
+                saveStepsToFile()
+            }
+
+        case .nonLinearBlobRemover(let args):
+            if let argType = argType as? NonLinearBlobRemover.Args.ArgType,
+               let updatedArgs = args.doubleUpdate(for: argType, value: value)
+            {
+                steps[stepIndex] = .nonLinearBlobRemover(updatedArgs)
                 saveStepsToFile()
             }
         }
@@ -299,6 +315,14 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                 saveStepsToFile()
             }
 
+        case .linearBlobExtender(let args):
+            if let argType = argType as? LinearBlobExtender.Args.ArgType,
+               let updatedArgs = args.intUpdate(for: argType, value: value)
+            {
+                steps[stepIndex] = .linearBlobExtender(updatedArgs)
+                saveStepsToFile()
+            }
+
         case .blobLineTrim(let args):
             if let argType = argType as? BlobLineTrim.Args.ArgType,
                let updatedArgs = args.intUpdate(for: argType, value: value)
@@ -366,6 +390,14 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                let updatedArgs = args.intUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .houghLineMatrixBlobConnector(updatedArgs)
+                saveStepsToFile()
+            }
+
+        case .nonLinearBlobRemover(let args):
+            if let argType = argType as? NonLinearBlobRemover.Args.ArgType,
+               let updatedArgs = args.intUpdate(for: argType, value: value)
+            {
+                steps[stepIndex] = .nonLinearBlobRemover(updatedArgs)
                 saveStepsToFile()
             }
         }

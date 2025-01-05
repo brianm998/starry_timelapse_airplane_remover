@@ -1,7 +1,7 @@
 import Foundation
 
 // x, y coordinates as doubles
-public struct DoubleCoord: Codable, CustomStringConvertible {
+public struct DoubleCoord: Codable, Sendable, CustomStringConvertible {
     public let x: Double
     public let y: Double
 
@@ -23,6 +23,12 @@ public struct DoubleCoord: Codable, CustomStringConvertible {
     public func distance(to other: DoubleCoord) -> Double {
         let x_diff = self.x - other.x
         let y_diff = self.y - other.y
+        return sqrt(x_diff*x_diff+y_diff*y_diff)
+    }
+    
+    public func distance(to x: Int, and y: Int) -> Double {
+        let x_diff = self.x - Double(x)
+        let y_diff = self.y - Double(y)
         return sqrt(x_diff*x_diff+y_diff*y_diff)
     }
     

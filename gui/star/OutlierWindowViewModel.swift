@@ -20,7 +20,7 @@ public final class OutlierWindowViewModel {
                 if let lineInfo = lineInfo.first(where: { $0.id == value }) {
                     Log.d("selected line \(lineInfo.line)")
                     Task {
-                        await selectedOutliers[0].set(line: lineInfo.line)
+                        await selectedOutliers[0].set(line: lineInfo)
                     }
                 }
             }

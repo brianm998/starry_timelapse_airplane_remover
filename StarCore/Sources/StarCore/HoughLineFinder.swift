@@ -22,9 +22,6 @@ fileprivate struct LineSplitResult {
 
 public struct CombinedHoughLineFinder: Sendable {
 
-    let farFinder: HoughLineFinder
-    let normalFinder: HoughLineFinder
-    let midFinder: HoughLineFinder
     let zeroFinder: HoughLineFinder
     let wtfFinder: HoughLineFinder
 
@@ -41,35 +38,18 @@ public struct CombinedHoughLineFinder: Sendable {
         
         // for some reason, sometimes we get better lines by padding the input data on the ends
         // this combination exists to find the best lines from all of them.
-        self.normalFinder = await .init(pixels: pixels,
-                                        bounds: bounds,
-                                        medianIntensity: medianIntensity,
-                                        maxIntensity: maxIntensity,
-                                        frameIndex: frameIndex) 
         self.zeroFinder = await .init(pixels: pixels,
                                       bounds: bounds,
                                       medianIntensity: medianIntensity,
                                       maxIntensity: maxIntensity,
                                       frameIndex: frameIndex,
                                       imageDataBorderSize: 0)
-        self.midFinder = await .init(pixels: pixels,
-                                      bounds: bounds,
-                                      medianIntensity: medianIntensity,
-                                      maxIntensity: maxIntensity,
-                                      frameIndex: frameIndex,
-                                      imageDataBorderSize: 2000)
         self.wtfFinder = await .init(pixels: pixels,
                                      bounds: bounds,
                                      medianIntensity: medianIntensity,
                                      maxIntensity: maxIntensity,
                                      frameIndex: frameIndex,
                                      imageDataBorderSize: 5000)
-        self.farFinder = await .init(pixels: pixels,
-                                     bounds: bounds,
-                                     medianIntensity: medianIntensity,
-                                     maxIntensity: maxIntensity,
-                                     frameIndex: frameIndex,
-                                     imageDataBorderSize: 6000)
     }
 
 
@@ -78,10 +58,8 @@ public struct CombinedHoughLineFinder: Sendable {
     }
     
     public var lineData: [HoughLineFinder.LineInfo] {
-        var base = self.normalFinder.lineData +
-          self.midFinder.lineData +
+        var base = 
           self.zeroFinder.lineData +
-          self.farFinder.lineData +
           self.wtfFinder.lineData
 
         // as a last ditch, add in two lines, from each opposite corners of the bounding box
@@ -107,13 +85,13 @@ public struct CombinedHoughLineFinder: Sendable {
         return base
     }
 
-    public var line: Line? {
+    public var line: HoughLineFinder.LineInfo? {
         var data = self.lineData
 
         data.sort { $0.score > $1.score }
 
         if data.count > 0 {
-            return data[0].line
+            return data[0]
         } else {
             return nil
         }
@@ -510,7 +488,7 @@ public struct HoughLineFinder: Sendable {
         }
     }
     
-    public var line: Line? {
+    public var line: LineInfo? {
         let pixelImage = self.pixelImage
         
         if let image = pixelImage.nsImage {
@@ -543,7 +521,9 @@ public struct HoughLineFinder: Sendable {
                     }
                 }
 
-                return lines[bestLineIndex]
+                return LineInfo(line: lines[bestLineIndex],
+                                score: bestScore,
+                                border: 0)                
             }
         }
         return nil

@@ -82,6 +82,13 @@ public actor Blob: CustomStringConvertible,
         }
     }
 
+    public var copy: Blob {
+        .init(self.pixels,
+              id: self.id,
+              frameIndex: self.frameIndex,
+              statusTracker: self.statusTracker)
+    }
+    
     public func update(id: UInt16) { self.id = id }
     
     public func persistentDataArray() -> [UInt16] {
@@ -168,19 +175,26 @@ public actor Blob: CustomStringConvertible,
     private var _medianIntensity: UInt16?
     private var _boundingBox: BoundingBox?
     private var _blobLine: Line?
+    private var _blobLineScore: Double?
     private var _pixelValues: [UInt16]?
     private var _outlierGroup: OutlierGroup?
     
+    public func blobLineScore() -> Double? { _blobLineScore }
+
     // a line computed from the pixels,
     // the best fitting line we have, if any
     public var line: Line? {
         get async {
             if let _blobLine { return _blobLine }
-            _blobLine = await CombinedHoughLineFinder(pixels: Array(self.pixels),
-                                                      bounds: self.boundingBox(),
-                                                      medianIntensity: self.medianIntensity(),
-                                                      maxIntensity: self.maxIntensity(),
-                                                      frameIndex: frameIndex).line
+            if let lineInfo = await CombinedHoughLineFinder(pixels: Array(self.pixels),
+                                                            bounds: self.boundingBox(),
+                                                            medianIntensity: self.medianIntensity(),
+                                                            maxIntensity: self.maxIntensity(),
+                                                            frameIndex: frameIndex).line
+            {
+                _blobLine = lineInfo.line
+                _blobLineScore = lineInfo.score
+            }
             return _blobLine
         }
     }
@@ -205,7 +219,7 @@ public actor Blob: CustomStringConvertible,
                                         frameIndex: frameIndex)
         
         let (pixelsToKeep, newPixelSets) =
-          hlf.lineSplit(args: args, optimalLine: hlf.line)
+          hlf.lineSplit(args: args, optimalLine: hlf.line?.line)
         
         if newPixelSets.count > 0 {
             Log.d("frame \(frameIndex) blob \(self.size()) lineSplit found \(newPixelSets.count) new pixel sets, reducing size of blob by \(self.pixels.count-pixelsToKeep.count) pixels")
@@ -334,6 +348,7 @@ public actor Blob: CustomStringConvertible,
         _pixelValues = nil
         _outlierGroup = nil
         _blobLine = nil
+        _blobLineScore = nil
         _averageDistanceFromIdealLine = nil
         _membersArray = nil
         _maxIntensity = nil
