@@ -117,6 +117,7 @@ struct OutlierWindowView: View {
                     }
                 }
                 
+                Toggle("Name", isOn: $outlierWindowViewModel.showName)
                 Toggle("CenterX", isOn: $outlierWindowViewModel.showCenterX)
                 Toggle("CenterY", isOn: $outlierWindowViewModel.showCenterY)
                 Toggle("Width", isOn: $outlierWindowViewModel.showWidth)

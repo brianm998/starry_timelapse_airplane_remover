@@ -201,7 +201,6 @@ public class HoughLineMatrixBlobConnector {
 
         let t2 = Date().timeIntervalSince1970
 
-
         var iteratedLines = 0
         
         // for each matrix element:
@@ -210,7 +209,7 @@ public class HoughLineMatrixBlobConnector {
             var processedBlobs: Set<Blob> = []
             
             // find lines
-            let finder = await CombinedHoughLineFinder(pixels: element.sortablePixels,
+            let finder = await /*Combined*/HoughLineFinder(pixels: element.sortablePixels,
                                                        bounds: element.bounds,
                                                        medianIntensity: 0, // not used here
                                                        maxIntensity: 0,    // not used here
@@ -247,8 +246,6 @@ public class HoughLineMatrixBlobConnector {
                 // don't iterate on further lines if all blobs have been looked at already
                 if processedBlobs.count == existingBlobs.count { break }
 
-                //if line.score < 2 { break } // XXX constant
-                
                 var lastSeenBlob: Blob?
                 var lastSeenX: Int?
                 var lastSeenY: Int?

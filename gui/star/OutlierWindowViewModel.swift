@@ -42,7 +42,8 @@ public final class OutlierWindowViewModel {
     }
 
     public var selectedOutliers: [OutlierGroup] = []
-    
+
+    public var showName = false
     public var showCenterX = false
     public var showCenterY = false
     public var showWidth = true
@@ -80,6 +81,7 @@ public final class OutlierWindowViewModel {
     }
 
     public func setAll(to value: Bool) {
+        showName = value
         showCenterX = value
         showCenterY = value
         showWidth = value

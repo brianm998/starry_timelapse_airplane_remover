@@ -131,7 +131,7 @@ struct OutlierGroupTable: View {
     var nameColumn: DTColumn {
         TableColumn("id", value: \.id) { (row: OutlierGroupTableRow) in
             Text(String(row.name))
-        }//}.width(min: 40, ideal: 60, max: 100)
+        }.width(min: 40, ideal: 60, max: 100)
     }
     
     var sizeColumn: DTColumn {
@@ -218,7 +218,7 @@ struct OutlierGroupTable: View {
                 {
                     // current compiler can't take more than 10 columns at once here
 
-                    // nameColumn // not sure why we need to know the id here, make it optional?
+                    if self.outlierWindowViewModel.showName { nameColumn }
                     willPaintColumn
                     self.sizeColumn
 

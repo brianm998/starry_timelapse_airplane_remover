@@ -171,6 +171,7 @@ public struct ImageAccessor: Sendable {
                         // to load the original and rescale it 
                         switch size {
                         case .original:
+                            Log.e("file at \(filename) does not exist :(")
                             return nil  // original does not exist, nothing to return
                         default:
                             return try await createMissingImage(frameIndex: frameIndex,

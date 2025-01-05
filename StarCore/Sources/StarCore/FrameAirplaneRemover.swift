@@ -366,6 +366,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                                      overwrite: false)
                         return alignedFrame
                     } else {
+                        // XXX this isn't handled well
                         Log.e("frame \(frameIndex) could not load aligned frame")
                     }
                 } else {

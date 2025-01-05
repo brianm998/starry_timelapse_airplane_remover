@@ -675,11 +675,11 @@ public actor Blob: CustomStringConvertible,
             let selfAfterSize = self.size()
 
             if selfAfterSize != selfBeforeSize + (await otherBlob.size()) {
-                //Log.w("frame \(frameIndex) blob \(self.id) \(selfAfterSize) != \(selfBeforeSize) + \(await otherBlob.size())")
-                if frameIndex == 0 {
+                Log.w("frame \(frameIndex) blob \(self.id) \(selfAfterSize) != \(selfBeforeSize) + \(await otherBlob.size())")
+//                if frameIndex == 0 {
                   //  Log.i("frame \(frameIndex) blob \(self.id) \(self.pixels.count) pixels \(self.pixels)")
                     //Log.i("frame \(frameIndex) other blob \(otherBlob.id) pixels \(await otherBlob.pixels)")
-                }
+//                }
             }
             //if selfAfterSize != selfBeforeSize + otherBlob.size {
                 // here the blobs overlapped, which isn't supposed to happen

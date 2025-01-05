@@ -41,6 +41,7 @@ public actor LinearBlobExtender {
     }
 
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
+        let minBlobSize: Int    // blobs smaller than this are ignored
         let lineExtension: Int       // how much furter to look at the ends of the line
         let innerSearch: Int       // how far along the line to look within the bounding box
         let adjecentPixelsOnIteration: Int // how far to iterate on adject pixels
@@ -51,6 +52,8 @@ public actor LinearBlobExtender {
 
         public func description(for type: ArgType) -> String {
             switch type {
+            case .minBlobSize:
+                return "blobs smaller than this are ignored"
             case .lineExtension:
                 return "how much further to look at the ends of the line"
             case .innerSearch:
@@ -63,6 +66,7 @@ public actor LinearBlobExtender {
         }
         
         public enum ArgType: CaseIterable, Hashable {
+            case minBlobSize
             case lineExtension
             case innerSearch
             case adjecentPixelsOnIteration
@@ -75,6 +79,8 @@ public actor LinearBlobExtender {
         
         public func value(for type: ArgType) -> Double? {
             switch type {
+            case .minBlobSize:
+                return Double(minBlobSize)
             case .lineExtension:
                 return Double(lineExtension)
             case .innerSearch:
@@ -90,37 +96,49 @@ public actor LinearBlobExtender {
         
         public func intUpdate(for type: ArgType, value: Int) -> Args? {
             switch type {
+            case .minBlobSize:
+                return Args(minBlobSize: value,
+                            lineExtension: self.lineExtension,
+                            innerSearch: self.innerSearch,
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
+                            maxIterationCount: self.maxIterationCount)
             case .lineExtension:
-                return Args(lineExtension: value,
+                return Args(minBlobSize: self.minBlobSize,
+                            lineExtension: value,
                             innerSearch: self.innerSearch,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: self.maxIterationCount)
 
             case .innerSearch:
-                return Args(lineExtension: self.lineExtension,
+                return Args(minBlobSize: self.minBlobSize,
+                            lineExtension: self.lineExtension,
                             innerSearch: value,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: self.maxIterationCount)
 
             case .adjecentPixelsOnIteration:
-                return Args(lineExtension: self.lineExtension,
+                return Args(minBlobSize: self.minBlobSize,
+                            lineExtension: self.lineExtension,
                             innerSearch: self.innerSearch,
                             adjecentPixelsOnIteration: value,
                             maxIterationCount: self.maxIterationCount)
 
             case .maxIterationCount:
-                return Args(lineExtension: self.lineExtension,
+                return Args(minBlobSize: self.minBlobSize,
+                            lineExtension: self.lineExtension,
                             innerSearch: self.innerSearch,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: value)
             }
         }
         
-        public init(lineExtension: Int,
+        public init(minBlobSize: Int,
+                    lineExtension: Int,
                     innerSearch: Int,
-                    adjecentPixelsOnIteration: Int,
+                    adjecentPixelsOnIteration: Int, // XXX not used :(
                     maxIterationCount: Int)
         {
+            self.minBlobSize = minBlobSize
             self.lineExtension = lineExtension
             self.innerSearch = innerSearch
             self.adjecentPixelsOnIteration = adjecentPixelsOnIteration
@@ -137,18 +155,26 @@ public actor LinearBlobExtender {
             if await processedBlobs.contains(id) { return }
             await processedBlobs.insert(id)
 
+            if await blob.size() < args.minBlobSize { return }
+            
             await process(blob: blob, args: args, furtherIterations: args.maxIterationCount)
         }
     }
 
+    private var iterationBlob: Blob?
+    
     private func process(blob: Blob, args: Args, furtherIterations: Int) async {
 
         if furtherIterations <= 0 { return }
-        
+
+        //Log.d("frame \(frameIndex) processing blob \(blob) furtherIterations \(furtherIterations)")
+
         // blobs need to have a line
         if let originZeroLine = await blob.originZeroLine {
 
             let intersections = await blob.boundingBox().intersections(with: originZeroLine.standardLine)
+
+            iterationBlob = blob
             // try to iterate lineExtension pixels off of each end of this blob,
             // looking for another blob to absorb.
             // if we find another blob:
@@ -160,33 +186,35 @@ public actor LinearBlobExtender {
             // - stop
 
             if intersections.count > 1 {
+                let blobSize = await blob.size()
+                //Log.d("frame \(frameIndex) processing blob \(blob) size \(blobSize) intersections.count \(intersections.count)")
+                //Log.d("frame \(frameIndex) processing blob \(blob) iterating forwards from intersection 0")
                 await originZeroLine.asyncIterate(.forwards, from: intersections[0]) { x, y, orientation in
-                    await self.handleIteration(of: blob,
-                                               x: x,
+                    await self.handleIteration(x: x,
                                                y: y,
                                                from: intersections[0],
                                                args: args,
                                                furtherIterations: furtherIterations)
                 }
+                //Log.d("frame \(frameIndex) processing blob \(blob) iterating backwards from intersection 0")
                 await originZeroLine.asyncIterate(.backwards, from: intersections[0]) { x, y, orientation in
-                    await self.handleIteration(of: blob,
-                                               x: x,
+                    await self.handleIteration(x: x,
                                                y: y,
                                                from: intersections[0],
                                                args: args,
                                                furtherIterations: furtherIterations)
                 }
+                //Log.d("frame \(frameIndex) processing blob \(blob) iterating forwards from intersection 1")
                 await originZeroLine.asyncIterate(.forwards, from: intersections[1]) { x, y, orientation in
-                    await self.handleIteration(of: blob,
-                                               x: x,
+                    await self.handleIteration(x: x,
                                                y: y,
                                                from: intersections[1],
                                                args: args,
                                                furtherIterations: furtherIterations) 
                 }
+                //Log.d("frame \(frameIndex) processing blob \(blob) iterating backwards from intersection 1")
                 await originZeroLine.asyncIterate(.backwards, from: intersections[1]) { x, y, orientation in
-                    await self.handleIteration(of: blob,
-                                               x: x,
+                    await self.handleIteration(x: x,
                                                y: y,
                                                from: intersections[1],
                                                args: args,
@@ -196,59 +224,89 @@ public actor LinearBlobExtender {
         }
     }
 
-    private func handleIteration(of blob: Blob,
-                                 x: Int,
+    private func handleIteration(x: Int,
                                  y: Int,
                                  from originCoord: DoubleCoord,
                                  args: Args,
                                  furtherIterations: Int) async -> Bool
     {
-        let distance = originCoord.distance(to: x, and: y)
-        if await blob.boundingBox().contains(x: x, y: y) {
-            // inside, use innerSearch
-            if distance > Double(args.innerSearch) { return false }
+        if let iterationBlob {
+            let distance = originCoord.distance(to: x, and: y)
+            if await iterationBlob.boundingBox().contains(x: x, y: y) {
+                //Log.d("frame \(frameIndex) processing blob \(iterationBlob) @ [\(x), \(y)] distance \(distance) inside bounding box extension \(args.innerSearch)")
+                // inside, use innerSearch
+                if distance > Double(args.innerSearch) { return false }
 
-            return await maybeAbsorb(from: blob,
-                                     x: x,
-                                     y: y,
-                                     args: args,
-                                     furtherIterations: furtherIterations)
-        } else {
-            // outside the bounding box, use lineExtension
-            if distance > Double(args.lineExtension) { return false }
+                return await maybeAbsorb(x: x,
+                                         y: y,
+                                         args: args,
+                                         furtherIterations: furtherIterations)
+            } else {
+                //Log.d("frame \(frameIndex) processing blob \(iterationBlob) @ [\(x), \(y)] distance \(distance) outside bounding box extension \(args.lineExtension)")
+                // outside the bounding box, use lineExtension
+                if distance > Double(args.lineExtension) { return false }
 
-            return await maybeAbsorb(from: blob,
-                                     x: x,
-                                     y: y,
-                                     args: args,
-                                     furtherIterations: furtherIterations)
+                return await maybeAbsorb(x: x,
+                                         y: y,
+                                         args: args,
+                                         furtherIterations: furtherIterations)
+            }
+            return true
         }
-        return true
+        return false
     }
 
-    private func maybeAbsorb(from blob: Blob,
-                             x: Int,
+    private func maybeAbsorb(x: Int,
                              y: Int,
                              args: Args,
                              furtherIterations: Int) async -> Bool
     {
+        guard let iterationBlob else { return false }
         if let newBlob = analyzer.blob(at: x, and: y),
-           newBlob != blob
+           newBlob != iterationBlob
         {
-            if let oldScore = await blob.blobLineScore() {
-                let blobCopy = await blob.copy
-                await blobCopy.absorb(newBlob, always: true)
-                if let newScore = await blobCopy.blobLineScore() {
-                    if newScore > oldScore {
-                        await analyzer.replace(blob: newBlob, with: blobCopy)
-                        await processedBlobs.insert(newBlob.id)
+            //Log.d("frame \(frameIndex) processing blob \(iterationBlob) @ [\(x), \(y)] found other blob \(newBlob)")
+            if let oldScore = await iterationBlob.blobLineScore() {
+                let blobCopy = await iterationBlob.copy
+                if await blobCopy.absorb(newBlob, always: true) {
 
-                        // keep iterating on this blob if we can
-                        await process(blob: blobCopy,
-                                      args: args,
-                                      furtherIterations: furtherIterations - 1)
+                    /*
+
+                     XXX maybe check the original line as well?
+                     sometimes the new score is lower, but we should still combine them :(
+                     
+                     */
+
+                    let newBlobSize = await newBlob.size()
+                    let blobSize = await iterationBlob.size()
+                    
+                    if let newLine = await blobCopy.line,
+                       let newScore = await blobCopy.blobLineScore()
+                    {
+                        //Log.d("frame \(frameIndex) processing blob \(iterationBlob) @ [\(x), \(y)] oldScore \(oldScore) newScore \(newScore)")
+                        if newScore*3 > oldScore { // XXX constant XXX
+                            await analyzer.replace(blob: newBlob, with: blobCopy)
+                            await processedBlobs.insert(newBlob.id)
+
+                            let copySize = await blobCopy.size()
+                            
+                            //Log.d("frame \(frameIndex) processing blob \(iterationBlob) @ [\(x), \(y)] size \(blobSize) did absorb other blob size \(newBlobSize) resulting in size \(copySize)")
+                            
+                            // keep iterating on this blob if we can
+                            await process(blob: blobCopy,
+                                          args: args,
+                                          furtherIterations: furtherIterations - 1)
+                        } else {
+                            //Log.d("frame \(frameIndex) processing blob \(iterationBlob) @ [\(x), \(y)] FUCK 3")
+                        }
+                    } else {
+                        //Log.d("frame \(frameIndex) processing blob \(iterationBlob) @ [\(x), \(y)] FUCK 1")
                     }
+                } else {
+                    //Log.d("frame \(frameIndex) processing blob \(iterationBlob) @ [\(x), \(y)] FUCK 4")
                 }
+            } else {
+                //Log.d("frame \(frameIndex) processing blob \(iterationBlob) @ [\(x), \(y)] FUCK 2")
             }
             return false
         }
