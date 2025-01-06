@@ -726,22 +726,6 @@ public actor Blob: CustomStringConvertible,
         return ret
     }
 
-
-    public func lineFillAmount() async -> Double {
-        if let _lineFillAmount { return _lineFillAmount }
-
-        var ret = 0.0
-        if let line = await self.line {
-            ret = calculateLineFillAmount(from: line,
-                                          with: self.boundingBox(),
-                                          and: self.pixelValues,
-                                          and: self.pixels)
-        }
-        _lineFillAmount = ret
-        return ret
-    }
-
-
     // remove any pixels within this bounding box from this blob and return them
     public func slice(with boundingBox: BoundingBox) -> Set<SortablePixel> {
         var ret: Set<SortablePixel> = []

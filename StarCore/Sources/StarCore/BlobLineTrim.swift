@@ -30,6 +30,7 @@ public actor BlobLineTrim {
     }
     
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
+        let minBlobSize: Int          // blobs smaller than this are ignored
         let minLineLength: Double     // blobs with less line length are not processed
         let minLineFillAmount: Double // blobs with less line fill amount are not processed
         let trimAmount: Double        // trim  pixels further from the line than this
@@ -39,6 +40,8 @@ public actor BlobLineTrim {
         
         public func description(for type: ArgType) -> String {
             switch type {
+            case .minBlobSize:
+                return "blobs smaller than this are ignored"
             case .minLineLength:
                 return "blobs with less line length are not processed"
             case .minLineFillAmount:
@@ -49,12 +52,24 @@ public actor BlobLineTrim {
         }
 
         public enum ArgType: CaseIterable, Hashable {
+            case minBlobSize
             case minLineLength
             case minLineFillAmount
             case trimAmount
         }
 
-        public func isInteger(_ type: ArgType) -> Bool { false }
+        public func isInteger(_ type: ArgType) -> Bool {
+            switch type {
+            case .minLineLength:
+                return false
+            case .minLineFillAmount:
+                return false
+            case .trimAmount:
+                return false
+            case .minBlobSize:
+                return true
+            }
+        }
         
         public func isOptional(_ type: ArgType) -> Bool { false }
         
@@ -66,34 +81,57 @@ public actor BlobLineTrim {
                 return minLineFillAmount
             case .trimAmount:
                 return trimAmount
+            case .minBlobSize:
+                return Double(minBlobSize)
             }
         }
 
         public func doubleUpdate(for type: ArgType, value: Double) -> Args? {
             switch type {
             case .minLineLength:
-                return Args(minLineLength: value,
+                return Args(minBlobSize: self.minBlobSize,
+                            minLineLength: value,
                             minLineFillAmount: self.minLineFillAmount,
                             trimAmount: self.trimAmount)
 
             case .minLineFillAmount:
-                return Args(minLineLength: self.minLineLength,
+                return Args(minBlobSize: self.minBlobSize,
+                            minLineLength: self.minLineLength,
                             minLineFillAmount: value,
                             trimAmount: self.trimAmount)
         
             case .trimAmount:
-                return Args(minLineLength: self.minLineLength,
+                return Args(minBlobSize: self.minBlobSize,
+                            minLineLength: self.minLineLength,
                             minLineFillAmount: self.minLineFillAmount,
                             trimAmount: value)
+            case .minBlobSize:
+                return nil
             }
         }
         
-        public func intUpdate(for type: ArgType, value: Int) -> Args? { nil }
+        public func intUpdate(for type: ArgType, value: Int) -> Args? {
+            switch type {
+            case .minLineLength:
+                return nil
+            case .minLineFillAmount:
+                return nil
+            case .trimAmount:
+                return nil
+            case .minBlobSize:
+                return Args(minBlobSize: value,
+                            minLineLength: self.minLineLength,
+                            minLineFillAmount: self.minLineFillAmount,
+                            trimAmount: self.trimAmount)
+            }
+        }
 
-        public init(minLineLength: Double,
+        public init(minBlobSize: Int,
+                    minLineLength: Double,
                     minLineFillAmount: Double,
                     trimAmount: Double)
         {
+            self.minBlobSize = minBlobSize
             self.minLineLength = minLineLength
             self.minLineFillAmount = minLineFillAmount
             self.trimAmount = trimAmount
@@ -102,22 +140,21 @@ public actor BlobLineTrim {
 
     public func process(_ args: Args) async -> [UInt16:Blob] {
         for (_, blob) in blobMap {
-            if let lineLength = await blob.lineLength(),
-               lineLength > args.minLineLength
+            if await blob.size() > args.minBlobSize, // ignore small blobs
+               let lineLength = await blob.lineLength(), 
+               lineLength > args.minLineLength, 
+               let lineFillAmount = await blob.blobLineScore(),
+               lineFillAmount > args.minLineFillAmount
             {
-                let lineFillAmount = await blob.lineFillAmount()
-
-                if lineFillAmount > args.minLineFillAmount {
-                    // trim that shit
-                    let trimmedPixels = await blob.lineTrim(by: args.trimAmount)
-                    if trimmedPixels.count > 0 {
-                        // make another blob from any trimmed pixels
-                        maxBlobID += 1
-                        let newBlob = Blob(trimmedPixels,
-                                           id: maxBlobID,
-                                           frameIndex: frameIndex)
-                        blobMap[newBlob.id] = newBlob
-                    }
+                // trim that shit
+                let trimmedPixels = await blob.lineTrim(by: args.trimAmount)
+                if trimmedPixels.count > 0 {
+                    // make another blob from any trimmed pixels
+                    maxBlobID += 1
+                    let newBlob = Blob(trimmedPixels,
+                                       id: maxBlobID,
+                                       frameIndex: frameIndex)
+                    blobMap[newBlob.id] = newBlob
                 }
             }
         }

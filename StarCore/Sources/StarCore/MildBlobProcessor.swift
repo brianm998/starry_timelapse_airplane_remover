@@ -207,7 +207,8 @@ public class MildBlobProcessor: AbstractBlobProcessor {
           .frameState(.filter13),
           
           // blob line trim
-          .blobLineTrim(.init(minLineLength: 65,
+          .blobLineTrim(.init(minBlobSize: 40,
+                              minLineLength: 65,
                               minLineFillAmount: 0.9,
                               trimAmount: 16)),
 
