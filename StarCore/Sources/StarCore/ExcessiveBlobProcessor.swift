@@ -46,8 +46,8 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
 
           // reconnect some lines that may have been split up
           .linearBlobConnector(.init(scanSize: 40, 
-                                     blobsSmallerThan: 680,
-                                     lineBorder: 2)),
+                                     blobsSmallerThan: 6800,
+                                     lineBorder: 8)),
 
           .save(.filter2),
           .frameState(.filter3),
@@ -56,7 +56,6 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           .linearBlobExtender(.init(minBlobSize: 30,
                                     lineExtension: 15,
                                     innerSearch: 5,
-                                    adjecentPixelsOnIteration: 5,
                                     maxIterationCount: 4,
                                     scoreMultiplier: 2.1,
                                     sideIterationPixels: 0)), // XXX try this??
@@ -71,53 +70,14 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           .save(.filter4),
           .frameState(.filter5),
 
-          // a first pass on dim isolated blob removal
-          .dimIsolatedBlobRemover(.init(scanSize: 80,
-                                        requiredNeighbors: 1,
-                                        intensityFloor: 5000)),
-
-          .save(.filter5),
-          .frameState(.filter6),
-
-
           .blobLineTrim(.init(minBlobSize: 40,
                               minLineLength: 30,
                               minLineFillAmount: 10,
-                              trimAmount: 7)),
+                              trimAmount: 9)),
+
+          .save(.filter5),
+          .frameState(.filter6),
           
-          // remove isolated blobs
-//          .isolatedBlobRemover(.init(minNeighborSize: 4,
-//                                     scanSize: 50)),
-          
-
-          .save(.filter6),
-          .frameState(.filter7),
-
-          
-          // remove smaller disconected blobs
-          .disconnectedBlobRemover(.init(scanSize: 60,
-                                         blobsSmallerThan: 18,
-                                         requiredNeighbors: 2,
-                                         intensityThreshold: 15000)),
-
-          .save(.filter7),
-          .frameState(.filter8),
-
-          .isolatedBlobRemover(.init(minNeighborSize: 4,
-                                     scanSize: 50,
-                                     requiredNeighbors: 1,
-                                     minBlobSize: 24)),
-
-          .save(.filter8),
-          .frameState(.filter9),
-
-          .largeDimBlobCleaner(.init(minBlobSize: 5000,
-                                     intensityFloor: 1000)),
-
-
-          .save(.filter9),
-          .frameState(.filter10),
-
 
           // another pass at cutting out individual blobs based upon size, brightness
           .trimWithConstants(.init(minBlobSize: 10,
@@ -126,54 +86,48 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
                                    qualifierMedianIntensity: 10000)),
 
 
+          .save(.filter6),
+          .frameState(.filter7),
+
+          .nonLinearBlobRemover(.init(minBlobSize: 0,
+                                      medianIntensity: 10000,
+                                      lengthOverFillAmount: 10,
+                                      minLineFillAmount: 4,
+                                      maxLineFillAmount: 15)),
+
+          .save(.filter7),
+          .frameState(.filter8),
+
+          // split up blobs based upon user input
+          .applyUserSlices,
+
+          .save(.filter8),
+
+          /*
+          .frameState(.filter9),
+
+
+          .save(.filter9),
+          .frameState(.filter10),
+
+
           .save(.filter10),
           .frameState(.filter11),
 
-          
-          // pass on getting rid of small dim blobs
-          .smallBlobRemover(.init(minBlobSize: 6,
-                                  intensityFloor: 1000)),
 
           .save(.filter11),
           .frameState(.filter12),
             
-          // pass on getting rid of small but larger, dimmer blobs
-          .dimIsolatedBlobRemover(.init(scanSize: 80,
-                                        requiredNeighbors: 2,
-                                        minBlobSize: 24,
-                                        intensityFloor: 5000)),
 
           .save(.filter12),
           .frameState(.filter13),
 
 
-          .smallDimBlobRemover(.init(minBlobSize: 4)),
-          
-          // pass on getting rid of small but larger, dimmer blobs
-          //.smallBlobRemover(.init(minBlobSize: 10)),
-
           .save(.filter13),
           .frameState(.filter14),
 
-
-          // a final pass at isolated removal
-          .isolatedBlobRemover(.init(scanSize: 50,
-                                     requiredNeighbors: 1,
-                                     minBlobSize: 30)),
-          
-
           .save(.filter14),
           .frameState(.filter15),
-          
-          // split up blobs based upon user input
-          .applyUserSlices,
-          
-          // any really big blobs with lots of small bunches that are dim can go away
-          .removeReallyBigBlobsWithSmallDimBunches(.init(minBlobSize: 1000,
-                                                         minBunchCount: 100,
-                                                         maxBunchSize: 10,
-                                                         intensityCeiling: 6000,
-                                                         removePixelsDimmerThan:  6000)),
 
           .save(.filter15),
           .frameState(.filter16),
@@ -181,13 +135,9 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           // check to see if any pixel is in more than one blob
           //.blobDupeCheck("end"),
 
-          .nonLinearBlobRemover(.init(minBlobSize: 0,
-                                      medianIntensity: 10000,
-                                      lengthOverFillAmount: 10,
-                                      minLineFillAmount: 3,
-                                      maxLineFillAmount: 15)),
-
           .save(.filter16),
+          
+           */
         ]
     }
 }

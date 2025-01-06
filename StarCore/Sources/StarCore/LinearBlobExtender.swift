@@ -44,7 +44,6 @@ public actor LinearBlobExtender {
         let minBlobSize: Int    // blobs smaller than this are ignored
         let lineExtension: Int       // how much furter to look at the ends of the line
         let innerSearch: Int       // how far along the line to look within the bounding box
-        let adjecentPixelsOnIteration: Int // how far to iterate on adject pixels
         let maxIterationCount: Int // maximum times to iterate on line improvement
         let scoreMultiplier: Double
         let sideIterationPixels: Int // how far to iterate on each side of the line
@@ -62,8 +61,6 @@ public actor LinearBlobExtender {
                 return "how much further to look at the ends of the line"
             case .innerSearch:
                 return "how far along the line to look within the bounding box"
-            case .adjecentPixelsOnIteration:
-                return "how far to iterate on adject pixels"
             case .maxIterationCount:
                 return "maximum times to iterate on line improvement"
             case .scoreMultiplier:
@@ -75,7 +72,6 @@ public actor LinearBlobExtender {
             case minBlobSize
             case lineExtension
             case innerSearch
-            case adjecentPixelsOnIteration
             case maxIterationCount
             case scoreMultiplier
             case sideIterationPixels
@@ -100,8 +96,6 @@ public actor LinearBlobExtender {
                 return Double(lineExtension)
             case .innerSearch:
                 return Double(innerSearch)
-            case .adjecentPixelsOnIteration:
-                return Double(adjecentPixelsOnIteration)
             case .maxIterationCount:
                 return Double(maxIterationCount)
             case .scoreMultiplier:
@@ -117,7 +111,6 @@ public actor LinearBlobExtender {
                 return Args(minBlobSize: self.minBlobSize,
                             lineExtension: self.lineExtension,
                             innerSearch: self.innerSearch,
-                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: self.maxIterationCount,
                             scoreMultiplier: value,
                             sideIterationPixels: self.sideIterationPixels)
@@ -132,7 +125,6 @@ public actor LinearBlobExtender {
                 return Args(minBlobSize: value,
                             lineExtension: self.lineExtension,
                             innerSearch: self.innerSearch,
-                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: self.maxIterationCount,
                             scoreMultiplier: self.scoreMultiplier,
                             sideIterationPixels: self.sideIterationPixels)
@@ -140,7 +132,6 @@ public actor LinearBlobExtender {
                 return Args(minBlobSize: self.minBlobSize,
                             lineExtension: value,
                             innerSearch: self.innerSearch,
-                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: self.maxIterationCount,
                             scoreMultiplier: self.scoreMultiplier,
                             sideIterationPixels: self.sideIterationPixels)
@@ -149,16 +140,6 @@ public actor LinearBlobExtender {
                 return Args(minBlobSize: self.minBlobSize,
                             lineExtension: self.lineExtension,
                             innerSearch: value,
-                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
-                            maxIterationCount: self.maxIterationCount,
-                            scoreMultiplier: self.scoreMultiplier,
-                            sideIterationPixels: self.sideIterationPixels)
-
-            case .adjecentPixelsOnIteration:
-                return Args(minBlobSize: self.minBlobSize,
-                            lineExtension: self.lineExtension,
-                            innerSearch: self.innerSearch,
-                            adjecentPixelsOnIteration: value,
                             maxIterationCount: self.maxIterationCount,
                             scoreMultiplier: self.scoreMultiplier,
                             sideIterationPixels: self.sideIterationPixels)
@@ -167,7 +148,6 @@ public actor LinearBlobExtender {
                 return Args(minBlobSize: self.minBlobSize,
                             lineExtension: self.lineExtension,
                             innerSearch: self.innerSearch,
-                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: value,
                             scoreMultiplier: self.scoreMultiplier,
                             sideIterationPixels: self.sideIterationPixels)
@@ -177,7 +157,6 @@ public actor LinearBlobExtender {
                 return Args(minBlobSize: self.minBlobSize,
                             lineExtension: self.lineExtension,
                             innerSearch: self.innerSearch,
-                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: self.maxIterationCount,
                             scoreMultiplier: self.scoreMultiplier,
                             sideIterationPixels: value)
@@ -187,7 +166,6 @@ public actor LinearBlobExtender {
         public init(minBlobSize: Int,
                     lineExtension: Int,
                     innerSearch: Int,
-                    adjecentPixelsOnIteration: Int, // XXX not used :(
                     maxIterationCount: Int,
                     scoreMultiplier: Double,
                     sideIterationPixels: Int)
@@ -195,7 +173,6 @@ public actor LinearBlobExtender {
             self.minBlobSize = minBlobSize
             self.lineExtension = lineExtension
             self.innerSearch = innerSearch
-            self.adjecentPixelsOnIteration = adjecentPixelsOnIteration
             self.maxIterationCount = maxIterationCount
             self.scoreMultiplier = scoreMultiplier
             self.sideIterationPixels = sideIterationPixels
@@ -230,7 +207,6 @@ public actor LinearBlobExtender {
 
             let intersections = await blob.boundingBox().intersections(with: originZeroLine.standardLine)
 
-            iterationBlob = blob
             // try to iterate lineExtension pixels off of each end of this blob,
             // looking for another blob to absorb.
             // if we find another blob:
@@ -246,32 +222,28 @@ public actor LinearBlobExtender {
                 //Log.d("frame \(frameIndex) processing blob \(blob) size \(blobSize) intersections.count \(intersections.count)")
                 //Log.d("frame \(frameIndex) processing blob \(blob) iterating forwards from intersection 0")
                 await originZeroLine.asyncIterate(.forwards, from: intersections[0]) { x, y, orientation in
-                    await self.handleIteration(x: x,
-                                               y: y,
+                    await self.handleIteration(x: x, y: y,
                                                from: intersections[0],
                                                args: args,
                                                furtherIterations: furtherIterations)
                 }
                 //Log.d("frame \(frameIndex) processing blob \(blob) iterating backwards from intersection 0")
                 await originZeroLine.asyncIterate(.backwards, from: intersections[0]) { x, y, orientation in
-                    await self.handleIteration(x: x,
-                                               y: y,
+                    await self.handleIteration(x: x, y: y,
                                                from: intersections[0],
                                                args: args,
                                                furtherIterations: furtherIterations)
                 }
                 //Log.d("frame \(frameIndex) processing blob \(blob) iterating forwards from intersection 1")
                 await originZeroLine.asyncIterate(.forwards, from: intersections[1]) { x, y, orientation in
-                    await self.handleIteration(x: x,
-                                               y: y,
+                    await self.handleIteration(x: x, y: y,
                                                from: intersections[1],
                                                args: args,
                                                furtherIterations: furtherIterations) 
                 }
                 //Log.d("frame \(frameIndex) processing blob \(blob) iterating backwards from intersection 1")
                 await originZeroLine.asyncIterate(.backwards, from: intersections[1]) { x, y, orientation in
-                    await self.handleIteration(x: x,
-                                               y: y,
+                    await self.handleIteration(x: x, y: y,
                                                from: intersections[1],
                                                args: args,
                                                furtherIterations: furtherIterations) 
@@ -342,8 +314,10 @@ public actor LinearBlobExtender {
                         //Log.d("frame \(frameIndex) processing blob \(iterationBlob) @ [\(x), \(y)] oldScore \(oldScore) newScore \(newScore)")
                         if newScore*args.scoreMultiplier > oldScore {
                             await analyzer.replace(blob: newBlob, with: blobCopy)
+                            await analyzer.update(blob: blobCopy)
                             await processedBlobs.insert(newBlob.id)
-
+                            self.iterationBlob = blobCopy
+                            
                             let copySize = await blobCopy.size()
                             
                             //Log.d("frame \(frameIndex) processing blob \(iterationBlob) @ [\(x), \(y)] size \(blobSize) did absorb other blob size \(newBlobSize) resulting in size \(copySize)")
