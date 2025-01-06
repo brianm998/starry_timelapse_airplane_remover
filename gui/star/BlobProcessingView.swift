@@ -134,71 +134,73 @@ struct BlobProcessingView: View {
                             
                             
                             ForEach(Array(steps.enumerated()), id: \.element) { stepIndex, step in
-                                switch step {
-                                case .findBlobs(let args):
-                                    findBlobsView(args, stepIndex: stepIndex)
-                                    
-                                case .applyUserSlices:
-                                    applyUserSlicesView()
+                                HStack {
+                                    switch step {
+                                    case .findBlobs(let args):
+                                        findBlobsView(args, stepIndex: stepIndex)
 
-                                case .smallBlobRemover(let args):
-                                    smallBlobRemoverView(args, stepIndex: stepIndex)
+                                    case .applyUserSlices:
+                                        applyUserSlicesView()
 
-                                case .smallDimBlobRemover(let args):
-                                    smallDimBlobRemoverView(args, stepIndex: stepIndex)
+                                    case .smallBlobRemover(let args):
+                                        smallBlobRemoverView(args, stepIndex: stepIndex)
 
-                                case .blobDupeCheck(let step):
-                                    blobDupeCheckView(step)
+                                    case .smallDimBlobRemover(let args):
+                                        smallDimBlobRemoverView(args, stepIndex: stepIndex)
 
-                                case .lineSplit(let args):
-                                    lineSplitView(args, stepIndex: stepIndex)
+                                    case .blobDupeCheck(let step):
+                                        blobDupeCheckView(step)
 
-                                case .borderBrightnessBlobRemover(let args):
-                                    borderBrightnessLessThanView(args, stepIndex: stepIndex)
+                                    case .lineSplit(let args):
+                                        lineSplitView(args, stepIndex: stepIndex)
 
-                                case .linearBlobConnector(let args):
-                                    linearBlobConnectorView(args, stepIndex: stepIndex)
+                                    case .borderBrightnessBlobRemover(let args):
+                                        borderBrightnessLessThanView(args, stepIndex: stepIndex)
 
-                                case .linearBlobExtender(let args):
-                                    linearBlobExtenderView(args, stepIndex: stepIndex)
+                                    case .linearBlobConnector(let args):
+                                        linearBlobConnectorView(args, stepIndex: stepIndex)
 
-                                case .blobLineTrim(let args):
-                                    blobLineTrimView(args, stepIndex: stepIndex)
+                                    case .linearBlobExtender(let args):
+                                        linearBlobExtenderView(args, stepIndex: stepIndex)
 
-                                case .isolatedBlobRemover(let args):
-                                    isolatedBlobRemoverView(args, stepIndex: stepIndex)
+                                    case .blobLineTrim(let args):
+                                        blobLineTrimView(args, stepIndex: stepIndex)
 
-                                case .disconnectedBlobRemover(let args):
-                                    disconnectedBlobRemoverView(args, stepIndex: stepIndex)
+                                    case .isolatedBlobRemover(let args):
+                                        isolatedBlobRemoverView(args, stepIndex: stepIndex)
 
-                                case .dimIsolatedBlobRemover(let args):
-                                    dimIsolatedBlobRemoverView(args, stepIndex: stepIndex)
-                                    
-                                case .save(let imageType):
-                                    saveView(imageType)
+                                    case .disconnectedBlobRemover(let args):
+                                        disconnectedBlobRemoverView(args, stepIndex: stepIndex)
 
-                                case .frameState(let processingState):
-                                    frameStateView(processingState)
+                                    case .dimIsolatedBlobRemover(let args):
+                                        dimIsolatedBlobRemoverView(args, stepIndex: stepIndex)
+                                        
+                                    case .save(let imageType):
+                                        saveView(imageType)
 
-                                case .removeReallyBigBlobsWithSmallDimBunches(let args):
-                                    removeReallyBigBlobsWithSmallDimBunchesView(args, stepIndex: stepIndex)
+                                    case .frameState(let processingState):
+                                        frameStateView(processingState)
 
-                                case .trimWithConstants(let args):
-                                    trimWithConstantsView(args, stepIndex: stepIndex)
+                                    case .removeReallyBigBlobsWithSmallDimBunches(let args):
+                                        removeReallyBigBlobsWithSmallDimBunchesView(args, stepIndex: stepIndex)
 
-                                case .largeDimBlobCleaner(let args):
-                                    largeDimBlobCleanerView(args, stepIndex: stepIndex)
-                                    
-                                case .houghLineMatrixBlobConnector(let args):
-                                    houghLineMatrixBlobConnectorView(args, stepIndex: stepIndex)
+                                    case .trimWithConstants(let args):
+                                        trimWithConstantsView(args, stepIndex: stepIndex)
 
-                                case .nonLinearBlobRemover(let args):
-                                    nonLinearBlobRemoverView(args, stepIndex: stepIndex)
-                                    
+                                    case .largeDimBlobCleaner(let args):
+                                        largeDimBlobCleanerView(args, stepIndex: stepIndex)
+                                        
+                                    case .houghLineMatrixBlobConnector(let args):
+                                        houghLineMatrixBlobConnectorView(args, stepIndex: stepIndex)
+
+                                    case .nonLinearBlobRemover(let args):
+                                        nonLinearBlobRemoverView(args, stepIndex: stepIndex)
+                                        
+                                    }
                                 }
+                                  .background(.gray)
+                                  .padding(1)
                             }
-                              .background(.gray)
-                              .padding(1)
 
                             VStack(alignment: .leading) {
                                 Text("Blob Processing Complete")
@@ -513,48 +515,18 @@ struct StepView<T: Hashable>: View {
     }
 
     var body: some View {
-        ZStack {
-            VStack(alignment: .leading) {
-                Text(title)
-                  .foregroundColor(.white)
-                  .font(.largeTitle)
-                Text(description)
-                Spacer()
-                  .frame(maxHeight: 10)
-                Text("Parameters which can affect how this step operates:")
-                Grid(alignment: .topLeading) {
-                    GridRow {
-                        Text("Name")
-                          .foregroundColor(.white)
-                        Text("Value")
-                          .foregroundColor(.white)
-                        Text("Description")
-                          .foregroundColor(.white)
-                    }
-                      .padding(.vertical, 2)
-
-                    // index of paramters in list
-                    ForEach(Array(array.enumerated()), id: \.element) { index, value in
-                        StepRowView(args,
-                                    argType: value,
-                                    stepIndex: stepIndex,
-                                    detectionType: $detectionType)
-                          .padding(.vertical, 2)
-                          .disabled(isDisabled)
-                    }
-                }
-            }
-              .layoutPriority(10)
+        VStack() {
             
-            if detectionType == .custom,
-               showDisableButton
-            {
-                HStack(alignment: .top) {
-                    Spacer()
-                      .layoutPriority(0)
-                    VStack(alignment: .trailing) {
-                        Spacer()
-                          .frame(maxHeight: 10)
+            ScrollView() {
+                
+            VStack(alignment: .leading) {
+                HStack {
+
+
+
+                    if detectionType == .custom,
+                       showDisableButton
+                    {
                         
                         Toggle("Disable", isOn: $isDisabled)
                           .toggleStyle(.switch)
@@ -565,9 +537,58 @@ struct StepView<T: Hashable>: View {
                               }
                           }
                         
-                        Spacer()
+                    }
+
+                Text(title)
+                  .foregroundColor(.white)
+                  .font(.largeTitle)
+                  .fixedSize(horizontal: false, vertical: true)
+
+                
+                }
+                Text(description)
+                  .fixedSize(horizontal: false, vertical: true)
+                Spacer()
+                  .frame(maxHeight: 10)
+                Text("Parameters which can affect how this step operates:")
+                  .fixedSize(horizontal: false, vertical: true)
+                Grid(alignment: .topLeading) {
+                    GridRow {
+                        Text("Name")
+                          .foregroundColor(.white)
+                          .fixedSize(horizontal: false, vertical: true)
+                        Text("Value")
+                          .foregroundColor(.white)
+                          .fixedSize(horizontal: false, vertical: true)
+                        Text("Description")
+                          .foregroundColor(.white)
+                          .fixedSize(horizontal: false, vertical: true)
+                    }
+                      .padding(.vertical, 2)
+
+                    /*
+                        Divider()
+                          .gridCellUnsizedAxes(.vertical)
+                          .opacity(0.7)
+                      */  
+
+                    // index of paramters in list
+                    ForEach(Array(array.enumerated()), id: \.element) { index, value in
+                        StepRowView(args,
+                                    argType: value,
+                                    stepIndex: stepIndex,
+                                    detectionType: $detectionType)
+                          .padding(.vertical, 2)
+                          .disabled(isDisabled)
+                        /*
+                        Divider()
+                          .gridCellUnsizedAxes(.vertical)
+                          .opacity(0.7)
+                         */
                     }
                 }
+                  .layoutPriority(10)
+            }
             }
         }
           .padding(10)
@@ -598,6 +619,7 @@ struct StepRowView<T: Hashable>: View {
     var body: some View {
         GridRow {
             Text("\(argType)")
+              .fixedSize(horizontal: false, vertical: true)
 
             let value = args.value(for: argType)
             
@@ -650,7 +672,7 @@ struct StepRowView<T: Hashable>: View {
                 }
             }
             Text(args.description(for: argType))
-
+              .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
