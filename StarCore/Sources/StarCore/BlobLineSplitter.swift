@@ -230,7 +230,7 @@ public actor BlobLineSplitter {
         for (_, blob) in blobs {
 
             let blobSize = await blob.size()
-            let lineFillAmount = await blob.lineFillAmount()
+            let lineFillAmount = await blob.blobLineScore() ?? 0 // XXX 
             let avgDist = await blob.averageDistanceFromIdealLine
 
             if avgDist > args.minAvgDistance, // not close to the line
