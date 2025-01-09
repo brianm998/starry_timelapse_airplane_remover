@@ -201,7 +201,7 @@ public actor OutlierGroup: CustomStringConvertible,
     }
 
     // has to be optional so we can read OuterlierGroups as codable
-    public var frame: FrameAirplaneRemover?
+    public weak var frame: FrameAirplaneRemover?
 
     public func set(frame: FrameAirplaneRemover) {
         self.frame = frame
