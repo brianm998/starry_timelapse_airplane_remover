@@ -342,7 +342,7 @@ public final class ImageSequenceViewModel {
                                                        writeOutputFiles: true,
                                                        imageAccessor: imageAccessor)
                     }
-                    if let callback = callbacks.frameCheckClosure {
+                    if let callback = callbacks.frameCheckClosure { 
                         await MainActor.run {
                             callback(frame)
                         }
@@ -384,7 +384,8 @@ public final class ImageSequenceViewModel {
         var callbacks = Callbacks()
 
         // get the full number of images in the sequcne
-        callbacks.imageSequenceSizeClosure = { imageSequenceSize in
+        callbacks.imageSequenceSizeClosure = { [weak self] imageSequenceSize in
+            guard let self else { return }            
             Task { @MainActor [weak self] in
                 self?.imageSequenceSize = imageSequenceSize
                 Log.i("read imageSequenceSize \(imageSequenceSize)")
@@ -392,13 +393,15 @@ public final class ImageSequenceViewModel {
             }
         }
 
-        callbacks.frameOutliersLoadedCallback = { frameIndex, outliersLoaded in
+        callbacks.frameOutliersLoadedCallback = { [weak self] frameIndex, outliersLoaded in
+            guard let self else { return }            
             Task { @MainActor [weak self] in
                 self?.frames[frameIndex].outliersLoaded = outliersLoaded
             }
         }
         
-        callbacks.frameStateChangeCallback = { frame, newState in
+        callbacks.frameStateChangeCallback = { [weak self] frame, newState in
+            guard let self else { return }            
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.frames[frame.frameIndex].frameState = newState
@@ -420,14 +423,16 @@ public final class ImageSequenceViewModel {
         }
 
         // called when we should check a frame
-        callbacks.frameCheckClosure = { newFrame in
+        callbacks.frameCheckClosure = { [weak self] newFrame in
+            guard let self else { return }            
             //Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
             Task { @MainActor [weak self] in
                 await self?.addToViewModel(frame: newFrame)
             }
         }
         
-        callbacks.frameSavingStateChangeCallback = { frame, oldState, newState in
+        callbacks.frameSavingStateChangeCallback = { [weak self] frame, oldState, newState in
+            guard let self else { return }            
             Task { @MainActor [weak self] in
                 self?.frameSaveQueue.frameSavingStateChanged(for: frame,
                                                              from: oldState,

@@ -16,7 +16,7 @@ import KHTSwift
 import logging
 import Cocoa
 
-public struct PixelatedImage: Sendable {
+public final class PixelatedImage: Sendable {
     public let width: Int
     public let height: Int
 
@@ -35,6 +35,8 @@ public struct PixelatedImage: Sendable {
     let colorSpace: CGColorSpace // XXX why both space and name?
     let ciFormat: CIFormat    // used to write tiff formats properly
 
+    deinit { }
+    
     // enum to bridge between Data and direct individual component access
     // do we have 8 bits per component, or 16?
     // pixels could have multiple components, or just one.
@@ -63,7 +65,7 @@ public struct PixelatedImage: Sendable {
         }
     }
 
-    public init?(fromFile filename: String) async throws {
+    public convenience init?(fromFile filename: String) async throws {
         if let nsImage = try await imageCache.loadImage(filename: filename) {
             if let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
                 self.init(cgImage)
@@ -75,9 +77,9 @@ public struct PixelatedImage: Sendable {
         }
     }
     
-    public init(width: Int,
-                height: Int,
-                grayscale16BitImageData imageData: [UInt16])
+    public convenience init(width: Int,
+                            height: Int,
+                            grayscale16BitImageData imageData: [UInt16])
     {
         self.init(width: width,
                   height: height,
@@ -92,9 +94,9 @@ public struct PixelatedImage: Sendable {
                   ciFormat: .L16)
     }
 
-    public init(width: Int,
-                height: Int,
-                grayscale8BitImageData imageData: [UInt8])
+    public convenience init(width: Int,
+                            height: Int,
+                            grayscale8BitImageData imageData: [UInt8])
     {
         self.init(width: width,
                   height: height,

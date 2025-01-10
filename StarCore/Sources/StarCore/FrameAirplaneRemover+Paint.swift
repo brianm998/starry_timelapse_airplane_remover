@@ -26,9 +26,9 @@ You should have received a copy of the GNU General Public License along with sta
 extension FrameAirplaneRemover {
 
     // actually paint over outlier groups that have been selected as airplane tracks
-    internal func paintOverAirplanes(image: PixelatedImage,
-                                     toData data: inout [UInt16],
-                                     otherFrame: PixelatedImage) async throws
+  internal func paintOverAirplanes(image: PixelatedImage,
+                                   toData data: inout [UInt16],
+                                   otherFrame: PixelatedImage) async throws
     {
         Log.i("frame \(frameIndex) painting airplane outlier groups")
 
@@ -57,8 +57,12 @@ extension FrameAirplaneRemover {
         // alpha zero means no painting, keep original pixel
         // alpha one means overwrite original pixel entierly with data from other frame
 
+        let config = await configManager.config()
+
         // the alpha mask that we will convolve across all paintable pixels
-        let paintMask = await self.paintMask
+        let paintMask = PaintMask(innerWallSize: config.outlierGroupPaintBorderInnerWallPixels,
+                                  radius: config.outlierGroupPaintBorderPixels)
+        
         let paintMaskIntRadius = Int(paintMask.radius)
 
         // only paint when we have found at least one positive outlier group
@@ -69,7 +73,7 @@ extension FrameAirplaneRemover {
                reason.willPaint
             {
                 shouldPaint = true
-                Log.d("frame \(frameIndex) painting over group \(group) for reason \(reason)")
+                //Log.d("frame \(frameIndex) painting over group \(group) for reason \(reason)")
 
                 for pixel in group.pixelSet {
                     // start in frame coords
@@ -102,8 +106,6 @@ extension FrameAirplaneRemover {
             }
         }
 
-        let config = await configManager.config()
-        
         if config.writeOutlierGroupFiles { // XXX this config value is very much overloaded
             var paintMaskImageData = [UInt8](repeating: 0, count: width*height)
 

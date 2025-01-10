@@ -106,9 +106,9 @@ public actor ImageSequence {
     
     private func getImageInt(withName filename: String) -> ImageLoader {
         if Thread.isMainThread { Log.w("ON MAIN THREAD") }
-        Log.d("getImage(withName: \(filename))")
+        //Log.d("getImage(withName: \(filename))")
         if let image = images[filename] {
-            Log.d("image was cached")
+            //Log.d("image was cached")
             return image
         }
         Log.d("loading \(filename)")

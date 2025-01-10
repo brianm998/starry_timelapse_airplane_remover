@@ -82,7 +82,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public var observer: FrameObserver?
+    public weak var observer: FrameObserver?
 
     public func set(observer: FrameObserver) {
         self.observer = observer
@@ -204,8 +204,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     internal var outliersLoadedFromFile = false
 
     // doubly linked list
-    var previousFrame: FrameAirplaneRemover?
-    var nextFrame: FrameAirplaneRemover?
+    weak var previousFrame: FrameAirplaneRemover?
+    weak var nextFrame: FrameAirplaneRemover?
 
     func getPreviousFrame() -> FrameAirplaneRemover? { previousFrame }
     
@@ -384,21 +384,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         try await loadOutliers()
     }
 
-    var _paintMask: PaintMask?
-    
-    var paintMask: PaintMask {
-        get async {
-            if let _paintMask { return _paintMask }
-
-            let config = await configManager.config()
-
-            let mask = PaintMask(innerWallSize: config.outlierGroupPaintBorderInnerWallPixels,
-                                 radius: config.outlierGroupPaintBorderPixels)
-            _paintMask = mask
-            return mask
-        }
-    }
-
     // run after shouldPaint has been set for each group, 
     // does the final painting and then writes out the output files
     public func finish() async throws {
@@ -433,7 +418,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         self.set(state: .waitingToLoadImages)
 
-       var (image,  otherFrame) = try await finalMonitor.load() {
+       var (image, otherFrame) = try await finalMonitor.load() {
             await self.set(state: .loadingImages)
             return await (imageAccessor.loadInt(frameIndex: frameIndex,
                                          type: .original,

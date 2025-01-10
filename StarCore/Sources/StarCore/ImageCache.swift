@@ -4,7 +4,7 @@ import logging
 import Cocoa
 import Semaphore
 
-public let imageCache = ImageCache()
+public let imageCache = ImageCache(cacheLimit: 100) // XXX guess
 
 /*
 
@@ -26,6 +26,10 @@ public class ImageCache: @unchecked Sendable {
     var cacheMisses: UInt = 0
     var imageLoadSuccess: UInt = 0
     var imageLoadFailures: UInt = 0
+
+    init(cacheLimit: Int) {
+        cache.countLimit = cacheLimit
+    }
 
     public func loadImage(filename: String) async throws -> NSImage? {
         let key = NSString(string: filename)
