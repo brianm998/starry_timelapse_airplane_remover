@@ -34,7 +34,7 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
 
           .houghLineMatrixBlobConnector(.init(elementWidth: 600,
                                               elementHeight: 400,
-                                              overlapPercent: 30,
+                                              overlapPercent: 20,
                                               maxHoughLines: 2000,
                                               sideIterationPixels: 3,
                                               maxBlobDistance: 30)),
@@ -55,8 +55,8 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
                                     lineExtension: 15,
                                     innerSearch: 5,
                                     maxIterationCount: 4,
-                                    scoreMultiplier: 2.1,
-                                    sideIterationPixels: 0)), // XXX try this??
+                                    scoreMultiplier: 4.1,
+                                    sideIterationPixels: 5)),
 
           .save(.filter3),
           .frameState(.filter4),
@@ -68,6 +68,8 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           .save(.filter4),
           .frameState(.filter5),
 
+          .compactBlobIds,
+          
           .blobLineTrim(.init(minBlobSize: 40,
                               minLineLength: 30,
                               minLineFillAmount: 10,
@@ -93,6 +95,8 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
                                       minLineFillAmount: 4,
                                       maxLineFillAmount: 15)),
 
+          .compactBlobIds,
+          
           .save(.filter7),
           .frameState(.filter8),
 
