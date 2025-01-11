@@ -18,7 +18,7 @@ public typealias BlobMap = [UInt16:Blob]
 
  problems:
 
-  - line split on real lines can split them when it shoudln't
+  - even the excessive mode sometimes doesn't combine linear blobs
  
  */
 
@@ -246,7 +246,7 @@ public class AbstractBlobProcessor {
         Log.i("compactBlobIds \(array.count) blobs, \(UInt16.max-UInt16(array.count)) ids left in UInt16 space")
         var newBlobMap: [UInt16:Blob] = [:]
         for (index, blob) in array.enumerated() {
-            let newId = UInt16(index)
+            let newId = UInt16(index+1) // can't use zero for blob ids
             blob.id = newId
             newBlobMap[newId] = blob
         }
