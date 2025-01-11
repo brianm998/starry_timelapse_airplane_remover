@@ -45,6 +45,18 @@ fileprivate let frameLoadMonitor = FileSystemMonitor(max: 28) // XXX makd this c
 @MainActor @Observable
 public final class ImageSequenceViewModel {
     var config: ConfigManager?
+
+    var userPreferences: UserPreferences = UserPreferences() {
+        didSet {
+            if let detectionType = userPreferences.processingType {
+                self.detectionType = detectionType
+            }
+            if let concurrentFrames = userPreferences.concurrentFrames {
+                numberOfFramesToProcessConcurrently = concurrentFrames
+            }
+        }
+    }
+
     var eraser: NighttimeAirplaneRemover?
     var noImageExplainationText: String = "Loading..."
 

@@ -155,7 +155,9 @@ struct RightPanel: View {
                                   .onChange(of: viewModel.detectionType) {
                                     Task {
                                         await constants.set(detectionType: viewModel.detectionType)
-                                        // XXX stick this in preferences
+
+                                        // stick it in user preferences
+                                        self.viewModel.userPreferences.processingType = viewModel.detectionType
                                     }
                                   }
 
@@ -236,7 +238,10 @@ struct EditableNumberOfFramesToProcessView: View {
                       {
                           self.viewModel.numberOfFramesToProcessConcurrently = newIntValue
 
-                          // XXX stick this in preferences as well
+                          // stick it in user preferences
+                          self.viewModel.userPreferences.concurrentFrames = newIntValue
+
+                          // update the global we use for this
                           Task { await maxFramesProcessing.set(value: newIntValue) }
                           
                           self.editFrameNumberMode = false

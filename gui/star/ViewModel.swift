@@ -60,7 +60,7 @@ public final class ViewModel {
     func startup(withConfigFile jsonConfigFilename: String) async throws {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = jsonConfigFilename
-        imageSequence = try await ImageSequenceViewModel(withConfig: jsonConfigFilename) { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
+        let imageSequenceViewModel = try await ImageSequenceViewModel(withConfig: jsonConfigFilename) { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
             Task { @MainActor in
                 self.amountLoaded = amountLoaded
                 self.numberLoaded = numberLoaded
@@ -68,6 +68,8 @@ public final class ViewModel {
                 self.amountPreviewsSaved = amountPreviewsSaved
             }
         }
+        imageSequence = imageSequenceViewModel
+        imageSequenceViewModel.userPreferences = userPreferences
         isLoadingImageSequence = false
         loadingImageSequenceFilename = nil
         numberLoaded = 0
@@ -81,7 +83,7 @@ public final class ViewModel {
     func startup(withConfig config: ConfigManager) async throws {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = config.config().imageSequenceDirname
-        imageSequence = try await ImageSequenceViewModel(with: config) { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
+        let imageSequenceViewModel = try await ImageSequenceViewModel(with: config) { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
             Task { @MainActor in
                 self.amountLoaded = amountLoaded
                 self.numberLoaded = numberLoaded
@@ -89,6 +91,8 @@ public final class ViewModel {
                 self.amountPreviewsSaved = amountPreviewsSaved
             }
         }
+        imageSequence = imageSequenceViewModel
+        imageSequenceViewModel.userPreferences = userPreferences
         loadingImageSequenceFilename = nil
         isLoadingImageSequence = false
         numberLoaded = 0
@@ -105,7 +109,7 @@ public final class ViewModel {
 
         // XXX check to see if we should create previews here
         
-        imageSequence = try await ImageSequenceViewModel(withNewImageSequence: imageSequenceDirname) { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
+        let imageSequenceViewModel = try await ImageSequenceViewModel(withNewImageSequence: imageSequenceDirname) { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
             Task { @MainActor in
                 self.amountLoaded = amountLoaded
                 self.numberLoaded = numberLoaded
@@ -113,6 +117,8 @@ public final class ViewModel {
                 self.amountPreviewsSaved = amountPreviewsSaved
             }
         }
+        imageSequence = imageSequenceViewModel
+        imageSequenceViewModel.userPreferences = userPreferences
         isLoadingImageSequence = false
         loadingImageSequenceFilename = nil
         numberLoaded = 0

@@ -28,6 +28,10 @@ struct UserPreferences: Codable, Sendable {
         }
     }
 
+    var concurrentFrames: Int? { didSet { self.save() } }
+    
+    var processingType: DetectionType? { didSet { self.save() } }
+    
     var sortedSequenceList: [String] {
         return recentlyOpenedSequencelist.keys.sorted {
             recentlyOpenedSequencelist[$0]! > recentlyOpenedSequencelist[$1]!
@@ -62,7 +66,17 @@ struct UserPreferences: Codable, Sendable {
               negativeInfinity: "-inf",
               nan: "nan")
             
-            return try decoder.decode(UserPreferences.self, from: data)
+            var preferences = try decoder.decode(UserPreferences.self, from: data)
+
+            if preferences.concurrentFrames == nil {
+                preferences.concurrentFrames = ProcessInfo().processorCount
+            }
+
+            if preferences.processingType == nil {
+                preferences.processingType = .strong
+            }
+            Log.d("UserPreferences: \(preferences)")
+            return preferences
         }
         return nil
     }
