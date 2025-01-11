@@ -141,20 +141,31 @@ public actor BlobLineTrim {
     public func process(_ args: Args) async -> [UInt16:Blob] {
         for (_, blob) in blobMap {
             if await blob.size() > args.minBlobSize, // ignore small blobs
-               let lineLength = await blob.lineLength(), 
-               lineLength > args.minLineLength, 
-               let lineFillAmount = await blob.blobLineScore(),
-               lineFillAmount > args.minLineFillAmount
+               let lineLength = await blob.lineLength(), // must know the line length
+               lineLength > args.minLineLength,          // line length must be big enough
+               let lineFillAmount = await blob.blobLineScore(), // must know the line fill amount
+               lineFillAmount > args.minLineFillAmount    // line fill amount must be big enough
             {
                 // trim that shit
                 let trimmedPixels = await blob.lineTrim(by: args.trimAmount)
                 if trimmedPixels.count > 0 {
-                    // make another blob from any trimmed pixels
-                    maxBlobID += 1
-                    let newBlob = Blob(trimmedPixels,
-                                       id: maxBlobID,
-                                       frameIndex: frameIndex)
-                    blobMap[newBlob.id] = newBlob
+                    if maxBlobID < UInt16.max {
+
+                        // make another blob from any trimmed pixels
+                        let newBlob = Blob(trimmedPixels,
+                                           id: maxBlobID,
+                                           frameIndex: frameIndex)
+                        blobMap[newBlob.id] = newBlob
+                        
+                        maxBlobID += 1
+                        
+                    } else {
+                        // avoid arithmetic overflow
+                        Log.w("frame \(frameIndex) breaking on blob line trim because max blob id \(maxBlobID) is == UInt16.max")
+                        // re-absorb the trimmed pixels into the same blob
+                        await blob.absorb(trimmedPixels)
+                        break
+                    }
                 }
             }
         }
