@@ -22,9 +22,7 @@ fileprivate struct LineSplitResult {
 
 public struct CombinedHoughLineFinder: Sendable {
 
-    let zeroFinder: HoughLineFinder
-    let wtfFinder: HoughLineFinder
-
+    let finders: [HoughLineFinder]
 
     let bounds: BoundingBox
     
@@ -35,32 +33,44 @@ public struct CombinedHoughLineFinder: Sendable {
                 frameIndex: Int) async
     {
         self.bounds = bounds
-        
-        // for some reason, sometimes we get better lines by padding the input data on the ends
-        // this combination exists to find the best lines from all of them.
-        self.zeroFinder = await .init(pixels: pixels,
-                                      bounds: bounds,
-                                      medianIntensity: medianIntensity,
-                                      maxIntensity: maxIntensity,
-                                      frameIndex: frameIndex,
-                                      imageDataBorderSize: 0)
-        self.wtfFinder = await .init(pixels: pixels,
-                                     bounds: bounds,
-                                     medianIntensity: medianIntensity,
-                                     maxIntensity: maxIntensity,
-                                     frameIndex: frameIndex,
-                                     imageDataBorderSize: 5000)
+
+        /*
+
+         refacor this to only have one finder unless we are below some configured size
+
+         */
+
+        var _finders: [HoughLineFinder] = []
+        _finders.append(await .init(pixels: pixels,
+                                   bounds: bounds,
+                                   medianIntensity: medianIntensity,
+                                   maxIntensity: maxIntensity,
+                                   frameIndex: frameIndex,
+                                   imageDataBorderSize: 0))
+
+        if bounds.width < 120 || bounds.height < 120 {
+            // for some reason, sometimes we get better lines by padding the input data on the ends
+            // this combination exists to find the best lines from all of them.
+            // because this takes longer, only use it for smaller areas.
+            _finders.append(await .init(pixels: pixels,
+                                       bounds: bounds,
+                                       medianIntensity: medianIntensity,
+                                       maxIntensity: maxIntensity,
+                                       frameIndex: frameIndex,
+                                       imageDataBorderSize: 5000))
+        }
+        self.finders = _finders
     }
 
 
     public func originZeroLine(from line: Line) -> Line {
-        self.wtfFinder.originZeroLine(from: line)
+        self.finders[0].originZeroLine(from: line)
     }
     
     public var lineData: [HoughLineFinder.LineInfo] {
-        var base = 
-          self.zeroFinder.lineData +
-          self.wtfFinder.lineData
+        var base: [HoughLineFinder.LineInfo] = []
+
+        for finder in finders { base += finder.lineData }
 
         // as a last ditch, add in two lines, from each opposite corners of the bounding box
         // this might be better than the line we get from KHT :(
@@ -70,7 +80,7 @@ public struct CombinedHoughLineFinder: Sendable {
                                           y: Double(bounds.height)),
                       votes: 66)
 
-        let f1Score = self.wtfFinder.pixelScore(for: self.wtfFinder.originZeroLine(from: f1))
+        let f1Score = self.finders[0].pixelScore(for: self.finders[0].originZeroLine(from: f1))
 
         base.append(.init(line: f1, score: f1Score, border: -1))
 
@@ -78,7 +88,7 @@ public struct CombinedHoughLineFinder: Sendable {
                       point2: DoubleCoord(x: 0, y: Double(bounds.height)),
                       votes: 68)
 
-        let f2Score = self.wtfFinder.pixelScore(for: self.wtfFinder.originZeroLine(from: f2))
+        let f2Score = self.finders[0].pixelScore(for: self.finders[0].originZeroLine(from: f2))
 
         base.append(.init(line: f2, score: f2Score, border: -2))
 
@@ -96,7 +106,6 @@ public struct CombinedHoughLineFinder: Sendable {
             return nil
         }
     }
-
 }
 
 // use the KHT to find lines, and then return the one which best fits the input data,
