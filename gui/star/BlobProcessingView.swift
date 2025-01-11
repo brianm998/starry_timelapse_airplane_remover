@@ -136,6 +136,9 @@ struct BlobProcessingView: View {
                             ForEach(Array(steps.enumerated()), id: \.element) { stepIndex, step in
                                 HStack {
                                     switch step {
+                                    case .compactBlobIds:
+                                        compactBlobIdsView()
+                                        
                                     case .findBlobs(let args):
                                         findBlobsView(args, stepIndex: stepIndex)
 
@@ -252,6 +255,16 @@ struct BlobProcessingView: View {
               .foregroundColor(.white)
               .font(.title2)
             Text("Apply any existing user slices to blobs")
+        }
+          .padding(10)
+    }
+
+    private func compactBlobIdsView() -> some View {
+        VStack(alignment: .leading) {
+            Text("Compact Blob Ids")
+              .foregroundColor(.white)
+              .font(.title2)
+            Text("Re-Id blobs to free up id space")
         }
           .padding(10)
     }

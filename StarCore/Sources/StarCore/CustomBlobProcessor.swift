@@ -115,6 +115,9 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
         let currentStep = steps[stepIndex]
         
         switch currentStep {
+        case .compactBlobIds:
+            break
+            
         case .findBlobs(let args):
             if let argType = argType as? BlobFinder.Args.ArgType,
                let updatedArgs = args.doubleUpdate(for: argType, value: value)
@@ -261,6 +264,9 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
         print("intUpdate args \(argsToUpdate) argType \(argType) value \(value) index \(index)")
         let currentStep = steps[stepIndex]
         switch currentStep {
+        case .compactBlobIds:
+            break
+            
         case .findBlobs(let args):
             if let argType = argType as? BlobFinder.Args.ArgType,
                let updatedArgs = args.intUpdate(for: argType, value: value)
