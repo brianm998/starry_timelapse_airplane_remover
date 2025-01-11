@@ -271,9 +271,7 @@ public final class ImageSequenceViewModel {
 
         self.config = configManager
 
-        await constants.set(detectionType: config.detectionType)
-
-      self.numberOfFramesToProcessConcurrently = await Task { await maxFramesProcessing.getValue() }.value
+        self.numberOfFramesToProcessConcurrently = await Task { await maxFramesProcessing.getValue() }.value
         
         if let ignoreLowerPixels = config.ignoreLowerPixels {
             self.ignoreLowerPixels = CGFloat(ignoreLowerPixels) // XXX need to sync back the other dir

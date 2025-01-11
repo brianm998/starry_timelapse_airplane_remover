@@ -233,6 +233,7 @@ public struct Config: Codable, Sendable, Transferable {
     // 0.6.6 re-wrote outlier saving, using one image per frame for outlier data now
     // 0.6.7 y-axis outlier images, two new classfication features
     // 0.7.0 swift 6, blob updates, gui a lot better, KHT works, display lines, etc
+    // 0.7.1 completely reworked excessive processing mode, memory fixes, more user prefs
     
     public var starVersion = Config.latestVersion
 

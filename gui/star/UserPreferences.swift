@@ -28,9 +28,23 @@ struct UserPreferences: Codable, Sendable {
         }
     }
 
-    var concurrentFrames: Int? { didSet { self.save() } }
+    var concurrentFrames: Int? {
+        didSet {
+            self.save()
+            if let concurrentFrames {
+                Task { await maxFramesProcessing.set(value: concurrentFrames) }
+            }
+        }
+    }
     
-    var processingType: DetectionType? { didSet { self.save() } }
+    var processingType: DetectionType? {
+        didSet {
+            self.save()
+            if let processingType  {
+                Task { await constants.set(detectionType: processingType) }
+            }
+        }
+    }
     
     var sortedSequenceList: [String] {
         return recentlyOpenedSequencelist.keys.sorted {
@@ -39,7 +53,6 @@ struct UserPreferences: Codable, Sendable {
     }
     
     mutating func justOpened(filename: String) {
-        print("FUCKING JUST OPENED filename \(filename)")
         self.recentlyOpenedSequencelist[filename] = Date().timeIntervalSince1970
     }
     
@@ -47,6 +60,14 @@ struct UserPreferences: Codable, Sendable {
         var instance: UserPreferences?
         do {
             instance = try UserPreferences.load()
+
+            if let concurrentFrames = instance?.concurrentFrames {
+                Task { await maxFramesProcessing.set(value: concurrentFrames) }
+            }
+            
+            if let processingType = instance?.processingType {
+                Task { await constants.set(detectionType: processingType) }
+            }
         } catch {
             Log.e("\(error)")
         }
