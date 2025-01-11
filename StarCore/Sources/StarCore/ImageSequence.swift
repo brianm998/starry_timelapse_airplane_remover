@@ -17,16 +17,13 @@ You should have received a copy of the GNU General Public License along with sta
 
 public actor ImageLoader {
     let filename: String
-    private var _image: PixelatedImage?
     
     init(fromFile filename: String) {
         self.filename = filename
     }
 
     public func image() async throws -> PixelatedImage {
-        if let image = _image { return image }
         if let image = try await PixelatedImage(fromFile: filename) {
-            _image = image
             return image
         }
         throw "could not load image from \(filename)"
