@@ -168,8 +168,6 @@ struct StarApp: App {
         
         Log.add(handler: ConsoleLogHandler(at: .debug), for: .console)
         Log.i("Starting Up")
-
-        openWindow(id: StarApp.mainWindowName)
     }
     
     var body: some Scene {
