@@ -4,7 +4,7 @@ import Semaphore
 import logging
 
 // used for finding outliers in frames when processing
-fileprivate let processingSemaphore = AsyncSemaphore(value: 10) // XXX make this configurable
+public let maxFramesProcessing = IntegralActor(value: 20) // XXX read this initial value from #-CPU's
 
 // used for final processing (categorizing, painting, saving)
 fileprivate let finalSemaphore = AsyncSemaphore(value: 40) // XXX make this configurable
@@ -18,13 +18,26 @@ public actor FinalGUIProcessor {
 
     func processAllFrames() async {
         guard let viewModel else { return }
-        
+
+
+        /*
+         each task group has its own semaphore that determins when it starts
+         at first just set them all to wait on their semaphore, and create
+         all the tasks that are needed.
+
+         afterwards, start the tasks in order according to how many should run
+
+         then when one finishes, start another
+         */
         try? await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
-            for frameView in await viewModel.frames {
+            var semaphores = await [AsyncSemaphore?](repeating: nil, count: viewModel.frames.count)
+            var numberFramesProcessing: Int = 0
+            for (index, frameView) in await viewModel.frames.enumerated() {
                 if let frame = await frameView.frame {
+                    let semaphore = AsyncSemaphore(value: 0)
+                    semaphores[index] = semaphore
                     taskGroup.addTask() {
-                        await processingSemaphore.wait()
-                        
+                        await semaphore.wait()
                         if await !frame.processingState().isReadyForInterframeProcessing {
                             // this frame needs to have outliers found
 
@@ -49,20 +62,49 @@ public actor FinalGUIProcessor {
                                 frameView.outliersLoaded = .loaded
                             }
                         }
-                        processingSemaphore.signal()
                         return frame
                     }
                 }
             }
-
-            Log.d("processAllFrames 2")
-
             
+            Log.d("processAllFrames 2")
+            
+            var num_processed = 0
+            var signalIndex = 0
+            
+            while await num_processed < maxFramesProcessing.getValue(),
+                  signalIndex < semaphores.count
+            {
+                if let semaphore = semaphores[signalIndex] {
+                    semaphore.signal()
+                    semaphores[signalIndex] = nil
+                    num_processed += 1
+                }
+                signalIndex += 1
+            }
+
+            numberFramesProcessing = num_processed
+
             var currentIndex = 0
             let numNeighbors = await viewModel.config?.config().numberFinalProcessingNeighborsNeeded ?? 1
-            
+
             for try await frame in taskGroup {
+                // first see if we can start any more frames processing
+                numberFramesProcessing -= 1
+
+                while await numberFramesProcessing < maxFramesProcessing.getValue(),
+                      signalIndex < semaphores.count
+                {
+                    if let semaphore = semaphores[signalIndex] {
+                        semaphore.signal()
+                        semaphores[signalIndex] = nil
+                        numberFramesProcessing += 1
+                    }
+                    signalIndex += 1
+                }
                 Log.d("got frame \(frame) currentIndex \(currentIndex)")
+
+                // then see about final processing
                 while await self.finalProcess(frames: viewModel.frames,
                                               currentIndex: currentIndex,
                                               numNeighbors: numNeighbors)

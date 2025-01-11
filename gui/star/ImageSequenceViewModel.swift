@@ -172,6 +172,8 @@ public final class ImageSequenceViewModel {
     // the frame number of the frame we're currently showing
     var currentIndex = 0
 
+    var numberOfFramesToProcessConcurrently: Int
+
     // number of frames in the sequence we're processing
     var imageSequenceSize: Int = 0
 
@@ -259,6 +261,8 @@ public final class ImageSequenceViewModel {
 
         await constants.set(detectionType: config.detectionType)
 
+      self.numberOfFramesToProcessConcurrently = await Task { await maxFramesProcessing.getValue() }.value
+        
         if let ignoreLowerPixels = config.ignoreLowerPixels {
             self.ignoreLowerPixels = CGFloat(ignoreLowerPixels) // XXX need to sync back the other dir
         }

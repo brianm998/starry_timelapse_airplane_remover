@@ -130,6 +130,8 @@ struct RightPanel: View {
                             Toggle("show full resolution", isOn: $viewModel.showFullResolution)
                               .foregroundColor(.white)
 
+                            EditableNumberOfFramesToProcessView()
+                    
                             let frameView = viewModel.currentFrameView
 
                                 Button() {
@@ -152,7 +154,8 @@ struct RightPanel: View {
                                   .frame(maxWidth: 120)
                                   .onChange(of: viewModel.detectionType) {
                                     Task {
-                                      await constants.set(detectionType: viewModel.detectionType)
+                                        await constants.set(detectionType: viewModel.detectionType)
+                                        // XXX stick this in preferences
                                     }
                                   }
 
@@ -172,7 +175,7 @@ struct RightPanel: View {
                         }
                     }
                       .defaultScrollAnchor(.bottom)
-                    
+
                     Spacer()
                     
                     Button() {
@@ -183,6 +186,7 @@ struct RightPanel: View {
                     }
                       .buttonStyle(PlainButtonStyle())
                       .cursor(.resizeRight, tag: "rightPanel")
+
                 }
                   .padding(10)
                   .frame(maxHeight: .infinity, alignment: .bottomLeading)
@@ -203,6 +207,52 @@ struct RightPanel: View {
                   .background(Color(white: 0.22))
                   .frame(maxHeight: .infinity, alignment: .bottomLeading)
             }
+        }
+    }
+}
+
+
+struct EditableNumberOfFramesToProcessView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+
+    @State private var editFrameNumberMode = false
+    @State private var editFrameNumberModeString = ""
+    
+    var body: some View {
+        let frameNumberString = String(format: "%d", viewModel.numberOfFramesToProcessConcurrently)
+        if self.editFrameNumberMode {
+            HStack {
+                Text("process")
+                  .foregroundColor(.white)
+                TextField("\(frameNumberString)",
+                          text: $editFrameNumberModeString)
+                  .frame(maxWidth: 38)
+                  .cursor(.arrow, tag: "editableFrameNumberView")
+                  .onSubmit {
+                      let filtered = editFrameNumberModeString.filter { "0123456789".contains($0) }
+                      if let newIntValue = Int(filtered),
+                         newIntValue >= 0,
+                         newIntValue < self.viewModel.imageSequenceSize
+                      {
+                          self.viewModel.numberOfFramesToProcessConcurrently = newIntValue
+
+                          // XXX stick this in preferences as well
+                          Task { await maxFramesProcessing.set(value: newIntValue) }
+                          
+                          self.editFrameNumberMode = false
+                          self.editFrameNumberModeString = ""
+                      }
+                  }
+                Text("frames at once")
+                  .foregroundColor(.white)
+            }
+        } else {
+            Text("process \(frameNumberString) frames at once")
+              .foregroundColor(.white)
+              .cursor(.dragLink, tag: "editableFrameNumberView")
+              .onTapGesture(count: 2) {
+                  self.editFrameNumberMode = true
+              }
         }
     }
 }
