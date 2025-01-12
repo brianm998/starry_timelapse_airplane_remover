@@ -187,7 +187,6 @@ public class HoughLineMatrixBlobConnector {
 
     public func process(_ args: Args) async {
 
-
         let startTime = Date().timeIntervalSince1970
         
         // first, assemble matrix from the blobrefs in the analyzer
@@ -201,8 +200,6 @@ public class HoughLineMatrixBlobConnector {
 
         let t2 = Date().timeIntervalSince1970
 
-        var iteratedLines = 0
-        
         // for each matrix element:
         for element in matrix {
             let elementStartTime = Date().timeIntervalSince1970
@@ -210,10 +207,13 @@ public class HoughLineMatrixBlobConnector {
             
             // find lines
             let finder = await /*Combined*/HoughLineFinder(pixels: element.sortablePixels,
-                                                       bounds: element.bounds,
-                                                       medianIntensity: 0, // not used here
-                                                       maxIntensity: 0,    // not used here
-                                                       frameIndex: frameIndex)
+                                                           bounds: element.bounds,
+                                                           medianIntensity: 0, // not used here
+                                                           maxIntensity: 0,    // not used here
+                                                           frameIndex: frameIndex)
+
+            let houghLinesTime = Date().timeIntervalSince1970
+
             var lines = finder.lineData
             lines.sort { $0.score > $1.score }
 
@@ -221,30 +221,10 @@ public class HoughLineMatrixBlobConnector {
                 lines = Array(lines[0..<args.maxHoughLines])
             }
             
-            // how many blobs are in this element?
-
-            var existingBlobs: Set<UInt16> = []
-            
-            switch element.image.imageData {
-            case .sixteenBit(let arr):
-                for i in 0..<arr.count {
-                    if arr[i] != 0 {
-                        existingBlobs.insert(arr[i])
-                    }
-                }
-                break
-            case .eightBit(let arr):
-                break
-                
-            }
-
             // iterate over lines in order of score
             for line in lines {
 
                 //let lineStartTime = Date().timeIntervalSince1970
-
-                // don't iterate on further lines if all blobs have been looked at already
-                if processedBlobs.count == existingBlobs.count { break }
 
                 var lastSeenBlob: Blob?
                 var lastSeenX: Int?
@@ -258,15 +238,12 @@ public class HoughLineMatrixBlobConnector {
                 // if we have more than one itersection, iterate through them
                 if intersections.count > 1 {
 
-                    iteratedLines += 1
-                    
                     // iterate through blob data on each line
                     await originZeroLine.asyncIterate(between: intersections[0],
                                                       and: intersections[1],
                                                       numberOfAdjecentPixels: args.sideIterationPixels)
                     { x, y, direction in
                         if let blob = analyzer.blob(at: x, and: y) {
-                            // skip already seen blobs on this element iteration
 
                             if let lastSeenBlob,
                                lastSeenBlob == blob
@@ -275,6 +252,7 @@ public class HoughLineMatrixBlobConnector {
                                 lastSeenY = y
                             }
                             
+                            // skip already seen blobs on this element iteration
                             if !processedBlobs.contains(blob) { 
 
                                 // for each blob encountered, keep track of it
@@ -316,10 +294,11 @@ public class HoughLineMatrixBlobConnector {
                     }
                 }
                 //let lineEndTime = Date().timeIntervalSince1970
-//                Log.d("XXX times line finished in \(lineEndTime-lineStartTime)")
+                //Log.d("frame \(frameIndex) times line finished in \(lineEndTime-lineStartTime)")
             }
             let elementEndTime = Date().timeIntervalSince1970
-            Log.d("XXX times element finished in \(elementEndTime-elementStartTime)")
+            
+            Log.d("frame \(frameIndex) times element finished in \(elementEndTime-elementStartTime) houghLinesTime \(houghLinesTime-elementStartTime) lines.count \(lines.count) processedBlobs.count \(processedBlobs.count)")
         }
         let t3 = Date().timeIntervalSince1970
 
@@ -328,7 +307,7 @@ public class HoughLineMatrixBlobConnector {
         let t2Time = t2-t1
         let t1Time = t1-startTime
 
-        Log.d("XXX times totalTime \(totalTime) t1Time \(t1Time) t2Time \(t2Time) t3Time \(t3Time) iteratedLines \(iteratedLines) matrix.count \(matrix.count)")
+        Log.d("frame \(frameIndex) times totalTime \(totalTime) t1Time \(t1Time) t2Time \(t2Time) t3Time \(t3Time) matrix.count \(matrix.count)")
     }
 }
 
