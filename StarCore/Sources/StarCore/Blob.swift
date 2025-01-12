@@ -181,6 +181,25 @@ public actor Blob: CustomStringConvertible,
     
     public func blobLineScore() -> Double? { _blobLineScore }
 
+    // assumes zero, zero origin line
+    public func pixelScore(for line: Line) -> Double {
+        let standardLine = line.standardLine
+        var ret: Double = 0.0
+        for pixel in pixels {
+            let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
+
+            let intensity = Double(pixel.intensity)/0xFFFF
+            
+            if distance < 1 {
+                ret += intensity
+            } else {
+                ret += intensity/(distance*distance)
+            }
+        }
+
+        return ret
+    }
+    
     // a line computed from the pixels,
     // the best fitting line we have, if any
     public var line: Line? {
@@ -188,6 +207,7 @@ public actor Blob: CustomStringConvertible,
             if let _blobLine { return _blobLine }
             if let lineInfo = await CombinedHoughLineFinder(pixels: Array(self.pixels),
                                                             bounds: self.boundingBox(),
+                                                            args: constants.getHoughLineFinderArgs(),
                                                             medianIntensity: self.medianIntensity(),
                                                             maxIntensity: self.maxIntensity(),
                                                             frameIndex: frameIndex).line
@@ -214,6 +234,7 @@ public actor Blob: CustomStringConvertible,
     {
         let hlf = await HoughLineFinder(pixels: Array(self.pixels),
                                         bounds: self.boundingBox(),
+                                        args: constants.getHoughLineFinderArgs(),
                                         medianIntensity: self.medianIntensity(),
                                         maxIntensity: self.maxIntensity(),
                                         frameIndex: frameIndex)

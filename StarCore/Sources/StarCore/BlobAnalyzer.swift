@@ -63,6 +63,8 @@ final public class BlobAnalyzer: @unchecked Sendable {
         return nil
     }
     
+    func blob(with blobId: UInt16) -> Blob? { blobMap[blobId] }
+    
     func update(blob: Blob) async {
         blobMap[blob.id] = blob
 

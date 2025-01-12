@@ -81,6 +81,7 @@ public actor OutlierGroup: CustomStringConvertible,
         get async {
           await CombinedHoughLineFinder(pixels: Array(self.pixelSet),
                                         bounds: self.bounds,
+                                        args: constants.getHoughLineFinderArgs(),
                                         medianIntensity: self.medianIntensity(),
                                         maxIntensity: self.maxIntensity(),
                                         frameIndex: self.frameIndex)

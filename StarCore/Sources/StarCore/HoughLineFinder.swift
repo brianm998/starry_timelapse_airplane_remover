@@ -28,6 +28,7 @@ public struct CombinedHoughLineFinder: Sendable {
     
     public init(pixels: [SortablePixel],
                 bounds: BoundingBox,
+                args: HoughLineFinder.Args,
                 medianIntensity: UInt16,
                 maxIntensity: UInt16,
                 frameIndex: Int) async
@@ -40,24 +41,28 @@ public struct CombinedHoughLineFinder: Sendable {
 
          */
 
+        
+        
         var _finders: [HoughLineFinder] = []
         _finders.append(await .init(pixels: pixels,
-                                   bounds: bounds,
-                                   medianIntensity: medianIntensity,
-                                   maxIntensity: maxIntensity,
-                                   frameIndex: frameIndex,
-                                   imageDataBorderSize: 0))
-
+                                    bounds: bounds,
+                                    args: args,
+                                    medianIntensity: medianIntensity,
+                                    maxIntensity: maxIntensity,
+                                    frameIndex: frameIndex,
+                                    imageDataBorderSize: 0))
+        
         if bounds.width < 120 || bounds.height < 120 {
             // for some reason, sometimes we get better lines by padding the input data on the ends
             // this combination exists to find the best lines from all of them.
             // because this takes longer, only use it for smaller areas.
             _finders.append(await .init(pixels: pixels,
-                                       bounds: bounds,
-                                       medianIntensity: medianIntensity,
-                                       maxIntensity: maxIntensity,
-                                       frameIndex: frameIndex,
-                                       imageDataBorderSize: 5000))
+                                        bounds: bounds,
+                                        args: args,
+                                        medianIntensity: medianIntensity,
+                                        maxIntensity: maxIntensity,
+                                        frameIndex: frameIndex,
+                                        imageDataBorderSize: 5000))
         }
         self.finders = _finders
     }
@@ -124,13 +129,14 @@ public struct HoughLineFinder: Sendable {
 
     public init(pixels: [SortablePixel],
                 bounds: BoundingBox,
+                args: Args,
                 medianIntensity: UInt16,
                 maxIntensity: UInt16,
                 frameIndex: Int,
                 imageDataBorderSize: Int? = nil) async
     {
         self.data = pixels
-        self.args = await constants.getHoughLineFinderArgs()
+        self.args = args
         self.bounds = bounds
         self.frameIndex = frameIndex
         self.maxIntensity = maxIntensity
@@ -283,7 +289,7 @@ public struct HoughLineFinder: Sendable {
         public init(imageDataBorderSize: Int = 4000,
                     minThetaDiff: Double = 10, // degrees
                     minRhoDiff: Double = 10,
-                    maxLineConstant: Int = 200,
+                    maxLineConstant: Int = 500,
                     maxDistanceFromLine: Double = 6)
         {
             self.imageDataBorderSize = imageDataBorderSize

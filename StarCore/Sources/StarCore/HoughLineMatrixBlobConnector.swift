@@ -204,10 +204,17 @@ public class HoughLineMatrixBlobConnector {
         for element in matrix {
             let elementStartTime = Date().timeIntervalSince1970
             var processedBlobs: Set<Blob> = []
+
+            let finderArgs = HoughLineFinder.Args(imageDataBorderSize: 0,
+                                                  minThetaDiff: 0, // degrees
+                                                  minRhoDiff: 0,
+                                                  maxLineConstant: args.maxHoughLines,
+                                                  maxDistanceFromLine: 6)
             
             // find lines
             let finder = await /*Combined*/HoughLineFinder(pixels: element.sortablePixels,
                                                            bounds: element.bounds,
+                                                           args: finderArgs,
                                                            medianIntensity: 0, // not used here
                                                            maxIntensity: 0,    // not used here
                                                            frameIndex: frameIndex)
@@ -298,7 +305,7 @@ public class HoughLineMatrixBlobConnector {
             }
             let elementEndTime = Date().timeIntervalSince1970
             
-            Log.d("frame \(frameIndex) times element finished in \(elementEndTime-elementStartTime) houghLinesTime \(houghLinesTime-elementStartTime) lines.count \(lines.count) processedBlobs.count \(processedBlobs.count)")
+            Log.d("frame \(frameIndex) times element finished in \(elementEndTime-elementStartTime) houghLinesTime \(houghLinesTime-elementStartTime) lines.count \(lines.count) processedBlobs.count \(processedBlobs.count) args.maxHoughLines \(args.maxHoughLines)")
         }
         let t3 = Date().timeIntervalSince1970
 

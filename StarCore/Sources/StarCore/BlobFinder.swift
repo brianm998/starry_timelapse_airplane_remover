@@ -42,19 +42,25 @@ public class BlobFinder {
             case .endContrastSize:
                 return "the blob size at which the contrast change ends"
             case .startMinContrast:
-                return "write this"
-            case .endMinContrast: 
                 return """
+                  Blobs smaller than startContrastSize will use this value as their contrast threshold.
+                  
                   blobs can grow until they get this
                   percentage darker than their seed pixel
                   larger values make any individiual blob bigger,
                   and may increase the total number of blobs due to their size
 
-                  how close to zero (in percentage) can the intensity of pixels decrease before
-                  being left out of a blob
+                  How close to zero (in percentage) can the intensity of pixels decrease before
+                  being left out of a blob.
                   zero means that only pixels of minimumLocalMaximum or higher will be in blobs
                   50 means that all pixels half as bright or more than the maximum will be in a blob
                   100 means that all pixels will be in a blob
+                  """
+            case .endMinContrast: 
+                return """
+                  Blobs that have grown to be larger than endContrastSize will use this value as their contrast threshold.
+
+                  Blobs that are sized between startContrastSize and endContrastSize will use a linear interpolation of startContrastSize and endContrastSize, according to their size.
                   """
             }
         }

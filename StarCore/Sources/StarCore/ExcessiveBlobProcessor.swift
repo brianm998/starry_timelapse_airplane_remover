@@ -24,7 +24,7 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
                            startContrastSize: 10,
                            endContrastSize: 50,
                            startMinContrast: 86,
-                           endMinContrast: 0)),
+                           endMinContrast: 86)),
 
           // check to see if any pixel is in more than one blob
           //.blobDupeCheck("init"),
@@ -36,9 +36,9 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
                                               elementHeight: 400,
                                               overlapPercent: 20,
                                               maxHoughLines: 2000,
-                                              sideIterationPixels: 3,
+                                              sideIterationPixels: 5,
                                               maxBlobDistance: 30)),
-          
+
           .save(.filter1),
           .frameState(.filter2),
 
@@ -77,7 +77,8 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
 
           .save(.filter5),
           .frameState(.filter6),
-          
+
+
 
           // another pass at cutting out individual blobs based upon size, brightness
           .trimWithConstants(.init(minBlobSize: 10,
@@ -85,30 +86,31 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
                                    qualifierSize: 18,
                                    qualifierMedianIntensity: 10000)),
 
-
+          
           .save(.filter6),
           .frameState(.filter7),
+          
 
           .nonLinearBlobRemover(.init(minBlobSize: 0,
                                       medianIntensity: 10000,
-                                      lengthOverFillAmount: 10,
+                                      lengthOverFillAmount: 18,
                                       minLineFillAmount: 4,
                                       maxLineFillAmount: 15)),
 
           .compactBlobIds,
-          
+
           .save(.filter7),
           .frameState(.filter8),
-
+          
           // split up blobs based upon user input
           .applyUserSlices,
 
           .save(.filter8),
 
           /*
+
           .frameState(.filter9),
-
-
+           
           .save(.filter9),
           .frameState(.filter10),
 

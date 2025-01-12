@@ -215,13 +215,9 @@ public class FullFrameBlobber {
 
 //                    Log.d("frame \(frameIndex) blob \(newBlob) has borderBrightness \(borderBrightness)") 
 
-                    // XXX delay this check until later in the process
-                    // XXX make original image avilalbe to blob for this
-                    
-                    if borderBrightness < 0.5 { // XXX guess
-                        newBlobId += 1
-                        blobs.append(newBlob)
-                    }
+                    newBlobId += 1
+                    blobs.append(newBlob)
+                        
                     //Log.d("expanding from seed pixel.intensity \(pixel.intensity)")
 
                 } else {
