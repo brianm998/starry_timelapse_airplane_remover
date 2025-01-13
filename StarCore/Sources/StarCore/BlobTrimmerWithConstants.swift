@@ -34,6 +34,8 @@ public class BlobTrimmerWithConstants {
         let minBlobIntensity: UInt16
         let qualifierSize: Int
         let qualifierMedianIntensity: UInt16
+        let bigBlobSize: Int
+        let bigBlobMedianIntensity: UInt16
         
         public typealias Types = ArgType
         public var id: Self { self }
@@ -50,6 +52,10 @@ public class BlobTrimmerWithConstants {
                 return "Size used for the qualifier" // XXX 
             case .qualifierMedianIntensity:
                 return "Intensity used for the qualifier" // XXXx
+            case .bigBlobSize:
+                return "blobs larger than this need to be brighter than bigBlobMedianIntensity" 
+            case .bigBlobMedianIntensity:
+                return "blobs dimmer than this need to be smaller than bigBlobSize" 
             }
         }
 
@@ -59,6 +65,8 @@ public class BlobTrimmerWithConstants {
             case minBlobIntensity
             case qualifierSize
             case qualifierMedianIntensity
+            case bigBlobSize
+            case bigBlobMedianIntensity
         }
 
         public func isInteger(_ type: ArgType) -> Bool { true }
@@ -74,6 +82,10 @@ public class BlobTrimmerWithConstants {
             case .qualifierSize:
                 return false
             case .qualifierMedianIntensity:
+                return false
+            case .bigBlobSize:
+                return false
+            case .bigBlobMedianIntensity:
                 return false
             }
         }
@@ -99,6 +111,10 @@ public class BlobTrimmerWithConstants {
 
             case .qualifierMedianIntensity:
                 return Double(qualifierMedianIntensity)
+            case .bigBlobSize:
+                return Double(bigBlobSize)
+            case .bigBlobMedianIntensity:
+                return Double(bigBlobMedianIntensity)
             }
         }
 
@@ -111,35 +127,63 @@ public class BlobTrimmerWithConstants {
                             minSmallBlobIntensity: self.minSmallBlobIntensity,
                             minBlobIntensity: UInt16(value),
                             qualifierSize: self.qualifierSize,
-                            qualifierMedianIntensity: self.qualifierMedianIntensity)
+                            qualifierMedianIntensity: self.qualifierMedianIntensity,
+                            bigBlobSize: self.bigBlobSize,
+                            bigBlobMedianIntensity: self.bigBlobMedianIntensity)
                 
             case .minSmallBlobIntensity:
                 return Args(minBlobSize: self.minBlobSize,
                             minSmallBlobIntensity: UInt16(value),
                             minBlobIntensity: self.minBlobIntensity,
                             qualifierSize: self.qualifierSize,
-                            qualifierMedianIntensity: self.qualifierMedianIntensity)
+                            qualifierMedianIntensity: self.qualifierMedianIntensity,
+                            bigBlobSize: self.bigBlobSize,
+                            bigBlobMedianIntensity: self.bigBlobMedianIntensity)
                 
             case .minBlobSize:
                 return Args(minBlobSize: value,
                             minSmallBlobIntensity: self.minSmallBlobIntensity,
                             minBlobIntensity: self.minBlobIntensity,
                             qualifierSize: self.qualifierSize,
-                            qualifierMedianIntensity: self.qualifierMedianIntensity)
+                            qualifierMedianIntensity: self.qualifierMedianIntensity,
+                            bigBlobSize: self.bigBlobSize,
+                            bigBlobMedianIntensity: self.bigBlobMedianIntensity)
 
             case .qualifierSize:
                 return Args(minBlobSize: self.minBlobSize,
                             minSmallBlobIntensity: self.minSmallBlobIntensity,
                             minBlobIntensity: self.minBlobIntensity,
                             qualifierSize: value,
-                            qualifierMedianIntensity: self.qualifierMedianIntensity)
+                            qualifierMedianIntensity: self.qualifierMedianIntensity,
+                            bigBlobSize: self.bigBlobSize,
+                            bigBlobMedianIntensity: self.bigBlobMedianIntensity)
 
             case .qualifierMedianIntensity:
                 return Args(minBlobSize: self.minBlobSize,
                             minSmallBlobIntensity: self.minSmallBlobIntensity,
                             minBlobIntensity: self.minBlobIntensity,
                             qualifierSize: self.qualifierSize,
-                            qualifierMedianIntensity: UInt16(value))
+                            qualifierMedianIntensity: UInt16(value),
+                            bigBlobSize: self.bigBlobSize,
+                            bigBlobMedianIntensity: self.bigBlobMedianIntensity)
+
+            case .bigBlobSize:
+                return Args(minBlobSize: self.minBlobSize,
+                            minSmallBlobIntensity: self.minSmallBlobIntensity,
+                            minBlobIntensity: self.minBlobIntensity,
+                            qualifierSize: self.qualifierSize,
+                            qualifierMedianIntensity: self.qualifierMedianIntensity,
+                            bigBlobSize: value,
+                            bigBlobMedianIntensity: self.bigBlobMedianIntensity)
+
+            case .bigBlobMedianIntensity:
+                return Args(minBlobSize: self.minBlobSize,
+                            minSmallBlobIntensity: self.minSmallBlobIntensity,
+                            minBlobIntensity: self.minBlobIntensity,
+                            qualifierSize: self.qualifierSize,
+                            qualifierMedianIntensity: self.qualifierMedianIntensity,
+                            bigBlobSize: self.bigBlobSize,
+                            bigBlobMedianIntensity: UInt16(value))
             }
         }        
         
@@ -147,13 +191,17 @@ public class BlobTrimmerWithConstants {
                     minSmallBlobIntensity: UInt16? = nil,
                     minBlobIntensity: UInt16,
                     qualifierSize: Int,
-                    qualifierMedianIntensity: UInt16)
+                    qualifierMedianIntensity: UInt16,
+                    bigBlobSize: Int = 1000,
+                    bigBlobMedianIntensity: UInt16 = 1500)
         {
             self.minBlobSize = minBlobSize
             self.minSmallBlobIntensity = minSmallBlobIntensity
             self.minBlobIntensity = minBlobIntensity
             self.qualifierSize = qualifierSize
             self.qualifierMedianIntensity = qualifierMedianIntensity
+            self.bigBlobSize = bigBlobSize
+            self.bigBlobMedianIntensity = bigBlobMedianIntensity
         }
     }
 
@@ -187,6 +235,12 @@ public class BlobTrimmerWithConstants {
 
             if blobIntensity < args.minBlobIntensity {
                 //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of median intensity \(await blob.medianIntensity()) <= \(args.minBlobIntensity)")
+                continue
+            }
+
+            if blobSize > args.bigBlobSize,
+               blobIntensity < args.bigBlobMedianIntensity
+            {
                 continue
             }
             
