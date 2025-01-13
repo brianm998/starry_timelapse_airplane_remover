@@ -52,7 +52,7 @@ public actor LinearBlobConnector {
         let blobsSmallerThan: Int // ignore blobs larger than this
         let blobsLargerThan: Int  // ignore blobs smaller than this
         let lineBorder: Int       // how much furter to look at the ends of the line
-        let maxAverageLineDistance: Double // don't process full blobs with > average line dist
+        let minLineScore: Double // don't process full blobs with > average line dist
         let adjecentPixelsOnIteration: Int // how far to iterate on adject pixels
         let maxIterationCount: Int // maximum times to iterate on line improvement
 
@@ -62,15 +62,15 @@ public actor LinearBlobConnector {
         public func description(for type: ArgType) -> String {
             switch type {
             case .scanSize:
-                return "how far in each direction to look for neighbors"
+                return "The maximum allowed distance used when constructing a neighbor cloud.  Each pixel must be scanSize or closer to its closest neighbor."
             case .blobsSmallerThan:
                 return "ignore blobs larger than this"
             case .blobsLargerThan:
                 return "ignore blobs smaller than this"
             case .lineBorder:
                 return "how much further to look at the ends of the line"
-            case .maxAverageLineDistance:
-                return "don't process full blobs with > average line dist"
+            case .minLineScore:
+                return "don't process full blobs with a line score less than this"
             case .adjecentPixelsOnIteration:
                 return "how far to iterate on adject pixels"
             case .maxIterationCount:
@@ -83,14 +83,14 @@ public actor LinearBlobConnector {
             case blobsSmallerThan
             case blobsLargerThan
             case lineBorder
-            case maxAverageLineDistance
+            case minLineScore
             case adjecentPixelsOnIteration
             case maxIterationCount
         }
 
         public func isInteger(_ type: ArgType) -> Bool {
             switch type {
-            case .maxAverageLineDistance:
+            case .minLineScore:
                 return false
             default:
                 return true
@@ -108,8 +108,8 @@ public actor LinearBlobConnector {
                 return Double(blobsLargerThan)
             case .lineBorder:
                 return Double(lineBorder)
-            case .maxAverageLineDistance:
-                return maxAverageLineDistance
+            case .minLineScore:
+                return minLineScore
             case .adjecentPixelsOnIteration:
                 return Double(adjecentPixelsOnIteration)
             case .maxIterationCount:
@@ -127,12 +127,12 @@ public actor LinearBlobConnector {
                 return nil
             case .lineBorder:
                 return nil
-            case .maxAverageLineDistance:
+            case .minLineScore:
                 return Args(scanSize: self.scanSize,
                             blobsSmallerThan: self.blobsSmallerThan,
                             blobsLargerThan: self.blobsLargerThan,
                             lineBorder: self.lineBorder,
-                            maxAverageLineDistance: value,
+                            minLineScore: value,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: self.maxIterationCount)
             case .adjecentPixelsOnIteration:
@@ -149,7 +149,7 @@ public actor LinearBlobConnector {
                             blobsSmallerThan: self.blobsSmallerThan,
                             blobsLargerThan: self.blobsLargerThan,
                             lineBorder: self.lineBorder,
-                            maxAverageLineDistance: self.maxAverageLineDistance,
+                            minLineScore: self.minLineScore,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: self.maxIterationCount)
 
@@ -158,7 +158,7 @@ public actor LinearBlobConnector {
                             blobsSmallerThan: value,
                             blobsLargerThan: self.blobsLargerThan,
                             lineBorder: self.lineBorder,
-                            maxAverageLineDistance: self.maxAverageLineDistance,
+                            minLineScore: self.minLineScore,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: self.maxIterationCount)
 
@@ -167,7 +167,7 @@ public actor LinearBlobConnector {
                             blobsSmallerThan: self.blobsSmallerThan,
                             blobsLargerThan: value,
                             lineBorder: self.lineBorder,
-                            maxAverageLineDistance: self.maxAverageLineDistance,
+                            minLineScore: self.minLineScore,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: self.maxIterationCount)
 
@@ -176,11 +176,11 @@ public actor LinearBlobConnector {
                             blobsSmallerThan: self.blobsSmallerThan,
                             blobsLargerThan: self.blobsLargerThan,
                             lineBorder: value,
-                            maxAverageLineDistance: self.maxAverageLineDistance,
+                            minLineScore: self.minLineScore,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: self.maxIterationCount)
 
-            case .maxAverageLineDistance:
+            case .minLineScore:
                 return nil
 
             case .adjecentPixelsOnIteration:
@@ -188,7 +188,7 @@ public actor LinearBlobConnector {
                             blobsSmallerThan: self.blobsSmallerThan,
                             blobsLargerThan: self.blobsLargerThan,
                             lineBorder: self.lineBorder,
-                            maxAverageLineDistance: self.maxAverageLineDistance,
+                            minLineScore: self.minLineScore,
                             adjecentPixelsOnIteration: value,
                             maxIterationCount: self.maxIterationCount)
 
@@ -197,7 +197,7 @@ public actor LinearBlobConnector {
                             blobsSmallerThan: self.blobsSmallerThan,
                             blobsLargerThan: self.blobsLargerThan,
                             lineBorder: self.lineBorder,
-                            maxAverageLineDistance: self.maxAverageLineDistance,
+                            minLineScore: self.minLineScore,
                             adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
                             maxIterationCount: value)
             }
@@ -207,7 +207,7 @@ public actor LinearBlobConnector {
                     blobsSmallerThan: Int = 24, 
                     blobsLargerThan: Int = 0,
                     lineBorder: Int = 0,
-                    maxAverageLineDistance: Double = 50,
+                    minLineScore: Double = 3,
                     adjecentPixelsOnIteration: Int = 5,
                     maxIterationCount: Int = 10)
         {
@@ -215,7 +215,7 @@ public actor LinearBlobConnector {
             self.blobsSmallerThan = blobsSmallerThan
             self.blobsLargerThan = blobsLargerThan
             self.lineBorder = lineBorder
-            self.maxAverageLineDistance = maxAverageLineDistance
+            self.minLineScore = minLineScore
             self.adjecentPixelsOnIteration = adjecentPixelsOnIteration
             self.maxIterationCount = maxIterationCount
         }
@@ -268,9 +268,10 @@ public actor LinearBlobConnector {
             
             // render a KHT on this full blob
             if let blobLine = await fullBlob.originZeroLine,
-               await fullBlob.averageDistanceFromIdealLine < args.maxAverageLineDistance
+               await fullBlob.pixelScore(for: blobLine) > args.minLineScore
             {
 
+                //Log.d("iterating on blob \(id)")
                 // only iterate on blob lines if they are a decent fit
                 
                 // XXX for testing, write out this big blob as json

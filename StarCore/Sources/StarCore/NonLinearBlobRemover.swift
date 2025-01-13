@@ -161,17 +161,29 @@ public class NonLinearBlobRemover {
     }
 
     public func process(_ args: Args) async {
-        for (id, blob) in blobMap {
-            if await blob.size() >= args.minBlobSize,
-               await blob.medianIntensity() < args.medianIntensity,
-               let lineLength = await blob.lineLength(),
-               let score = await blob.blobLineScore()
-            {
-                if score < args.minLineFillAmount {
-                    blobMap.removeValue(forKey: id) 
-                } else if score < args.maxLineFillAmount {
-                    let ratio = lineLength/score
-                    if ratio > args.lengthOverFillAmount { blobMap.removeValue(forKey: id) }
+        await withTaskGroup(of: Optional<UInt16>.self) { taskGroup in
+            for (id, blob) in blobMap {
+                taskGroup.addTask {
+                    if await blob.size() >= args.minBlobSize,
+                       await blob.medianIntensity() < args.medianIntensity,
+                       let lineLength = await blob.lineLength(),
+                       let score = await blob.blobLineScore()
+                    {
+                        if score < args.minLineFillAmount {
+                            return id
+                        } else if score < args.maxLineFillAmount {
+                            let ratio = lineLength/score
+                            if ratio > args.lengthOverFillAmount {
+                                return id
+                            }
+                        }
+                    }
+                    return nil
+                }
+            }
+            for await blobId in taskGroup {
+                if let blobId {
+                    blobMap.removeValue(forKey: blobId) 
                 }
             }
         }
