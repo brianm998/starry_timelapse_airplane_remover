@@ -55,7 +55,7 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
 
 
           // find really close linear blobs
-          .linearBlobConnector(.init(scanSize: 32, 
+          .linearBlobConnector(.init(scanSize: 12, 
                                      blobsSmallerThan: 180,
                                      lineBorder: 12)),
 
@@ -165,7 +165,7 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
           .frameState(.filter13),
           
           // reconnect some lines that may have been split up
-          .linearBlobConnector(.init(scanSize: 40, 
+          .linearBlobConnector(.init(scanSize: 12, 
                                      blobsSmallerThan: 180,
                                      lineBorder: 2)),
 
