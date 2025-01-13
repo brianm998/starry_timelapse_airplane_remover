@@ -212,120 +212,123 @@ public actor HoughLineMatrixBlobConnector {
         await withTaskGroup(of: Void.self) { taskGroup in
             // for each matrix element:
             for element in matrix {
-                taskGroup.addTask {
-                    await self.process(element: element, with: args)
+              taskGroup.addTask { [self] in
+                    await StarCore.process(element: element,
+                                           with: args,
+                                           frameIndex: frameIndex,
+                                           analyzer: analyzer)
                 }
             }
         }
     }
+}
 
-    private func process(element: ImageMatrixElement, with args: Args) async { 
+fileprivate func process(element: ImageMatrixElement,
+                         with args: HoughLineMatrixBlobConnector.Args,
+                         frameIndex: Int,
+                         analyzer: BlobAnalyzer) async
+{ 
+    //let elementStartTime = Date().timeIntervalSince1970
+    let processedBlobs = SetActor<Blob>()
+
+    let finderArgs = HoughLineFinder.Args(imageDataBorderSize: 0,
+                                          minThetaDiff: 0, // degrees
+                                          minRhoDiff: 0,
+                                          maxLineConstant: args.maxHoughLines,
+                                          maxDistanceFromLine: 6)
+    
+    // find lines
+    let finder = await /*Combined*/HoughLineFinder(pixels: element.sortablePixels,
+                                                   bounds: element.bounds,
+                                                   args: finderArgs,
+                                                   medianIntensity: 0, // not used here
+                                                   maxIntensity: 0,    // not used here
+                                                   frameIndex: frameIndex)
+
+    //let houghLinesTime = Date().timeIntervalSince1970
+
+    var lines = finder.lineData
+    lines.sort { $0.score > $1.score }
+
+    if lines.count > args.maxHoughLines {
+        lines = Array(lines[0..<args.maxHoughLines])
+    }
+    
+    // iterate over lines in order of score
+    for line in lines {
+
+        //let lineStartTime = Date().timeIntervalSince1970
+
+        let lastSeenBlob = OptionalActor<Blob>()
+        let lastSeenX = OptionalActor<Int>()
+        let lastSeenY = OptionalActor<Int>()
         
-        let elementStartTime = Date().timeIntervalSince1970
-        let processedBlobs = SetActor<Blob>()
+        let originZeroLine = finder.originZeroLine(from: line.line)
 
-        let finderArgs = HoughLineFinder.Args(imageDataBorderSize: 0,
-                                              minThetaDiff: 0, // degrees
-                                              minRhoDiff: 0,
-                                              maxLineConstant: args.maxHoughLines,
-                                              maxDistanceFromLine: 6)
-        
-        // find lines
-        let finder = await /*Combined*/HoughLineFinder(pixels: element.sortablePixels,
-                                                       bounds: element.bounds,
-                                                       args: finderArgs,
-                                                       medianIntensity: 0, // not used here
-                                                       maxIntensity: 0,    // not used here
-                                                       frameIndex: frameIndex)
+        // find intersections of this line with this matrix element
+        let intersections = element.bounds.intersections(with: originZeroLine.standardLine)
 
-        let houghLinesTime = Date().timeIntervalSince1970
+        // if we have more than one itersection, iterate through them
+        if intersections.count > 1 {
 
-        var lines = finder.lineData
-        lines.sort { $0.score > $1.score }
+            // iterate through blob data on each line
+            await originZeroLine.asyncIterate(between: intersections[0],
+                                              and: intersections[1],
+                                              numberOfAdjecentPixels: args.sideIterationPixels)
+            { x, y, direction in
+                if let blob = await analyzer.blob(at: x, and: y) {
 
-        if lines.count > args.maxHoughLines {
-            lines = Array(lines[0..<args.maxHoughLines])
-        }
-        
-        // iterate over lines in order of score
-        for line in lines {
+                    if let lastSeenBlob = await lastSeenBlob.value,
+                       lastSeenBlob == blob
+                    {
+                        await lastSeenX.set(x)
+                        await lastSeenY.set(y)
+                    }
+                    
+                    // skip already seen blobs on this element iteration
+                    if await !processedBlobs.contains(blob) { 
 
-            //let lineStartTime = Date().timeIntervalSince1970
-
-            let lastSeenBlob = OptionalActor<Blob>()
-            let lastSeenX = OptionalActor<Int>()
-            let lastSeenY = OptionalActor<Int>()
-            
-            let originZeroLine = finder.originZeroLine(from: line.line)
-
-            // find intersections of this line with this matrix element
-            let intersections = element.bounds.intersections(with: originZeroLine.standardLine)
-
-            // if we have more than one itersection, iterate through them
-            if intersections.count > 1 {
-
-                // iterate through blob data on each line
-                await originZeroLine.asyncIterate(between: intersections[0],
-                                                  and: intersections[1],
-                                                  numberOfAdjecentPixels: args.sideIterationPixels)
-                { x, y, direction in
-                    if let blob = await analyzer.blob(at: x, and: y) {
-
-                        if let lastSeenBlob = await lastSeenBlob.value,
-                           lastSeenBlob == blob
-                        {
-                            await lastSeenX.set(x)
-                            await lastSeenY.set(y)
-                        }
+                        // for each blob encountered, keep track of it
+                        await processedBlobs.insert(blob)
                         
-                        // skip already seen blobs on this element iteration
-                        if await !processedBlobs.contains(blob) { 
+                        if let previousBlob = await lastSeenBlob.value,
+                           let lastSeenX = await lastSeenX.value,
+                           let lastSeenY = await lastSeenY.value
+                        {
+                            let distance = distance(x, y, lastSeenX, lastSeenY)
+                            //  when another blob is encountered,
+                            // see how far along the line we've gotten since the last one
+                            if distance < args.maxBlobDistance {
+                                // if close enough, combine the blobs
 
-                            // for each blob encountered, keep track of it
-                            await processedBlobs.insert(blob)
-                            
-                            if let previousBlob = await lastSeenBlob.value,
-                               let lastSeenX = await lastSeenX.value,
-                               let lastSeenY = await lastSeenY.value
-                            {
-                                let distance = distance(x, y, lastSeenX, lastSeenY)
-                                //  when another blob is encountered,
-                                // see how far along the line we've gotten since the last one
-                                if distance < args.maxBlobDistance {
-                                    // if close enough, combine the blobs
+                                /*
 
-                                    /*
-
-                                     may help to check to see if the blobs lines are aligned
-                                     if not, then maybe don't combine them here,
-                                     and maybe don't mark this blob as having been seen on this
-                                     element iteration
-                                     
-                                     */
-                                    
-                                    if await previousBlob.absorb(blob, always: true) {
-                                        await analyzer.replace(blob: blob, with: previousBlob)
-                                    }
-                                } else {
-                                    // if too far, discard previous blob ref and keep track of new blob
-                                    await lastSeenBlob.set(blob)
+                                 may help to check to see if the blobs lines are aligned
+                                 if not, then maybe don't combine them here,
+                                 and maybe don't mark this blob as having been seen on this
+                                 element iteration
+                                 
+                                 */
+                                
+                                if await previousBlob.absorb(blob, always: true) {
+                                    await analyzer.replace(blob: blob, with: previousBlob)
                                 }
                             } else {
-                                // no previous last seen blob, set it to this blob
+                                // if too far, discard previous blob ref and keep track of new blob
                                 await lastSeenBlob.set(blob)
                             }
-                            await lastSeenX.set(x)
-                            await lastSeenY.set(y)
+                        } else {
+                            // no previous last seen blob, set it to this blob
+                            await lastSeenBlob.set(blob)
                         }
+                        await lastSeenX.set(x)
+                        await lastSeenY.set(y)
                     }
                 }
             }
-            //let lineEndTime = Date().timeIntervalSince1970
-            //Log.d("frame \(frameIndex) times line finished in \(lineEndTime-lineStartTime)")
         }
-        let elementEndTime = Date().timeIntervalSince1970
-        
-        Log.d("frame \(frameIndex) times element finished in \(elementEndTime-elementStartTime) houghLinesTime \(houghLinesTime-elementStartTime) lines.count \(lines.count) processedBlobs.count \(await processedBlobs.set.count) args.maxHoughLines \(args.maxHoughLines)")
+        //let lineEndTime = Date().timeIntervalSince1970
+        //Log.d("frame \(frameIndex) times line finished in \(lineEndTime-lineStartTime)")
     }
 }
 
