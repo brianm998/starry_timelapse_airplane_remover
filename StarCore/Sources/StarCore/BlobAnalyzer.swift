@@ -96,8 +96,8 @@ final public class BlobAnalyzer: @unchecked Sendable {
     }
 
     func replace(blob: Blob, with other: Blob) async {
-        blobMap[other.id] = other
         blobMap.removeValue(forKey: blob.id)
+        blobMap[other.id] = other
 
         // update blob refs
         for pixel in await blob.getPixels() {
