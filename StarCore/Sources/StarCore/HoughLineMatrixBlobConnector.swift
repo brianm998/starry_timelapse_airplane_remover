@@ -207,13 +207,23 @@ public actor HoughLineMatrixBlobConnector {
                                                     maxHeight: args.elementHeight,
                                                     overlapPercent: args.overlapPercent)
 
+        let blobImage = await analyzer.pixelatedImage
+
+        // used to find blobs independently for each element
+        let blobMatrix = blobImage.splitIntoMatrix(maxWidth: args.elementWidth,
+                                                   maxHeight: args.elementHeight,
+                                                   overlapPercent: args.overlapPercent)
+        
+        
         let t2 = Date().timeIntervalSince1970
 
         await withTaskGroup(of: Void.self) { taskGroup in
             // for each matrix element:
-            for element in matrix {
-              taskGroup.addTask { [self] in
+            for (index, element) in matrix.enumerated() {
+                let blobElement = blobMatrix[index]
+                taskGroup.addTask { [self] in
                     await StarCore.process(element: element,
+                                           blobElement: blobElement,
                                            with: args,
                                            frameIndex: frameIndex,
                                            analyzer: analyzer)
@@ -224,6 +234,7 @@ public actor HoughLineMatrixBlobConnector {
 }
 
 fileprivate func process(element: ImageMatrixElement,
+                         blobElement: ImageMatrixElement,
                          with args: HoughLineMatrixBlobConnector.Args,
                          frameIndex: Int,
                          analyzer: BlobAnalyzer) async
@@ -253,6 +264,8 @@ fileprivate func process(element: ImageMatrixElement,
     if lines.count > args.maxHoughLines {
         lines = Array(lines[0..<args.maxHoughLines])
     }
+
+    let blobMap = await analyzer.mapOfBlobs()
     
     // iterate over lines in order of score
     for line in lines {
@@ -276,8 +289,10 @@ fileprivate func process(element: ImageMatrixElement,
                                               and: intersections[1],
                                               numberOfAdjecentPixels: args.sideIterationPixels)
             { x, y, direction in
-                if let blob = await analyzer.blob(at: x, and: y) {
-
+                if let potentialBlobId = blobElement.intensity(atX: x, andY: y),
+                   potentialBlobId < UInt16.max,
+                   let blob = blobMap[UInt16(potentialBlobId)]
+                {
                     if let lastSeenBlob = await lastSeenBlob.value,
                        lastSeenBlob == blob
                     {

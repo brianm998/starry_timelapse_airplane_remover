@@ -668,6 +668,21 @@ public class ImageMatrixElement: @unchecked Sendable, Hashable, CustomStringConv
     public var sortablePixels: [SortablePixel] {
         image.sortablePixels(baseX: x, baseY: y)
     }
+
+    public func intensity(atX x: Int, andY y: Int) -> UInt? {
+        if contains(x: x, y: y) {
+            return image.intensity(atX: x-self.x, andY: y-self.y)
+        } else {
+            return nil
+        }
+    }
+
+    public func contains(x: Int, y: Int) -> Bool {
+        x > self.x &&
+        y > self.y &&
+        x < self.x + width &&
+        y < self.y + height
+    }
     
     public static func == (lhs: ImageMatrixElement, rhs: ImageMatrixElement) -> Bool {
          lhs.x == rhs.x && lhs.y == rhs.y &&
