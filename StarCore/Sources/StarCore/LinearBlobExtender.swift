@@ -36,8 +36,8 @@ public actor LinearBlobExtender {
                                            frameIndex: frameIndex)
     }
 
-    public func blobMap() -> [UInt16:Blob] {
-        analyzer.mapOfBlobs()
+    public func blobMap() async -> [UInt16:Blob] {
+        await analyzer.mapOfBlobs()
     }
 
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
@@ -290,7 +290,7 @@ public actor LinearBlobExtender {
                              furtherIterations: Int) async -> Bool
     {
         guard let iterationBlob else { return false }
-        if let newBlob = analyzer.blob(at: x, and: y),
+        if let newBlob = await analyzer.blob(at: x, and: y),
            newBlob != iterationBlob
         {
             //Log.d("frame \(frameIndex) processing blob \(iterationBlob) @ [\(x), \(y)] found other blob \(newBlob)")

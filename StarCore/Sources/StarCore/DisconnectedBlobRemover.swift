@@ -33,8 +33,8 @@ public actor DisconnectedBlobRemover {
                                       frameIndex: frameIndex)
     }
 
-    public func blobMap() -> [UInt16:Blob] {
-        analyzer.mapOfBlobs()
+    public func blobMap() async -> [UInt16:Blob] {
+        await analyzer.mapOfBlobs()
     }
     
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {

@@ -9,6 +9,11 @@ public actor IntegralActor {
 
     public func getValue() -> Int { value }
 
+    public func increment() -> Int {
+        value += 1
+        return value
+    }
+    
     public func set(value: Int) {
         self.value = value
     }

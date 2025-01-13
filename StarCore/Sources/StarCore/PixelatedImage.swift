@@ -34,8 +34,6 @@ public final class PixelatedImage: Sendable {
 
     let colorSpace: CGColorSpace // XXX why both space and name?
     let ciFormat: CIFormat    // used to write tiff formats properly
-
-    deinit { }
     
     // enum to bridge between Data and direct individual component access
     // do we have 8 bits per component, or 16?
@@ -165,6 +163,7 @@ public final class PixelatedImage: Sendable {
         self.bitmapInfo = image.bitmapInfo
         self.componentsPerPixel = image.bitsPerPixel/image.bitsPerComponent
         self.colorSpace = image.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+
         let numComponentsPerPixel = image.bitsPerPixel / image.bitsPerComponent
         if numComponentsPerPixel == 1 {
             if bitsPerPixel == 8 {
@@ -647,7 +646,7 @@ extension Array<UInt8> {
     }
 }
 
-public class ImageMatrixElement: Hashable, CustomStringConvertible {
+public class ImageMatrixElement: @unchecked Sendable, Hashable, CustomStringConvertible {
     public let x: Int                  // offset in original image
     public let y: Int
     public let width: Int

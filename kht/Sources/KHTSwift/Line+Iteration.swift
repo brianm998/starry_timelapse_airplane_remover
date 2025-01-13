@@ -277,7 +277,7 @@ extension Line {
     public func asyncIterate(between coord1: DoubleCoord,
                              and coord2: DoubleCoord,
                              numberOfAdjecentPixels: Int = 0, // iterate in the parallel direction this many pixels
-                             closure: (Int, Int, IterationOrientation) async -> Void) async
+                             closure: @Sendable (Int, Int, IterationOrientation) async -> Void) async
     {
         let standardLine = self.standardLine
 

@@ -22,7 +22,7 @@ public class LastBlob {
 }
 
 // skeleton for analyzer of blobs that can then manipulate the blobs in some way
-final public class BlobAnalyzer: @unchecked Sendable {
+public actor BlobAnalyzer {
 
     // map of all known blobs keyed by blob id
     private var blobMap: [UInt16: Blob]
@@ -59,6 +59,17 @@ final public class BlobAnalyzer: @unchecked Sendable {
         {
             let blobId = blobRefs[index]
             if blobId != 0 { return blobMap[blobId] }
+        }
+        return nil
+    }
+    
+    func blobId(at x: Int, and y: Int) -> UInt16? {
+        let index = y*width+x
+        if index >= 0,
+           index < blobRefs.count
+        {
+            let blobId = blobRefs[index]
+            if blobId != 0 { return blobId }
         }
         return nil
     }

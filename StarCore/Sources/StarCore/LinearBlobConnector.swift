@@ -16,6 +16,28 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
+public actor SetActor<T> where T: Hashable {
+    private var internalSet: Set<T>
+
+    init(with set: Set<T>) {
+        self.internalSet = set
+    }
+
+    init() {
+        self.internalSet = []
+    }
+
+    public func insert(_ value: T) {
+        internalSet.insert(value)
+    }
+
+    public func contains(_ value: T) -> Bool {
+        internalSet.contains(value)
+    }
+
+    public var set: Set<T> { internalSet }
+}
+
 public protocol Argable<Types> where Types: CaseIterable {
     associatedtype Types
     func value(for type: Types) -> Double?
@@ -43,8 +65,8 @@ public actor LinearBlobConnector {
                                            frameIndex: frameIndex)
     }
 
-    public func blobMap() -> [UInt16:Blob] {
-        analyzer.mapOfBlobs()
+    public func blobMap() async -> [UInt16:Blob] {
+        await analyzer.mapOfBlobs()
     }
 
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
@@ -343,13 +365,13 @@ public actor LinearBlobConnector {
 
         if let start, let end {
             //Log.d("frame \(frameIndex) blob \(fullBlob.id) iterating between \(start) and \(end)")
-            var linearBlobIds = Set<UInt16>()
+            let linearBlobIds = SetActor<UInt16>()
             // iterate over the line and absorbs all blobs along it into a new blob
             // remove all ids expept for the one from the combined blob ids from the blob map
             
-            blobLine.iterate(between: start,
-                             and: end,
-                             numberOfAdjecentPixels: adjecentPixelsOnIteration)
+            await blobLine.asyncIterate(between: start,
+                                        and: end,
+                                        numberOfAdjecentPixels: adjecentPixelsOnIteration)
             { x, y, orientation in
                 if x >= 0,
                    y >= 0,
@@ -357,27 +379,20 @@ public actor LinearBlobConnector {
                    y < analyzer.height
                 {
                     // look for blobs at x,y, i.e. blobs that are right on the line
-                    let index = y*analyzer.width+x
-                    if index < analyzer.blobRefs.count {
-                        let blobId = analyzer.blobRefs[index]
-                        if blobId != 0 {
-                            //Log.d("frame \(analyzer.frameIndex) blob \(fullBlob.id) found linear blob \(blobId) @ [\(x), \(y)]")
-                            linearBlobIds.insert(blobId)
-                        } else {
-                            //Log.d("frame \(frameIndex) blob \(fullBlob.id) nothing found @ [\(x), \(y)]")
-                        }
+                    if let blobId = await analyzer.blobId(at: x, and: y) {
+                        await linearBlobIds.insert(blobId)
                     }
                 }
             }
 
-            let linearBlobSet = analyzer.blobs(with: linearBlobIds)
+            let linearBlobSet = await analyzer.blobs(with: await linearBlobIds.set)
 
             if linearBlobSet.count > 1 {
                 // use nextIndex(from blobMap:) here?
                 // re-use analyzer.maxBlobId until we absorb another blob
                 // and then grab its id instead, as maxBlobId is already used 
-                let linearBlob = Blob(id: analyzer.maxBlobId,
-                                      frameIndex: frameIndex)
+                let linearBlob = await Blob(id: analyzer.maxBlobId,
+                                            frameIndex: frameIndex)
 
                 //Log.d("frame \(analyzer.frameIndex) blob \(fullBlob.id) found \(linearBlobIds.count) linear blobs")
                 
@@ -388,7 +403,7 @@ public actor LinearBlobConnector {
                     if await linearBlob.absorb(otherBlob, always: true) {
                     //Log.d("frame \(analyzer.frameIndex) removing \(otherBlob) \(await otherBlob.pixels.count) pixels \(await otherBlob.pixels)")
                         await analyzer.remove(blob: otherBlob)
-                        if linearBlob.id == analyzer.maxBlobId {
+                        if await linearBlob.id == analyzer.maxBlobId {
                             // reuse other blob's id to avoid overrunning UInt16.max
                             await linearBlob.update(id: otherBlob.id)
                         }

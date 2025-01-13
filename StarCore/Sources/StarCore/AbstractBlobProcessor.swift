@@ -217,7 +217,7 @@ public class AbstractBlobProcessor {
                                                                    height: frame.height,
                                                                    frameIndex: frame.frameIndex)
                 await connector.process(args)
-                blobMap = connector.blobMap()
+                blobMap = await connector.blobMap()
                 
             case .nonLinearBlobRemover(let args):
                 let remover = await NonLinearBlobRemover(blobMap: blobMap,

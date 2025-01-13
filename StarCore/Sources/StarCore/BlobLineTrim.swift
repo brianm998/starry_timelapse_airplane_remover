@@ -21,12 +21,14 @@ public actor BlobLineTrim {
 
     var blobMap: [UInt16: Blob]
     let frameIndex: Int
-    var maxBlobID: UInt16 = 0
+    let maxBlobID: IntegralActor
     
     init(blobMap: [UInt16: Blob], frameIndex: Int) {
         self.frameIndex = frameIndex
         self.blobMap = blobMap
-        for (id, _) in blobMap { if id > maxBlobID { maxBlobID = id } }
+        var max: UInt16 = 0
+        for (id, _) in blobMap { if id > max { max = id } }
+        maxBlobID = IntegralActor(value: Int(max))
     }
     
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
@@ -139,15 +141,24 @@ public actor BlobLineTrim {
     }
 
     public func process(_ args: Args) async -> [UInt16:Blob] {
-        for (_, blob) in blobMap {
-            if !(await process(blob, with: args, maxIterations: 10)) { // XXX constant
-                break
+        await withTaskGroup(of: [Blob].self) { taskGroup in
+            for (_, blob) in blobMap {
+                taskGroup.addTask {
+                    await self.process(blob, with: args, maxIterations: 10)
+                }
+
+                for await newBlobs in taskGroup {
+                    for newBlob in newBlobs {
+                        blobMap[newBlob.id] = newBlob
+                    }
+                }
             }
         }
         return blobMap
     }
 
-    private func process(_ blob: Blob, with args: Args, maxIterations: Int) async -> Bool {
+    // maybe break up the given blob into a set of other blobs, each of which is more linear
+    private func process(_ blob: Blob, with args: Args, maxIterations: Int) async -> [Blob] {
         if await blob.size() > args.minBlobSize, // ignore small blobs
            let lineLength = await blob.lineLength(), // must know the line length
            lineLength > args.minLineLength,          // line length must be big enough
@@ -157,31 +168,31 @@ public actor BlobLineTrim {
             // trim that shit
             let trimmedPixels = await blob.lineTrim(by: args.trimAmount)
             if trimmedPixels.count > 0 {
-                if maxBlobID < UInt16.max {
+                let newBlobID = await maxBlobID.increment()
+                if newBlobID < UInt16.max {
 
                     // iterate on this
                     
                     // make another blob from any trimmed pixels
                     let newBlob = Blob(trimmedPixels,
-                                       id: maxBlobID,
+                                       id: UInt16(newBlobID),
                                        frameIndex: frameIndex)
-                    blobMap[newBlob.id] = newBlob
-                    
-                    maxBlobID += 1
 
-                    if maxIterations > 1 {
-                        await process(newBlob, with: args, maxIterations: maxIterations-1)
-                    }
+                    var ret = [newBlob]
                     
+                    if maxIterations > 1 {
+                      await ret += process(newBlob, with: args, maxIterations: maxIterations-1)
+                    }
+
+                    return ret
                 } else {
                     // avoid arithmetic overflow
                     Log.w("frame \(frameIndex) breaking on blob line trim because max blob id \(maxBlobID) is == UInt16.max")
                     // re-absorb the trimmed pixels into the same blob
                     await blob.absorb(trimmedPixels)
-                    return false
                 }
             }
         }
-        return true
+        return []
     }
 }

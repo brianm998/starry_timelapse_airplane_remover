@@ -33,7 +33,7 @@ public actor DimIsolatedBlobRemover {
     }
 
     public func blobMap() async -> [UInt16:Blob] {
-        analyzer.mapOfBlobs()
+        await analyzer.mapOfBlobs()
     }
 
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
@@ -142,7 +142,7 @@ public actor DimIsolatedBlobRemover {
     }
 
     public func process(_ args: Args) async {
-        let filteredBlobs = analyzer.blobs()
+        let filteredBlobs = await analyzer.blobs()
 
         if filteredBlobs.count == 0 { return }
 

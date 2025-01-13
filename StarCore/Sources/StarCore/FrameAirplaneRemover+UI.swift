@@ -53,14 +53,21 @@ extension FrameAirplaneRemover {
     public func applyDecisionTreeToAllOutliers() async {
         //Log.d("frame \(self.frameIndex) applyDecisionTreeToAll \(self.outlierGroups?.members.count ?? 0) Outliers")
         let startTime = NSDate().timeIntervalSince1970
-        if let classifier = await currentClassifier.get() {
-            await foreachOutlierGroupMulti() { group in
-                if await group.shouldPaint() == nil {
-                    // only apply classifier when no other classification is otherwise present
-                    let featureData = await group.featureData()
-                    let classification = classifier.classification(of: featureData)
-                    await group.shouldPaint(.fromClassifier(classification))
+        if let classifier = await currentClassifier.get(),
+           let outlierGroups
+        {
+            await withTaskGroup(of: Void.self) { taskGroup in
+                for (_, group) in await outlierGroups.getMembers() {
+                    taskGroup.addTask {
+                        if await group.shouldPaint() == nil {
+                            // only apply classifier when no other classification is otherwise present
+                            let featureData = await group.featureData()
+                            let classification = classifier.classification(of: featureData)
+                            await group.shouldPaint(.fromClassifier(classification))
+                        }
+                    }
                 }
+                await taskGroup.waitForAll()
             }
             let endTime = NSDate().timeIntervalSince1970
             Log.i("frame \(self.frameIndex) spent \(endTime - startTime) seconds classifing outlier groups");
