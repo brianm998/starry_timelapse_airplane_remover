@@ -181,40 +181,6 @@ public class FullFrameBlobber {
                     await expand(blob: newBlob, seedPixel: pixel)
                     //Log.d("frame \(frameIndex) creating blob \(newBlob)")
                     
-                    /*
-
-                     after we expand, and before we append, try a further test:
-
-                     try starting a new blob on the original image, and compare the result
-                     to what we got here.
-
-                     if the blob from the original image is a lot bigger, and brighter, then discard
-                     
-                     only keep if the number of bright pixels isn't all that much larger (how much?)
-                     
-                     */
-
-                    // examine the blob in the original image.
-
-                    // XXX maybe make this a classification criteria instead
-                    // of just dumping them outright here?
-                    /*
-                     XXX this is blowing away some blobs that we want, even bright ones.
-                     it does get rid of lots of horizon blobs however.
-
-                     need to expose this as a classification feature
-
-                     but it requires the original image, so
-
-                     use imageCache inside of Outlier group to allow
-                     calculating this value
-
-                     */
-
-                    let borderBrightness = await originalImage.borderBrightness(of: newBlob.pixels)
-
-//                    Log.d("frame \(frameIndex) blob \(newBlob) has borderBrightness \(borderBrightness)") 
-
                     newBlobId += 1
                     blobs.append(newBlob)
                         
