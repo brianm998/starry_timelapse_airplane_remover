@@ -284,8 +284,9 @@ public class HoughLineMatrixBlobConnector {
                                          
                                          */
                                         
-                                        await previousBlob.absorb(blob, always: true)
-                                        await analyzer.replace(blob: blob, with: previousBlob)
+                                        if await previousBlob.absorb(blob, always: true) {
+                                            await analyzer.replace(blob: blob, with: previousBlob)
+                                        }
                                     } else {
                                         // if too far, discard previous blob ref and keep track of new blob
                                         lastSeenBlob = blob
