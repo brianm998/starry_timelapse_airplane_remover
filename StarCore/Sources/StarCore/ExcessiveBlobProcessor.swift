@@ -92,8 +92,8 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           
 
           .nonLinearBlobRemover(.init(minBlobSize: 0,
-                                      medianIntensity: 10000,
-                                      lengthOverFillAmount: 18,
+                                      medianIntensity: 5000,
+                                      lengthOverFillAmount: 22,
                                       minLineFillAmount: 4,
                                       maxLineFillAmount: 15)),
 
