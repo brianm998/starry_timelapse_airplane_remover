@@ -243,202 +243,238 @@ public actor LinearBlobConnector {
         }
     }
 
-    public func process(_ args: Args) async {
-        let processedBlobs = ProcessedBlobs()
-        //await analyzer.logBlobs()     // XXX
-        await analyzer.iterateOverAllBlobs() { id, blob in
-            if await processedBlobs.contains(id) { return }
-            await processedBlobs.insert(id)
-            
-            // only deal with blobs in a certain size range
-            let blobSize = await blob.size()
-            
-            if blobSize >= args.blobsSmallerThan || 
-               blobSize < args.blobsLargerThan
-            {
-                return
-            }
+    fileprivate final class Data: Sendable {
+        let args: Args
+        let processedBlobs: ProcessedBlobs
+        let analyzer: BlobAnalyzer
+        let frameIndex: Int
 
-            //Log.d("iterating over blob \(id)")
-
-            // find a cloud of neighbors 
-            let (neighborCloud, newProcessedBlobs) =
-              await analyzer.neighborCloud(of: blob,
-                                           scanSize: args.scanSize,
-                                           processedBlobs: processedBlobs)
-
-            await processedBlobs.union(with: newProcessedBlobs)
-            
-            if neighborCloud.count == 0 { return }
-            
-            //Log.d("blob \(id) has \(neighborCloud.count) neighbors")
-
-            let frameIndex = neighborCloud.first?.frameIndex ?? -1
-            let id = neighborCloud.first?.id ?? 0
-            
-            // then create a temporary blob that combines all of the nearby blobs
-            let fullBlob = Blob(id: id, frameIndex: frameIndex) // values not used
-            for blob in neighborCloud { _ = await fullBlob.absorb(blob, always: true) }
-
-            // here we have combined all of the nearby blobs within our given scanSize
-            // to eachother.  This may be enormous, if we have lots of small blobs close together.
-            // Or or may be 50-80% small blobs on the same line.
-
-
-            //Log.d("blob \(id) fullBlob has \(await fullBlob.getPixels().count) pixels boundingBox \(await fullBlob.boundingBox()) line \(await fullBlob.line)")
-
-            
-            // render a KHT on this full blob
-            if let blobLine = await fullBlob.originZeroLine,
-               await fullBlob.pixelScore(for: blobLine) > args.minLineScore
-            {
-
-                //Log.d("iterating on blob \(id)")
-                // only iterate on blob lines if they are a decent fit
-                
-                // XXX for testing, write out this big blob as json
-/* 
-                let blobJsonFilename = "/tmp/Blob_frame_\(frameIndex)_\(fullBlob).json"
-                let encoder = JSONEncoder()
-                encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
-                
-                do {
-                    let jsonData = try encoder.encode(fullBlob)
-                    
-                    FileManager.default.createFile(atPath: blobJsonFilename,
-                                           contents: jsonData,
-                                           attributes: nil)
-                } catch {
-                    Log.e("\(error)")
-                }
-
- */
-
-                // first iterate on the best line for the full blob
-                // maybe recurse on a better line from a smaller amount
-                await iterate(on: blobLine,
-                              over: fullBlob,
-                              lineBorder: args.lineBorder,
-                              maxIterationCount: args.maxIterationCount,
-                              adjecentPixelsOnIteration: args.adjecentPixelsOnIteration)
-
-                // trim the blob here?
-            }
+        init(args: Args,
+             processedBlobs: ProcessedBlobs,
+             analyzer: BlobAnalyzer,
+             frameIndex: Int)
+        {
+            self.args = args
+            self.processedBlobs = processedBlobs
+            self.analyzer = analyzer
+            self.frameIndex = frameIndex
         }
-        //await analyzer.logBlobs()     // XXX 
     }
 
-    fileprivate func iterate(on blobLine: Line,
-                             over fullBlob: Blob,
-                             // how much furter to look at the ends of the line
-                             lineBorder: Int,
-                             iterationCount: Int = 0,
-                             maxIterationCount: Int,
-                             adjecentPixelsOnIteration: Int) async
-    {
-        // we have an ideal origin zero line for this blob
-        //Log.d("frame \(frameIndex) blob \(fullBlob.id) has line \(blobLine)")
+    public func process(_ args: Args) async {
 
-        var start: DoubleCoord?
-        var end: DoubleCoord?
+        let blobMap = await analyzer.mapOfBlobs()
 
-        let boundingBox = await fullBlob.boundingBox()
-        
-        switch blobLine.iterationOrientation {
-            
-        case .horizontal:
-            var min = boundingBox.min.x - lineBorder
-            var max = boundingBox.max.x + lineBorder
-            if min < 0 { min = 0 }
-            if max >= analyzer.width { max = analyzer.width - 1 }
-            start = DoubleCoord(x: Double(min), y: 0)
-            end = DoubleCoord(x: Double(max), y: 0)
-            
-        case .vertical:
-            var min = boundingBox.min.y - lineBorder
-            var max = boundingBox.max.y + lineBorder
-            if min < 0 { min = 0 }
-            if max >= analyzer.height { max = analyzer.height - 1 }
-            start = DoubleCoord(x: 0, y: Double(min))
-            end = DoubleCoord(x: 0, y: Double(max))
-        }
-
-        if let start, let end {
-            //Log.d("frame \(frameIndex) blob \(fullBlob.id) iterating between \(start) and \(end)")
-            let linearBlobIds = SetActor<UInt16>()
-            // iterate over the line and absorbs all blobs along it into a new blob
-            // remove all ids expept for the one from the combined blob ids from the blob map
-            
-            await blobLine.asyncIterate(between: start,
-                                        and: end,
-                                        numberOfAdjecentPixels: adjecentPixelsOnIteration)
-            { x, y, orientation in
-                if x >= 0,
-                   y >= 0,
-                   x < analyzer.width,
-                   y < analyzer.height
-                {
-                    // look for blobs at x,y, i.e. blobs that are right on the line
-                    if let blobId = await analyzer.blobId(at: x, and: y) {
-                        await linearBlobIds.insert(blobId)
-                    }
-                }
-            }
-
-            let linearBlobSet = await analyzer.blobs(with: await linearBlobIds.set)
-
-            if linearBlobSet.count > 1 {
-                // use nextIndex(from blobMap:) here?
-                // re-use analyzer.maxBlobId until we absorb another blob
-                // and then grab its id instead, as maxBlobId is already used 
-                let linearBlob = await Blob(id: analyzer.maxBlobId,
+        let data = LinearBlobConnector.Data(args: args,
+                                            processedBlobs: .init(),
+                                            analyzer: analyzer,
                                             frameIndex: frameIndex)
-
-                //Log.d("frame \(analyzer.frameIndex) blob \(fullBlob.id) found \(linearBlobIds.count) linear blobs")
-                
-                // we found more than one blob along the line
-
-                // the others will get eaten and thrown away :(
-                for otherBlob in linearBlobSet {
-                    if await linearBlob.absorb(otherBlob, always: true) {
-                    //Log.d("frame \(analyzer.frameIndex) removing \(otherBlob) \(await otherBlob.pixels.count) pixels \(await otherBlob.pixels)")
-                        await analyzer.remove(blob: otherBlob)
-                        if await linearBlob.id == analyzer.maxBlobId {
-                            // reuse other blob's id to avoid overrunning UInt16.max
-                            await linearBlob.update(id: otherBlob.id)
-                        }
-                    }
+        
+        await withTaskGroup(of: Void.self) { taskGroup in
+            for (_, blob) in blobMap {
+                taskGroup.addTask { [self] in
+                    await processBlob(blob, data: data)
                 }
-
-                await analyzer.update(blob: linearBlob)
-
-                //Log.d("frame \(analyzer.frameIndex) fullBlob \(fullBlob.id) after absorb \(await fullBlob.pixels.count) pixels \(await fullBlob.pixels)")
-                
-                /*
-                 If we have a line from this new blob, it is likely
-                 more accurate than the one we iterated on before.
-
-                 try recursing and iterating on this new line with some border
-                 to see what we might find.
-                 */
-
-                if let line = await fullBlob.originZeroLine {
-                    if iterationCount < maxIterationCount {
-                        //Log.d("frame \(analyzer.frameIndex) ITERATING iterationCount \(iterationCount)")
-                        await self.iterate(on: line,
-                                           over: linearBlob,
-                                           lineBorder: lineBorder,
-                                           iterationCount: iterationCount + 1,
-                                           maxIterationCount: maxIterationCount,
-                                           adjecentPixelsOnIteration: adjecentPixelsOnIteration)
-                    } else {
-                        //Log.d("frame \(analyzer.frameIndex) NOT ITERATING iterationCount \(iterationCount)")
-                    }
-                }
-            } else {
-                //Log.d("frame \(analyzer.frameIndex) only found \(linearBlobSet.count) linear blobs")
             }
+            await taskGroup.waitForAll()
         }
     }
 }
+
+fileprivate func processBlob(_ blob: Blob, data: LinearBlobConnector.Data) async {
+    if await data.processedBlobs.contains(blob.id) { return }
+    await data.processedBlobs.insert(blob.id)
+    
+    // only deal with blobs in a certain size range
+    let blobSize = await blob.size()
+    
+    if blobSize >= data.args.blobsSmallerThan || 
+         blobSize < data.args.blobsLargerThan
+    {
+        return
+    }
+
+    //Log.d("iterating over blob \(id)")
+
+    // find a cloud of neighbors 
+    let (neighborCloud, newProcessedBlobs) =
+      await data.analyzer.neighborCloud(of: blob,
+                                        scanSize: data.args.scanSize,
+                                        processedBlobs: data.processedBlobs)
+
+    await data.processedBlobs.union(with: newProcessedBlobs)
+    
+    if neighborCloud.count == 0 { return }
+    
+    //Log.d("blob \(id) has \(neighborCloud.count) neighbors")
+
+    let frameIndex = neighborCloud.first?.frameIndex ?? -1
+    let id = neighborCloud.first?.id ?? 0
+    
+    // then create a temporary blob that combines all of the nearby blobs
+    let fullBlob = Blob(id: id, frameIndex: frameIndex) // values not used
+    for blob in neighborCloud { _ = await fullBlob.absorb(blob, always: true) }
+
+    // here we have combined all of the nearby blobs within our given scanSize
+    // to eachother.  This may be enormous, if we have lots of small blobs close together.
+    // Or or may be 50-80% small blobs on the same line.
+
+
+    //Log.d("blob \(id) fullBlob has \(await fullBlob.getPixels().count) pixels boundingBox \(await fullBlob.boundingBox()) line \(await fullBlob.line)")
+
+    
+    // render a KHT on this full blob
+    if let blobLine = await fullBlob.originZeroLine,
+       await fullBlob.pixelScore(for: blobLine) > data.args.minLineScore
+    {
+
+        //Log.d("iterating on blob \(id)")
+        // only iterate on blob lines if they are a decent fit
+        
+        // XXX for testing, write out this big blob as json
+        /* 
+           let blobJsonFilename = "/tmp/Blob_frame_\(frameIndex)_\(fullBlob).json"
+           let encoder = JSONEncoder()
+           encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+           
+           do {
+           let jsonData = try encoder.encode(fullBlob)
+           
+           FileManager.default.createFile(atPath: blobJsonFilename,
+           contents: jsonData,
+           attributes: nil)
+           } catch {
+           Log.e("\(error)")
+           }
+
+         */
+
+        // first iterate on the best line for the full blob
+        // maybe recurse on a better line from a smaller amount
+        await iterate(on: blobLine,
+                      over: fullBlob,
+                      data: data,
+                      lineBorder: data.args.lineBorder,
+                      maxIterationCount: data.args.maxIterationCount,
+                      adjecentPixelsOnIteration: data.args.adjecentPixelsOnIteration)
+
+        // trim the blob here?
+    }
+}
+
+fileprivate func iterate(on blobLine: Line,
+                         over fullBlob: Blob,
+                         // how much furter to look at the ends of the line
+                         data: LinearBlobConnector.Data,
+                         lineBorder: Int,
+                         iterationCount: Int = 0,
+                         maxIterationCount: Int,
+                         adjecentPixelsOnIteration: Int) async
+{
+    // we have an ideal origin zero line for this blob
+    //Log.d("frame \(frameIndex) blob \(fullBlob.id) has line \(blobLine)")
+
+    var start: DoubleCoord?
+    var end: DoubleCoord?
+
+    let boundingBox = await fullBlob.boundingBox()
+    
+    switch blobLine.iterationOrientation {
+        
+    case .horizontal:
+        var min = boundingBox.min.x - lineBorder
+        var max = boundingBox.max.x + lineBorder
+        if min < 0 { min = 0 }
+        if max >= data.analyzer.width { max = data.analyzer.width - 1 }
+        start = DoubleCoord(x: Double(min), y: 0)
+        end = DoubleCoord(x: Double(max), y: 0)
+        
+    case .vertical:
+        var min = boundingBox.min.y - lineBorder
+        var max = boundingBox.max.y + lineBorder
+        if min < 0 { min = 0 }
+        if max >= data.analyzer.height { max = data.analyzer.height - 1 }
+        start = DoubleCoord(x: 0, y: Double(min))
+        end = DoubleCoord(x: 0, y: Double(max))
+    }
+
+    if let start, let end {
+        //Log.d("frame \(frameIndex) blob \(fullBlob.id) iterating between \(start) and \(end)")
+        let linearBlobIds = SetActor<UInt16>()
+        // iterate over the line and absorbs all blobs along it into a new blob
+        // remove all ids expept for the one from the combined blob ids from the blob map
+        
+        await blobLine.asyncIterate(between: start,
+                                    and: end,
+                                    numberOfAdjecentPixels: adjecentPixelsOnIteration)
+        { x, y, orientation in
+            if x >= 0,
+               y >= 0,
+               x < data.analyzer.width,
+               y < data.analyzer.height
+            {
+                // look for blobs at x,y, i.e. blobs that are right on the line
+                if let blobId = await data.analyzer.blobId(at: x, and: y) {
+                    await linearBlobIds.insert(blobId)
+                }
+            }
+        }
+
+        let linearBlobSet = await data.analyzer.blobs(with: await linearBlobIds.set)
+
+        if linearBlobSet.count > 1 {
+            // use nextIndex(from blobMap:) here?
+            // re-use data.analyzer.maxBlobId until we absorb another blob
+            // and then grab its id instead, as maxBlobId is already used 
+            let linearBlob = await Blob(id: data.analyzer.maxBlobId,
+                                        frameIndex: data.frameIndex)
+
+            //Log.d("frame \(data.analyzer.frameIndex) blob \(fullBlob.id) found \(linearBlobIds.count) linear blobs")
+            
+            // we found more than one blob along the line
+
+            // the others will get eaten and thrown away :(
+            for otherBlob in linearBlobSet {
+                if await linearBlob.absorb(otherBlob, always: true) {
+                    //Log.d("frame \(data.analyzer.frameIndex) removing \(otherBlob) \(await otherBlob.pixels.count) pixels \(await otherBlob.pixels)")
+                    await data.analyzer.remove(blob: otherBlob)
+                    if await linearBlob.id == data.analyzer.maxBlobId {
+                        // reuse other blob's id to avoid overrunning UInt16.max
+                        await linearBlob.update(id: otherBlob.id)
+                    }
+                }
+            }
+
+            await data.analyzer.update(blob: linearBlob)
+
+            //Log.d("frame \(data.analyzer.frameIndex) fullBlob \(fullBlob.id) after absorb \(await fullBlob.pixels.count) pixels \(await fullBlob.pixels)")
+            
+            /*
+             If we have a line from this new blob, it is likely
+             more accurate than the one we iterated on before.
+
+             try recursing and iterating on this new line with some border
+             to see what we might find.
+             */
+
+            if let line = await fullBlob.originZeroLine {
+                if iterationCount < maxIterationCount {
+                    //Log.d("frame \(data.analyzer.frameIndex) ITERATING iterationCount \(iterationCount)")
+                    await iterate(on: line,
+                                  over: linearBlob,
+                                  data: data,
+                                  lineBorder: lineBorder,
+                                  iterationCount: iterationCount + 1,
+                                  maxIterationCount: maxIterationCount,
+                                  adjecentPixelsOnIteration: adjecentPixelsOnIteration)
+                } else {
+                    //Log.d("frame \(data.analyzer.frameIndex) NOT ITERATING iterationCount \(iterationCount)")
+                }
+            }
+        } else {
+            //Log.d("frame \(data.analyzer.frameIndex) only found \(linearBlobSet.count) linear blobs")
+        }
+    }
+}
+
 
