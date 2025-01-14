@@ -12,7 +12,7 @@ star is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY
 You should have received a copy of the GNU General Public License along with star. If not, see <https://www.gnu.org/licenses/>.
 
 */
-public typealias BlobMap = [UInt16:Blob]
+
 
 /*
 
@@ -61,9 +61,9 @@ public class AbstractBlobProcessor {
     internal func shouldRunStep(atIndex index: Int) -> Bool { true }
     
     // runs each step in sequence and returns the result
-    public func process(frame: FrameAirplaneRemover) async throws -> BlobMap {
+    public func process(frame: FrameAirplaneRemover) async throws -> [UInt16:Blob] {
         self.frame = frame
-        var blobMap: BlobMap = [:]
+        var blobMap: [UInt16:Blob] = [:]
 
         // align neighbor frame, subtract it, sort pixels
         let (subtractionArray, originalImage) = try await self.setup()
@@ -254,7 +254,7 @@ public class AbstractBlobProcessor {
     }
     
     // slice up blobs as directed by the user
-    internal func applyUserSlices(_ blobMap: [UInt16:Blob]) async throws -> BlobMap {
+    internal func applyUserSlices(_ blobMap: [UInt16:Blob]) async throws -> [UInt16:Blob] {
         guard let frame else { return [:] }
 
         var newBlobs: [UInt16:Blob] = blobMap

@@ -25,7 +25,7 @@ public class LastBlob {
 public actor BlobAnalyzer {
 
     // map of all known blobs keyed by blob id
-    private var blobMap: [UInt16: Blob]
+    private var blobMap: [UInt16:Blob]
 
     // width of the frame
     internal let width: Int
@@ -38,14 +38,14 @@ public actor BlobAnalyzer {
 
     // a reference for each pixel for each blob it might belong to
     // non zero values reference a blob
-    internal var blobRefs: [UInt16]
+    internal var blobRefs: BlobRefs
 
     internal var maxBlobId: UInt16 = 0
 
     var pixelatedImage: PixelatedImage {
         .init(width: self.width,
               height: self.height,
-              grayscale16BitImageData: blobRefs)
+              grayscale16BitImageData: blobRefs.refs)
     }
     
     func blobs(with blobIdSet: Set<UInt16>) -> [Blob] {
@@ -55,9 +55,9 @@ public actor BlobAnalyzer {
     func blob(at x: Int, and y: Int) -> Blob? {
         let index = y*width+x
         if index >= 0,
-           index < blobRefs.count
+           index < blobRefs.refs.count
         {
-            let blobId = blobRefs[index]
+            let blobId = blobRefs.refs[index]
             if blobId != 0 { return blobMap[blobId] }
         }
         return nil
@@ -66,9 +66,9 @@ public actor BlobAnalyzer {
     func blobId(at x: Int, and y: Int) -> UInt16? {
         let index = y*width+x
         if index >= 0,
-           index < blobRefs.count
+           index < blobRefs.refs.count
         {
-            let blobId = blobRefs[index]
+            let blobId = blobRefs.refs[index]
             if blobId != 0 { return blobId }
         }
         return nil
@@ -79,10 +79,12 @@ public actor BlobAnalyzer {
     func update(blob: Blob) async {
         blobMap[blob.id] = blob
 
+        var refsArr = blobRefs.refs
+        
         // update blob refs, check for errors
         for pixel in await blob.getPixels() {
             let index = pixel.y*width+pixel.x
-            let existingBlobId = blobRefs[index]
+            let existingBlobId = blobRefs.refs[index]
             if existingBlobId != 0,
                existingBlobId != blob.id
             {
@@ -90,33 +92,41 @@ public actor BlobAnalyzer {
                     await existingBlob.remove(pixel: pixel)
                 }
             }
-            blobRefs[index] = blob.id
+            refsArr[index] = blob.id
         }
+
+        blobRefs = blobRefs.updated(with: refsArr)
     }
     
     func remove(blob: Blob) async {
         blobMap.removeValue(forKey: blob.id)
 
+        var refsArr = blobRefs.refs
+
         // update blob refs
         for pixel in await blob.getPixels() {
             let index = pixel.y*width+pixel.x
-            if blobRefs[index] == blob.id {
-                blobRefs[index] = 0
+            if refsArr[index] == blob.id {
+                refsArr[index] = 0
             }
         }
+        
+        blobRefs = blobRefs.updated(with: refsArr)
     }
 
     func replace(blob: Blob, with other: Blob) async {
         blobMap.removeValue(forKey: blob.id)
         blobMap[other.id] = other
 
+        var refsArr = blobRefs.refs
         // update blob refs
         for pixel in await blob.getPixels() {
             let index = pixel.y*width+pixel.x
-            if blobRefs[index] == blob.id {
-                blobRefs[index] = other.id
+            if refsArr[index] == blob.id {
+                refsArr[index] = other.id
             }
         }
+        blobRefs = blobRefs.updated(with: refsArr)
     }
 
     func mapOfBlobs() -> [UInt16: Blob] { blobMap }
@@ -161,7 +171,7 @@ public actor BlobAnalyzer {
                 _blobRefs[blobRefIndex] = blob.id
             }
         }
-        self.blobRefs = _blobRefs
+        self.blobRefs = BlobRefs(refs: _blobRefs, width: width, height: height)
         let endTime = Date().timeIntervalSince1970
 
         Log.d("blob analyzer init took \(endTime-startTime) seconds")
@@ -184,50 +194,6 @@ public actor BlobAnalyzer {
         }
     }
 
-    // returns a set of blobs that are directly within scanSize of blob's bounding box
-    // certain neighbors can be excluded with the blobMattersClosure returning false
-    // if requiredNeighbors is set, no more than that number of neighbors will be returned.
-    internal func directNeighbors(of blob: Blob,
-                                  scanSize: Int = 12,
-                                  requiredNeighbors: Int? = nil,
-                                  blobMattersClosure:  (@Sendable (Blob) async -> Bool)? = nil) async -> Set<Blob>
-    {
-        let boundingBox = await blob.boundingBox()
-        
-        var startX = boundingBox.min.x - scanSize
-        var startY = boundingBox.min.y - scanSize
-        
-        if startX < 0 { startX = 0 }
-        if startY < 0 { startY = 0 }
-
-        var endX = boundingBox.max.x + scanSize
-        var endY = boundingBox.max.y + scanSize
-
-        if endX >= width { endX = width - 1 }
-        if endY >= height { endY = height - 1 }
-        
-        var otherBlobsNearby: Set<Blob> = []
-
-        for x in (startX ... endX) {
-            for y in (startY ... endY) {
-                let blobRef = blobRefs[y*width+x]
-                if blobRef != 0,
-                   blobRef != blob.id,
-                   let otherBlob = blobMap[blobRef]
-                {
-                    if await blobMattersClosure?(otherBlob) ?? true {
-                        otherBlobsNearby.insert(otherBlob)
-                        if let requiredNeighbors,
-                           otherBlobsNearby.count >= requiredNeighbors { break }
-                    }
-                }
-            }
-            if let requiredNeighbors,
-               otherBlobsNearby.count >= requiredNeighbors { break }
-        }
-        return otherBlobsNearby
-    }
-
     // returns a set of neighbors, and a set of blob ids that have been processed already.
     // repeats the direct neighbor scan for all found neighbors,
     // so that all members of this neighbor set are within scanSize
@@ -236,20 +202,11 @@ public actor BlobAnalyzer {
                                 scanSize: Int = 12,
                                 processedBlobs: ProcessedBlobs) async -> (Set<Blob>, ProcessedBlobs)
     {
-        var blobsToProcess = [blob]
-        var ret: Set<Blob> = []
-
-        while blobsToProcess.count > 0 {
-            let blobToProcess = blobsToProcess.removeFirst()
-            for otherBlob in await self.directNeighbors(of: blobToProcess, scanSize: scanSize) {
-                if !(await processedBlobs.contains(otherBlob.id)) {
-                    await processedBlobs.insert(otherBlob.id)
-                    ret.insert(otherBlob)
-                    blobsToProcess.append(otherBlob)
-                }
-            }
-        }
-        return (ret, processedBlobs)
+        await StarCore.neighborCloud(of: blob,
+                                     blobRefs: blobRefs,
+                                     blobMap: blobMap,
+                                     scanSize: scanSize,
+                                     processedBlobs: processedBlobs)
     }
 
     public func logBlobs() async {
@@ -258,10 +215,118 @@ public actor BlobAnalyzer {
             Log.d("frame \(frameIndex) blob.id \(blob.id) \(await blob.size()) pixels \(await blob.pixels)")
         }
     }
+
+    public var blobRefsObj: BlobRefs { blobRefs }
+
+
+    public func directNeighbors(of blob: Blob,
+                                scanSize: Int = 12,
+                                requiredNeighbors: Int? = nil,
+                                blobMattersClosure:  (@Sendable (Blob) async -> Bool)? = nil) async -> Set<Blob>
+    {
+        await StarCore.directNeighbors(of: blob,
+                                       blobRefs: blobRefs,
+                                       blobMap: blobMap,
+                                       scanSize: scanSize,
+                                       requiredNeighbors: requiredNeighbors,
+                                       blobMattersClosure: blobMattersClosure)
+    }
 }
-    
+
 fileprivate struct BlobSize {
     let id: UInt16
     let size: Int
     let blob: Blob
 }
+
+public final class BlobRefs: Sendable {
+
+    let refs: [UInt16]
+    let width: Int
+    let height: Int
+    
+    public init(refs: [UInt16], width: Int, height: Int) {
+        self.refs = refs
+        self.width = width
+        self.height = height
+    }
+
+    public func updated(with newRefs: [UInt16]) -> BlobRefs {
+        .init(refs: newRefs, width: width, height: height)
+    }
+}
+
+internal func neighborCloud(of blob: Blob,
+                            blobRefs: BlobRefs,
+                            blobMap: [UInt16: Blob],
+                            scanSize: Int = 12,
+                            processedBlobs: ProcessedBlobs) async -> (Set<Blob>, ProcessedBlobs)
+{
+    var blobsToProcess = [blob]
+    var ret: Set<Blob> = []
+
+    while blobsToProcess.count > 0 {
+        let blobToProcess = blobsToProcess.removeFirst()
+        for otherBlob in await StarCore.directNeighbors(of: blobToProcess,
+                                                        blobRefs: blobRefs,
+                                                        blobMap: blobMap,
+                                                        scanSize: scanSize)
+        {
+            if !(await processedBlobs.contains(otherBlob.id)) {
+                await processedBlobs.insert(otherBlob.id)
+                ret.insert(otherBlob)
+                blobsToProcess.append(otherBlob)
+            }
+        }
+    }
+    return (ret, processedBlobs)
+}
+
+
+
+// returns a set of blobs that are directly within scanSize of blob's bounding box
+// certain neighbors can be excluded with the blobMattersClosure returning false
+// if requiredNeighbors is set, no more than that number of neighbors will be returned.
+internal func directNeighbors(of blob: Blob,
+                              blobRefs: BlobRefs,
+                              blobMap: [UInt16: Blob],
+                              scanSize: Int = 12,
+                              requiredNeighbors: Int? = nil,
+                              blobMattersClosure:  (@Sendable (Blob) async -> Bool)? = nil) async -> Set<Blob>
+{
+    let boundingBox = await blob.boundingBox()
+    
+    var startX = boundingBox.min.x - scanSize
+    var startY = boundingBox.min.y - scanSize
+    
+    if startX < 0 { startX = 0 }
+    if startY < 0 { startY = 0 }
+
+    var endX = boundingBox.max.x + scanSize
+    var endY = boundingBox.max.y + scanSize
+
+    if endX >= blobRefs.width  { endX = blobRefs.width  - 1 }
+    if endY >= blobRefs.height { endY = blobRefs.height - 1 }
+    
+    var otherBlobsNearby: Set<Blob> = []
+
+    for x in (startX ... endX) {
+        for y in (startY ... endY) {
+            let blobRef = blobRefs.refs[y*blobRefs.width+x]
+            if blobRef != 0,
+               blobRef != blob.id,
+               let otherBlob = blobMap[blobRef]
+            {
+                if await blobMattersClosure?(otherBlob) ?? true {
+                    otherBlobsNearby.insert(otherBlob)
+                    if let requiredNeighbors,
+                       otherBlobsNearby.count >= requiredNeighbors { break }
+                }
+            }
+        }
+        if let requiredNeighbors,
+           otherBlobsNearby.count >= requiredNeighbors { break }
+    }
+    return otherBlobsNearby
+}
+

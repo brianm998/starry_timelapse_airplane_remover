@@ -208,7 +208,6 @@ public actor LinearBlobExtender {
                                            data: data,
                                            furtherIterations: args.maxIterationCount)
                 }
-               // try? await Task.sleep(nanoseconds: 1_000_000)
             }
             await taskGroup.waitForAll()
         }

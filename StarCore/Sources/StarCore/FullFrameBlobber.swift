@@ -203,8 +203,8 @@ public class FullFrameBlobber {
         Log.i("frame \(frameIndex) found \(blobs.count) blobs")
     }
     
-    public var blobMap: BlobMap {
-        var ret: BlobMap = [:]
+    public var blobMap: [UInt16:Blob] {
+        var ret: [UInt16:Blob] = [:]
         for blob in self.blobs { ret[blob.id] = blob }
         return ret
     }

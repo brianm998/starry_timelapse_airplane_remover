@@ -246,16 +246,22 @@ public actor LinearBlobConnector {
     fileprivate final class Data: Sendable {
         let args: Args
         let processedBlobs: ProcessedBlobs
+        let blobMap: [UInt16:Blob]
+        let blobRefs: BlobRefs
         let analyzer: BlobAnalyzer
         let frameIndex: Int
 
         init(args: Args,
              processedBlobs: ProcessedBlobs,
+             blobMap: [UInt16:Blob],
+             blobRefs: BlobRefs,
              analyzer: BlobAnalyzer,
              frameIndex: Int)
         {
             self.args = args
             self.processedBlobs = processedBlobs
+            self.blobMap = blobMap
+            self.blobRefs = blobRefs
             self.analyzer = analyzer
             self.frameIndex = frameIndex
         }
@@ -267,12 +273,14 @@ public actor LinearBlobConnector {
 
         let data = LinearBlobConnector.Data(args: args,
                                             processedBlobs: .init(),
+                                            blobMap: await analyzer.mapOfBlobs(),
+                                            blobRefs: await analyzer.blobRefsObj,
                                             analyzer: analyzer,
                                             frameIndex: frameIndex)
-        
+
         await withTaskGroup(of: Void.self) { taskGroup in
             for (_, blob) in blobMap {
-                taskGroup.addTask { [self] in
+                taskGroup.addTask { 
                     await processBlob(blob, data: data)
                 }
             }
@@ -298,9 +306,11 @@ fileprivate func processBlob(_ blob: Blob, data: LinearBlobConnector.Data) async
 
     // find a cloud of neighbors 
     let (neighborCloud, newProcessedBlobs) =
-      await data.analyzer.neighborCloud(of: blob,
-                                        scanSize: data.args.scanSize,
-                                        processedBlobs: data.processedBlobs)
+      await StarCore.neighborCloud(of: blob,
+                                   blobRefs: data.blobRefs,
+                                   blobMap: data.blobMap,
+                                   scanSize: data.args.scanSize,
+                                   processedBlobs: data.processedBlobs)
 
     await data.processedBlobs.union(with: newProcessedBlobs)
     
@@ -414,12 +424,13 @@ fileprivate func iterate(on blobLine: Line,
                y < data.analyzer.height
             {
                 // look for blobs at x,y, i.e. blobs that are right on the line
-                if let blobId = await data.analyzer.blobId(at: x, and: y) {
-                    await linearBlobIds.insert(blobId)
-                }
+                let index = y*data.analyzer.width+x
+                let blobId = data.blobRefs.refs[index]
+                await linearBlobIds.insert(blobId)
             }
         }
 
+        // XXX use passed in BlobMap for this?
         let linearBlobSet = await data.analyzer.blobs(with: await linearBlobIds.set)
 
         if linearBlobSet.count > 1 {
