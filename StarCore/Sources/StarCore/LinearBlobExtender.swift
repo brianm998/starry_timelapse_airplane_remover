@@ -192,11 +192,11 @@ public actor LinearBlobExtender {
 
         await withTaskGroup(of: Void.self) { taskGroup in
             for (id, blob) in blobMap {
+                if await processedBlobs.contains(id) { return }
+                await processedBlobs.insert(id)
+                if await blob.size() < args.minBlobSize { return }
+                
                 taskGroup.addTask { [self] in
-                    if await processedBlobs.contains(id) { return }
-                    await processedBlobs.insert(id)
-                    if await blob.size() < args.minBlobSize { return }
-
                     let data = Data(args: args,
                                     blobMap: blobMap,
                                     blobImage: blobImage,
@@ -208,7 +208,7 @@ public actor LinearBlobExtender {
                                            data: data,
                                            furtherIterations: args.maxIterationCount)
                 }
-                try? await Task.sleep(nanoseconds: 1_000_000)
+               // try? await Task.sleep(nanoseconds: 1_000_000)
             }
             await taskGroup.waitForAll()
         }
@@ -239,7 +239,6 @@ public actor LinearBlobExtender {
         }
     }
 }
-
 
 fileprivate func process(blob: Blob,
                          data: LinearBlobExtender.Data,
