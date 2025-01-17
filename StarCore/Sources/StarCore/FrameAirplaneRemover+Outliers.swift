@@ -117,13 +117,32 @@ extension FrameAirplaneRemover {
 
         let blobBinarySaver = BlobBinarySaver(blobMap: blobMap)
         await blobBinarySaver.save(to: self.outliersDirname)
-        
+
         // blobs to promote to outlier groups
         let blobs = Array(blobMap.values)
 
         Log.i("frame \(frameIndex) has \(blobs.count) blobs")
         self.set(state: .populatingOutlierGroups)
 
+
+
+        // XXX XXX XXX
+        // XXX XXX XXX
+        // XXX XXX XXX
+
+            var makeDustBin = true
+            if let _ = blobProcessor as? StrongBlobProcessor {
+                makeDustBin = false
+            }
+            if let _ = blobProcessor as? MildBlobProcessor {
+                makeDustBin = false
+            }
+
+        // XXX XXX XXX
+        // XXX XXX XXX
+        // XXX XXX XXX
+
+        
         // promote found blobs to outlier groups for further processing
         for blob in blobs {
             // make outlier group from this blob
@@ -131,7 +150,44 @@ extension FrameAirplaneRemover {
 
             //Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.id) line \(String(describing: blob.line))")
             await outlierGroup.set(frame: self)
-            await outlierGroups?.add(member: outlierGroup)
+
+
+        // XXX XXX XXX
+        // XXX XXX XXX
+        // XXX XXX XXX
+            if makeDustBin {
+            
+        // here is were we see if we should apply the .isolated decision tree type
+        // and separate out the blobs into two groups:
+        // 1. dust bin
+        // 2. add to normal outlier group pathway
+
+                if let classifier = await currentClassifier.get(for: .isolated) {
+                    let featureData = await outlierGroup.featureData()
+                    let classification = classifier.classification(of: featureData)
+
+                    if classification > -0.7 { // XXX constant XXX
+                        // it's good
+                        await outlierGroups?.add(member: outlierGroup)
+                    } else {
+                        // it's bad
+                        // put it in the dustbin
+                        /*
+
+                         - save to dustbin
+                         - allow reading of dustbin in GUI
+                         
+                         */
+                    }
+                }
+            } else {
+                // don't use the dustbin
+        // XXX XXX XXX
+        // XXX XXX XXX
+        // XXX XXX XXX
+            
+                await outlierGroups?.add(member: outlierGroup)
+            }
         }
         self.set(state: .readyForInterFrameProcessing)
     }

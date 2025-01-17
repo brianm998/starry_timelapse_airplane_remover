@@ -61,14 +61,11 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           .save(.filter3),
           .frameState(.filter4),
 
-          .borderBrightnessBlobRemover(.init(maxBrightness: 0.65,
-                                             medianIntensityFloor: 10000)),
 
+          .compactBlobIds,
           
           .save(.filter4),
           .frameState(.filter5),
-
-          .compactBlobIds,
           
           .blobLineTrim(.init(minBlobSize: 40,
                               minLineLength: 30,
@@ -79,23 +76,9 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           .frameState(.filter6),
 
 
-
-          // another pass at cutting out individual blobs based upon size, brightness
-          .trimWithConstants(.init(minBlobSize: 10,
-                                   minBlobIntensity: 1000,
-                                   qualifierSize: 18,
-                                   qualifierMedianIntensity: 10000)),
-
-          
           .save(.filter6),
           .frameState(.filter7),
           
-
-          .nonLinearBlobRemover(.init(minBlobSize: 0,
-                                      medianIntensity: 5000,
-                                      lengthOverFillAmount: 22,
-                                      minLineFillAmount: 4,
-                                      maxLineFillAmount: 15)),
 
           .compactBlobIds,
 
