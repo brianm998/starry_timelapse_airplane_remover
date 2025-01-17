@@ -49,7 +49,12 @@ cd ../decision_tree_generator
 ./outlier_csv_split.pl /qp/star_validated/$1
 
 # build trees
+# tree for all classifiers
 swift run -Xswiftc -O decision_tree_generator --forest 8 --no-prune -t /qp/star_validated/$1-test /qp/star_validated/$1-train
+
+# tree for just isolated classifiers
+swift run -Xswiftc -O decision_tree_generator --treeType isolated --forest 8 --no-prune -t /qp/star_validated/$1-test /qp/star_validated/$1-train
+
 #.build/debug/decision_tree_generator --forest 12 --no-prune -n 28 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
 #.build/debug/decision_tree_generator --forest 16 --no-prune -n 28 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
 #.build/debug/decision_tree_generator --forest 24 --no-prune -n 28 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
