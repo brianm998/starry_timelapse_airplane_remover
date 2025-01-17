@@ -20,15 +20,17 @@ public enum DecisionSplitType: String, Sendable {
 public let currentClassifier = Classifier()
 
 public actor Classifier {
-    private var currentClassifier: (() -> NamedOutlierGroupClassifier)? 
-
+    private var classifiers: [TreeType: @Sendable () -> NamedOutlierGroupClassifier] = [:]
+    
     public init() { }
 
-    public func set(classifier: @Sendable @escaping () -> NamedOutlierGroupClassifier) {
-        currentClassifier = classifier
+    public func set(for treeType: TreeType,
+                    classifier: @Sendable @escaping () -> NamedOutlierGroupClassifier)
+    {
+        classifiers[treeType] = classifier
     }
 
-    public func get() -> NamedOutlierGroupClassifier? { currentClassifier?() }
+    public func get(for treeType: TreeType) -> NamedOutlierGroupClassifier? { classifiers[treeType]?() }
 }
 
 public enum StreakDirection: Sendable {

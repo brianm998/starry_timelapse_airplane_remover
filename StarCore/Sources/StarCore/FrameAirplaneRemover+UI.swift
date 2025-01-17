@@ -22,7 +22,7 @@ You should have received a copy of the GNU General Public License along with sta
 extension FrameAirplaneRemover {
     
     public func applyDecisionTreeToAutoSelectedOutliers() async {
-        if let classifier = await currentClassifier.get() {
+        if let classifier = await currentClassifier.get(for: .all) {  // XXX
             await foreachOutlierGroupMulti() { group in
                 var apply = true
                 if let shouldPaint = await group.shouldPaint() {
@@ -50,24 +50,26 @@ extension FrameAirplaneRemover {
         }
     }
 
-    public func applyDecisionTreeToAllOutliers() async {
+    public func applyDecisionTreeToAllOutliers() async -> Task<Void,Never>? {
         //Log.d("frame \(self.frameIndex) applyDecisionTreeToAll \(self.outlierGroups?.members.count ?? 0) Outliers")
         let startTime = NSDate().timeIntervalSince1970
-        if let classifier = await currentClassifier.get(),
+        if let classifier = await currentClassifier.get(for: .all),  // XXX 
            let outlierGroups
         {
-            await withTaskGroup(of: Void.self) { taskGroup in
-                for (_, group) in await outlierGroups.getMembers() {
-                    taskGroup.addTask {
-                        if await group.shouldPaint() == nil {
-                            // only apply classifier when no other classification is otherwise present
-                            let featureData = await group.featureData()
-                            let classification = classifier.classification(of: featureData)
-                            await group.shouldPaint(.fromClassifier(classification))
+            return await Task.detached(priority: .userInitiated) {
+                await withTaskGroup(of: Void.self) { taskGroup in
+                    for (_, group) in await outlierGroups.getMembers() {
+                        taskGroup.addTask {
+                            if await group.shouldPaint() == nil {
+                                // only apply classifier when no other classification is otherwise present
+                                let featureData = await group.featureData()
+                                let classification = classifier.classification(of: featureData)
+                                await group.shouldPaint(.fromClassifier(classification))
+                            }
                         }
                     }
+                    await taskGroup.waitForAll()
                 }
-                await taskGroup.waitForAll()
             }
             let endTime = NSDate().timeIntervalSince1970
             Log.i("frame \(self.frameIndex) spent \(endTime - startTime) seconds classifing outlier groups");
@@ -75,6 +77,7 @@ extension FrameAirplaneRemover {
             Log.w("no classifier")
         }
         Log.d("frame \(self.frameIndex) DONE applyDecisionTreeToAllOutliers")
+        return nil
     }
     
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool) async {

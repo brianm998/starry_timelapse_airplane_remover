@@ -92,7 +92,7 @@ import StarDecisionTrees
     without this, ghost airplanes are still seen, the bright parts of the streak are gone,
     but a halo around still persists.  XXX somehow detect this beforehand? XXX
 
-  - refactor the view model class so that it doesn't crash when closed when processing 
+  * refactor the view model class so that it doesn't crash when closed when processing 
     problem now is that we re-use the same view model class, need to create another properly
 
   - orange unknown outlier groups not clickable directly (but are clickable on arrows)
@@ -117,8 +117,8 @@ import StarDecisionTrees
     - render frame button is sometimes disabled when it shouldn't be
     * frames end up waiting for interframe processing too long, and pile up
     - load all outliers on unprocessed frame starts processing when there are no outliers :(
-    - memory leaks lead to crash on processing long sequences
-
+    * memory leaks lead to crash on processing long sequences
+    - fix bug where chevron buttons don't always work
 
   Next steps for custom blob gui:
 
@@ -135,14 +135,16 @@ import StarDecisionTrees
     - allow deleting steps
     * need to have helper text for what the values do
     * find way to get processing methods into json and back
-    - allow saving and current state to json
-    - allow reading saved json when starting up custom processor 
+    * allow saving and current state to json
+    * allow reading saved json when starting up custom processor 
     - allow switching from one custom back to a default
+    - allow starting over with new custom processing steps (delete and copy exisiting set)
+    - make blob window open when switching to custom processing and there isn't any yet
 
   Blobber improvements;
     - process brighter pixels through the set of steps first, without dim ones,
       then do one or more dimmer passes later
-    - use a variable min contrast, which changes as the blob expands.
+    * use a variable min contrast, which changes as the blob expands.
       have a beginning min contrast, which linearly contracts to a final min contrast
       over a given blob size
     
@@ -161,8 +163,11 @@ struct StarApp: App {
     init() {
         // maybe move this elsewhere
         Task { 
-            await StarCore.currentClassifier.set() {
+            await StarCore.currentClassifier.set(for: .all) {
                 OutlierGroupForestClassifier_0b8a521a()
+            }
+            await StarCore.currentClassifier.set(for: .isolated) {
+                OutlierGroupForestClassifier_c5ea1596()
             }
         }
         
