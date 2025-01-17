@@ -63,6 +63,14 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
             """)
     var decisionTypesString: String = ""
 
+    @Option(name: [.customShort("e"), .customLong("treeType")],
+          help:"""
+            Specify which type of tree you want to make:
+            
+            \(TreeType.allCasesString)
+            """)
+    var treeType: TreeType?
+    
     @Option(name: [.customShort("t"), .customLong("test-data")],
           help:"""
             A list of directories containing test data that is not used for training
@@ -479,8 +487,17 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
         Log.d("decisionTypesString \(decisionTypesString)")
         
         if decisionTypesString == "" {
-            // if not specfied, use all types
-            decisionTypes = OutlierGroupFeature.allCases
+            // if not specfied, maybe use tree type
+            if let treeType {
+                switch treeType {
+                case .all:
+                    decisionTypes = OutlierGroupFeature.allCases
+                case .isolated:
+                    decisionTypes = OutlierGroupFeature.allCases.filter { $0.isUsed(for: treeType) }
+                }
+            } else {
+                decisionTypes = OutlierGroupFeature.allCases
+            }
         } else {
             // split out given types
             let rawValues = decisionTypesString.components(separatedBy: ",")
@@ -657,6 +674,8 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
         }
     }
 }
+
+extension TreeType: ExpressibleByArgument { } // XXX
 
 extension OutlierGroupFeature: ExpressibleByArgument {
 

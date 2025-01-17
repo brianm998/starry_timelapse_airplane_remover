@@ -16,6 +16,20 @@ import logging
 import Cocoa
 import Combine
 
+public enum TreeType: String, CaseIterable {
+    case all
+    case isolated
+
+    public static var allCasesString: String {
+        var ret = ""
+        for type in TreeType.allCases {
+            ret += "\(type.rawValue)\n"
+        }
+
+        return ret
+    }
+}
+
 // we derive a Double value from each of these
 // all switches on this enum are in this file
 // add a new case, handle all switches here, and the
@@ -99,6 +113,104 @@ public enum OutlierGroupFeature: String,
         return ret
     }
     
+    public func isUsed(for treeType: TreeType) -> Bool {
+        switch treeType {
+        case .all:
+            return true
+
+        case .isolated:
+            switch self {
+            case .size:
+                return true
+
+            case .width:
+                return true
+     
+            case .height:
+                return true
+     
+            case .centerX:
+                return true
+     
+            case .centerY:
+                return true
+     
+            case .minX:
+                return true
+     
+            case .minY:
+                return true
+     
+            case .maxX:
+                return true
+     
+            case .maxY:
+                return true
+     
+            case .hypotenuse:
+                return true
+     
+            case .aspectRatio:
+                return true
+     
+            case .fillAmount:
+                return true
+     
+            case .surfaceAreaRatio:
+                return true
+     
+            case .averagebrightness:
+                return true
+     
+            case .medianBrightness:
+                return true
+     
+            case .maxBrightness:
+                return true
+     
+            case .numberOfNearbyOutliersInSameFrame:
+                return false
+     
+            case .maxHoughTransformCount:
+                return true
+     
+            case .pixelBorderAmount:
+                return true
+     
+            case .averageLineVariance:
+                return true
+     
+            case .medianLineVariance:
+                return true
+     
+            case .lineLength:
+                return true
+     
+            case .nearbyDirectOverlapScore:
+                return false
+     
+            case .boundingBoxOverlapScore:
+                return false
+     
+            case .lineFillAmount:
+                return true
+     
+            case .borderBrightness:
+                return false    // maybe could be used here? 
+                
+            case .bunchCount:
+                return true
+
+            case .medianBunchSize:
+                return true
+     
+            case .maxBunchSize:
+                return true
+     
+            }
+        }
+    }
+    
     public var sortOrder: Int {
         switch self {
         case .size:
@@ -161,7 +273,7 @@ public enum OutlierGroupFeature: String,
             return 28
         }
     }
-
+    
     public func decisionTreeValue(of group: OutlierGroup) async -> Double {
         let height = IMAGE_HEIGHT!
         let width = IMAGE_WIDTH!
