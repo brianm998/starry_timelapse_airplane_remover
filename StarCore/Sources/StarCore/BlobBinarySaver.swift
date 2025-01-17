@@ -30,10 +30,24 @@ You should have received a copy of the GNU General Public License along with sta
  ]
 */
 public struct BlobBinaryLoader {
+    // returns good blobs first, then the dustbin
     public func load(from dirname: String,
                      with frameIndex: Int) async throws -> [UInt16: Blob]
     {
-        let filename = "\(dirname)/\(BlobBinarySaver.outlierBinaryFilename)"
+        try await loadMap(from: "\(dirname)/\(BlobBinarySaver.outlierBinaryFilename)",
+                          with: frameIndex)
+    }
+
+    public func loadDustbin(from dirname: String,
+                            with frameIndex: Int) async throws -> [UInt16: Blob]
+    {
+         try await loadMap(from: "\(dirname)/\(BlobBinarySaver.dustbinBinaryFilename)",
+                           with: frameIndex)
+    }
+
+    private func loadMap(from filename: String,
+                         with frameIndex: Int) async throws -> [UInt16: Blob]
+    {
         let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
         let request = URLRequest(url: imageURL as URL)
         let (data, _) = try await URLSession.shared.data(for: request)
@@ -63,10 +77,10 @@ public actor BlobBinarySaver {
     }
 
     public static let outlierBinaryFilename = "outliers.bin"
+    public static let dustbinBinaryFilename = "dust.bin"
     
-    public func save(to dirname: String) async {
+    public func save(to filename: String) async {
         // save the blob refs as an image here
-        let filename = "\(dirname)/\(BlobBinarySaver.outlierBinaryFilename)"
 
         let blobCount = UInt16(blobMap.count)
         var buffer = [blobCount].data

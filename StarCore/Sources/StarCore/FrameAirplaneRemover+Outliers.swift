@@ -38,16 +38,6 @@ extension FrameAirplaneRemover {
             } catch {
                 // XXX log here
             }
-            // still have stored sequences with this format
-            if let outlierGroups = try await loadOutliersFromImageFile() {
-                // when loading from the older format, store in the new one
-
-                let config = await configManager.config()
-                let dirname = "\(config.outlierOutputDirname)/\(frameIndex)"
-                
-                try await outlierGroups.writeOutliersBinary(to: dirname)
-                return outlierGroups
-            }
 
             return nil
         }
@@ -67,46 +57,6 @@ extension FrameAirplaneRemover {
         return try await OutlierGroups(at: frameIndex, fromOutlierDir: dirname)
     }
     
-    public func loadOutliersFromImageFile() async throws -> OutlierGroups? {
-        let startTime = Date().timeIntervalSinceReferenceDate
-
-        guard let subtractionImage =
-                try await self.imageAccessor.load(frameIndex: frameIndex,
-                                                  type: .subtraction,
-                                                  atSize: .original)
-        else {
-            Log.i("couldn't load subtraction image for loading outliers")
-            return nil
-        }
-
-        Log.i("frame \(frameIndex) loaded subtraction image in \(Date().timeIntervalSinceReferenceDate-startTime) seconds")
-
-        switch subtractionImage.imageData {
-        case .eightBit(_):
-            Log.w("cannot process eight bit subtraction image")
-            return nil
-
-        case .sixteenBit(let subtractionArr):
-            do {
-                let config = await configManager.config()
-                if let groups = try await OutlierGroups(at: frameIndex,
-                                                        withSubtractionArr: subtractionArr,
-
-                                                        fromOutlierDir: "\(config.outlierOutputDirname)/\(frameIndex)")
-                {
-                    let endTime = Date().timeIntervalSinceReferenceDate
-                    Log.i("frame \(frameIndex) loaded \(await groups.members.count) outliers in \(endTime-startTime) seconds")
-
-                    
-                    return groups
-                }
-            } catch {
-                Log.e("frame \(frameIndex) cannot load outlier groups: \(error)")
-            }
-        }
-        return nil
-    }
-
     public func findOutliers() async throws {
         
         mkdir(await self.outliersDirname)
@@ -115,33 +65,11 @@ extension FrameAirplaneRemover {
         
         let blobMap = try await blobProcessor.process(frame: self)
 
-        let blobBinarySaver = BlobBinarySaver(blobMap: blobMap)
-        await blobBinarySaver.save(to: self.outliersDirname)
-
         // blobs to promote to outlier groups
         let blobs = Array(blobMap.values)
 
         Log.i("frame \(frameIndex) has \(blobs.count) blobs")
         self.set(state: .populatingOutlierGroups)
-
-
-
-        // XXX XXX XXX
-        // XXX XXX XXX
-        // XXX XXX XXX
-
-            var makeDustBin = true
-            if let _ = blobProcessor as? StrongBlobProcessor {
-                makeDustBin = false
-            }
-            if let _ = blobProcessor as? MildBlobProcessor {
-                makeDustBin = false
-            }
-
-        // XXX XXX XXX
-        // XXX XXX XXX
-        // XXX XXX XXX
-
         
         // promote found blobs to outlier groups for further processing
         for blob in blobs {
@@ -151,44 +79,34 @@ extension FrameAirplaneRemover {
             //Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.id) line \(String(describing: blob.line))")
             await outlierGroup.set(frame: self)
 
+            // when promoting blobs to outlier groups, we first use the .isolated classifier
+            // and separate blobs into two groups based upon a threshold in this classification.
+            // one group is the dustbin, which has a very high likelyhood of not being useful
+            // the other group are the outlier groups that will get processed further
 
-        // XXX XXX XXX
-        // XXX XXX XXX
-        // XXX XXX XXX
-            if makeDustBin {
-            
-        // here is were we see if we should apply the .isolated decision tree type
-        // and separate out the blobs into two groups:
-        // 1. dust bin
-        // 2. add to normal outlier group pathway
+            if let classifier = await currentClassifier.get(for: .isolated) {
+                let classification = await classifier.classification(of: outlierGroup.featureData())
 
-                if let classifier = await currentClassifier.get(for: .isolated) {
-                    let featureData = await outlierGroup.featureData()
-                    let classification = classifier.classification(of: featureData)
-
-                    if classification > -0.7 { // XXX constant XXX
-                        // it's good
-                        await outlierGroups?.add(member: outlierGroup)
-                    } else {
-                        // it's bad
-                        // put it in the dustbin
-                        /*
-
-                         - save to dustbin
-                         - allow reading of dustbin in GUI
-                         
-                         */
-                    }
+                // -1 classification means bad
+                //  1 classification means good
+                //  0 is undecided
+                if classification > -0.7 { // XXX constant XXX
+                    // it's good
+                    await outlierGroups?.add(member: outlierGroup)
+                } else {
+                    // it's bad
+                    // put it in the dustbin
+                    await outlierGroups?.dumpInDustBin(member: outlierGroup)
                 }
             } else {
-                // don't use the dustbin
-        // XXX XXX XXX
-        // XXX XXX XXX
-        // XXX XXX XXX
-            
+                Log.w("No .isolated classifier!!")
                 await outlierGroups?.add(member: outlierGroup)
             }
         }
+
+        // here we write the outlier binaries through the outlierGroups
+        try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)
+        
         self.set(state: .readyForInterFrameProcessing)
     }
 
@@ -238,8 +156,7 @@ extension FrameAirplaneRemover {
     }
 
     public func initializeEmptyOutlierGroups() {
-        self.outlierGroups = OutlierGroups(frameIndex: frameIndex,
-                                           members: [:])
+        self.outlierGroups = OutlierGroups(frameIndex: frameIndex)
     }
     
     public func foreachOutlierGroup(_ closure: @Sendable (OutlierGroup) async -> Void) async {
@@ -402,6 +319,14 @@ extension FrameAirplaneRemover {
     public func outlierGroupList() async -> [OutlierGroup]? {
         if let outlierGroups {
             let groups = await outlierGroups.getMembers()
+            return groups.map {$0.value}
+        }
+        return nil
+    }
+
+    public func outlierGroupDustbinList() async -> [OutlierGroup]? {
+        if let outlierGroups {
+            let groups = await outlierGroups.getDustbin()
             return groups.map {$0.value}
         }
         return nil

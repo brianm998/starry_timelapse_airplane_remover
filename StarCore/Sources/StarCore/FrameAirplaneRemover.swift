@@ -508,11 +508,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                                   atSize: .preview,
                                                   overwrite: false)
             }
-            Log.d("frame \(self.frameIndex) done writing toutut files")
+            Log.d("frame \(self.frameIndex) done writing output files")
         }
         self.set(state: .complete)
         if let completion { await completion() }
-
         
         Log.i("frame \(self.frameIndex) complete")
     }

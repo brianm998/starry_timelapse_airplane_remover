@@ -264,7 +264,7 @@ fileprivate func process(blob: Blob,
         // - stop
 
         if intersections.count > 1 {
-            let blobSize = await blob.size()
+            //let blobSize = await blob.size()
             //Log.d("frame \(frameIndex) processing blob \(blob) size \(blobSize) intersections.count \(intersections.count)")
             //Log.d("frame \(frameIndex) processing blob \(blob) iterating forwards from intersection 0")
             await originZeroLine.asyncIterate(.forwards, from: intersections[0]) { x, y, orientation in
@@ -356,7 +356,6 @@ fileprivate func maybeAbsorb(x: Int,
                  
                  */
 
-                let newBlobSize = await newBlob.size()
                 let blobSize = await _iterationBlob.size()
                 
                 if let newLine = await blobCopy.line,

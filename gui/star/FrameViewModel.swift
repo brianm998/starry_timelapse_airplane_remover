@@ -78,6 +78,10 @@ public class FrameViewModel {
     var outlierViews: [OutlierGroupViewModel]?
     var loadingOutlierViews: Bool = false
 
+    var shouldShowDustbin = false
+    var dustbinViews: [OutlierGroupViewModel]?
+    var loadingDustbinViews: Bool = false
+
     // we don't keep full resolution images here
 
     var thumbnailImage: Image = initialImage

@@ -75,6 +75,27 @@ public struct FrameEditImageView: View {
         } 
     }
 
+    private func maybeLoadDustbin() { 
+        // try loading dustbin outliers if there aren't any present
+        let frameView = self.viewModel.frames[self.viewModel.currentIndex]
+
+        if viewModel.shouldShowDustbin,
+           frameView.dustbinViews == nil,
+           !frameView.loadingDustbinViews,
+           let frame = frameView.frame
+        {
+            frameView.loadingDustbinViews = true
+            //viewModel.loadingOutliers = true
+
+            Task {
+                await self.viewModel.setOutlierDustbinGroups(forFrame: frame)
+                await MainActor.run {
+                    frameView.loadingDustbinViews = false
+                }
+            }
+        } 
+    }
+
     public var body: some View {
         @Bindable var viewModel = viewModel
 
@@ -105,10 +126,24 @@ public struct FrameEditImageView: View {
                               .id(localID)
                         }
                     }
+                    if self.viewModel.shouldShowDustbin,
+                       let outlierViews = frameView.dustbinViews
+                    {
+                        ForEach(outlierViews) { outlierViewModel in
+                            OutlierGroupView(groupViewModel: outlierViewModel)
+                              .id(localID)
+                        }
+                    }
+
                 }.opacity(viewModel.outlierOpacity)
             }
-        }.onChange(of: viewModel.currentIndex, initial: true) {
-            maybeLoadOutliers()
         }
+          .onChange(of: viewModel.currentIndex, initial: true) {
+              maybeLoadOutliers()
+              maybeLoadDustbin()
+          }
+          .onChange(of: viewModel.shouldShowDustbin) {
+              maybeLoadDustbin()
+          }
     }
 }

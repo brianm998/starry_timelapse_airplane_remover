@@ -23,20 +23,33 @@ public actor OutlierGroups {
     let width = Int(IMAGE_WIDTH!)
     
     public let frameIndex: Int
-    public var members: [UInt16: OutlierGroup] // keyed by name
+    // outliers which have been selected through the first round as looking acceptable
+    public var members: [UInt16: OutlierGroup] // keyed by id
+
+    // outliers which have failed the first round, but are here if that was wrong
+    public var dustbin: [UInt16: OutlierGroup] // keyed by id
 
     public func add(member: OutlierGroup) {
         members[member.id] = member
+    }
+
+    public func dumpInDustBin(member: OutlierGroup) {
+        dustbin[member.id] = member
     }
 
     public func asyncHash(into hasher: inout Hasher) async {
         for (_, member) in members {
             hasher.combine(member)
         }
+        for (_, member) in dustbin {
+            hasher.combine(member)
+        }
     }
 
     public func getMembers() -> [UInt16: OutlierGroup] { members }
-    
+
+    public func getDustbin() -> [UInt16: OutlierGroup] { dustbin }
+
     // image data from an image with non zero pixels set with an outlier id
     public var outlierImageData: [UInt16] = [] // outlier ids for frame, row major indexed
     public var outlierYAxisImageData: [UInt8]? // y axis of the outlierImage data
@@ -64,13 +77,21 @@ public actor OutlierGroups {
                 outlierImageData[index] = id
             }
         }
+        for (id, group) in dustbin {
+            for pixel in group.pixelSet {
+                let index = pixel.y*width+pixel.x
+                outlierImageData[index] = id
+            }
+        }
     }
     
     public init(frameIndex: Int,
-                members: [UInt16: OutlierGroup])
+                members: [UInt16: OutlierGroup] = [:],
+                dustbin: [UInt16: OutlierGroup] = [:])
     {
         self.frameIndex = frameIndex
         self.members = members
+        self.dustbin = dustbin
         self.outlierImageData = [UInt16](repeating: 0, count: 0) // XXX ???
         self.outlierYAxisImageData = [UInt8](repeating: 0, count: 0) // XXX
     }
@@ -105,9 +126,11 @@ public actor OutlierGroups {
         self.frameIndex = frameIndex
         let blobBinaryLoader = BlobBinaryLoader()
         let blobs = try await blobBinaryLoader.load(from: outlierDir, with: frameIndex)
+        let dustbinBlobs = try? await blobBinaryLoader.loadDustbin(from: outlierDir, with: frameIndex)
         let outlierGroupPaintDataFilename = "\(outlierDir)/\(OutlierGroups.outlierGroupPaintJsonFilename)"
         let outlierGroupPaintData = try await OutlierGroups.loadOutlierGroupPaintData(from: outlierGroupPaintDataFilename)
         self.members = [:]
+        self.dustbin = [:]
         
         for (id, blob) in blobs {
             let outlierGroup = await blob.outlierGroup(at: frameIndex)
@@ -118,125 +141,13 @@ public actor OutlierGroups {
             }
             self.members[id] = outlierGroup
         }
-    }
 
-    // uses the older blob image, will remove this eventually
-    public init?(at frameIndex: Int,
-                 withSubtractionArr subtractionArr: [UInt16],
-                 fromOutlierDir outlierDir: String) async throws
-    {
-        let startTime = Date().timeIntervalSinceReferenceDate
-        //Log.d("start")
-        self.frameIndex = frameIndex
-        let outlierGroupPaintDataFilename = "\(outlierDir)/\(OutlierGroups.outlierGroupPaintJsonFilename)"
-        let imageFilename = "\(outlierDir)/\(BlobImageSaver.outlierTiffFilename)"
-        // XXX pick up y-axis if it exists
-        let yAxisImageFilename = "\(outlierDir)/\(BlobImageSaver.outlierYAxisBinaryFilename)"
-        let outlierGroupPaintData = try await OutlierGroups.loadOutlierGroupPaintData(from: outlierGroupPaintDataFilename)
-
-
-        Log.i("frame \(frameIndex) loaded outlier group paint data after \(Date().timeIntervalSinceReferenceDate-startTime) seconds")
-
-        
-        // XXX
-        
-        let _outlierGroupPaintData = outlierGroupPaintData
-
-        self.members = [:]
-
-        //Log.d("check 1")
-
-        if FileManager.default.fileExists(atPath: yAxisImageFilename) {
-
-            let fileurl = NSURL(fileURLWithPath: yAxisImageFilename, isDirectory: false)
-
-            let (groupData, _) = try await URLSession.shared.data(for: URLRequest(url: fileurl as URL))
-            self.outlierYAxisImageData = groupData.uInt8Array
-            
-        } else {
-            //Log.w("no y axis :(")
-        }
-        
-        Log.i("frame \(frameIndex) loaded y axis image data after \(Date().timeIntervalSinceReferenceDate-startTime) seconds")
-
-        //Log.d("check 2")
-        if FileManager.default.fileExists(atPath: imageFilename),
-           let outlierImage = try await PixelatedImage(fromFile: imageFilename)
-        {
-            guard outlierImage.width == width, // make sure the image is of the right size
-                  outlierImage.height == height
-            else { fatalError("outlierImage from \(imageFilename) of size [\(outlierImage.width), \(outlierImage.width)] doesn't match frame size [\(width), \(height)") }
-            
-            switch outlierImage.imageData {
-            case .eightBit(_):
-                Log.w("cannot process eight bit outlier image \(imageFilename)")
-                return nil
-
-            case .sixteenBit(let imageArr):
-                //Log.d("check 3")
-
-                Log.i("frame \(frameIndex) check after \(Date().timeIntervalSinceReferenceDate-startTime) seconds")
-                
-                self.outlierImageData = imageArr // XXX we need this elsewhere ;(
-                var blobMap: [UInt16: Blob] = [:]
-
-                var coutinueCount = 0
-                
-                // load blobs from image
-                for y in 0 ..< outlierImage.height {
-                    if let outlierYAxisImageData,
-                       outlierYAxisImageData[y] == 0
-                    {
-                        coutinueCount += 1
-                        continue
-                    }
-
-                    for x in 0 ..< outlierImage.width {
-                        let index = y*outlierImage.width + x
-                        let blobId = imageArr[index]
-                        if blobId != 0 {
-                            let pixelValue = subtractionArr[index]
-                            let pixel = SortablePixel(x: x, y: y, intensity: pixelValue)
-                            if let blob = blobMap[blobId] {
-                                // add this pixel to existing blob
-                                await blob.add(pixel: pixel)
-                            } else {
-                                // start a new blob with this pixel
-                                let blob = Blob(pixel, id: blobId, frameIndex: frameIndex)
-                                blobMap[blobId] = blob
-                            }
-                        }
-                    }
-                }
-
-                Log.i("frame \(frameIndex) check 2 after \(Date().timeIntervalSinceReferenceDate-startTime) seconds")
-                //Log.d("check 4 coutinueCount \(coutinueCount)")
-                // promote found blobs to outlier groups for further processing
-                // apply should paint if loaded
-                
-                for blob in blobMap.values {
-                    // make outlier group from this blob
-                    let outlierGroup = await blob.outlierGroup(at: frameIndex)
-
-                    if let _outlierGroupPaintData {
-                        // the newer full frame json file
-
-                        if let shouldPaint = _outlierGroupPaintData[outlierGroup.id] {
-                            await outlierGroup.shouldPaint(shouldPaint)
-                        } else {
-                            //Log.i("frame \(frameIndex) could not find outlier group info for group \(outlierGroup.id) in outlierGroupPaintData")
-                        }
-                    }
-
-                    self.members[outlierGroup.id] = outlierGroup
-                }
-                //Log.d("check 5")
+        if let dustbinBlobs {
+            for (id, blob) in dustbinBlobs {
+                let outlierGroup = await blob.outlierGroup(at: frameIndex)
+                self.dustbin[id] = outlierGroup
             }
-        } else {
-            Log.d("Cannot load outliers from \(imageFilename)")
-            return nil
         }
-        Log.i("frame \(frameIndex) done loading outliers after \(Date().timeIntervalSinceReferenceDate-startTime) seconds")
     }
 
     // returns outlier groups from this frame that overlap with the given group from another frame
@@ -333,20 +244,29 @@ public actor OutlierGroups {
 
     // hopefully faster version to just write out what we need
     public func writeOutliersBinary(to dirname: String) async throws {
+
+        mkdir(dirname)
+
+        // save members
+        await self.writeBinary(outlierMap: self.members,
+                         to: "\(dirname)/\(BlobBinarySaver.outlierBinaryFilename)")
+
+        // save dustbin
+        await self.writeBinary(outlierMap: self.dustbin,
+                         to: "\(dirname)/\(BlobBinarySaver.dustbinBinaryFilename)")
+    }
+
+    private func writeBinary(outlierMap: [UInt16: OutlierGroup], to filename: String) async {
         var blobMap: [UInt16: Blob] = [:]
 
-        for outlier in members.values {
+        for outlier in outlierMap.values {
             let blob = await outlier.blob()
             blobMap[blob.id] = blob
         }
 
-        mkdir(dirname)
-
-        let blobBinarySaver = BlobBinarySaver(blobMap: blobMap)
-
-        await blobBinarySaver.save(to: dirname)
+        await BlobBinarySaver(blobMap: blobMap).save(to: filename)
     }
-
+    
     // only writes the paint reasons now, outlier image is written elsewhere
     public func write(to dir: String) async throws {
         let frameDir = "\(dir)/\(frameIndex)"

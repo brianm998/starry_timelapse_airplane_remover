@@ -103,6 +103,9 @@ struct RightPanel: View {
                             Toggle("Show Ignore Bar", isOn: $viewModel.showIgnoreLowerBar)
                               .foregroundColor(.white)
                             
+                            Toggle("Show Dustbin", isOn: $viewModel.shouldShowDustbin)
+                              .foregroundColor(.white)
+                            
                             // frame rate checkoer
                             let frame_rates = [1, 2, 3, 5, 10, 15, 20, 25, 30, 60, 90]
                             Text("Frame Rate")

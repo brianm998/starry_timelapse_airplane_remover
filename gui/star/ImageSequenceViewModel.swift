@@ -192,6 +192,8 @@ public final class ImageSequenceViewModel {
     var finalProcessor: FinalGUIProcessor?
 
     var shouldShowInitialInstructions: Bool = false
+
+    var shouldShowDustbin: Bool = false
     
     convenience init(withConfig jsonConfigFilename: String,
                      closure: @escaping @Sendable (Int, Double, Int, Double) -> Void) async throws
@@ -664,6 +666,39 @@ public final class ImageSequenceViewModel {
                 let foo = newOutlierGroups
                 await MainActor.run {
                     self.frames[frame.frameIndex].outlierViews = foo
+                   // self.objectWillChange.send()
+                }
+            }
+        }
+    }
+    
+    func setOutlierDustbinGroups(forFrame frame: FrameAirplaneRemover) async {
+        Task.detached(priority: .userInitiated) {
+          let outlierGroups = await frame.outlierGroupDustbinList()
+            if let outlierGroups = outlierGroups {
+                Log.d("got \(outlierGroups.count) groups for frame \(frame.frameIndex)")
+                var newOutlierGroups: [OutlierGroupViewModel] = []
+                for group in outlierGroups {
+                    if let cgImage = await group.testImage() { // XXX heap corruption here :(
+                        var size = CGSize()
+                        size.width = CGFloat(cgImage.width)
+                        size.height = CGFloat(cgImage.height)
+                        let outlierImage = NSImage(cgImage: cgImage, size: size)
+                        
+                        let groupView = await OutlierGroupViewModel(viewModel: self,
+                                                                    group: group,
+                                                                    name: group.id,
+                                                                    bounds: group.bounds,
+                                                                    image: outlierImage)
+                        newOutlierGroups.append(groupView)
+                    } else {
+                        Log.e("frame \(frame.frameIndex) outlier group no image")
+                    }
+                }
+                
+                let foo = newOutlierGroups
+                await MainActor.run {
+                    self.frames[frame.frameIndex].dustbinViews = foo
                    // self.objectWillChange.send()
                 }
             }
