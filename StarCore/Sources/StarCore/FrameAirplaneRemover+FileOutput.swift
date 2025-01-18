@@ -45,7 +45,8 @@ extension FrameAirplaneRemover {
                 Log.i("frame \(self.frameIndex) not recalculating outlier values with existing files")
             } else {
                 let valueMatrix = CondensedOutlierGroupValueMatrix()
-                
+
+
                 if let outliers = await self.outlierGroupList() {
                     Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")
                     //let startTime = NSDate().timeIntervalSince1970
@@ -57,6 +58,12 @@ extension FrameAirplaneRemover {
                             //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1b \(index) after \(duration) seconds")
 //                        }
                         await valueMatrix.append(outlierGroup: outlier)
+                    }
+                }
+                // append dustbin values too
+                if let dustbin = await self.outlierGroups?.getDustbin().values {
+                    for outlier in dustbin {
+                        await valueMatrix.append(outlierGroup: outlier, for: .isolated)
                     }
                 }
                 Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 2")

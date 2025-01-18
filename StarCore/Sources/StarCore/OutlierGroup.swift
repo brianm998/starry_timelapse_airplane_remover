@@ -484,12 +484,16 @@ public actor OutlierGroup: CustomStringConvertible,
     // https://forums.swift.org/t/actor-isolation-delegates-in-extensions/60571/6
 
     // ordered by the list of features below
-    func decisionTreeValues() async -> [Double] {
+    func decisionTreeValues(for treeType: TreeType = .all) async -> [Double] {
         var ret: [Double] = []
         ret.append(Double(self.id))
         for type in OutlierGroupFeature.allCases {
             //let t0 = NSDate().timeIntervalSince1970
-            ret.append(await self.decisionTreeValueAsync(for: type))
+            if type.isUsed(for: treeType) {
+                ret.append(await self.decisionTreeValueAsync(for: type))
+            } else {
+                ret.append(0)
+            }
             //let t1 = NSDate().timeIntervalSince1970
             //Log.i("frame \(frameIndex) group \(self) took \(t1-t0) seconds to calculate value for \(type)")
         }

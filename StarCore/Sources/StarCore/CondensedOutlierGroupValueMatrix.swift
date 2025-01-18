@@ -8,8 +8,8 @@ public class CondensedOutlierGroupValueMatrix {
 
     public var outlierValues: [[Double]]
     
-    public func append(outlierGroup: OutlierGroup) async {
-        outlierValues.append(await outlierGroup.decisionTreeValues())
+    public func append(outlierGroup: OutlierGroup, for treeType: TreeType = .all) async {
+        outlierValues.append(await outlierGroup.decisionTreeValues(for: treeType))
     }
 
     public static let typesFilename = "types.csv"
