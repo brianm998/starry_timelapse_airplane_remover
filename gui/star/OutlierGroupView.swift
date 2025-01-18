@@ -294,17 +294,6 @@ struct OutlierGroupView: View {
                 if let outlier_group = await outlierGroups.members[self.groupViewModel.group.id] {
                     // update the outlier group in the background
                     await outlier_group.shouldPaint(shouldPaint)
-                } else if let outlier_group = await outlierGroups.dustbin[self.groupViewModel.group.id] {
-                    /*
-
-                     here we promote dustbin outliers that are being selected
-                     to be painted to the members array, and out of the dustbin
-                     
-                     */
-                    await outlier_group.shouldPaint(shouldPaint)
-                    await outlierGroups.promoteFromDustbin(outlier_group)
-                    self.groupViewModel.viewModel.currentFrameView.promoteFromDustbin(outlierId: outlier_group.id)
-
                 } else {
                     Log.e("HOLY FUCK")
                 }

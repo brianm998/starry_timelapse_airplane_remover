@@ -80,7 +80,7 @@ public struct FrameEditImageView: View {
         let frameView = self.viewModel.frames[self.viewModel.currentIndex]
 
         if viewModel.shouldShowDustbin,
-           frameView.dustbinViews == nil,
+           frameView.dustbinImage == nil,
            !frameView.loadingDustbinViews,
            let frame = frameView.frame
         {
@@ -119,22 +119,24 @@ public struct FrameEditImageView: View {
                 
                 let frameView = self.viewModel.frames[self.viewModel.currentIndex]
                 ZStack() {
-                    // in edit mode, show outliers groups 
+                    // in edit mode, show outliers groups
+
+                    // dustbin does below
+                    if self.viewModel.shouldShowDustbin,
+                       let dustbinImage = frameView.dustbinImage
+                    {
+                        dustbinImage
+                          .renderingMode(.template) 
+                          .foregroundColor(.yellow)
+                    }
+
+                    // then the outliers that have view models
                     if let outlierViews = frameView.outlierViews {
                         ForEach(outlierViews) { outlierViewModel in
                             OutlierGroupView(groupViewModel: outlierViewModel)
                               .id(localID)
                         }
                     }
-                    if self.viewModel.shouldShowDustbin,
-                       let outlierViews = frameView.dustbinViews
-                    {
-                        ForEach(outlierViews) { outlierViewModel in
-                            OutlierGroupView(groupViewModel: outlierViewModel)
-                              .id(localID)
-                        }
-                    }
-
                 }.opacity(viewModel.outlierOpacity)
             }
         }

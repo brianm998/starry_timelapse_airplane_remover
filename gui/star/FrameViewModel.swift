@@ -79,7 +79,7 @@ public class FrameViewModel {
     var loadingOutlierViews: Bool = false
 
     var shouldShowDustbin = false
-    var dustbinViews: [OutlierGroupViewModel]?
+    var dustbinImage: Image?
     var loadingDustbinViews: Bool = false
 
     // we don't keep full resolution images here
@@ -88,20 +88,6 @@ public class FrameViewModel {
     var previewImage: Image = initialImage
     var processedPreviewImage: Image = initialImage
 
-    public func promoteFromDustbin(outlierId: UInt16) {
-        if let dustbinViews {
-            var viewToPromote: OutlierGroupViewModel?
-            for view in dustbinViews {
-                if view.name == outlierId {
-                    viewToPromote = view
-                    break
-                }
-            }
-            if let viewToPromote,
-               var outlierViews { outlierViews.append(viewToPromote) }
-        }
-    }
-    
     public func previewImage(type: FrameViewMode) -> some View {
         Group {
             switch type {

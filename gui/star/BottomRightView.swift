@@ -81,11 +81,16 @@ struct BottomRightView: View {
                               .foregroundColor(.orange)
                         }
                     }
+                    /*
+                     XXX rewrite this to not use the dustbinViews XXX 
+                     
                     if let dustbinViews = frameView.dustbinViews {
                         let size = dustbinViews.count
                         Text("\(size) in the dustbin") // XXX this doesn't change when it should :(
                           .foregroundColor(size == 0 ? .white : .orange)
-                    }
+                          }
+
+                     */
                 }
 
                 EditableFrameNumberView()

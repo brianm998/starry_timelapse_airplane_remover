@@ -673,33 +673,42 @@ public final class ImageSequenceViewModel {
     }
     
     func setOutlierDustbinGroups(forFrame frame: FrameAirplaneRemover) async {
+        // write an image from all of the dustbin, as there can be too much dust
+        // to make each particle an outlier view 
+        let width  = Int(self.frameWidth)
+        let height = Int(self.frameHeight)
         Task.detached(priority: .userInitiated) {
-          let outlierGroups = await frame.outlierGroupDustbinList()
-            if let outlierGroups = outlierGroups {
-                Log.d("got \(outlierGroups.count) groups for frame \(frame.frameIndex)")
-                var newOutlierGroups: [OutlierGroupViewModel] = []
+            var dustbinArray = [UInt8](repeating: 0, count: 2*width*height)
+            if let outlierGroups = await frame.outlierGroupDustbinList() {
+                Log.d("frame \(frame.frameIndex) has \(outlierGroups.count) dustbin groups")
                 for group in outlierGroups {
-                    if let cgImage = await group.testImage() { // XXX heap corruption here :(
-                        var size = CGSize()
-                        size.width = CGFloat(cgImage.width)
-                        size.height = CGFloat(cgImage.height)
-                        let outlierImage = NSImage(cgImage: cgImage, size: size)
-                        
-                        let groupView = await OutlierGroupViewModel(viewModel: self,
-                                                                    group: group,
-                                                                    name: group.id,
-                                                                    bounds: group.bounds,
-                                                                    image: outlierImage)
-                        newOutlierGroups.append(groupView)
-                    } else {
-                        Log.e("frame \(frame.frameIndex) outlier group no image")
+                    for pixel in group.pixelSet {
+                        let index = 2*(pixel.y*width+pixel.x)
+                        var value = pixel.intensity/0xFF
+                        if value > UInt8.max { value = UInt16(UInt8.max) }
+                        dustbinArray[index] = UInt8(value)
+                        dustbinArray[index+1] = 0xFF // make it visible
                     }
                 }
-                
-                let foo = newOutlierGroups
+            }
+
+            if let dataProvider = CGDataProvider(data: dustbinArray.data as CFData),
+               let image = CGImage(width: width,
+                                   height: height,
+                                   bitsPerComponent: 8,
+                                   bitsPerPixel: 16,
+                                   bytesPerRow: 2*width,
+                                   space: CGColorSpaceCreateDeviceGray(),
+                                   bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue),
+                                   provider: dataProvider,
+                                   decode: nil,
+                                   shouldInterpolate: false,
+                                   intent: .defaultIntent)
+            {
+                let nsImage = NSImage(cgImage: image, size: .zero)
+                let swiftUIImage = Image(nsImage: nsImage)
                 await MainActor.run {
-                    self.frames[frame.frameIndex].dustbinViews = foo
-                   // self.objectWillChange.send()
+                    self.frames[frame.frameIndex].dustbinImage = swiftUIImage
                 }
             }
         }
