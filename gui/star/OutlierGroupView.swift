@@ -112,12 +112,16 @@ struct OutlierGroupView: View {
                             bottom_line_height / 2 + half_bounds_height)
             }
 
-            if groupViewModel.group.size > 50 {
-                self.outlierView
-                  .onHover { groupViewModel.selectArrow($0) }
-                
-                // tap gesture toggles paintability of the tapped group
-                  .onTapGesture {
+
+            self.outlierView
+              .onHover { groupViewModel.selectArrow($0) }
+            
+            // tap gesture toggles paintability of the tapped group
+              .onTapGesture {
+                  if groupViewModel.viewModel.selectionMode == .dustbin {
+                      // dump the tapped outlier into the dustbin
+                      groupViewModel.viewModel.frames[groupViewModel.group.frameIndex].dumpInDustbin(groupViewModel.group)
+                  } else {                   
                       Task {
                           let origShouldPaint = await groupViewModel.group.shouldPaint() 
                           
@@ -125,6 +129,8 @@ struct OutlierGroupView: View {
                               if let origShouldPaint {
                                   // change the paintability of this outlier group
                                   // set it to user selected opposite previous value
+
+                                  Log.d("groupViewModel.viewModel.selectionMode \(groupViewModel.viewModel.selectionMode)")
                                   
                                   if groupViewModel.viewModel.selectionMode == .details {
                                       handleDetailsMode()
@@ -140,10 +146,7 @@ struct OutlierGroupView: View {
                           }
                       }
                   }
-                
-            } else {
-                self.outlierView
-            }
+              }
         }
     }
 

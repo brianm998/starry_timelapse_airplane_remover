@@ -146,6 +146,29 @@ public class FrameViewModel {
         }
     }
 
+    // puts view outliers into the dustbin
+    public func dumpInDustbin(_ badGroup: OutlierGroup) {
+        var newOutlierViews: [OutlierGroupViewModel] = []
+        var dustbin: [OutlierGroup] = []
+
+        outlierViews?.forEach() { group in
+            if group.group.id == badGroup.id {
+                dustbin.append(group.group)   
+            } else {
+                newOutlierViews.append(group)
+            }
+        }
+        self.outlierViews = newOutlierViews
+
+        if let frame {
+            Task {
+                await frame.getOutlierGroups()?.dumpInDustbin(dustbin)
+                await self.viewModel.computeDustbinImage(forFrame: frame)
+                try await frame.getOutlierGroups()?.writeOutliersBinary(to: frame.outliersDirname)
+            }
+        }
+    }
+
     // pulls outliers out of the dustbin into the view
     public func extractDust(between selectionStart: CGPoint,
                             and end_location: CGPoint)
