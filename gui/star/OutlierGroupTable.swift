@@ -72,7 +72,6 @@ struct OutlierGroupTableRow: Identifiable {
         size = group.size
         centerX = group.bounds.center.x
         centerY = group.bounds.center.y
-        let centerY: Int
 
         let shouldPaint = await group.shouldPaint()
         if let shouldPaint = shouldPaint {

@@ -798,7 +798,8 @@ public extension ImageSequenceViewModel {
         if let frame = frameView.frame {
             // update the real actor in the background
             Task {
-                await frame.userSelectUndecidedOutliers(toShouldPaint: shouldPaint)
+                await frame.userSelectUndecidedOutliers(toShouldPaint: shouldPaint,
+                                                        includingDustbin: self.shouldShowDustbin)
 
                 if renderImmediately {
                     // XXX make render here an option in settings
@@ -821,7 +822,8 @@ public extension ImageSequenceViewModel {
         if let frame = frameView.frame {
             // update the real actor in the background
             Task.detached {
-                await frame.userSelectAllOutliers(toShouldPaint: shouldPaint)
+                await frame.userSelectAllOutliers(toShouldPaint: shouldPaint,
+                                                  includingDustbin: self.shouldShowDustbin)
 
                 if renderImmediately {
                     // XXX make render here an option in settings
@@ -902,7 +904,9 @@ public extension ImageSequenceViewModel {
             await frame.initializeEmptyOutlierGroups()
             try await frame.findOutliers()
 
-            await frame.applyDecisionTreeToAllOutliers()
+            if let task = await frame.applyDecisionTreeToAllOutliers(includingDustbin: self.shouldShowDustbin) {
+                await task.value
+            }
 
             try await self.render(frame: frame, now: true) {
                 Task {

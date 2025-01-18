@@ -33,8 +33,13 @@ public actor OutlierGroups {
         members[member.id] = member
     }
 
-    public func dumpInDustBin(member: OutlierGroup) {
+    public func dumpInDustbin(member: OutlierGroup) {
         dustbin[member.id] = member
+    }
+
+    public func promoteFromDustbin(member: OutlierGroup) {
+        members[member.id] = member
+        dustbin.removeValue(forKey: member.id)
     }
 
     public func asyncHash(into hasher: inout Hasher) async {

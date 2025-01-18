@@ -21,9 +21,9 @@ You should have received a copy of the GNU General Public License along with sta
  */
 extension FrameAirplaneRemover {
     
-    public func applyDecisionTreeToAutoSelectedOutliers() async {
-        if let classifier = await currentClassifier.get(for: .all) {  // XXX
-            await foreachOutlierGroupMulti() { group in
+    public func applyDecisionTreeToAutoSelectedOutliers(includingDustbin: Bool) async {
+        if let classifier = await currentClassifier.get(for: .all) {
+            await foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
                 var apply = true
                 if let shouldPaint = await group.shouldPaint() {
                     switch shouldPaint {
@@ -37,6 +37,9 @@ extension FrameAirplaneRemover {
                 if apply {
                     Log.d("applying decision tree")
                     await group.shouldPaint(.fromClassifier(await classifier.asyncClassification(of: group)))
+                    if isInDustbin {
+                        await self.outlierGroups?.promoteFromDustbin(member: group)
+                    }
                 }
             }
         } else {
@@ -44,16 +47,16 @@ extension FrameAirplaneRemover {
         }
     }
 
-    public func clearOutlierGroupValueCaches() async {
-        await foreachOutlierGroupMulti() { group in
+    public func clearOutlierGroupValueCaches(includingDustbin: Bool) async {
+        await foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, _ in
             await group.clearFeatureValueCache()
         }
     }
 
-    public func applyDecisionTreeToAllOutliers() async -> Task<Void,Never>? {
+    public func applyDecisionTreeToAllOutliers(includingDustbin: Bool) async -> Task<Void,Never>? {
         //Log.d("frame \(self.frameIndex) applyDecisionTreeToAll \(self.outlierGroups?.members.count ?? 0) Outliers")
         let startTime = NSDate().timeIntervalSince1970
-        if let classifier = await currentClassifier.get(for: .all),  // XXX 
+        if let classifier = await currentClassifier.get(for: .all), 
            let outlierGroups
         {
             return await Task.detached(priority: .userInitiated) {
@@ -68,6 +71,20 @@ extension FrameAirplaneRemover {
                             }
                         }
                     }
+                    if includingDustbin {
+                        for (_, group) in await outlierGroups.getDustbin() {
+                            taskGroup.addTask {
+                                if await group.shouldPaint() == nil {
+                                    // only apply classifier when no other classification is otherwise present
+                                    let featureData = await group.featureData()
+                                    let classification = classifier.classification(of: featureData)
+                                    await group.shouldPaint(.fromClassifier(classification))
+                                    await outlierGroups.promoteFromDustbin(member: group)
+                                }
+                            }
+                        }
+
+                    }
                     await taskGroup.waitForAll()
                 }
             }
@@ -80,19 +97,30 @@ extension FrameAirplaneRemover {
         return nil
     }
     
-    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool) async {
+    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
+                                      includingDustbin: Bool) async
+    {
         Task.detached {
-            await self.foreachOutlierGroupMulti() { group in
+            await self.foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
                 await group.shouldPaint(.userSelected(shouldPaint))
+                if isInDustbin {
+                    await self.outlierGroups?.promoteFromDustbin(member: group)
+                }
             }
+            // 
         }
     }
 
-    public func userSelectUndecidedOutliers(toShouldPaint shouldPaint: Bool) async {
+    public func userSelectUndecidedOutliers(toShouldPaint shouldPaint: Bool,
+                                            includingDustbin: Bool) async
+    {
         Task.detached {
-            await self.foreachOutlierGroupMulti() { group in
+            await self.foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
                 if await group.shouldPaint() == nil {
                     await group.shouldPaint(.userSelected(shouldPaint))
+                    if isInDustbin {
+                        await self.outlierGroups?.promoteFromDustbin(member: group)
+                    }
                 }
             }
         }
@@ -110,10 +138,16 @@ extension FrameAirplaneRemover {
     
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
                                       between startLocation: CGPoint,
-                                      and endLocation: CGPoint) async
+                                      and endLocation: CGPoint,
+                                      includingDustbin: Bool) async
     {
-        await foreachOutlierGroupMulti(between: startLocation, and: endLocation) { group in
+        await foreachOutlierGroupMulti(between: startLocation,
+                                       and: endLocation,
+                                       includingDustbin: includingDustbin) { group, isInDustbin in
             await group.shouldPaint(.userSelected(shouldPaint))
+            if isInDustbin {
+                await self.outlierGroups?.promoteFromDustbin(member: group)
+            }
         }
     }
 }

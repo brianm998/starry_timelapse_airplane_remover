@@ -14,11 +14,9 @@ struct ApplyAllDecisionTreeButton: View {
                 do {
                     //Log.d("doh index \(viewModel.currentIndex) frame \(viewModel.frames[0].frame) have_all_frames \(viewModel.have_all_frames)")
                     if let frame = viewModel.currentFrame {
-                        Log.d("doh")
-                        await frame.applyDecisionTreeToAllOutliers()
-                        Log.d("doh")
+                       
+                        _ = await frame.applyDecisionTreeToAllOutliers(includingDustbin: viewModel.shouldShowDustbin)
                         try? await viewModel.render(frame: frame) {
-                            Log.d("doh")
                             Task {
                                 await viewModel.refresh(frame: frame)
                                 await viewModel.setOutlierGroups(forFrame: frame)

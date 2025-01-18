@@ -82,8 +82,9 @@ struct BottomRightView: View {
                         }
                     }
                     if let dustbinViews = frameView.dustbinViews {
-                        Text("\(dustbinViews.count) in the dustbin")
-                          .foregroundColor(dustbinViews.count == 0 ? .white : .orange)
+                        let size = dustbinViews.count
+                        Text("\(size) in the dustbin") // XXX this doesn't change when it should :(
+                          .foregroundColor(size == 0 ? .white : .orange)
                     }
                 }
 

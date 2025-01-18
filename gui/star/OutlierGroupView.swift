@@ -279,20 +279,35 @@ struct OutlierGroupView: View {
             will_paint = origShouldPaint.willPaint
         }
         let shouldPaint = PaintReason.userSelected(!will_paint)
-        
+
 
         Task {
             // update the view model to show the change quickly
             await self.groupViewModel.group.shouldPaint(shouldPaint)
+
+                                 
+            // update frame view model too
             
             if let frame = self.groupViewModel.viewModel.currentFrame,
-               let outlierGroups = await frame.outlierGroups,
-               let outlier_group = await outlierGroups.members[self.groupViewModel.group.id]
+               let outlierGroups = await frame.outlierGroups
             {
-                // update the outlier group in the background
-                await outlier_group.shouldPaint(shouldPaint)
-            } else {
-                Log.e("HOLY FUCK")
+                if let outlier_group = await outlierGroups.members[self.groupViewModel.group.id] {
+                    // update the outlier group in the background
+                    await outlier_group.shouldPaint(shouldPaint)
+                } else if let outlier_group = await outlierGroups.dustbin[self.groupViewModel.group.id] {
+                    /*
+
+                     here we promote dustbin outliers that are being selected
+                     to be painted to the members array, and out of the dustbin
+                     
+                     */
+                    await outlier_group.shouldPaint(shouldPaint)
+                    await outlierGroups.promoteFromDustbin(member: outlier_group)
+                    self.groupViewModel.viewModel.currentFrameView.promoteFromDustbin(outlierId: outlier_group.id)
+
+                } else {
+                    Log.e("HOLY FUCK")
+                }
             }
         }
     }

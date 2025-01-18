@@ -87,7 +87,21 @@ public class FrameViewModel {
     var thumbnailImage: Image = initialImage
     var previewImage: Image = initialImage
     var processedPreviewImage: Image = initialImage
- 
+
+    public func promoteFromDustbin(outlierId: UInt16) {
+        if let dustbinViews {
+            var viewToPromote: OutlierGroupViewModel?
+            for view in dustbinViews {
+                if view.name == outlierId {
+                    viewToPromote = view
+                    break
+                }
+            }
+            if let viewToPromote,
+               var outlierViews { outlierViews.append(viewToPromote) }
+        }
+    }
+    
     public func previewImage(type: FrameViewMode) -> some View {
         Group {
             switch type {

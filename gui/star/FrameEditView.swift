@@ -139,7 +139,8 @@ struct FrameEditView: View {
                               let _outlierGroupTableRows = ArrayActor<OutlierGroupTableRow>()
                               
                               await frame.foreachOutlierGroupMulti(between: selectionStart,
-                                                                   and: end_location) { group in
+                                                                   and: end_location,
+                                                                   includingDustbin: viewModel.shouldShowDustbin) { group, isInDustbin in // XXX isInDustbin not presented in UI
                                   let new_row = await OutlierGroupTableRow(group)
                                   await _outlierGroupTableRows.append(new_row)
                               }
@@ -188,7 +189,7 @@ struct FrameEditView: View {
         }
     }
 
-    
+    // XXX update this by renaming it to dustbinOutliers, and no longer really delete them, just bin them
     private func deleteOutliers(from frameView: FrameViewModel,
                                 between selectionStart: CGPoint,
                                 and end_location: CGPoint)
@@ -221,7 +222,8 @@ struct FrameEditView: View {
             Task.detached(priority: .userInitiated) {
                await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                  between: selectionStart,
-                                                 and: end_location)
+                                                 and: end_location,
+                                                 includingDustbin: viewModel.shouldShowDustbin)
                 await MainActor.run {
                     viewModel.selectionStart = nil
                     viewModel.selectionEnd = nil

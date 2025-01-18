@@ -308,7 +308,7 @@ struct MultiSelectSheetView: View {
         let end = endIndex ?? frames.count
         let frames: [FrameViewModel] = frames
         let currentIndex = currentIndex
-        Log.w("updateFrames(shouldPaint: \(shouldPaint), startIndex: \(startIndex), endIndex: \(endIndex)")
+        Log.w("updateFrames(shouldPaint: \(shouldPaint), startIndex: \(startIndex), endIndex: \(String(describing: endIndex))")
         if let selectionStart = selectionStart,
            let selectionEnd = selectionEnd
         {
@@ -321,7 +321,8 @@ struct MultiSelectSheetView: View {
                     Task {
                         await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                           between: selectionStart,
-                                                          and: selectionEnd)
+                                                          and: selectionEnd,
+                                                          includingDustbin: viewModel.shouldShowDustbin)
                         // save outlier paintability changes here
                         await frame.writeOutliersPaintReasons()
 
@@ -349,7 +350,7 @@ struct MultiSelectSheetView: View {
         let frames: [FrameViewModel] = frames
         let currentIndex = currentIndex
 
-        Log.w("updateFrames(shouldPaint: \(shouldPaint), startIndex: \(startIndex), endIndex: \(endIndex)")
+        Log.w("updateFrames(shouldPaint: \(shouldPaint), startIndex: \(startIndex), endIndex: \(String(describing: endIndex))")
         if let selectionStart = selectionStart,
            let selectionEnd = selectionEnd 
         {
@@ -361,8 +362,9 @@ struct MultiSelectSheetView: View {
                         Task {
                             let new_value = shouldPaint
                             await frame.foreachOutlierGroupMulti(between: selectionStart,
-                                                                 and: selectionEnd)
-                            { group in
+                                                                 and: selectionEnd,
+                                                                 includingDustbin: viewModel.shouldShowDustbin)
+                            { group, isInDustbin in
                                 await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                                   overlapping: group)
 

@@ -96,7 +96,7 @@ extension FrameAirplaneRemover {
                 } else {
                     // it's bad
                     // put it in the dustbin
-                    await outlierGroups?.dumpInDustBin(member: outlierGroup)
+                    await outlierGroups?.dumpInDustbin(member: outlierGroup)
                 }
             } else {
                 Log.w("No .isolated classifier!!")
@@ -161,21 +161,29 @@ extension FrameAirplaneRemover {
         self.outlierGroups = OutlierGroups(frameIndex: frameIndex)
     }
     
-    public func foreachOutlierGroup(_ closure: @Sendable (OutlierGroup) async -> Void) async {
+    public func foreachOutlierGroup(includingDustbin: Bool,
+                                    _ closure: @Sendable (OutlierGroup, Bool) async -> Void) async
+    {
         if let outlierGroups {
             for (_, group) in await outlierGroups.getMembers() {
-                await closure(group)
+                await closure(group, false)
+            }
+            for (_, group) in await outlierGroups.getDustbin() {
+                await closure(group, true)
             }
         } 
     }
 
-    public func foreachOutlierGroupMulti(_ closure: @Sendable @escaping (OutlierGroup) async -> Void) async {
+    public func foreachOutlierGroupMulti(includingDustbin: Bool,
+                                         _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Void) async
+    {
         if let outlierGroups {
             await withTaskGroup(of: Void.self) { taskGroup in
                 for (_, group) in await outlierGroups.getMembers() {
-                    taskGroup.addTask() {
-                        await closure(group)
-                    }
+                    taskGroup.addTask() { await closure(group, false) }
+                }
+                for (_, group) in await outlierGroups.getDustbin() {
+                    taskGroup.addTask() { await closure(group, true) }
                 }
                 await taskGroup.waitForAll()
             }
@@ -204,7 +212,8 @@ extension FrameAirplaneRemover {
 
     public func foreachOutlierGroupMulti(between startLocation: CGPoint,
                                          and endLocation: CGPoint,
-                                         _ closure: @Sendable @escaping (OutlierGroup) async -> Void) async
+                                         includingDustbin: Bool, 
+                                         _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Void) async
     {
         // first get bounding box from start and end location
         var minX: CGFloat = CGFLOAT_MAX
@@ -224,17 +233,17 @@ extension FrameAirplaneRemover {
 
         let gestureBounds = BoundingBox(min: Coord(x: Int(minX), y: Int(minY)),
                                         max: Coord(x: Int(maxX), y: Int(maxY)))
-
-        await foreachOutlierGroupMulti() { group in
+        
+        await foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
             if gestureBounds.contains(other: group.bounds) {
                 // check to make sure this outlier's bounding box is fully contained
                 // otherwise don't change paint status
-                await closure(group)
+                await closure(group, isInDustbin)
             }
         }
     }
 
-    public func maybeApplyOutlierGroupClassifier() async throws {
+    public func maybeApplyOutlierGroupClassifier(includingDustbin: Bool) async throws {
 
         var shouldUseDecisionTree = true
         /*
@@ -277,7 +286,7 @@ extension FrameAirplaneRemover {
         if shouldUseDecisionTree {
             Log.i("frame \(frameIndex) classifying outliers with decision tree")
             self.set(state: .interFrameProcessing)
-            await self.applyDecisionTreeToAllOutliers()
+            await self.applyDecisionTreeToAllOutliers(includingDustbin: includingDustbin)
         }
     }
 
