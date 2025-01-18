@@ -29,15 +29,27 @@ public actor OutlierGroups {
     // outliers which have failed the first round, but are here if that was wrong
     public var dustbin: [UInt16: OutlierGroup] // keyed by id
 
-    public func add(member: OutlierGroup) {
+    public func add(_ member: OutlierGroup) {
         members[member.id] = member
     }
 
-    public func dumpInDustbin(member: OutlierGroup) {
+    public func add(_ newMembers: [OutlierGroup]) {
+        for member in newMembers {
+            self.members[member.id] = member
+        }
+    }
+    
+    public func dumpInDustbin(_ member: OutlierGroup) {
         dustbin[member.id] = member
     }
 
-    public func promoteFromDustbin(member: OutlierGroup) {
+    public func dumpInDustbin(_ newMembers: [OutlierGroup]) {
+        for member in newMembers {
+            self.dustbin[member.id] = member
+        }
+    }
+
+    public func promoteFromDustbin(_ member: OutlierGroup) {
         members[member.id] = member
         dustbin.removeValue(forKey: member.id)
     }

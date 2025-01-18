@@ -256,12 +256,16 @@ public actor OutlierGroup: CustomStringConvertible,
         }
     }
 
-    public func featureData() async -> OutlierGroupFeatureData {
+    public func featureData(for treeType: TreeType = .all) async -> OutlierGroupFeatureData {
         var values = [Double](repeating: 0, count: OutlierGroupFeature.allCases.count)
         var features = [OutlierGroupFeature](repeating: .size, count: OutlierGroupFeature.allCases.count)
         for type in OutlierGroupFeature.allCases {
             features[type.sortOrder] = type
-            values[type.sortOrder] = await decisionTreeValueAsync(for: type)
+            if type.isUsed(for: treeType) {
+                values[type.sortOrder] = await decisionTreeValueAsync(for: type)
+            } else {
+                values[type.sortOrder] = 0
+            }
         }
         return OutlierGroupFeatureData(features: features, values: values)
     }

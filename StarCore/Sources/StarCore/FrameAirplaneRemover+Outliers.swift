@@ -25,6 +25,11 @@ You should have received a copy of the GNU General Public License along with sta
 
 fileprivate let outliersFileSystemMonitor = FileSystemMonitor(max: 50)
 
+public struct OutlierSorter: Sendable {
+    public let classification: Double
+    public let outlier: OutlierGroup
+}
+
 extension FrameAirplaneRemover {
 
 
@@ -70,40 +75,58 @@ extension FrameAirplaneRemover {
 
         Log.i("frame \(frameIndex) has \(blobs.count) blobs")
         self.set(state: .populatingOutlierGroups)
-        
-        // promote found blobs to outlier groups for further processing
-        for blob in blobs {
-            // make outlier group from this blob
-            let outlierGroup = await blob.outlierGroup(at: frameIndex)
 
-            //Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.id) line \(String(describing: blob.line))")
-            await outlierGroup.set(frame: self)
+        await withTaskGroup(of: OutlierSorter.self) { taskGroup in
+                
+            // promote found blobs to outlier groups for further processing
+            let classifier = await currentClassifier.get(for: .isolated) 
+            
+            for blob in blobs {
+                taskGroup.addTask {
+                    // make outlier group from this blob
+                    let outlierGroup = await blob.outlierGroup(at: self.frameIndex)
 
-            // when promoting blobs to outlier groups, we first use the .isolated classifier
-            // and separate blobs into two groups based upon a threshold in this classification.
-            // one group is the dustbin, which has a very high likelyhood of not being useful
-            // the other group are the outlier groups that will get processed further
+                    //Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.id) line \(String(describing: blob.line))")
+                    await outlierGroup.set(frame: self)
 
-            if let classifier = await currentClassifier.get(for: .isolated) {
-                let classification = await classifier.classification(of: outlierGroup.featureData())
+                    // when promoting blobs to outlier groups, we first use the .isolated classifier
+                    // and separate blobs into two groups based upon a threshold in this classification.
+                    // one group is the dustbin, which has a very high likelyhood of not being useful
+                    // the other group are the outlier groups that will get processed further
 
-                // -1 classification means bad
-                //  1 classification means good
-                //  0 is undecided
-                if classification > -0.7 { // XXX constant XXX
-                    // it's good
-                    await outlierGroups?.add(member: outlierGroup)
-                } else {
-                    // it's bad
-                    // put it in the dustbin
-                    await outlierGroups?.dumpInDustbin(member: outlierGroup)
+                    if let classifier {
+                        let featureData = await outlierGroup.featureData(for: .isolated)
+                        let classification = classifier.classification(of: featureData)
+
+                        // -1 classification means bad
+                        //  1 classification means good
+                        //  0 is undecided
+                        return OutlierSorter(classification: classification,
+                                             outlier: outlierGroup)
+                    } else {
+                        Log.w("No .isolated classifier!!") // assume it's good
+                        return OutlierSorter(classification: 1,
+                                             outlier: outlierGroup)
+                    }
                 }
-            } else {
-                Log.w("No .isolated classifier!!")
-                await outlierGroups?.add(member: outlierGroup)
+
+                var good: [OutlierGroup] = []
+                var bad: [OutlierGroup] = []
+                
+                for await value in taskGroup {
+                    if value.classification > -0.1 { // XXX constant XXX
+                        // it's good
+                        good.append(value.outlier)
+                    } else {
+                        // it's bad
+                        bad.append(value.outlier)
+                    }
+                }
+
+                await self.outlierGroups?.add(good)
+                await self.outlierGroups?.dumpInDustbin(bad)
             }
         }
-
         // here we write the outlier binaries through the outlierGroups
         try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)
 

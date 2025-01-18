@@ -38,7 +38,7 @@ extension FrameAirplaneRemover {
                     Log.d("applying decision tree")
                     await group.shouldPaint(.fromClassifier(await classifier.asyncClassification(of: group)))
                     if isInDustbin {
-                        await self.outlierGroups?.promoteFromDustbin(member: group)
+                        await self.outlierGroups?.promoteFromDustbin(group)
                     }
                 }
             }
@@ -79,7 +79,7 @@ extension FrameAirplaneRemover {
                                     let featureData = await group.featureData()
                                     let classification = classifier.classification(of: featureData)
                                     await group.shouldPaint(.fromClassifier(classification))
-                                    await outlierGroups.promoteFromDustbin(member: group)
+                                    await outlierGroups.promoteFromDustbin(group)
                                 }
                             }
                         }
@@ -104,7 +104,7 @@ extension FrameAirplaneRemover {
             await self.foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
                 await group.shouldPaint(.userSelected(shouldPaint))
                 if isInDustbin {
-                    await self.outlierGroups?.promoteFromDustbin(member: group)
+                    await self.outlierGroups?.promoteFromDustbin(group)
                 }
             }
             // 
@@ -119,7 +119,7 @@ extension FrameAirplaneRemover {
                 if await group.shouldPaint() == nil {
                     await group.shouldPaint(.userSelected(shouldPaint))
                     if isInDustbin {
-                        await self.outlierGroups?.promoteFromDustbin(member: group)
+                        await self.outlierGroups?.promoteFromDustbin(group)
                     }
                 }
             }
@@ -146,7 +146,7 @@ extension FrameAirplaneRemover {
                                        includingDustbin: includingDustbin) { group, isInDustbin in
             await group.shouldPaint(.userSelected(shouldPaint))
             if isInDustbin {
-                await self.outlierGroups?.promoteFromDustbin(member: group)
+                await self.outlierGroups?.promoteFromDustbin(group)
             }
         }
     }

@@ -302,7 +302,7 @@ struct OutlierGroupView: View {
                      
                      */
                     await outlier_group.shouldPaint(shouldPaint)
-                    await outlierGroups.promoteFromDustbin(member: outlier_group)
+                    await outlierGroups.promoteFromDustbin(outlier_group)
                     self.groupViewModel.viewModel.currentFrameView.promoteFromDustbin(outlierId: outlier_group.id)
 
                 } else {

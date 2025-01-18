@@ -16,7 +16,7 @@ import logging
 import Cocoa
 import Combine
 
-public enum TreeType: String, CaseIterable {
+public enum TreeType: String, CaseIterable, Sendable {
     case all
     case isolated
 
