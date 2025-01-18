@@ -106,6 +106,8 @@ extension FrameAirplaneRemover {
 
         // here we write the outlier binaries through the outlierGroups
         try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)
+
+        // XXX update UI
         
         self.set(state: .readyForInterFrameProcessing)
     }
@@ -353,7 +355,7 @@ extension FrameAirplaneRemover {
         
     }
 
-    public func applyRazor(in boundingBox: BoundingBox) async throws {
+    public func applyRazor(in boundingBox: BoundingBox, includingDustbin: Bool) async throws {
         /*
          - find all outliers that have some match with this bounding box
          - remove them from outlier groups list
@@ -362,8 +364,9 @@ extension FrameAirplaneRemover {
          - convert all of them back to outlier groups
          */
 
-        if await outlierGroups?.applyRazor(in: boundingBox) ?? false {
-
+        if await outlierGroups?.applyRazor(in: boundingBox,
+                                           includingDustbin: includingDustbin) ?? false
+        {
             await self.markAsChanged()
 
             try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)

@@ -53,6 +53,17 @@ struct BottomRightView: View {
                 }
 
                 VStack {
+                    if frameView.loadingOutlierViews {
+                        Text("loading outlier views")
+                          .foregroundColor(.green)
+                    }
+                    if frameView.loadingDustbinViews {
+                        Text("loading outlier dustbin views")
+                          .foregroundColor(.orange)
+                    }
+                }
+
+                VStack {
                     if let _ = frameView.outlierViews {
                         
                         if let numPositive = frameView.frameObserver.numberOfPositiveOutliers {
@@ -69,6 +80,10 @@ struct BottomRightView: View {
                             Text("\(numUndecided) undecided")
                               .foregroundColor(.orange)
                         }
+                    }
+                    if let dustbinViews = frameView.dustbinViews {
+                        Text("\(dustbinViews.count) in the dustbin")
+                          .foregroundColor(dustbinViews.count == 0 ? .white : .orange)
                     }
                 }
 

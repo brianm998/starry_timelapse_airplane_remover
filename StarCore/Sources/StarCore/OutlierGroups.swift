@@ -206,10 +206,11 @@ public actor OutlierGroups {
         return Array(ret.values)
     }
 
-    public func applyRazor(in boundingBox: BoundingBox) async -> Bool {
+    public func applyRazor(in boundingBox: BoundingBox, includingDustbin: Bool) async -> Bool {
         var newBlobPixels: Set<SortablePixel> = []
         var newOutlierGroups: [OutlierGroup] = []
         var maxKey: UInt16 = 0
+        // first apply razor to members
         for (key, group) in members {
             if key > maxKey { maxKey = key }
             if let overlap = boundingBox.overlap(with: group.bounds) {
@@ -221,6 +222,22 @@ public actor OutlierGroups {
                 newOutlierGroups.append(newOutlierGroup)
             }
         }
+
+        // then apply it to the dustbin too, if requested
+        if includingDustbin {
+            for (key, group) in dustbin {
+                if key > maxKey { maxKey = key }
+                if let overlap = boundingBox.overlap(with: group.bounds) {
+                    let blobToSlice = await group.blob()
+                    let newPixels = await blobToSlice.slice(with: overlap)
+                    newBlobPixels.formUnion(newPixels)
+                    dustbin.removeValue(forKey: key)
+                    let newOutlierGroup = await blobToSlice.outlierGroup(at: frameIndex)
+                    newOutlierGroups.append(newOutlierGroup)
+                }
+            }
+        }
+
         maxKey += 1
         for newOutlier in newOutlierGroups {
             members[newOutlier.id] = newOutlier

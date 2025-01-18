@@ -174,7 +174,8 @@ struct FrameEditView: View {
 
         if let frame = frameView.frame {
             Task.detached(priority: .userInitiated) {
-                try await frame.applyRazor(in: gestureBounds)
+                try await frame.applyRazor(in: gestureBounds,
+                                           includingDustbin: viewModel.shouldShowDustbin)
                 await viewModel.setOutlierGroups(forFrame: frame)
                 await MainActor.run {
                     viewModel.selectionStart = nil

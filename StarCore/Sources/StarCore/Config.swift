@@ -235,6 +235,7 @@ public struct Config: Codable, Sendable, Transferable {
     // 0.7.0 swift 6, blob updates, gui a lot better, KHT works, display lines, etc
     // 0.7.1 completely reworked excessive processing mode, memory fixes, blob processing window,
     //       custom blob processing, more user prefs
+    //       dustbin filled by adding another .isolated decision tree before inter-frame processing
     
     public var starVersion = Config.latestVersion
 
