@@ -467,6 +467,17 @@ extension FrameAirplaneRemover {
             return "\(config.outlierOutputDirname)/\(frameIndex)"
         }
     }
+
+    public func promoteDust(in boundingBox: BoundingBox) async throws -> [OutlierGroup] {
+        guard let outlierGroups else { return [] }
+        let ret = await outlierGroups.promoteDust(in: boundingBox)
+
+        await self.markAsChanged()
+        
+        try await outlierGroups.writeOutliersBinary(to: self.outliersDirname)
+
+        return ret
+    }
     
     public func deleteOutliers(in boundingBox: BoundingBox) async throws {
         await outlierGroups?.deleteOutliers(in: boundingBox)

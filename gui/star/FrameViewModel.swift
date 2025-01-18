@@ -113,14 +113,55 @@ public class FrameViewModel {
                         initialImage
                     }
                 } else {
-
-                    
                     initialImage
                 }
             }
         }
     }
 
+    // puts view outliers into the dustbin
+    public func dumpInDustbin(between selectionStart: CGPoint,
+                              and end_location: CGPoint)
+    {
+        let gestureBounds = BoundingBox(between: selectionStart, and: end_location)
+
+        var newOutlierViews: [OutlierGroupViewModel] = []
+        var dustbin: [OutlierGroup] = []
+
+        outlierViews?.forEach() { group in
+            if !gestureBounds.contains(other: group.bounds) {
+                newOutlierViews.append(group)
+            } else {
+                dustbin.append(group.group)   
+            }
+        }
+        self.outlierViews = newOutlierViews
+
+        if let frame {
+            Task {
+                await frame.getOutlierGroups()?.dumpInDustbin(dustbin)
+                await self.viewModel.computeDustbinImage(forFrame: frame)
+                try await frame.getOutlierGroups()?.writeOutliersBinary(to: frame.outliersDirname)
+            }
+        }
+    }
+
+    // pulls outliers out of the dustbin into the view
+    public func extractDust(between selectionStart: CGPoint,
+                            and end_location: CGPoint)
+    {
+        let gestureBounds = BoundingBox(between: selectionStart, and: end_location)
+
+        Task {
+            if let frame {
+                let newViewOutliers = try await frame.promoteDust(in: gestureBounds)
+
+                await viewModel.setOutlierGroups(forFrame: frame)
+            }
+        }
+    }
+
+    
     public func deleteOutliers(between selectionStart: CGPoint,
                                and end_location: CGPoint) -> BoundingBox
     {

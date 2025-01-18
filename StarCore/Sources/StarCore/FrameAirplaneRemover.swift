@@ -154,8 +154,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             // update the observer here
           await observer?.set(numberOfPositiveOutliers: totalPositive,
-                               numberOfNegativeOutliers: totalNegative,
-                               numberOfUndecidedOutliers: totalUnknown)
+                              numberOfNegativeOutliers: totalNegative,
+                              numberOfUndecidedOutliers: totalUnknown)
         }
     }
 

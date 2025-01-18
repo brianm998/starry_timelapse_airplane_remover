@@ -36,6 +36,7 @@ public actor OutlierGroups {
     public func add(_ newMembers: [OutlierGroup]) {
         for member in newMembers {
             self.members[member.id] = member
+            self.dustbin.removeValue(forKey: member.id)
         }
     }
     
@@ -46,6 +47,7 @@ public actor OutlierGroups {
     public func dumpInDustbin(_ newMembers: [OutlierGroup]) {
         for member in newMembers {
             self.dustbin[member.id] = member
+            self.members.removeValue(forKey: member.id)
         }
     }
 
@@ -268,6 +270,18 @@ public actor OutlierGroups {
         }
     }
 
+    public func promoteDust(in gestureBounds: BoundingBox) -> [OutlierGroup] {
+        var ret: [OutlierGroup] = []
+        for (key, group) in dustbin {
+            if gestureBounds.contains(group.bounds) {
+                dustbin.removeValue(forKey: key)
+                ret.append(group)
+                members[key] = group
+            }
+        }
+        return ret
+    }
+    
     public func deleteOutliers(in gestureBounds: BoundingBox) {
         for (key, group) in members {
             if gestureBounds.contains(group.bounds) {

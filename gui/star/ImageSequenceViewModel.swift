@@ -16,7 +16,8 @@ public enum SelectionMode: String, Equatable, CaseIterable {
     case paint
     case clear
     case razor
-    case delete
+    case dustbin
+    case getDust
     case multi
     case details
     
@@ -128,7 +129,13 @@ public final class ImageSequenceViewModel {
 
     var selectedOutliers = Set<OutlierGroupTableRow.ID>()
 
-    var selectionMode = SelectionMode.paint
+    var selectionMode = SelectionMode.paint {
+        didSet {
+            if selectionMode == .getDust {
+                shouldShowDustbin = true
+            }
+        }
+    }
     var renderingCurrentFrame = false
 
     var isProcessingAllFrames = false
@@ -490,8 +497,10 @@ public final class ImageSequenceViewModel {
             return .green
         case .razor:
             return .yellow
-        case .delete:
-            return .orange
+        case .dustbin:
+            return .pink
+        case .getDust:
+            return .mint
         case .details:
             return .blue
         case .multi:
@@ -672,7 +681,7 @@ public final class ImageSequenceViewModel {
         }
     }
     
-    func setOutlierDustbinGroups(forFrame frame: FrameAirplaneRemover) async {
+    func computeDustbinImage(forFrame frame: FrameAirplaneRemover) async {
         // write an image from all of the dustbin, as there can be too much dust
         // to make each particle an outlier view 
         let width  = Int(self.frameWidth)

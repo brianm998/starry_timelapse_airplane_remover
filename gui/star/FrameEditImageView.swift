@@ -85,10 +85,9 @@ public struct FrameEditImageView: View {
            let frame = frameView.frame
         {
             frameView.loadingDustbinViews = true
-            //viewModel.loadingOutliers = true
 
             Task {
-                await self.viewModel.setOutlierDustbinGroups(forFrame: frame)
+                await self.viewModel.computeDustbinImage(forFrame: frame)
                 await MainActor.run {
                     frameView.loadingDustbinViews = false
                 }

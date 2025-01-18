@@ -12,11 +12,11 @@ class OutlierGroupViewModel: Identifiable {
     // XXX make the UI use this to see changes in paintability
     var paintObserver = OutlierPaintObserver() 
     
-    init (viewModel: ImageSequenceViewModel,
-          group: OutlierGroup,
-          name: UInt16,
-          bounds: BoundingBox,
-          image: NSImage) async
+    init(viewModel: ImageSequenceViewModel,
+         group: OutlierGroup,
+         name: UInt16,
+         bounds: BoundingBox,
+         image: NSImage) async
     {
         self.viewModel = viewModel
         self.group = group

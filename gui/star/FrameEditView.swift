@@ -123,12 +123,26 @@ struct FrameEditView: View {
                       applyRazor(to: frameView,
                                  between: selectionStart,
                                  and: end_location)
+
+                      // if we are showing the dustbin, recompute the image after the razor
+                      if viewModel.shouldShowDustbin {
+                          Task {
+                              if let frame = frameView.frame {
+                                  await self.viewModel.computeDustbinImage(forFrame: frame)
+                              }
+                          }
+                      }
                       
-                  case .delete:
-                      //let _ = Log.d("DELETE")
-                      deleteOutliers(from: frameView,
-                                     between: selectionStart,
-                                     and: end_location) 
+                  case .dustbin:
+                      dumpInDustbin(from: frameView,
+                                    between: selectionStart,
+                                    and: end_location) 
+                      break
+                      
+                  case .getDust:
+                      extractDust(from: frameView,
+                                  between: selectionStart,
+                                  and: end_location) 
 
                   case .details:
                       //let _ = Log.d("DETAILS")
@@ -189,6 +203,26 @@ struct FrameEditView: View {
         }
     }
 
+    // takes outliers from the view layer and dumps them in the dustbin
+    private func dumpInDustbin(from frameView: FrameViewModel,
+                               between selectionStart: CGPoint,
+                               and end_location: CGPoint)
+    {
+        frameView.dumpInDustbin(between: selectionStart, and: end_location)
+        viewModel.selectionStart = nil
+        viewModel.selectionEnd = nil
+    }
+
+    // promotes outliers from dustbin to the view layer
+    private func extractDust(from frameView: FrameViewModel,
+                             between selectionStart: CGPoint,
+                             and end_location: CGPoint)
+    {
+        frameView.extractDust(between: selectionStart, and: end_location)
+        viewModel.selectionStart = nil
+        viewModel.selectionEnd = nil
+    }
+    
     // XXX update this by renaming it to dustbinOutliers, and no longer really delete them, just bin them
     private func deleteOutliers(from frameView: FrameViewModel,
                                 between selectionStart: CGPoint,
