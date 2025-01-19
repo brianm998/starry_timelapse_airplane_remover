@@ -76,57 +76,12 @@ extension FrameAirplaneRemover {
         Log.i("frame \(frameIndex) has \(blobs.count) blobs")
         self.set(state: .populatingOutlierGroups)
 
-        await withTaskGroup(of: OutlierSorter.self) { taskGroup in
-                
-            // promote found blobs to outlier groups for further processing
-            let classifier = await currentClassifier.get(for: .isolated) 
-            
-            for blob in blobs {
-                taskGroup.addTask {
-                    // make outlier group from this blob
-                    let outlierGroup = await blob.outlierGroup(at: self.frameIndex)
+        let classifier = IoslatedOutlierClassifier(frameIndex: frameIndex, frame: self)
+        let (good, bad) = await classifier.promoteAndClassify(blobs)
 
-                    //Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.id) line \(String(describing: blob.line))")
-                    await outlierGroup.set(frame: self)
-
-                    // when promoting blobs to outlier groups, we first use the .isolated classifier
-                    // and separate blobs into two groups based upon a threshold in this classification.
-                    // one group is the dustbin, which has a very high likelyhood of not being useful
-                    // the other group are the outlier groups that will get processed further
-
-                    if let classifier {
-                        let featureData = await outlierGroup.featureData(for: .isolated)
-                        let classification = classifier.classification(of: featureData)
-
-                        // -1 classification means bad
-                        //  1 classification means good
-                        //  0 is undecided
-                        return OutlierSorter(classification: classification,
-                                             outlier: outlierGroup)
-                    } else {
-                        Log.w("No .isolated classifier!!") // assume it's good
-                        return OutlierSorter(classification: 1,
-                                             outlier: outlierGroup)
-                    }
-                }
-
-                var good: [OutlierGroup] = []
-                var bad: [OutlierGroup] = []
-                
-                for await value in taskGroup {
-                    if value.classification > -0.1 { // XXX constant XXX
-                        // it's good
-                        good.append(value.outlier)
-                    } else {
-                        // it's bad
-                        bad.append(value.outlier)
-                    }
-                }
-
-                await self.outlierGroups?.add(good)
-                await self.outlierGroups?.dumpInDustbin(bad)
-            }
-        }
+        await self.outlierGroups?.add(good)
+        await self.outlierGroups?.dumpInDustbin(bad)
+        
         // here we write the outlier binaries through the outlierGroups
         try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)
 
@@ -486,5 +441,73 @@ extension FrameAirplaneRemover {
         
         try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)
         // XXX add y-axis here too
+    }
+}
+
+
+class IoslatedOutlierClassifier {
+
+    let frameIndex: Int
+    let frame: FrameAirplaneRemover
+    
+    public init(frameIndex: Int,
+                frame: FrameAirplaneRemover)
+    {
+        self.frameIndex = frameIndex
+        self.frame = frame
+    }
+    
+    func promoteAndClassify(_ blobs: [Blob]) async -> ([OutlierGroup], [OutlierGroup]) {
+        await withTaskGroup(of: OutlierSorter.self) { taskGroup in
+            let frame = self.frame
+            let frameIndex = self.frameIndex
+            // promote found blobs to outlier groups for further processing
+            let classifier = await currentClassifier.get(for: .isolated) 
+            
+            for blob in blobs {
+                taskGroup.addTask {
+                    // make outlier group from this blob
+                    let outlierGroup = await blob.outlierGroup(at: frameIndex)
+
+                    //Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.id) line \(String(describing: blob.line))")
+                   await outlierGroup.set(frame: frame)
+
+                    // when promoting blobs to outlier groups, we first use the .isolated classifier
+                    // and separate blobs into two groups based upon a threshold in this classification.
+                    // one group is the dustbin, which has a very high likelyhood of not being useful
+                    // the other group are the outlier groups that will get processed further
+
+                    if let classifier {
+                        let featureData = await outlierGroup.featureData(for: .isolated)
+                        let classification = classifier.classification(of: featureData)
+
+                        // -1 classification means bad
+                        //  1 classification means good
+                        //  0 is undecided
+                        return OutlierSorter(classification: classification,
+                                             outlier: outlierGroup)
+                    } else {
+                        Log.w("No .isolated classifier!!") // assume it's good
+                        return OutlierSorter(classification: 1,
+                                             outlier: outlierGroup)
+                    }
+                }
+            }
+
+            var good: [OutlierGroup] = []
+            var bad: [OutlierGroup] = []
+            
+            for await value in taskGroup {
+                if value.classification > -0.3 { // XXX constant XXX
+                    // it's good
+                    good.append(value.outlier)
+                } else {
+                    // it's bad
+                    bad.append(value.outlier)
+                }
+            }
+
+            return (good, bad)
+        }
     }
 }
