@@ -150,11 +150,10 @@ public actor BlobLineTrim {
                                            frameIndex: self.frameIndex,
                                            maxIterations: 10)
                 }
-
-                for await newBlobs in taskGroup {
-                    for newBlob in newBlobs {
-                        blobMap[newBlob.id] = newBlob
-                    }
+            }
+            for await newBlobs in taskGroup {
+                for newBlob in newBlobs {
+                    blobMap[newBlob.id] = newBlob
                 }
             }
         }
