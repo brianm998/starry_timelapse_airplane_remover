@@ -70,18 +70,21 @@ At a high level, Star operates in a number of steps for each frame:
 1. star-align a neighboring frame
 2. subtract the image from step #1 from the frame being processed
 3. detect bright groups of pixels in the image from step #2
-4. apply some heuristics to filter out a lot of the groups from step #3
-5. classify groups left after step #4 using machine learning to decide which ones to derive layer masks from
-6. create a layer mask for this frame using the classified groups from step #5
-7. use the layer mask from step #6 and the star-aligned neighbor frame from step #1 to generate the output image for this frame
+4. use line detection logic to assemble as many bright pixels into lines
+5. apply machine learning to decimate the blobs per frame, leaving most in the dustbin
+6. link the frames and apply machine learning again to determine which ones to derive layer masks from
+7. create a layer mask for this frame using the classified groups from step #6
+8. use the layer mask from step #7 and the star-aligned neighbor frame from step #1 to generate the output image for this frame
 
 As of Star v 0.4.0, detection is done via star-aligned images.  Each frame has a neighboring frame mapped to it via hugin's `align_image_stack` utility.  This makes the stars show up in close to the same spot in both images, while things like the earth are moved.  The effect of this is that, with proper alignment, the area of a frame that is covered by the streak of an airplane will be replace with a closer part of the sky from the neighboring frame.
 
 Having mapped a comparison image makes detection a lot more capable, i.e. smaller differences between the images can be found, with fewer false positives.
 
+As of Star v 0.7.1, the detection logic has been updated to never discard any of the detected bright blobs, but to instead leave them in the new 'dustbin'.  This allows users to correct for any mis-classified blobs, and also allows for the machine learning engine to get more data from the corrections.
+
 The heuristics from step #4 can be controlled on the command line with the `--detectionType` argument.  Really wide lenses like 12mm can result in a less accurate star alignment, which can give a noiser subtraction image.  Shorter lenses like 20mm or narrower can result in much closer star alignment and a much cleaner subtration image.
 
-The machine learning is implemented with a trained decision tree.  Star contains logic to build forests of decision trees from validated image sequences.  
+The machine learning is implemented with a trained decision tree.  Star contains logic to build forests of decision trees from validated image sequences.  As of Star 0.7.1 there are now two separate, but similar decision trees packaged with the app.  The first decision tree is used before frames are linked together, using only classification features that are isolated to the blob in question.  The second decision tree uses a super set of the classification features of the first, which adds features that reference other parts of the frame in question, as well as a set of neighboring frames.
 
 If any errors are noticed in the rendered videos, the Star gui appliation can be used to modify each frame as necessary.
 
