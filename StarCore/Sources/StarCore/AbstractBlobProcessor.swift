@@ -61,11 +61,9 @@ public class AbstractBlobProcessor {
             let step = steps[stepIndex]
 
             if !shouldRunStep(atIndex: stepIndex) {
-                print("shouldRunStep at index \(stepIndex) NO")
                 continue
             }
             
-            print("shouldRunStep at index \(stepIndex) YES")
             switch step {
                 
             case .findBlobs(let args):
