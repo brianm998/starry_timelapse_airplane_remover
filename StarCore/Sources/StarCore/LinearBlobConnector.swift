@@ -270,6 +270,7 @@ public actor LinearBlobConnector {
     public func process(_ args: Args) async {
 
         let blobMap = await analyzer.mapOfBlobs()
+        let startTime = Date().timeIntervalSince1970
 
         let data = LinearBlobConnector.Data(args: args,
                                             processedBlobs: .init(),
@@ -278,49 +279,58 @@ public actor LinearBlobConnector {
                                             analyzer: analyzer,
                                             frameIndex: frameIndex)
 
-//        let array = Array(blobMap.values).splitIntoChunks(sized: 100) // XXX constant
-        
-//        await Task.detached(priority: .userInitiated) {
-            await withTaskGroup(of: Void.self) { taskGroup in
-//                for subarray in array { 
-                for blob in blobMap.values {
-                    taskGroup.addTask {
-                        await processBlob(blob, data: data)
-                    }
+        await withTaskGroup(of: Void.self) { taskGroup in
+            for blob in blobMap.values {
+
+                if await data.processedBlobs.contains(blob.id) { return }
+                await data.processedBlobs.insert(blob.id)
+    
+                // only deal with blobs in a certain size range
+                let blobSize = await blob.size()
+                
+                if blobSize >= data.args.blobsSmallerThan || 
+                     blobSize < data.args.blobsLargerThan
+                {
+                    return
                 }
-                //                }
-                await taskGroup.waitForAll()
+
+                // find a cloud of neighbors 
+                let (neighborCloud, newProcessedBlobs) =
+                  await StarCore.neighborCloud(of: blob,
+                                               blobRefs: data.blobRefs,
+                                               blobMap: data.blobMap,
+                                               scanSize: data.args.scanSize,
+                                               processedBlobs: data.processedBlobs)
+                
+                await data.processedBlobs.union(with: newProcessedBlobs)
+                
+                if neighborCloud.count == 0 { continue }
+                
+                taskGroup.addTask {
+                    await processBlob(blob,
+                                      data: data,
+                                      neighborCloud: neighborCloud,
+                                      newProcessedBlobs: newProcessedBlobs)
+                }
             }
-//        }.value
+            await taskGroup.waitForAll()
+        }
+        let endTime = Date().timeIntervalSince1970
+        Log.d("frame \(frameIndex) processed in \(endTime-startTime) seconds")
     }
 }
 
-fileprivate func processBlob(_ blob: Blob, data: LinearBlobConnector.Data) async {
-    if await data.processedBlobs.contains(blob.id) { return }
-    await data.processedBlobs.insert(blob.id)
+fileprivate func processBlob(_ blob: Blob,
+                             data: LinearBlobConnector.Data,
+                             neighborCloud: Set<Blob>,
+                             newProcessedBlobs: ProcessedBlobs) async
+{
+    let startTime = Date().timeIntervalSince1970
     
-    // only deal with blobs in a certain size range
-    let blobSize = await blob.size()
-    
-    if blobSize >= data.args.blobsSmallerThan || 
-         blobSize < data.args.blobsLargerThan
-    {
-        return
-    }
-
     //Log.d("iterating over blob \(id)")
 
-    // find a cloud of neighbors 
-    let (neighborCloud, newProcessedBlobs) =
-      await StarCore.neighborCloud(of: blob,
-                                   blobRefs: data.blobRefs,
-                                   blobMap: data.blobMap,
-                                   scanSize: data.args.scanSize,
-                                   processedBlobs: data.processedBlobs)
-
-    await data.processedBlobs.union(with: newProcessedBlobs)
+    // this appears to be blocking progress for some reason
     
-    if neighborCloud.count == 0 { return }
     
     //Log.d("blob \(id) has \(neighborCloud.count) neighbors")
 
@@ -375,7 +385,9 @@ fileprivate func processBlob(_ blob: Blob, data: LinearBlobConnector.Data) async
                       adjecentPixelsOnIteration: data.args.adjecentPixelsOnIteration)
 
         // trim the blob here?
-    }
+    } 
+    let endTime = Date().timeIntervalSince1970
+    Log.d("frame \(frameIndex) processed blob \(blob) in \(endTime-startTime) seconds")
 }
 
 fileprivate func iterate(on blobLine: Line,
