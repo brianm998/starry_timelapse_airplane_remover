@@ -432,11 +432,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
        var (image, otherFrame) = try await finalMonitor.load() {
             await self.set(state: .loadingImages)
             return await (imageAccessor.loadInt(frameIndex: frameIndex,
-                                         type: .original,
-                                         atSize: .original),
-                   imageAccessor.loadInt(frameIndex: frameIndex,
-                                         type: .aligned,
-                                         atSize: .original))
+                                                type: .original,
+                                                atSize: .original),
+                          imageAccessor.loadInt(frameIndex: frameIndex,
+                                                type: .aligned,
+                                                atSize: .original))
         }
 
         guard let image = image//try await imageAccessor.loadFinal(type: .original, atSize: .original)

@@ -153,7 +153,7 @@ public actor FinalGUIProcessor {
                         }
 
                         if haveEnoughOutliers {
-                            Task {
+                            Task.detached(priority: .userInitiated) {
                                 await finalProcess(atIndex: frameIndex,
                                                    frames: viewModel.frames,
                                                    viewModel: viewModel)
@@ -165,7 +165,7 @@ public actor FinalGUIProcessor {
             }
             for frameIndex in 0..<framesCount {
                 if !haveFinalProcessed[frameIndex] {
-                    Task {
+                    Task.detached(priority: .userInitiated) {
                         await finalProcess(atIndex: frameIndex,
                                            frames: viewModel.frames,
                                            viewModel: viewModel)
@@ -211,7 +211,9 @@ fileprivate func finalProcess(atIndex currentIndex: Int,
     Log.d("frame \(frame.frameIndex) about to final process")
 
     // mark that we're processing
-    await viewModel.finalProcessingCount.increase()
+    Task { @MainActor in
+        await viewModel.finalProcessingCount.increase()
+    }
     
     //await finalSemaphore.wait()
     Log.d("finalProcess currentIndex \(currentIndex)")
@@ -239,18 +241,20 @@ fileprivate func finalProcess(atIndex currentIndex: Int,
         }
         await frame.set(frameSavingState: .notSaving)
 
-        await viewModel.setOutlierGroups(forFrame: frame)
-        await MainActor.run {
+        Task { @MainActor in
+            await viewModel.setOutlierGroups(forFrame: frame)
             viewModel.numberOfFramesProcessed += 1
         }
 
     } else {
         Log.d("frame \(frame.frameIndex) about to final process already complete")
-        await MainActor.run {
+        Task { @MainActor in
             viewModel.numberOfFramesProcessed += 1
         }
     }
-    await viewModel.finalProcessingCount.decrease()
+    Task { @MainActor in
+        await viewModel.finalProcessingCount.decrease()
+    }
     //finalSemaphore.signal()
 
     Log.d("final process done at index \(currentIndex)")
