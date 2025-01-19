@@ -500,7 +500,7 @@ fileprivate class IoslatedOutlierClassifier {
                 var bad: [OutlierGroup] = []
                 
                 for await value in taskGroup {
-                    if value.classification > -0.15 { // XXX constant XXX expose this XXX
+                    if value.classification > -0.1 { // XXX constant XXX expose this XXX
                         // it's good
                         good.append(value.outlier)
                     } else {
