@@ -141,6 +141,7 @@ public class FrameViewModel {
             Task {
                 await frame.getOutlierGroups()?.dumpInDustbin(dustbin)
                 await self.viewModel.computeDustbinImage(forFrame: frame)
+                await frame.updateCombineSubjects()
                 try await frame.getOutlierGroups()?.writeOutliersBinary(to: frame.outliersDirname)
             }
         }
@@ -165,6 +166,7 @@ public class FrameViewModel {
                 await frame.getOutlierGroups()?.dumpInDustbin(dustbin)
                 await self.viewModel.computeDustbinImage(forFrame: frame)
                 try await frame.getOutlierGroups()?.writeOutliersBinary(to: frame.outliersDirname)
+                await frame.updateCombineSubjects()
             }
         }
     }
@@ -180,31 +182,9 @@ public class FrameViewModel {
                 let newViewOutliers = try await frame.promoteDust(in: gestureBounds)
 
                 await viewModel.setOutlierGroups(forFrame: frame)
+                await frame.updateCombineSubjects()            
             }
         }
-    }
-
-    
-    public func deleteOutliers(between selectionStart: CGPoint,
-                               and end_location: CGPoint) -> BoundingBox
-    {
-        let gestureBounds = BoundingBox(between: selectionStart, and: end_location)
-
-        Log.d("deleteOutliers with gestureBounds \(gestureBounds)")
-        
-        var newOutlierViews: [OutlierGroupViewModel] = []
-
-        // XXX bug here where no outliers get appended,
-        // and they all dissapear from the view :(
-        
-        outlierViews?.forEach() { group in
-            if !gestureBounds.contains(other: group.bounds) {
-                newOutlierViews.append(group)
-            }
-        }
-        self.outlierViews = newOutlierViews
-
-        return gestureBounds
     }
 }
 

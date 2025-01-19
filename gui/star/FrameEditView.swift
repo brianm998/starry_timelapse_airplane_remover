@@ -223,29 +223,6 @@ struct FrameEditView: View {
         viewModel.selectionEnd = nil
     }
     
-    // XXX update this by renaming it to dustbinOutliers, and no longer really delete them, just bin them
-    private func deleteOutliers(from frameView: FrameViewModel,
-                                between selectionStart: CGPoint,
-                                and end_location: CGPoint)
-    {
-        // update the view on the main thread
-        let gestureBounds = frameView.deleteOutliers(between: selectionStart, and: end_location)
-        
-        if let frame = frameView.frame {
-            Task.detached(priority: .userInitiated) {
-                // update the frame in the background
-                try await frame.deleteOutliers(in: gestureBounds) // XXX errors not handled
-                await MainActor.run {
-                    viewModel.selectionStart = nil
-                    viewModel.selectionEnd = nil
-                }
-            }
-        } else {
-            viewModel.selectionStart = nil
-            viewModel.selectionEnd = nil
-        }
-    }
-
     private func update(frame frameView: FrameViewModel,
                         shouldPaint: Bool,
                         between selectionStart: CGPoint,

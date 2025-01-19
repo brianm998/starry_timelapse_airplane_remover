@@ -17,7 +17,6 @@ public enum MultiSelectionType: String, Equatable, CaseIterable {
 public enum MultiSelectionPaintType: String, Equatable, CaseIterable {
     case paint
     case clear
-    case delete
     case paintOverlaps
     case clearOverlaps
 
@@ -68,8 +67,6 @@ struct MultiSelectSheetView: View {
                     Text("Paint outliers in this area in all \(frames.count) frames")
                 case .clear:
                     Text("Clear outliers in this area in all \(frames.count) frames")
-                case .delete:
-                    Text("Remove outliers in this area in all \(frames.count) frames")
                 case .paintOverlaps:
                     Text("Paint overlaying outliers in this area in all \(frames.count) frames")
                 case .clearOverlaps:
@@ -83,8 +80,6 @@ struct MultiSelectSheetView: View {
                     Text("Paint outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
                 case .clear:
                     Text("Clear outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
-                case .delete:
-                    Text("Remove outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
                 case .paintOverlaps:
                     Text("Paint overlaying outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
                 case .clearOverlaps:
@@ -99,8 +94,6 @@ struct MultiSelectSheetView: View {
                     Text("Paint outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
                 case .clear:
                     Text("Clear outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
-                case .delete:
-                    Text("Remove outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
                 case .paintOverlaps:
                     Text("Paint overlaying outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
                 case .clearOverlaps:
@@ -125,8 +118,6 @@ struct MultiSelectSheetView: View {
                             self.updateFrames(shouldPaint: true)
                         case .clear:
                             self.updateFrames(shouldPaint: false)
-                        case .delete:
-                            self.deleteFromFrames()
                         case .paintOverlaps:
                             self.updateOverlappersInFrames(shouldPaint: true)
                         case .clearOverlaps:
@@ -145,8 +136,6 @@ struct MultiSelectSheetView: View {
                         case .clear:
                             self.updateFrames(shouldPaint: false,
                                               startIndex: currentIndex)
-                        case .delete:
-                            self.deleteFromFrames(startIndex: currentIndex)
                         case .paintOverlaps:
                             self.updateOverlappersInFrames(shouldPaint: true,
                                                            startIndex: currentIndex)
@@ -169,9 +158,6 @@ struct MultiSelectSheetView: View {
                             self.updateFrames(shouldPaint: false,
                                               startIndex: 0,
                                               endIndex: currentIndex)
-                        case .delete:
-                            self.deleteFromFrames(startIndex: 0,
-                                                  endIndex: currentIndex)
                         case .paintOverlaps:
                             self.updateOverlappersInFrames(shouldPaint: true,
                                                            startIndex: 0,
@@ -198,9 +184,6 @@ struct MultiSelectSheetView: View {
                                 self.updateFrames(shouldPaint: false,
                                                   startIndex: currentIndex,
                                                   endIndex: currentIndex + number_of_frames)
-                            case .delete:
-                                self.deleteFromFrames(startIndex: currentIndex,
-                                                      endIndex: currentIndex + number_of_frames)
                             case .paintOverlaps:
                                 self.updateOverlappersInFrames(shouldPaint: true,
                                                                startIndex: currentIndex,
@@ -231,9 +214,6 @@ struct MultiSelectSheetView: View {
                                 self.updateFrames(shouldPaint: false,
                                                   startIndex: currentIndex - number_of_frames,
                                                   endIndex: currentIndex)
-                            case .delete:
-                                self.deleteFromFrames(startIndex: currentIndex - number_of_frames,
-                                                      endIndex: currentIndex)
                             case .paintOverlaps:
                                 self.updateOverlappersInFrames(shouldPaint: true,
                                                                startIndex: currentIndex - number_of_frames,
@@ -258,6 +238,8 @@ struct MultiSelectSheetView: View {
         }.frame(minWidth: 300, idealWidth: 450, maxWidth: 800)
     }
 
+    // no longer used, base .dusbin and .getDust off of this
+    /*
     private func deleteFromFrames(startIndex: Int = 0, endIndex: Int? = nil) {
         let end = endIndex ?? frames.count
         let frames = self.frames
@@ -300,7 +282,7 @@ struct MultiSelectSheetView: View {
             }
         }
     }
-
+*/
     private func updateFrames(shouldPaint: Bool,
                               startIndex: Int = 0,
                               endIndex: Int? = nil)

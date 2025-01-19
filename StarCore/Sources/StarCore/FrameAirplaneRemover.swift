@@ -850,6 +850,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)
 
             await updateUserSlices(with: boundingBox)
+
+            await self.updateCombineSubjects()            
         }
     }
 
