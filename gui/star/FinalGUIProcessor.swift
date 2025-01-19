@@ -153,8 +153,11 @@ public actor FinalGUIProcessor {
                         }
 
                         if haveEnoughOutliers {
-                            await self.finalProcess(atIndex: frameIndex,
-                                                    frames: viewModel.frames)
+                            Task {
+                                await finalProcess(atIndex: frameIndex,
+                                                   frames: viewModel.frames,
+                                                   viewModel: viewModel)
+                            }
                             haveFinalProcessed[frameIndex] = true
                         }
                     }
@@ -162,8 +165,11 @@ public actor FinalGUIProcessor {
             }
             for frameIndex in 0..<framesCount {
                 if !haveFinalProcessed[frameIndex] {
-                    await self.finalProcess(atIndex: frameIndex,
-                                            frames: viewModel.frames)
+                    Task {
+                        await finalProcess(atIndex: frameIndex,
+                                           frames: viewModel.frames,
+                                           viewModel: viewModel)
+                    }
                     haveFinalProcessed[frameIndex] = true
                 }
             }
@@ -187,64 +193,65 @@ public actor FinalGUIProcessor {
         }
     }
 
-    // process frames that are ready for inter frame processing
-    // apply decision tree to outliers
-    // render processed output file
-    func finalProcess(atIndex currentIndex: Int,
-                      frames: [FrameViewModel]) async
-    {
-        guard let viewModel else { return }
-        guard let frame = await frames[currentIndex].frame else { return }
-
-        if await frame.processingState() == .complete { return }
-        
-        // we can now move this one further
-        Log.d("frame \(frame.frameIndex) about to final process")
-
-        // mark that we're processing
-        await viewModel.finalProcessingCount.increase()
-        
-        //await finalSemaphore.wait()
-        Log.d("finalProcess currentIndex \(currentIndex)")
-        if await frame.processingState() != .complete {
-
-            Log.d("frame \(frame.frameIndex) about to final process step 3")
-
-            await frame.set(state: .interFrameProcessing)
-            
-            if let task = await frame.applyDecisionTreeToAllOutliers(includingDustbin: viewModel.shouldShowDustbin) {
-                await task.value
-            }
-
-            await frame.set(state: .outlierProcessingComplete)
-
-            await frame.set(frameSavingState: .saving)
-            Log.d("frame \(frame.frameIndex) saveNow for real")
-            do {
-
-                try await frame.loadOutliers()
-                try await frame.finish()
-                await frame.changesHandled()
-            } catch {
-                Log.e("frame \(frame.frameIndex) frame save error: \(error)")
-            }
-            await frame.set(frameSavingState: .notSaving)
-
-            await viewModel.setOutlierGroups(forFrame: frame)
-            await MainActor.run {
-                viewModel.numberOfFramesProcessed += 1
-            }
-
-        } else {
-            Log.d("frame \(frame.frameIndex) about to final process already complete")
-            await MainActor.run {
-                viewModel.numberOfFramesProcessed += 1
-            }
-        }
-        await viewModel.finalProcessingCount.decrease()
-        //finalSemaphore.signal()
-
-        Log.d("final process done at index \(currentIndex)")
-    }
 }
 
+
+// process frames that are ready for inter frame processing
+// apply decision tree to outliers
+// render processed output file
+fileprivate func finalProcess(atIndex currentIndex: Int,
+                              frames: [FrameViewModel],
+                              viewModel: ImageSequenceViewModel) async
+{
+    guard let frame = await frames[currentIndex].frame else { return }
+
+    if await frame.processingState() == .complete { return }
+    
+    // we can now move this one further
+    Log.d("frame \(frame.frameIndex) about to final process")
+
+    // mark that we're processing
+    await viewModel.finalProcessingCount.increase()
+    
+    //await finalSemaphore.wait()
+    Log.d("finalProcess currentIndex \(currentIndex)")
+    if await frame.processingState() != .complete {
+
+        Log.d("frame \(frame.frameIndex) about to final process step 3")
+
+        await frame.set(state: .interFrameProcessing)
+        
+        if let task = await frame.applyDecisionTreeToAllOutliers(includingDustbin: viewModel.shouldShowDustbin) {
+            await task.value
+        }
+
+        await frame.set(state: .outlierProcessingComplete)
+
+        await frame.set(frameSavingState: .saving)
+        Log.d("frame \(frame.frameIndex) saveNow for real")
+        do {
+
+            try await frame.loadOutliers()
+            try await frame.finish()
+            await frame.changesHandled()
+        } catch {
+            Log.e("frame \(frame.frameIndex) frame save error: \(error)")
+        }
+        await frame.set(frameSavingState: .notSaving)
+
+        await viewModel.setOutlierGroups(forFrame: frame)
+        await MainActor.run {
+            viewModel.numberOfFramesProcessed += 1
+        }
+
+    } else {
+        Log.d("frame \(frame.frameIndex) about to final process already complete")
+        await MainActor.run {
+            viewModel.numberOfFramesProcessed += 1
+        }
+    }
+    await viewModel.finalProcessingCount.decrease()
+    //finalSemaphore.signal()
+
+    Log.d("final process done at index \(currentIndex)")
+}
