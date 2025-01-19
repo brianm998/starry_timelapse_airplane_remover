@@ -141,23 +141,29 @@ public actor BlobLineTrim {
     }
 
     public func process(_ args: Args) async -> [UInt16:Blob] {
-        await withTaskGroup(of: [Blob].self) { taskGroup in
-            for (_, blob) in blobMap {
-                taskGroup.addTask {
-                    await StarCore.process(blob,
-                                           with: args,
-                                           maxBlobID: self.maxBlobID,
-                                           frameIndex: self.frameIndex,
-                                           maxIterations: 10)
+        let blobMap = blobMap
+        self.blobMap = await Task.detached(priority: .userInitiated) {
+            var blobMap = blobMap
+            await withTaskGroup(of: [Blob].self) { taskGroup in
+                for (_, blob) in blobMap {
+                    taskGroup.addTask {
+                        await StarCore.process(blob,
+                                               with: args,
+                                               maxBlobID: self.maxBlobID,
+                                               frameIndex: self.frameIndex,
+                                               maxIterations: 10)
+                    }
+                }
+                for await newBlobs in taskGroup {
+                    for newBlob in newBlobs {
+                        blobMap[newBlob.id] = newBlob
+                    }
                 }
             }
-            for await newBlobs in taskGroup {
-                for newBlob in newBlobs {
-                    blobMap[newBlob.id] = newBlob
-                }
-            }
-        }
-        return blobMap
+            return blobMap
+        }.value
+
+        return self.blobMap
     }
 }
 
