@@ -45,7 +45,8 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           // reconnect some lines that may have been split up
           .linearBlobConnector(.init(scanSize: 12, 
                                      blobsSmallerThan: 6800,
-                                     lineBorder: 8)),
+                                     lineBorder: 8,
+                                     maxIterationCount: 5)),
 
           .save(.filter2),
           .frameState(.filter3),
@@ -75,18 +76,15 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           .save(.filter5),
           .frameState(.filter6),
 
+          .compactBlobIds,
+
           .save(.filter6),
           .frameState(.filter7),
            
-          .compactBlobIds,
-
-          .save(.filter7),
-          .frameState(.filter8),
-          
           // split up blobs based upon user input
           .applyUserSlices,
 
-          .save(.filter8),
+          .save(.filter7),
         ]
     }
 }
