@@ -27,14 +27,6 @@ public enum FrameViewMode: String,
     case filter6                // ..
     case filter7                // ..
     case filter8                // ..
-    case filter9                // ..
-    case filter10               // ..
-    case filter11               // ..
-    case filter12               // ..
-    case filter13               // ..
-    case filter14               // ..
-    case filter15               // ..
-    case filter16               // ..
     case validation             // an image of exactly what pixels have been identified as unwanted
     case paintMask              // the paint mask created from the validation image
     case processed              // the final processed image, 
@@ -68,21 +60,6 @@ public enum FrameViewMode: String,
             return "f7"
         case .filter8:
             return "f8"
-        case .filter9:
-            return "f9"
-        case .filter10:
-            return "f10"
-        case .filter11:
-            return "f11"
-        case .filter12:
-            return "f12"
-        case .filter13:
-            return "f13"
-        case .filter14:
-            return "f14"
-        case .filter15:
-            return "f15"
-        case .filter16:
             return "f16"
         case .paintMask:
             return "pmask"
@@ -119,22 +96,6 @@ public enum FrameViewMode: String,
             return "blob filter level 7"
         case .filter8:
             return "blob filter level 8"
-        case .filter9:
-            return "blob filter level 9"
-        case .filter10:
-            return "blob filter level 10"
-        case .filter11:
-            return "blob filter level 11"
-        case .filter12:
-            return "blob filter level 12"
-        case .filter13:
-            return "blob filter level 13"
-        case .filter14:
-            return "blob filter level 14"
-        case .filter15:
-            return "blob filter level 15"
-        case .filter16:
-            return "blob filter level 16"
         case .paintMask:
             return "computed paint mask"
         case .validation:

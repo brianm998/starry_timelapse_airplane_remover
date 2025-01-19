@@ -187,38 +187,6 @@ public actor UpdatableProgressMonitor {
             updates.append(update)
         }
 
-        if let update = progressLine(for: .filter9) {
-            updates.append(update)
-        }
-
-        if let update = progressLine(for: .filter10) {
-            updates.append(update)
-        }
-
-        if let update = progressLine(for: .filter11) {
-            updates.append(update)
-        }
-
-        if let update = progressLine(for: .filter12) {
-            updates.append(update)
-        }
-
-        if let update = progressLine(for: .filter13) {
-            updates.append(update)
-        }
-
-        if let update = progressLine(for: .filter14) {
-            updates.append(update)
-        }
-
-        if let update = progressLine(for: .filter15) {
-            updates.append(update)
-        }
-
-        if let update = progressLine(for: .filter16) {
-            updates.append(update)
-        }
-        
         if let update = progressLine(for: .populatingOutlierGroups) {
             updates.append(update)
         }

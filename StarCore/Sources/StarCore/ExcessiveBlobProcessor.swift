@@ -87,42 +87,6 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           .applyUserSlices,
 
           .save(.filter8),
-
-          /*
-
-          .frameState(.filter9),
-           
-          .save(.filter9),
-          .frameState(.filter10),
-
-
-          .save(.filter10),
-          .frameState(.filter11),
-
-
-          .save(.filter11),
-          .frameState(.filter12),
-            
-
-          .save(.filter12),
-          .frameState(.filter13),
-
-
-          .save(.filter13),
-          .frameState(.filter14),
-
-          .save(.filter14),
-          .frameState(.filter15),
-
-          .save(.filter15),
-          .frameState(.filter16),
-
-          // check to see if any pixel is in more than one blob
-          //.blobDupeCheck("end"),
-
-          .save(.filter16),
-          
-           */
         ]
     }
 }

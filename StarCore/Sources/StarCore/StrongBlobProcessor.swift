@@ -50,7 +50,6 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
           //.blobDupeCheck("init"),
 
           .save(.blobs),          
-
           .frameState(.filter1),
 
 
@@ -61,39 +60,7 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
 
 
           .save(.filter1),
-
           .frameState(.filter2),
-
-          .save(.filter2),
-          .frameState(.filter3),
-          
-          
-          .save(.filter3),
-          .frameState(.filter4),
-
-          .save(.filter4),
-          .frameState(.filter5),
-          
-          .save(.filter5),
-          .frameState(.filter6),
-
-          .save(.filter7),
-          .frameState(.filter8),
-          .save(.filter8),
-          .frameState(.filter9),
-
-          .save(.filter9),
-          .frameState(.filter10),
-          
-
-
-          .save(.filter10),
-          .frameState(.filter11),
-
-          .save(.filter11),
-          .frameState(.filter12),
-
-          // try to split up blobs with more than one line in them
 
 
           .blobLineTrim(.init(minBlobSize: 40,
@@ -101,37 +68,14 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
                               minLineFillAmount: 10,
                               trimAmount: 9)),
 
-          .save(.filter12),
-          .frameState(.filter13),
           
-
-          // a first pass at cutting out individual blobs based upon size, brightness
-          
-          // pass on getting rid of small but larger, dimmer blobs
-          // XXX this needs to take into account distance from others, it's killing us
-          //.smallBlobRemover(.init(minBlobSize: 50,
-          //intensityFloor: 7500)),
-          .save(.filter13),
-          .frameState(.filter14),
-
-          // pass on getting rid of small but larger, dimmer blobs
-          //.smallBlobRemover(.init(minBlobSize: 10)),
-
-          .save(.filter14),
-          .frameState(.filter15),
-
-
+          .save(.filter2),
+          .frameState(.filter3),
           
           // split up blobs based upon user input
           .applyUserSlices,
-
-          .save(.filter15),
-          .frameState(.filter16),
-
-          // check to see if any pixel is in more than one blob
-          //.blobDupeCheck("end"),
-
-          .save(.filter16),
+          
+          .save(.filter3),
         ]
     }
 }

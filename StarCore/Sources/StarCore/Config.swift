@@ -398,86 +398,6 @@ public struct Config: Codable, Sendable, Transferable {
                 return nil
             }
 
-        case .filter9:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(self.outputPath)/\(self.basename)-blobs-filter9-preview"
-            case .thumbnail:
-                return nil
-            }
-
-        case .filter10:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(self.outputPath)/\(self.basename)-blobs-filter10-preview"
-            case .thumbnail:
-                return nil
-            }
-
-        case .filter11:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(self.outputPath)/\(self.basename)-blobs-filter11-preview"
-            case .thumbnail:
-                return nil
-            }
-
-        case .filter12:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(self.outputPath)/\(self.basename)-blobs-filter12-preview"
-            case .thumbnail:
-                return nil
-            }
-
-        case .filter13:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(self.outputPath)/\(self.basename)-blobs-filter13-preview"
-            case .thumbnail:
-                return nil
-            }
-
-        case .filter14:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(self.outputPath)/\(self.basename)-blobs-filter14-preview"
-            case .thumbnail:
-                return nil
-            }
-
-        case .filter15:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(self.outputPath)/\(self.basename)-blobs-filter15-preview"
-            case .thumbnail:
-                return nil
-            }
-
-        case .filter16:
-            switch size {
-            case .original:
-                return nil
-            case .preview:
-                return "\(self.outputPath)/\(self.basename)-blobs-filter16-preview"
-            case .thumbnail:
-                return nil
-            }
-
         case .paintMask:
             switch size {
             case .original:
@@ -530,14 +450,6 @@ public struct Config: Codable, Sendable, Transferable {
             if let dir = self.dirForImage(ofType: .filter6, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .filter7, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .filter8, atSize: .preview) { ret.append(dir) }
-            if let dir = self.dirForImage(ofType: .filter9, atSize: .preview) { ret.append(dir) }
-            if let dir = self.dirForImage(ofType: .filter10, atSize: .preview) { ret.append(dir) }
-            if let dir = self.dirForImage(ofType: .filter11, atSize: .preview) { ret.append(dir) }
-            if let dir = self.dirForImage(ofType: .filter12, atSize: .preview) { ret.append(dir) }
-            if let dir = self.dirForImage(ofType: .filter13, atSize: .preview) { ret.append(dir) }
-            if let dir = self.dirForImage(ofType: .filter14, atSize: .preview) { ret.append(dir) }
-            if let dir = self.dirForImage(ofType: .filter15, atSize: .preview) { ret.append(dir) }
-            if let dir = self.dirForImage(ofType: .filter16, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .paintMask, atSize: .preview) { ret.append(dir) }
         }
         if self.writeFrameThumbnailFiles {

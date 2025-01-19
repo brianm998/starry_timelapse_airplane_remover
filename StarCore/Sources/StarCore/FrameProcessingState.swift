@@ -47,14 +47,6 @@ public enum FrameProcessingState: Int,
     case filter6
     case filter7
     case filter8
-    case filter9
-    case filter10
-    case filter11
-    case filter12
-    case filter13
-    case filter14
-    case filter15
-    case filter16
     
     case populatingOutlierGroups
     case readyForInterFrameProcessing
@@ -105,22 +97,6 @@ public enum FrameProcessingState: Int,
             return "filter 7"
         case .filter8:
             return "filter 8"
-        case .filter9:
-            return "filter 9"
-        case .filter10:
-            return "filter 10"
-        case .filter11:
-            return "filter 11"
-        case .filter12:
-            return "filter 12"
-        case .filter13:
-            return "filter 13"
-        case .filter14:
-            return "filter 14"
-        case .filter15:
-            return "filter 15"
-        case .filter16:
-            return "filter 16"
             
         case .populatingOutlierGroups:
             return "populating outlier groups"
@@ -183,22 +159,6 @@ public enum FrameProcessingState: Int,
             return false
         case .filter8:
             return false
-        case .filter9:
-            return false
-        case .filter10:
-            return false
-        case .filter11:
-            return false
-        case .filter12:
-            return false
-        case .filter13:
-            return false
-        case .filter14:
-            return false
-        case .filter15:
-            return false
-        case .filter16:
-            return false
         case .populatingOutlierGroups:
             return false
         case .readyForInterFrameProcessing:
@@ -259,22 +219,6 @@ public enum FrameProcessingState: Int,
         case .filter7:
             return .yellow
         case .filter8:
-            return .yellow
-        case .filter9:
-            return .yellow
-        case .filter10:
-            return .yellow
-        case .filter11:
-            return .yellow
-        case .filter12:
-            return .yellow
-        case .filter13:
-            return .yellow
-        case .filter14:
-            return .yellow
-        case .filter15:
-            return .yellow
-        case .filter16:
             return .yellow
         case .populatingOutlierGroups:
             return .yellow

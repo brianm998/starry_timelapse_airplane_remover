@@ -444,7 +444,7 @@ extension FrameAirplaneRemover {
     }
 }
 
-
+// executes the classification of .isolated blobs in parallel
 fileprivate class IoslatedOutlierClassifier {
 
     let frameIndex: Int
