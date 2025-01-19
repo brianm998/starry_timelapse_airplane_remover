@@ -33,22 +33,11 @@ public enum BlobProcessingType: Hashable,
     case frameState(FrameProcessingState)
     case applyUserSlices
     case findBlobs(BlobFinder.Args)
-    case dimIsolatedBlobRemover(DimIsolatedBlobRemover.Args)
-    case isolatedBlobRemover(IsolatedBlobRemover.Args)
-    case disconnectedBlobRemover(DisconnectedBlobRemover.Args)
     case linearBlobConnector(LinearBlobConnector.Args)
     case linearBlobExtender(LinearBlobExtender.Args)
     case blobLineTrim(BlobLineTrim.Args)
-    case borderBrightnessBlobRemover(BorderBrightnessBlobRemover.Args)
-    case lineSplit(BlobLineSplitter.Args)
     case blobDupeCheck(String)
-    case smallBlobRemover(SmallBlobRemover.Args)
-    case smallDimBlobRemover(SmallDimBlobRemover.Args)
-    case removeReallyBigBlobsWithSmallDimBunches(RemoveReallyBigBlobsWithSmallDimBunches.Args)
-    case trimWithConstants(BlobTrimmerWithConstants.Args)
-    case largeDimBlobCleaner(LargeDimBlobCleaner.Args)
     case houghLineMatrixBlobConnector(HoughLineMatrixBlobConnector.Args)
-    case nonLinearBlobRemover(NonLinearBlobRemover.Args)
     case compactBlobIds
 }
 
@@ -88,39 +77,12 @@ public class AbstractBlobProcessor {
             case .applyUserSlices:
                 blobMap = try await applyUserSlices(blobMap)
                 
-            case .smallBlobRemover(let args): // no analyzer
-                let remover = SmallBlobRemover(blobMap: blobMap,
-                                               frameIndex: frame.frameIndex)
-                
-                await remover.process(args)
-                blobMap = await remover.blobMap()
-                
-            case .smallDimBlobRemover(let args): // no analyzer
-                let remover = SmallDimBlobRemover(blobMap: blobMap,
-                                                  frameIndex: frame.frameIndex)
-                await remover.process(args)
-                blobMap = remover.blobMap
-                
             case .blobDupeCheck(let step): // uses analyzer
                 let _ = await BlobDupeCheck(blobMap: blobMap,
                                             width: frame.width,
                                             height: frame.height,
                                             frameIndex: frame.frameIndex,
                                             step: step)
-                
-            case .lineSplit(let args): // no analyzer
-                let splitter = BlobLineSplitter(blobMap: blobMap,
-                                                frameIndex: frame.frameIndex)
-                await splitter.process(args)
-                blobMap = await splitter.blobMap()
-                
-                
-            case .borderBrightnessBlobRemover(let args):
-                let remover = BorderBrightnessBlobRemover(blobMap: blobMap,
-                                                          frameIndex: frame.frameIndex)
-                await remover.process(args, originalImage: originalImage)
-                blobMap = await remover.blobMap()
-                
                 
             case .linearBlobConnector(let args): // uses analyzer
                 let connector = await LinearBlobConnector(blobMap: blobMap,
@@ -144,43 +106,6 @@ public class AbstractBlobProcessor {
                 let trimmer = BlobLineTrim(blobMap: blobMap, frameIndex: frame.frameIndex)
                 blobMap = await trimmer.process(args)
                 
-            case .isolatedBlobRemover(let args): // uses analyzer
-                let remover = await IsolatedBlobRemover(blobMap: blobMap,
-                                                        width: frame.width,
-                                                        height: frame.height,
-                                                        frameIndex: frame.frameIndex)
-                await iterate() { shouldRun in
-                    if shouldRun {
-                        await remover.process(args)
-                    }
-                    return await remover.blobMap().count
-                }
-                blobMap = await remover.blobMap()
-                
-                
-            case .disconnectedBlobRemover(let args): // uses analyzer
-                let remover = await DisconnectedBlobRemover(blobMap: blobMap,
-                                                            width: frame.width,
-                                                            height: frame.height,
-                                                            frameIndex: frame.frameIndex)
-                await remover.process(args)
-                blobMap = await remover.blobMap()
-                
-                
-            case .dimIsolatedBlobRemover(let args): // uses analyzer
-                let remover = await DimIsolatedBlobRemover(blobMap: blobMap,
-                                                           width: frame.width,
-                                                           height: frame.height,
-                                                           frameIndex: frame.frameIndex)
-                await iterate() { shouldRun in
-                    if shouldRun {
-                        await remover.process(args)
-                    }
-                    
-                    return await remover.blobMap().count
-                }
-                blobMap = await remover.blobMap()
-                
                 
             case .save(let imageType):
                 if await frame.configManager.config().writeOutlierGroupFiles {
@@ -193,24 +118,6 @@ public class AbstractBlobProcessor {
                 await frame.set(state: processingState)
                 
                 
-            case .removeReallyBigBlobsWithSmallDimBunches(let args): // no analyzer
-                let remover = RemoveReallyBigBlobsWithSmallDimBunches(blobMap: blobMap,
-                                                                      frameIndex: frame.frameIndex)
-                await remover.process(args)
-                blobMap = await remover.blobMap()
-                
-            case .trimWithConstants(let args):
-                let trimmer = BlobTrimmerWithConstants(blobMap: blobMap,
-                                                       frameIndex: frame.frameIndex)
-                await trimmer.process(args)
-                blobMap = trimmer.blobMap
-                
-            case .largeDimBlobCleaner(let args):
-                let cleaner = LargeDimBlobCleaner(blobMap: blobMap,
-                                                  frameIndex: frame.frameIndex)
-                await cleaner.process(args)
-                blobMap = await cleaner.blobMap()
-                
             case .houghLineMatrixBlobConnector(let args):
                 let connector = await HoughLineMatrixBlobConnector(blobMap: blobMap,
                                                                    width: frame.width,
@@ -218,12 +125,6 @@ public class AbstractBlobProcessor {
                                                                    frameIndex: frame.frameIndex)
                 await connector.process(args)
                 blobMap = await connector.blobMap()
-                
-            case .nonLinearBlobRemover(let args):
-                let remover = await NonLinearBlobRemover(blobMap: blobMap,
-                                                         frameIndex: frame.frameIndex)
-                await remover.process(args)
-                blobMap = remover.blobMap
                 
             case .compactBlobIds:
                 blobMap = compactBlobIds(of: blobMap)

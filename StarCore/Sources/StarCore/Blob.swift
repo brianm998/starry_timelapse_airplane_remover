@@ -208,8 +208,6 @@ public actor Blob: CustomStringConvertible,
             if let lineInfo = await CombinedHoughLineFinder(pixels: Array(self.pixels),
                                                             bounds: self.boundingBox(),
                                                             args: constants.getHoughLineFinderArgs(),
-                                                            medianIntensity: self.medianIntensity(),
-                                                            maxIntensity: self.maxIntensity(),
                                                             frameIndex: frameIndex).line
             {
                 _blobLine = lineInfo.line
@@ -220,37 +218,6 @@ public actor Blob: CustomStringConvertible,
     }
 
 
-    /*
-
-     XXX write code in the BlobProcessor to use this at the end of processing
-     to try to detach any blobs we can split up.
-
-     use it only on larger blobs (1-200?)
-
-     
-     */
-    // use KHT to see if we have more than one line in this group of pixels
-    public func lineSplit(args: BlobLineSplitter.Args) async -> [[SortablePixel]]
-    {
-        let hlf = await HoughLineFinder(pixels: Array(self.pixels),
-                                        bounds: self.boundingBox(),
-                                        args: constants.getHoughLineFinderArgs(),
-                                        medianIntensity: self.medianIntensity(),
-                                        maxIntensity: self.maxIntensity(),
-                                        frameIndex: frameIndex)
-        
-        let (pixelsToKeep, newPixelSets) =
-          hlf.lineSplit(args: args, optimalLine: hlf.line?.line)
-        
-        if newPixelSets.count > 0 {
-            Log.d("frame \(frameIndex) blob \(self.size()) lineSplit found \(newPixelSets.count) new pixel sets, reducing size of blob by \(self.pixels.count-pixelsToKeep.count) pixels")
-            self.pixels = Set(pixelsToKeep)
-            reset()
-            return newPixelSets
-        }
-        return []
-    }
-    
     private var _averageDistanceFromIdealLine: Double? 
     
     public var averageDistanceFromIdealLine: Double {

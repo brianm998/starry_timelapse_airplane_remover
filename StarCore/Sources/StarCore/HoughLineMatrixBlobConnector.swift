@@ -242,18 +242,13 @@ fileprivate func process(element: ImageMatrixElement,
     //let elementStartTime = Date().timeIntervalSince1970
     let processedBlobs = SetActor<Blob>()
 
-    let finderArgs = HoughLineFinder.Args(imageDataBorderSize: 0,
-                                          minThetaDiff: 0, // degrees
-                                          minRhoDiff: 0,
-                                          maxLineConstant: args.maxHoughLines,
-                                          maxDistanceFromLine: 6)
+    let finderArgs = HoughLineFinder.Args(imageDataBorderSize: 0,                                         
+                                          maxLineConstant: args.maxHoughLines)
     
     // find lines
     let finder = await /*Combined*/HoughLineFinder(pixels: element.sortablePixels,
                                                    bounds: element.bounds,
-                                                   args: finderArgs,
-                                                   medianIntensity: 0, // not used here
-                                                   maxIntensity: 0,    // not used here
+                                                   args: finderArgs,                                                
                                                    frameIndex: frameIndex)
 
     //let houghLinesTime = Date().timeIntervalSince1970

@@ -145,60 +145,26 @@ struct BlobProcessingView: View {
                                     case .applyUserSlices:
                                         applyUserSlicesView()
 
-                                    case .smallBlobRemover(let args):
-                                        smallBlobRemoverView(args, stepIndex: stepIndex)
-
-                                    case .smallDimBlobRemover(let args):
-                                        smallDimBlobRemoverView(args, stepIndex: stepIndex)
-
                                     case .blobDupeCheck(let step):
                                         blobDupeCheckView(step)
-
-                                    case .lineSplit(let args):
-                                        lineSplitView(args, stepIndex: stepIndex)
-
-                                    case .borderBrightnessBlobRemover(let args):
-                                        borderBrightnessLessThanView(args, stepIndex: stepIndex)
 
                                     case .linearBlobConnector(let args):
                                         linearBlobConnectorView(args, stepIndex: stepIndex)
 
                                     case .linearBlobExtender(let args):
                                         linearBlobExtenderView(args, stepIndex: stepIndex)
-
+                                        
                                     case .blobLineTrim(let args):
                                         blobLineTrimView(args, stepIndex: stepIndex)
 
-                                    case .isolatedBlobRemover(let args):
-                                        isolatedBlobRemoverView(args, stepIndex: stepIndex)
-
-                                    case .disconnectedBlobRemover(let args):
-                                        disconnectedBlobRemoverView(args, stepIndex: stepIndex)
-
-                                    case .dimIsolatedBlobRemover(let args):
-                                        dimIsolatedBlobRemoverView(args, stepIndex: stepIndex)
-                                        
                                     case .save(let imageType):
                                         saveView(imageType)
 
                                     case .frameState(let processingState):
                                         frameStateView(processingState)
 
-                                    case .removeReallyBigBlobsWithSmallDimBunches(let args):
-                                        removeReallyBigBlobsWithSmallDimBunchesView(args, stepIndex: stepIndex)
-
-                                    case .trimWithConstants(let args):
-                                        trimWithConstantsView(args, stepIndex: stepIndex)
-
-                                    case .largeDimBlobCleaner(let args):
-                                        largeDimBlobCleanerView(args, stepIndex: stepIndex)
-                                        
                                     case .houghLineMatrixBlobConnector(let args):
                                         houghLineMatrixBlobConnectorView(args, stepIndex: stepIndex)
-
-                                    case .nonLinearBlobRemover(let args):
-                                        nonLinearBlobRemoverView(args, stepIndex: stepIndex)
-                                        
                                     }
                                 }
                                   .background(.gray)
@@ -292,28 +258,6 @@ struct BlobProcessingView: View {
                  showDisableButton: false)
     }
     
-    private func smallBlobRemoverView(_ args: SmallBlobRemover.Args,
-                                      stepIndex: Int) -> some View
-    {
-        StepView(title: "Small Blob Remover",
-                 description: "gets rid of dimmer blobs off by themselves",
-                 args: args,
-                 array: SmallBlobRemover.Args.ArgType.allCases,
-                 stepIndex: stepIndex,
-                 detectionType: $detectionType)
-    }
-
-    private func smallDimBlobRemoverView(_ args: SmallDimBlobRemover.Args,
-                                         stepIndex: Int) -> some View
-    {
-        StepView(title: "Small Dim Blob Remover",
-                 description: "gets rid of dimmer blobs off by themselves",
-                 args: args,
-                 array: SmallDimBlobRemover.Args.ArgType.allCases,
-                 stepIndex: stepIndex,
-                 detectionType: $detectionType)
-    }
-
     private func blobDupeCheckView(_ step: String) -> some View {
         VStack(alignment: .leading) {
             Text("Blob Dupe Check")
@@ -322,28 +266,6 @@ struct BlobProcessingView: View {
             Text("look for duplicate blobs, and log them as step \(step) if any are found")
         }
           .padding(10)
-    }
-
-    private func lineSplitView(_ args: BlobLineSplitter.Args,
-                               stepIndex: Int) -> some View
-    {
-        StepView(title: "Line Splitter",
-                 description: "tries to split up blobs into multiple lines if possible",
-                 args: args,
-                 array: BlobLineSplitter.Args.ArgType.allCases,
-                 stepIndex: stepIndex,
-                 detectionType: $detectionType)
-    }
-
-    private func borderBrightnessLessThanView(_ args: BorderBrightnessBlobRemover.Args,
-                                              stepIndex: Int) -> some View
-    {
-        StepView(title: "Border Brightness Less Than View Brightness",
-                 description: "This steps only keeps blobs that meet one or both of the following criteria.",
-                 args: args,
-                 array: BorderBrightnessBlobRemover.Args.ArgType.allCases,
-                 stepIndex: stepIndex,
-                 detectionType: $detectionType)
     }
 
     private func linearBlobConnectorView(_ args: LinearBlobConnector.Args,
@@ -355,7 +277,7 @@ struct BlobProcessingView: View {
                         args: args,
                         array: LinearBlobConnector.Args.ArgType.allCases,
                         stepIndex: stepIndex,
-                        detectionType: $detectionType)
+                       detectionType: $detectionType)
     }
 
     private func linearBlobExtenderView(_ args: LinearBlobExtender.Args,
@@ -381,41 +303,6 @@ struct BlobProcessingView: View {
                  detectionType: $detectionType)
     }
 
-    private func isolatedBlobRemoverView(_ args: IsolatedBlobRemover.Args,
-                                         stepIndex: Int) -> some View
-    {
-        StepView(title: "Isolated Blob Remover",
-                 description: "gets rid of small blobs by themselves in nowhere",
-                 args: args,
-                 array: IsolatedBlobRemover.Args.ArgType.allCases,
-                 stepIndex: stepIndex,
-                 detectionType: $detectionType)
-    }
-
-    private func disconnectedBlobRemoverView(_ args: DisconnectedBlobRemover.Args,
-                                             stepIndex: Int) -> some View
-    {
-        let description = "recurse on finding nearby blobs to isolate groups of neighbors as a set\nuse the size of the neighbor set to determine if we keep a blob or not"
-
-        return StepView(title: "Disconnected Blob Remover",
-                        description: description,
-                        args: args,
-                        array: DisconnectedBlobRemover.Args.ArgType.allCases,
-                        stepIndex: stepIndex,
-                        detectionType: $detectionType)
-    }
-
-    private func dimIsolatedBlobRemoverView(_ args: DimIsolatedBlobRemover.Args,
-                                            stepIndex: Int) -> some View
-    {
-        StepView(title: "Dim Isolated Blob Remover",
-                 description: "gets rid of dimmer blobs off by themselves",
-                 args: args,
-                 array: DimIsolatedBlobRemover.Args.ArgType.allCases,
-                 stepIndex: stepIndex,
-                 detectionType: $detectionType)
-    }
-
     private func saveView(_ imageType: FrameViewMode) -> some View {
       HStack(alignment: .firstTextBaseline) {
             Text("Save Image")
@@ -436,40 +323,6 @@ struct BlobProcessingView: View {
         .padding(10)
     }
 
-    private func removeReallyBigBlobsWithSmallDimBunchesView(_ args: RemoveReallyBigBlobsWithSmallDimBunches.Args,
-                                                             stepIndex: Int) -> some View
-    {
-        StepView(title: "Remove Really Big Blobs With Small Dim Bunches",
-                 description: "Trims dimmer pixels out of large cloud like blobs.",
-                 args: args,
-                 array: RemoveReallyBigBlobsWithSmallDimBunches.Args.ArgType.allCases,
-                 stepIndex: stepIndex,
-                 detectionType: $detectionType)
-    }
-
-
-    private func trimWithConstantsView(_ args: BlobTrimmerWithConstants.Args,
-                                       stepIndex: Int) -> some View
-    {
-        StepView(title: "Blob Trimmer with Constants",
-                 description: "Removes blobs that don't fit the given criteria",
-                 args: args,
-                 array: BlobTrimmerWithConstants.Args.ArgType.allCases,
-                 stepIndex: stepIndex,
-                 detectionType: $detectionType)
-    }
-
-    private func largeDimBlobCleanerView(_ args: LargeDimBlobCleaner.Args,
-                                         stepIndex: Int) -> some View
-    {
-        StepView(title: "Large Dim Blob Cleaner",
-                 description: "Cleans out dim pixels from large dim blobs",
-                 args: args,
-                 array: LargeDimBlobCleaner.Args.ArgType.allCases,
-                 stepIndex: stepIndex,
-                 detectionType: $detectionType)
-    }
-
     private func houghLineMatrixBlobConnectorView(_ args: HoughLineMatrixBlobConnector.Args,
                                                   stepIndex: Int) -> some View
     {
@@ -484,18 +337,6 @@ struct BlobProcessingView: View {
                  detectionType: $detectionType)
     }
 
-    private func nonLinearBlobRemoverView(_ args: NonLinearBlobRemover.Args,
-                                                  stepIndex: Int) -> some View
-    {
-        StepView(title: "Non Linear Blob Remover",
-                 description: """
-                   Gets rid of blobs with a line, that aren't on that line.
-                   """,
-                 args: args,
-                 array: NonLinearBlobRemover.Args.ArgType.allCases,
-                 stepIndex: stepIndex,
-                 detectionType: $detectionType)
-    }
 }
 
 

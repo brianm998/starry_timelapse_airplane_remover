@@ -29,8 +29,6 @@ public struct CombinedHoughLineFinder: Sendable {
     public init(pixels: [SortablePixel],
                 bounds: BoundingBox,
                 args: HoughLineFinder.Args,
-                medianIntensity: UInt16,
-                maxIntensity: UInt16,
                 frameIndex: Int) async
     {
         self.bounds = bounds
@@ -47,8 +45,6 @@ public struct CombinedHoughLineFinder: Sendable {
         _finders.append(await .init(pixels: pixels,
                                     bounds: bounds,
                                     args: args,
-                                    medianIntensity: medianIntensity,
-                                    maxIntensity: maxIntensity,
                                     frameIndex: frameIndex,
                                     imageDataBorderSize: 0))
         
@@ -59,8 +55,6 @@ public struct CombinedHoughLineFinder: Sendable {
             _finders.append(await .init(pixels: pixels,
                                         bounds: bounds,
                                         args: args,
-                                        medianIntensity: medianIntensity,
-                                        maxIntensity: maxIntensity,
                                         frameIndex: frameIndex,
                                         imageDataBorderSize: 5000))
         }
@@ -120,8 +114,6 @@ public struct HoughLineFinder: Sendable {
     let data: [SortablePixel]
     
     let bounds: BoundingBox
-    let medianIntensity: UInt16
-    let maxIntensity: UInt16
     let frameIndex: Int
     let args: Args
 
@@ -130,8 +122,6 @@ public struct HoughLineFinder: Sendable {
     public init(pixels: [SortablePixel],
                 bounds: BoundingBox,
                 args: Args,
-                medianIntensity: UInt16,
-                maxIntensity: UInt16,
                 frameIndex: Int,
                 imageDataBorderSize: Int? = nil) async
     {
@@ -139,18 +129,13 @@ public struct HoughLineFinder: Sendable {
         self.args = args
         self.bounds = bounds
         self.frameIndex = frameIndex
-        self.maxIntensity = maxIntensity
-        self.medianIntensity = medianIntensity
         self._imageDataBorderSize = imageDataBorderSize
     }
 
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         
         var imageDataBorderSize: Int
-        var minThetaDiff: Double // degrees
-        var minRhoDiff: Double
         var maxLineConstant: Int// max number of of hough lines to look at
-        var maxDistanceFromLine: Double
 
         public typealias Types = ArgType
 
@@ -168,37 +153,22 @@ public struct HoughLineFinder: Sendable {
                   instead of giving the KHT algorithm a small
                   image with a line right through the middle of it.
                   """
-            case .minThetaDiff:
-                return "Used by line split only"
-            case .minRhoDiff:
-                return "Used by line split only"
             case .maxLineConstant:
                 return "Return no more than this many lines, sorted by number of votes"
-            case .maxDistanceFromLine:
-                return "Pixels furter than this from a line will not count to the score of that line"
             }
         }
 
         public enum ArgType: CaseIterable, Hashable {
             case imageDataBorderSize
-            case minThetaDiff
-            case minRhoDiff
             case maxLineConstant
-            case maxDistanceFromLine
         }
 
         public func isInteger(_ type: ArgType) -> Bool {
             switch type {
             case .imageDataBorderSize:
                 return true
-            case .minThetaDiff:
-                return false
-            case .minRhoDiff:
-                return false
             case .maxLineConstant:
                 return true
-            case .maxDistanceFromLine:
-                return false
             }
         }
 
@@ -208,14 +178,8 @@ public struct HoughLineFinder: Sendable {
             switch type {
             case .imageDataBorderSize:
                 return Double(imageDataBorderSize)
-            case .minThetaDiff:
-                return minThetaDiff
-            case .minRhoDiff:
-                return minRhoDiff
             case .maxLineConstant:
                 return Double(maxLineConstant)
-            case .maxDistanceFromLine:
-                return maxDistanceFromLine
             }
         }
         
@@ -224,29 +188,9 @@ public struct HoughLineFinder: Sendable {
             case .imageDataBorderSize:
                 return nil
 
-            case .minThetaDiff:
-                return Args(imageDataBorderSize: self.imageDataBorderSize,
-                            minThetaDiff: value,
-                            minRhoDiff: self.minRhoDiff,
-                            maxLineConstant: self.maxLineConstant,
-                            maxDistanceFromLine: self.maxDistanceFromLine)
-
-            case .minRhoDiff:
-                return Args(imageDataBorderSize: self.imageDataBorderSize,
-                            minThetaDiff: self.minThetaDiff,
-                            minRhoDiff: value,
-                            maxLineConstant: self.maxLineConstant,
-                            maxDistanceFromLine: self.maxDistanceFromLine)
-
             case .maxLineConstant:
                 return nil
 
-            case .maxDistanceFromLine:
-                return Args(imageDataBorderSize: self.imageDataBorderSize,
-                            minThetaDiff: self.minThetaDiff,
-                            minRhoDiff: self.minRhoDiff,
-                            maxLineConstant: self.maxLineConstant,
-                            maxDistanceFromLine: value)
             }
         }
         
@@ -254,26 +198,12 @@ public struct HoughLineFinder: Sendable {
             switch type {
             case .imageDataBorderSize:
                 return Args(imageDataBorderSize: value,
-                            minThetaDiff: self.minThetaDiff,
-                            minRhoDiff: self.minRhoDiff,
-                            maxLineConstant: self.maxLineConstant,
-                            maxDistanceFromLine: self.maxDistanceFromLine)
-
-            case .minThetaDiff:
-                return nil
-
-            case .minRhoDiff:
-                return nil
+                            maxLineConstant: self.maxLineConstant)
 
             case .maxLineConstant:
                 return Args(imageDataBorderSize: self.imageDataBorderSize,
-                            minThetaDiff: self.minThetaDiff,
-                            minRhoDiff: self.minRhoDiff,
-                            maxLineConstant: value,
-                            maxDistanceFromLine: self.maxDistanceFromLine)
+                            maxLineConstant: value)
 
-            case .maxDistanceFromLine:
-                return nil
             }
         }
         /*
@@ -287,16 +217,10 @@ public struct HoughLineFinder: Sendable {
          
          */
         public init(imageDataBorderSize: Int = 4000,
-                    minThetaDiff: Double = 10, // degrees
-                    minRhoDiff: Double = 10,
-                    maxLineConstant: Int = 500,
-                    maxDistanceFromLine: Double = 6)
+                    maxLineConstant: Int = 500)
         {
             self.imageDataBorderSize = imageDataBorderSize
-            self.minThetaDiff = minThetaDiff
-            self.minRhoDiff = minRhoDiff
             self.maxLineConstant = maxLineConstant
-            self.maxDistanceFromLine = maxDistanceFromLine
         }
     }
         
@@ -331,119 +255,11 @@ public struct HoughLineFinder: Sendable {
 
             // XXX this can give zeros, and result in no lines :(
             //imageData[imageIndex] = UInt8(pixel.intensity>>8)
+            // XXX use this instead? VVV
+            //imageData[imageIndex] = UInt8(pixel.intensity/0xFF)
         }
 
         return imageData
-    }
-
-    // iterate through all lines and see if any of them have a match
-    // with a certain number of pixels.
-    // If so, sort them by number of closest pixels, and iterate over
-    // them to split this group out into more than one
-    public func lineSplit(args: BlobLineSplitter.Args, optimalLine: Line?)
-      -> ([SortablePixel], [[SortablePixel]])
-      // first return value is the original, possibly reduced, set of pixels we started with
-      // the second return value is a list of any sub-blobs we found that are close to another line
-    {
-        let pixelImage = self.pixelImage
-        if let image = pixelImage.nsImage {
-            let lines = kernelHoughTransform(image: image, maxResults: args.maxLines)
-            if lines.count > 0 {
-                var max = lines.count
-                if max > args.maxLines { max = args.maxLines } 
-
-                var results: [LineSplitResult] = []
-                
-                for i in 0..<max {
-                    /*
-                     call a function here to see many pixels are close to this
-                     line
-
-                     a per pixel score where 1 means on line,
-                     0 means X pixels from line
-                     score for line is sum of values for all pixels
-
-                     return a sortable struct that we can sort by
-                     number of close pixels (over some threshold),
-                     and then iterate over that to split up this group up
-                     */
-                    
-                    let originZeroLine = self.originZeroLine(from: lines[i])
-                    let linePixelScore = pixelScore(for: originZeroLine)
-
-                    if linePixelScore > args.minLineScore {
-                        results.append(LineSplitResult(score: linePixelScore,
-                                                       line: originZeroLine))
-
-                    }
-                }
-
-                let sortedResults = results.sorted() { $0.score > $1.score } 
-
-                var linesToProcess: [Line] = []
-                if let optimalLine { linesToProcess.append(optimalLine) }
-
-                
-                if sortedResults.count > 0 {
-                    // we found at least one sorted result
-                    var pixelsForLines: [Line:[SortablePixel]] = [:]
-                    var pixelsToKeep: Set<SortablePixel> = Set(data)
-
-                    // filter out lines with similar theta
-                    for result in sortedResults {
-                        var shouldProcessThisLine = true
-
-                        for existingLine in linesToProcess {
-                            if abs(existingLine.theta-result.line.theta) < self.args.minThetaDiff ||
-                                abs(existingLine.rho-result.line.rho) < self.args.minRhoDiff
-                            {
-                                shouldProcessThisLine = false
-                                break
-                            }
-                        }
-                        
-                        if shouldProcessThisLine {
-                            linesToProcess.append(result.line)
-                        }
-                    }
-
-                    //Log.d("frame \(frameIndex) linesToProcess \(linesToProcess)")
-
-                    for line in linesToProcess {
-                        let standardLine = line.standardLine
-                        for pixel in pixelsToKeep {
-                            let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
-                            if distance < self.args.maxDistanceFromLine { 
-
-                                // this line gets this pixel
-                                if var pixelList = pixelsForLines[line] {
-                                    pixelList.append(pixel)
-                                    pixelsForLines[line] = pixelList
-                                } else {
-                                    pixelsForLines[line] = [pixel]
-                                }
-                                pixelsToKeep.remove(pixel)
-                            }
-                        }
-                    }
-
-                    var newPixelSets: [[SortablePixel]] = []
-
-                    var pixelArrayToKeep = Array(pixelsToKeep)
-                    
-                    for (_, pixelList) in pixelsForLines {
-                        if pixelList.count >= args.minLineCount { 
-                            newPixelSets.append(pixelList)
-                        } else {
-                            pixelArrayToKeep.append(contentsOf: pixelList)
-                        }
-                    }
-                    return (pixelArrayToKeep, newPixelSets)
-                }
-            }
-        }
-
-        return ([], [])
     }
 
     public func pixelScore(for line: Line) -> Double {

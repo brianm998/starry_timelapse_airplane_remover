@@ -129,40 +129,8 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
         case .applyUserSlices:
            break
             
-        case .smallBlobRemover(let args):
-            if let argType = argType as? SmallBlobRemover.Args.ArgType,
-               let updatedArgs = args.doubleUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .smallBlobRemover(updatedArgs)
-                saveStepsToFile()
-            }
-    
-        case .smallDimBlobRemover(let args):
-            if let argType = argType as? SmallDimBlobRemover.Args.ArgType,
-               let updatedArgs = args.doubleUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .smallDimBlobRemover(updatedArgs)
-                saveStepsToFile()
-            }
-  
         case .blobDupeCheck(let step):
             break
-
-        case .lineSplit(let args):
-            if let argType = argType as? BlobLineSplitter.Args.ArgType,
-               let updatedArgs = args.doubleUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .lineSplit(updatedArgs)
-                saveStepsToFile()
-            }
-
-        case .borderBrightnessBlobRemover(let args):
-            if let argType = argType as? BorderBrightnessBlobRemover.Args.ArgType,
-               let updatedArgs = args.doubleUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .borderBrightnessBlobRemover(updatedArgs)
-                saveStepsToFile()
-            }
 
         case .linearBlobConnector(let args):
             if let argType = argType as? LinearBlobConnector.Args.ArgType,
@@ -188,73 +156,17 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                 saveStepsToFile()
             }
 
-        case .isolatedBlobRemover(let args):
-            if let argType = argType as? IsolatedBlobRemover.Args.ArgType,
-               let updatedArgs = args.doubleUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .isolatedBlobRemover(updatedArgs)
-                saveStepsToFile()
-            }
-
-        case .disconnectedBlobRemover(let args):
-            if let argType = argType as? DisconnectedBlobRemover.Args.ArgType,
-               let updatedArgs = args.doubleUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .disconnectedBlobRemover(updatedArgs)
-                saveStepsToFile()
-            }
-
-        case .dimIsolatedBlobRemover(let args):
-            if let argType = argType as? DimIsolatedBlobRemover.Args.ArgType,
-               let updatedArgs = args.doubleUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .dimIsolatedBlobRemover(updatedArgs)
-                saveStepsToFile()
-            }
-            
         case .save(let imageType):
             break
 
         case .frameState(let processingState):
             break
 
-        case .removeReallyBigBlobsWithSmallDimBunches(let args):
-            if let argType = argType as? RemoveReallyBigBlobsWithSmallDimBunches.Args.ArgType,
-               let updatedArgs = args.doubleUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .removeReallyBigBlobsWithSmallDimBunches(updatedArgs)
-                saveStepsToFile()
-            }
-
-        case .trimWithConstants(let args):
-            if let argType = argType as? BlobTrimmerWithConstants.Args.ArgType,
-               let updatedArgs = args.doubleUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .trimWithConstants(updatedArgs)
-                saveStepsToFile()
-            }
-
-        case .largeDimBlobCleaner(let args):
-            if let argType = argType as? LargeDimBlobCleaner.Args.ArgType,
-               let updatedArgs = args.doubleUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .largeDimBlobCleaner(updatedArgs)
-                saveStepsToFile()
-            }
-
         case .houghLineMatrixBlobConnector(let args):
             if let argType = argType as? HoughLineMatrixBlobConnector.Args.ArgType,
                let updatedArgs = args.doubleUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .houghLineMatrixBlobConnector(updatedArgs)
-                saveStepsToFile()
-            }
-
-        case .nonLinearBlobRemover(let args):
-            if let argType = argType as? NonLinearBlobRemover.Args.ArgType,
-               let updatedArgs = args.doubleUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .nonLinearBlobRemover(updatedArgs)
                 saveStepsToFile()
             }
         }
@@ -277,41 +189,9 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
             
         case .applyUserSlices:
             break
-            
-        case .smallBlobRemover(let args):
-            if let argType = argType as? SmallBlobRemover.Args.ArgType,
-               let updatedArgs = args.intUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .smallBlobRemover(updatedArgs)
-                saveStepsToFile()
-            }
-    
-        case .smallDimBlobRemover(let args):
-            if let argType = argType as? SmallDimBlobRemover.Args.ArgType,
-               let updatedArgs = args.intUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .smallDimBlobRemover(updatedArgs)
-                saveStepsToFile()
-            }
   
         case .blobDupeCheck(let step):
             break
-
-        case .lineSplit(let args):
-            if let argType = argType as? BlobLineSplitter.Args.ArgType,
-               let updatedArgs = args.intUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .lineSplit(updatedArgs)
-                saveStepsToFile()
-            }
-
-        case .borderBrightnessBlobRemover(let args):
-            if let argType = argType as? BorderBrightnessBlobRemover.Args.ArgType,
-               let updatedArgs = args.intUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .borderBrightnessBlobRemover(updatedArgs)
-                saveStepsToFile()
-            }
 
         case .linearBlobConnector(let args):
             if let argType = argType as? LinearBlobConnector.Args.ArgType,
@@ -337,73 +217,17 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                 saveStepsToFile()
             }
 
-        case .isolatedBlobRemover(let args):
-            if let argType = argType as? IsolatedBlobRemover.Args.ArgType,
-               let updatedArgs = args.intUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .isolatedBlobRemover(updatedArgs)
-                saveStepsToFile()
-            }
-
-        case .disconnectedBlobRemover(let args):
-            if let argType = argType as? DisconnectedBlobRemover.Args.ArgType,
-               let updatedArgs = args.intUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .disconnectedBlobRemover(updatedArgs)
-                saveStepsToFile()
-            }
-
-        case .dimIsolatedBlobRemover(let args):
-            if let argType = argType as? DimIsolatedBlobRemover.Args.ArgType,
-               let updatedArgs = args.intUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .dimIsolatedBlobRemover(updatedArgs)
-                saveStepsToFile()
-            }
-            
         case .save(let imageType):
             break
 
         case .frameState(let processingState):
             break
 
-        case .removeReallyBigBlobsWithSmallDimBunches(let args):
-            if let argType = argType as? RemoveReallyBigBlobsWithSmallDimBunches.Args.ArgType,
-               let updatedArgs = args.intUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .removeReallyBigBlobsWithSmallDimBunches(updatedArgs)
-                saveStepsToFile()
-            }
-
-        case .trimWithConstants(let args):
-            if let argType = argType as? BlobTrimmerWithConstants.Args.ArgType,
-               let updatedArgs = args.intUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .trimWithConstants(updatedArgs)
-                saveStepsToFile()
-            }
-
-        case .largeDimBlobCleaner(let args):
-            if let argType = argType as? LargeDimBlobCleaner.Args.ArgType,
-               let updatedArgs = args.intUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .largeDimBlobCleaner(updatedArgs)
-                saveStepsToFile()
-            }
-
         case .houghLineMatrixBlobConnector(let args):
             if let argType = argType as? HoughLineMatrixBlobConnector.Args.ArgType,
                let updatedArgs = args.intUpdate(for: argType, value: value)
             {
                 steps[stepIndex] = .houghLineMatrixBlobConnector(updatedArgs)
-                saveStepsToFile()
-            }
-
-        case .nonLinearBlobRemover(let args):
-            if let argType = argType as? NonLinearBlobRemover.Args.ArgType,
-               let updatedArgs = args.intUpdate(for: argType, value: value)
-            {
-                steps[stepIndex] = .nonLinearBlobRemover(updatedArgs)
                 saveStepsToFile()
             }
         }
