@@ -835,8 +835,7 @@ public extension ImageSequenceViewModel {
                              renderImmediately: Bool = true)
     {
         Log.d("setAllFrameOutliers in frame \(frameView.frameIndex) to should paint \(shouldPaint)")
-        let reason = PaintReason.userSelected(shouldPaint)
-
+        
         if let frame = frameView.frame {
             // update the real actor in the background
             Task.detached {
@@ -874,10 +873,12 @@ public extension ImageSequenceViewModel {
 
     // fully reprocess this frame
     func reprocess(_ frame: FrameAirplaneRemover) async {
-        Task {
-            if let frame = self.currentFrame {
+        if let frame = self.currentFrame {
+            Task.detached {     // do we need this detached task?
                 frame.imageAccessor.deleteAllImages(frameIndex: frame.frameIndex)
-                self.frameViewMode = .original
+                Task { @MainActor in
+                    self.frameViewMode = .original
+                }
 
                 var existingImages: Set<FrameViewMode> = [.original]
                 
@@ -895,7 +896,9 @@ public extension ImageSequenceViewModel {
                     existingImages.insert(.subtraction)
                 }
 
-                self.currentFrameView.existingImages = existingImages
+                Task { @MainActor in
+                    self.currentFrameView.existingImages = existingImages
+                }
                 
                 let binaryBlobFilename = await frame.blobBinaryFilename
                 // get rid of the outlier files
@@ -907,9 +910,9 @@ public extension ImageSequenceViewModel {
                 }
                 // re-find them
                 await self.findOutliersAndRender(frame: frame)
-            } else {
-                // XXX probably should do something here
             }
+        } else {
+            // XXX probably should do something here
         }
     }
     
@@ -953,8 +956,7 @@ public extension ImageSequenceViewModel {
 
     // next frame entry point
     func transition(numberOfFrames: Int) {
-        let currentFrame = self.currentFrame
-
+        
         var newIndex = self.currentIndex + numberOfFrames
         if newIndex < 0 { newIndex = 0 }
         if newIndex >= self.frames.count {

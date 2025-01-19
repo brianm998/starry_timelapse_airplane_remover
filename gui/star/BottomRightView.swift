@@ -80,17 +80,13 @@ struct BottomRightView: View {
                             Text("\(numUndecided) undecided")
                               .foregroundColor(.orange)
                         }
+                        if let numDustbin = frameView.frameObserver.numberOfDustbinOutliers,
+                           numDustbin > 0
+                        {
+                            Text("\(numDustbin) in dustbin")
+                              .foregroundColor(.yellow)
+                        }
                     }
-                    /*
-                     XXX rewrite this to not use the dustbinViews XXX 
-                     
-                    if let dustbinViews = frameView.dustbinViews {
-                        let size = dustbinViews.count
-                        Text("\(size) in the dustbin") // XXX this doesn't change when it should :(
-                          .foregroundColor(size == 0 ? .white : .orange)
-                          }
-
-                     */
                 }
 
                 EditableFrameNumberView()

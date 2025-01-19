@@ -278,14 +278,20 @@ public actor LinearBlobConnector {
                                             analyzer: analyzer,
                                             frameIndex: frameIndex)
 
-        await withTaskGroup(of: Void.self) { taskGroup in
-            for (_, blob) in blobMap {
-                taskGroup.addTask { 
-                    await processBlob(blob, data: data)
+//        let array = Array(blobMap.values).splitIntoChunks(sized: 100) // XXX constant
+        
+//        await Task.detached(priority: .userInitiated) {
+            await withTaskGroup(of: Void.self) { taskGroup in
+//                for subarray in array { 
+                for blob in blobMap.values {
+                    taskGroup.addTask {
+                        await processBlob(blob, data: data)
+                    }
                 }
+                //                }
+                await taskGroup.waitForAll()
             }
-            await taskGroup.waitForAll()
-        }
+//        }.value
     }
 }
 
@@ -430,9 +436,8 @@ fileprivate func iterate(on blobLine: Line,
             }
         }
 
-        // XXX use passed in BlobMap for this?
-        let linearBlobSet = await data.analyzer.blobs(with: await linearBlobIds.set)
-
+        let linearBlobSet = await linearBlobIds.set.compactMap { data.blobMap[$0] }
+        
         if linearBlobSet.count > 1 {
             // use nextIndex(from blobMap:) here?
             // re-use data.analyzer.maxBlobId until we absorb another blob
@@ -488,4 +493,11 @@ fileprivate func iterate(on blobLine: Line,
     }
 }
 
-
+// XXX move this
+public extension Array {
+    func splitIntoChunks(sized size: Int) -> [[Element]] {
+        return (0..<size).map {
+            stride(from: $0, to: count, by: size).map { self[$0] }
+        }
+    }
+}

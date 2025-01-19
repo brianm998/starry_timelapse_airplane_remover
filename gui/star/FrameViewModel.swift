@@ -66,14 +66,6 @@ public class FrameViewModel {
         }
     }
 
-    // XXX turn these into properties that are updated when the paintability changes
-    // have the FrameAirplaneRemover be able to both knows these values,
-    // and transmit changes to the UI with a callback that updates view state
-
-//    var numberOfPositiveOutliers: Int? 
-//    var numberOfNegativeOutliers: Int? 
-//    var numberOfUndecidedOutliers: Int?
-    
     // optional to distinguish between not loaded and empty list
     var outlierViews: [OutlierGroupViewModel]?
     var loadingOutlierViews: Bool = false

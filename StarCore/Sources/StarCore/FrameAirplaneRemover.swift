@@ -38,6 +38,7 @@ public class FrameObserver {
     public var numberOfPositiveOutliers: Int? 
     public var numberOfNegativeOutliers: Int? 
     public var numberOfUndecidedOutliers: Int?
+    public var numberOfDustbinOutliers: Int?
 
     // XXX stick more here, like state
     
@@ -53,13 +54,19 @@ public class FrameObserver {
         self.numberOfUndecidedOutliers = numberOfUndecidedOutliers
     }
 
+    public func set(numberOfDustbinOutliers: Int) {
+        self.numberOfDustbinOutliers = numberOfDustbinOutliers
+    }
+    
     func set(numberOfPositiveOutliers: Int,
              numberOfNegativeOutliers: Int,
-             numberOfUndecidedOutliers: Int)
+             numberOfUndecidedOutliers: Int,
+             numberOfDustbinOutliers: Int)
     {
         self.numberOfPositiveOutliers = numberOfPositiveOutliers
         self.numberOfNegativeOutliers = numberOfNegativeOutliers
         self.numberOfUndecidedOutliers = numberOfUndecidedOutliers
+        self.numberOfDustbinOutliers = numberOfDustbinOutliers
     }
 
 }
@@ -153,10 +160,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
 
+            let dustbinCount = await outlierGroups?.getDustbin().count ?? 0
+            
             // update the observer here
-          await observer?.set(numberOfPositiveOutliers: totalPositive,
-                              numberOfNegativeOutliers: totalNegative,
-                              numberOfUndecidedOutliers: totalUnknown)
+            await observer?.set(numberOfPositiveOutliers: totalPositive,
+                                numberOfNegativeOutliers: totalNegative,
+                                numberOfUndecidedOutliers: totalUnknown,
+                                numberOfDustbinOutliers: dustbinCount)
         }
     }
 
@@ -568,7 +578,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         self.set(state: .populatingOutlierGroups)
 
         let classifier = IoslatedOutlierClassifier(frameIndex: frameIndex, frame: self)
-        let (good, bad) = await classifier.promoteAndClassify(blobs)
+        self.set(state: .populatingOutlierGroups1)
+        let (good, bad) = await classifier.promoteAndClassify(blobs) // this is where time is spent
 
         await self.outlierGroups?.add(good)
         await self.outlierGroups?.dumpInDustbin(bad)
@@ -1243,7 +1254,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
                                       includingDustbin: Bool) async
     {
-        Task.detached {
+        Task.detached(priority: .userInitiated) {
             await self.foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
                 await group.shouldPaint(.userSelected(shouldPaint))
                 if isInDustbin {
@@ -1257,7 +1268,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func userSelectUndecidedOutliers(toShouldPaint shouldPaint: Bool,
                                             includingDustbin: Bool) async
     {
-        Task.detached {
+        Task.detached(priority: .userInitiated) {
             await self.foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
                 if await group.shouldPaint() == nil {
                     await group.shouldPaint(.userSelected(shouldPaint))
@@ -1477,11 +1488,13 @@ fileprivate class IoslatedOutlierClassifier {
         let frame = self.frame
         let frameIndex = self.frameIndex
         
-        return await Task.detached {
-            await withTaskGroup(of: OutlierSorter.self) { taskGroup in
+        return await Task.detached(priority: .userInitiated) {
+            return await withTaskGroup(of: OutlierSorter.self) { taskGroup in
+
                 // promote found blobs to outlier groups for further processing
                 let classifier = await currentClassifier.get(for: .isolated) 
-                
+                await frame.set(state: .populatingOutlierGroups2)
+            
                 for blob in blobs {
                     taskGroup.addTask {
                         // make outlier group from this blob
@@ -1511,6 +1524,7 @@ fileprivate class IoslatedOutlierClassifier {
                         }
                     }
                 }
+                await frame.set(state: .populatingOutlierGroups3)
 
                 var good: [OutlierGroup] = []
                 var bad: [OutlierGroup] = []

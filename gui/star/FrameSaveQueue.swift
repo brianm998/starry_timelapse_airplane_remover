@@ -50,11 +50,11 @@ class FrameSaveQueue {
                 await frame.set(frameSavingState: .saving)
                 Log.d("frame \(frame.frameIndex) saveNow for real")
                 do {
-                    let _ = try await Task.detached {
+//                    let _ = try await Task.detached {
                         try await frame.loadOutliers()
                         try await frame.finish()
                         await frame.changesHandled()
-                    }.value
+//                    }.value
                 } catch {
                     Log.e("frame \(frame.frameIndex) frame save error: \(error)")
                 }
