@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import KHTSwift
 import logging
 import Cocoa
 import Combine
@@ -518,6 +519,1013 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     
     public static func == (lhs: FrameAirplaneRemover, rhs: FrameAirplaneRemover) -> Bool {
         return lhs.frameIndex == rhs.frameIndex
-    }    
+    }
+
+    // Mark - Outliers
+    
+
+    // loads outliers from a combination of the outliers.tiff image and the subtraction image,
+    // if they are present
+    public func loadOutliersFromFile() async throws -> OutlierGroups? {
+        try await outliersFileSystemMonitor.load() {
+            do {
+                // newer file format, default to this
+                return try await loadOutliersFromBinaryFile()
+            } catch {
+                // XXX log here
+            }
+
+            return nil
+        }
+    }
+
+    public var blobBinaryFilename: String { // not used anymore?
+        get async {
+            let config = await configManager.config()
+            return "\(config.outlierOutputDirname)/\(frameIndex)/\(BlobBinarySaver.outlierBinaryFilename)"
+        }
+    }
+    
+    public func loadOutliersFromBinaryFile() async throws -> OutlierGroups? {
+        let config = await configManager.config()
+        let dirname = "\(config.outlierOutputDirname)/\(frameIndex)"
+
+        return try await OutlierGroups(at: frameIndex, fromOutlierDir: dirname)
+    }
+    
+    public func findOutliers() async throws {
+        
+        mkdir(await self.outliersDirname)
+
+        let blobProcessor = await constants.getDetectionType().blobProcessor
+        
+        let blobMap = try await blobProcessor.process(frame: self)
+
+        // blobs to promote to outlier groups
+        let blobs = Array(blobMap.values)
+
+        Log.i("frame \(frameIndex) has \(blobs.count) blobs")
+        self.set(state: .populatingOutlierGroups)
+
+        let classifier = IoslatedOutlierClassifier(frameIndex: frameIndex, frame: self)
+        let (good, bad) = await classifier.promoteAndClassify(blobs)
+
+        await self.outlierGroups?.add(good)
+        await self.outlierGroups?.dumpInDustbin(bad)
+        
+        // here we write the outlier binaries through the outlierGroups
+        try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)
+
+        // XXX update UI
+        
+        self.set(state: .readyForInterFrameProcessing)
+    }
+
+//    public func outliersLoaded() { self.outlierGroups != nil }
+
+    public func loadOutliers(loadOnly: Bool = false) async throws {
+        if isLoadingOutliers { return }
+        isLoadingOutliers = true
+        if self.outlierGroups == nil {
+            // nil outlier groups means that we haven't tried to get outliers for this frame yet
+            Log.d("frame \(frameIndex) loading outliers")
+            if let outlierGroups = try await loadOutliersFromFile() {
+                callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
+                Log.d("frame \(frameIndex) loading outliers from file")
+                for outlier in await outlierGroups.getMembers().values {
+                    await outlier.set(frame: self) 
+                }
+
+                self.outlierGroups = outlierGroups
+                // while these have already decided outlier groups,
+                // we still need to inter frame process them so that
+                // frames are linked with their neighbors and outlier
+                // groups can use these links for decision tree values
+                self.outliersLoadedFromFile = true
+                Log.i("loaded \(String(describing: await self.outlierGroups?.getMembers().count)) outlier groups for frame \(frameIndex)")
+                await self.updateCombineSubjects()
+                
+                callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
+            } else if !loadOnly {
+                callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
+                Log.d("frame \(frameIndex) calculating outliers")
+                self.initializeEmptyOutlierGroups()
+
+                Log.i("calculating outlier groups for frame \(frameIndex)")
+                // find outlying bright pixels between frames,
+                // and group neighboring outlying pixels into groups
+                // this can take a long time
+                try await self.findOutliers()
+
+                await self.updateCombineSubjects()
+                
+                // perhaps apply validation image to outliers here if possible
+                callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
+            }
+        }
+        isLoadingOutliers = false
+    }
+
+    public func initializeEmptyOutlierGroups() {
+        self.outlierGroups = OutlierGroups(frameIndex: frameIndex)
+    }
+    
+    public func foreachOutlierGroup(includingDustbin: Bool,
+                                    _ closure: @Sendable (OutlierGroup, Bool) async -> Void) async
+    {
+        if let outlierGroups {
+            for (_, group) in await outlierGroups.getMembers() {
+                await closure(group, false)
+            }
+            for (_, group) in await outlierGroups.getDustbin() {
+                await closure(group, true)
+            }
+        } 
+    }
+
+    public func foreachOutlierGroupMulti(includingDustbin: Bool,
+                                         _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Void) async
+    {
+        if let outlierGroups {
+            await withTaskGroup(of: Void.self) { taskGroup in
+                for (_, group) in await outlierGroups.getMembers() {
+                    taskGroup.addTask() { await closure(group, false) }
+                }
+                for (_, group) in await outlierGroups.getDustbin() {
+                    taskGroup.addTask() { await closure(group, true) }
+                }
+                await taskGroup.waitForAll()
+            }
+        } 
+    }
+
+    // uses spatial 2d array for search
+    public func outlierGroups(within distance: Double,
+                              of group: OutlierGroup) async -> [OutlierGroup]?
+    {
+        if let nearbyGroups = await group.nearbyGroups() {
+            var ret: [OutlierGroup] = []
+            for nearbyGroup in nearbyGroups {
+                if nearbyGroup.bounds.centerDistance(to: group.bounds) < distance {
+                    ret.append(nearbyGroup)
+                }
+            }
+            return ret
+        }
+        return nil
+    }
+
+    public func outlierGroup(named outlierName: UInt16) async -> OutlierGroup? {
+        await outlierGroups?.getMembers()[outlierName]
+    }
+
+    public func foreachOutlierGroupMulti(between startLocation: CGPoint,
+                                         and endLocation: CGPoint,
+                                         includingDustbin: Bool, 
+                                         _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Void) async
+    {
+        // first get bounding box from start and end location
+        var minX: CGFloat = CGFLOAT_MAX
+        var maxX: CGFloat = 0
+        var minY: CGFloat = CGFLOAT_MAX
+        var maxY: CGFloat = 0
+
+        if startLocation.x < minX { minX = startLocation.x }
+        if startLocation.x > maxX { maxX = startLocation.x }
+        if startLocation.y < minY { minY = startLocation.y }
+        if startLocation.y > maxY { maxY = startLocation.y }
+        
+        if endLocation.x < minX { minX = endLocation.x }
+        if endLocation.x > maxX { maxX = endLocation.x }
+        if endLocation.y < minY { minY = endLocation.y }
+        if endLocation.y > maxY { maxY = endLocation.y }
+
+        let gestureBounds = BoundingBox(min: Coord(x: Int(minX), y: Int(minY)),
+                                        max: Coord(x: Int(maxX), y: Int(maxY)))
+        
+        await foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
+            if gestureBounds.contains(other: group.bounds) {
+                // check to make sure this outlier's bounding box is fully contained
+                // otherwise don't change paint status
+                await closure(group, isInDustbin)
+            }
+        }
+    }
+
+    public func maybeApplyOutlierGroupClassifier(includingDustbin: Bool) async throws {
+
+        var shouldUseDecisionTree = true
+        /*
+         logic here to do validation instead of decision tree
+
+         if:
+           - we calculated the outlier groups here, not loaded from file
+           - and a validation image already exists for this frame
+         then:
+           - load the validation image
+           - don't apply decision tree, use the validation image instead
+         */
+
+        if let image = try await imageAccessor.load(frameIndex: frameIndex,
+                                                    type: .validation,
+                                                    atSize: .original)
+        {
+            switch image.imageData {
+            case .eightBit(let validationArr):
+                await classifyOutliers(with: validationArr)
+                shouldUseDecisionTree = false
+                await self.markAsChanged()
+                
+            case .sixteenBit(_):
+                Log.e("frame \(frameIndex) cannot load 16 bit validation image")
+            }
+        } else {
+            Log.i("frame \(frameIndex) couldn't load validation image from")
+        }
+/*
+        if config.writeOutlierGroupFiles,
+           let outlierGroups
+        {
+            // calculate decision tree values first 
+            for group in outlierGroups.members.values {
+                let _ = group.decisionTreeValues
+            }
+        }
+  */      
+        if shouldUseDecisionTree {
+            Log.i("frame \(frameIndex) classifying outliers with decision tree")
+            self.set(state: .interFrameProcessing)
+            await self.applyDecisionTreeToAllOutliers(includingDustbin: includingDustbin)
+        }
+    }
+
+    // used to classify outliers given a validation image.
+    // this validation image contains a non zero pixel for each outlier
+    // that should be painted over.
+    // any outlier that matches any pixels is classified to paint here.
+    private func classifyOutliers(with validationData: [UInt8]) async {
+        Log.d("frame \(frameIndex) classifying outliers with validation image data")
+
+        if let outlierGroups {
+
+            for group in await outlierGroups.getMembers().values {
+                var groupIsValid = false
+                for x in 0 ..< group.bounds.width {
+                    for y in 0 ..< group.bounds.height {
+                        if group.pixels[y*group.bounds.width+x] != 0 {
+                            // test this non zero group pixel against the validation image
+
+                            let validationX = group.bounds.min.x + x
+                            let validationY = group.bounds.min.y + y
+                            let validationIdx = validationY * width + validationX
+
+                            if validationData[validationIdx] != 0 {
+                                //Log.d("frame \(frameIndex) group \(group.id) is valid based upon validation image data")
+                                groupIsValid = true
+                                break
+                            }
+                        }
+                    }
+                    if groupIsValid { break }
+                }
+                //Log.d("group \(group) shouldPaint \(String(describing: group.shouldPaint))")
+                await group.shouldPaint(.userSelected(groupIsValid))
+            }
+        } else {
+            Log.w("cannot classify nil outlier groups")
+        }
+    }
+
+    public func outlierGroupList() async -> [OutlierGroup]? {
+        if let outlierGroups {
+            let groups = await outlierGroups.getMembers()
+            return groups.map {$0.value}
+        }
+        return nil
+    }
+
+    public func outlierGroupDustbinList() async -> [OutlierGroup]? {
+        if let outlierGroups {
+            let groups = await outlierGroups.getDustbin()
+            return groups.map {$0.value}
+        }
+        return nil
+    }
+
+    // used for saving different images of blobs
+    public func saveImages(for blobs: [Blob], as frameImageType: FrameViewMode) async throws {
+        var blobImageData = [UInt8](repeating: 0, count: width*height)
+        for blob in blobs {
+            for pixel in await blob.getPixels() {
+                let imageIntensity = pixel.intensity >> 8
+                blobImageData[pixel.y*width+pixel.x] = UInt8(imageIntensity)//0xFF // make different per blob?
+            }
+        }
+        let fuck = frameImageType
+        let blobImage = PixelatedImage(width: width, height: height,
+                                       grayscale8BitImageData: blobImageData)
+        let (_) = await (/*try imageAccessor.save(blobImage, as: fuck,
+                                                   atSize: .original, overwrite: true),*/
+          try imageAccessor.save(blobImage,
+                                 frameIndex: frameIndex,
+                                 as: fuck,
+                                 atSize: .preview, overwrite: true))
+        
+    }
+
+    public func applyRazor(in boundingBox: BoundingBox, includingDustbin: Bool) async throws {
+        /*
+         - find all outliers that have some match with this bounding box
+         - remove them from outlier groups list
+         - convert them to blobs
+         - do intersection with bounding box to create new blob
+         - convert all of them back to outlier groups
+         */
+
+        if await outlierGroups?.applyRazor(in: boundingBox,
+                                           includingDustbin: includingDustbin) ?? false
+        {
+            await self.markAsChanged()
+
+            try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)
+
+            await updateUserSlices(with: boundingBox)
+        }
+    }
+
+    private func updateUserSlices(with newSlice: BoundingBox) async {
+
+        if userSlices == nil { await self.loadUserSlices() }
+
+        guard let userSlices else { return }
+        
+        // XXX update this to load them first if not present
+        
+        var newSlices: [BoundingBox] = [newSlice]
+
+        // append bounding box to this frame's razor list
+        // if any overlap, keep the latest
+            
+        for slice in userSlices {
+            if slice.overlap(with: newSlice) == nil {
+                newSlices.append(slice)
+            }
+        }
+
+        self.userSlices = newSlices
+        await saveUserSlices()
+    }
+    
+    public func saveUserSlices() async {
+        guard let userSlices else { return }
+        let encoder = JSONEncoder()
+        do {
+            let jsonData = try encoder.encode(userSlices)
+
+            let fullPath = await self.userSliceFilename
+            if FileManager.default.fileExists(atPath: fullPath) {
+                try FileManager.default.removeItem(atPath: fullPath)
+            } 
+            Log.i("creating \(fullPath)")                      
+            FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
+        } catch {
+            Log.e("\(error)")
+        }
+    }
+    
+    public func loadUserSlices() async {
+        do {
+            let slices_url = NSURL(fileURLWithPath: await self.userSliceFilename,
+                                   isDirectory: false) as URL
+            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: slices_url))
+            let decoder = JSONDecoder()
+            self.userSlices = try decoder.decode([BoundingBox].self, from: data)
+        } catch {
+            //Log.e("cannot load user slices: \(error)")
+
+            mkdir(await self.userSliceDirname)
+        }
+    }
+
+    public var outliersDirname: String {
+        get async {
+            let config = await configManager.config()
+            return "\(config.outlierOutputDirname)/\(frameIndex)"
+        }
+    }
+
+    public func promoteDust(in boundingBox: BoundingBox) async throws -> [OutlierGroup] {
+        guard let outlierGroups else { return [] }
+        let ret = await outlierGroups.promoteDust(in: boundingBox)
+
+        await self.markAsChanged()
+        
+        try await outlierGroups.writeOutliersBinary(to: self.outliersDirname)
+
+        return ret
+    }
+    
+    public func deleteOutliers(in boundingBox: BoundingBox) async throws {
+        await outlierGroups?.deleteOutliers(in: boundingBox)
+
+        await self.markAsChanged()
+        
+        try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)
+        // XXX add y-axis here too
+    }
+
+        // Mark - Paint
+
+    /*
+     Logic about painting undesired elements from the image.
+
+     Painting is done with data from a neighboring, aligned frame.
+
+     Pixels to be painted over come from validated outlier groups,
+     that logic is elsewhere.
+     */
+
+    // actually paint over outlier groups that have been selected as airplane tracks
+    internal func paintOverAirplanes(image: PixelatedImage,
+                                     toData data: inout [UInt16],
+                                     otherFrame: PixelatedImage) async throws
+    {
+        Log.i("frame \(frameIndex) painting airplane outlier groups")
+
+        // paint over every outlier in the paint list with pixels from the adjecent frames
+        guard let outlierGroups = outlierGroups else {
+            Log.e("cannot paint without outlier groups")
+            return
+        }
+
+        guard await outlierGroups.getMembers().count > 0 else {
+            Log.v("no outliers, not painting")
+            return
+        }
+        
+        self.set(state: .painting)
+
+        // the alpha level to apply to each pixel in the image
+        // indexed by y*width+x
+        // this is esentially a layer mask for the frame, 
+        // with the adjusted neighbor frame underneath
+        var alphaLevels = [Double](repeating: 0, count: width*height)
+        var alphaYAxis = [UInt8](repeating: 0, count: height)
+
+        // first go through the outlier groups and determine what alpha
+        // level to apply to each pixel in this frame.
+        // alpha zero means no painting, keep original pixel
+        // alpha one means overwrite original pixel entierly with data from other frame
+
+        let config = await configManager.config()
+
+        // the alpha mask that we will convolve across all paintable pixels
+        let paintMask = PaintMask(innerWallSize: config.outlierGroupPaintBorderInnerWallPixels,
+                                  radius: config.outlierGroupPaintBorderPixels)
+        
+        let paintMaskIntRadius = Int(paintMask.radius)
+
+        // only paint when we have found at least one positive outlier group
+        var shouldPaint = false
+        
+        for (_, group) in await outlierGroups.getMembers() {
+            if let reason = await group.shouldPaint(),
+               reason.willPaint
+            {
+                shouldPaint = true
+                //Log.d("frame \(frameIndex) painting over group \(group) for reason \(reason)")
+
+                for pixel in group.pixelSet {
+                    // start in frame coords
+                    let maskStartX = pixel.x - paintMaskIntRadius
+                    let maskStartY = pixel.y - paintMaskIntRadius
+
+                    for maskX in 0..<paintMask.size {
+                        for maskY in 0..<paintMask.size {
+                            let frameX = maskX + maskStartX
+                            let frameY = maskY + maskStartY
+
+                            if frameX >= 0,
+                               frameX < width,
+                               frameY >= 0,
+                               frameY < height
+                            {
+                                let frameIndex = frameY*width+frameX
+                                let maskIndex = maskY*paintMask.size+maskX
+                                
+                                let frameAlpha = alphaLevels[frameIndex]
+                                let maskAlpha = paintMask.pixels[maskIndex]
+                                if maskAlpha > frameAlpha {
+                                    alphaLevels[frameIndex] = maskAlpha
+                                    alphaYAxis[frameY] = 0xFF
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if config.writeOutlierGroupFiles { // XXX this config value is very much overloaded
+            var paintMaskImageData = [UInt8](repeating: 0, count: width*height)
+
+            for y in 0 ..< height {
+                if alphaYAxis[y] == 0 { continue }
+                for x in 0 ..< width {
+                    let index = y*width+x
+                    let alpha = alphaLevels[index]
+                    if alpha > 0 {
+                        var value = Int(alpha*Double(0xFF))
+                        if value > 0xFF { value = 0xFF }
+                        paintMaskImageData[index] = UInt8(value)
+                    }
+                }
+            }
+
+            let paintMaskImage = PixelatedImage(width: width, height: height,
+                                                grayscale8BitImageData: paintMaskImageData)
+            let (_,_) = await (try imageAccessor.save(paintMaskImage,
+                                                      frameIndex: frameIndex,
+                                                      as: .paintMask,
+                                                      atSize: .original,
+                                                      overwrite: true),
+                               try imageAccessor.save(paintMaskImage,
+                                                      frameIndex: frameIndex,
+                                                      as: .paintMask,
+                                                      atSize: .preview,
+                                                      overwrite: true))
+        }
+
+        if shouldPaint {
+            self.set(state: .painting2)
+            
+            // then actually paint each non zero alpha pizel
+            for y in 0 ..< height {
+                if alphaYAxis[y] == 0 { continue }
+                for x in 0 ..< width {
+                    var alpha = alphaLevels[y*width+x]
+                    if alpha > 0 {
+                        if alpha > 1 { alpha = 1 }
+
+                        paint(x: x, y: y,
+                              alpha: alpha,
+                              toData: &data,
+                              image: image,
+                              otherFrame: otherFrame)
+
+                        /*
+
+                         // test paint the expected alpha levels as colors
+                         
+                         var paintPixel = Pixel()
+                         paintPixel.blue = 0xFFFF
+                         paintPixel.green = UInt16(Double(0xFFFF)*alpha)
+                         paint(x: x, y: y, why: reason, alpha: alpha,
+                         toData: &data,
+                         image: image,
+                         paintPixel: paintPixel)
+                         */
+
+                    }
+                }
+            }
+        }
+    }
+
+    // paint over a selected outlier pixel with data from pixels from adjecent frames
+    internal func paint(x: Int, y: Int,
+                        alpha: Double,
+                        toData data: inout [UInt16],
+                        image: PixelatedImage,
+                        otherFrame: PixelatedImage)
+    {
+        let paintPixel = otherFrame.readPixel(atX: x, andY: y)
+
+        if otherFrame.componentsPerPixel == 4, // has alpha channel
+           paintPixel.alpha != 0xFFFF   // alpha is not fully opaque
+        {
+            // ignore transparent pixels
+            // don't paint over with them
+            return
+        }
+
+        self.paint(x: x, y: y,
+                   alpha: alpha,
+                   toData: &data,
+                   image: image,
+                   paintPixel: paintPixel)
+    }
+
+
+    // paint over a selected outlier pixel with data from pixels from adjecent frames
+    internal func paint(x: Int, y: Int,
+                        alpha: Double,
+                        toData data: inout [UInt16],
+                        image: PixelatedImage,
+                        paintPixel: Pixel)
+    {
+        var paintPixel = paintPixel
+        let op = image.readPixel(atX: x, andY: y)
+
+        // don't make the original image brighter at this pixel
+        // leave the original value there in this case
+        if op.intensity < paintPixel.intensity { return }
+        
+        if alpha < 1 {
+            // merge in original value
+            paintPixel = Pixel(merging: paintPixel, with: op, atAlpha: alpha)
+        }
+
+        // the is the place in the image data to write to
+        let offset = (Int(y) * bytesPerRow/2) + (Int(x) * bytesPerPixel/2)
+
+        // actually paint over that airplane like thing in the image data
+        if self.bytesPerPixel == 2 {
+            data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
+                                 with: [paintPixel.red])
+        } else if self.bytesPerPixel == 6 {
+            data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
+                                 with: [paintPixel.red, paintPixel.green, paintPixel.blue])
+
+        } else if self.bytesPerPixel == 8 {
+            data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
+                                 with: [paintPixel.red,
+                                        paintPixel.green,
+                                        paintPixel.blue,
+                                        0xFFFF])
+        }
+    }
+
+    // Mark - UI
+
+    /*
+     UI related methods
+     */
+    
+    public func applyDecisionTreeToAutoSelectedOutliers(includingDustbin: Bool) async {
+        if let classifier = await currentClassifier.get(for: .all) {
+            await foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
+                var apply = true
+                if let shouldPaint = await group.shouldPaint() {
+                    switch shouldPaint {
+                    case .userSelected(_):
+                        // leave user selected ones in place
+                        apply = false
+                    default:
+                        break
+                    }
+                }
+                if apply {
+                    Log.d("applying decision tree")
+                    await group.shouldPaint(.fromClassifier(await classifier.asyncClassification(of: group)))
+                    if isInDustbin {
+                        await self.outlierGroups?.promoteFromDustbin(group)
+                    }
+                }
+            }
+        } else {
+            Log.w("no classifier")
+        }
+    }
+
+    public func clearOutlierGroupValueCaches(includingDustbin: Bool) async {
+        await foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, _ in
+            await group.clearFeatureValueCache()
+        }
+    }
+
+    public func applyDecisionTreeToAllOutliers(includingDustbin: Bool) async -> Task<Void,Never>? {
+        //Log.d("frame \(self.frameIndex) applyDecisionTreeToAll \(self.outlierGroups?.members.count ?? 0) Outliers")
+        let startTime = NSDate().timeIntervalSince1970
+        if let classifier = await currentClassifier.get(for: .all), 
+           let outlierGroups
+        {
+            return await Task.detached(priority: .userInitiated) {
+                await withTaskGroup(of: Void.self) { taskGroup in
+                    for (_, group) in await outlierGroups.getMembers() {
+                        taskGroup.addTask {
+                            if await group.shouldPaint() == nil {
+                                // only apply classifier when no other classification is otherwise present
+                                let featureData = await group.featureData()
+                                let classification = classifier.classification(of: featureData)
+                                await group.shouldPaint(.fromClassifier(classification))
+                            }
+                        }
+                    }
+                    if includingDustbin {
+                        for (_, group) in await outlierGroups.getDustbin() {
+                            taskGroup.addTask {
+                                if await group.shouldPaint() == nil {
+                                    // only apply classifier when no other classification is otherwise present
+                                    let featureData = await group.featureData()
+                                    let classification = classifier.classification(of: featureData)
+                                    await group.shouldPaint(.fromClassifier(classification))
+                                    await outlierGroups.promoteFromDustbin(group)
+                                }
+                            }
+                        }
+
+                    }
+                    await taskGroup.waitForAll()
+                }
+            }
+            let endTime = NSDate().timeIntervalSince1970
+            Log.i("frame \(self.frameIndex) spent \(endTime - startTime) seconds classifing outlier groups");
+        } else {
+            Log.w("no classifier")
+        }
+        Log.d("frame \(self.frameIndex) DONE applyDecisionTreeToAllOutliers")
+        return nil
+    }
+    
+    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
+                                      includingDustbin: Bool) async
+    {
+        Task.detached {
+            await self.foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
+                await group.shouldPaint(.userSelected(shouldPaint))
+                if isInDustbin {
+                    await self.outlierGroups?.promoteFromDustbin(group)
+                }
+            }
+            // 
+        }
+    }
+
+    public func userSelectUndecidedOutliers(toShouldPaint shouldPaint: Bool,
+                                            includingDustbin: Bool) async
+    {
+        Task.detached {
+            await self.foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
+                if await group.shouldPaint() == nil {
+                    await group.shouldPaint(.userSelected(shouldPaint))
+                    if isInDustbin {
+                        await self.outlierGroups?.promoteFromDustbin(group)
+                    }
+                }
+            }
+        }
+    }
+
+    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
+                                      overlapping group: OutlierGroup) async
+    {
+        guard let outlierGroups else { return }
+
+        for group in await outlierGroups.groups(overlapping: group) {
+            await group.shouldPaint(.userSelected(shouldPaint))
+        }
+    }
+    
+    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
+                                      between startLocation: CGPoint,
+                                      and endLocation: CGPoint,
+                                      includingDustbin: Bool) async
+    {
+        await foreachOutlierGroupMulti(between: startLocation,
+                                       and: endLocation,
+                                       includingDustbin: includingDustbin) { group, isInDustbin in
+            await group.shouldPaint(.userSelected(shouldPaint))
+            if isInDustbin {
+                await self.outlierGroups?.promoteFromDustbin(group)
+            }
+        }
+    }
+
+    // Mark - Subtraction
+
+    /*
+
+     Image subtraction logic
+     
+     */
+
+    // returns a grayscale image pixel value array from subtracting the aligned frame
+    // from the frame being processed.
+    internal func subtractAlignedImageFromFrame() async throws -> PixelatedImage {
+        // first try to load the subtracted image directly from file
+
+        let accessor = imageAccessor
+        
+        if let image = try await imageAccessor.load(frameIndex: frameIndex,
+                                                    type: .subtraction,
+                                                    atSize: .original)
+        {
+            return image
+        }
+
+        // if we don't have the subtracted image on file yet, make it
+        Log.d("frame \(frameIndex) subtractAlignedImageFromFrame")
+
+
+        // load the original
+        guard let image = try await accessor.load(frameIndex: frameIndex,
+                                                  type: .original,
+                                                  atSize: .original)
+        else {
+            Log.e("frame \(frameIndex) couldn't load original image")
+            // XXX these should really throw an error, and that really should
+            // be handled properly at a higher level, but right now, thrown errors
+            // from here end up in the bitbucket :(  Need to figure out why
+            throw "frame \(frameIndex) couldn't original image"
+        }
+        Log.d("frame \(frameIndex) got orig image")
+        
+        // load or create the aligned frame
+        var alignedFrame = try await accessor.load(frameIndex: frameIndex,
+                                                   type: .aligned,
+                                                   atSize: .original)
+        if alignedFrame == nil {
+            // try creating the star aligned image if we can't load it
+            alignedFrame = try await starAlignedImage()
+        }
+
+        guard let alignedFrame else {
+            let error = "frame \(frameIndex) can't load the star aligned image"
+            Log.e(error)
+            throw error
+        }
+        
+        Log.d("frame \(frameIndex) got aligned image")
+        
+        self.set(state: .subtractingNeighbor)
+        
+        Log.i("frame \(frameIndex) finding outliers")
+
+        // subtract them
+        // result is image - alignedFrame
+        // any pixel which is bright in image but not bright in alignedFrame
+        // will be bright in the subtractionImage
+        let subtractionImage = image.subtract(alignedFrame)
+
+        let config = await configManager.config()
+        
+        if config.writeOutlierGroupFiles {
+            // write out image of outlier amounts
+            do {
+                try await accessor.save(subtractionImage,
+                                        frameIndex: frameIndex,
+                                        as: .subtraction,
+                                        atSize: .original,
+                                        overwrite: false)
+                try await accessor.save(subtractionImage,
+                                        frameIndex: frameIndex,
+                                        as: .subtraction,
+                                        atSize: .preview,
+                                        overwrite: false)
+            } catch {
+                Log.e("frame \(frameIndex) can't write subtraction image: \(error)")
+            }
+        }
+
+        return subtractionImage
+    }
+
+    // Mark - File output
+
+    
+    // write out just the OutlierGroupValueMatrix, which just what
+    // the decision tree needs, and not very large
+    public func writeOutlierValuesCSV() async throws {
+        try await fileSystemMonitor.save() { try await self.writeOutlierValuesCSVInt() }
+    }
+    
+    private func writeOutlierValuesCSVInt() async throws {
+
+        Log.d("frame \(self.frameIndex) writeOutlierValuesCSV")
+        let config = await configManager.config()
+        
+        if config.writeOutlierGroupFiles {
+            // write out the decision tree value matrix too
+            Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1")
+
+            let frameOutlierDir = "\(config.outlierOutputDirname)/\(self.frameIndex)"
+            let csvFilename = "\(frameOutlierDir)/\(CondensedOutlierGroupValueMatrix.outlierDataFilename)"
+
+            // check to see if both of these files exist already
+            if FileManager.default.fileExists(atPath: csvFilename) {
+                Log.i("frame \(self.frameIndex) not recalculating outlier values with existing files")
+            } else {
+                let valueMatrix = CondensedOutlierGroupValueMatrix()
+
+
+                if let outliers = await self.outlierGroupList() {
+                    Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")
+                    //let startTime = NSDate().timeIntervalSince1970
+                    // XXX start time
+                    
+                    for (_, outlier) in outliers.enumerated() {
+//                        if index % 10 == 0 {
+//                            let duration = NSDate().timeIntervalSince1970 - startTime
+                            //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1b \(index) after \(duration) seconds")
+//                        }
+                        await valueMatrix.append(outlierGroup: outlier)
+                    }
+                }
+                // append dustbin values too
+                if let dustbin = await self.outlierGroups?.getDustbin().values {
+                    for outlier in dustbin {
+                        await valueMatrix.append(outlierGroup: outlier, for: .isolated)
+                    }
+                }
+                Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 2")
+
+                try valueMatrix.writeCSV(to: frameOutlierDir)
+                Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 3")
+            }
+        }
+        Log.d("frame \(self.frameIndex) DONE writeOutlierValuesCSV")
+    }
+
+    public func writeOutliersPaintReasons() async {
+        let config = await configManager.config()
+        if config.writeOutlierGroupFiles {
+            do {
+                try await fileSystemMonitor.save() {
+                    try await self.outlierGroups?.write(to: config.outlierOutputDirname)
+                }
+            } catch {
+                Log.e("error \(error)")
+            }                
+        }
+    }
+}
+
+fileprivate let outliersFileSystemMonitor = FileSystemMonitor(max: 50)
+
+fileprivate struct OutlierSorter: Sendable {
+    public let classification: Double
+    public let outlier: OutlierGroup
+}
+
+// executes the classification of .isolated blobs in parallel
+fileprivate class IoslatedOutlierClassifier {
+
+    let frameIndex: Int
+    let frame: FrameAirplaneRemover
+    
+    public init(frameIndex: Int,
+                frame: FrameAirplaneRemover)
+    {
+        self.frameIndex = frameIndex
+        self.frame = frame
+    }
+    
+    func promoteAndClassify(_ blobs: [Blob]) async -> ([OutlierGroup], [OutlierGroup]) {
+        let frame = self.frame
+        let frameIndex = self.frameIndex
+        
+        return await Task.detached {
+            await withTaskGroup(of: OutlierSorter.self) { taskGroup in
+                // promote found blobs to outlier groups for further processing
+                let classifier = await currentClassifier.get(for: .isolated) 
+                
+                for blob in blobs {
+                    taskGroup.addTask {
+                        // make outlier group from this blob
+                        let outlierGroup = await blob.outlierGroup(at: frameIndex)
+
+                        //Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.id) line \(String(describing: blob.line))")
+                        await outlierGroup.set(frame: frame)
+
+                        // when promoting blobs to outlier groups, we first use the .isolated classifier
+                        // and separate blobs into two groups based upon a threshold in this classification.
+                        // one group is the dustbin, which has a very high likelyhood of not being useful
+                        // the other group are the outlier groups that will get processed further
+
+                        if let classifier {
+                            let featureData = await outlierGroup.featureData(for: .isolated)
+                            let classification = classifier.classification(of: featureData)
+
+                            // -1 classification means bad
+                            //  1 classification means good
+                            //  0 is undecided
+                            return OutlierSorter(classification: classification,
+                                                 outlier: outlierGroup)
+                        } else {
+                            Log.w("No .isolated classifier!!") // assume it's good
+                            return OutlierSorter(classification: 1,
+                                                 outlier: outlierGroup)
+                        }
+                    }
+                }
+
+                var good: [OutlierGroup] = []
+                var bad: [OutlierGroup] = []
+                
+                for await value in taskGroup {
+                    if value.classification > -0.1 { // XXX constant XXX expose this XXX
+                        // it's good
+                        good.append(value.outlier)
+                    } else {
+                        // it's bad
+                        bad.append(value.outlier)
+                    }
+                }
+
+                return (good, bad)
+            }
+        }.value
+    }
 }
 
