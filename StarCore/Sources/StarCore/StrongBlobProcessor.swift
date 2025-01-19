@@ -52,30 +52,46 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
           .save(.blobs),          
           .frameState(.filter1),
 
+          .houghLineMatrixBlobConnector(.init(elementWidth: 600,
+                                              elementHeight: 400,
+                                              overlapPercent: 20,
+                                              maxHoughLines: 2000,
+                                              sideIterationPixels: 5,
+                                              maxBlobDistance: 30)),
 
-          // find really close linear blobs
-          .linearBlobConnector(.init(scanSize: 12, 
-                                     blobsSmallerThan: 180,
-                                     lineBorder: 12)),
-
-
-          .save(.filter1),
           .frameState(.filter2),
 
 
+          // try to combine lines in another way
+          .linearBlobExtender(.init(minBlobSize: 30,
+                                    lineExtension: 25,
+                                    innerSearch: 15,
+                                    maxIterationCount: 4,
+                                    scoreMultiplier: 8.1,
+                                    sideIterationPixels: 5)),
+
+
+          .frameState(.filter3),
+
+
+          .compactBlobIds,
+          
+          .frameState(.filter4),
+          
           .blobLineTrim(.init(minBlobSize: 40,
                               minLineLength: 30,
                               minLineFillAmount: 10,
                               trimAmount: 9)),
+          .frameState(.filter5),
 
-          
-          .save(.filter2),
-          .frameState(.filter3),
-          
+
+          .compactBlobIds,
+
+          .frameState(.filter6),
+           
           // split up blobs based upon user input
           .applyUserSlices,
-          
-          .save(.filter3),
+
         ]
     }
 }

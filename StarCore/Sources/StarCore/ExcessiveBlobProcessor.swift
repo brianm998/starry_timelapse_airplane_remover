@@ -39,7 +39,6 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
                                               sideIterationPixels: 5,
                                               maxBlobDistance: 30)),
 
-          .save(.filter1),
           .frameState(.filter2),
 
           // reconnect some lines that may have been split up
@@ -48,7 +47,6 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
                                      lineBorder: 8,
                                      maxIterationCount: 5)),
 
-          .save(.filter2),
           .frameState(.filter3),
 
           // try to combine lines in another way
@@ -59,13 +57,11 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
                                     scoreMultiplier: 8.1,
                                     sideIterationPixels: 5)),
 
-          .save(.filter3),
           .frameState(.filter4),
 
 
           .compactBlobIds,
           
-          .save(.filter4),
           .frameState(.filter5),
           
           .blobLineTrim(.init(minBlobSize: 40,
@@ -73,18 +69,15 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
                               minLineFillAmount: 10,
                               trimAmount: 9)),
 
-          .save(.filter5),
           .frameState(.filter6),
 
           .compactBlobIds,
 
-          .save(.filter6),
           .frameState(.filter7),
            
           // split up blobs based upon user input
           .applyUserSlices,
 
-          .save(.filter7),
         ]
     }
 }

@@ -100,7 +100,6 @@ public class MildBlobProcessor: AbstractBlobProcessor {
                                      lineBorder: 12)),
 
 
-          .save(.filter1),
 
           .frameState(.filter2),
 
@@ -109,17 +108,12 @@ public class MildBlobProcessor: AbstractBlobProcessor {
                               minLineLength: 30,
                               minLineFillAmount: 10,
                               trimAmount: 9)),
-
           
-          .save(.filter2),
-
           .frameState(.filter3),
 
           // split up blobs based upon user input
           .applyUserSlices,
 
-
-          .save(.filter3),
           
         ]
     }
