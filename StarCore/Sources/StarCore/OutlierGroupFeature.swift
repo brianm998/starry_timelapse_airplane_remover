@@ -73,6 +73,8 @@ public enum OutlierGroupFeature: String,
     case bunchCount
     case medianBunchSize
     case maxBunchSize
+
+    case neighborLineScore
     
     /*
 
@@ -131,10 +133,12 @@ public enum OutlierGroupFeature: String,
      
             case .borderBrightness:
                 return false    // maybe could be used here? 
+
+            case .neighborLineScore:
+                return false
                 
             default:
                 return true
-     
             }
         }
     }
@@ -199,6 +203,8 @@ public enum OutlierGroupFeature: String,
             return 27
         case .maxBunchSize:
             return 28
+        case .neighborLineScore:
+            return 29
         }
     }
     
@@ -275,6 +281,8 @@ public enum OutlierGroupFeature: String,
             return await Double(group.medianBunchSize())
         case .maxBunchSize:
             return await Double(group.maxBunchSize())
+        case .neighborLineScore:
+            return await calculateNeighborLineScore(of: group)
         }
     }
     
@@ -350,6 +358,260 @@ fileprivate func calculateNumberOfNearbyOutliersInSameFrame(of group: OutlierGro
 
 }
 
+// gives a larger score if there are closeby lines in neighboring frames 
+fileprivate func calculateNeighborLineScore(of group: OutlierGroup) async -> Double {
+    if let frame = await group.frame,
+       let originalGroupLine = await group.originZeroLine,
+       let previousFrame = await frame.getPreviousFrame(),
+       let previousOutlierGroups = await previousFrame.getOutlierGroups(),
+       let nextFrame = await frame.getNextFrame(),
+       let nextOutlierGroups = await nextFrame.getOutlierGroups()
+    {
+        /*
+
+         calculate a score which gives a larger value if there is one or more
+         lines in neighboring frames which match, given some criteria:
+
+         - rho diff
+         - theta diff
+         - bounding box distance
+
+         iterate along the blob line similar to the BlobLineExtender,
+         but on neighboring frames.
+
+         grab a set of outliers from each neighorbing frame along the iteration line
+
+         */
+
+        let iterationWidthPixels = 4 // XXX constant XXX
+
+        var previousNeighbors: Set<UInt16> = []
+        var nextNeighbors: Set<UInt16> = []
+
+        let previousOutlierImage = await previousOutlierGroups.outlierImageDataFunc()
+        let nextOutlierImage = await nextOutlierGroups.outlierImageDataFunc()
+
+        let groupBounds = await group.bounds
+        let groupSize = await group.size
+
+        var iterationCount = 0
+
+        let intersections = group.bounds.intersections(with: originalGroupLine.standardLine)
+        if intersections.count > 1 {
+            originalGroupLine.iterate(.forwards,
+                                      from: intersections[0],
+                                      numberOfAdjecentPixels: iterationWidthPixels)
+            { x, y, orientation in
+                //Log.d("frame \(group.frameIndex) iterating for group \(group) at [\(x), \(y)]")
+                let (shouldContinue, previousId, nextId) = 
+                  handleIteration(in: groupBounds,
+                                  x: x, y: y,
+                                  width: frame.width,
+                                  height: frame.height,
+                                  from: intersections[0],
+                                  previousOutlierImage: previousOutlierImage,
+                                  nextOutlierImage: nextOutlierImage)
+
+                if previousId != 0 { previousNeighbors.insert(previousId) }
+                if nextId != 0 { nextNeighbors.insert(nextId) }
+                iterationCount += 1
+                return shouldContinue
+            }
+
+            originalGroupLine.iterate(.backwards,
+                                      from: intersections[0],
+                                      numberOfAdjecentPixels: iterationWidthPixels)
+            { x, y, orientation in
+                //Log.d("frame \(group.frameIndex) iterating for group \(group) at [\(x), \(y)]")
+                let (shouldContinue, previousId, nextId) = 
+                  handleIteration(in: groupBounds,
+                                  x: x, y: y,
+                                  width: frame.width,
+                                  height: frame.height,
+                                  from: intersections[0],
+                                  previousOutlierImage: previousOutlierImage,
+                                  nextOutlierImage: nextOutlierImage)
+
+                if previousId != 0 { previousNeighbors.insert(previousId) }
+                if nextId != 0 { nextNeighbors.insert(nextId) }
+                iterationCount += 1
+                return shouldContinue
+            }
+            //Log.d("frame \(frameIndex) processing blob \(blob) iterating forwards from intersection 1")
+            originalGroupLine.iterate(.forwards,
+                                      from: intersections[1],
+                                      numberOfAdjecentPixels: iterationWidthPixels)
+            { x, y, orientation in
+                //Log.d("frame \(group.frameIndex) iterating for group \(group) at [\(x), \(y)]")
+                let (shouldContinue, previousId, nextId) = 
+                  handleIteration(in: groupBounds,
+                                  x: x, y: y,
+                                  width: frame.width,
+                                  height: frame.height,
+                                  from: intersections[1],
+                                  previousOutlierImage: previousOutlierImage,
+                                  nextOutlierImage: nextOutlierImage) 
+
+                if previousId != 0 { previousNeighbors.insert(previousId) }
+                if nextId != 0 { nextNeighbors.insert(nextId) }
+                iterationCount += 1
+                return shouldContinue
+            }
+            //Log.d("frame \(frameIndex) processing blob \(blob) iterating backwards from intersection 1")
+            originalGroupLine.iterate(.backwards,
+                                      from: intersections[1],
+                                      numberOfAdjecentPixels: iterationWidthPixels)
+            { x, y, orientation in
+                //Log.d("frame \(group.frameIndex) iterating for group \(group) at [\(x), \(y)]")
+                let (shouldContinue, previousId, nextId) = 
+                  handleIteration(in: groupBounds,
+                                  x: x, y: y,
+                                  width: frame.width,
+                                  height: frame.height,
+                                  from: intersections[1],
+                                  previousOutlierImage: previousOutlierImage,
+                                  nextOutlierImage: nextOutlierImage) 
+                if previousId != 0 { previousNeighbors.insert(previousId) }
+                if nextId != 0 { nextNeighbors.insert(nextId) }
+                iterationCount += 1
+                return shouldContinue
+            }
+        }
+
+        // here we have a set of previousNeighbors and nextNeighbors
+
+        /*
+         compute the score to be maximal when there is a nearby group that:
+          - has a close line theta and rho
+          - is closer rather than farther away
+          - tends towards zero when they are farther away
+          
+          theta score is 1 if they are parallel, 0 if they are perpendicular
+          rho score is 1 if they are identical, decreases with square of distance
+          distance score is 1 if they touch, decreases with square of distance
+          size score is 1 if they are the same size, smallest / largest otherwise
+          
+          final score per outlying group is muliple of all
+
+          final score is sum of all outying group matches
+         */
+
+        var score = 0.0
+
+        Log.d("frame \(group.frameIndex) found \(previousNeighbors.count) previousNeighbors and  \(nextNeighbors.count) nextNeighbors for group \(group) iterationCount \(iterationCount)")
+        
+        for previousId in previousNeighbors {
+            if let previousOutlier = await previousOutlierGroups.get(with: previousId),
+               let previousOutlierLine = await previousOutlier.originZeroLine
+            {
+                score += scoreOf(originalGroupLine: originalGroupLine,
+                                 previousOutlierLine: previousOutlierLine,
+                                 groupBounds: groupBounds,
+                                 groupSize: groupSize,
+                                 otherOutlier: previousOutlier)
+            }
+        }
+        
+        for nextId in nextNeighbors {
+            if let nextOutlier = await nextOutlierGroups.get(with: nextId),
+               let nextOutlierLine = await nextOutlier.originZeroLine
+            {
+                score += scoreOf(originalGroupLine: originalGroupLine,
+                                 previousOutlierLine: nextOutlierLine,
+                                 groupBounds: groupBounds,
+                                 groupSize: groupSize,
+                                 otherOutlier: nextOutlier)
+            }
+        }
+        
+        return score
+    } else {
+        return 0
+    }
+}
+
+fileprivate func scoreOf(originalGroupLine: Line,
+                         previousOutlierLine: Line,
+                         groupBounds: BoundingBox,
+                         groupSize: UInt,
+                         otherOutlier: OutlierGroup) -> Double
+{
+    let (thetaScore, rhoScore) = thetaRhoDiff(of: originalGroupLine,
+                                              and: previousOutlierLine)
+    var sizeScore = 0.0
+    if otherOutlier.size > groupSize {
+        sizeScore = Double(groupSize) / Double(otherOutlier.size)
+    } else {
+        sizeScore = Double(otherOutlier.size) / Double(groupSize)
+    }
+    return thetaScore * rhoScore * sizeScore
+}
+
+fileprivate func thetaRhoDiff(of line1: Line, and line2: Line) -> (Double, Double) {
+    // theta score is 1 if they are parallel, 0 if they are perpendicular
+    
+    var theta1 = line1.theta
+    var theta2 = line2.theta
+
+    if theta1 < 0 { theta1 += 360 }
+    if theta2 < 0 { theta2 += 360 }
+
+    // thetas are now both positive
+    
+    var thetaDiff = abs(theta1-theta2)
+
+    if thetaDiff > 180 { thetaDiff = 360-thetaDiff }
+    // thetaDiff is now between 0 and 180
+
+    if thetaDiff > 90 { thetaDiff = 180-thetaDiff }
+
+    // thetaDiff is now between 0 and 90
+    
+    // 1 if thetaDiff == 0
+    // 0 if thetaDiff == 90
+    let thetaScore = (90-thetaDiff)/90
+
+    // rho score is 1 if they are identical, zero if 100 pixels away or more
+    let max = 100.0
+    
+    var distance = abs(line1.rho - line2.rho)
+    if distance > max { distance = max }
+    let rhoScore = (max-distance)/max
+    //var rhoScore = 1.0
+    //if distance > 1 { rhoScore = 1/(distance) }
+    
+    return (thetaScore, rhoScore)
+}
+
+fileprivate func handleIteration(in bounds: BoundingBox,
+                                 x: Int,
+                                 y: Int,
+                                 width: Int,
+                                 height: Int,
+                                 from originCoord: DoubleCoord,
+                                 previousOutlierImage: [UInt16],
+                                 nextOutlierImage: [UInt16]) -> (Bool, UInt16, UInt16)
+{
+    if x < 0 { return (false, 0, 0) }
+    if y < 0 { return (false, 0, 0) }
+    if x >= width { return (false, 0, 0) }
+    if y >= height { return (false, 0, 0) }
+    
+    let distance = originCoord.distance(to: x, and: y)
+    if distance > 20,           // XXX constant
+       bounds.contains(x: x, y: y)
+    {
+        return (false, 0, 0)
+    }
+    if distance > 40 { return (false, 0, 0) } // XXX constant
+
+    let index = y*width+x
+    
+    // look at x, y in each neighboring frame for an outlier group
+    // return it somehow if found
+    
+    return (true, previousOutlierImage[index], nextOutlierImage[index])
+}
 
 // 1.0 if all pixels in this group overlap all pixels of outliers in all neighboring frames
 // 0 if none of the pixels overlap

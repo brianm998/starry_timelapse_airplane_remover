@@ -71,6 +71,7 @@ public final class OutlierWindowViewModel {
     public var showBunchCount = true
     public var showMedianBunchSize = true
     public var showMaxBunchSize = true
+    public var showNeighborLineScore = true
     
     public func selectAll() {
         setAll(to: true)
@@ -109,5 +110,6 @@ public final class OutlierWindowViewModel {
         showBunchCount = value
         showMedianBunchSize = value
         showMaxBunchSize = value
+        showNeighborLineScore = value
     }
 }

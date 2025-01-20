@@ -146,12 +146,13 @@ struct OutlierWindowView: View {
                 Toggle("BunchCount", isOn: $outlierWindowViewModel.showBunchCount)
                 Toggle("MedianBunchSize", isOn: $outlierWindowViewModel.showMedianBunchSize)
                 Toggle("MaxBunchSize", isOn: $outlierWindowViewModel.showMaxBunchSize)
+                Toggle("NeighborLineScore", isOn: $outlierWindowViewModel.showNeighborLineScore)
             }
         }
     }
 }
 
-// XXX NEW FILE
+// XXX STICK THIS VVV IN A NEW FILE
 
 struct ArgableView<T: Hashable>: View {
     let title: String

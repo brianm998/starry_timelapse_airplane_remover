@@ -39,6 +39,8 @@ public actor OutlierGroups {
             self.dustbin.removeValue(forKey: member.id)
         }
     }
+
+    public func get(with id: UInt16) -> OutlierGroup? { members[id] }
     
     public func dumpInDustbin(_ member: OutlierGroup) {
         dustbin[member.id] = member

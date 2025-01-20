@@ -66,6 +66,8 @@ struct OutlierGroupTableRow: Identifiable {
     let dt_bunchCount : Double
     let dt_medianBunchSize : Double
     let dt_maxBunchSize : Double
+
+    let dt_neighborLineScore: Double
     
     init(_ group: OutlierGroup) async {
         name = group.id
@@ -112,6 +114,7 @@ struct OutlierGroupTableRow: Identifiable {
         dt_bunchCount = await group.decisionTreeValueAsync(for: .bunchCount)
         dt_medianBunchSize = await group.decisionTreeValueAsync(for: .medianBunchSize)
         dt_maxBunchSize = await group.decisionTreeValueAsync(for: .maxBunchSize)
+        dt_neighborLineScore = await group.decisionTreeValueAsync(for: .neighborLineScore)
     }
 }
 
@@ -364,6 +367,12 @@ struct OutlierGroupTable: View {
                             self.tableColumn(for: "maxBunchSize",
                                              value: \.dt_maxBunchSize) { row in
                                 row.dt_maxBunchSize
+                            }
+                        }
+                        if self.outlierWindowViewModel.showNeighborLineScore {
+                            self.tableColumn(for: "neighborLineScore",
+                                             value: \.dt_neighborLineScore) { row in
+                                row.dt_neighborLineScore
                             }
                         }
                     }
