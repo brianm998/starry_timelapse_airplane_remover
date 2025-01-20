@@ -190,12 +190,13 @@ public actor OutlierGroup: CustomStringConvertible,
         self.paintObserver = paintObserver
     }
     
-    public func shouldPaint(_ shouldPaint: PaintReason) async {
+    public func shouldPaint(_ shouldPaint: PaintReason, markAsChanged: Bool = true) async {
         //Log.d("\(self) should paint \(shouldPaint) self.frame \(self.frame)")
         self._shouldPaint = shouldPaint
 
-        // XXX update frame that it's different 
-        await self.frame?.markAsChanged()
+        // XXX update frame that it's different
+        if markAsChanged { await self.frame?.markAsChanged() }
+
         await paintObserver?.set(shouldPaint: shouldPaint)
     }
 

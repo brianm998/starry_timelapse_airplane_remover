@@ -233,7 +233,7 @@ public actor BlobAnalyzer {
     }
 }
 
-fileprivate struct BlobSize {
+public struct BlobSize {
     let id: UInt16
     let size: Int
     let blob: Blob
@@ -273,7 +273,7 @@ internal func neighborCloud(of blob: Blob,
                                                         scanSize: scanSize)
         {
             if !(await processedBlobs.contains(otherBlob.id)) {
-                await processedBlobs.insert(otherBlob.id)
+                await processedBlobs.insert(otherBlob.id) // XXX combine this with above
                 ret.insert(otherBlob)
                 blobsToProcess.append(otherBlob)
             }

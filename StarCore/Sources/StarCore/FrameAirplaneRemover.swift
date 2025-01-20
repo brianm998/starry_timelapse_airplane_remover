@@ -1209,6 +1209,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
+    // XXX make this more parallel, like how the .dustbin is determined
+    // i.e. the task group isn't working right because this is inside an actor :(
     public func applyDecisionTreeToAllOutliers(includingDustbin: Bool) async -> Task<Void,Never>? {
         //Log.d("frame \(self.frameIndex) applyDecisionTreeToAll \(self.outlierGroups?.members.count ?? 0) Outliers")
         let startTime = NSDate().timeIntervalSince1970
@@ -1223,7 +1225,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                 // only apply classifier when no other classification is otherwise present
                                 let featureData = await group.featureData()
                                 let classification = classifier.classification(of: featureData)
-                                await group.shouldPaint(.fromClassifier(classification))
+                                await group.shouldPaint(.fromClassifier(classification),
+                                                        markAsChanged: false)
                             }
                         }
                     }
@@ -1234,7 +1237,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                     // only apply classifier when no other classification is otherwise present
                                     let featureData = await group.featureData()
                                     let classification = classifier.classification(of: featureData)
-                                    await group.shouldPaint(.fromClassifier(classification))
+                                    await group.shouldPaint(.fromClassifier(classification),
+                                                            markAsChanged: false)
                                     await outlierGroups.promoteFromDustbin(group)
                                 }
                             }
