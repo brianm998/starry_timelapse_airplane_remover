@@ -223,10 +223,8 @@ fileprivate func finalProcess(atIndex currentIndex: Int,
 
         await frame.set(state: .interFrameProcessing)
         
-        if let task = await frame.applyDecisionTreeToAllOutliers(includingDustbin: viewModel.shouldShowDustbin) {
-            await task.value
-        }
-
+        await frame.applyDecisionTreeToAllOutliers(includingDustbin: viewModel.shouldShowDustbin)
+      
         await frame.set(state: .outlierProcessingComplete)
 
         await frame.set(frameSavingState: .saving)

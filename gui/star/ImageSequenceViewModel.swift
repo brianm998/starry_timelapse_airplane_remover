@@ -925,10 +925,11 @@ public extension ImageSequenceViewModel {
             await frame.initializeEmptyOutlierGroups()
             try await frame.findOutliers()
 
-            if let task = await frame.applyDecisionTreeToAllOutliers(includingDustbin: self.shouldShowDustbin) {
-                await task.value
-            }
-
+            // XXX set state
+            try await frame.set(state: .interFrameProcessing)
+            
+            await frame.applyDecisionTreeToAllOutliers(includingDustbin: self.shouldShowDustbin)
+             
             try await self.render(frame: frame, now: true) {
                 Task {
                     await self.setOutlierGroups(forFrame: frame)

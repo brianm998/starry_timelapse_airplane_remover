@@ -577,7 +577,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.i("frame \(frameIndex) has \(blobs.count) blobs")
         self.set(state: .populatingOutlierGroups)
 
-        let classifier = IoslatedOutlierClassifier(frameIndex: frameIndex, frame: self)
+        let classifier = OutlierClassifier(frame: self)
         self.set(state: .populatingOutlierGroups1)
         let (good, bad) = await classifier.promoteAndClassify(blobs) // this is where time is spent
 
@@ -1211,50 +1211,19 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     // XXX make this more parallel, like how the .dustbin is determined
     // i.e. the task group isn't working right because this is inside an actor :(
-    public func applyDecisionTreeToAllOutliers(includingDustbin: Bool) async -> Task<Void,Never>? {
+    public func applyDecisionTreeToAllOutliers(includingDustbin: Bool) async {
         //Log.d("frame \(self.frameIndex) applyDecisionTreeToAll \(self.outlierGroups?.members.count ?? 0) Outliers")
         let startTime = NSDate().timeIntervalSince1970
-        if let classifier = await currentClassifier.get(for: .all), 
-           let outlierGroups
-        {
-            return await Task.detached(priority: .userInitiated) {
-                await withTaskGroup(of: Void.self) { taskGroup in
-                    for (_, group) in await outlierGroups.getMembers() {
-                        taskGroup.addTask {
-                            if await group.shouldPaint() == nil {
-                                // only apply classifier when no other classification is otherwise present
-                                let featureData = await group.featureData()
-                                let classification = classifier.classification(of: featureData)
-                                await group.shouldPaint(.fromClassifier(classification),
-                                                        markAsChanged: false)
-                            }
-                        }
-                    }
-                    if includingDustbin {
-                        for (_, group) in await outlierGroups.getDustbin() {
-                            taskGroup.addTask {
-                                if await group.shouldPaint() == nil {
-                                    // only apply classifier when no other classification is otherwise present
-                                    let featureData = await group.featureData()
-                                    let classification = classifier.classification(of: featureData)
-                                    await group.shouldPaint(.fromClassifier(classification),
-                                                            markAsChanged: false)
-                                    await outlierGroups.promoteFromDustbin(group)
-                                }
-                            }
-                        }
-
-                    }
-                    await taskGroup.waitForAll()
-                }
-            }
+        if let outlierGroups {
+            let groups = await outlierGroups.getMembers()
+            let classifier = OutlierClassifier(frame: self)
+            await classifier.classifyAll(Array(groups.values))
             let endTime = NSDate().timeIntervalSince1970
             Log.i("frame \(self.frameIndex) spent \(endTime - startTime) seconds classifing outlier groups");
         } else {
             Log.w("no classifier")
         }
         Log.d("frame \(self.frameIndex) DONE applyDecisionTreeToAllOutliers")
-        return nil
     }
     
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
@@ -1478,18 +1447,79 @@ fileprivate struct OutlierSorter: Sendable {
 }
 
 // executes the classification of .isolated blobs in parallel
-fileprivate class IoslatedOutlierClassifier {
+fileprivate class OutlierClassifier {
 
     let frameIndex: Int
     let frame: FrameAirplaneRemover
     
-    public init(frameIndex: Int,
-                frame: FrameAirplaneRemover)
+    public init(frame: FrameAirplaneRemover)
     {
-        self.frameIndex = frameIndex
+        self.frameIndex = frame.frameIndex
         self.frame = frame
     }
-    
+
+    // classifies OutlierGroup actors in OutlierGroups, marking them as paintable or not
+    // uses the .all classifier, which digs into neighboring frames for more data
+    func classifyAll(_ outlierGroups: OutlierGroups, includingDustbin: Bool) async {
+        await Task.detached(priority: .userInitiated) {
+            await withTaskGroup(of: Void.self) { taskGroup in
+                guard let classifier = await currentClassifier.get(for: .all) else { return }
+                
+                for (_, group) in await outlierGroups.getMembers() {
+                    if await group.shouldPaint() == nil {
+                        // only apply classifier when no other classification is otherwise present
+                        taskGroup.addTask {
+                            let featureData = await group.featureData()
+                            let classification = classifier.classification(of: featureData)
+                            await group.shouldPaint(.fromClassifier(classification),
+                                                    markAsChanged: false)
+                        }
+                    }
+                }
+                if includingDustbin {
+                    for (_, group) in await outlierGroups.getDustbin() {
+                        if await group.shouldPaint() == nil {
+                            // only apply classifier when no other classification is otherwise present
+                            taskGroup.addTask {
+                                let featureData = await group.featureData()
+                                let classification = classifier.classification(of: featureData)
+                                await group.shouldPaint(.fromClassifier(classification),
+                                                        markAsChanged: false)
+                                await outlierGroups.promoteFromDustbin(group)
+                            }
+                        }
+                    }
+
+                }
+                await taskGroup.waitForAll()
+            }
+        }.value
+    }
+
+    // classifies OutlierGroup actors in OutlierGroups, marking them as paintable or not
+    // uses the .all classifier, which digs into neighboring frames for more data
+    func classifyAll(_ outliers: [OutlierGroup]) async {
+        await Task.detached(priority: .userInitiated) {
+            await withTaskGroup(of: Void.self) { taskGroup in
+                guard let classifier = await currentClassifier.get(for: .all) else { return }
+                
+                for group in outliers {
+                    if await group.shouldPaint() == nil {
+                        // only apply classifier when no other classification is otherwise present
+                        taskGroup.addTask {
+                            let featureData = await group.featureData()
+                            let classification = classifier.classification(of: featureData)
+                            await group.shouldPaint(.fromClassifier(classification),
+                                                    markAsChanged: false)
+                        }
+                    }
+                }
+                await taskGroup.waitForAll()
+            }
+        }.value
+    }
+
+    // classifies blobs with the .isolated classifier, and promotes them to separate groups
     func promoteAndClassify(_ blobs: [Blob]) async -> ([OutlierGroup], [OutlierGroup]) {
         let frame = self.frame
         let frameIndex = self.frameIndex
