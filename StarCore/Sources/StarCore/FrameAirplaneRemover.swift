@@ -662,8 +662,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 for (_, group) in await outlierGroups.getMembers() {
                     taskGroup.addTask() { await closure(group, false) }
                 }
-                for (_, group) in await outlierGroups.getDustbin() {
-                    taskGroup.addTask() { await closure(group, true) }
+                if includingDustbin {
+                    for (_, group) in await outlierGroups.getDustbin() {
+                        taskGroup.addTask() { await closure(group, true) }
+                    }
                 }
                 await taskGroup.waitForAll()
             }
