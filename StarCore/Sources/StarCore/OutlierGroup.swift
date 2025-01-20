@@ -803,6 +803,8 @@ fileprivate func scoresOf(originalGroupLine: Line,
                           otherOutlier: OutlierGroup,
                           otherGroupMedianIntensiy: UInt16) -> NeighborLineScores
 {
+    // calculate size score
+    // 1 if they are the same, trending towards zero as they diverge
     var sizeScore = 0.0
     if otherOutlier.size > groupSize {
         sizeScore = Double(groupSize) / Double(otherOutlier.size)
@@ -810,12 +812,21 @@ fileprivate func scoresOf(originalGroupLine: Line,
         sizeScore = Double(otherOutlier.size) / Double(groupSize)
     }
 
+    // calculate brightness score
+    // 1 if they are the same, trending towards zero as they diverge
     var brightnessScore = 0.0
     if otherGroupMedianIntensiy > groupMedianIntensity {
         brightnessScore = Double(groupMedianIntensity)/Double(otherGroupMedianIntensiy)
     } else {
         brightnessScore = Double(otherGroupMedianIntensiy)/Double(groupMedianIntensity)
     }
+
+    // calculate distance score
+    var edgeDistance = groupBounds.edgeDistance(to: otherOutlier.bounds)
+    if edgeDistance < 1 { edgeDistance = 1 }
+
+    // 1 if they are close, trending towards zero as they diverge
+    let distanceScore = 1/edgeDistance
     
     return NeighborLineScores(thetaScore: thetaScore(of: originalGroupLine,
                                                      and: previousOutlierLine),
@@ -823,7 +834,7 @@ fileprivate func scoresOf(originalGroupLine: Line,
                                                  and: previousOutlierLine),
                               sizeScore: sizeScore,
                               brightnessScore: brightnessScore,
-                              distanceScore: groupBounds.edgeDistance(to: otherOutlier.bounds))
+                              distanceScore: distanceScore)
 }
 
 fileprivate func thetaScore(of line1: Line, and line2: Line) -> Double {
@@ -856,12 +867,11 @@ fileprivate func thetaScore(of line1: Line, and line2: Line) -> Double {
 fileprivate func rhoScore(of line1: Line, and line2: Line) -> Double {
 
     // rho score is 1 if they are identical, zero if 100 pixels away or more
+    let max = 100.0             // XXX constant
     
     var distance = abs(line1.rho - line2.rho)
-    //if distance > max { distance = max }
-    //let rhoScore = (max-distance)/max
-    var rhoScore = 1.0
-    if distance > 1 { rhoScore = 1/(distance) }
+    if distance > max { distance = max }
+    let rhoScore = (max-distance)/max
     
     return rhoScore
 }
