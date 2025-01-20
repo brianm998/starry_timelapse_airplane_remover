@@ -146,7 +146,11 @@ struct OutlierWindowView: View {
                 Toggle("BunchCount", isOn: $outlierWindowViewModel.showBunchCount)
                 Toggle("MedianBunchSize", isOn: $outlierWindowViewModel.showMedianBunchSize)
                 Toggle("MaxBunchSize", isOn: $outlierWindowViewModel.showMaxBunchSize)
-                Toggle("NeighborLineScore", isOn: $outlierWindowViewModel.showNeighborLineScore)
+                Toggle("NeighborLineThetaScore", isOn: $outlierWindowViewModel.showNeighborLineThetaScore)
+                Toggle("NeighborLineRhoScore", isOn: $outlierWindowViewModel.showNeighborLineRhoScore)
+                Toggle("NeighborLineSizeScore", isOn: $outlierWindowViewModel.showNeighborLineSizeScore)
+                Toggle("NeighborLineBrightnessScore", isOn: $outlierWindowViewModel.showNeighborLineBrightnessScore)
+                Toggle("NeighborLineDistanceScore", isOn: $outlierWindowViewModel.showNeighborLineDistanceScore)
             }
         }
     }

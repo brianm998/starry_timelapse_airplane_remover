@@ -568,7 +568,377 @@ public actor OutlierGroup: CustomStringConvertible,
 
     fileprivate var _maxIntensity: UInt16?
     fileprivate var _medianIntensity: UInt16?
+    fileprivate var _neighborLineScores: NeighborLineScores?
+
+    public var neighboringThetaScore: Double {
+        get async {
+            if let _neighborLineScores { return _neighborLineScores.thetaScore }
+            let scores = await self.neighborLineScores
+            _neighborLineScores = scores
+            return scores.thetaScore
+        }
+    }
+
+    public var neighboringRhoScore: Double {
+        get async {
+            if let _neighborLineScores { return _neighborLineScores.rhoScore }
+            let scores = await self.neighborLineScores
+            _neighborLineScores = scores
+            return scores.rhoScore
+        }
+    }
+
+    public var neighboringSizeScore: Double {
+        get async {
+            if let _neighborLineScores { return _neighborLineScores.sizeScore }
+            let scores = await self.neighborLineScores
+            _neighborLineScores = scores
+            return scores.sizeScore
+        }
+    }
+
+    public var neighboringBrightnessScore: Double {
+        get async {
+            if let _neighborLineScores { return _neighborLineScores.brightnessScore }
+            let scores = await self.neighborLineScores
+            _neighborLineScores = scores
+            return scores.brightnessScore
+        }
+    }
+
+    public var neighboringDistanceScore: Double {
+        get async {
+            if let _neighborLineScores { return _neighborLineScores.distanceScore }
+            let scores = await self.neighborLineScores
+            _neighborLineScores = scores
+            return scores.distanceScore
+        }
+    }
+
+    // collect a bunch of scores related to nearby outliers in neighboring frames
+    private var neighborLineScores: NeighborLineScores {
+        get async {
+
+            var scores = NeighborLineScores()
+
+            if let frame = await self.frame,
+               let originalGroupLine = await self.originZeroLine,
+               let previousFrame = await frame.getPreviousFrame(),
+               let previousOutlierGroups = await previousFrame.getOutlierGroups(),
+               let nextFrame = await frame.getNextFrame(),
+               let nextOutlierGroups = await nextFrame.getOutlierGroups()
+            {
+                /*
+
+                 calculate a score which gives a larger value if there is one or more
+                 lines in neighboring frames which match, given some criteria:
+
+                 - rho diff
+                 - theta diff
+                 - bounding box distance
+
+                 iterate along the blob line similar to the BlobLineExtender,
+                 but on neighboring frames.
+
+                 grab a set of outliers from each neighorbing frame along the iteration line
+
+                 */
+
+                let iterationWidthPixels = 12 // XXX constant XXX
+
+                var previousNeighbors: Set<UInt16> = []
+                var nextNeighbors: Set<UInt16> = []
+
+                let previousOutlierImage = await previousOutlierGroups.outlierImageDataFunc()
+                let nextOutlierImage = await nextOutlierGroups.outlierImageDataFunc()
+
+                let groupBounds = await self.bounds
+                let groupSize = await self.size
+                let groupMedianIntensity = await self.medianIntensity()
+
+                var iterationCount = 0
+
+                let intersections = self.bounds.intersections(with: originalGroupLine.standardLine)
+                if intersections.count > 1 {
+                    originalGroupLine.iterate(.forwards,
+                                              from: intersections[0],
+                                              numberOfAdjecentPixels: iterationWidthPixels)
+                    { x, y, orientation in
+                        //Log.d("frame \(self.frameIndex) iterating for group \(group) at [\(x), \(y)]")
+                        let (shouldContinue, previousId, nextId) = 
+                          handleIteration(in: groupBounds,
+                                          x: x, y: y,
+                                          width: frame.width,
+                                          height: frame.height,
+                                          from: intersections[0],
+                                          previousOutlierImage: previousOutlierImage,
+                                          nextOutlierImage: nextOutlierImage)
+
+                        if previousId != 0 { previousNeighbors.insert(previousId) }
+                        if nextId != 0 { nextNeighbors.insert(nextId) }
+                        iterationCount += 1
+                        return shouldContinue
+                    }
+
+                    originalGroupLine.iterate(.backwards,
+                                              from: intersections[0],
+                                              numberOfAdjecentPixels: iterationWidthPixels)
+                    { x, y, orientation in
+                        //Log.d("frame \(self.frameIndex) iterating for group \(group) at [\(x), \(y)]")
+                        let (shouldContinue, previousId, nextId) = 
+                          handleIteration(in: groupBounds,
+                                          x: x, y: y,
+                                          width: frame.width,
+                                          height: frame.height,
+                                          from: intersections[0],
+                                          previousOutlierImage: previousOutlierImage,
+                                          nextOutlierImage: nextOutlierImage)
+
+                        if previousId != 0 { previousNeighbors.insert(previousId) }
+                        if nextId != 0 { nextNeighbors.insert(nextId) }
+                        iterationCount += 1
+                        return shouldContinue
+                    }
+                    //Log.d("frame \(frameIndex) processing blob \(blob) iterating forwards from intersection 1")
+                    originalGroupLine.iterate(.forwards,
+                                              from: intersections[1],
+                                              numberOfAdjecentPixels: iterationWidthPixels)
+                    { x, y, orientation in
+                        //Log.d("frame \(self.frameIndex) iterating for group \(group) at [\(x), \(y)]")
+                        let (shouldContinue, previousId, nextId) = 
+                          handleIteration(in: groupBounds,
+                                          x: x, y: y,
+                                          width: frame.width,
+                                          height: frame.height,
+                                          from: intersections[1],
+                                          previousOutlierImage: previousOutlierImage,
+                                          nextOutlierImage: nextOutlierImage) 
+
+                        if previousId != 0 { previousNeighbors.insert(previousId) }
+                        if nextId != 0 { nextNeighbors.insert(nextId) }
+                        iterationCount += 1
+                        return shouldContinue
+                    }
+                    //Log.d("frame \(frameIndex) processing blob \(blob) iterating backwards from intersection 1")
+                    originalGroupLine.iterate(.backwards,
+                                              from: intersections[1],
+                                              numberOfAdjecentPixels: iterationWidthPixels)
+                    { x, y, orientation in
+                        //Log.d("frame \(self.frameIndex) iterating for group \(group) at [\(x), \(y)]")
+                        let (shouldContinue, previousId, nextId) = 
+                          handleIteration(in: groupBounds,
+                                          x: x, y: y,
+                                          width: frame.width,
+                                          height: frame.height,
+                                          from: intersections[1],
+                                          previousOutlierImage: previousOutlierImage,
+                                          nextOutlierImage: nextOutlierImage) 
+                        if previousId != 0 { previousNeighbors.insert(previousId) }
+                        if nextId != 0 { nextNeighbors.insert(nextId) }
+                        iterationCount += 1
+                        return shouldContinue
+                    }
+                }
+
+                // here we have a set of previousNeighbors and nextNeighbors
+
+                /*
+                 compute the score to be maximal when there is a nearby group that:
+                 - has a close line theta and rho
+                 - is closer rather than farther away
+                 - tends towards zero when they are farther away
+                 
+                 theta score is 1 if they are parallel, 0 if they are perpendicular
+                 rho score is 1 if they are identical, decreases with square of distance
+                 distance score is 1 if they touch, decreases with square of distance
+                 size score is 1 if they are the same size, smallest / largest otherwise
+                 
+                 final score per outlying group is muliple of all
+
+                 final score is sum of all outying group matches
+                 */
+
+                Log.d("frame \(self.frameIndex) found \(previousNeighbors.count) previousNeighbors and  \(nextNeighbors.count) nextNeighbors for group \(self) iterationCount \(iterationCount)")
+                
+                for previousId in previousNeighbors {
+                    if let previousOutlier = await previousOutlierGroups.get(with: previousId),
+                       let previousOutlierLine = await previousOutlier.originZeroLine
+                    {
+                        let otherGroupMedianIntensiy = await previousOutlier.medianIntensity()
+                        scores = scores + scoresOf(originalGroupLine: originalGroupLine,
+                                                   previousOutlierLine: previousOutlierLine,
+                                                   groupBounds: groupBounds,
+                                                   groupSize: groupSize,
+                                                   groupMedianIntensity: groupMedianIntensity,
+                                                   otherOutlier: previousOutlier,
+                                                   otherGroupMedianIntensiy: otherGroupMedianIntensiy)
+                    }
+                }
+                
+                for nextId in nextNeighbors {
+                    if let nextOutlier = await nextOutlierGroups.get(with: nextId),
+                       let nextOutlierLine = await nextOutlier.originZeroLine
+                    {
+                        let otherGroupMedianIntensiy = await nextOutlier.medianIntensity()
+                        scores = scores + scoresOf(originalGroupLine: originalGroupLine,
+                                                   previousOutlierLine: nextOutlierLine,
+                                                   groupBounds: groupBounds,
+                                                   groupSize: groupSize,
+                                                   groupMedianIntensity: groupMedianIntensity,
+                                                   otherOutlier: nextOutlier,
+                                                   otherGroupMedianIntensiy: otherGroupMedianIntensiy)
+                    }
+                }
+            }
+            return scores
+        }
+    }
 }
 
+fileprivate func scoresOf(originalGroupLine: Line,
+                          previousOutlierLine: Line,
+                          groupBounds: BoundingBox,
+                          groupSize: UInt,
+                          groupMedianIntensity: UInt16,
+                          otherOutlier: OutlierGroup,
+                          otherGroupMedianIntensiy: UInt16) -> NeighborLineScores
+{
+    var sizeScore = 0.0
+    if otherOutlier.size > groupSize {
+        sizeScore = Double(groupSize) / Double(otherOutlier.size)
+    } else {
+        sizeScore = Double(otherOutlier.size) / Double(groupSize)
+    }
+
+    var brightnessScore = 0.0
+    if otherGroupMedianIntensiy > groupMedianIntensity {
+        brightnessScore = Double(groupMedianIntensity)/Double(otherGroupMedianIntensiy)
+    } else {
+        brightnessScore = Double(otherGroupMedianIntensiy)/Double(groupMedianIntensity)
+    }
+    
+    return NeighborLineScores(thetaScore: thetaScore(of: originalGroupLine,
+                                                     and: previousOutlierLine),
+                              rhoScore: rhoScore(of: originalGroupLine,
+                                                 and: previousOutlierLine),
+                              sizeScore: sizeScore,
+                              brightnessScore: brightnessScore,
+                              distanceScore: groupBounds.edgeDistance(to: otherOutlier.bounds))
+}
+
+fileprivate func thetaScore(of line1: Line, and line2: Line) -> Double {
+    // theta score is 1 if they are parallel, 0 if they are perpendicular
+    
+    var theta1 = line1.theta
+    var theta2 = line2.theta
+
+    if theta1 < 0 { theta1 += 360 }
+    if theta2 < 0 { theta2 += 360 }
+
+    // thetas are now both positive
+    
+    var thetaDiff = abs(theta1-theta2)
+
+    if thetaDiff > 180 { thetaDiff = 360-thetaDiff }
+    // thetaDiff is now between 0 and 180
+
+    if thetaDiff > 90 { thetaDiff = 180-thetaDiff }
+
+    // thetaDiff is now between 0 and 90
+    
+    // 1 if thetaDiff == 0
+    // 0 if thetaDiff == 90
+    let thetaScore = (90-thetaDiff)/90
+    
+    return thetaScore
+}
+
+fileprivate func rhoScore(of line1: Line, and line2: Line) -> Double {
+
+    // rho score is 1 if they are identical, zero if 100 pixels away or more
+    
+    var distance = abs(line1.rho - line2.rho)
+    //if distance > max { distance = max }
+    //let rhoScore = (max-distance)/max
+    var rhoScore = 1.0
+    if distance > 1 { rhoScore = 1/(distance) }
+    
+    return rhoScore
+}
+
+fileprivate func handleIteration(in bounds: BoundingBox,
+                                 x: Int,
+                                 y: Int,
+                                 width: Int,
+                                 height: Int,
+                                 from originCoord: DoubleCoord,
+                                 previousOutlierImage: [UInt16],
+                                 nextOutlierImage: [UInt16]) -> (Bool, UInt16, UInt16)
+{
+    if x < 0 { return (false, 0, 0) }
+    if y < 0 { return (false, 0, 0) }
+    if x >= width { return (false, 0, 0) }
+    if y >= height { return (false, 0, 0) }
+
+
+    // how far to iterate inside the bounding box
+    let maxInnerDistance = 20.0           // XXX constant
+    
+    // how far to iterate outside the bounding box
+    let maxOuterDistance = 80.0           // XXX constant
+    
+    let distance = originCoord.distance(to: x, and: y)
+    if distance > maxInnerDistance,
+       bounds.contains(x: x, y: y)
+    {
+        return (false, 0, 0)
+    }
+    
+    if distance > maxOuterDistance { return (false, 0, 0) } // XXX constant
+
+    let index = y*width+x
+    
+    // look at x, y in each neighboring frame for an outlier group
+    // return it somehow if found
+    
+    return (true, previousOutlierImage[index], nextOutlierImage[index])
+}
+
+public struct NeighborLineScores {
+    let thetaScore: Double
+    let rhoScore: Double
+    let sizeScore: Double
+    let brightnessScore: Double
+    let distanceScore: Double
+
+    public init(thetaScore: Double,
+                rhoScore: Double,
+                sizeScore: Double,
+                brightnessScore: Double,
+                distanceScore: Double)
+    {
+        self.thetaScore = thetaScore
+        self.rhoScore = rhoScore
+        self.sizeScore = sizeScore
+        self.brightnessScore = brightnessScore
+        self.distanceScore = distanceScore
+    }
+    
+    public init() {
+        self.thetaScore = 0
+        self.rhoScore = 0
+        self.sizeScore = 0
+        self.brightnessScore = 0
+        self.distanceScore = 0
+    }
+    
+    public static func +(lhs: NeighborLineScores, rhs: NeighborLineScores) -> NeighborLineScores {
+        NeighborLineScores(thetaScore: rhs.thetaScore + lhs.thetaScore,
+                           rhoScore: rhs.rhoScore + lhs.rhoScore,
+                           sizeScore: rhs.sizeScore + lhs.sizeScore,
+                           brightnessScore: rhs.brightnessScore + lhs.brightnessScore,
+                           distanceScore: rhs.distanceScore + lhs.distanceScore)
+    }
+}
 
 

@@ -67,7 +67,11 @@ struct OutlierGroupTableRow: Identifiable {
     let dt_medianBunchSize : Double
     let dt_maxBunchSize : Double
 
-    let dt_neighborLineScore: Double
+    let dt_neighborLineThetaScore: Double
+    let dt_neighborLineRhoScore: Double
+    let dt_neighborLineSizeScore: Double
+    let dt_neighborLineBrightnessScore: Double
+    let dt_neighborLineDistanceScore: Double
     
     init(_ group: OutlierGroup) async {
         name = group.id
@@ -114,7 +118,11 @@ struct OutlierGroupTableRow: Identifiable {
         dt_bunchCount = await group.decisionTreeValueAsync(for: .bunchCount)
         dt_medianBunchSize = await group.decisionTreeValueAsync(for: .medianBunchSize)
         dt_maxBunchSize = await group.decisionTreeValueAsync(for: .maxBunchSize)
-        dt_neighborLineScore = await group.decisionTreeValueAsync(for: .neighborLineScore)
+        dt_neighborLineThetaScore = await group.decisionTreeValueAsync(for: .neighborLineThetaScore)
+        dt_neighborLineRhoScore = await group.decisionTreeValueAsync(for: .neighborLineRhoScore)
+        dt_neighborLineSizeScore = await group.decisionTreeValueAsync(for: .neighborLineSizeScore)
+        dt_neighborLineBrightnessScore = await group.decisionTreeValueAsync(for: .neighborLineBrightnessScore)
+        dt_neighborLineDistanceScore = await group.decisionTreeValueAsync(for: .neighborLineDistanceScore)
     }
 }
 
@@ -369,10 +377,36 @@ struct OutlierGroupTable: View {
                                 row.dt_maxBunchSize
                             }
                         }
-                        if self.outlierWindowViewModel.showNeighborLineScore {
-                            self.tableColumn(for: "neighborLineScore",
-                                             value: \.dt_neighborLineScore) { row in
-                                row.dt_neighborLineScore
+                    }
+                    Group {
+                        if self.outlierWindowViewModel.showNeighborLineThetaScore {
+                            self.tableColumn(for: "neighborLineThetaScore",
+                                             value: \.dt_neighborLineThetaScore) { row in
+                                row.dt_neighborLineThetaScore
+                            }
+                        }
+                        if self.outlierWindowViewModel.showNeighborLineRhoScore {
+                            self.tableColumn(for: "neighborLineRhoScore",
+                                             value: \.dt_neighborLineRhoScore) { row in
+                                row.dt_neighborLineRhoScore
+                            }
+                        }
+                        if self.outlierWindowViewModel.showNeighborLineSizeScore {
+                            self.tableColumn(for: "neighborLineSizeScore",
+                                             value: \.dt_neighborLineSizeScore) { row in
+                                row.dt_neighborLineSizeScore
+                            }
+                        }
+                        if self.outlierWindowViewModel.showNeighborLineBrightnessScore {
+                            self.tableColumn(for: "neighborLineBrightnessScore",
+                                             value: \.dt_neighborLineBrightnessScore) { row in
+                                row.dt_neighborLineBrightnessScore
+                            }
+                        }
+                        if self.outlierWindowViewModel.showNeighborLineDistanceScore {
+                            self.tableColumn(for: "neighborLineDistanceScore",
+                                             value: \.dt_neighborLineDistanceScore) { row in
+                                row.dt_neighborLineDistanceScore
                             }
                         }
                     }
