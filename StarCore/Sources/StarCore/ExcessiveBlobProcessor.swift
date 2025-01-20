@@ -20,7 +20,7 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
         super.init()
         self.steps = [
 
-          .findBlobs(.init(minPixelIntensity: 5000,
+          .findBlobs(.init(minPixelIntensity: 5500,
                            startContrastSize: 10,
                            endContrastSize: 50,
                            startMinContrast: 86,
@@ -42,10 +42,13 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           .frameState(.filter2),
 
           // reconnect some lines that may have been split up
-          .linearBlobConnector(.init(scanSize: 8, 
+          .linearBlobConnector(.init(scanSize: 6, 
                                      blobsSmallerThan: 6800,
+                                     blobsLargerThan: 4,
                                      lineBorder: 8,
-                                     maxIterationCount: 5)),
+                                     minLineScore: 3,
+                                     adjecentPixelsOnIteration: 5,
+                                     maxIterationCount: 3)),
 
           .frameState(.filter3),
 
