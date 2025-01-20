@@ -80,41 +80,58 @@ public class MildBlobProcessor: AbstractBlobProcessor {
 
         self.steps = [
 
-          .findBlobs(.init(minPixelIntensity: 6000,
+          .findBlobs(.init(minPixelIntensity: 8000,
                            startContrastSize: 10,
                            endContrastSize: 200,
                            startMinContrast: 60,
                            endMinContrast: 40)),
 
+          
           // check to see if any pixel is in more than one blob
           //.blobDupeCheck("init"),
-        
-          .save(.blobs),          
 
+          .save(.blobs),          
           .frameState(.filter1),
 
-
-          // find really close linear blobs
-          .linearBlobConnector(.init(scanSize: 16, 
-                                     blobsSmallerThan: 120,
-                                     lineBorder: 12)),
-
-
+          .houghLineMatrixBlobConnector(.init(elementWidth: 600,
+                                              elementHeight: 400,
+                                              overlapPercent: 20,
+                                              maxHoughLines: 2000,
+                                              sideIterationPixels: 5,
+                                              maxBlobDistance: 30)),
 
           .frameState(.filter2),
 
 
+          // try to combine lines in another way
+          .linearBlobExtender(.init(minBlobSize: 30,
+                                    lineExtension: 25,
+                                    innerSearch: 15,
+                                    maxIterationCount: 4,
+                                    scoreMultiplier: 8.1,
+                                    sideIterationPixels: 5)),
+
+
+          .frameState(.filter3),
+
+
+          .compactBlobIds,
+          
+          .frameState(.filter4),
+          
           .blobLineTrim(.init(minBlobSize: 40,
                               minLineLength: 30,
                               minLineFillAmount: 10,
                               trimAmount: 9)),
-          
-          .frameState(.filter3),
+          .frameState(.filter5),
 
+
+          .compactBlobIds,
+
+          .frameState(.filter6),
+           
           // split up blobs based upon user input
           .applyUserSlices,
-
-          
         ]
     }
 }
