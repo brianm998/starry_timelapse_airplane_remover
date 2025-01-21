@@ -577,3 +577,81 @@ public func ratioOfSurfaceAreaToSize(of pixels: [UInt16],
     return Double(surfaceArea)/Double(size)
 }
 
+
+public final class FrameDataHarvester: Sendable {
+
+    let width: Int
+    let height: Int
+    let outlierGroups: OutlierGroups?
+    let previousOutlierGroups: OutlierGroups?
+    let previousOutlierData: [UInt16]? // row major indexed, outlier id keyed
+    let nextOutlierGroups: OutlierGroups?
+    let nextOutlierData: [UInt16]?     // row major indexed, outlier id keyed
+
+    init(for frame: FrameAirplaneRemover) async {
+        self.outlierGroups = await frame.outlierGroups
+        self.width = frame.width
+        self.height = frame.height
+        let previousFrame = await frame.getPreviousFrame() 
+        self.previousOutlierGroups = await previousFrame?.getOutlierGroups()
+        self.previousOutlierData = await previousOutlierGroups?.outlierImageDataFunc()
+        let nextFrame = await frame.getNextFrame()
+        self.nextOutlierGroups = await nextFrame?.getOutlierGroups()
+        self.nextOutlierData = await nextOutlierGroups?.outlierImageDataFunc()
+    }
+
+    public func decisionTreeValues(for group: OutlierGroup,
+                                   with treeType: TreeType = .all) async -> [Double]
+    {
+        var neighborLineScores = NeighborLineScores()
+        if let originalGroupLine = await group.originZeroLine,
+           let previousOutlierGroups,
+           let nextOutlierGroups
+        {
+            neighborLineScores = await
+              StarCore.neighborLineScores(of: group,
+                                          width: width,
+                                          height: height,
+                                          with: previousOutlierGroups,
+                                          and: nextOutlierGroups,
+                                          originalGroupLine: originalGroupLine)
+        }
+
+        var ret: [Double] = []
+        
+        for type in OutlierGroupFeature.allCases {
+            if type.isUsed(for: treeType) {
+                switch type {
+                case .numberOfNearbyOutliersInSameFrame:
+                    ret.append(await calculateNumberOfNearbyOutliersInSameFrame(of: group, in: outlierGroups))
+
+                case .nearbyDirectOverlapScore:
+                    ret.append(calculateNearbyDirectOverlapScore(of: group,
+                                                                 previousImageData: previousOutlierData,
+                                                                 nextImageData: nextOutlierData))
+                case .boundingBoxOverlapScore:
+                    ret.append(calculateBoundingBoxOverlapScore(of: group,
+                                                                previousImageData: previousOutlierData,
+                                                                nextImageData: nextOutlierData))
+                case .neighborLineThetaScore:
+                    ret.append(neighborLineScores.thetaScore)
+                case .neighborLineRhoScore:
+                    ret.append(neighborLineScores.rhoScore)
+                case .neighborLineSizeScore:
+                    ret.append(neighborLineScores.sizeScore)
+                case .neighborLineBrightnessScore:
+                    ret.append(neighborLineScores.brightnessScore)
+                case .neighborLineDistanceScore:
+                    ret.append(neighborLineScores.distanceScore)
+
+                    // all the rest are fast enough like this
+                default:
+                    ret.append(await type.decisionTreeValue(of: group))
+                }
+            } else {
+                ret.append(0)
+            }
+        }
+        return ret
+    }
+}

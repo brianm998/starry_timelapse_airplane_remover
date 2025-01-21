@@ -1380,7 +1380,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             if FileManager.default.fileExists(atPath: csvFilename) {
                 Log.i("frame \(self.frameIndex) not recalculating outlier values with existing files")
             } else {
-                let valueMatrix = CondensedOutlierGroupValueMatrix()
+                let valueMatrix = await CondensedOutlierGroupValueMatrix(for: self)
 
                 if let outliers = await self.outlierGroupList() {
                     Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")
@@ -1404,7 +1404,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
                 Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 2")
 
-                try valueMatrix.writeCSV(to: frameOutlierDir)
+                try await valueMatrix.writeCSV(to: frameOutlierDir)
                 Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 3")
             }
         }

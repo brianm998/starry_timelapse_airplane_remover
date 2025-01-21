@@ -2,20 +2,23 @@ import Foundation
 
 // used for storing only decision tree data for all of the outlier groups in a frame
 // this one is used for writing out initial values
-public class CondensedOutlierGroupValueMatrix {
+public actor CondensedOutlierGroupValueMatrix {
     
     public var types: [OutlierGroupFeature]
 
     public var outlierValues: [[Double]]
+
+    public let dataHarvester: FrameDataHarvester
     
     public func append(outlierGroup: OutlierGroup, for treeType: TreeType = .all) async {
-        outlierValues.append(await outlierGroup.decisionTreeValues(for: treeType))
+        outlierValues.append(await dataHarvester.decisionTreeValues(for: outlierGroup, with: treeType))
     }
 
     public static let typesFilename = "types.csv"
     public static let outlierDataFilename = "outlier_data.csv"
 
-    public init() {
+    public init(for frame: FrameAirplaneRemover) async {
+        self.dataHarvester = await FrameDataHarvester(for: frame)
         self.types = OutlierGroup.decisionTreeValueTypes
         self.outlierValues = []
     }
