@@ -672,22 +672,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         } 
     }
 
-    // uses spatial 2d array for search
-    public func outlierGroups(within distance: Double,
-                              of group: OutlierGroup) async -> [OutlierGroup]?
-    {
-        if let nearbyGroups = await self.outlierGroups?.groups(nearby: group, within: 80) { // XXX hardcoded constant
-            var ret: [OutlierGroup] = []
-            for nearbyGroup in nearbyGroups {
-                if nearbyGroup.bounds.centerDistance(to: group.bounds) < distance {
-                    ret.append(nearbyGroup)
-                }
-            }
-            return ret
-        }
-        return nil
-    }
-
     public func outlierGroup(named outlierName: UInt16) async -> OutlierGroup? {
         await outlierGroups?.getMembers()[outlierName]
     }

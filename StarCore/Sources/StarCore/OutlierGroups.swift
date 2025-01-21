@@ -217,7 +217,8 @@ public actor OutlierGroups {
                 if outlierId != 0,
                    outlierId != group.id,
                    !ret.keys.contains(outlierId),
-                   let outlier = members[outlierId]
+                   let outlier = members[outlierId],
+                   group.bounds.centerDistance(to: outlier.bounds) < searchDistance
                 {
                     ret[outlierId] = outlier
                 }

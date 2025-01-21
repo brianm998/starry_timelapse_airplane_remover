@@ -263,41 +263,44 @@ public enum OutlierGroupFeature: String,
             return calculateMedianBrightness(of: group)
         case .maxBrightness:    
             return calculateMaxBrightness(of: group)
-        case .maxHoughTransformCount:
+        case .maxHoughTransformCount: // depends upon group.line
             return await calculateMaxHoughTransformCount(of: group)
-        case .numberOfNearbyOutliersInSameFrame:
-            return await calculateNumberOfNearbyOutliersInSameFrame(of: group)
-        case .nearbyDirectOverlapScore:
-            return await calculateNearbyDirectOverlapScore(of: group)
-        case .boundingBoxOverlapScore:
+        case .numberOfNearbyOutliersInSameFrame: // depends upon outlierGroups
+            return await calculateNumberOfNearbyOutliersInSameFrame(of: group, in: group.frame?.outlierGroups)
+        case .nearbyDirectOverlapScore: // depends upon previous and next frames, outlierImageDataFunc
+            let prevImgData = await group.frame?.getPreviousFrame()?.getOutlierGroups()?.outlierImageDataFunc()
+            let nextImgData = await group.frame?.getNextFrame()?.getOutlierGroups()?.outlierImageDataFunc()
+            return calculateNearbyDirectOverlapScore(of: group,
+                                                     previousImageData: prevImgData,
+                                                     nextImageData: nextImgData)
+        case .boundingBoxOverlapScore: // depends upon previous and next frames, outlierImageData
             return await calculateBoundingBoxOverlapScore(of: group)
         case .pixelBorderAmount:
             return calculatePixelBorderAmount(from: group.pixelSet,
                                               with: group.bounds,
                                               and: group.pixels)
-        case .averageLineVariance:
+        case .averageLineVariance: // depends upon group.line for properties
             return await group.averageLineVariance()
-        case .medianLineVariance:
+        case .medianLineVariance: // depends upon group.line for properties
             return await group.medianLineVariance()
-        case .lineLength:
+        case .lineLength:    // depends upon group.line for properties
             if let line = await group.originZeroLine {
                 let (_, _length) = await group.averageDistanceAndLineLength(from: line)
                 return _length
             } else {
                 return 0
             }
-        case .lineFillAmount:
-            //return await calculateLineFillAmount(of: group)
+        case .lineFillAmount:   // depends upon group.line for properties
             return await group.getLineScore() ?? 0
-        case .borderBrightness:
+        case .borderBrightness: // depends upon the original image
             return await calculateBorderBrightness(of: group)
-        case .bunchCount:
+        case .bunchCount:       // depends upon pixel set
             return await Double(group.bunchCount())
-        case .medianBunchSize:
+        case .medianBunchSize:  // depends upon pixel set
             return await Double(group.medianBunchSize())
-        case .maxBunchSize:
+        case .maxBunchSize:     // depends upon pixel set
             return await Double(group.maxBunchSize())
-        case .neighborLineThetaScore:
+        case .neighborLineThetaScore: // these all depend upon the previous and next outlierImageData
             return await group.neighboringThetaScore
         case .neighborLineRhoScore:
             return await group.neighboringRhoScore
@@ -371,57 +374,48 @@ fileprivate func calculateMaxHoughTransformCount(of group: OutlierGroup) async -
 }
 
 
-fileprivate func calculateNumberOfNearbyOutliersInSameFrame(of group: OutlierGroup) async -> Double {
-    if let frame = await group.frame,
-       let nearbyGroups = await frame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance, of: group)
-    {
-        return Double(nearbyGroups.count)
-    } else {
-        return 0//fatalError("Died on frame \(group.frameIndex)")
-    }
-
+fileprivate func calculateNumberOfNearbyOutliersInSameFrame(of group: OutlierGroup,
+                                                            in outlierGroups: OutlierGroups?) async -> Double
+{
+    guard let outlierGroups else { return  0 }
+    let nearbyGroups = await outlierGroups.groups(nearby: group, within: 80) // XXX hardcoded constant
+    return Double(nearbyGroups.count)
 }
 
 // 1.0 if all pixels in this group overlap all pixels of outliers in all neighboring frames
 // 0 if none of the pixels overlap
 // airplane streaks typically do not overlap the same pixels on neighboring frames
-fileprivate func calculateNearbyDirectOverlapScore(of group: OutlierGroup) async -> Double {
-    if let frame = await group.frame {
-        let pixelCount = group.pixelSet.count
-        var matchCount = 0
-        let previousFrame = await frame.getPreviousFrame()
-        let nextFrame = await frame.getNextFrame()
+fileprivate func calculateNearbyDirectOverlapScore(of group: OutlierGroup,
+                                                   previousImageData: [UInt16]?,
+                                                   nextImageData: [UInt16]?) -> Double
+{
+    let pixelCount = group.pixelSet.count
+    var matchCount = 0
 
-        for pixel in group.pixelSet {
-            let index = pixel.y * Int(IMAGE_WIDTH!) + pixel.x
-            if let previousFrame,
-               let previousOutlierGroups = await previousFrame.getOutlierGroups(),
-               await previousOutlierGroups.outlierImageDataFunc()[index] != 0
-            {
-                matchCount += 1
-            }
-
-            if let nextFrame,
-               let nextOutlierGroups = await nextFrame.getOutlierGroups(),
-               await nextOutlierGroups.outlierImageDataFunc()[index] != 0
-            {
-                matchCount += 1
-            }
+    for pixel in group.pixelSet {
+        let index = pixel.y * Int(IMAGE_WIDTH!) + pixel.x
+        if let previousImageData,
+           previousImageData[index] != 0
+        {
+            matchCount += 1
         }
 
-        var numberFrames = 0
-        if previousFrame != nil {
-            numberFrames += 1
+        if let nextImageData,
+           nextImageData[index] != 0
+        {
+            matchCount += 1
         }
-        if nextFrame != nil {
-            numberFrames += 1
-        }
-        if numberFrames == 0 { return 0 }
-        return Double(matchCount)/(Double(numberFrames)*Double(pixelCount))
-    } else {
-        return 0
-//        fatalError("NO FRAME for nearbyDirectOverlapScore @ index \(group.frameIndex)")
     }
+
+    var numberFrames = 0
+    if previousImageData != nil {
+        numberFrames += 1
+    }
+    if nextImageData != nil {
+        numberFrames += 1
+    }
+    if numberFrames == 0 { return 0 }
+    return Double(matchCount)/(Double(numberFrames)*Double(pixelCount))
 }
 
 
