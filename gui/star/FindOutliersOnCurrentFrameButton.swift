@@ -11,7 +11,7 @@ struct FindOutliersOnCurrentFrameButton: View {
                 Task {
                     if let frame = viewModel.currentFrame {
                         // re-find them
-                        await viewModel.findOutliersAndRender(frame: frame)
+                        viewModel.findOutliersAndRender(frame: frame)
                     } else {
                         // XXX probably should do something here
                     }

@@ -30,7 +30,7 @@ struct ReProcessCurrentFrameButton: View {
                     Log.e("error removing \(binaryBlobFilename): \(error)")
                 }
                 // re-find them
-                await viewModel.findOutliersAndRender(frame: frame)
+                viewModel.findOutliersAndRender(frame: frame)
             } else {
                 // XXX probably should do something here
             }
