@@ -322,12 +322,6 @@ public actor OutlierGroup: CustomStringConvertible,
             hasher.combine(_shouldPaint)
         }
     }
-
-    // a local cache of other nearby groups - NO LONGER CACHED AFTER SWIFT 6 :( 
-    public func nearbyGroups() async -> [OutlierGroup]? {
-        // only run this only once, and only if needed, as it's not fast
-        await self.frame?.outlierGroups?.groups(nearby: self, within: 80) // XXX hardcoded constant
-    }
     
     private var cachedTestImage: CGImage? 
 
@@ -336,9 +330,9 @@ public actor OutlierGroup: CustomStringConvertible,
         let bytesPerPixel = 64/8
         
         if x >= self.bounds.width ||
-           x < 0 ||
-           y >= self.bounds.height ||
-           y < 0
+             x < 0 ||
+             y >= self.bounds.height ||
+             y < 0
         {
             return false
         }
@@ -368,14 +362,14 @@ public actor OutlierGroup: CustomStringConvertible,
         
         // maybe write out the line
         if writeLine,
-//           self.size > 150,
+           //           self.size > 150,
            let line = await self.line()
         {
-            Log.d("have LINE \(line)")
+            //Log.d("have LINE \(line)")
             var pixel = Pixel()
             pixel.blue = 0xFFFF
-//            pixel.green = 0xFFFF
-//            pixel.red = 0xFFFF
+            //            pixel.green = 0xFFFF
+            //            pixel.red = 0xFFFF
             pixel.alpha = 0xFFFF
             
             let centralCoord = DoubleCoord(x: Double(self.bounds.width/2),
@@ -402,7 +396,7 @@ public actor OutlierGroup: CustomStringConvertible,
             var nextValue = pixelToWrite.value
             
             let offset = (Int(pixel.y-bounds.min.y) * bytesPerPixel*self.bounds.width) +
-                         (Int(pixel.x-bounds.min.x) * bytesPerPixel)
+              (Int(pixel.x-bounds.min.x) * bytesPerPixel)
             
             imageData.replaceSubrange(offset ..< offset+bytesPerPixel,
                                       with: &nextValue,
@@ -505,16 +499,16 @@ public actor OutlierGroup: CustomStringConvertible,
     }
 
     public func decisionTreeGroupValues() async -> OutlierFeatureData {
-         var rawValues = OutlierFeatureData.rawValues()
-         for type in OutlierGroupFeature.allCases {
-             let t0 = NSDate().timeIntervalSince1970
-             let value = await self.decisionTreeValueAsync(for: type)
-             let t1 = NSDate().timeIntervalSince1970
-             Log.i("frame \(frameIndex) group \(self) took \(t1-t0) seconds to calculate value for \(type)")
-             rawValues[type.sortOrder] = value
-             //Log.d("frame \(frameIndex) type \(type) value \(value)")
-         }
-         return OutlierFeatureData(rawValues)
+        var rawValues = OutlierFeatureData.rawValues()
+        for type in OutlierGroupFeature.allCases {
+            let t0 = NSDate().timeIntervalSince1970
+            let value = await self.decisionTreeValueAsync(for: type)
+            let t1 = NSDate().timeIntervalSince1970
+            Log.i("frame \(frameIndex) group \(self) took \(t1-t0) seconds to calculate value for \(type)")
+            rawValues[type.sortOrder] = value
+            //Log.d("frame \(frameIndex) type \(type) value \(value)")
+        }
+        return OutlierFeatureData(rawValues)
     }
     
 
@@ -759,7 +753,7 @@ public actor OutlierGroup: CustomStringConvertible,
                  final score is sum of all outying group matches
                  */
 
-                Log.d("frame \(self.frameIndex) found \(previousNeighbors.count) previousNeighbors and  \(nextNeighbors.count) nextNeighbors for group \(self) iterationCount \(iterationCount)")
+                //Log.d("frame \(self.frameIndex) found \(previousNeighbors.count) previousNeighbors and  \(nextNeighbors.count) nextNeighbors for group \(self) iterationCount \(iterationCount)")
                 
                 for previousId in previousNeighbors {
                     if let previousOutlier = await previousOutlierGroups.get(with: previousId),

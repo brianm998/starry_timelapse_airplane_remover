@@ -676,7 +676,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func outlierGroups(within distance: Double,
                               of group: OutlierGroup) async -> [OutlierGroup]?
     {
-        if let nearbyGroups = await group.nearbyGroups() {
+        if let nearbyGroups = await self.outlierGroups?.groups(nearby: group, within: 80) { // XXX hardcoded constant
             var ret: [OutlierGroup] = []
             for nearbyGroup in nearbyGroups {
                 if nearbyGroup.bounds.centerDistance(to: group.bounds) < distance {
@@ -1209,8 +1209,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    // XXX make this more parallel, like how the .dustbin is determined
-    // i.e. the task group isn't working right because this is inside an actor :(
+    // this still is not running fully parallel, unlike the other usage of
+    // the OutlierClassifier in this file.  Perhaps this is because of access to
+    // neighboring frames and lots of different actors?
+    // collect all of the data to get outlier classification data without crossing actor boundaries.
     public func applyDecisionTreeToAllOutliers(includingDustbin: Bool) async {
         //Log.d("frame \(self.frameIndex) applyDecisionTreeToAll \(self.outlierGroups?.members.count ?? 0) Outliers")
         let startTime = NSDate().timeIntervalSince1970
@@ -1396,22 +1398,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             } else {
                 let valueMatrix = CondensedOutlierGroupValueMatrix()
 
-
                 if let outliers = await self.outlierGroupList() {
                     Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")
-                    //let startTime = NSDate().timeIntervalSince1970
+                    let startTime = NSDate().timeIntervalSince1970
                     // XXX start time
                     
-                    for (_, outlier) in outliers.enumerated() {
-//                        if index % 10 == 0 {
-//                            let duration = NSDate().timeIntervalSince1970 - startTime
-                            //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1b \(index) after \(duration) seconds")
-//                        }
+                    for (index, outlier) in outliers.enumerated() {
+                        if index % 100 == 0 {
+                            let duration = NSDate().timeIntervalSince1970 - startTime
+                            Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1b \(index) after \(duration) seconds")
+                        }
                         await valueMatrix.append(outlierGroup: outlier)
                     }
                 }
                 // append dustbin values too
                 if let dustbin = await self.outlierGroups?.getDustbin().values {
+                    Log.d("frame \(self.frameIndex) writeOutlierValuesCSV appending dustbin")
                     for outlier in dustbin {
                         await valueMatrix.append(outlierGroup: outlier, for: .isolated)
                     }

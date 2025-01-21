@@ -14,8 +14,8 @@ import Foundation
 import Cocoa
 import logging
 
-// this class holds all the outlier groups for a frame
-
+// holds all the outlier groups for a frame
+// including the dustbin
 
 public actor OutlierGroups {
 
