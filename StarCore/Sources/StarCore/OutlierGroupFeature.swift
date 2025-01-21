@@ -274,7 +274,11 @@ public enum OutlierGroupFeature: String,
                                                      previousImageData: prevImgData,
                                                      nextImageData: nextImgData)
         case .boundingBoxOverlapScore: // depends upon previous and next frames, outlierImageData
-            return await calculateBoundingBoxOverlapScore(of: group)
+            let prevImgData = await group.frame?.getPreviousFrame()?.getOutlierGroups()?.outlierImageDataFunc()
+            let nextImgData = await group.frame?.getNextFrame()?.getOutlierGroups()?.outlierImageDataFunc()
+            return calculateBoundingBoxOverlapScore(of: group,
+                                                    previousImageData: prevImgData,
+                                                    nextImageData: nextImgData)
         case .pixelBorderAmount:
             return calculatePixelBorderAmount(from: group.pixelSet,
                                               with: group.bounds,
@@ -422,59 +426,42 @@ fileprivate func calculateNearbyDirectOverlapScore(of group: OutlierGroup,
 // 0 if no pixels are found withing the bounding box in neighboring frames
 // 1 if all pixels withing the bounding box in neighboring frames are filled
 // airplane streaks typically do not overlap the same pixels on neighboring frames
-fileprivate func calculateBoundingBoxOverlapScore(of group: OutlierGroup) async -> Double {
-
+fileprivate func calculateBoundingBoxOverlapScore(of group: OutlierGroup,
+                                                  previousImageData: [UInt16]?,
+                                                  nextImageData: [UInt16]?) -> Double
+{
     if group.bounds.max.y - group.bounds.min.y < 2 { return 0 }
     
-    if let frame = await group.frame {
-        var matchCount = 0
-        var numberFrames = 0
+    var matchCount = 0
+    var numberFrames = 0
 
-        if let previousFrame = await frame.getPreviousFrame(),
-           let previousOutlierGroups = await previousFrame.getOutlierGroups()
-        {
-            //let previousOutlierGroupsOutlierYAxisImageData = await previousOutlierGroups.outlierYAxisImageData
-            let previousOutlierGroupsOutlierImageData = await previousOutlierGroups.outlierImageData
-            numberFrames += 1
-            for y in group.bounds.min.y...group.bounds.max.y {
-//                if let yAxis = previousOutlierGroupsOutlierYAxisImageData,
-//                   yAxis[y] == 0 { continue }
-                
-                for x in group.bounds.min.x...group.bounds.max.x {
-                    let index = y*Int(IMAGE_WIDTH!) + x
-                    if previousOutlierGroupsOutlierImageData[index] != 0 {
-                        // there is an outlier here
-                        matchCount += 1
-                    }
+    if let previousImageData {
+        numberFrames += 1
+        for y in group.bounds.min.y...group.bounds.max.y {
+            for x in group.bounds.min.x...group.bounds.max.x {
+                let index = y*Int(IMAGE_WIDTH!) + x
+                if previousImageData[index] != 0 {
+                    // there is an outlier here
+                    matchCount += 1
                 }
             }
         }
-        if let nextFrame = await frame.getNextFrame(),
-           let nextOutlierGroups = await nextFrame.getOutlierGroups()
-        {
-            //let nextOutlierGroupsOutlierYAxisImageData = await nextOutlierGroups.outlierYAxisImageData
-            let nextOutlierGroupsOutlierImageData = await nextOutlierGroups.outlierImageData
-            numberFrames += 1
-            for y in group.bounds.min.y...group.bounds.max.y {
-//                if let yAxis = nextOutlierGroupsOutlierYAxisImageData,
-//                   yAxis[y] == 0 { continue }
-                
-                for x in group.bounds.min.x...group.bounds.max.x {
-                    let index = y*Int(IMAGE_WIDTH!) + x
-                    if nextOutlierGroupsOutlierImageData[index] != 0 {
-                        // there is an outlier here
-                        matchCount += 1
-                    }
-                }
-            }
-        }
-
-        if numberFrames == 0 { return 0 }
-        return Double(matchCount)/(Double(numberFrames)*Double(group.bounds.width*group.bounds.height))
-    } else {
-        return 0
-//        fatalError("NO FRAME for boundingBoxOverlapScore @ index \(group.frameIndex)")
     }
+    if let nextImageData {
+        numberFrames += 1
+        for y in group.bounds.min.y...group.bounds.max.y {
+            for x in group.bounds.min.x...group.bounds.max.x {
+                let index = y*Int(IMAGE_WIDTH!) + x
+                if nextImageData[index] != 0 {
+                    // there is an outlier here
+                    matchCount += 1
+                }
+            }
+        }
+    }
+
+    if numberFrames == 0 { return 0 }
+    return Double(matchCount)/(Double(numberFrames)*Double(group.bounds.width*group.bounds.height))
 }
     
 

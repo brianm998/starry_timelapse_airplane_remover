@@ -613,9 +613,6 @@ public actor OutlierGroup: CustomStringConvertible,
     // collect a bunch of scores related to nearby outliers in neighboring frames
     private var neighborLineScores: NeighborLineScores {
         get async {
-
-            var scores = NeighborLineScores()
-
             if let frame = await self.frame,
                let originalGroupLine = await self.originZeroLine,
                let previousFrame = await frame.getPreviousFrame(),
@@ -623,171 +620,190 @@ public actor OutlierGroup: CustomStringConvertible,
                let nextFrame = await frame.getNextFrame(),
                let nextOutlierGroups = await nextFrame.getOutlierGroups()
             {
-                /*
-
-                 calculate a score which gives a larger value if there is one or more
-                 lines in neighboring frames which match, given some criteria:
-
-                 - rho diff
-                 - theta diff
-                 - bounding box distance
-
-                 iterate along the blob line similar to the BlobLineExtender,
-                 but on neighboring frames.
-
-                 grab a set of outliers from each neighorbing frame along the iteration line
-
-                 */
-
-                let iterationWidthPixels = 12 // XXX constant XXX
-
-                var previousNeighbors: Set<UInt16> = []
-                var nextNeighbors: Set<UInt16> = []
-
-                let previousOutlierImage = await previousOutlierGroups.outlierImageDataFunc()
-                let nextOutlierImage = await nextOutlierGroups.outlierImageDataFunc()
-
-                let groupBounds = await self.bounds
-                let groupSize = await self.size
-                let groupMedianIntensity = await self.medianIntensity()
-
-                var iterationCount = 0
-
-                let intersections = self.bounds.intersections(with: originalGroupLine.standardLine)
-                if intersections.count > 1 {
-                    originalGroupLine.iterate(.forwards,
-                                              from: intersections[0],
-                                              numberOfAdjecentPixels: iterationWidthPixels)
-                    { x, y, orientation in
-                        //Log.d("frame \(self.frameIndex) iterating for group \(group) at [\(x), \(y)]")
-                        let (shouldContinue, previousId, nextId) = 
-                          handleIteration(in: groupBounds,
-                                          x: x, y: y,
-                                          width: frame.width,
-                                          height: frame.height,
-                                          from: intersections[0],
-                                          previousOutlierImage: previousOutlierImage,
-                                          nextOutlierImage: nextOutlierImage)
-
-                        if previousId != 0 { previousNeighbors.insert(previousId) }
-                        if nextId != 0 { nextNeighbors.insert(nextId) }
-                        iterationCount += 1
-                        return shouldContinue
-                    }
-
-                    originalGroupLine.iterate(.backwards,
-                                              from: intersections[0],
-                                              numberOfAdjecentPixels: iterationWidthPixels)
-                    { x, y, orientation in
-                        //Log.d("frame \(self.frameIndex) iterating for group \(group) at [\(x), \(y)]")
-                        let (shouldContinue, previousId, nextId) = 
-                          handleIteration(in: groupBounds,
-                                          x: x, y: y,
-                                          width: frame.width,
-                                          height: frame.height,
-                                          from: intersections[0],
-                                          previousOutlierImage: previousOutlierImage,
-                                          nextOutlierImage: nextOutlierImage)
-
-                        if previousId != 0 { previousNeighbors.insert(previousId) }
-                        if nextId != 0 { nextNeighbors.insert(nextId) }
-                        iterationCount += 1
-                        return shouldContinue
-                    }
-                    //Log.d("frame \(frameIndex) processing blob \(blob) iterating forwards from intersection 1")
-                    originalGroupLine.iterate(.forwards,
-                                              from: intersections[1],
-                                              numberOfAdjecentPixels: iterationWidthPixels)
-                    { x, y, orientation in
-                        //Log.d("frame \(self.frameIndex) iterating for group \(group) at [\(x), \(y)]")
-                        let (shouldContinue, previousId, nextId) = 
-                          handleIteration(in: groupBounds,
-                                          x: x, y: y,
-                                          width: frame.width,
-                                          height: frame.height,
-                                          from: intersections[1],
-                                          previousOutlierImage: previousOutlierImage,
-                                          nextOutlierImage: nextOutlierImage) 
-
-                        if previousId != 0 { previousNeighbors.insert(previousId) }
-                        if nextId != 0 { nextNeighbors.insert(nextId) }
-                        iterationCount += 1
-                        return shouldContinue
-                    }
-                    //Log.d("frame \(frameIndex) processing blob \(blob) iterating backwards from intersection 1")
-                    originalGroupLine.iterate(.backwards,
-                                              from: intersections[1],
-                                              numberOfAdjecentPixels: iterationWidthPixels)
-                    { x, y, orientation in
-                        //Log.d("frame \(self.frameIndex) iterating for group \(group) at [\(x), \(y)]")
-                        let (shouldContinue, previousId, nextId) = 
-                          handleIteration(in: groupBounds,
-                                          x: x, y: y,
-                                          width: frame.width,
-                                          height: frame.height,
-                                          from: intersections[1],
-                                          previousOutlierImage: previousOutlierImage,
-                                          nextOutlierImage: nextOutlierImage) 
-                        if previousId != 0 { previousNeighbors.insert(previousId) }
-                        if nextId != 0 { nextNeighbors.insert(nextId) }
-                        iterationCount += 1
-                        return shouldContinue
-                    }
-                }
-
-                // here we have a set of previousNeighbors and nextNeighbors
-
-                /*
-                 compute the score to be maximal when there is a nearby group that:
-                 - has a close line theta and rho
-                 - is closer rather than farther away
-                 - tends towards zero when they are farther away
-                 
-                 theta score is 1 if they are parallel, 0 if they are perpendicular
-                 rho score is 1 if they are identical, decreases with square of distance
-                 distance score is 1 if they touch, decreases with square of distance
-                 size score is 1 if they are the same size, smallest / largest otherwise
-                 
-                 final score per outlying group is muliple of all
-
-                 final score is sum of all outying group matches
-                 */
-
-                //Log.d("frame \(self.frameIndex) found \(previousNeighbors.count) previousNeighbors and  \(nextNeighbors.count) nextNeighbors for group \(self) iterationCount \(iterationCount)")
-                
-                for previousId in previousNeighbors {
-                    if let previousOutlier = await previousOutlierGroups.get(with: previousId),
-                       let previousOutlierLine = await previousOutlier.originZeroLine
-                    {
-                        let otherGroupMedianIntensiy = await previousOutlier.medianIntensity()
-                        scores = scores + scoresOf(originalGroupLine: originalGroupLine,
-                                                   previousOutlierLine: previousOutlierLine,
-                                                   groupBounds: groupBounds,
-                                                   groupSize: groupSize,
-                                                   groupMedianIntensity: groupMedianIntensity,
-                                                   otherOutlier: previousOutlier,
-                                                   otherGroupMedianIntensiy: otherGroupMedianIntensiy)
-                    }
-                }
-                
-                for nextId in nextNeighbors {
-                    if let nextOutlier = await nextOutlierGroups.get(with: nextId),
-                       let nextOutlierLine = await nextOutlier.originZeroLine
-                    {
-                        let otherGroupMedianIntensiy = await nextOutlier.medianIntensity()
-                        scores = scores + scoresOf(originalGroupLine: originalGroupLine,
-                                                   previousOutlierLine: nextOutlierLine,
-                                                   groupBounds: groupBounds,
-                                                   groupSize: groupSize,
-                                                   groupMedianIntensity: groupMedianIntensity,
-                                                   otherOutlier: nextOutlier,
-                                                   otherGroupMedianIntensiy: otherGroupMedianIntensiy)
-                    }
-                }
+                return await StarCore.neighborLineScores(of: self,
+                                                         width: frame.width,
+                                                         height: frame.height,
+                                                         with: previousOutlierGroups,
+                                                         and: nextOutlierGroups,
+                                                         originalGroupLine: originalGroupLine)
+            } else {
+                return NeighborLineScores() // all zeros
             }
-            return scores
         }
     }
+}
+
+public func neighborLineScores(of group: OutlierGroup,
+                               width: Int,
+                               height: Int,
+                               with previousOutlierGroups: OutlierGroups,
+                               and nextOutlierGroups: OutlierGroups,
+                               originalGroupLine: Line) async -> NeighborLineScores
+{
+    var scores = NeighborLineScores()
+
+    /*
+
+     calculate a score which gives a larger value if there is one or more
+     lines in neighboring frames which match, given some criteria:
+
+     - rho diff
+     - theta diff
+     - bounding box distance
+
+     iterate along the blob line similar to the BlobLineExtender,
+     but on neighboring frames.
+
+     grab a set of outliers from each neighorbing frame along the iteration line
+
+     */
+
+    let iterationWidthPixels = 12 // XXX constant XXX
+
+    var previousNeighbors: Set<UInt16> = []
+    var nextNeighbors: Set<UInt16> = []
+
+    let previousOutlierImage = await previousOutlierGroups.outlierImageDataFunc()
+    let nextOutlierImage = await nextOutlierGroups.outlierImageDataFunc()
+
+    let groupBounds = await group.bounds
+    let groupSize = await group.size
+    let groupMedianIntensity = await group.medianIntensity()
+
+    var iterationCount = 0
+
+    let intersections = group.bounds.intersections(with: originalGroupLine.standardLine)
+    if intersections.count > 1 {
+        originalGroupLine.iterate(.forwards,
+                                  from: intersections[0],
+                                  numberOfAdjecentPixels: iterationWidthPixels)
+        { x, y, orientation in
+            //Log.d("frame \(self.frameIndex) iterating for group \(group) at [\(x), \(y)]")
+            let (shouldContinue, previousId, nextId) = 
+              handleIteration(in: groupBounds,
+                              x: x, y: y,
+                              width: width,
+                              height: height,
+                              from: intersections[0],
+                              previousOutlierImage: previousOutlierImage,
+                              nextOutlierImage: nextOutlierImage)
+
+            if previousId != 0 { previousNeighbors.insert(previousId) }
+            if nextId != 0 { nextNeighbors.insert(nextId) }
+            iterationCount += 1
+            return shouldContinue
+        }
+
+        originalGroupLine.iterate(.backwards,
+                                  from: intersections[0],
+                                  numberOfAdjecentPixels: iterationWidthPixels)
+        { x, y, orientation in
+            //Log.d("frame \(self.frameIndex) iterating for group \(group) at [\(x), \(y)]")
+            let (shouldContinue, previousId, nextId) = 
+              handleIteration(in: groupBounds,
+                              x: x, y: y,
+                              width: width,
+                              height: height,
+                              from: intersections[0],
+                              previousOutlierImage: previousOutlierImage,
+                              nextOutlierImage: nextOutlierImage)
+
+            if previousId != 0 { previousNeighbors.insert(previousId) }
+            if nextId != 0 { nextNeighbors.insert(nextId) }
+            iterationCount += 1
+            return shouldContinue
+        }
+        //Log.d("frame \(frameIndex) processing blob \(blob) iterating forwards from intersection 1")
+        originalGroupLine.iterate(.forwards,
+                                  from: intersections[1],
+                                  numberOfAdjecentPixels: iterationWidthPixels)
+        { x, y, orientation in
+            //Log.d("frame \(self.frameIndex) iterating for group \(group) at [\(x), \(y)]")
+            let (shouldContinue, previousId, nextId) = 
+              handleIteration(in: groupBounds,
+                              x: x, y: y,
+                              width: width,
+                              height: height,
+                              from: intersections[1],
+                              previousOutlierImage: previousOutlierImage,
+                              nextOutlierImage: nextOutlierImage) 
+
+            if previousId != 0 { previousNeighbors.insert(previousId) }
+            if nextId != 0 { nextNeighbors.insert(nextId) }
+            iterationCount += 1
+            return shouldContinue
+        }
+        //Log.d("frame \(frameIndex) processing blob \(blob) iterating backwards from intersection 1")
+        originalGroupLine.iterate(.backwards,
+                                  from: intersections[1],
+                                  numberOfAdjecentPixels: iterationWidthPixels)
+        { x, y, orientation in
+            //Log.d("frame \(self.frameIndex) iterating for group \(group) at [\(x), \(y)]")
+            let (shouldContinue, previousId, nextId) = 
+              handleIteration(in: groupBounds,
+                              x: x, y: y,
+                              width: width,
+                              height: height,
+                              from: intersections[1],
+                              previousOutlierImage: previousOutlierImage,
+                              nextOutlierImage: nextOutlierImage) 
+            if previousId != 0 { previousNeighbors.insert(previousId) }
+            if nextId != 0 { nextNeighbors.insert(nextId) }
+            iterationCount += 1
+            return shouldContinue
+        }
+    }
+
+    // here we have a set of previousNeighbors and nextNeighbors
+
+    /*
+     compute the score to be maximal when there is a nearby group that:
+     - has a close line theta and rho
+     - is closer rather than farther away
+     - tends towards zero when they are farther away
+     
+     theta score is 1 if they are parallel, 0 if they are perpendicular
+     rho score is 1 if they are identical, decreases with square of distance
+     distance score is 1 if they touch, decreases with square of distance
+     size score is 1 if they are the same size, smallest / largest otherwise
+     
+     final score per outlying group is muliple of all
+
+     final score is sum of all outying group matches
+     */
+
+    //Log.d("frame \(self.frameIndex) found \(previousNeighbors.count) previousNeighbors and  \(nextNeighbors.count) nextNeighbors for group \(self) iterationCount \(iterationCount)")
+    
+    for previousId in previousNeighbors {
+        if let previousOutlier = await previousOutlierGroups.get(with: previousId),
+           let previousOutlierLine = await previousOutlier.originZeroLine
+        {
+            let otherGroupMedianIntensiy = await previousOutlier.medianIntensity()
+            scores = scores + scoresOf(originalGroupLine: originalGroupLine,
+                                       previousOutlierLine: previousOutlierLine,
+                                       groupBounds: groupBounds,
+                                       groupSize: groupSize,
+                                       groupMedianIntensity: groupMedianIntensity,
+                                       otherOutlier: previousOutlier,
+                                       otherGroupMedianIntensiy: otherGroupMedianIntensiy)
+        }
+    }
+    
+    for nextId in nextNeighbors {
+        if let nextOutlier = await nextOutlierGroups.get(with: nextId),
+           let nextOutlierLine = await nextOutlier.originZeroLine
+        {
+            let otherGroupMedianIntensiy = await nextOutlier.medianIntensity()
+            scores = scores + scoresOf(originalGroupLine: originalGroupLine,
+                                       previousOutlierLine: nextOutlierLine,
+                                       groupBounds: groupBounds,
+                                       groupSize: groupSize,
+                                       groupMedianIntensity: groupMedianIntensity,
+                                       otherOutlier: nextOutlier,
+                                       otherGroupMedianIntensiy: otherGroupMedianIntensiy)
+        }
+    }
+    return scores
 }
 
 fileprivate func scoresOf(originalGroupLine: Line,
@@ -909,7 +925,7 @@ fileprivate func handleIteration(in bounds: BoundingBox,
     return (true, previousOutlierImage[index], nextOutlierImage[index])
 }
 
-public struct NeighborLineScores {
+public struct NeighborLineScores: Sendable{
     let thetaScore: Double
     let rhoScore: Double
     let sizeScore: Double
