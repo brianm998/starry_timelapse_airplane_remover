@@ -767,7 +767,7 @@ public final class ImageSequenceViewModel {
     }
 
 
-  func addToViewModel(frame newFrame: FrameAirplaneRemover) async {
+    func addToViewModel(frame newFrame: FrameAirplaneRemover) async {
         //Log.d("addToViewModel(frame: \(newFrame.frameIndex))")
 
         if self.config == nil {
@@ -784,10 +784,10 @@ public final class ImageSequenceViewModel {
         
         // Log.d("addToViewModel self.frame \(self.frame)")
     }
-}
+//}
 
 // methods used in image sequence view
-public extension ImageSequenceViewModel {
+//public extension ImageSequenceViewModel {
     func setAllCurrentFrameOutliers(to shouldPaint: Bool,
                                     renderImmediately: Bool = true)
     {
@@ -815,13 +815,13 @@ public extension ImageSequenceViewModel {
         
         if let frame = frameView.frame {
             // update the real actor in the background
-            Task {
+            Task.detached(priority: .userInitiated) {
                 await frame.userSelectUndecidedOutliers(toShouldPaint: shouldPaint,
                                                         includingDustbin: self.shouldShowDustbin)
 
                 if renderImmediately {
                     // XXX make render here an option in settings
-                    try await render(frame: frame) {
+                    try await self.render(frame: frame) {
                     }
                 }
             }
@@ -917,26 +917,30 @@ public extension ImageSequenceViewModel {
     }
     
     // used to re-process a particular frame 
-    func findOutliersAndRender(frame: FrameAirplaneRemover) async {
-        let frameView = self.frames[frame.frameIndex] 
+    func findOutliersAndRender(frame: FrameAirplaneRemover) {
+        // XXX
+        let frameView = self.frames[frame.frameIndex]
         frameView.outlierViews = nil
-        //frameView.loadingOutliersViews = true
-        do {
-            await frame.initializeEmptyOutlierGroups()
-            try await frame.findOutliers()
+            //frameView.loadingOutliersViews = true
+        Task.detached(priority: .userInitiated) { [self] in
+            do {
+                await frame.initializeEmptyOutlierGroups()
+                try await frame.findOutliers()
 
-            // XXX set state
-            try await frame.set(state: .interFrameProcessing)
-            
-            await frame.applyDecisionTreeToAllOutliers(includingDustbin: self.shouldShowDustbin)
-             
-            try await self.render(frame: frame, now: true) {
-                Task {
-                    await self.setOutlierGroups(forFrame: frame)
+                // XXX set state
+                await frame.set(state: .interFrameProcessing)
+                
+                await frame.applyDecisionTreeToAllOutliers(includingDustbin: self.shouldShowDustbin)
+                
+                try await self.render(frame: frame, now: true) {
+                    Task {
+                        await self.setOutlierGroups(forFrame: frame)
+                    }
                 }
+            } catch {
+                Log.e("error finding outliers for frame \(frame.frameIndex): \(error)")
+
             }
-        } catch {
-            Log.e("error finding outliers for frame \(frame.frameIndex): \(error)")
         }
     }
     
@@ -1039,7 +1043,7 @@ public extension ImageSequenceViewModel {
     {
         Log.d("saveToFile frame \(frameToSave.frameIndex)")
         let frameSaveQueue = self.frameSaveQueue 
-        Task {
+        Task.detached(priority: .userInitiated) {
             await frameSaveQueue.readyToSave(frame: frameToSave,
                                              completionClosure: completionClosure)
         }
