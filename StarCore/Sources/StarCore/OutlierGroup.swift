@@ -255,18 +255,26 @@ public actor OutlierGroup: CustomStringConvertible,
         }
     }
 
-    public func featureData(for treeType: TreeType = .all) async -> OutlierGroupFeatureData {
-        var values = [Double](repeating: 0, count: OutlierGroupFeature.allCases.count)
+    public func featureData(for treeType: TreeType = .all, dataHarvester: FrameDataHarvester? = nil) async -> OutlierGroupFeatureData {
         var features = [OutlierGroupFeature](repeating: .size, count: OutlierGroupFeature.allCases.count)
         for type in OutlierGroupFeature.allCases {
             features[type.sortOrder] = type
-            if type.isUsed(for: treeType) {
-                values[type.sortOrder] = await decisionTreeValueAsync(for: type)
-            } else {
-                values[type.sortOrder] = 0
-            }
         }
-        return OutlierGroupFeatureData(features: features, values: values)
+
+        if let dataHarvester {
+            let values = await dataHarvester.decisionTreeValues(for: self, with: treeType)
+            return OutlierGroupFeatureData(features: features, values: values)
+        }
+        
+        if let frame = self.frame {
+            let dataHarvester = await FrameDataHarvester(for: frame)
+            let values = await dataHarvester.decisionTreeValues(for: self, with: treeType)
+            return OutlierGroupFeatureData(features: features, values: values)
+        } else {
+            Log.w("calculating feature data without a frame, will be all zeros :(")
+            let values = [Double](repeating: 0, count: OutlierGroupFeature.allCases.count)
+            return OutlierGroupFeatureData(features: features, values: values)
+        }
     }
     
     fileprivate static func averageMedianMaxDistance(for pixelSet: Set<SortablePixel>,
@@ -565,6 +573,10 @@ public actor OutlierGroup: CustomStringConvertible,
     fileprivate var _medianIntensity: UInt16?
     fileprivate var _neighborLineScores: NeighborLineScores?
 
+    public func set(neighborLineScores: NeighborLineScores) {
+        _neighborLineScores = neighborLineScores
+    }
+    
     public var neighboringThetaScore: Double {
         get async {
             if let _neighborLineScores { return _neighborLineScores.thetaScore }
@@ -613,18 +625,25 @@ public actor OutlierGroup: CustomStringConvertible,
     // collect a bunch of scores related to nearby outliers in neighboring frames
     private var neighborLineScores: NeighborLineScores {
         get async {
-            if let frame = await self.frame,
+            if let frame = self.frame,
                let originalGroupLine = await self.originZeroLine,
                let previousFrame = await frame.getPreviousFrame(),
                let previousOutlierGroups = await previousFrame.getOutlierGroups(),
                let nextFrame = await frame.getNextFrame(),
                let nextOutlierGroups = await nextFrame.getOutlierGroups()
             {
+                let previousOutlierImage = FrameHolder(await previousOutlierGroups.outlierImageDataFunc(),
+                                                       width: frame.width, height: frame.height)
+                let nextOutlierImage = FrameHolder(await nextOutlierGroups.outlierImageDataFunc(),
+                                                   width: frame.width, height: frame.height)
+                
                 return await StarCore.neighborLineScores(of: self,
                                                          width: frame.width,
                                                          height: frame.height,
                                                          with: previousOutlierGroups,
                                                          and: nextOutlierGroups,
+                                                         previousOutlierImage: previousOutlierImage,
+                                                         nextOutlierImage: nextOutlierImage,
                                                          originalGroupLine: originalGroupLine)
             } else {
                 return NeighborLineScores() // all zeros
@@ -633,15 +652,38 @@ public actor OutlierGroup: CustomStringConvertible,
     }
 }
 
+public final class FrameHolder: Sendable {
+    let value: [UInt16]
+    let width: Int
+    let height: Int
+
+    public init(_ value: [UInt16],
+                width: Int,
+                height: Int)
+    {
+        self.value = value
+        self.width = width
+        self.height = height
+    }
+
+    public func value(at x: Int, and y: Int) -> UInt16 {
+        let index = y*width+x
+        if index < 0 || index >= value.count { return 0 }
+        return value[index]
+    }
+}
+
 public func neighborLineScores(of group: OutlierGroup,
                                width: Int,
                                height: Int,
                                with previousOutlierGroups: OutlierGroups,
                                and nextOutlierGroups: OutlierGroups,
+                               previousOutlierImage: FrameHolder,
+                               nextOutlierImage: FrameHolder,
                                originalGroupLine: Line) async -> NeighborLineScores
 {
     var scores = NeighborLineScores()
-
+//    if true { return scores }
     /*
 
      calculate a score which gives a larger value if there is one or more
@@ -663,11 +705,9 @@ public func neighborLineScores(of group: OutlierGroup,
     var previousNeighbors: Set<UInt16> = []
     var nextNeighbors: Set<UInt16> = []
 
-    let previousOutlierImage = await previousOutlierGroups.outlierImageDataFunc()
-    let nextOutlierImage = await nextOutlierGroups.outlierImageDataFunc()
 
-    let groupBounds = await group.bounds
-    let groupSize = await group.size
+    let groupBounds = group.bounds
+    let groupSize = group.size
     let groupMedianIntensity = await group.medianIntensity()
 
     var iterationCount = 0
@@ -893,8 +933,8 @@ fileprivate func handleIteration(in bounds: BoundingBox,
                                  width: Int,
                                  height: Int,
                                  from originCoord: DoubleCoord,
-                                 previousOutlierImage: [UInt16],
-                                 nextOutlierImage: [UInt16]) -> (Bool, UInt16, UInt16)
+                                 previousOutlierImage: FrameHolder,
+                                 nextOutlierImage: FrameHolder) -> (Bool, UInt16, UInt16)
 {
     if x < 0 { return (false, 0, 0) }
     if y < 0 { return (false, 0, 0) }
@@ -922,10 +962,12 @@ fileprivate func handleIteration(in bounds: BoundingBox,
     // look at x, y in each neighboring frame for an outlier group
     // return it somehow if found
     
-    return (true, previousOutlierImage[index], nextOutlierImage[index])
+    return (true,
+            previousOutlierImage.value(at: x, and: y),
+            nextOutlierImage.value(at: x, and: y))
 }
 
-public struct NeighborLineScores: Sendable{
+public struct NeighborLineScores: Sendable {
     let thetaScore: Double
     let rhoScore: Double
     let sizeScore: Double

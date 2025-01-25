@@ -1357,7 +1357,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     // Mark - File output
 
-    
     // write out just the OutlierGroupValueMatrix, which just what
     // the decision tree needs, and not very large
     public func writeOutlierValuesCSV() async throws {
@@ -1395,6 +1394,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         await valueMatrix.append(outlierGroup: outlier)
                     }
                 }
+                Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 2a")
                 // append dustbin values too
                 if let dustbin = await self.outlierGroups?.getDustbin().values {
                     Log.d("frame \(self.frameIndex) writeOutlierValuesCSV appending dustbin")
@@ -1447,15 +1447,18 @@ fileprivate class OutlierClassifier {
     // classifies OutlierGroup actors in OutlierGroups, marking them as paintable or not
     // uses the .all classifier, which digs into neighboring frames for more data
     func classifyAll(_ outlierGroups: OutlierGroups, includingDustbin: Bool) async {
-        await Task.detached(priority: .userInitiated) {
+ //       await Task.detached(priority: .userInitiated) {
             await withTaskGroup(of: Void.self) { taskGroup in
                 guard let classifier = await currentClassifier.get(for: .all) else { return }
+
+                let dataHarvester = await FrameDataHarvester(for: self.frame)
                 
                 for (_, group) in await outlierGroups.getMembers() {
                     if await group.shouldPaint() == nil {
                         // only apply classifier when no other classification is otherwise present
                         taskGroup.addTask {
-                            let featureData = await group.featureData()
+                            // XXX we need to grab the feature data from the FrameDataHarvester
+                            let featureData = await group.featureData(dataHarvester: dataHarvester)
                             let classification = classifier.classification(of: featureData)
                             await group.shouldPaint(.fromClassifier(classification),
                                                     markAsChanged: false)
@@ -1467,7 +1470,7 @@ fileprivate class OutlierClassifier {
                         if await group.shouldPaint() == nil {
                             // only apply classifier when no other classification is otherwise present
                             taskGroup.addTask {
-                                let featureData = await group.featureData()
+                                let featureData = await group.featureData(dataHarvester: dataHarvester)
                                 let classification = classifier.classification(of: featureData)
                                 await group.shouldPaint(.fromClassifier(classification),
                                                         markAsChanged: false)
@@ -1475,11 +1478,10 @@ fileprivate class OutlierClassifier {
                             }
                         }
                     }
-
                 }
                 await taskGroup.waitForAll()
             }
-        }.value
+       // }.value
     }
 
     // classifies OutlierGroup actors in OutlierGroups, marking them as paintable or not

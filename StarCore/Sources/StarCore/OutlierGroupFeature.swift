@@ -268,14 +268,30 @@ public enum OutlierGroupFeature: String,
         case .numberOfNearbyOutliersInSameFrame: // depends upon outlierGroups
             return await calculateNumberOfNearbyOutliersInSameFrame(of: group, in: group.frame?.outlierGroups)
         case .nearbyDirectOverlapScore: // depends upon previous and next frames, outlierImageDataFunc
-            let prevImgData = await group.frame?.getPreviousFrame()?.getOutlierGroups()?.outlierImageDataFunc()
-            let nextImgData = await group.frame?.getNextFrame()?.getOutlierGroups()?.outlierImageDataFunc()
+            var prevImgData: FrameHolder?
+            if let arr = await group.frame?.getPreviousFrame()?.getOutlierGroups()?.outlierImageDataFunc() {
+                prevImgData = FrameHolder(arr, width: Int(width), height: Int(height))
+            }
+            
+            var nextImgData: FrameHolder?
+            if let arr = await group.frame?.getNextFrame()?.getOutlierGroups()?.outlierImageDataFunc() {
+                nextImgData = FrameHolder(arr, width: Int(width), height: Int(height))
+            }
             return calculateNearbyDirectOverlapScore(of: group,
                                                      previousImageData: prevImgData,
                                                      nextImageData: nextImgData)
+            
         case .boundingBoxOverlapScore: // depends upon previous and next frames, outlierImageData
-            let prevImgData = await group.frame?.getPreviousFrame()?.getOutlierGroups()?.outlierImageDataFunc()
-            let nextImgData = await group.frame?.getNextFrame()?.getOutlierGroups()?.outlierImageDataFunc()
+            var prevImgData: FrameHolder?
+            if let arr = await group.frame?.getPreviousFrame()?.getOutlierGroups()?.outlierImageDataFunc() {
+                prevImgData = FrameHolder(arr, width: Int(width), height: Int(height))
+            }
+            
+            var nextImgData: FrameHolder?
+            if let arr = await group.frame?.getNextFrame()?.getOutlierGroups()?.outlierImageDataFunc() {
+                nextImgData = FrameHolder(arr, width: Int(width), height: Int(height))
+            }
+            
             return calculateBoundingBoxOverlapScore(of: group,
                                                     previousImageData: prevImgData,
                                                     nextImageData: nextImgData)
@@ -390,22 +406,21 @@ fileprivate func calculateNumberOfNearbyOutliersInSameFrame(of group: OutlierGro
 // 0 if none of the pixels overlap
 // airplane streaks typically do not overlap the same pixels on neighboring frames
 fileprivate func calculateNearbyDirectOverlapScore(of group: OutlierGroup,
-                                                   previousImageData: [UInt16]?,
-                                                   nextImageData: [UInt16]?) -> Double
+                                                   previousImageData: FrameHolder?,
+                                                   nextImageData: FrameHolder?) -> Double
 {
     let pixelCount = group.pixelSet.count
     var matchCount = 0
 
     for pixel in group.pixelSet {
-        let index = pixel.y * Int(IMAGE_WIDTH!) + pixel.x
         if let previousImageData,
-           previousImageData[index] != 0
+           previousImageData.value(at: pixel.x, and: pixel.y) != 0
         {
             matchCount += 1
         }
 
         if let nextImageData,
-           nextImageData[index] != 0
+           nextImageData.value(at: pixel.x, and: pixel.y) != 0
         {
             matchCount += 1
         }
@@ -427,8 +442,8 @@ fileprivate func calculateNearbyDirectOverlapScore(of group: OutlierGroup,
 // 1 if all pixels withing the bounding box in neighboring frames are filled
 // airplane streaks typically do not overlap the same pixels on neighboring frames
 fileprivate func calculateBoundingBoxOverlapScore(of group: OutlierGroup,
-                                                  previousImageData: [UInt16]?,
-                                                  nextImageData: [UInt16]?) -> Double
+                                                  previousImageData: FrameHolder?,
+                                                  nextImageData: FrameHolder?) -> Double
 {
     if group.bounds.max.y - group.bounds.min.y < 2 { return 0 }
     
@@ -439,8 +454,7 @@ fileprivate func calculateBoundingBoxOverlapScore(of group: OutlierGroup,
         numberFrames += 1
         for y in group.bounds.min.y...group.bounds.max.y {
             for x in group.bounds.min.x...group.bounds.max.x {
-                let index = y*Int(IMAGE_WIDTH!) + x
-                if previousImageData[index] != 0 {
+                if previousImageData.value(at: x, and: y) != 0 {
                     // there is an outlier here
                     matchCount += 1
                 }
@@ -451,8 +465,7 @@ fileprivate func calculateBoundingBoxOverlapScore(of group: OutlierGroup,
         numberFrames += 1
         for y in group.bounds.min.y...group.bounds.max.y {
             for x in group.bounds.min.x...group.bounds.max.x {
-                let index = y*Int(IMAGE_WIDTH!) + x
-                if nextImageData[index] != 0 {
+                if nextImageData.value(at: x, and: y) != 0 {
                     // there is an outlier here
                     matchCount += 1
                 }
@@ -584,9 +597,9 @@ public final class FrameDataHarvester: Sendable {
     let height: Int
     let outlierGroups: OutlierGroups?
     let previousOutlierGroups: OutlierGroups?
-    let previousOutlierData: [UInt16]? // row major indexed, outlier id keyed
+    let previousOutlierData: FrameHolder? // row major indexed, outlier id keyed
     let nextOutlierGroups: OutlierGroups?
-    let nextOutlierData: [UInt16]?     // row major indexed, outlier id keyed
+    let nextOutlierData: FrameHolder?     // row major indexed, outlier id keyed
 
     init(for frame: FrameAirplaneRemover) async {
         self.outlierGroups = await frame.outlierGroups
@@ -594,19 +607,30 @@ public final class FrameDataHarvester: Sendable {
         self.height = frame.height
         let previousFrame = await frame.getPreviousFrame() 
         self.previousOutlierGroups = await previousFrame?.getOutlierGroups()
-        self.previousOutlierData = await previousOutlierGroups?.outlierImageDataFunc()
+        if let arr = await previousOutlierGroups?.outlierImageDataFunc() {
+            self.previousOutlierData = FrameHolder(arr, width: width, height: height)
+        } else {
+            self.previousOutlierData = nil
+        }
         let nextFrame = await frame.getNextFrame()
         self.nextOutlierGroups = await nextFrame?.getOutlierGroups()
-        self.nextOutlierData = await nextOutlierGroups?.outlierImageDataFunc()
+        if let arr = await nextOutlierGroups?.outlierImageDataFunc() {
+            self.nextOutlierData = FrameHolder(arr, width: width, height: height)
+        } else {
+            self.nextOutlierData = nil
+        }
     }
 
     public func decisionTreeValues(for group: OutlierGroup,
                                    with treeType: TreeType = .all) async -> [Double]
     {
         var neighborLineScores = NeighborLineScores()
-        if let originalGroupLine = await group.originZeroLine,
+        if treeType == .all,
+           let originalGroupLine = await group.originZeroLine,
            let previousOutlierGroups,
-           let nextOutlierGroups
+           let nextOutlierGroups,
+           let previousOutlierData,
+           let nextOutlierData
         {
             neighborLineScores = await
               StarCore.neighborLineScores(of: group,
@@ -614,42 +638,46 @@ public final class FrameDataHarvester: Sendable {
                                           height: height,
                                           with: previousOutlierGroups,
                                           and: nextOutlierGroups,
+                                          previousOutlierImage: previousOutlierData,
+                                          nextOutlierImage: nextOutlierData,
                                           originalGroupLine: originalGroupLine)
+            await group.set(neighborLineScores: neighborLineScores)
         }
 
-        var ret: [Double] = []
+        var ret = [Double](repeating: 0, count: OutlierGroupFeature.allCases.count)
         
         for type in OutlierGroupFeature.allCases {
             if type.isUsed(for: treeType) {
                 switch type {
                 case .numberOfNearbyOutliersInSameFrame:
-                    ret.append(await calculateNumberOfNearbyOutliersInSameFrame(of: group, in: outlierGroups))
-
+                    ret[type.sortOrder] =
+                      await calculateNumberOfNearbyOutliersInSameFrame(of: group, in: outlierGroups)
+                    
                 case .nearbyDirectOverlapScore:
-                    ret.append(calculateNearbyDirectOverlapScore(of: group,
-                                                                 previousImageData: previousOutlierData,
-                                                                 nextImageData: nextOutlierData))
+                    ret[type.sortOrder] =
+                      calculateNearbyDirectOverlapScore(of: group,
+                                                        previousImageData: previousOutlierData,
+                                                        nextImageData: nextOutlierData)
                 case .boundingBoxOverlapScore:
-                    ret.append(calculateBoundingBoxOverlapScore(of: group,
-                                                                previousImageData: previousOutlierData,
-                                                                nextImageData: nextOutlierData))
+                    ret[type.sortOrder] =
+                      calculateBoundingBoxOverlapScore(of: group,
+                                                       previousImageData: previousOutlierData,
+                                                       nextImageData: nextOutlierData)
                 case .neighborLineThetaScore:
-                    ret.append(neighborLineScores.thetaScore)
+                    ret[type.sortOrder] = neighborLineScores.thetaScore
                 case .neighborLineRhoScore:
-                    ret.append(neighborLineScores.rhoScore)
+                    ret[type.sortOrder] = neighborLineScores.rhoScore
                 case .neighborLineSizeScore:
-                    ret.append(neighborLineScores.sizeScore)
+                    ret[type.sortOrder] = neighborLineScores.sizeScore
                 case .neighborLineBrightnessScore:
-                    ret.append(neighborLineScores.brightnessScore)
+                    ret[type.sortOrder] = neighborLineScores.brightnessScore
                 case .neighborLineDistanceScore:
-                    ret.append(neighborLineScores.distanceScore)
+                    ret[type.sortOrder] = neighborLineScores.distanceScore
 
                     // all the rest are fast enough like this
                 default:
-                    ret.append(await type.decisionTreeValue(of: group))
+                    ret[type.sortOrder] = await type.decisionTreeValue(of: group)
                 }
-            } else {
-                ret.append(0)
             }
         }
         return ret
