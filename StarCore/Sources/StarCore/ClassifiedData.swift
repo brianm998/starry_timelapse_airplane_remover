@@ -98,6 +98,13 @@ public class ClassifiedData: @unchecked Sendable { // XXX unchecked :(
 }
 
 extension Array {
+
+    // splits the array in the given number of evvn sized pieces
+    func split(into splitCount: Int) -> [[Element]] {
+        if self.count < splitCount { return [self] }
+        return self.chunks(of: self.count/splitCount)
+    }
+    
     // splits array into some number of chunks of the given size
     func chunks(of size: Int) -> [[Element]] {
         if size == 0 { return [self] }
