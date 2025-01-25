@@ -1198,10 +1198,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let startTime = NSDate().timeIntervalSince1970
         if let outlierGroups {
             let groups = await outlierGroups.getMembers()
-            let classifier = OutlierClassifier(frame: self)
-            await classifier.classifyAll(Array(groups.values))
-            let endTime = NSDate().timeIntervalSince1970
-            Log.i("frame \(self.frameIndex) spent \(endTime - startTime) seconds classifing outlier groups");
+            Task {
+                let classifier = OutlierClassifier(frame: self)
+                await classifier.classifyAll(Array(groups.values))
+                let endTime = NSDate().timeIntervalSince1970
+                Log.i("frame \(self.frameIndex) spent \(endTime - startTime) seconds classifing outlier groups");
+            }
         } else {
             Log.w("no classifier")
         }
@@ -1483,15 +1485,16 @@ fileprivate class OutlierClassifier {
     // classifies OutlierGroup actors in OutlierGroups, marking them as paintable or not
     // uses the .all classifier, which digs into neighboring frames for more data
     func classifyAll(_ outliers: [OutlierGroup]) async {
-        await Task.detached(priority: .userInitiated) {
+//        await Task.detached(priority: .userInitiated) {
+        let dataHarvester = await FrameDataHarvester(for: self.frame)
             await withTaskGroup(of: Void.self) { taskGroup in
                 guard let classifier = await currentClassifier.get(for: .all) else { return }
-                
+
                 for group in outliers {
                     if await group.shouldPaint() == nil {
                         // only apply classifier when no other classification is otherwise present
                         taskGroup.addTask {
-                            let featureData = await group.featureData()
+                            let featureData = await group.featureData(dataHarvester: dataHarvester)
                             let classification = classifier.classification(of: featureData)
                             await group.shouldPaint(.fromClassifier(classification),
                                                     markAsChanged: false)
@@ -1500,7 +1503,7 @@ fileprivate class OutlierClassifier {
                 }
                 await taskGroup.waitForAll()
             }
-        }.value
+//        }.value
     }
 
     // classifies blobs with the .isolated classifier, and promotes them to separate groups
@@ -1514,7 +1517,9 @@ fileprivate class OutlierClassifier {
                 // promote found blobs to outlier groups for further processing
                 let classifier = await currentClassifier.get(for: .isolated) 
                 await frame.set(state: .populatingOutlierGroups2)
-            
+
+                let dataHarvester = await FrameDataHarvester(for: frame)
+                
                 for blob in blobs {
                     taskGroup.addTask {
                         // make outlier group from this blob
@@ -1529,7 +1534,7 @@ fileprivate class OutlierClassifier {
                         // the other group are the outlier groups that will get processed further
 
                         if let classifier {
-                            let featureData = await outlierGroup.featureData(for: .isolated)
+                            let featureData = await outlierGroup.featureData(for: .isolated, dataHarvester: dataHarvester)
                             let classification = classifier.classification(of: featureData)
 
                             // -1 classification means bad

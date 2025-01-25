@@ -255,26 +255,16 @@ public actor OutlierGroup: CustomStringConvertible,
         }
     }
 
-    public func featureData(for treeType: TreeType = .all, dataHarvester: FrameDataHarvester? = nil) async -> OutlierGroupFeatureData {
+    public func featureData(for treeType: TreeType = .all,
+                            dataHarvester: FrameDataHarvester) async -> OutlierGroupFeatureData
+    {
         var features = [OutlierGroupFeature](repeating: .size, count: OutlierGroupFeature.allCases.count)
         for type in OutlierGroupFeature.allCases {
             features[type.sortOrder] = type
         }
 
-        if let dataHarvester {
-            let values = await dataHarvester.decisionTreeValues(for: self, with: treeType)
-            return OutlierGroupFeatureData(features: features, values: values)
-        }
-        
-        if let frame = self.frame {
-            let dataHarvester = await FrameDataHarvester(for: frame)
-            let values = await dataHarvester.decisionTreeValues(for: self, with: treeType)
-            return OutlierGroupFeatureData(features: features, values: values)
-        } else {
-            Log.w("calculating feature data without a frame, will be all zeros :(")
-            let values = [Double](repeating: 0, count: OutlierGroupFeature.allCases.count)
-            return OutlierGroupFeatureData(features: features, values: values)
-        }
+        let values = await dataHarvester.decisionTreeValues(for: self, with: treeType)
+        return OutlierGroupFeatureData(features: features, values: values)
     }
     
     fileprivate static func averageMedianMaxDistance(for pixelSet: Set<SortablePixel>,
@@ -936,8 +926,6 @@ fileprivate func handleIteration(in bounds: BoundingBox,
     
     if distance > maxOuterDistance { return (false, 0, 0) } // XXX constant
 
-    let index = y*width+x
-    
     // look at x, y in each neighboring frame for an outlier group
     // return it somehow if found
     

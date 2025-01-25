@@ -13,7 +13,67 @@ You should have received a copy of the GNU General Public License along with sta
 import Foundation
 import KHTSwift
 import logging
+import SwiftUI
 
+public actor FrameDataHarvesterDataHolder {
+
+    public var harvesterCount: Int = 0
+    public var allOutlierGroupCount: Int = 0
+    public var allTotalOutlierProcessingTime: TimeInterval = 0
+    public var isolatedOutlierGroupCount: Int = 0
+    public var isolatedTotalOutlierProcessingTime: TimeInterval = 0
+
+    private var callback: ((Int,Int,TimeInterval,Int,TimeInterval) -> Void)?
+
+    public func setCallback(_ callback: (@Sendable (Int,Int,TimeInterval,Int,TimeInterval) -> Void)?) {
+        self.callback = callback
+    }
+    
+    public func harvesterStarted() {
+        harvesterCount += 1
+        callback?(harvesterCount,
+                  allOutlierGroupCount,
+                  allTotalOutlierProcessingTime,
+                  isolatedOutlierGroupCount,
+                  isolatedTotalOutlierProcessingTime)
+    }
+
+    public func harvesterDone() {
+        harvesterCount -= 1
+        callback?(harvesterCount,
+                  allOutlierGroupCount,
+                  allTotalOutlierProcessingTime,
+                  isolatedOutlierGroupCount,
+                  isolatedTotalOutlierProcessingTime)
+    }
+
+    public func outlierProcessingFinished(in interval: TimeInterval, for treeType: TreeType) {
+        switch treeType {
+        case .all:
+            allOutlierGroupCount += 1
+            allTotalOutlierProcessingTime += interval
+        case .isolated:
+            allOutlierGroupCount += 1
+            allTotalOutlierProcessingTime += interval
+        }
+        callback?(harvesterCount,
+                  allOutlierGroupCount,
+                  allTotalOutlierProcessingTime,
+                  isolatedOutlierGroupCount,
+                  isolatedTotalOutlierProcessingTime)
+    }
+}
+
+public let frameDataHarvesterDataHolder = FrameDataHarvesterDataHolder()
+
+/*
+ show:
+
+ - number of harvesters exist
+ - number of outlier groups processed
+ - time it took to process each one
+ 
+ */
 public final class FrameDataHarvester: Sendable {
 
     let width: Int
@@ -42,13 +102,18 @@ public final class FrameDataHarvester: Sendable {
         } else {
             self.nextOutlierData = nil
         }
+
+        await frameDataHarvesterDataHolder.harvesterStarted()
     }
 
-    deinit { }
+    deinit {
+        Task { await frameDataHarvesterDataHolder.harvesterDone() }
+    }
     
     public func decisionTreeValues(for group: OutlierGroup,
                                    with treeType: TreeType = .all) async -> [Double]
     {
+        let startTime = Date().timeIntervalSince1970
         var neighborLineScores = NeighborLineScores()
         if treeType == .all,
            let originalGroupLine = await group.originZeroLine,
@@ -105,6 +170,12 @@ public final class FrameDataHarvester: Sendable {
                 }
             }
         }
+
+        let endTime = Date().timeIntervalSince1970
+        Task {
+            await frameDataHarvesterDataHolder.outlierProcessingFinished(in: (endTime-startTime), for: treeType)
+        }
+        
         return ret
     }
 }
