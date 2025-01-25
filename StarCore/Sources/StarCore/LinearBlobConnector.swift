@@ -543,12 +543,3 @@ fileprivate func iterate(on blobLine: Line,
         }
     }
 }
-
-// XXX move this
-public extension Array {
-    func splitIntoChunks(sized size: Int) -> [[Element]] {
-        return (0..<size).map {
-            stride(from: $0, to: count, by: size).map { self[$0] }
-        }
-    }
-}

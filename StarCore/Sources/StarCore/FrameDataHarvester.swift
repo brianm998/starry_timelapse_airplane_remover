@@ -64,7 +64,7 @@ public actor FrameDataHarvesterDataHolder {
     }
 }
 
-public let frameDataHarvesterDataHolder = FrameDataHarvesterDataHolder()
+//public let frameDataHarvesterDataHolder = FrameDataHarvesterDataHolder()
 
 /*
  show:
@@ -103,19 +103,27 @@ public final class FrameDataHarvester: Sendable {
             self.nextOutlierData = nil
         }
 
-        await frameDataHarvesterDataHolder.harvesterStarted()
+//        await frameDataHarvesterDataHolder.harvesterStarted()
     }
 
     deinit {
-        Task { await frameDataHarvesterDataHolder.harvesterDone() }
+//        Task { await frameDataHarvesterDataHolder.harvesterDone() }
     }
     
     public func decisionTreeValues(for group: OutlierGroup,
                                    with treeType: TreeType = .all) async -> [Double]
     {
-        let startTime = Date().timeIntervalSince1970
+
+        // XXX XXX XXX
+        //return [Double](repeating: 0, count: OutlierGroupFeature.allCases.count)
+        // XXX XXX XXX
+
+        
+//        let startTime = Date().timeIntervalSince1970
         var neighborLineScores = NeighborLineScores()
         if treeType == .all,
+           // don't process smaller blobs with this method
+           group.size >= OutlierGroupFeature.minNeighborScoreSize, 
            let originalGroupLine = await group.originZeroLine,
            let previousOutlierGroups,
            let nextOutlierGroups,
@@ -140,19 +148,25 @@ public final class FrameDataHarvester: Sendable {
             if type.isUsed(for: treeType) {
                 switch type {
                 case .numberOfNearbyOutliersInSameFrame:
-                    ret[type.sortOrder] =
-                      await calculateNumberOfNearbyOutliersInSameFrame(of: group, in: outlierGroups)
+                    if group.size >= OutlierGroupFeature.minNeighborScoreSize {
+                        ret[type.sortOrder] =
+                          await calculateNumberOfNearbyOutliersInSameFrame(of: group, in: outlierGroups)
+                    } 
                     
                 case .nearbyDirectOverlapScore:
-                    ret[type.sortOrder] =
-                      calculateNearbyDirectOverlapScore(of: group,
-                                                        previousImageData: previousOutlierData,
-                                                        nextImageData: nextOutlierData)
+                    if group.size >= OutlierGroupFeature.minNeighborScoreSize {
+                        ret[type.sortOrder] =
+                          calculateNearbyDirectOverlapScore(of: group,
+                                                            previousImageData: previousOutlierData,
+                                                            nextImageData: nextOutlierData)
+                    }
                 case .boundingBoxOverlapScore:
-                    ret[type.sortOrder] =
-                      calculateBoundingBoxOverlapScore(of: group,
-                                                       previousImageData: previousOutlierData,
-                                                       nextImageData: nextOutlierData)
+                    if group.size >= OutlierGroupFeature.minNeighborScoreSize {
+                        ret[type.sortOrder] =
+                          calculateBoundingBoxOverlapScore(of: group,
+                                                           previousImageData: previousOutlierData,
+                                                           nextImageData: nextOutlierData)
+                    }
                 case .neighborLineThetaScore:
                     ret[type.sortOrder] = neighborLineScores.thetaScore
                 case .neighborLineRhoScore:
@@ -171,10 +185,10 @@ public final class FrameDataHarvester: Sendable {
             }
         }
 
-        let endTime = Date().timeIntervalSince1970
-        Task {
-            await frameDataHarvesterDataHolder.outlierProcessingFinished(in: (endTime-startTime), for: treeType)
-        }
+//        let endTime = Date().timeIntervalSince1970
+//        Task {
+//            await frameDataHarvesterDataHolder.outlierProcessingFinished(in: (endTime-startTime), for: treeType)
+//        }
         
         return ret
     }

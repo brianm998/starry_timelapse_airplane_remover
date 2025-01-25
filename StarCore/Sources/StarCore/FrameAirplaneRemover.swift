@@ -658,17 +658,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                          _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Void) async
     {
         if let outlierGroups {
-            await withTaskGroup(of: Void.self) { taskGroup in
-                for (_, group) in await outlierGroups.getMembers() {
-                    taskGroup.addTask() { await closure(group, false) }
-                }
+            await Task.detached(priority: .userInitiated) {
+
+                let outliers = await Array(outlierGroups.getMembers().values)
+                var dustbin: [OutlierGroup] = []
+
                 if includingDustbin {
-                    for (_, group) in await outlierGroups.getDustbin() {
-                        taskGroup.addTask() { await closure(group, true) }
-                    }
+                    dustbin = await Array(outlierGroups.getDustbin().values)
                 }
-                await taskGroup.waitForAll()
-            }
+                await foreachOutlier(in: outliers, with: dustbin, closure)
+            }.value
         } 
     }
 
@@ -1198,12 +1197,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let startTime = NSDate().timeIntervalSince1970
         if let outlierGroups {
             let groups = await outlierGroups.getMembers()
-            Task {
+            await Task.detached(priority: .userInitiated) {
                 let classifier = OutlierClassifier(frame: self)
                 await classifier.classifyAll(Array(groups.values))
                 let endTime = NSDate().timeIntervalSince1970
                 Log.i("frame \(self.frameIndex) spent \(endTime - startTime) seconds classifing outlier groups");
-            }
+            }.value
         } else {
             Log.w("no classifier")
         }
@@ -1213,7 +1212,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
                                       includingDustbin: Bool) async
     {
-        Task.detached(priority: .userInitiated) {
+        await Task.detached(priority: .userInitiated) {
             await self.foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
                 await group.shouldPaint(.userSelected(shouldPaint))
                 if isInDustbin {
@@ -1221,13 +1220,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
             // 
-        }
+        }.value
     }
 
     public func userSelectUndecidedOutliers(toShouldPaint shouldPaint: Bool,
                                             includingDustbin: Bool) async
     {
-        Task.detached(priority: .userInitiated) {
+        await Task.detached(priority: .userInitiated) {
             await self.foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
                 if await group.shouldPaint() == nil {
                     await group.shouldPaint(.userSelected(shouldPaint))
@@ -1236,7 +1235,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     }
                 }
             }
-        }
+        }.value
     }
 
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
@@ -1373,38 +1372,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             let frameOutlierDir = "\(config.outlierOutputDirname)/\(self.frameIndex)"
             let csvFilename = "\(frameOutlierDir)/\(CondensedOutlierGroupValueMatrix.outlierDataFilename)"
 
-            // check to see if both of these files exist already
-            if FileManager.default.fileExists(atPath: csvFilename) {
-                Log.i("frame \(self.frameIndex) not recalculating outlier values with existing files")
-            } else {
-                let valueMatrix = await CondensedOutlierGroupValueMatrix(for: self)
-
-                if let outliers = await self.outlierGroupList() {
-                    Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")
-                    let startTime = NSDate().timeIntervalSince1970
-                    // XXX start time
-                    
-                    for (index, outlier) in outliers.enumerated() {
-                        if index % 100 == 0 {
-                            let duration = NSDate().timeIntervalSince1970 - startTime
-                            Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1b \(index) after \(duration) seconds")
-                        }
-                        await valueMatrix.append(outlierGroup: outlier)
-                    }
+            await Task.detached(priority: .userInitiated) {
+                do {
+                    try await writeOutlierValuesCSVPrivate(to: csvFilename,
+                                                           frameOutlierDir: frameOutlierDir,
+                                                           frame: self)
+                } catch {
+                    Log.e("frame \(self.frameIndex) unable to write outlier values csv to \(csvFilename)")
                 }
-                Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 2a")
-                // append dustbin values too
-                if let dustbin = await self.outlierGroups?.getDustbin().values {
-                    Log.d("frame \(self.frameIndex) writeOutlierValuesCSV appending dustbin")
-                    for outlier in dustbin {
-                        await valueMatrix.append(outlierGroup: outlier, for: .isolated)
-                    }
-                }
-                Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 2")
-
-                try await valueMatrix.writeCSV(to: frameOutlierDir)
-                Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 3")
-            }
+            }.value
         }
         Log.d("frame \(self.frameIndex) DONE writeOutlierValuesCSV")
     }
@@ -1422,6 +1398,45 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 }
+
+fileprivate func writeOutlierValuesCSVPrivate(to csvFilename: String,
+                                              frameOutlierDir: String,
+                                              frame: FrameAirplaneRemover) async throws
+{
+    // check to see if both of these files exist already
+    if FileManager.default.fileExists(atPath: csvFilename) {
+        Log.i("frame \(frame.frameIndex) not recalculating outlier values with existing files")
+    } else {
+        let valueMatrix = await CondensedOutlierGroupValueMatrix(for: frame)
+
+        if let outliers = await frame.outlierGroupList() {
+            Log.d("frame \(frame.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")
+            let startTime = NSDate().timeIntervalSince1970
+            // XXX start time
+            
+            for (index, outlier) in outliers.enumerated() {
+                if index % 100 == 0 {
+                    let duration = NSDate().timeIntervalSince1970 - startTime
+                    Log.d("frame \(frame.frameIndex) writeOutlierValuesCSV 1b \(index) after \(duration) seconds")
+                }
+                await valueMatrix.append(outlierGroup: outlier)
+            }
+        }
+        Log.d("frame \(frame.frameIndex) writeOutlierValuesCSV 2a")
+        // append dustbin values too
+        if let dustbin = await frame.outlierGroups?.getDustbin().values {
+            Log.d("frame \(frame.frameIndex) writeOutlierValuesCSV appending dustbin")
+            for outlier in dustbin {
+                await valueMatrix.append(outlierGroup: outlier, for: .isolated)
+            }
+        }
+        Log.d("frame \(frame.frameIndex) writeOutlierValuesCSV 2")
+
+        try await valueMatrix.writeCSV(to: frameOutlierDir)
+        Log.d("frame \(frame.frameIndex) writeOutlierValuesCSV 3")
+    }
+}
+
 
 fileprivate let outliersFileSystemMonitor = FileSystemMonitor(max: 50)
 
@@ -1450,29 +1465,43 @@ fileprivate class OutlierClassifier {
                 guard let classifier = await currentClassifier.get(for: .all) else { return }
 
                 let dataHarvester = await FrameDataHarvester(for: self.frame)
+
+                let outliers = Array(await outlierGroups.getMembers().values)
                 
-                for (_, group) in await outlierGroups.getMembers() {
-                    if await group.shouldPaint() == nil {
-                        // only apply classifier when no other classification is otherwise present
+                let max = 10            // XXX hardcoded constant
+
+                if outliers.count > 0 {
+                    for chunk in outliers.split(into: max) {
                         taskGroup.addTask {
-                            // XXX we need to grab the feature data from the FrameDataHarvester
-                            let featureData = await group.featureData(dataHarvester: dataHarvester)
-                            let classification = classifier.classification(of: featureData)
-                            await group.shouldPaint(.fromClassifier(classification),
-                                                    markAsChanged: false)
+                            for group in chunk {
+                                if await group.shouldPaint() == nil {
+                                    // only apply classifier when no other classification is otherwise present
+                                    // XXX we need to grab the feature data from the FrameDataHarvester
+                                    let featureData = await group.featureData(dataHarvester: dataHarvester)
+                                    let classification = classifier.classification(of: featureData)
+                                    await group.shouldPaint(.fromClassifier(classification),
+                                                            markAsChanged: false)
+                                }
+                            }
                         }
                     }
                 }
                 if includingDustbin {
-                    for (_, group) in await outlierGroups.getDustbin() {
-                        if await group.shouldPaint() == nil {
-                            // only apply classifier when no other classification is otherwise present
+                    let dustbin = await Array(outlierGroups.getDustbin().values)
+
+                    if dustbin.count > 0 {
+                        for chunk in dustbin.split(into: max) {
                             taskGroup.addTask {
-                                let featureData = await group.featureData(dataHarvester: dataHarvester)
-                                let classification = classifier.classification(of: featureData)
-                                await group.shouldPaint(.fromClassifier(classification),
-                                                        markAsChanged: false)
-                                await outlierGroups.promoteFromDustbin(group)
+                                for group in chunk {
+                                    if await group.shouldPaint() == nil {
+                                        // only apply classifier when no other classification is otherwise present
+                                        let featureData = await group.featureData(dataHarvester: dataHarvester)
+                                        let classification = classifier.classification(of: featureData)
+                                        await group.shouldPaint(.fromClassifier(classification),
+                                                                markAsChanged: false)
+                                        await outlierGroups.promoteFromDustbin(group)
+                                    }
+                                }
                             }
                         }
                     }
@@ -1490,14 +1519,20 @@ fileprivate class OutlierClassifier {
             await withTaskGroup(of: Void.self) { taskGroup in
                 guard let classifier = await currentClassifier.get(for: .all) else { return }
 
-                for group in outliers {
-                    if await group.shouldPaint() == nil {
-                        // only apply classifier when no other classification is otherwise present
+                let max = 10            // XXX hardcoded constant
+
+                if outliers.count > 0 {
+                    for chunk in outliers.split(into: max) {
                         taskGroup.addTask {
-                            let featureData = await group.featureData(dataHarvester: dataHarvester)
-                            let classification = classifier.classification(of: featureData)
-                            await group.shouldPaint(.fromClassifier(classification),
-                                                    markAsChanged: false)
+                            for group in chunk {
+                                if await group.shouldPaint() == nil {
+                                    // only apply classifier when no other classification is otherwise present
+                                    let featureData = await group.featureData(dataHarvester: dataHarvester)
+                                    let classification = classifier.classification(of: featureData)
+                                    await group.shouldPaint(.fromClassifier(classification),
+                                                            markAsChanged: false)
+                                }
+                            }
                         }
                     }
                 }
@@ -1512,40 +1547,48 @@ fileprivate class OutlierClassifier {
         let frameIndex = self.frameIndex
         
         return await Task.detached(priority: .userInitiated) {
-            return await withTaskGroup(of: OutlierSorter.self) { taskGroup in
+            return await withTaskGroup(of: [OutlierSorter].self) { taskGroup in
 
                 // promote found blobs to outlier groups for further processing
                 let classifier = await currentClassifier.get(for: .isolated) 
                 await frame.set(state: .populatingOutlierGroups2)
 
                 let dataHarvester = await FrameDataHarvester(for: frame)
-                
-                for blob in blobs {
-                    taskGroup.addTask {
-                        // make outlier group from this blob
-                        let outlierGroup = await blob.outlierGroup(at: frameIndex)
 
-                        //Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.id) line \(String(describing: blob.line))")
-                        await outlierGroup.set(frame: frame)
+                let max = 10            // XXX hardcoded constant
 
-                        // when promoting blobs to outlier groups, we first use the .isolated classifier
-                        // and separate blobs into two groups based upon a threshold in this classification.
-                        // one group is the dustbin, which has a very high likelyhood of not being useful
-                        // the other group are the outlier groups that will get processed further
+                if blobs.count > 0 {
+                    for chunk in blobs.split(into: max) {
+                        taskGroup.addTask {
+                            var ret: [OutlierSorter] = []
+                            for blob in chunk {
+                                // make outlier group from this blob
+                                let outlierGroup = await blob.outlierGroup(at: frameIndex)
 
-                        if let classifier {
-                            let featureData = await outlierGroup.featureData(for: .isolated, dataHarvester: dataHarvester)
-                            let classification = classifier.classification(of: featureData)
+                                //Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.id) line \(String(describing: blob.line))")
+                                await outlierGroup.set(frame: frame)
 
-                            // -1 classification means bad
-                            //  1 classification means good
-                            //  0 is undecided
-                            return OutlierSorter(classification: classification,
-                                                 outlier: outlierGroup)
-                        } else {
-                            Log.w("No .isolated classifier!!") // assume it's good
-                            return OutlierSorter(classification: 1,
-                                                 outlier: outlierGroup)
+                                // when promoting blobs to outlier groups, we first use the .isolated classifier
+                                // and separate blobs into two groups based upon a threshold in this classification.
+                                // one group is the dustbin, which has a very high likelyhood of not being useful
+                                // the other group are the outlier groups that will get processed further
+
+                                if let classifier {
+                                    let featureData = await outlierGroup.featureData(for: .isolated, dataHarvester: dataHarvester)
+                                    let classification = classifier.classification(of: featureData)
+
+                                    // -1 classification means bad
+                                    //  1 classification means good
+                                    //  0 is undecided
+                                    ret.append(OutlierSorter(classification: classification,
+                                                             outlier: outlierGroup))
+                                } else {
+                                    Log.w("No .isolated classifier!!") // assume it's good
+                                    ret.append(OutlierSorter(classification: 1,
+                                                             outlier: outlierGroup))
+                                }
+                            }
+                            return ret
                         }
                     }
                 }
@@ -1554,13 +1597,15 @@ fileprivate class OutlierClassifier {
                 var good: [OutlierGroup] = []
                 var bad: [OutlierGroup] = []
                 
-                for await value in taskGroup {
-                    if value.classification > -0.1 { // XXX constant XXX expose this XXX
-                        // it's good
-                        good.append(value.outlier)
-                    } else {
-                        // it's bad
-                        bad.append(value.outlier)
+                for await values in taskGroup {
+                    for value in values {
+                        if value.classification > -0.1 { // XXX constant XXX expose this XXX
+                            // it's good
+                            good.append(value.outlier)
+                        } else {
+                            // it's bad
+                            bad.append(value.outlier)
+                        }
                     }
                 }
 
@@ -1570,3 +1615,35 @@ fileprivate class OutlierClassifier {
     }
 }
 
+fileprivate func foreachOutlier(in outliers: [OutlierGroup],
+                                with dustbin: [OutlierGroup],
+                                _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Void) async {
+    await withTaskGroup(of: Void.self) { taskGroup in
+
+        // max number of concurrent tasks (for each outliers and dustbin)
+        let max = 10            // XXX hardcoded constant
+
+        let outlierChunkSize = outliers.count/max
+        let dustbinChunkSize = dustbin.count/max
+
+        if outliers.count > 0 {
+            for chunk in outliers.chunks(of: outlierChunkSize) {
+                taskGroup.addTask() {
+                    for group in chunk {
+                        await closure(group, false)
+                    }
+                }
+            }
+        }
+        if dustbin.count > 0 {
+            for chunk in dustbin.chunks(of: dustbinChunkSize) {
+                taskGroup.addTask() {
+                    for group in chunk {
+                        await closure(group, true)
+                    }
+                }
+            }
+        }
+        await taskGroup.waitForAll()
+    }
+}

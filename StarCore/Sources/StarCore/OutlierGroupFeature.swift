@@ -110,6 +110,10 @@ public enum OutlierGroupFeature: String,
      
      */
 
+    // groups smaller than this don't get inter-frame scores,
+    // because that makes getting classification data take forever
+    public static let minNeighborScoreSize = 24 // XXX constant
+    
     public static var allCasesString: String {
         var ret = ""
         for type in OutlierGroupFeature.allCases {
@@ -266,35 +270,46 @@ public enum OutlierGroupFeature: String,
         case .maxHoughTransformCount: // depends upon group.line
             return await calculateMaxHoughTransformCount(of: group)
         case .numberOfNearbyOutliersInSameFrame: // depends upon outlierGroups
-            return await calculateNumberOfNearbyOutliersInSameFrame(of: group, in: group.frame?.outlierGroups)
+            if group.size >= OutlierGroupFeature.minNeighborScoreSize {
+                return await calculateNumberOfNearbyOutliersInSameFrame(of: group, in: group.frame?.outlierGroups)
+            } else {
+                return 0
+            }
         case .nearbyDirectOverlapScore: // depends upon previous and next frames, outlierImageDataFunc
-            var prevImgData: FrameHolder?
-            if let arr = await group.frame?.getPreviousFrame()?.getOutlierGroups()?.outlierImageDataFunc() {
-                prevImgData = FrameHolder(arr, width: Int(width), height: Int(height))
+            if group.size > OutlierGroupFeature.minNeighborScoreSize {
+                var prevImgData: FrameHolder?
+                if let arr = await group.frame?.getPreviousFrame()?.getOutlierGroups()?.outlierImageDataFunc() {
+                    prevImgData = FrameHolder(arr, width: Int(width), height: Int(height))
+                }
+                
+                var nextImgData: FrameHolder?
+                if let arr = await group.frame?.getNextFrame()?.getOutlierGroups()?.outlierImageDataFunc() {
+                    nextImgData = FrameHolder(arr, width: Int(width), height: Int(height))
+                }
+                return calculateNearbyDirectOverlapScore(of: group,
+                                                         previousImageData: prevImgData,
+                                                         nextImageData: nextImgData)
+            } else {
+                return 0
             }
-            
-            var nextImgData: FrameHolder?
-            if let arr = await group.frame?.getNextFrame()?.getOutlierGroups()?.outlierImageDataFunc() {
-                nextImgData = FrameHolder(arr, width: Int(width), height: Int(height))
-            }
-            return calculateNearbyDirectOverlapScore(of: group,
-                                                     previousImageData: prevImgData,
-                                                     nextImageData: nextImgData)
-            
         case .boundingBoxOverlapScore: // depends upon previous and next frames, outlierImageData
-            var prevImgData: FrameHolder?
-            if let arr = await group.frame?.getPreviousFrame()?.getOutlierGroups()?.outlierImageDataFunc() {
-                prevImgData = FrameHolder(arr, width: Int(width), height: Int(height))
+            if group.size > OutlierGroupFeature.minNeighborScoreSize {
+                var prevImgData: FrameHolder?
+                if let arr = await group.frame?.getPreviousFrame()?.getOutlierGroups()?.outlierImageDataFunc() {
+                    prevImgData = FrameHolder(arr, width: Int(width), height: Int(height))
+                }
+                
+                var nextImgData: FrameHolder?
+                if let arr = await group.frame?.getNextFrame()?.getOutlierGroups()?.outlierImageDataFunc() {
+                    nextImgData = FrameHolder(arr, width: Int(width), height: Int(height))
+                }
+                
+                return calculateBoundingBoxOverlapScore(of: group,
+                                                        previousImageData: prevImgData,
+                                                        nextImageData: nextImgData)
+            } else {
+                return 0
             }
-            
-            var nextImgData: FrameHolder?
-            if let arr = await group.frame?.getNextFrame()?.getOutlierGroups()?.outlierImageDataFunc() {
-                nextImgData = FrameHolder(arr, width: Int(width), height: Int(height))
-            }
-            
-            return calculateBoundingBoxOverlapScore(of: group,
-                                                    previousImageData: prevImgData,
-                                                    nextImageData: nextImgData)
         case .pixelBorderAmount:
             return calculatePixelBorderAmount(from: group.pixelSet,
                                               with: group.bounds,
@@ -321,15 +336,35 @@ public enum OutlierGroupFeature: String,
         case .maxBunchSize:     // depends upon pixel set
             return await Double(group.maxBunchSize())
         case .neighborLineThetaScore: // these all depend upon the previous and next outlierImageData
-            return await group.neighboringThetaScore
+            if group.size >= OutlierGroupFeature.minNeighborScoreSize {
+                return await group.neighboringThetaScore
+            } else {
+                return 0
+            }
         case .neighborLineRhoScore:
-            return await group.neighboringRhoScore
+            if group.size >= OutlierGroupFeature.minNeighborScoreSize {
+                return await group.neighboringRhoScore
+            } else {
+                return 0
+            }
         case .neighborLineSizeScore:
-            return await group.neighboringSizeScore
+            if group.size >= OutlierGroupFeature.minNeighborScoreSize {
+                return await group.neighboringSizeScore
+            } else {
+                return 0
+            }
         case .neighborLineBrightnessScore:
-            return await group.neighboringBrightnessScore
+            if group.size >= OutlierGroupFeature.minNeighborScoreSize {
+                return await group.neighboringBrightnessScore
+            } else {
+                return 0
+            }
         case .neighborLineDistanceScore:
-            return await group.neighboringDistanceScore
+            if group.size >= OutlierGroupFeature.minNeighborScoreSize {
+                return await group.neighboringDistanceScore
+            } else {
+                return 0
+            }
         }
     }
     

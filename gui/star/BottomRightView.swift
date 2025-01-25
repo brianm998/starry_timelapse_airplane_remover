@@ -9,12 +9,46 @@ import Combine
 struct BottomRightView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
+    @State var harvesterCount: Int = 0
+    @State var allOutlierGroupCount: Int = 0
+    @State var allTotalOutlierProcessingTime: TimeInterval = 0
+    @State var isolatedOutlierGroupCount: Int = 0
+    @State var isolatedTotalOutlierProcessingTime: TimeInterval = 0
+    
     var body: some View {
         
         HStack() {
             @Bindable var viewModel = viewModel
 
             if viewModel.interactionMode == .edit {
+
+                if harvesterCount > 0 {
+                    VStack {
+                        Text("\(harvesterCount) data harvesters running")
+                          .foregroundColor(.orange)
+                        HStack {
+                            if allOutlierGroupCount > 0 {
+                                VStack {
+                                    Text("\(allOutlierGroupCount) groups processed")
+                                      .foregroundColor(.orange)
+                                    let formatString = String(format: "%.2f", allTotalOutlierProcessingTime/Double(allOutlierGroupCount))
+                                    Text("averaging \(formatString) secs")
+                                      .foregroundColor(.orange)
+                                }
+                            }
+                            if isolatedOutlierGroupCount > 0 {
+                                VStack {
+                                    Text("\(isolatedOutlierGroupCount) groups processed")
+                                      .foregroundColor(.orange)
+                                    let formatString = String(format: "%.2f", isolatedTotalOutlierProcessingTime/Double(isolatedOutlierGroupCount))
+                                    Text("averaging \(formatString) secs")
+                                      .foregroundColor(.orange)
+                                }
+                            }
+                        }
+                    }
+                }
+                
                 let frameView = viewModel.currentFrameView
                 
                 VStack(alignment: .trailing) {
@@ -126,7 +160,7 @@ struct BottomRightView: View {
                     if viewModel.isProcessingAllFrames {
                         ProgressView()
                         Text("processing \(viewModel.frames.count - viewModel.numberOfFramesProcessed) more frames")
-                      .foregroundColor(.white)
+                          .foregroundColor(.white)
                     }
                     if viewModel.showIgnoreLowerBar {
                         Toggle("Show Ignore Bar", isOn: $viewModel.showIgnoreLowerBar)
@@ -137,5 +171,24 @@ struct BottomRightView: View {
                 }
             }
         }
+        /*
+          .onAppear {
+              Task {
+                  await frameDataHarvesterDataHolder.setCallback() { a, b, c, d, e in
+                      Task { @MainActor in 
+                          self.harvesterCount = a
+                          self.allOutlierGroupCount = b
+                          self.allTotalOutlierProcessingTime = c
+                          self.isolatedOutlierGroupCount = d
+                          self.isolatedTotalOutlierProcessingTime = e
+                      }
+                  }
+              }
+          }
+          .onDisappear {
+              Task {
+                  await frameDataHarvesterDataHolder.setCallback(nil)
+              }
+          }*/
     }
 }

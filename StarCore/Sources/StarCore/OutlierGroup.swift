@@ -206,12 +206,17 @@ public actor OutlierGroup: CustomStringConvertible,
     public func set(frame: FrameAirplaneRemover) {
         self.frame = frame
     }
-    
+
+    private var _originZeroLine: Line?
+
     // a line with (0,0) origin calculated from the pixels in this group, if possible
     public var originZeroLine: Line? {
         get async {
-            if let line = await self.line() { return originZeroLine(from: line) }
-            return nil
+            if let _originZeroLine { return _originZeroLine }
+            if let line = await self.line() {
+                _originZeroLine = originZeroLine(from: line)
+            }
+            return _originZeroLine
         }
     }
 
@@ -649,10 +654,20 @@ public func neighborLineScores(of group: OutlierGroup,
                                and nextOutlierGroups: OutlierGroups,
                                previousOutlierImage: FrameHolder,
                                nextOutlierImage: FrameHolder,
-                               originalGroupLine: Line) async -> NeighborLineScores
+                               originalGroupLine: Line,
+                               // how far to iderate perpendicular to the line
+                               iterationWidthPixels: Int = 8,
+                               // how far to iterate inside the bounding box
+                               maxInnerDistance: Double = 12.0,
+                               // how far to iterate outside the bounding box
+                               maxOuterDistance: Double = 60.0)
+  async -> NeighborLineScores
 {
     var scores = NeighborLineScores()
-//    if true { return scores }
+
+    // XXX XXX XXX
+    //if true { return scores }
+    // XXX XXX XXX
     /*
 
      calculate a score which gives a larger value if there is one or more
@@ -669,7 +684,6 @@ public func neighborLineScores(of group: OutlierGroup,
 
      */
 
-    let iterationWidthPixels = 12 // XXX constant XXX
 
     var previousNeighbors: Set<UInt16> = []
     var nextNeighbors: Set<UInt16> = []
@@ -688,19 +702,20 @@ public func neighborLineScores(of group: OutlierGroup,
                                   numberOfAdjecentPixels: iterationWidthPixels)
         { x, y, orientation in
             //Log.d("frame \(self.frameIndex) iterating for group \(group) at [\(x), \(y)]")
-            let (shouldContinue, previousId, nextId) = 
-              handleIteration(in: groupBounds,
-                              x: x, y: y,
-                              width: width,
-                              height: height,
-                              from: intersections[0],
-                              previousOutlierImage: previousOutlierImage,
-                              nextOutlierImage: nextOutlierImage)
+            if x < 0 || y < 0 || x >= width || y >= height { return false }
+
+            let distance = intersections[0].distance(to: x, and: y)
+            if distance > maxInnerDistance,
+               groupBounds.contains(x: x, y: y) { return false }
+            if distance > maxOuterDistance { return false } 
+            
+            let previousId = previousOutlierImage.value(at: x, and: y)
+            let nextId = nextOutlierImage.value(at: x, and: y)
 
             if previousId != 0 { previousNeighbors.insert(previousId) }
             if nextId != 0 { nextNeighbors.insert(nextId) }
             iterationCount += 1
-            return shouldContinue
+            return true
         }
 
         originalGroupLine.iterate(.backwards,
@@ -708,19 +723,20 @@ public func neighborLineScores(of group: OutlierGroup,
                                   numberOfAdjecentPixels: iterationWidthPixels)
         { x, y, orientation in
             //Log.d("frame \(self.frameIndex) iterating for group \(group) at [\(x), \(y)]")
-            let (shouldContinue, previousId, nextId) = 
-              handleIteration(in: groupBounds,
-                              x: x, y: y,
-                              width: width,
-                              height: height,
-                              from: intersections[0],
-                              previousOutlierImage: previousOutlierImage,
-                              nextOutlierImage: nextOutlierImage)
+            if x < 0 || y < 0 || x >= width || y >= height { return false }
+            
+            let distance = intersections[0].distance(to: x, and: y)
+            if distance > maxInnerDistance,
+               groupBounds.contains(x: x, y: y)  { return false }
+            if distance > maxOuterDistance { return false } 
+            
+            let previousId = previousOutlierImage.value(at: x, and: y)
+            let nextId = nextOutlierImage.value(at: x, and: y)
 
             if previousId != 0 { previousNeighbors.insert(previousId) }
             if nextId != 0 { nextNeighbors.insert(nextId) }
             iterationCount += 1
-            return shouldContinue
+            return true
         }
         //Log.d("frame \(frameIndex) processing blob \(blob) iterating forwards from intersection 1")
         originalGroupLine.iterate(.forwards,
@@ -728,19 +744,20 @@ public func neighborLineScores(of group: OutlierGroup,
                                   numberOfAdjecentPixels: iterationWidthPixels)
         { x, y, orientation in
             //Log.d("frame \(self.frameIndex) iterating for group \(group) at [\(x), \(y)]")
-            let (shouldContinue, previousId, nextId) = 
-              handleIteration(in: groupBounds,
-                              x: x, y: y,
-                              width: width,
-                              height: height,
-                              from: intersections[1],
-                              previousOutlierImage: previousOutlierImage,
-                              nextOutlierImage: nextOutlierImage) 
-
+            if x < 0 || y < 0 || x >= width || y >= height { return false }
+            
+            let distance = intersections[0].distance(to: x, and: y)
+            if distance > maxInnerDistance,
+               groupBounds.contains(x: x, y: y)  { return false }
+            if distance > maxOuterDistance { return false } 
+            
+            let previousId = previousOutlierImage.value(at: x, and: y)
+            let nextId = nextOutlierImage.value(at: x, and: y)
+              
             if previousId != 0 { previousNeighbors.insert(previousId) }
             if nextId != 0 { nextNeighbors.insert(nextId) }
             iterationCount += 1
-            return shouldContinue
+            return true
         }
         //Log.d("frame \(frameIndex) processing blob \(blob) iterating backwards from intersection 1")
         originalGroupLine.iterate(.backwards,
@@ -748,18 +765,21 @@ public func neighborLineScores(of group: OutlierGroup,
                                   numberOfAdjecentPixels: iterationWidthPixels)
         { x, y, orientation in
             //Log.d("frame \(self.frameIndex) iterating for group \(group) at [\(x), \(y)]")
-            let (shouldContinue, previousId, nextId) = 
-              handleIteration(in: groupBounds,
-                              x: x, y: y,
-                              width: width,
-                              height: height,
-                              from: intersections[1],
-                              previousOutlierImage: previousOutlierImage,
-                              nextOutlierImage: nextOutlierImage) 
+
+            if x < 0 || y < 0 || x >= width || y >= height { return false }
+            
+            let distance = intersections[0].distance(to: x, and: y)
+            if distance > maxInnerDistance,
+               groupBounds.contains(x: x, y: y)  { return false }
+            if distance > maxOuterDistance { return false } 
+            
+            let previousId = previousOutlierImage.value(at: x, and: y)
+            let nextId = nextOutlierImage.value(at: x, and: y)
+              
             if previousId != 0 { previousNeighbors.insert(previousId) }
             if nextId != 0 { nextNeighbors.insert(nextId) }
             iterationCount += 1
-            return shouldContinue
+            return true
         }
     }
 
@@ -894,43 +914,5 @@ fileprivate func rhoScore(of line1: Line, and line2: Line) -> Double {
     let rhoScore = (max-distance)/max
     
     return rhoScore
-}
-
-fileprivate func handleIteration(in bounds: BoundingBox,
-                                 x: Int,
-                                 y: Int,
-                                 width: Int,
-                                 height: Int,
-                                 from originCoord: DoubleCoord,
-                                 previousOutlierImage: FrameHolder,
-                                 nextOutlierImage: FrameHolder) -> (Bool, UInt16, UInt16)
-{
-    if x < 0 { return (false, 0, 0) }
-    if y < 0 { return (false, 0, 0) }
-    if x >= width { return (false, 0, 0) }
-    if y >= height { return (false, 0, 0) }
-
-
-    // how far to iterate inside the bounding box
-    let maxInnerDistance = 20.0           // XXX constant
-    
-    // how far to iterate outside the bounding box
-    let maxOuterDistance = 80.0           // XXX constant
-    
-    let distance = originCoord.distance(to: x, and: y)
-    if distance > maxInnerDistance,
-       bounds.contains(x: x, y: y)
-    {
-        return (false, 0, 0)
-    }
-    
-    if distance > maxOuterDistance { return (false, 0, 0) } // XXX constant
-
-    // look at x, y in each neighboring frame for an outlier group
-    // return it somehow if found
-    
-    return (true,
-            previousOutlierImage.value(at: x, and: y),
-            nextOutlierImage.value(at: x, and: y))
 }
 
