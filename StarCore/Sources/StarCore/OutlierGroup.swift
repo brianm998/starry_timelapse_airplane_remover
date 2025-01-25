@@ -652,27 +652,6 @@ public actor OutlierGroup: CustomStringConvertible,
     }
 }
 
-public final class FrameHolder: Sendable {
-    let value: [UInt16]
-    let width: Int
-    let height: Int
-
-    public init(_ value: [UInt16],
-                width: Int,
-                height: Int)
-    {
-        self.value = value
-        self.width = width
-        self.height = height
-    }
-
-    public func value(at x: Int, and y: Int) -> UInt16 {
-        let index = y*width+x
-        if index < 0 || index >= value.count { return 0 }
-        return value[index]
-    }
-}
-
 public func neighborLineScores(of group: OutlierGroup,
                                width: Int,
                                height: Int,
@@ -966,42 +945,4 @@ fileprivate func handleIteration(in bounds: BoundingBox,
             previousOutlierImage.value(at: x, and: y),
             nextOutlierImage.value(at: x, and: y))
 }
-
-public struct NeighborLineScores: Sendable {
-    let thetaScore: Double
-    let rhoScore: Double
-    let sizeScore: Double
-    let brightnessScore: Double
-    let distanceScore: Double
-
-    public init(thetaScore: Double,
-                rhoScore: Double,
-                sizeScore: Double,
-                brightnessScore: Double,
-                distanceScore: Double)
-    {
-        self.thetaScore = thetaScore
-        self.rhoScore = rhoScore
-        self.sizeScore = sizeScore
-        self.brightnessScore = brightnessScore
-        self.distanceScore = distanceScore
-    }
-    
-    public init() {
-        self.thetaScore = 0
-        self.rhoScore = 0
-        self.sizeScore = 0
-        self.brightnessScore = 0
-        self.distanceScore = 0
-    }
-    
-    public static func +(lhs: NeighborLineScores, rhs: NeighborLineScores) -> NeighborLineScores {
-        NeighborLineScores(thetaScore: rhs.thetaScore + lhs.thetaScore,
-                           rhoScore: rhs.rhoScore + lhs.rhoScore,
-                           sizeScore: rhs.sizeScore + lhs.sizeScore,
-                           brightnessScore: rhs.brightnessScore + lhs.brightnessScore,
-                           distanceScore: rhs.distanceScore + lhs.distanceScore)
-    }
-}
-
 

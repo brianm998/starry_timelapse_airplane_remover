@@ -1193,10 +1193,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    // this still is not running fully parallel, unlike the other usage of
-    // the OutlierClassifier in this file.  Perhaps this is because of access to
-    // neighboring frames and lots of different actors?
-    // collect all of the data to get outlier classification data without crossing actor boundaries.
     public func applyDecisionTreeToAllOutliers(includingDustbin: Bool) async {
         //Log.d("frame \(self.frameIndex) applyDecisionTreeToAll \(self.outlierGroups?.members.count ?? 0) Outliers")
         let startTime = NSDate().timeIntervalSince1970

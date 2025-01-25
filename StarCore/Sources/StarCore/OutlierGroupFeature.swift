@@ -394,8 +394,8 @@ fileprivate func calculateMaxHoughTransformCount(of group: OutlierGroup) async -
 }
 
 
-fileprivate func calculateNumberOfNearbyOutliersInSameFrame(of group: OutlierGroup,
-                                                            in outlierGroups: OutlierGroups?) async -> Double
+internal func calculateNumberOfNearbyOutliersInSameFrame(of group: OutlierGroup,
+                                                         in outlierGroups: OutlierGroups?) async -> Double
 {
     guard let outlierGroups else { return  0 }
     let nearbyGroups = await outlierGroups.groups(nearby: group, within: 80) // XXX hardcoded constant
@@ -405,9 +405,9 @@ fileprivate func calculateNumberOfNearbyOutliersInSameFrame(of group: OutlierGro
 // 1.0 if all pixels in this group overlap all pixels of outliers in all neighboring frames
 // 0 if none of the pixels overlap
 // airplane streaks typically do not overlap the same pixels on neighboring frames
-fileprivate func calculateNearbyDirectOverlapScore(of group: OutlierGroup,
-                                                   previousImageData: FrameHolder?,
-                                                   nextImageData: FrameHolder?) -> Double
+internal func calculateNearbyDirectOverlapScore(of group: OutlierGroup,
+                                                previousImageData: FrameHolder?,
+                                                nextImageData: FrameHolder?) -> Double
 {
     let pixelCount = group.pixelSet.count
     var matchCount = 0
@@ -441,9 +441,9 @@ fileprivate func calculateNearbyDirectOverlapScore(of group: OutlierGroup,
 // 0 if no pixels are found withing the bounding box in neighboring frames
 // 1 if all pixels withing the bounding box in neighboring frames are filled
 // airplane streaks typically do not overlap the same pixels on neighboring frames
-fileprivate func calculateBoundingBoxOverlapScore(of group: OutlierGroup,
-                                                  previousImageData: FrameHolder?,
-                                                  nextImageData: FrameHolder?) -> Double
+internal func calculateBoundingBoxOverlapScore(of group: OutlierGroup,
+                                               previousImageData: FrameHolder?,
+                                               nextImageData: FrameHolder?) -> Double
 {
     if group.bounds.max.y - group.bounds.min.y < 2 { return 0 }
     
@@ -591,95 +591,3 @@ public func ratioOfSurfaceAreaToSize(of pixels: [UInt16],
 }
 
 
-public final class FrameDataHarvester: Sendable {
-
-    let width: Int
-    let height: Int
-    let outlierGroups: OutlierGroups?
-    let previousOutlierGroups: OutlierGroups?
-    let previousOutlierData: FrameHolder? // row major indexed, outlier id keyed
-    let nextOutlierGroups: OutlierGroups?
-    let nextOutlierData: FrameHolder?     // row major indexed, outlier id keyed
-
-    init(for frame: FrameAirplaneRemover) async {
-        self.outlierGroups = await frame.outlierGroups
-        self.width = frame.width
-        self.height = frame.height
-        let previousFrame = await frame.getPreviousFrame() 
-        self.previousOutlierGroups = await previousFrame?.getOutlierGroups()
-        if let arr = await previousOutlierGroups?.outlierImageDataFunc() {
-            self.previousOutlierData = FrameHolder(arr, width: width, height: height)
-        } else {
-            self.previousOutlierData = nil
-        }
-        let nextFrame = await frame.getNextFrame()
-        self.nextOutlierGroups = await nextFrame?.getOutlierGroups()
-        if let arr = await nextOutlierGroups?.outlierImageDataFunc() {
-            self.nextOutlierData = FrameHolder(arr, width: width, height: height)
-        } else {
-            self.nextOutlierData = nil
-        }
-    }
-
-    public func decisionTreeValues(for group: OutlierGroup,
-                                   with treeType: TreeType = .all) async -> [Double]
-    {
-        var neighborLineScores = NeighborLineScores()
-        if treeType == .all,
-           let originalGroupLine = await group.originZeroLine,
-           let previousOutlierGroups,
-           let nextOutlierGroups,
-           let previousOutlierData,
-           let nextOutlierData
-        {
-            neighborLineScores = await
-              StarCore.neighborLineScores(of: group,
-                                          width: width,
-                                          height: height,
-                                          with: previousOutlierGroups,
-                                          and: nextOutlierGroups,
-                                          previousOutlierImage: previousOutlierData,
-                                          nextOutlierImage: nextOutlierData,
-                                          originalGroupLine: originalGroupLine)
-            await group.set(neighborLineScores: neighborLineScores)
-        }
-
-        var ret = [Double](repeating: 0, count: OutlierGroupFeature.allCases.count)
-        
-        for type in OutlierGroupFeature.allCases {
-            if type.isUsed(for: treeType) {
-                switch type {
-                case .numberOfNearbyOutliersInSameFrame:
-                    ret[type.sortOrder] =
-                      await calculateNumberOfNearbyOutliersInSameFrame(of: group, in: outlierGroups)
-                    
-                case .nearbyDirectOverlapScore:
-                    ret[type.sortOrder] =
-                      calculateNearbyDirectOverlapScore(of: group,
-                                                        previousImageData: previousOutlierData,
-                                                        nextImageData: nextOutlierData)
-                case .boundingBoxOverlapScore:
-                    ret[type.sortOrder] =
-                      calculateBoundingBoxOverlapScore(of: group,
-                                                       previousImageData: previousOutlierData,
-                                                       nextImageData: nextOutlierData)
-                case .neighborLineThetaScore:
-                    ret[type.sortOrder] = neighborLineScores.thetaScore
-                case .neighborLineRhoScore:
-                    ret[type.sortOrder] = neighborLineScores.rhoScore
-                case .neighborLineSizeScore:
-                    ret[type.sortOrder] = neighborLineScores.sizeScore
-                case .neighborLineBrightnessScore:
-                    ret[type.sortOrder] = neighborLineScores.brightnessScore
-                case .neighborLineDistanceScore:
-                    ret[type.sortOrder] = neighborLineScores.distanceScore
-
-                    // all the rest are fast enough like this
-                default:
-                    ret[type.sortOrder] = await type.decisionTreeValue(of: group)
-                }
-            }
-        }
-        return ret
-    }
-}
