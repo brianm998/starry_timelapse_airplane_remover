@@ -269,6 +269,34 @@ public enum OutlierGroupFeature: String,
             return calculateMaxBrightness(of: group)
         case .maxHoughTransformCount: // depends upon group.line
             return await calculateMaxHoughTransformCount(of: group)
+
+        case .pixelBorderAmount:
+            return calculatePixelBorderAmount(from: group.pixelSet,
+                                              with: group.bounds,
+                                              and: group.pixels)
+        case .averageLineVariance: // depends upon group.line for properties
+            return await group.averageLineVariance()
+        case .medianLineVariance: // depends upon group.line for properties
+            return await group.medianLineVariance()
+        case .lineLength:    // depends upon group.line for properties
+            if let line = await group.originZeroLine {
+                let (_, _length) = await group.averageDistanceAndLineLength(from: line)
+                return _length
+            } else {
+                return 0
+            }
+        case .lineFillAmount:   // depends upon group.line for properties
+            return await group.getLineScore() ?? 0
+        case .bunchCount:       // depends upon pixel set
+            return await Double(group.bunchCount())
+        case .medianBunchSize:  // depends upon pixel set
+            return await Double(group.medianBunchSize())
+        case .maxBunchSize:     // depends upon pixel set
+            return await Double(group.maxBunchSize())
+
+        // all cases after here are not used for .isolated trees
+        case .borderBrightness: // depends upon the original image
+            return await calculateBorderBrightness(of: group)
         case .numberOfNearbyOutliersInSameFrame: // depends upon outlierGroups
             if group.size >= OutlierGroupFeature.minNeighborScoreSize {
                 return await calculateNumberOfNearbyOutliersInSameFrame(of: group, in: group.frame?.outlierGroups)
@@ -310,31 +338,6 @@ public enum OutlierGroupFeature: String,
             } else {
                 return 0
             }
-        case .pixelBorderAmount:
-            return calculatePixelBorderAmount(from: group.pixelSet,
-                                              with: group.bounds,
-                                              and: group.pixels)
-        case .averageLineVariance: // depends upon group.line for properties
-            return await group.averageLineVariance()
-        case .medianLineVariance: // depends upon group.line for properties
-            return await group.medianLineVariance()
-        case .lineLength:    // depends upon group.line for properties
-            if let line = await group.originZeroLine {
-                let (_, _length) = await group.averageDistanceAndLineLength(from: line)
-                return _length
-            } else {
-                return 0
-            }
-        case .lineFillAmount:   // depends upon group.line for properties
-            return await group.getLineScore() ?? 0
-        case .borderBrightness: // depends upon the original image
-            return await calculateBorderBrightness(of: group)
-        case .bunchCount:       // depends upon pixel set
-            return await Double(group.bunchCount())
-        case .medianBunchSize:  // depends upon pixel set
-            return await Double(group.medianBunchSize())
-        case .maxBunchSize:     // depends upon pixel set
-            return await Double(group.maxBunchSize())
         case .neighborLineThetaScore: // these all depend upon the previous and next outlierImageData
             if group.size >= OutlierGroupFeature.minNeighborScoreSize {
                 return await group.neighboringThetaScore

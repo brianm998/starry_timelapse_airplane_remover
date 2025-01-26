@@ -88,6 +88,10 @@ public actor OutlierGroup: CustomStringConvertible,
     
     public func line() async -> Line? {
         if shouldLoadLine {
+            if size < 10 {      // XXX constant to help speed up classification of large sets
+                shouldLoadLine = false
+                return nil
+            }
             shouldLoadLine = false
             return await Task<Line?,Never>.detached {
                 if let line = await self.lineFinder.line
@@ -568,6 +572,8 @@ public actor OutlierGroup: CustomStringConvertible,
     fileprivate var _medianIntensity: UInt16?
     fileprivate var _neighborLineScores: NeighborLineScores?
 
+    public var exisitingNeighborLineScores: NeighborLineScores? { _neighborLineScores }
+    
     public func set(neighborLineScores: NeighborLineScores) {
         _neighborLineScores = neighborLineScores
     }
@@ -620,12 +626,14 @@ public actor OutlierGroup: CustomStringConvertible,
     // collect a bunch of scores related to nearby outliers in neighboring frames
     private var neighborLineScores: NeighborLineScores {
         get async {
-            if let frame = self.frame,
-               let originalGroupLine = await self.originZeroLine,
-               let previousFrame = await frame.getPreviousFrame(),
-               let previousOutlierGroups = await previousFrame.getOutlierGroups(),
-               let nextFrame = await frame.getNextFrame(),
-               let nextOutlierGroups = await nextFrame.getOutlierGroups()
+            if let _neighborLineScores {
+                return _neighborLineScores
+            } else if let frame = self.frame,
+                      let originalGroupLine = await self.originZeroLine,
+                      let previousFrame = await frame.getPreviousFrame(),
+                      let previousOutlierGroups = await previousFrame.getOutlierGroups(),
+                      let nextFrame = await frame.getNextFrame(),
+                      let nextOutlierGroups = await nextFrame.getOutlierGroups()
             {
                 let previousOutlierImage = FrameHolder(await previousOutlierGroups.outlierImageDataFunc(),
                                                        width: frame.width, height: frame.height)

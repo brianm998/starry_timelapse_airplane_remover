@@ -1553,9 +1553,9 @@ fileprivate class OutlierClassifier {
                 let classifier = await currentClassifier.get(for: .isolated) 
                 await frame.set(state: .populatingOutlierGroups2)
 
-                let dataHarvester = await FrameDataHarvester(for: frame)
+                let dataHarvester = await FrameDataHarvester(for: frame, treeType: .isolated)
 
-                let max = 10            // XXX hardcoded constant
+                let max = 20            // XXX hardcoded constant
 
                 if blobs.count > 0 {
                     for chunk in blobs.split(into: max) {

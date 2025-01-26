@@ -84,25 +84,45 @@ public final class FrameDataHarvester: Sendable {
     let nextOutlierGroups: OutlierGroups?
     let nextOutlierData: FrameHolder?     // row major indexed, outlier id keyed
 
-    init(for frame: FrameAirplaneRemover) async {
-        self.outlierGroups = await frame.outlierGroups
+    init(width: Int, height: Int) {
+        self.width = width
+        self.height = height
+        self.outlierGroups = nil
+        self.previousOutlierGroups = nil
+        self.previousOutlierData = nil
+        self.nextOutlierGroups = nil
+        self.nextOutlierData = nil
+    }
+    
+    init(for frame: FrameAirplaneRemover, treeType: TreeType = .all) async {
         self.width = frame.width
         self.height = frame.height
-        let previousFrame = await frame.getPreviousFrame() 
-        self.previousOutlierGroups = await previousFrame?.getOutlierGroups()
-        if let arr = await previousOutlierGroups?.outlierImageDataFunc() {
-            self.previousOutlierData = FrameHolder(arr, width: width, height: height)
-        } else {
+        switch treeType {
+        case .all:
+            self.outlierGroups = await frame.outlierGroups
+            let previousFrame = await frame.getPreviousFrame() 
+            self.previousOutlierGroups = await previousFrame?.getOutlierGroups()
+            if let arr = await previousOutlierGroups?.outlierImageDataFunc() {
+                self.previousOutlierData = FrameHolder(arr, width: width, height: height)
+            } else {
+                self.previousOutlierData = nil
+            }
+            let nextFrame = await frame.getNextFrame()
+            self.nextOutlierGroups = await nextFrame?.getOutlierGroups()
+            if let arr = await nextOutlierGroups?.outlierImageDataFunc() {
+                self.nextOutlierData = FrameHolder(arr, width: width, height: height)
+            } else {
+                self.nextOutlierData = nil
+            }
+
+        case .isolated:
+            self.outlierGroups = nil
+            self.previousOutlierGroups = nil
             self.previousOutlierData = nil
-        }
-        let nextFrame = await frame.getNextFrame()
-        self.nextOutlierGroups = await nextFrame?.getOutlierGroups()
-        if let arr = await nextOutlierGroups?.outlierImageDataFunc() {
-            self.nextOutlierData = FrameHolder(arr, width: width, height: height)
-        } else {
+            self.nextOutlierGroups = nil
             self.nextOutlierData = nil
         }
-
+        
 //        await frameDataHarvesterDataHolder.harvesterStarted()
     }
 
@@ -117,19 +137,24 @@ public final class FrameDataHarvester: Sendable {
         // XXX XXX XXX
         //return [Double](repeating: 0, count: OutlierGroupFeature.allCases.count)
         // XXX XXX XXX
-
         
-//        let startTime = Date().timeIntervalSince1970
+        //        let startTime = Date().timeIntervalSince1970
+
+        // start with scores of all zeros
         var neighborLineScores = NeighborLineScores()
-        if treeType == .all,
-           // don't process smaller blobs with this method
-           group.size >= OutlierGroupFeature.minNeighborScoreSize, 
-           let originalGroupLine = await group.originZeroLine,
-           let previousOutlierGroups,
-           let nextOutlierGroups,
-           let previousOutlierData,
-           let nextOutlierData
+        if let exisingNeighborLineScores = await group.exisitingNeighborLineScores {
+            // grab existing ones if they exist
+            neighborLineScores = exisingNeighborLineScores
+        } else if treeType == .all,
+                  // don't process smaller blobs with this method
+                  group.size >= OutlierGroupFeature.minNeighborScoreSize, 
+                  let originalGroupLine = await group.originZeroLine,
+                  let previousOutlierGroups,
+                  let nextOutlierGroups,
+                  let previousOutlierData,
+                  let nextOutlierData
         {
+            // otherwise compute them, if we need them
             neighborLineScores = await
               StarCore.neighborLineScores(of: group,
                                           width: width,
