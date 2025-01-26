@@ -29,7 +29,7 @@ public struct CombinedHoughLineFinder: Sendable {
     public init(pixels: [SortablePixel],
                 bounds: BoundingBox,
                 args: HoughLineFinder.Args,
-                frameIndex: Int) async
+                frameIndex: Int) 
     {
         self.bounds = bounds
 
@@ -42,21 +42,21 @@ public struct CombinedHoughLineFinder: Sendable {
         
         
         var _finders: [HoughLineFinder] = []
-        _finders.append(await .init(pixels: pixels,
-                                    bounds: bounds,
-                                    args: args,
-                                    frameIndex: frameIndex,
-                                    imageDataBorderSize: 0))
+        _finders.append(.init(pixels: pixels,
+                              bounds: bounds,
+                              args: args,
+                              frameIndex: frameIndex,
+                              imageDataBorderSize: 0))
         
         if bounds.width < 120 || bounds.height < 120 {
             // for some reason, sometimes we get better lines by padding the input data on the ends
             // this combination exists to find the best lines from all of them.
             // because this takes longer, only use it for smaller areas.
-            _finders.append(await .init(pixels: pixels,
-                                        bounds: bounds,
-                                        args: args,
-                                        frameIndex: frameIndex,
-                                        imageDataBorderSize: 5000))
+            _finders.append(.init(pixels: pixels,
+                                  bounds: bounds,
+                                  args: args,
+                                  frameIndex: frameIndex,
+                                  imageDataBorderSize: 5000))
         }
         self.finders = _finders
     }
@@ -123,7 +123,7 @@ public struct HoughLineFinder: Sendable {
                 bounds: BoundingBox,
                 args: Args,
                 frameIndex: Int,
-                imageDataBorderSize: Int? = nil) async
+                imageDataBorderSize: Int? = nil) 
     {
         self.data = pixels
         self.args = args
@@ -286,7 +286,7 @@ public struct HoughLineFinder: Sendable {
                         grayscale8BitImageData: self.imageData())
     }
 
-    public struct LineInfo: Identifiable {
+    public struct LineInfo: Identifiable, Sendable {
         public let id = UUID()
         
         public let line: Line
