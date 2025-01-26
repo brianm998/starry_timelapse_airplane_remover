@@ -20,7 +20,7 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
         super.init()
         self.steps = [
 
-          .findBlobs(.init(minPixelIntensity: 5500,
+          .findBlobs(.init(minPixelIntensity: 5750,
                            startContrastSize: 10,
                            endContrastSize: 50,
                            startMinContrast: 86,

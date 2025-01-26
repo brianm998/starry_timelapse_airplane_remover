@@ -126,10 +126,15 @@ public class MildBlobProcessor: AbstractBlobProcessor {
           .frameState(.filter5),
 
 
-          .compactBlobIds,
+          .smallBlobRemover(.init(minBlobSize: 20,
+                                  intensityFloor: 6000)),
 
           .frameState(.filter6),
-           
+          
+          .compactBlobIds,
+
+          .frameState(.filter7),
+ 
           // split up blobs based upon user input
           .applyUserSlices,
         ]

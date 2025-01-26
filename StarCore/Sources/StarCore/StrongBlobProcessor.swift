@@ -62,6 +62,19 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
           .frameState(.filter2),
 
 
+
+          // reconnect some lines that may have been split up
+          .linearBlobConnector(.init(scanSize: 6, 
+                                     blobsSmallerThan: 6800,
+                                     blobsLargerThan: 4,
+                                     lineBorder: 8,
+                                     minLineScore: 3,
+                                     adjecentPixelsOnIteration: 5,
+                                     maxIterationCount: 3)),
+
+
+          .frameState(.filter3),
+          
           // try to combine lines in another way
           .linearBlobExtender(.init(minBlobSize: 30,
                                     lineExtension: 25,
@@ -71,27 +84,33 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
                                     sideIterationPixels: 5)),
 
 
-          .frameState(.filter3),
 
+          .frameState(.filter4),
 
           .compactBlobIds,
           
-          .frameState(.filter4),
+          
+          .frameState(.filter5),
           
           .blobLineTrim(.init(minBlobSize: 40,
                               minLineLength: 30,
                               minLineFillAmount: 10,
                               trimAmount: 9)),
-          .frameState(.filter5),
+
+          .frameState(.filter6),
+
+          .smallBlobRemover(.init(minBlobSize: 10,
+                                  intensityFloor: 5000)),
+
+          .frameState(.filter7),
 
 
           .compactBlobIds,
-
-          .frameState(.filter6),
-           
+          
           // split up blobs based upon user input
           .applyUserSlices,
 
+          
         ]
     }
 }
