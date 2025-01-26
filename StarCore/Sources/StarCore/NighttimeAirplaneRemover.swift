@@ -57,10 +57,6 @@ public actor NighttimeAirplaneRemover {
 
     var remainingImagesClosure: (@Sendable (Int) -> Void)?
 
-    // if this is true, outliers are detected, inter-frame processing is done
-    // if false, frames are handed back without outliers detected
-    let fullyProcess: Bool
-
     let processExistingFiles: Bool
     
     func assembleMethodList() async throws -> MethodList<FrameAirplaneRemover> {
@@ -203,9 +199,6 @@ public actor NighttimeAirplaneRemover {
     
     public var finalProcessor: FinalProcessor?    
 
-    // are we running on the gui?
-    public let isGUI: Bool
-
     public let writeOutputFiles: Bool
     
     public let basename: String
@@ -214,13 +207,10 @@ public actor NighttimeAirplaneRemover {
                 callbacks: Callbacks,
                 processExistingFiles: Bool,
                 maxResidentImages: Int? = nil,
-                fullyProcess: Bool = true,
-                isGUI: Bool = false,
                 writeOutputFiles: Bool = true) async throws
     {
         self.configManager = configManager
         self.callbacks = callbacks
-        self.isGUI = isGUI     // XXX make this better
         self.writeOutputFiles = writeOutputFiles
 
         let config = await configManager.config()
@@ -236,7 +226,6 @@ public actor NighttimeAirplaneRemover {
                                                maxImages: maxResidentImages)
         self.shouldProcess = [Bool](repeating: processExistingFiles, count: imageSequence.filenames.count)
         self.existingOutputFiles = [Bool](repeating: false, count: imageSequence.filenames.count)
-        self.fullyProcess = fullyProcess
         self.methodList = try await assembleMethodList()
 
         let imageSequenceSize = /*self.*/imageSequence.filenames.count
@@ -279,7 +268,7 @@ public actor NighttimeAirplaneRemover {
                                               numberOfFrames: imageSequenceSize,
                                               shouldProcess: shouldProcess,
                                               imageSequence: imageSequence,
-                                              isGUI: isGUI || processExistingFiles)
+                                              isGUI: processExistingFiles)
     }
 
     public func run() async throws {
@@ -355,7 +344,7 @@ public actor NighttimeAirplaneRemover {
                                                    atIndex: index,
                                                    outputFilename: outputFilename,
                                                    baseName: baseName,
-                                                   fullyProcess: fullyProcess,
+                                                   fullyProcess: true,
                                                    writeOutputFiles: writeOutputFiles,
                                                    imageAccessor: imageAccessor)
         {
