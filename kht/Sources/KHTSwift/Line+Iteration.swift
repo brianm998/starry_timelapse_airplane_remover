@@ -99,12 +99,14 @@ extension Line {
         if numberOfAdjecentPixels == 0 {
             return closure(x, y, iterationOrientation)
         } else {
+            var didSucceed: Bool? = nil
             switch iterationOrientation {
             case .horizontal:
                 // side iterate vertically on Y axis
                 for sideY in y-numberOfAdjecentPixels...y+numberOfAdjecentPixels {
                     if sideY >= 0 {
                         let success = closure(x, sideY, .horizontal)
+                        didSucceed = success
                         if !success { return false }
                     }
                 }
@@ -113,11 +115,12 @@ extension Line {
                 for sideX in x-numberOfAdjecentPixels...x+numberOfAdjecentPixels {
                     if sideX >= 0 {
                         let success = closure(sideX, y, .vertical)
+                        didSucceed = success
                         if !success { return false }
                     }
                 }
             }
-            return true
+            return didSucceed ?? false // return false if we didn't call the closure at all
         }
     }
     
