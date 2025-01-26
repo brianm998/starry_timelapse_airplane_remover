@@ -62,18 +62,6 @@ public final class PixelatedImage: Sendable {
             }
         }
     }
-
-    public convenience init?(fromFile filename: String) async throws {
-        if let nsImage = try await imageCache.loadImage(filename: filename) {
-            if let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                self.init(cgImage)
-            } else {
-                return nil
-            }
-        } else {
-            return nil
-        }
-    }
     
     public convenience init(width: Int,
                             height: Int,

@@ -164,14 +164,17 @@ struct StarApp: App {
         // maybe move this elsewhere
         Task { 
             await StarCore.currentClassifier.set(for: .all) {
-                OutlierGroupForestClassifier_0b8a521a()
+                OutlierGroupForestClassifier_deda1214()
             }
             await StarCore.currentClassifier.set(for: .isolated) {
-                OutlierGroupForestClassifier_c5ea1596()
+                OutlierGroupForestClassifier_deda1214()
             }
         }
-        
+
+        // XXX make this for debug builds only
+        #if DEBUG
         Log.add(handler: ConsoleLogHandler(at: .debug), for: .console)
+        #endif
         Log.i("Starting Up")
     }
     

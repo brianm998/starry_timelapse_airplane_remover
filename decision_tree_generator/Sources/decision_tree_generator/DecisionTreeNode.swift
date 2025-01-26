@@ -24,9 +24,9 @@ class DecisionSubtree: SwiftDecisionSubtree, @unchecked Sendable {
         let swift = """
 
           
-              fileprivate func \(methodName)(_ group: ClassifiableOutlierGroup) -> Double {
+          fileprivate func \(methodName)(_ group: ClassifiableOutlierGroup) async -> Double {
           \(nodeSwift)
-              }
+          }
           """
         return (swift, furtherSubtrees)
     }
@@ -62,7 +62,7 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
     var stump: Bool
     let lessThanStumpValue: Double
     let greaterThanStumpValue: Double
-      
+    
     // the kind of value we are deciding upon
     let type: OutlierGroupFeature
 
@@ -89,25 +89,7 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
     
     // runtime execution
 
-    func asyncClassification(of group: OutlierGroup) async -> Double { 
-        let outlierValue = await group.decisionTreeValueAsync(for: type)
-        
-        if stump {
-            if outlierValue < value {
-                return lessThanStumpValue
-            } else {
-                return greaterThanStumpValue
-            }
-        } else {
-            if outlierValue < value {
-                return await lessThan.asyncClassification(of: group)
-            } else {
-                return await greaterThan.asyncClassification(of: group)
-            }
-        }
-    }
-    
-    func classification(of group: ClassifiableOutlierGroup) -> Double {
+    func classification(of group: ClassifiableOutlierGroup) async -> Double {
         let outlierValue = group.decisionTreeValue(for: type)
         if stump {
             if outlierValue < value {
@@ -117,9 +99,9 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
             }
         } else {
             if outlierValue < value {
-                return lessThan.classification(of: group)
+                return await lessThan.classification(of: group)
             } else {
-                return greaterThan.classification(of: group)
+                return await greaterThan.classification(of: group)
             }
         }
     }
@@ -161,8 +143,14 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
         var indentation = ""
         for _ in 0..<initialIndent+(indent % newMethodLevel) { indentation += "    " }
 
+        var methodCallString = "group.decisionTreeValue"
+        
+        if type.isAsync {
+            methodCallString = "await group.decisionTreeValueAsync"
+        }
+        
         let swift = """
-          \(indentation)if group.decisionTreeValue(for: .\(type)) < \(value) {
+          \(indentation)if \(methodCallString)(for: .\(type)) < \(value) {
           \(lessThanSwift)
           \(indentation)} else {
           \(greaterThanSwift)
@@ -177,8 +165,15 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
         for _ in 0..<initialIndent+(indent % newMethodLevel) { indentation += "    " }
 
         if stump {
+
+            var methodCallString = "group.decisionTreeValue"
+            
+            if type.isAsync {
+                methodCallString = "await group.decisionTreeValueAsync"
+            }
+            
             let swift = """
-              \(indentation)if group.decisionTreeValue(for: .\(type)) < \(value) {
+              \(indentation)if \(methodCallString)(for: .\(type)) < \(value) {
               \(indentation)    return \(lessThanStumpValue)
               \(indentation)} else {
               \(indentation)    return \(greaterThanStumpValue)
@@ -196,7 +191,7 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
                 for _ in 0..<initialIndent+newMethodLevel { specialIndentation += "    " }
                 
                 let swift = """
-                  \(specialIndentation)return \(subtree.methodName)(group)
+                  \(specialIndentation)return await \(subtree.methodName)(group)
                   """
                 return (swift, [subtree])
             } else {

@@ -57,6 +57,10 @@ public actor NighttimeAirplaneRemover {
 
     var remainingImagesClosure: (@Sendable (Int) -> Void)?
 
+    // if this is true, outliers are detected, inter-frame processing is done
+    // if false, frames are handed back without outliers detected
+    let fullyProcess: Bool
+
     let processExistingFiles: Bool
     
     func assembleMethodList() async throws -> MethodList<FrameAirplaneRemover> {
@@ -207,6 +211,7 @@ public actor NighttimeAirplaneRemover {
                 callbacks: Callbacks,
                 processExistingFiles: Bool,
                 maxResidentImages: Int? = nil,
+                fullyProcess: Bool = true,
                 writeOutputFiles: Bool = true) async throws
     {
         self.configManager = configManager
@@ -226,6 +231,7 @@ public actor NighttimeAirplaneRemover {
                                                maxImages: maxResidentImages)
         self.shouldProcess = [Bool](repeating: processExistingFiles, count: imageSequence.filenames.count)
         self.existingOutputFiles = [Bool](repeating: false, count: imageSequence.filenames.count)
+        self.fullyProcess = fullyProcess
         self.methodList = try await assembleMethodList()
 
         let imageSequenceSize = /*self.*/imageSequence.filenames.count
@@ -344,7 +350,7 @@ public actor NighttimeAirplaneRemover {
                                                    atIndex: index,
                                                    outputFilename: outputFilename,
                                                    baseName: baseName,
-                                                   fullyProcess: true,
+                                                   fullyProcess: fullyProcess,
                                                    writeOutputFiles: writeOutputFiles,
                                                    imageAccessor: imageAccessor)
         {

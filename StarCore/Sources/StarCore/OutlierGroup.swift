@@ -38,13 +38,15 @@ public class OutlierPaintObserver {
 // used for both outlier groups and raw data
 public protocol ClassifiableOutlierGroup {
     func decisionTreeValue(for type: OutlierGroupFeature) -> Double 
+    func decisionTreeValueAsync(for type: OutlierGroupFeature) async -> Double 
 }
 
 // represents a single outler group in a frame
 public actor OutlierGroup: CustomStringConvertible,
                            Hashable,
                            Equatable,
-                           Comparable
+                           Comparable,
+                           ClassifiableOutlierGroup
 {
     nonisolated public let id: UInt16              // unique across a frame, non zero
     nonisolated public let size: UInt              // number of pixels in this outlier group
@@ -79,10 +81,10 @@ public actor OutlierGroup: CustomStringConvertible,
 
     public var lineFinder: CombinedHoughLineFinder {
         get async {
-          await CombinedHoughLineFinder(pixels: Array(self.pixelSet),
-                                        bounds: self.bounds,
-                                        args: constants.getHoughLineFinderArgs(),                                     
-                                        frameIndex: self.frameIndex)
+            CombinedHoughLineFinder(pixels: Array(self.pixelSet),
+                                    bounds: self.bounds,
+                                    args: await constants.getHoughLineFinderArgs(),
+                                    frameIndex: self.frameIndex)
         }
     }
     
@@ -93,15 +95,12 @@ public actor OutlierGroup: CustomStringConvertible,
                 return nil
             }
             shouldLoadLine = false
-            return await Task<Line?,Never>.detached {
-                if let line = await self.lineFinder.line
-                {
-                    await self.set(line: line)
-                    return line.line
-                } else {
-                    return nil
-                }
-            }.value
+            if let line = await self.lineFinder.line {
+                self.set(line: line)
+                return line.line
+            } else {
+                return nil
+            }
         } else {
             return _line
         }
@@ -265,15 +264,26 @@ public actor OutlierGroup: CustomStringConvertible,
     }
 
     public func featureData(for treeType: TreeType = .all,
-                            dataHarvester: FrameDataHarvester) async -> OutlierGroupFeatureData
+                            dataHarvester: FrameDataHarvester? = nil) async -> OutlierGroupFeatureData
     {
+        // XXX try recording time too here, and reporting it to the UI?
         var features = [OutlierGroupFeature](repeating: .size, count: OutlierGroupFeature.allCases.count)
         for type in OutlierGroupFeature.allCases {
             features[type.sortOrder] = type
         }
 
-        let values = await dataHarvester.decisionTreeValues(for: self, with: treeType)
-        return OutlierGroupFeatureData(features: features, values: values)
+        if let dataHarvester {
+            let values = await dataHarvester.decisionTreeValues(for: self, with: treeType)
+            return OutlierGroupFeatureData(features: features, values: values)
+        } else if let frame = self.frame {
+            let dataHarvester = await FrameDataHarvester(for: frame)
+            let values = await dataHarvester.decisionTreeValues(for: self, with: treeType)
+            return OutlierGroupFeatureData(features: features, values: values)
+        } else {
+            Log.w("with no harvester or frame, reporting all zeros :(") 
+            let values = [Double](repeating: 0, count: features.count)
+            return OutlierGroupFeatureData(features: features, values: values)
+        }
     }
     
     fileprivate static func averageMedianMaxDistance(for pixelSet: Set<SortablePixel>,
@@ -523,14 +533,26 @@ public actor OutlierGroup: CustomStringConvertible,
 
     public func clearFeatureValueCache() { featureValueCache = [:] }
 
+    nonisolated public func decisionTreeValue(for type: OutlierGroupFeature) -> Double {
+//        if let value = featureValueCache[type] { return value }
+
+        //let t0 = NSDate().timeIntervalSince1970
+
+        let ret = type.decisionTreeValueSync(of: self)
+        //let t1 = NSDate().timeIntervalSince1970
+        //Log.d("group \(id) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
+
+//        featureValueCache[type] = ret
+        return ret
+    }
+
     public func decisionTreeValueAsync(for type: OutlierGroupFeature) async -> Double {
         if let value = featureValueCache[type] { return value }
 
         //let t0 = NSDate().timeIntervalSince1970
-
-        let ret = await type.decisionTreeValue(of: self)
-        //let t1 = NSDate().timeIntervalSince1970
-        //Log.d("group \(id) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
+        let ret = await Task.detached(priority: .userInitiated) {
+            await type.decisionTreeValue(of: self)
+        }.value
 
         featureValueCache[type] = ret
         return ret

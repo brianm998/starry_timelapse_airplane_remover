@@ -213,7 +213,7 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
                                 for (treeKey, tree) in decisionTrees {
                                     await taskGroup.addTask() {
                                         let decisionTreeShouldPaint =  
-                                          await tree.asyncClassification(of: outlierGroup) > 0
+                                          await tree.classification(of: outlierGroup) > 0
                                         
                                         return (treeKey, decisionTreeShouldPaint == numberGoodShouldPaint.willPaint)
                                     }

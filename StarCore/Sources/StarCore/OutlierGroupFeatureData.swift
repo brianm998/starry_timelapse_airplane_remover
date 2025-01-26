@@ -8,13 +8,16 @@ public struct OutlierGroupFeatureData: ClassifiableOutlierGroup,
     
     public init(features: [OutlierGroupFeature],
                 values: [Double])
-
     {
         var _values = [Double](repeating: 0, count: features.count)
         for (index, type) in features.enumerated() {
             _values[type.sortOrder] = values[index]
         }
         self.values = _values
+    }
+
+    public func decisionTreeValueAsync(for type: OutlierGroupFeature) async -> Double  {
+        decisionTreeValue(for: type)
     }
 
     public func decisionTreeValue(for type: OutlierGroupFeature) -> Double  {

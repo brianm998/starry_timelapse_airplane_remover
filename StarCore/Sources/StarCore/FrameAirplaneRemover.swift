@@ -30,6 +30,32 @@ public enum FrameSavingState: Sendable {
 
 public let finalMonitor = FileSystemMonitor(max: 32)
 
+public let classificationTimingDataHolder = ClassificationTimingDataHolder()
+
+public actor ClassificationTimingDataHolder {
+    private var featureTime: TimeInterval = 0
+    private var classificationTime: TimeInterval = 0
+    private var outlierCount = 0
+    private var frameCount = 0
+    
+    private var callback: ((TimeInterval,TimeInterval,Int,Int) -> Void)?
+    
+    public func setCallback(_ callback: (@Sendable (TimeInterval,TimeInterval,Int,Int) -> Void)?) {
+        self.callback = callback
+    }
+
+    public func set(featureTime: TimeInterval,
+                    classificationTime: TimeInterval,
+                    outlierCount: Int)
+    {
+        self.featureTime += featureTime
+        self.classificationTime += classificationTime
+        self.outlierCount += outlierCount
+        self.frameCount += 1
+        callback?(featureTime, classificationTime, outlierCount, frameCount)
+    }
+}
+
 @MainActor
 @Observable
 public class FrameObserver {
@@ -579,8 +605,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         let classifier = OutlierClassifier(frame: self)
         self.set(state: .populatingOutlierGroups1)
-        let (good, bad) = await classifier.promoteAndClassify(blobs) // this is where time is spent
+        let (good, bad, featureTime, classificationTime, outlierCount) =
+          await classifier.promoteAndClassify(blobs) // this is where time is spent
 
+        Task {
+            await classificationTimingDataHolder.set(featureTime: featureTime,
+                                                     classificationTime: classificationTime,
+                                                     outlierCount: outlierCount)
+        }
+        
+        // XXX promote featureTime and classificationTime to the gui
+        
         await self.outlierGroups?.add(good)
         await self.outlierGroups?.dumpInDustbin(bad)
         
@@ -1175,7 +1210,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
                 if apply {
                     Log.d("applying decision tree")
-                    await group.shouldPaint(.fromClassifier(await classifier.asyncClassification(of: group)))
+                    await group.shouldPaint(.fromClassifier(await classifier.classification(of: group)))
                     if isInDustbin {
                         await self.outlierGroups?.promoteFromDustbin(group)
                     }
@@ -1464,7 +1499,7 @@ fileprivate class OutlierClassifier {
             await withTaskGroup(of: Void.self) { taskGroup in
                 guard let classifier = await currentClassifier.get(for: .all) else { return }
 
-                let dataHarvester = await FrameDataHarvester(for: self.frame)
+                //let dataHarvester = await FrameDataHarvester(for: self.frame)
 
                 let outliers = Array(await outlierGroups.getMembers().values)
                 
@@ -1477,8 +1512,8 @@ fileprivate class OutlierClassifier {
                                 if await group.shouldPaint() == nil {
                                     // only apply classifier when no other classification is otherwise present
                                     // XXX we need to grab the feature data from the FrameDataHarvester
-                                    let featureData = await group.featureData(dataHarvester: dataHarvester)
-                                    let classification = classifier.classification(of: featureData)
+                                    //let featureData = await group.featureData(dataHarvester: dataHarvester)
+                                    let classification = await classifier.classification(of: group)
                                     await group.shouldPaint(.fromClassifier(classification),
                                                             markAsChanged: false)
                                 }
@@ -1495,8 +1530,8 @@ fileprivate class OutlierClassifier {
                                 for group in chunk {
                                     if await group.shouldPaint() == nil {
                                         // only apply classifier when no other classification is otherwise present
-                                        let featureData = await group.featureData(dataHarvester: dataHarvester)
-                                        let classification = classifier.classification(of: featureData)
+                                        //let featureData = await group.featureData(dataHarvester: dataHarvester)
+                                        let classification = await classifier.classification(of: group)
                                         await group.shouldPaint(.fromClassifier(classification),
                                                                 markAsChanged: false)
                                         await outlierGroups.promoteFromDustbin(group)
@@ -1515,7 +1550,7 @@ fileprivate class OutlierClassifier {
     // uses the .all classifier, which digs into neighboring frames for more data
     func classifyAll(_ outliers: [OutlierGroup]) async {
 //        await Task.detached(priority: .userInitiated) {
-        let dataHarvester = await FrameDataHarvester(for: self.frame)
+        //let dataHarvester = await FrameDataHarvester(for: self.frame)
             await withTaskGroup(of: Void.self) { taskGroup in
                 guard let classifier = await currentClassifier.get(for: .all) else { return }
 
@@ -1527,8 +1562,8 @@ fileprivate class OutlierClassifier {
                             for group in chunk {
                                 if await group.shouldPaint() == nil {
                                     // only apply classifier when no other classification is otherwise present
-                                    let featureData = await group.featureData(dataHarvester: dataHarvester)
-                                    let classification = classifier.classification(of: featureData)
+                                    //let featureData = await group.featureData(dataHarvester: dataHarvester)
+                                    let classification = await classifier.classification(of: group)
                                     await group.shouldPaint(.fromClassifier(classification),
                                                             markAsChanged: false)
                                 }
@@ -1542,12 +1577,12 @@ fileprivate class OutlierClassifier {
     }
 
     // classifies blobs with the .isolated classifier, and promotes them to separate groups
-    func promoteAndClassify(_ blobs: [Blob]) async -> ([OutlierGroup], [OutlierGroup]) {
+    func promoteAndClassify(_ blobs: [Blob]) async -> ([OutlierGroup], [OutlierGroup], TimeInterval, TimeInterval, Int) {
         let frame = self.frame
         let frameIndex = self.frameIndex
         
         return await Task.detached(priority: .userInitiated) {
-            return await withTaskGroup(of: [OutlierSorter].self) { taskGroup in
+            return await withTaskGroup(of: ([OutlierSorter], TimeInterval, TimeInterval, Int).self) { taskGroup in
 
                 // promote found blobs to outlier groups for further processing
                 let classifier = await currentClassifier.get(for: .isolated) 
@@ -1560,6 +1595,9 @@ fileprivate class OutlierClassifier {
                 if blobs.count > 0 {
                     for chunk in blobs.split(into: max) {
                         taskGroup.addTask {
+                            var featureDataTime: TimeInterval = 0
+                            var classificationTime: TimeInterval = 0
+                    
                             var ret: [OutlierSorter] = []
                             for blob in chunk {
                                 // make outlier group from this blob
@@ -1574,21 +1612,33 @@ fileprivate class OutlierClassifier {
                                 // the other group are the outlier groups that will get processed further
 
                                 if let classifier {
-                                    let featureData = await outlierGroup.featureData(for: .isolated, dataHarvester: dataHarvester)
-                                    let classification = classifier.classification(of: featureData)
+                                    let startTime = Date().timeIntervalSince1970
+
+                                    // XXX figure out why this is so fucking slow XXX 
+                                    //let featureData = await outlierGroup.featureData(for: .isolated, dataHarvester: dataHarvester)
+                                    // XXX figure out why this is so fucking slow XXX
+                                    
+                                    let featureTime = Date().timeIntervalSince1970
+                                    let classification = await classifier.classification(of: outlierGroup)
+                                    let classTime = Date().timeIntervalSince1970
 
                                     // -1 classification means bad
                                     //  1 classification means good
                                     //  0 is undecided
                                     ret.append(OutlierSorter(classification: classification,
                                                              outlier: outlierGroup))
+                                    featureDataTime += featureTime - startTime
+                                    classificationTime += classTime - featureTime
                                 } else {
                                     Log.w("No .isolated classifier!!") // assume it's good
                                     ret.append(OutlierSorter(classification: 1,
                                                              outlier: outlierGroup))
                                 }
                             }
-                            return ret
+                            return (ret,
+                                    featureDataTime,
+                                    classificationTime,
+                                    chunk.count)
                         }
                     }
                 }
@@ -1596,8 +1646,15 @@ fileprivate class OutlierClassifier {
 
                 var good: [OutlierGroup] = []
                 var bad: [OutlierGroup] = []
+
+                var totalFeatureTime: TimeInterval = 0
+                var totalClassificationTime: TimeInterval = 0
+                var totalOutliers: Int = 0
                 
-                for await values in taskGroup {
+                for await (values, featureTime, classTime, chunkCount) in taskGroup {
+                    totalFeatureTime += featureTime
+                    totalClassificationTime += classTime
+                    totalOutliers += chunkCount
                     for value in values {
                         if value.classification > -0.1 { // XXX constant XXX expose this XXX
                             // it's good
@@ -1609,7 +1666,7 @@ fileprivate class OutlierClassifier {
                     }
                 }
 
-                return (good, bad)
+                return (good, bad, totalFeatureTime, totalClassificationTime, totalOutliers)
             }
         }.value
     }

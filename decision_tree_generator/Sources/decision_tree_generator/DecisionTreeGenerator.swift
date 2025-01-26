@@ -8,14 +8,14 @@ import CryptoKit
 let initialIndent = 2
 
 // how deep can the if/else statements get before we make new methods?
-let globalMaxIfDepth = 12        // this is a guess
+// make this a command line paramater?
+let globalMaxIfDepth = 6        // this is a guess
 
 
 struct TreeForestResult {
     let tree: DecisionTreeStruct
     let testScore: Double
 }
-
 
 actor DecisionTreeGenerator {
 
@@ -127,8 +127,8 @@ actor DecisionTreeGenerator {
             Log.i("have tree \(name) w/ score \(score)")
 
             treesDeclarationString += "    let tree_\(name) = OutlierGroupDecisionTreeForest_\(name)()\n"
-            treesClassificationString1 += "        total += self.tree_\(name).classification(of: group) * \(score)\n"
-            treesClassificationString2 += "        total += self.tree_\(name).classification(of: featureData) * \(score)\n"
+            treesClassificationString1 += "        total += await self.tree_\(name).classification(of: group) * \(score)\n"
+            treesClassificationString2 += "        total += await self.tree_\(name).classification(of: featureData) * \(score)\n"
             treesNameListString += " \"\(name)\","
 
             treesTypeString += "   \(tree.tree.type)\n\n"
@@ -192,13 +192,8 @@ actor DecisionTreeGenerator {
 
              \(treesDeclarationString)
 
-                 public func asyncClassification(of group: OutlierGroup) async -> Double {
-                     let featureData = await group.featureData()
-                     return classification(of: featureData)
-                 }
-
                  // returns -1 for negative, +1 for positive
-                 public func classification(of group: ClassifiableOutlierGroup) -> Double {
+                 public func classification(of group: ClassifiableOutlierGroup) async -> Double {
                      var total: Double = 0.0
              
              \(treesClassificationString1)
@@ -209,7 +204,7 @@ actor DecisionTreeGenerator {
                  public func classification (
                     of features: [OutlierGroupFeature],   // parallel
                     and values: [Double]                   // arrays
-                 ) -> Double
+                 ) async -> Double
                  {
                      var total: Double = 0.0
                      
@@ -454,22 +449,15 @@ actor DecisionTreeGenerator {
               public func classification(
                  of features: [OutlierGroupFeature], // parallel
                  and values: [Double]                 // arrays
-                ) -> Double
+                ) async -> Double
               {
                   let featureData = OutlierGroupFeatureData(features: features, values: values)
-                  return classification(of: featureData)
-              }
-
-              // return value is between -1 and 1, 1 is paint
-              public func asyncClassification(of group: OutlierGroup) async -> Double 
-              {
-                  let featureData = await group.featureData()
-                  return classification(of: featureData)
+                  return await classification(of: featureData)
               }
 
               // the actual tree resides here
               // return value is between -1 and 1, 1 is paint
-              public func classification(of group: ClassifiableOutlierGroup) -> Double 
+              public func classification(of group: ClassifiableOutlierGroup) async -> Double 
               {
           \(generatedSwiftCode)
               }

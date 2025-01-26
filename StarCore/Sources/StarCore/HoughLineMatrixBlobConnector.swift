@@ -246,10 +246,10 @@ fileprivate func process(element: ImageMatrixElement,
                                           maxLineConstant: args.maxHoughLines)
     
     // find lines
-    let finder = await /*Combined*/HoughLineFinder(pixels: element.sortablePixels,
-                                                   bounds: element.bounds,
-                                                   args: finderArgs,                                                
-                                                   frameIndex: frameIndex)
+    let finder = /*Combined*/HoughLineFinder(pixels: element.sortablePixels,
+                                             bounds: element.bounds,
+                                             args: finderArgs,
+                                             frameIndex: frameIndex)
 
     //let houghLinesTime = Date().timeIntervalSince1970
 

@@ -23,7 +23,7 @@ public actor ImageLoader {
     }
 
     public func image() async throws -> PixelatedImage {
-        if let image = try await PixelatedImage(fromFile: filename) {
+        if let image = try await imageCache.loadImage(filename: filename) {
             return image
         }
         throw "could not load image from \(filename)"

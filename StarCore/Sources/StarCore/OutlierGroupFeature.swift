@@ -227,53 +227,90 @@ public enum OutlierGroupFeature: String,
             return 33
         }
     }
+
+    public var isAsync: Bool {
+        switch self {
+        case .size:
+            return false
+        case .width:
+            return false
+        case .height:
+            return false
+        case .centerX:
+            return false
+        case .minX:
+            return false
+        case .maxX:
+            return false
+        case .minY:
+            return false
+        case .maxY:
+            return false
+        case .centerY:
+            return false
+        case .hypotenuse:
+            return false
+        case .aspectRatio:
+            return false
+        case .fillAmount:
+            return false
+        case .surfaceAreaRatio:
+            return false
+        case .averagebrightness:
+            return false
+        case .medianBrightness:            
+            return false
+        case .maxBrightness:    
+            return false
+        case .maxHoughTransformCount: 
+            return true
+        case .pixelBorderAmount:
+            return false
+        case .averageLineVariance: 
+            return true
+        case .medianLineVariance: 
+            return true
+        case .lineLength:    
+            return true
+        case .lineFillAmount:
+            return true
+        case .bunchCount:    
+            return true
+        case .medianBunchSize:
+            return true
+        case .maxBunchSize:   
+            return true
+
+        // all cases after here are not used for .isolated trees
+        case .borderBrightness:
+            return true
+        case .numberOfNearbyOutliersInSameFrame:
+            return true
+        case .nearbyDirectOverlapScore: 
+            return true
+        case .boundingBoxOverlapScore:
+            return true
+        case .neighborLineThetaScore: 
+            return true
+        case .neighborLineRhoScore:
+            return true
+        case .neighborLineSizeScore:
+            return true
+        case .neighborLineBrightnessScore:
+            return true
+        case .neighborLineDistanceScore:
+            return true
+        }
+    }
     
     public func decisionTreeValue(of group: OutlierGroup) async -> Double {
         let height = IMAGE_HEIGHT!
         let width = IMAGE_WIDTH!
 
         switch self {
-        case .size:
-            return Double(group.size)/(height*width)
-        case .width:
-            return Double(group.bounds.width)/width
-        case .height:
-            return Double(group.bounds.height)/height
-        case .centerX:
-            return Double(group.bounds.center.x)/width
-        case .minX:
-            return Double(group.bounds.min.x)/width
-        case .maxX:
-            return Double(group.bounds.max.x)/width
-        case .minY:
-            return Double(group.bounds.min.y)/height
-        case .maxY:
-            return Double(group.bounds.max.y)/height
-        case .centerY:
-            return Double(group.bounds.center.y)/height
-        case .hypotenuse:
-            return Double(group.bounds.hypotenuse)/(height*width)
-        case .aspectRatio:
-            return Double(group.bounds.width) / Double(group.bounds.height)
-        case .fillAmount:
-            return Double(group.size)/(Double(group.bounds.width)*Double(group.bounds.height))
-        case .surfaceAreaRatio:
-            return ratioOfSurfaceAreaToSize(of: group.pixels,
-                                            and: group.pixelSet,
-                                            bounds: group.bounds)
-        case .averagebrightness:
-            return Double(group.brightness)
-        case .medianBrightness:            
-            return calculateMedianBrightness(of: group)
-        case .maxBrightness:    
-            return calculateMaxBrightness(of: group)
         case .maxHoughTransformCount: // depends upon group.line
             return await calculateMaxHoughTransformCount(of: group)
 
-        case .pixelBorderAmount:
-            return calculatePixelBorderAmount(from: group.pixelSet,
-                                              with: group.bounds,
-                                              and: group.pixels)
         case .averageLineVariance: // depends upon group.line for properties
             return await group.averageLineVariance()
         case .medianLineVariance: // depends upon group.line for properties
@@ -368,6 +405,96 @@ public enum OutlierGroupFeature: String,
             } else {
                 return 0
             }
+        default:
+            return decisionTreeValueSync(of: group)
+        }
+    }
+    
+    public func decisionTreeValueSync(of group: OutlierGroup) -> Double {
+        let height = IMAGE_HEIGHT!
+        let width = IMAGE_WIDTH!
+
+        switch self {
+        case .size:
+            return Double(group.size)/(height*width)
+        case .width:
+            return Double(group.bounds.width)/width
+        case .height:
+            return Double(group.bounds.height)/height
+        case .centerX:
+            return Double(group.bounds.center.x)/width
+        case .minX:
+            return Double(group.bounds.min.x)/width
+        case .maxX:
+            return Double(group.bounds.max.x)/width
+        case .minY:
+            return Double(group.bounds.min.y)/height
+        case .maxY:
+            return Double(group.bounds.max.y)/height
+        case .centerY:
+            return Double(group.bounds.center.y)/height
+        case .hypotenuse:
+            return Double(group.bounds.hypotenuse)/(height*width)
+        case .aspectRatio:
+            return Double(group.bounds.width) / Double(group.bounds.height)
+        case .fillAmount:
+            return Double(group.size)/(Double(group.bounds.width)*Double(group.bounds.height))
+        case .surfaceAreaRatio:
+            return ratioOfSurfaceAreaToSize(of: group.pixels,
+                                            and: group.pixelSet,
+                                            bounds: group.bounds)
+        case .averagebrightness:
+            return Double(group.brightness)
+        case .medianBrightness:            
+            return calculateMedianBrightness(of: group)
+        case .maxBrightness:    
+            return calculateMaxBrightness(of: group)
+        case .maxHoughTransformCount: // depends upon group.line
+            fatalError("call decisionTreeValue for this type")
+
+        case .pixelBorderAmount:
+            return calculatePixelBorderAmount(from: group.pixelSet,
+                                              with: group.bounds,
+                                              and: group.pixels)
+        case .averageLineVariance: // depends upon group.line for properties
+            fatalError("call decisionTreeValue for this type")
+
+        case .medianLineVariance: // depends upon group.line for properties
+            fatalError("call decisionTreeValue for this type")
+
+        case .lineLength:    // depends upon group.line for properties
+            fatalError("call decisionTreeValue for this type")
+
+        case .lineFillAmount:   // depends upon group.line for properties
+            fatalError("call decisionTreeValue for this type")
+        case .bunchCount:       // depends upon pixel set
+            fatalError("call decisionTreeValue for this type")
+        case .medianBunchSize:  // depends upon pixel set
+            fatalError("call decisionTreeValue for this type")
+        case .maxBunchSize:     // depends upon pixel set
+            fatalError("call decisionTreeValue for this type")
+
+        // all cases after here are not used for .isolated trees
+        case .borderBrightness: // depends upon the original image
+            fatalError("call decisionTreeValue for this type")
+
+        case .numberOfNearbyOutliersInSameFrame: // depends upon outlierGroups
+            fatalError("call decisionTreeValue for this type")
+            
+        case .nearbyDirectOverlapScore: // depends upon previous and next frames, outlierImageDataFunc
+            fatalError("call decisionTreeValue for this type")
+        case .boundingBoxOverlapScore: // depends upon previous and next frames, outlierImageData
+            fatalError("call decisionTreeValue for this type")
+        case .neighborLineThetaScore: // these all depend upon the previous and next outlierImageData
+            fatalError("call decisionTreeValue for this type")
+        case .neighborLineRhoScore:
+            fatalError("call decisionTreeValue for this type")
+        case .neighborLineSizeScore:
+            fatalError("call decisionTreeValue for this type")
+        case .neighborLineBrightnessScore:
+            fatalError("call decisionTreeValue for this type")
+        case .neighborLineDistanceScore:
+            fatalError("call decisionTreeValue for this type")
         }
     }
     

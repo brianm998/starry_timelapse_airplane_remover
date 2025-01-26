@@ -13,19 +13,10 @@ struct ForestClassifier: OutlierGroupClassifier {
     }
 
     // returns -1 for negative, +1 for positive
-    func asyncClassification(of group: OutlierGroup) async -> Double {
+    func classification(of group: ClassifiableOutlierGroup) async -> Double {
         var ret: Double = 0
         for result in trees {
-            ret += await result.tree.asyncClassification(of: group) * result.testScore
-        }
-        return ret / Double(trees.count)
-    }
-
-    // returns -1 for negative, +1 for positive
-    func classification(of group: ClassifiableOutlierGroup) -> Double {
-        var ret: Double = 0
-        for result in trees {
-            ret += result.tree.classification(of: group) * result.testScore
+            ret += await result.tree.classification(of: group) * result.testScore
         }
         return ret / Double(trees.count)
     }
