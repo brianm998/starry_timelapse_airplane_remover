@@ -127,8 +127,16 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
             }
             
         case .applyUserSlices:
-           break
+            break
             
+        case .smallBlobRemover(let args):
+            if let argType = argType as? SmallBlobRemover.Args.ArgType,
+               let updatedArgs = args.doubleUpdate(for: argType, value: value)
+            {
+                steps[stepIndex] = .smallBlobRemover(updatedArgs)
+                saveStepsToFile()
+            }
+
         case .blobDupeCheck(let step):
             break
 
@@ -190,6 +198,14 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
         case .applyUserSlices:
             break
   
+        case .smallBlobRemover(let args):
+            if let argType = argType as? SmallBlobRemover.Args.ArgType,
+               let updatedArgs = args.intUpdate(for: argType, value: value)
+            {
+                steps[stepIndex] = .smallBlobRemover(updatedArgs)
+                saveStepsToFile()
+            }
+            
         case .blobDupeCheck(let step):
             break
 

@@ -14,6 +14,7 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 
+
 /*
 
  problems:
@@ -39,6 +40,7 @@ public enum BlobProcessingType: Hashable,
     case blobDupeCheck(String)
     case houghLineMatrixBlobConnector(HoughLineMatrixBlobConnector.Args)
     case compactBlobIds
+    case smallBlobRemover(SmallBlobRemover.Args)
 }
 
 // load and process all blobs for a frame, using a defined sequence of steps
@@ -75,6 +77,16 @@ public class AbstractBlobProcessor {
             case .applyUserSlices:
                 blobMap = try await applyUserSlices(blobMap)
                 
+
+            case .smallBlobRemover(let args): // no analyzer
+                let remover = SmallBlobRemover(blobMap: blobMap,
+                                               frameIndex: frame.frameIndex)
+                
+                await remover.process(args)
+                blobMap = await remover.blobMap()
+                
+
+
             case .blobDupeCheck(let step): // uses analyzer
                 let _ = await BlobDupeCheck(blobMap: blobMap,
                                             width: frame.width,

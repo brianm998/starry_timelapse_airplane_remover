@@ -145,6 +145,9 @@ struct BlobProcessingView: View {
                                     case .applyUserSlices:
                                         applyUserSlicesView()
 
+                                    case .smallBlobRemover(let args):
+                                        smallBlobRemoverView(args, stepIndex: stepIndex)
+                                        
                                     case .blobDupeCheck(let step):
                                         blobDupeCheckView(step)
 
@@ -213,6 +216,17 @@ struct BlobProcessingView: View {
                   stepsLoaded = true
               }
           }
+    }
+
+    private func smallBlobRemoverView(_ args: SmallBlobRemover.Args,
+                                      stepIndex: Int) -> some View
+    {
+        StepView(title: "Small Blob Remover",
+                 description: "gets rid of dimmer blobs off by themselves",
+                 args: args,
+                 array: SmallBlobRemover.Args.ArgType.allCases,
+                 stepIndex: stepIndex,
+                 detectionType: $detectionType)
     }
 
     private func applyUserSlicesView() -> some View {
