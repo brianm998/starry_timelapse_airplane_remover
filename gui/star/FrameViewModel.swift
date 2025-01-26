@@ -171,7 +171,7 @@ public class FrameViewModel {
 
         Task {
             if let frame {
-                let newViewOutliers = try await frame.promoteDust(in: gestureBounds)
+                let _ = try await frame.promoteDust(in: gestureBounds)
 
                 await viewModel.setOutlierGroups(forFrame: frame)
                 await frame.updateCombineSubjects()            
