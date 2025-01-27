@@ -92,7 +92,7 @@ struct Main: AsyncParsableCommand {
                                 negativeRows.append(outlierFeatureData)
                             }
                         } else {
-                            // XXX gets ignored with no paint reason
+                            negativeRows.append(outlierFeatureData)
                         }
                     }
                 }
