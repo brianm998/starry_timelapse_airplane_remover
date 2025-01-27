@@ -48,14 +48,10 @@ public enum FrameProcessingState: Int,
     case filter7
     case filter8
     
-    case populatingOutlierGroups
-
-    case populatingOutlierGroups1
-    case populatingOutlierGroups2
-    case populatingOutlierGroups3
+    case firstClassification
 
     case readyForInterFrameProcessing
-    case interFrameProcessing
+    case secondClassification
     case outlierProcessingComplete
     case finishing
 
@@ -103,25 +99,13 @@ public enum FrameProcessingState: Int,
         case .filter8:
             return "filter 8"
             
-        case .populatingOutlierGroups:
-            return "populating outlier groups"
-
-
-            // XXX for concurrency  testing
-        case .populatingOutlierGroups1:
-            return "populating outlier groups 1"
-        case .populatingOutlierGroups2:
-            return "populating outlier groups 2"
-        case .populatingOutlierGroups3:
-            return "populating outlier groups 3"
-            // XXX for concurrency  testing
-
-            
+        case .firstClassification:
+            return "first classification"
 
         case .readyForInterFrameProcessing: // XXX not covered in progress monitor
             return "ready for inter frame processing"
-        case .interFrameProcessing:
-            return "classifing outlier groups"
+        case .secondClassification:
+            return "second classification"
         case .outlierProcessingComplete:
             return "ready to finish"
         case .finishing:
@@ -180,17 +164,11 @@ public enum FrameProcessingState: Int,
             return false
         case .filter8:
             return false
-        case .populatingOutlierGroups:
-            return false
-        case .populatingOutlierGroups1:
-            return false
-        case .populatingOutlierGroups2:
-            return false
-        case .populatingOutlierGroups3:
+        case .firstClassification:
             return false
         case .readyForInterFrameProcessing:
             return true
-        case .interFrameProcessing:
+        case .secondClassification:
             return true
         case .outlierProcessingComplete:
             return true
@@ -247,17 +225,11 @@ public enum FrameProcessingState: Int,
             return .yellow
         case .filter8:
             return .yellow
-        case .populatingOutlierGroups:
-            return .yellow
-        case .populatingOutlierGroups1:
-            return .yellow
-        case .populatingOutlierGroups2:
-            return .yellow
-        case .populatingOutlierGroups3:
+        case .firstClassification:
             return .yellow
         case .readyForInterFrameProcessing:
             return .yellow
-        case .interFrameProcessing:
+        case .secondClassification:
             return .yellow
         case .outlierProcessingComplete:
             return .yellow

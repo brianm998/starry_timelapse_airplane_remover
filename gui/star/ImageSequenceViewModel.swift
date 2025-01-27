@@ -928,7 +928,7 @@ public final class ImageSequenceViewModel {
                 try await frame.findOutliers()
 
                 // XXX set state
-                await frame.set(state: .interFrameProcessing)
+                await frame.set(state: .secondClassification)
                 
                 await frame.applyDecisionTreeToAllOutliers(includingDustbin: self.shouldShowDustbin)
                 

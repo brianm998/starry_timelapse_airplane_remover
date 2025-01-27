@@ -187,13 +187,13 @@ public actor UpdatableProgressMonitor {
             updates.append(update)
         }
 
-        if let update = progressLine(for: .populatingOutlierGroups) {
+        if let update = progressLine(for: .firstClassification) {
             updates.append(update)
         }
         
         value = value + 100 // scoot up a bunch so FinalProcessor can stick a line inbetween easily
         
-        if let update = progressLine(for: .interFrameProcessing) {
+        if let update = progressLine(for: .secondClassification) {
             updates.append(update)
         }
         

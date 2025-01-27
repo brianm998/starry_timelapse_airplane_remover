@@ -221,7 +221,7 @@ fileprivate func finalProcess(atIndex currentIndex: Int,
 
         Log.d("frame \(frame.frameIndex) about to final process step 3")
 
-        await frame.set(state: .interFrameProcessing)
+        await frame.set(state: .secondClassification)
         
         await frame.applyDecisionTreeToAllOutliers(includingDustbin: viewModel.shouldShowDustbin)
       

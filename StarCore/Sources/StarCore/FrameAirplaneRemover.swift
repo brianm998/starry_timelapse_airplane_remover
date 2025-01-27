@@ -601,10 +601,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let blobs = Array(blobMap.values)
 
         Log.i("frame \(frameIndex) has \(blobs.count) blobs")
-        self.set(state: .populatingOutlierGroups)
+        self.set(state: .firstClassification)
 
         let classifier = OutlierClassifier(frame: self)
-        self.set(state: .populatingOutlierGroups1)
+
         let (good, bad, featureTime, classificationTime, outlierCount) =
           await classifier.promoteAndClassify(blobs) // this is where time is spent
 
@@ -785,7 +785,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
   */      
         if shouldUseDecisionTree {
             Log.i("frame \(frameIndex) classifying outliers with decision tree")
-            self.set(state: .interFrameProcessing)
+            self.set(state: .secondClassification)
             await self.applyDecisionTreeToAllOutliers(includingDustbin: includingDustbin)
         }
     }
@@ -1586,7 +1586,6 @@ fileprivate class OutlierClassifier {
 
                 // promote found blobs to outlier groups for further processing
                 let classifier = await currentClassifier.get(for: .isolated) 
-                await frame.set(state: .populatingOutlierGroups2)
 
                 let dataHarvester = await FrameDataHarvester(for: frame, treeType: .isolated)
 
@@ -1642,7 +1641,6 @@ fileprivate class OutlierClassifier {
                         }
                     }
                 }
-                await frame.set(state: .populatingOutlierGroups3)
 
                 var good: [OutlierGroup] = []
                 var bad: [OutlierGroup] = []
