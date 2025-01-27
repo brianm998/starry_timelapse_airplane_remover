@@ -167,45 +167,44 @@ public final class FrameDataHarvester: Sendable {
             await group.set(neighborLineScores: neighborLineScores)
         }
 
-        var ret = [Double](repeating: 0, count: OutlierGroupFeature.allCases.count)
+        var ret: [Double] = []
+        ret.append(Double(group.id)) // group id goes first for later categorization
         
         for type in OutlierGroupFeature.allCases {
             if type.isUsed(for: treeType) {
                 switch type {
                 case .numberOfNearbyOutliersInSameFrame:
                     if group.size >= OutlierGroupFeature.minNeighborScoreSize {
-                        ret[type.sortOrder] =
-                          await calculateNumberOfNearbyOutliersInSameFrame(of: group, in: outlierGroups)
+                        ret.append(await calculateNumberOfNearbyOutliersInSameFrame(of: group, in: outlierGroups))
                     } 
                     
                 case .nearbyDirectOverlapScore:
                     if group.size >= OutlierGroupFeature.minNeighborScoreSize {
-                        ret[type.sortOrder] =
-                          calculateNearbyDirectOverlapScore(of: group,
-                                                            previousImageData: previousOutlierData,
-                                                            nextImageData: nextOutlierData)
+                        ret.append(calculateNearbyDirectOverlapScore(of: group,
+                                                                     previousImageData: previousOutlierData,
+                                                                     nextImageData: nextOutlierData))
                     }
                 case .boundingBoxOverlapScore:
                     if group.size >= OutlierGroupFeature.minNeighborScoreSize {
-                        ret[type.sortOrder] =
+                        ret.append(
                           calculateBoundingBoxOverlapScore(of: group,
                                                            previousImageData: previousOutlierData,
-                                                           nextImageData: nextOutlierData)
+                                                           nextImageData: nextOutlierData))
                     }
                 case .neighborLineThetaScore:
-                    ret[type.sortOrder] = neighborLineScores.thetaScore
+                    ret.append(neighborLineScores.thetaScore)
                 case .neighborLineRhoScore:
-                    ret[type.sortOrder] = neighborLineScores.rhoScore
+                    ret.append(neighborLineScores.rhoScore)
                 case .neighborLineSizeScore:
-                    ret[type.sortOrder] = neighborLineScores.sizeScore
+                    ret.append(neighborLineScores.sizeScore)
                 case .neighborLineBrightnessScore:
-                    ret[type.sortOrder] = neighborLineScores.brightnessScore
+                    ret.append(neighborLineScores.brightnessScore)
                 case .neighborLineDistanceScore:
-                    ret[type.sortOrder] = neighborLineScores.distanceScore
+                    ret.append(neighborLineScores.distanceScore)
 
                     // all the rest are fast enough like this
                 default:
-                    ret[type.sortOrder] = await type.decisionTreeValue(of: group)
+                    ret.append(await type.decisionTreeValue(of: group))
                 }
             }
         }
