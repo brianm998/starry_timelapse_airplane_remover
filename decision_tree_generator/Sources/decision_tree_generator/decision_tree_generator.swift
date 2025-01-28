@@ -399,7 +399,33 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
     // actually generate a decision tree forest
     func generateForestFromTrainingData(with forestSize: Int) async throws {
 
-        let generator = DecisionTreeGenerator(withTypes: OutlierGroupFeature.allCases,
+        var decisionTypes: [OutlierGroupFeature] = []
+
+        if decisionTypesString == "" {
+            // if not specfied, maybe use tree type
+            if let treeType {
+                switch treeType {
+                case .all:
+                    decisionTypes = OutlierGroupFeature.allCases
+                case .isolated:
+                    decisionTypes = OutlierGroupFeature.allCases.filter { $0.isUsed(for: treeType) }
+                }
+            } else {
+                decisionTypes = OutlierGroupFeature.allCases
+            }
+        } else {
+            // split out given types
+            let rawValues = decisionTypesString.components(separatedBy: ",")
+            for rawValue in rawValues {
+                if let enumValue = OutlierGroupFeature(rawValue: rawValue) {
+                    decisionTypes.append(enumValue)
+                } else {
+                    Log.w("type \(rawValue) is not a member of OutlierGroupFeature")
+                }
+            }
+        }
+        
+        let generator = DecisionTreeGenerator(withTypes: decisionTypes,
                                               andSplitTypes: [.median],
                                               pruneTree: !noPrune,
                                               maxDepth: maxDepth)
@@ -509,7 +535,7 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
                 }
             }
         }
-        
+
         // training data gathered from all inputs
         let trainingData = try await loadTrainingData()
 
