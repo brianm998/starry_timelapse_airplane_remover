@@ -16,6 +16,28 @@ struct FilmstripImageView: View {
                     Text("\(frameIndex)").foregroundColor(.white)
                       .frame(alignment: .leading)
                     Spacer()
+                    let circleSize: CGFloat = 4
+                    if let num = frameView.frameObserver.numberOfPositiveOutliers,
+                       num != 0
+                    {
+                        Circle()
+                          .fill(.red)
+                          .frame(width: circleSize, height: circleSize)
+                    }
+                    if let num = frameView.frameObserver.numberOfNegativeOutliers,
+                       num != 0
+                    {
+                        Circle()
+                          .fill(.green)
+                          .frame(width: circleSize, height: circleSize)
+                    }
+                    if let num = frameView.frameObserver.numberOfUndecidedOutliers,
+                       num != 0
+                    {
+                        Circle()
+                          .fill(.orange)
+                          .frame(width: circleSize, height: circleSize)
+                    }
                     switch frameView.outliersLoaded {
                     case .unloaded:
                         // show nothing when unloaded
