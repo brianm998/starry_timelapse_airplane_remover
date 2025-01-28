@@ -356,9 +356,9 @@ fileprivate func maybeAbsorb(x: Int,
                  
                  */
 
-                let blobSize = await _iterationBlob.size()
+                //let blobSize = await _iterationBlob.size()
                 
-                if let newLine = await blobCopy.line,
+                if let _ = await blobCopy.line,
                    let newScore = await blobCopy.blobLineScore()
                 {
                     //Log.d("frame \(frameIndex) processing blob \(_iterationBlob) @ [\(x), \(y)] oldScore \(oldScore) newScore \(newScore)")
@@ -368,7 +368,7 @@ fileprivate func maybeAbsorb(x: Int,
                         await data.processedBlobs.insert(newBlob.id)
                         await data.iterationBlob.set(blobCopy)
                         
-                        let copySize = await blobCopy.size()
+                        //let copySize = await blobCopy.size()
                         
                         //Log.d("frame \(frameIndex) processing blob \(iterationBlob) @ [\(x), \(y)] size \(blobSize) did absorb other blob size \(newBlobSize) resulting in size \(copySize)")
                         
