@@ -730,11 +730,18 @@ fileprivate func result(for type: OutlierGroupFeature,
     let negativeTrainingDataCount = trainingData.negativeData.count 
     for index in 0..<negativeTrainingDataCount {
         let groupValues = trainingData.negativeData[index]
-        let groupValue = groupValues.values[type.sortOrder]
-        if groupValue < decisionValue {
-            lessThanNegative.append(groupValues)
+
+        if type.sortOrder >= 0,
+           type.sortOrder < groupValues.values.count
+        {
+            let groupValue = groupValues.values[type.sortOrder]
+            if groupValue < decisionValue {
+                lessThanNegative.append(groupValues)
+            } else {
+                greaterThanNegative.append(groupValues)
+            }
         } else {
-            greaterThanNegative.append(groupValues)
+            Log.w("type.sortOrder \(type.sortOrder) groupValues.values.count \(groupValues.values.count)")
         }
     }
 
