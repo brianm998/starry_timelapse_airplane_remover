@@ -130,9 +130,7 @@ public final class FrameDataHarvester: Sendable {
 //        Task { await frameDataHarvesterDataHolder.harvesterDone() }
     }
     
-    public func decisionTreeValues(for group: OutlierGroup,
-                                   with treeType: TreeType = .all) async -> [Double]
-    {
+    public func decisionTreeValues(for group: OutlierGroup) async -> [Double] {
 
         // XXX XXX XXX
         //return [Double](repeating: 0, count: OutlierGroupFeature.allCases.count)
@@ -145,8 +143,7 @@ public final class FrameDataHarvester: Sendable {
         if let exisingNeighborLineScores = await group.exisitingNeighborLineScores {
             // grab existing ones if they exist
             neighborLineScores = exisingNeighborLineScores
-        } else if treeType == .all,
-                  // don't process smaller blobs with this method
+        } else if // don't process smaller blobs with this method
                   group.size >= OutlierGroupFeature.minNeighborScoreSize, 
                   let originalGroupLine = await group.originZeroLine,
                   let previousOutlierGroups,
@@ -167,45 +164,46 @@ public final class FrameDataHarvester: Sendable {
             await group.set(neighborLineScores: neighborLineScores)
         }
 
-        var ret: [Double] = []
-        ret.append(Double(group.id)) // group id goes first for later categorization
+        var ret = [Double](repeating: 0, count: OutlierGroupFeature.allCases.count+1)
+        ret[0] = Double(group.id) // group id goes first for later categorization
         
         for type in OutlierGroupFeature.allCases {
-            if type.isUsed(for: treeType) {
-                switch type {
-                case .numberOfNearbyOutliersInSameFrame:
-                    if group.size >= OutlierGroupFeature.minNeighborScoreSize {
-                        ret.append(await calculateNumberOfNearbyOutliersInSameFrame(of: group, in: outlierGroups))
-                    } 
-                    
-                case .nearbyDirectOverlapScore:
-                    if group.size >= OutlierGroupFeature.minNeighborScoreSize {
-                        ret.append(calculateNearbyDirectOverlapScore(of: group,
-                                                                     previousImageData: previousOutlierData,
-                                                                     nextImageData: nextOutlierData))
-                    }
-                case .boundingBoxOverlapScore:
-                    if group.size >= OutlierGroupFeature.minNeighborScoreSize {
-                        ret.append(
-                          calculateBoundingBoxOverlapScore(of: group,
-                                                           previousImageData: previousOutlierData,
-                                                           nextImageData: nextOutlierData))
-                    }
-                case .neighborLineThetaScore:
-                    ret.append(neighborLineScores.thetaScore)
-                case .neighborLineRhoScore:
-                    ret.append(neighborLineScores.rhoScore)
-                case .neighborLineSizeScore:
-                    ret.append(neighborLineScores.sizeScore)
-                case .neighborLineBrightnessScore:
-                    ret.append(neighborLineScores.brightnessScore)
-                case .neighborLineDistanceScore:
-                    ret.append(neighborLineScores.distanceScore)
-
-                    // all the rest are fast enough like this
-                default:
-                    ret.append(await type.decisionTreeValue(of: group))
+            switch type {
+            case .numberOfNearbyOutliersInSameFrame:
+                if group.size >= OutlierGroupFeature.minNeighborScoreSize {
+                    ret[type.sortOrder+1] =
+                      await calculateNumberOfNearbyOutliersInSameFrame(of: group,
+                                                                       in: outlierGroups)
                 }
+
+            case .nearbyDirectOverlapScore:
+                if group.size >= OutlierGroupFeature.minNeighborScoreSize {
+                    ret[type.sortOrder+1] =
+                      calculateNearbyDirectOverlapScore(of: group,
+                                                        previousImageData: previousOutlierData,
+                                                        nextImageData: nextOutlierData)
+                }
+            case .boundingBoxOverlapScore:
+                if group.size >= OutlierGroupFeature.minNeighborScoreSize {
+                    ret[type.sortOrder+1] =
+                      calculateBoundingBoxOverlapScore(of: group,
+                                                       previousImageData: previousOutlierData,
+                                                       nextImageData: nextOutlierData)
+                }
+            case .neighborLineThetaScore:
+                ret[type.sortOrder+1] = neighborLineScores.thetaScore
+            case .neighborLineRhoScore:
+                ret[type.sortOrder+1] = neighborLineScores.rhoScore
+            case .neighborLineSizeScore:
+                ret[type.sortOrder+1] = neighborLineScores.sizeScore
+            case .neighborLineBrightnessScore:
+                ret[type.sortOrder+1] = neighborLineScores.brightnessScore
+            case .neighborLineDistanceScore:
+                ret[type.sortOrder+1] = neighborLineScores.distanceScore
+
+                // all the rest are fast enough like this
+            default:
+                ret[type.sortOrder+1] = await type.decisionTreeValue(of: group)
             }
         }
 

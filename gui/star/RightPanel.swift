@@ -105,6 +105,24 @@ struct RightPanel: View {
                             
                             Toggle("Show Dustbin", isOn: $viewModel.shouldShowDustbin)
                               .foregroundColor(.white)
+
+                            Text("Minimum Classification Size")
+                              .foregroundColor(.orange)
+                            TextField("\(viewModel.minimumClassificationSize)",
+                                      text: $viewModel.minimumClassificationSizeString)
+                              .frame(maxWidth: 60)
+                              .onSubmit {
+                                  let filtered = viewModel.minimumClassificationSizeString.filter { "0123456789".contains($0) }
+                                  if let newIntValue = Int(filtered),
+                                     newIntValue >= 0
+                                  {
+                                      viewModel.minimumClassificationSize = newIntValue
+                                      viewModel.minimumClassificationSizeString = "\(newIntValue)"
+                                  }
+                              }
+
+                            Toggle("Only Unclassified", isOn: $viewModel.classifyOnlyUnclassified)
+                              .foregroundColor(.orange)
                             
                             // frame rate checkoer
                             let frame_rates = [1, 2, 3, 5, 10, 15, 20, 25, 30, 60, 90]

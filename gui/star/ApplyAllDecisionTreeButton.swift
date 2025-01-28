@@ -9,13 +9,15 @@ struct ApplyAllDecisionTreeButton: View {
         Log.d("applyAllDecisionTreeButton")
         let action: () -> Void = {
             Log.d("applyAllDecisionTreeButton action")
-            Task {
+            Task.detached(priority: .userInitiated) {
                 Log.d("doh")
                 do {
                     //Log.d("doh index \(viewModel.currentIndex) frame \(viewModel.frames[0].frame) have_all_frames \(viewModel.have_all_frames)")
-                    if let frame = viewModel.currentFrame {
+                    if let frame = await viewModel.currentFrame {
                        
-                        _ = await frame.applyDecisionTreeToAllOutliers(includingDustbin: viewModel.shouldShowDustbin)
+                        _ = await frame.applyDecisionTreeToAllOutliers(includingDustbin: viewModel.shouldShowDustbin,
+                                                                       overwrite: !viewModel.classifyOnlyUnclassified,
+                                                                       minimumSize: viewModel.minimumClassificationSize)
                         try? await viewModel.render(frame: frame) {
                             Task {
                                 await viewModel.refresh(frame: frame)

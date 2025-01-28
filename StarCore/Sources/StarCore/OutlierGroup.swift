@@ -263,8 +263,7 @@ public actor OutlierGroup: CustomStringConvertible,
         }
     }
 
-    public func featureData(for treeType: TreeType = .all,
-                            dataHarvester: FrameDataHarvester? = nil) async -> OutlierGroupFeatureData
+    public func featureData(dataHarvester: FrameDataHarvester) async -> OutlierGroupFeatureData
     {
         // XXX try recording time too here, and reporting it to the UI?
         var features = [OutlierGroupFeature](repeating: .size, count: OutlierGroupFeature.allCases.count)
@@ -272,18 +271,8 @@ public actor OutlierGroup: CustomStringConvertible,
             features[type.sortOrder] = type
         }
 
-        if let dataHarvester {
-            let values = await dataHarvester.decisionTreeValues(for: self, with: treeType)
-            return OutlierGroupFeatureData(features: features, values: values)
-        } else if let frame = self.frame {
-            let dataHarvester = await FrameDataHarvester(for: frame)
-            let values = await dataHarvester.decisionTreeValues(for: self, with: treeType)
-            return OutlierGroupFeatureData(features: features, values: values)
-        } else {
-            Log.w("with no harvester or frame, reporting all zeros :(") 
-            let values = [Double](repeating: 0, count: features.count)
-            return OutlierGroupFeatureData(features: features, values: values)
-        }
+        let values = await dataHarvester.decisionTreeValues(for: self)
+        return OutlierGroupFeatureData(features: features, values: values)
     }
     
     fileprivate static func averageMedianMaxDistance(for pixelSet: Set<SortablePixel>,
@@ -405,10 +394,10 @@ public actor OutlierGroup: CustomStringConvertible,
         for pixel in pixelSet {
             var pixelToWrite = Pixel()
             // the real color is set in the view layer 
-            pixelToWrite.red = 0xFFFF
-            pixelToWrite.green = 0xFFFF
-            pixelToWrite.blue = 0xFFFF
-            pixelToWrite.alpha = 0xFFFF
+            pixelToWrite.red = pixel.intensity
+            pixelToWrite.green = pixel.intensity
+            pixelToWrite.blue = pixel.intensity
+            pixelToWrite.alpha = pixel.intensity
 
             var nextValue = pixelToWrite.value
             
@@ -512,6 +501,7 @@ public actor OutlierGroup: CustomStringConvertible,
 
     // the ordering of the list of values above
     static var decisionTreeValueTypes: [OutlierGroupFeature] {
+        // XXX this is assumed to be the same as sort order...
         OutlierGroupFeature.allCases 
     }
 

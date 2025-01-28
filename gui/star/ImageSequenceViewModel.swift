@@ -201,6 +201,11 @@ public final class ImageSequenceViewModel {
     var shouldShowInitialInstructions: Bool = false
 
     var shouldShowDustbin: Bool = false
+
+    var minimumClassificationSize: Int = 20
+    var minimumClassificationSizeString = ""
+
+    var classifyOnlyUnclassified: Bool = true
     
     convenience init(withConfig jsonConfigFilename: String,
                      closure: @escaping @Sendable (Int, Double, Int, Double) -> Void) async throws
