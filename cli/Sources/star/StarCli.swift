@@ -240,11 +240,11 @@ struct StarCli: AsyncParsableCommand {
         
         // gui has to do this too
         await StarCore.currentClassifier.set(for: .all) {
-            OutlierGroupForestClassifier_deda1214()
+            OutlierGroupForestClassifier_8cad8b31()
         }
 
         await StarCore.currentClassifier.set(for: .isolated) {
-            OutlierGroupForestClassifier_deda1214()
+            OutlierGroupForestClassifier_dacba75b()
         }
 
         if version {
