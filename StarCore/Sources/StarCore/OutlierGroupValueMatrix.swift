@@ -1,4 +1,5 @@
 import Foundation
+import logging
 
 // used for storing only decision tree data for all of the outlier groups in a frame
 // this one is used for reading condensed and categorized data
@@ -63,7 +64,18 @@ public class OutlierGroupValueMatrix {
             if values[values.count-1].count != self.types.count {
                 values.removeLast()
             }
-            self.negativeValues = values
+
+            var goodValues: [[Double]] = []
+            
+            for i in 0..<values.count {
+                if values[i].count != self.types.count {
+                    Log.w("bad values[\(i)]: \(values[i])")
+                } else {
+                    goodValues.append(values[i])
+                }
+            }
+            
+            self.negativeValues = goodValues
             
         } else {
             return nil
