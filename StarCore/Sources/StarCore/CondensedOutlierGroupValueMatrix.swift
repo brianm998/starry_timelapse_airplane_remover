@@ -8,17 +8,14 @@ public actor CondensedOutlierGroupValueMatrix {
 
     public var outlierValues: [[Double]]
 
-    public let dataHarvester: FrameDataHarvester
-    
     public func append(outlierGroup: OutlierGroup) async {
-        outlierValues.append(await dataHarvester.decisionTreeValues(for: outlierGroup))
+        outlierValues.append(await outlierGroup.decisionTreeValues())
     }
 
     public static let typesFilename = "types.csv"
     public static let outlierDataFilename = "outlier_data.csv"
 
     public init(for frame: FrameAirplaneRemover) async {
-        self.dataHarvester = await FrameDataHarvester(for: frame)
         self.types = OutlierGroup.decisionTreeValueTypes
         self.outlierValues = []
     }

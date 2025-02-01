@@ -71,7 +71,11 @@ public actor OutlierGroup: CustomStringConvertible,
     fileprivate var lineLoaded = false
     fileprivate var shouldLoadLine = true
 
-    public func getLineScore() -> Double? { lineScore }
+    public func getLineScore() async -> Double? {
+        // make sure the line is loaded, otherwise no score
+        if !lineLoaded { let _ = await self.line() }
+        return lineScore         
+    }
     
     public func set(line: HoughLineFinder.LineInfo) {
         _line = line.line
@@ -263,18 +267,6 @@ public actor OutlierGroup: CustomStringConvertible,
         }
     }
 
-    public func featureData(dataHarvester: FrameDataHarvester) async -> OutlierGroupFeatureData
-    {
-        // XXX try recording time too here, and reporting it to the UI?
-        var features = [OutlierGroupFeature](repeating: .size, count: OutlierGroupFeature.allCases.count)
-        for type in OutlierGroupFeature.allCases {
-            features[type.sortOrder] = type
-        }
-
-        let values = await dataHarvester.decisionTreeValues(for: self)
-        return OutlierGroupFeatureData(features: features, values: values)
-    }
-    
     fileprivate static func averageMedianMaxDistance(for pixelSet: Set<SortablePixel>,
                                                      from line: Line,
                                                      with bounds: BoundingBox)
@@ -486,7 +478,7 @@ public actor OutlierGroup: CustomStringConvertible,
     func decisionTreeValues(for treeType: TreeType = .all) async -> [Double] {
         var ret: [Double] = []
         ret.append(Double(self.id))
-        for type in OutlierGroupFeature.allCases {
+        for type in OutlierGroupFeature.allCases { // XXX sort order?
             //let t0 = NSDate().timeIntervalSince1970
             if type.isUsed(for: treeType) {
                 ret.append(await self.decisionTreeValueAsync(for: type))
@@ -498,11 +490,14 @@ public actor OutlierGroup: CustomStringConvertible,
         }
         return ret
     }
-
+    
     // the ordering of the list of values above
     static var decisionTreeValueTypes: [OutlierGroupFeature] {
-        // XXX this is assumed to be the same as sort order...
-        OutlierGroupFeature.allCases 
+        var ret = [OutlierGroupFeature](repeating: .size, count: OutlierGroupFeature.allCases.count)
+        for feature in OutlierGroupFeature.allCases {
+            ret[feature.sortOrder] = feature
+        }
+        return ret
     }
 
     public func decisionTreeGroupValues() async -> OutlierFeatureData {

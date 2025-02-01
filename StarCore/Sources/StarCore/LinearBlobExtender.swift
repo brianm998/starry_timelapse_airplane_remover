@@ -325,7 +325,6 @@ fileprivate func handleIteration(x: Int,
                                      data: data,
                                      furtherIterations: furtherIterations)
         }
-        return true
     }
     return false
 }

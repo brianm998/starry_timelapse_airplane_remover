@@ -1252,6 +1252,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 
                 await classifier.classifyAll(values, overwrite: overwrite)
                 let endTime = NSDate().timeIntervalSince1970
+                Task { @MainActor in
+                    await self.updateCombineSubjects()
+                }
+                
                 Log.i("frame \(self.frameIndex) spent \(endTime - startTime) seconds classifing outlier groups");
             }.value
         } else {
@@ -1272,6 +1276,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
             // 
         }.value
+        Task { @MainActor in
+            await self.updateCombineSubjects()
+        }
     }
 
     public func userSelectUndecidedOutliers(toShouldPaint shouldPaint: Bool,
@@ -1287,6 +1294,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
         }.value
+        Task { @MainActor in
+            await self.updateCombineSubjects()
+        }
     }
 
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
@@ -1296,6 +1306,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         for group in await outlierGroups.groups(overlapping: group) {
             await group.shouldPaint(.userSelected(shouldPaint))
+        }
+        Task { @MainActor in
+            await self.updateCombineSubjects()
         }
     }
     
@@ -1311,6 +1324,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             if isInDustbin {
                 await self.outlierGroups?.promoteFromDustbin(group)
             }
+        }
+        Task { @MainActor in
+            await self.updateCombineSubjects()
         }
     }
 
@@ -1673,7 +1689,8 @@ fileprivate class OutlierClassifier {
                     totalClassificationTime += classTime
                     totalOutliers += chunkCount
                     for value in values {
-                        if value.classification > -0.1 { // XXX constant XXX expose this XXX
+                        if value.outlier.size > 10,      // XXX constant XXX 
+                           value.classification > -0.1 { // XXX constant XXX expose this XXX
                             // it's good
                             good.append(value.outlier)
                         } else {
