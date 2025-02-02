@@ -606,8 +606,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let classifier = OutlierClassifier(frame: self)
 
         let (good, bad, featureTime, classificationTime, outlierCount) =
-          await classifier.promoteAndClassify(blobs) // this is where time is spent
-
+          await classifier.promoteAndClassify(blobs,
+                                              dustbinLevel: -0.1, // XXX hardcoded
+                                              smallDustMax: 10)   // XXX hardcoded
         Task {
             await classificationTimingDataHolder.set(featureTime: featureTime,
                                                      classificationTime: classificationTime,
@@ -1612,7 +1613,11 @@ fileprivate class OutlierClassifier {
     }
 
     // classifies blobs with the .isolated classifier, and promotes them to separate groups
-    func promoteAndClassify(_ blobs: [Blob]) async -> ([OutlierGroup], [OutlierGroup], TimeInterval, TimeInterval, Int) {
+    func promoteAndClassify(_ blobs: [Blob],
+                            dustbinLevel: Double = 0.0,
+                            smallDustMax: Int = 10) async
+      -> ([OutlierGroup], [OutlierGroup], TimeInterval, TimeInterval, Int)
+    {
         let frame = self.frame
         let frameIndex = self.frameIndex
         
@@ -1648,10 +1653,6 @@ fileprivate class OutlierClassifier {
                                 if let classifier {
                                     let startTime = Date().timeIntervalSince1970
 
-                                    // XXX figure out why this is so fucking slow XXX 
-                                    //let featureData = await outlierGroup.featureData(for: .isolated, dataHarvester: dataHarvester)
-                                    // XXX figure out why this is so fucking slow XXX
-                                    
                                     let featureTime = Date().timeIntervalSince1970
                                     let classification = await classifier.classification(of: outlierGroup)
                                     let classTime = Date().timeIntervalSince1970
@@ -1689,8 +1690,9 @@ fileprivate class OutlierClassifier {
                     totalClassificationTime += classTime
                     totalOutliers += chunkCount
                     for value in values {
-                        if value.outlier.size > 10,      // XXX constant XXX 
-                           value.classification > -0.1 { // XXX constant XXX expose this XXX
+                        if value.outlier.size > smallDustMax,
+                           value.classification > dustbinLevel
+                        {
                             // it's good
                             good.append(value.outlier)
                         } else {
