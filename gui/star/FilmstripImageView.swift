@@ -9,7 +9,7 @@ struct FilmstripImageView: View {
     var body: some View {
         VStack(alignment: .center) {
             let frameView = viewModel.frames[frameIndex]
-            Spacer().frame(maxHeight: 8)
+            Spacer().frame(height: 6)
               .layoutPriority(1)
             HStack(spacing: 0) {
                 Spacer().frame(width: 8)
@@ -59,10 +59,14 @@ struct FilmstripImageView: View {
                 Spacer()
                   .frame(width: 4)
             }
-              .frame(maxHeight: 10)
+              .frame(height: 10)
+
+            Spacer()
+              .frame(height: 6)
             
             if frameIndex >= 0 && frameIndex < viewModel.frames.count {
-                ZStack(alignment: .bottomTrailing) {
+                ZStack(alignment: .center) {
+                    // the actual thumbnail image
                     if viewModel.currentIndex == frameIndex {
                         frameView.thumbnailImage
                           .foregroundColor(.orange)
@@ -70,15 +74,39 @@ struct FilmstripImageView: View {
                         frameView.thumbnailImage
                     }
                     if let frameState = frameView.frameState {
-                        Circle()
-                          .fill(frameState.color)
-                          .opacity(0.6)
-                          .frame(maxWidth: 10, maxHeight: 10)
-                          .offset(x: -2, y: -2)
+                        // the green dot on the bottom right
+                        if frameState == .complete {
+                            VStack {
+                                Spacer() 
+                                HStack {
+                                    Spacer()
+
+                                    Circle()
+                                      .fill(frameState.color)
+                                      .opacity(0.6)
+                                      .frame(maxWidth: 10, maxHeight: 10)
+                                      .offset(x: -2, y: -2)
+
+                                    Spacer()
+                                      .frame(width: 4)
+                                }
+                            }
+                        }
+                        // processing state on the bottom left 
+                        VStack {
+                            Spacer() 
+                            HStack {
+                                Spacer()
+                                  .frame(width: 8)
+                                Text(frameState.shortString)
+                                  .foregroundColor(frameState.color)
+                                Spacer()
+                            }
+                        }
                     }
                 }
             }
-            Spacer().frame(maxHeight: 8)
+            Spacer().frame(height: 8)
         }
           .frame(width: CGFloat((viewModel.config?.config().thumbnailWidth ?? 80) + 8),
                  height: CGFloat((viewModel.config?.config().thumbnailHeight ?? 50) + 30))

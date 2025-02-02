@@ -195,6 +195,66 @@ public enum FrameProcessingState: Int,
         }
     }
 
+    public var shortString: String {
+        switch self {
+        case .unprocessed:
+            return "unprocessed"
+        case .starAlignment:
+            return "align"
+        case .subtractingNeighbor:
+            return "subtract"
+        case .assemblingPixels:
+            return "assemble"
+        case .sortingPixels:
+            return "sorting"
+        case .detectingBlobs:
+            return "blob detection"
+        case .filter1:
+            return "filter 1"
+        case .filter2:
+            return "filter 2"
+        case .filter3:
+            return "filter 3"
+        case .filter4:
+            return "filter 4"
+        case .filter5:
+            return "filter 5"
+        case .filter6:
+            return "filter 6"
+        case .filter7:
+            return "filter 7"
+        case .filter8:
+            return "filter 8"
+        case .firstClassification:
+            return "class 1"
+        case .readyForInterFrameProcessing:
+            return "inter"
+        case .secondClassification:
+            return "class 2"
+        case .outlierProcessingComplete:
+            return "ready to finish"
+        case .finishing:
+            return "finishing"
+        case .writingOutlierValues:
+            return "write values"
+        case .userModified:
+            return "classified"
+        case .waitingToLoadImages:
+            return "waiting to load"
+        case .loadingImages:
+            return "loading 1"
+        case .loadingImages1:
+            return "loading 2"
+        case .painting:
+            return "paint mask"
+        case .painting2:
+            return "painting"
+        case .writingOutputFile:
+            return "writing"
+        case .complete:
+            return ""
+        }
+    }
     public var color: Color {
         switch self {
         case .unprocessed:
