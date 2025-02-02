@@ -19,6 +19,10 @@ struct RightPanel: View {
     let foobar = 134.0/255.0 // XXX make a custom color from these
     let foobar2 = 138.0/255.0
 
+    @FocusState private var minimumClassificationSizeIsFirstResponder: Bool
+    @FocusState private var dustbinLevelIsFirstResponder: Bool
+    @FocusState private var smallDustMaxIsFirstResponder: Bool
+
     var body: some View {
         @Bindable var viewModel = viewModel
         return Group {
@@ -106,11 +110,42 @@ struct RightPanel: View {
                             Toggle("Show Dustbin", isOn: $viewModel.shouldShowDustbin)
                               .foregroundColor(.white)
 
+                            Text("Dustbin Level")
+                              .foregroundColor(.yellow)
+                            TextField("\(viewModel.dustbinLevel)",
+                                      text: $viewModel.dustbinLevelString)
+                              .frame(maxWidth: 60)
+                              .focused($dustbinLevelIsFirstResponder)
+                              .onSubmit {
+                                  let filtered = viewModel.dustbinLevelString.filter { "0123456789.".contains($0) }
+                                  if let newValue = Double(filtered) {
+                                      viewModel.dustbinLevel = newValue
+                                      viewModel.dustbinLevelString = "\(newValue)"
+                                      self.dustbinLevelIsFirstResponder = false
+                                  }
+                              }
+                            
+                            Text("Small Dust Max")
+                              .foregroundColor(.yellow)
+                            TextField("\(viewModel.smallDustMax)",
+                                      text: $viewModel.smallDustMaxString)
+                              .frame(maxWidth: 60)
+                              .focused($smallDustMaxIsFirstResponder)
+                              .onSubmit {
+                                  let filtered = viewModel.smallDustMaxString.filter { "0123456789".contains($0) }
+                                  if let newValue = Int(filtered) {
+                                      viewModel.smallDustMax = newValue
+                                      viewModel.smallDustMaxString = "\(newValue)"
+                                      self.smallDustMaxIsFirstResponder = false
+                                  }
+                              }
+                            
                             Text("Minimum Classification Size")
                               .foregroundColor(.orange)
                             TextField("\(viewModel.minimumClassificationSize)",
                                       text: $viewModel.minimumClassificationSizeString)
                               .frame(maxWidth: 60)
+                              .focused($minimumClassificationSizeIsFirstResponder)
                               .onSubmit {
                                   let filtered = viewModel.minimumClassificationSizeString.filter { "0123456789".contains($0) }
                                   if let newIntValue = Int(filtered),
@@ -118,6 +153,7 @@ struct RightPanel: View {
                                   {
                                       viewModel.minimumClassificationSize = newIntValue
                                       viewModel.minimumClassificationSizeString = "\(newIntValue)"
+                                      self.minimumClassificationSizeIsFirstResponder = false
                                   }
                               }
 

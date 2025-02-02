@@ -206,7 +206,23 @@ public final class ImageSequenceViewModel {
     var minimumClassificationSizeString = ""
 
     var classifyOnlyUnclassified: Bool = true
+
+    var dustbinLevel: Double {
+        didSet {
+            Task { await constants.set(dustbinLevel: self.dustbinLevel) }
+        }
+    }
+
+    var dustbinLevelString: String = ""
     
+    var smallDustMax: Int {
+        didSet {
+            Task { await constants.set(smallDustMax: self.smallDustMax) }
+        }
+    }
+
+    var smallDustMaxString: String = ""
+
     convenience init(withConfig jsonConfigFilename: String,
                      closure: @escaping @Sendable (Int, Double, Int, Double) -> Void) async throws
     {
@@ -221,7 +237,6 @@ public final class ImageSequenceViewModel {
     convenience init(withNewImageSequence imageSequenceDirname: String,
                      closure: @Sendable @escaping (Int, Double, Int, Double) -> Void) async throws
     {
-
         let shouldWriteOutlierGroupFiles = true // XXX see what happens
         
         // XXX copied from star.swift
@@ -281,6 +296,9 @@ public final class ImageSequenceViewModel {
 
     init(with configManager: ConfigManager, closure: @Sendable @escaping (Int, Double, Int, Double) -> Void) async throws {
 
+        self.dustbinLevel = await constants.getDustbinLevel()
+        self.smallDustMax = await constants.getSmallDustMax()
+        
         let config = configManager.config()
 
         self.config = configManager
