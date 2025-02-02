@@ -163,11 +163,12 @@ struct StarApp: App {
     init() {
         // maybe move this elsewhere
         Task {
+
             await StarCore.currentClassifier.set(for: .all) {
-                OutlierGroupForestClassifier_8cad8b31()
+                OutlierGroupForestClassifier_f6fe466e()
             }
             await StarCore.currentClassifier.set(for: .isolated) {
-                OutlierGroupForestClassifier_dacba75b()
+                OutlierGroupForestClassifier_c444252b()
             }
         }
 
