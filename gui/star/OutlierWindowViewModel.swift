@@ -76,6 +76,7 @@ public final class OutlierWindowViewModel {
     public var showNeighborLineSizeScore = true
     public var showNeighborLineBrightnessScore = true
     public var showNeighborLineDistanceScore = true
+    public var showClassificationScore = true
     
     public func selectAll() {
         setAll(to: true)
@@ -119,5 +120,6 @@ public final class OutlierWindowViewModel {
         showNeighborLineSizeScore = value
         showNeighborLineBrightnessScore = value
         showNeighborLineDistanceScore = value
+        showClassificationScore = value
     }
 }

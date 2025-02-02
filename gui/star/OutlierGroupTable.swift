@@ -72,6 +72,8 @@ struct OutlierGroupTableRow: Identifiable {
     let dt_neighborLineSizeScore: Double
     let dt_neighborLineBrightnessScore: Double
     let dt_neighborLineDistanceScore: Double
+
+    let dt_classificationScore: Double
     
     init(_ group: OutlierGroup) async {
         name = group.id
@@ -123,10 +125,14 @@ struct OutlierGroupTableRow: Identifiable {
         dt_neighborLineSizeScore = await group.decisionTreeValueAsync(for: .neighborLineSizeScore)
         dt_neighborLineBrightnessScore = await group.decisionTreeValueAsync(for: .neighborLineBrightnessScore)
         dt_neighborLineDistanceScore = await group.decisionTreeValueAsync(for: .neighborLineDistanceScore)
+        dt_classificationScore = await classification(of: group)
     }
 }
 
-
+func classification(of group: OutlierGroup) async -> Double {
+    guard let classifier = await currentClassifier.get(for: .all) else { return 0 }
+    return await classifier.classification(of: group)
+}
 
 struct OutlierGroupTable: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
@@ -407,6 +413,13 @@ struct OutlierGroupTable: View {
                             self.tableColumn(for: "neighborLineDistanceScore",
                                              value: \.dt_neighborLineDistanceScore) { row in
                                 row.dt_neighborLineDistanceScore
+                            }
+                            
+                        }
+                        if self.outlierWindowViewModel.showClassificationScore {
+                            self.tableColumn(for: "classificationScore",
+                                             value: \.dt_classificationScore) { row in
+                                row.dt_classificationScore
                             }
                         }
                     }

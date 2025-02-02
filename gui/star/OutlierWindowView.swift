@@ -151,6 +151,7 @@ struct OutlierWindowView: View {
                 Toggle("NeighborLineSizeScore", isOn: $outlierWindowViewModel.showNeighborLineSizeScore)
                 Toggle("NeighborLineBrightnessScore", isOn: $outlierWindowViewModel.showNeighborLineBrightnessScore)
                 Toggle("NeighborLineDistanceScore", isOn: $outlierWindowViewModel.showNeighborLineDistanceScore)
+                Toggle("NeighborLineDistanceScore", isOn: $outlierWindowViewModel.showClassificationScore)
             }
         }
     }
