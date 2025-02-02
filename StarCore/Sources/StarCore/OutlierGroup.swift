@@ -386,10 +386,13 @@ public actor OutlierGroup: CustomStringConvertible,
         for pixel in pixelSet {
             var pixelToWrite = Pixel()
             // the real color is set in the view layer 
-            pixelToWrite.red = pixel.intensity
-            pixelToWrite.green = pixel.intensity
-            pixelToWrite.blue = pixel.intensity
-            pixelToWrite.alpha = pixel.intensity
+            pixelToWrite.red = 0xFFFF
+            pixelToWrite.green = 0xFFFF
+            pixelToWrite.blue = 0xFFFF
+            pixelToWrite.alpha = 0xFFFF
+            //pixelToWrite.red = pixel.intensity
+            //pixelToWrite.green = pixel.intensity
+            //pixelToWrite.blue = pixel.intensity
 
             var nextValue = pixelToWrite.value
             
