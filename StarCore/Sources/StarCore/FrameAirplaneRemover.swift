@@ -605,10 +605,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         let classifier = OutlierClassifier(frame: self)
 
+        let dustbinLevel = await constants.getDustbinLevel()
+        let smallDustMax = await constants.getSmallDustMax()
+        
         let (good, bad, featureTime, classificationTime, outlierCount) =
           await classifier.promoteAndClassify(blobs,
-                                              dustbinLevel: -0.1, // XXX hardcoded
-                                              smallDustMax: 10)   // XXX hardcoded
+                                              dustbinLevel: dustbinLevel,
+                                              smallDustMax: smallDustMax)
         Task {
             await classificationTimingDataHolder.set(featureTime: featureTime,
                                                      classificationTime: classificationTime,

@@ -22,6 +22,12 @@ public actor Constants {        // XXX rename this
 
     private var houghLineFinderArgs: HoughLineFinder.Args = .init()
 
+    // threshold for initial classification into dustbin or not
+    private var dustbinLevel: Double = -0.1
+
+    // anything smaller than this is dust
+    private var smallDustMax: Int = 10
+    
     public init(detectionType: DetectionType) {
         self.detectionType = detectionType
     }
@@ -47,5 +53,11 @@ public actor Constants {        // XXX rename this
     public func set(houghLineFinderArgs newArgs: HoughLineFinder.Args) async {
         self.houghLineFinderArgs = newArgs
     }
+
+    public func getDustbinLevel() -> Double { dustbinLevel }
+    public func set(dustbinLevel: Double) { self.dustbinLevel = dustbinLevel }
+
+    public func getSmallDustMax() -> Int { smallDustMax }
+    public func set(smallDustMax: Int) { self.smallDustMax = smallDustMax }
 }
 
