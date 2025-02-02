@@ -7,80 +7,81 @@ struct FilmstripImageView: View {
     let frameIndex: Int
 
     var body: some View {
-            VStack(alignment: .center) {
-                let frameView = viewModel.frames[frameIndex]
-                Spacer().frame(maxHeight: 8)
-                HStack {
-                    Spacer().frame(maxWidth: 10)
-                      .frame(alignment: .leading)
-                    Text("\(frameIndex)").foregroundColor(.white)
-                      .frame(alignment: .leading)
-                    Spacer()
-                    let circleSize: CGFloat = 4
-                    if let num = frameView.frameObserver.numberOfPositiveOutliers,
-                       num != 0
-                    {
-                        Circle()
-                          .fill(.red)
-                          .frame(width: circleSize, height: circleSize)
-                    }
-                    if let num = frameView.frameObserver.numberOfNegativeOutliers,
-                       num != 0
-                    {
-                        Circle()
-                          .fill(.green)
-                          .frame(width: circleSize, height: circleSize)
-                    }
-                    if let num = frameView.frameObserver.numberOfUndecidedOutliers,
-                       num != 0
-                    {
-                        Circle()
-                          .fill(.orange)
-                          .frame(width: circleSize, height: circleSize)
-                    }
-                    switch frameView.outliersLoaded {
-                    case .unloaded:
-                        // show nothing when unloaded
-                        Group { }
+        VStack(alignment: .center) {
+            let frameView = viewModel.frames[frameIndex]
+            Spacer().frame(maxHeight: 8)
+              .layoutPriority(1)
+            HStack(spacing: 0) {
+                Spacer().frame(width: 8)
 
-                    case .loading:
-                        Image(systemName: "line.diagonal")
-                          .foregroundColor(.yellow)
-                          .animation(Animation.easeInOut(duration:1)
-                                       .repeatForever(autoreverses:true))
-                    case .loaded:
-                        Image(systemName: "line.diagonal")
-                          .foregroundColor(.green)
-                    }
-
-                    Spacer()
-                      .frame(maxWidth: 6)
-                      .frame(alignment: .trailing)
-
-                }
-                  .frame(maxHeight: 10)
-                
-                if frameIndex >= 0 && frameIndex < viewModel.frames.count {
-                    ZStack(alignment: .bottomTrailing) {
-                        if viewModel.currentIndex == frameIndex {
-                            frameView.thumbnailImage
+                Text("\(frameIndex)").foregroundColor(.white)
+                  .layoutPriority(8)
+                Spacer()
+                let circleSize: CGFloat = 8
+                switch frameView.outliersLoaded {
+                case .unloaded:
+                    // show nothing when unloaded
+                    Group { }
+                      .layoutPriority(1)
+                    
+                case .loading:
+                    Image(systemName: "progress.indicator")
+                      .layoutPriority(1)
+                      .foregroundColor(.yellow)
+                      .animation(Animation.easeInOut(duration:1)
+                                   .repeatForever(autoreverses:true))
+                    // XXX add .onHover() here
+                    
+                case .loaded:
+                    HStack(spacing: -6) {
+                        if let num = frameView.frameObserver.numberOfPositiveOutliers,
+                           num != 0
+                        {
+                            Image(systemName: "line.diagonal")
+                              .foregroundColor(.red)
+                        }
+                        if let num = frameView.frameObserver.numberOfUndecidedOutliers,
+                           num != 0
+                        {
+                            Image(systemName: "line.diagonal")
                               .foregroundColor(.orange)
-                        } else {
-                            frameView.thumbnailImage
                         }
-                        if let frameState = frameView.frameState {
-                            Circle()
-                              .fill(frameState.color)
-                              .opacity(0.6)
-                              .frame(maxWidth: 10, maxHeight: 10)
-                              .offset(x: -2, y: -2)
+                        if let num = frameView.frameObserver.numberOfNegativeOutliers,
+                           num != 0
+                        {
+                            Image(systemName: "line.diagonal")
+                              .foregroundColor(.green)
                         }
                     }
+                      .layoutPriority(1)
                 }
-                Spacer().frame(maxHeight: 8)
+                
+                Spacer()
+                  .frame(width: 4)
             }
-            .frame(minWidth: CGFloat((viewModel.config?.config().thumbnailWidth ?? 80) + 8),
-                   minHeight: CGFloat((viewModel.config?.config().thumbnailHeight ?? 50) + 30))
+              .frame(maxHeight: 10)
+            
+            if frameIndex >= 0 && frameIndex < viewModel.frames.count {
+                ZStack(alignment: .bottomTrailing) {
+                    if viewModel.currentIndex == frameIndex {
+                        frameView.thumbnailImage
+                          .foregroundColor(.orange)
+                    } else {
+                        frameView.thumbnailImage
+                    }
+                    if let frameState = frameView.frameState {
+                        Circle()
+                          .fill(frameState.color)
+                          .opacity(0.6)
+                          .frame(maxWidth: 10, maxHeight: 10)
+                          .offset(x: -2, y: -2)
+                    }
+                }
+            }
+            Spacer().frame(maxHeight: 8)
+        }
+          .frame(width: CGFloat((viewModel.config?.config().thumbnailWidth ?? 80) + 8),
+                 height: CGFloat((viewModel.config?.config().thumbnailHeight ?? 50) + 30))
         // highlight the selected frame
           .background(viewModel.currentIndex == frameIndex ? Color(white: 0.45) : Color(white: 0.22))
           .onTapGesture {
