@@ -277,12 +277,11 @@ struct OutlierGroupView: View {
     
     // used when user selects an outlier group outisde of details selection mode 
     func togglePaintReason(_ origShouldPaint: PaintReason? = nil) {
-        var will_paint = true
+        var will_paint = false
         if let origShouldPaint = origShouldPaint {
             will_paint = origShouldPaint.willPaint
         }
         let shouldPaint = PaintReason.userSelected(!will_paint)
-
 
         Task {
             // update the view model to show the change quickly

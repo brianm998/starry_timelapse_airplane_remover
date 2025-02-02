@@ -897,7 +897,8 @@ public final class ImageSequenceViewModel {
     // fully reprocess this frame
     func reprocess(_ frame: FrameAirplaneRemover) async {
         if let frame = self.currentFrame {
-            Task.detached {     // do we need this detached task?
+            Task.detached(priority: .userInitiated) { // do we need this detached task?
+                await frame.set(state: .unprocessed)
                 frame.imageAccessor.deleteAllImages(frameIndex: frame.frameIndex)
                 Task { @MainActor in
                     self.frameViewMode = .original
