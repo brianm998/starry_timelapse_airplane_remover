@@ -1635,6 +1635,7 @@ fileprivate class OutlierClassifier {
                 let max = 20            // XXX hardcoded constant
 
                 if blobs.count > 0 {
+                    
                     for chunk in blobs.split(into: max) {
                         taskGroup.addTask {
                             var featureDataTime: TimeInterval = 0
@@ -1642,9 +1643,17 @@ fileprivate class OutlierClassifier {
                     
                             var ret: [OutlierSorter] = []
                             for blob in chunk {
+
                                 // make outlier group from this blob
                                 let outlierGroup = await blob.outlierGroup(at: frameIndex)
-
+                                
+                                // don't process smaller blobs at all
+                                if outlierGroup.size <= smallDustMax {
+                                    ret.append(.init(classification: -1, // classified based on size only
+                                                     outlier: outlierGroup))
+                                    continue
+                                }
+                           
                                 //Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.id) line \(String(describing: blob.line))")
                                 await outlierGroup.set(frame: frame)
 
@@ -1669,8 +1678,8 @@ fileprivate class OutlierClassifier {
                                     classificationTime += classTime - featureTime
                                 } else {
                                     Log.w("No .isolated classifier!!") // assume it's good
-                                    ret.append(OutlierSorter(classification: 1,
-                                                             outlier: outlierGroup))
+                                  ret.append(.init(classification: 1,
+                                                   outlier: outlierGroup))
                                 }
                             }
                             return (ret,
@@ -1693,9 +1702,7 @@ fileprivate class OutlierClassifier {
                     totalClassificationTime += classTime
                     totalOutliers += chunkCount
                     for value in values {
-                        if value.outlier.size > smallDustMax,
-                           value.classification > dustbinLevel
-                        {
+                        if value.classification > dustbinLevel {
                             // it's good
                             good.append(value.outlier)
                         } else {
