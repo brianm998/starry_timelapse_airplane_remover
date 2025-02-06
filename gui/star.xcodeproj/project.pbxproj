@@ -56,6 +56,7 @@
 		D3B29CA42B2FE31800754C10 /* KHTSwift in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CA32B2FE31800754C10 /* KHTSwift */; };
 		D3B29CB12B2FE5BE00754C10 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CB02B2FE5BE00754C10 /* StarCore */; };
 		D3B29CB42B2FE5D900754C10 /* Zoomable in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CB32B2FE5D900754C10 /* Zoomable */; };
+		D3B3730A2D50857400B56342 /* ProcessRemainingFramesButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B373092D50857400B56342 /* ProcessRemainingFramesButton.swift */; };
 		D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */; };
 		D3CD86792CF5815100D2D53F /* InitialInstructionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3CD86782CF5815100D2D53F /* InitialInstructionsView.swift */; };
 		D3D7F0FC2A2BE10D00658862 /* StarCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */; };
@@ -143,6 +144,7 @@
 		D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpandUpButton.swift; sourceTree = "<group>"; };
 		D3A0D3AF2CF3AEB800FD2E9E /* FinalGUIProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinalGUIProcessor.swift; sourceTree = "<group>"; };
 		D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UserPreferences.swift; sourceTree = "<group>"; };
+		D3B373092D50857400B56342 /* ProcessRemainingFramesButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRemainingFramesButton.swift; sourceTree = "<group>"; };
 		D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupTable.swift; sourceTree = "<group>"; };
 		D3CD86782CF5815100D2D53F /* InitialInstructionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InitialInstructionsView.swift; sourceTree = "<group>"; };
 		D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StarCommands.swift; sourceTree = "<group>"; };
@@ -224,6 +226,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D3B373092D50857400B56342 /* ProcessRemainingFramesButton.swift */,
 				D35618712D24CCF80001814D /* OutlierWindowView.swift */,
 				D35618722D24CCF80001814D /* OutlierWindowViewModel.swift */,
 				D35309442D0DE4F200C4AFFF /* BlobProcessingView.swift */,
@@ -483,6 +486,7 @@
 				D35618742D24CCF80001814D /* OutlierWindowView.swift in Sources */,
 				D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */,
 				D32F6DB32A4D2BF800704870 /* ApplyAllDecisionTreeButton.swift in Sources */,
+				D3B3730A2D50857400B56342 /* ProcessRemainingFramesButton.swift in Sources */,
 				D332F70529B64004009E2796 /* ShrinkingButton.swift in Sources */,
 				D33FFC142A2CFAED00F38194 /* ImageSequenceView.swift in Sources */,
 				D33FFC2A2A2E1A8900F38194 /* OutlierGroupViewModel.swift in Sources */,
@@ -697,7 +701,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.7.0;
+				MARKETING_VERSION = 0.7.1;
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -740,7 +744,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.7.0;
+				MARKETING_VERSION = 0.7.1;
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -772,7 +776,7 @@
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 12.5;
-				MARKETING_VERSION = 0.7.0;
+				MARKETING_VERSION = 0.7.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -791,7 +795,7 @@
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 12.5;
-				MARKETING_VERSION = 0.7.0;
+				MARKETING_VERSION = 0.7.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -808,7 +812,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.7.0;
+				MARKETING_VERSION = 0.7.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -825,7 +829,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.7.0;
+				MARKETING_VERSION = 0.7.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

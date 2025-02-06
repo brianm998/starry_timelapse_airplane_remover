@@ -876,7 +876,7 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    func processAllFrames() {
+    func processFrames(from startIndex: Int? = nil, to endIndex: Int? = nil) {
         if isProcessingAllFrames { return }
         isProcessingAllFrames = true
 
@@ -886,8 +886,8 @@ public final class ImageSequenceViewModel {
             // XXX a crude version of the FinalProcessor, could be better
             Log.d("processAllFrames 1")
 
-            await finalProcessor?.processAllFrames()
-            
+            await finalProcessor?.processFrames(from: startIndex, to: endIndex)
+
             await MainActor.run {
                 self.isProcessingAllFrames = false
             }

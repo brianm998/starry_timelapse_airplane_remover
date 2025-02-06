@@ -9,12 +9,19 @@ import Combine
 struct BottomRightView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
+    // stuff from harvester testing
     @State var harvesterCount: Int = 0
     @State var allOutlierGroupCount: Int = 0
     @State var allTotalOutlierProcessingTime: TimeInterval = 0
     @State var isolatedOutlierGroupCount: Int = 0
     @State var isolatedTotalOutlierProcessingTime: TimeInterval = 0
-    
+
+    // stuff from time testing
+    @State var featureTime: TimeInterval = 0
+    @State var classificationTime: TimeInterval = 0
+    @State var outlierCount: Int = 0
+    @State var frameCount: Int = 0
+        
     var body: some View {
         
         HStack() {
@@ -22,6 +29,25 @@ struct BottomRightView: View {
 
             if viewModel.interactionMode == .edit {
 
+                if featureTime > 0,
+                   classificationTime > 0
+                {
+                    VStack {
+                        Text("\(outlierCount) outliers")
+                          .foregroundColor(.orange)
+                        Text("from \(frameCount) frames")
+                          .foregroundColor(.orange)
+                    }
+                    VStack {
+                        let featureString = String(format: "%d", Int(featureTime))
+                        Text("featureTime \(featureString)s")
+                          .foregroundColor(.orange)
+                        let classificationString = String(format: "%d", Int(classificationTime))
+                        Text("classificationTime \(classificationString)s")
+                          .foregroundColor(.orange)
+                    }
+                }
+                
                 if harvesterCount > 0 {
                     VStack {
                         Text("\(harvesterCount) data harvesters running")
@@ -171,9 +197,17 @@ struct BottomRightView: View {
                 }
             }
         }
-        /*
           .onAppear {
+        /*
               Task {
+                  await classificationTimingDataHolder.setCallback() { a, b, c, d in
+                      Task { @MainActor in 
+                          self.featureTime = a
+                          self.classificationTime = b
+                          self.outlierCount = c
+                          self.frameCount = d
+                      }
+                  }
                   await frameDataHarvesterDataHolder.setCallback() { a, b, c, d, e in
                       Task { @MainActor in 
                           self.harvesterCount = a
@@ -184,11 +218,13 @@ struct BottomRightView: View {
                       }
                   }
               }
+                  */
           }
           .onDisappear {
               Task {
-                  await frameDataHarvesterDataHolder.setCallback(nil)
+                  //await classificationTimingDataHolder.setCallback(nil)
+                  //await frameDataHarvesterDataHolder.setCallback(nil)
               }
-          }*/
+          }
     }
 }

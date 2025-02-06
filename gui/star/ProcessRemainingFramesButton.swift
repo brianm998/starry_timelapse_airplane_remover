@@ -2,20 +2,20 @@ import SwiftUI
 import StarCore
 import logging
 
-struct ProcessAllFramesButton: View {
+struct ProcessRemainingFramesButton: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     var body: some View {
         Group {
             Button(action: buttonPress) {
-                Text("Process all frames")
+                Text("Process frames from here to the end")
             }
-              .help("Process all frames")
+              .help("Process frames from here to the end")
         }
     }
 
     private func buttonPress() {
-        viewModel.processFrames()
+        viewModel.processFrames(from: viewModel.currentIndex)
     }
 }
 

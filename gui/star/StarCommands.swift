@@ -23,6 +23,8 @@ struct StarCommands: Commands {
                   .keyboardShortcut("k", modifiers: [])
                 ProcessAllFramesButton()
                   .environment(viewModel)
+                ProcessRemainingFramesButton()
+                  .environment(viewModel)
                 ReProcessCurrentFrameButton()
                   .environment(viewModel)
                 FindOutliersOnCurrentFrameButton()            

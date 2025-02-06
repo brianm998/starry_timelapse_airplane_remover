@@ -160,7 +160,7 @@ struct RightPanel: View {
                             Toggle("Only Unclassified", isOn: $viewModel.classifyOnlyUnclassified)
                               .foregroundColor(.orange)
                             
-                            // frame rate checkoer
+                            // frame rate 
                             let frame_rates = [1, 2, 3, 5, 10, 15, 20, 25, 30, 60, 90]
                             Text("Frame Rate")
                               .foregroundColor(.white)
@@ -227,10 +227,9 @@ struct RightPanel: View {
                             } label: {
                                 Text("Render Updates")
                             }
-                              .disabled(viewModel.isProcessingAllFrames ||
-                                          frameView.frameState == .complete ||
-                                          frameView.outlierViews == nil ||
-                                          viewModel.renderingCurrentFrame)
+                              .disabled(frameView.frameState == .complete ||
+                                        frameView.outlierViews == nil ||
+                                        viewModel.renderingCurrentFrame)
                         }
                     }
                       .defaultScrollAnchor(.bottom)
