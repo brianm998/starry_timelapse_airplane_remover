@@ -214,6 +214,10 @@ struct StarCli: AsyncParsableCommand {
           help:"Write individual outlier group image files")
     var shouldWriteOutlierGroupFiles = false
 
+    @Option(name: [.customShort("L"), .customLong("last-frame")],
+            help:"don't process past this frame number")
+    var lastFrameNumber: Int? = nil
+    
     @Flag(name: [.customShort("W"), .customLong("write-outlier-classification-values")],
           help:"Write individual outlier group classification values")
     var shouldWriteOutlierClassificationValues = false
@@ -385,7 +389,8 @@ struct StarCli: AsyncParsableCommand {
                                                                 callbacks: callbacks,
                                                                 processExistingFiles: false,
                                                                 maxResidentImages: 40, // XXX
-                                                                writeOutputFiles: writeOutputFiles)
+                                                                writeOutputFiles: writeOutputFiles,
+                                                                lastFrameNumber: lastFrameNumber)
                 
                 let frameCount = await eraser.frameCount()
                 

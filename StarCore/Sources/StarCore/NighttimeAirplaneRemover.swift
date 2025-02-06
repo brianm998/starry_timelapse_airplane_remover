@@ -102,7 +102,11 @@ public actor NighttimeAirplaneRemover {
                     endIdx = existingOutputFiles.count - 1
                 }
                 for i in startIdx ... endIdx {
-                    shouldProcess[i] = true
+                    if let lastFrameNumber {
+                        shouldProcess[i] = i < lastFrameNumber 
+                    } else {
+                        shouldProcess[i] = true
+                    }
                 }
             }
         }
@@ -112,6 +116,7 @@ public actor NighttimeAirplaneRemover {
             let filename = self.imageSequence.filenames[index]
             let basename = removePath(fromString: filename)
             let outputFilename = "\(outputDirname)/\(basename)"
+            Log.w("shouldProcess[\(index)] = \(shouldProcess[index])")
             if shouldProcess[index] {
                 _methodList[index] = {
                     // this method is run async later
@@ -206,18 +211,22 @@ public actor NighttimeAirplaneRemover {
     public let writeOutputFiles: Bool
     
     public let basename: String
+
+    public let lastFrameNumber: Int?
     
     public init(with configManager: ConfigManager,
                 callbacks: Callbacks,
                 processExistingFiles: Bool,
                 maxResidentImages: Int? = nil,
                 fullyProcess: Bool = true,
-                writeOutputFiles: Bool = true) async throws
+                writeOutputFiles: Bool = true,
+                lastFrameNumber: Int? = nil) async throws
     {
         self.configManager = configManager
         self.callbacks = callbacks
         self.writeOutputFiles = writeOutputFiles
-
+        self.lastFrameNumber = lastFrameNumber
+        
         let config = await configManager.config()
         
         self.basename = config.basename
@@ -232,6 +241,16 @@ public actor NighttimeAirplaneRemover {
         self.shouldProcess = [Bool](repeating: processExistingFiles, count: imageSequence.filenames.count)
         self.existingOutputFiles = [Bool](repeating: false, count: imageSequence.filenames.count)
         self.fullyProcess = fullyProcess
+
+        // only process the first set of frames
+        if let lastFrameNumber,
+           lastFrameNumber < self.shouldProcess.count
+        {
+            for i in lastFrameNumber..<self.shouldProcess.count {
+                self.shouldProcess[i] = false
+            }
+        }
+
         self.methodList = try await assembleMethodList()
 
         let imageSequenceSize = /*self.*/imageSequence.filenames.count
@@ -264,14 +283,13 @@ public actor NighttimeAirplaneRemover {
             }
         }
 
-        var shouldProcess = [Bool](repeating: false, count: self.existingOutputFiles.count)
-        for (index, outputFileExists) in self.existingOutputFiles.enumerated() {
-            shouldProcess[index] = !outputFileExists
-        }
+        var numberOfFrames = imageSequenceSize
+        
+        if let lastFrameNumber { numberOfFrames = lastFrameNumber }
         
         finalProcessor = await FinalProcessor(with: config,
                                               callbacks: callbacks,
-                                              numberOfFrames: imageSequenceSize,
+                                              numberOfFrames: numberOfFrames,
                                               shouldProcess: shouldProcess,
                                               imageSequence: imageSequence,
                                               isGUI: processExistingFiles)
@@ -340,6 +358,9 @@ public actor NighttimeAirplaneRemover {
                       baseName: String,
                       imageAccessor: ImageAccessor) async throws -> FrameAirplaneRemover
     {
+//        if let shouldProcess,
+//           index >= shouldProcess { continue }
+
         await numberLeft.increment()
         let frame = try await FrameAirplaneRemover(with: configManager,
                                                    width: imageWidth!,
