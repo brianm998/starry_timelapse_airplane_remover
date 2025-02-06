@@ -34,12 +34,19 @@ struct Main: AsyncParsableCommand {
          */
         
         if FileManager.default.fileExists(atPath: validatedSequenceJsonFilename) {
-            let sequences: [String:[String]] =
-              try await read(fromJsonFilename: validatedSequenceJsonFilename)
-            for (dirname, dirlist) in sequences {
-                for sequence in dirlist {
-                    try await process(sequence: "\(dirname)/\(sequence)")
+            let sequences = try await readRawJson(fromJsonFilename: validatedSequenceJsonFilename)
+            if let sequences = sequences as? [String: Any] {
+                for (dirname, dirlist) in sequences {
+                    if dirname.starts(with: "/") {
+                        if let dirlist = dirlist as? [String] {
+                            for sequence in dirlist {
+                                try await process(sequence: "\(dirname)/\(sequence)")
+                            }
+                        }
+                    }
                 }
+            } else {
+                print("Unable to parse validated sequences json")
             }
         } else {
             print("no file exists at \(validatedSequenceJsonFilename)")
@@ -124,11 +131,17 @@ struct Main: AsyncParsableCommand {
                                contents: outlierData,
                                attributes: nil)
     }
-    
+
     func read<T>(fromJsonFilename filename: String) async throws -> T where T: Decodable {
         let url = NSURL(fileURLWithPath: filename, isDirectory: false) as URL
         let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
         return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    func readRawJson(fromJsonFilename filename: String) async throws -> Any {
+        let url = NSURL(fileURLWithPath: filename, isDirectory: false) as URL
+        let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
+        return try JSONSerialization.jsonObject(with: data)
     }
 
     func readCSV(from filename: String) async throws -> [[Double]] {

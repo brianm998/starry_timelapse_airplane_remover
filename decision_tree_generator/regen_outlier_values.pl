@@ -21,16 +21,18 @@ use json;
 my $sequences = json::read("validated_sequences.json");
 
 foreach my $basedir (keys %$sequences) {
-  foreach my $sequence_dir (@{$sequences->{$basedir}}) {
-    my $sequence = "$basedir/$sequence_dir";
+  if ($basedir =~ m~^/~) {
+    foreach my $sequence_dir (@{$sequences->{$basedir}}) {
+      my $sequence = "$basedir/$sequence_dir";
 
-    print "cleansing existing csv files from $sequence\n";
+      print "cleansing existing csv files from $sequence\n";
 
-    # get rid of existing csv files
-    system "find $sequence"."-outliers -name '*.csv' -exec rm '{}' ';'";
+      # get rid of existing csv files
+      system "find $sequence"."-outliers -name '*.csv' -exec rm '{}' ';'";
 
-    # remove the output files so star regenerates data for all frames
-    system "rm -r $sequence";
+      # remove the output files so star regenerates data for all frames
+      system "rm -r $sequence";
+    }
   }
 }
 
@@ -39,15 +41,22 @@ my $cmd = 'star';
 #my $cmd = "~/git/nighttime_timelapse_airplane_remover/cli/memmory_error.pl ";
 
 foreach my $basedir (keys %$sequences) {
-  foreach my $sequence_dir (@{$sequences->{$basedir}}) {
-    my $sequence = "$basedir/$sequence_dir";
-    print "re-generating csv files for $sequence\n";
-    if (-f "$sequence"."-outliers/config.json") {
-      system "time $cmd -W -w -s $sequence"."-outliers/config.json";
-    } elsif (-f "$sequence"."-config.json") {
-      system "time $cmd -W -w -s $sequence"."-config.json";
-    } else {
-      print("no config.json found for $sequence\n");
+  if ($basedir =~ m~^/~) {
+    foreach my $sequence_dir (@{$sequences->{$basedir}}) {
+      my $range_args = "";
+
+      if(exists $sequences->{ranges}{$sequence_dir}) {
+	$range_args = "-L $sequences->{ranges}{$sequence_dir}{lastFrame}"
+      }
+      my $sequence = "$basedir/$sequence_dir";
+      print "re-generating csv files for $sequence\n";
+      if (-f "$sequence"."-outliers/config.json") {
+	system "time $cmd $range_args -W -w -s $sequence"."-outliers/config.json";
+      } elsif (-f "$sequence"."-config.json") {
+	system "time $cmd $range_args -W -w -s $sequence"."-config.json";
+      } else {
+	print("no config.json found for $sequence\n");
+      }
     }
   }
 }

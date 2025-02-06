@@ -22,16 +22,18 @@ mkdir $output_dir;
 my $sequences = json::read("validated_sequences.json");
 
 foreach my $basedir (keys %$sequences) {
-  chdir $basedir;
+  if ($basedir =~ m~^/~) {
+    chdir $basedir;
 
-  foreach my $sequence (@{$sequences->{$basedir}}) {
-    print "sequence $sequence\n";
-    my $dirname = "$basedir/$sequence"."-outliers";
-    print "dirname $dirname\n";
+    foreach my $sequence (@{$sequences->{$basedir}}) {
+      print "sequence $sequence\n";
+      my $dirname = "$basedir/$sequence"."-outliers";
+      print "dirname $dirname\n";
 
-    system "cat $dirname/*/positive_data.csv >> $output_dir/positive_data.csv\n";
-    system "cat $dirname/*/negative_data.csv >> $output_dir/negative_data.csv\n";
-    system "cp $dirname/0/types.csv $output_dir\n"; # XXX should really make sure these are all the same
+      system "cat $dirname/*/positive_data.csv >> $output_dir/positive_data.csv\n";
+      system "cat $dirname/*/negative_data.csv >> $output_dir/negative_data.csv\n";
+      system "cp $dirname/0/types.csv $output_dir\n"; # XXX should really make sure these are all the same
+    }
   }
 }
 
