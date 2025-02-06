@@ -244,10 +244,10 @@ struct StarCli: AsyncParsableCommand {
 
         // gui has to do this too
         await StarCore.currentClassifier.set(for: .all) {
-            OutlierGroupForestClassifier_f6fe466e()
+            OutlierGroupForestClassifier_22a041f3()
         }
         await StarCore.currentClassifier.set(for: .isolated) {
-            OutlierGroupForestClassifier_c444252b()
+            OutlierGroupForestClassifier_3fb68803()
         }
 
         if version {
@@ -384,7 +384,7 @@ struct StarCli: AsyncParsableCommand {
             let writeOutputFiles = !skipOutputFiles
 
             do {
-
+                
                 let eraser = try await NighttimeAirplaneRemover(with: configManager,
                                                                 callbacks: callbacks,
                                                                 processExistingFiles: false,
