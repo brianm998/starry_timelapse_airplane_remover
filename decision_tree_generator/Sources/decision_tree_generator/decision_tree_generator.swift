@@ -691,9 +691,9 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
     }
 }
 
-extension TreeType: ExpressibleByArgument { } // XXX
+extension TreeType: @retroactive ExpressibleByArgument { } // XXX
 
-extension OutlierGroupFeature: ExpressibleByArgument {
+extension OutlierGroupFeature: @retroactive ExpressibleByArgument {
 
     public init?(argument: String) {
         if let me = OutlierGroupFeature(rawValue: argument) {
