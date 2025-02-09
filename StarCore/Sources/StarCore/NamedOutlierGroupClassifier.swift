@@ -25,7 +25,7 @@ public struct DecisionTreeParams: Sendable {
                decisionTypes: [OutlierGroupFeature],
                decisionSplitTypes: [DecisionSplitType],
                maxDepth: Int?,
-               pruned: Bool)
+               pruned: Bool)    // no longer used, but existing decision trees need this value for complation :(
     {
         self.name = name
         self.inputSequences = inputSequences
