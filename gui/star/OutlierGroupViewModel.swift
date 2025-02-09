@@ -124,7 +124,7 @@ class OutlierGroupViewModel: Identifiable {
                 return .green
             }
         } else {
-            return .orange
+            return .blue
         }
     }
     
@@ -133,7 +133,7 @@ class OutlierGroupViewModel: Identifiable {
         
         if let will_paint = self.paintObserver.shouldPaint {
             if self.arrowSelected {            
-              if will_paint.willPaint {
+                if will_paint.willPaint {
                     return .red
                 } else {
                     return .green
@@ -142,7 +142,11 @@ class OutlierGroupViewModel: Identifiable {
                 return .white
             }
         } else {
-            return .orange
+            if self.arrowSelected {            
+                return .red
+            } else {
+                return .blue
+            }
         }
     }
 }
