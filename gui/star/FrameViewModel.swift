@@ -173,6 +173,9 @@ public class FrameViewModel {
             if let frame {
                 let _ = try await frame.promoteDust(in: gestureBounds)
 
+                // update the dustbin image
+                await self.viewModel.computeDustbinImage(forFrame: frame)
+                
                 await viewModel.setOutlierGroups(forFrame: frame)
                 await frame.updateCombineSubjects()            
             }
