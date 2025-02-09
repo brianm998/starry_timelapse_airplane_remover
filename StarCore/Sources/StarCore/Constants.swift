@@ -23,10 +23,10 @@ public actor Constants {        // XXX rename this
     private var houghLineFinderArgs: HoughLineFinder.Args = .init()
 
     // threshold for initial classification into dustbin or not
-    private var dustbinLevel: Double = -0.1
+    private var dustbinLevel: Double = -0.5
 
-    // anything smaller than this is dust
-    private var smallDustMax: Int = 10
+    // anything smaller than this is dust, adjusted for place on screen
+    private var smallDustMax: Int = 30
     
     public init(detectionType: DetectionType) {
         self.detectionType = detectionType

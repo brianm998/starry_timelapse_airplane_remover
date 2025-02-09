@@ -606,6 +606,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let classifier = OutlierClassifier(frame: self)
 
         let dustbinLevel = await constants.getDustbinLevel()
+
+        // this changes based upon Y value
         let smallDustMax = await constants.getSmallDustMax()
         
         let (good, bad, featureTime, classificationTime, outlierCount) =
@@ -1618,7 +1620,7 @@ fileprivate class OutlierClassifier {
     // classifies blobs with the .isolated classifier, and promotes them to separate groups
     func promoteAndClassify(_ blobs: [Blob],
                             dustbinLevel: Double = 0.0,
-                            smallDustMax: Int = 10) async
+                            smallDustMax: Int = 20) async
       -> ([OutlierGroup], [OutlierGroup], TimeInterval, TimeInterval, Int)
     {
         let frame = self.frame
@@ -1646,9 +1648,25 @@ fileprivate class OutlierClassifier {
 
                                 // make outlier group from this blob
                                 let outlierGroup = await blob.outlierGroup(at: frameIndex)
-                                
-                                // don't process smaller blobs at all
-                                if outlierGroup.size <= smallDustMax {
+
+                                // vertical position on screen of the center of this outlier group
+                                // 0 is top
+                                // 1 is bottom
+                                let centerY = Double(outlierGroup.bounds.center.y)/Double(IMAGE_HEIGHT!)
+
+                                /*
+                                 to speed things up, smaller blobs are discarded.
+                                 minimum blob size is relative to the y position on screen of the outlier
+
+                                 min at the top of the screen - 20
+                                 min at the middle of the screen - 10
+                                 min at the bottom of the screen - 0
+                                 
+                                 */
+                                let minSize = Int(Double(smallDustMax)*(1.0 - centerY))
+
+                                // don't process smaller blobs any further
+                                if outlierGroup.size <= minSize {
                                     ret.append(.init(classification: -1, // classified based on size only
                                                      outlier: outlierGroup))
                                     continue
