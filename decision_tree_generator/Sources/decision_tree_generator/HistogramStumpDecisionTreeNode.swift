@@ -1,7 +1,7 @@
 
 import Foundation
 import StarCore
-
+import logging
     
     /*
 
@@ -44,20 +44,9 @@ class HistogramStumpDecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
         var maxValue = -10000000000.0
         var _minValue = 10000000000.0
 
-/*
-     histogram starts at smallest value
-     histogram ends at largest value
-     histogram has X buckets (10-20?)
-     each bucket has a specific range of values that it holds
-     for each bucket, see how many positive and negative results we have for it
-     result for each bucket is calculated based upon a
-     sum values for each result (+1 or -1)/(total results for bucket)
-     So if they are all +1, the result for the bucket is +1
-*/     
-        
         var positiveValues: [Double] = [] // values for this result.type that are positive test data
         var negativeValues: [Double] = [] // values for this result.type that are negative test data
-        
+
         for featureData in result.lessThanPositive {
             let value = featureData.decisionTreeValue(for: result.type)
             positiveValues.append(value)
@@ -83,41 +72,68 @@ class HistogramStumpDecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
             if value > maxValue { maxValue = value }
         }
 
+        Log.d("for \(result.type) have \(positiveValues.count) \(negativeValues.count) minValue \(_minValue) maxValue \(maxValue) result.greaterThanPositive \(result.greaterThanPositive.count) result.greaterThanNegative \(result.greaterThanNegative.count) result.lessThanPositive \(result.lessThanPositive.count) result.lessThanNegative \(result.lessThanNegative.count)")
+       
         // calculate the size of each histogram bucket
 
         self.bucketSize = (maxValue - _minValue)/Double(bucketCount)
 
         var _histogramValues = [Double](repeating: 0, count: bucketCount)
 
+        var largestValue: Double = 0
+        
         for i in 0..<bucketCount {
-            let bucketStart = Double(i)*bucketSize
+            let bucketStart = _minValue + Double(i)*bucketSize
             let bucketEnd = bucketStart+bucketSize
-            var bucketValue = 0
-            var bucketValueCount = 0 
+            var positiveBucketValueCount = 0 
+            var negativeBucketValueCount = 0 
             
             for positiveValue in positiveValues {
                 if positiveValue >= bucketStart,
                    positiveValue <= bucketEnd
                 {
-                    bucketValue += 1
-                    bucketValueCount += 1
+                    positiveBucketValueCount += 1
                 }
             }
-            
+
             for negativeValue in negativeValues {
                 if negativeValue >= bucketStart,
                    negativeValue <= bucketEnd
                 {
-                    bucketValue -= 1
-                    bucketValueCount += 1
+                    negativeBucketValueCount += 1
                 }
             }
-            // 1 if all were positive
-            // -1 if all were negative
-            _histogramValues[i] = Double(bucketValue) / Double(bucketValueCount)
+
+            var fractionPositive: Double = 0
+            if positiveValues.count != 0 {
+                fractionPositive = Double(positiveBucketValueCount)/Double(positiveValues.count)
+            }            
+            var fractionNegative: Double = 0
+            if negativeValues.count != 0 {
+                fractionNegative = Double(negativeBucketValueCount)/Double(negativeValues.count)
+            }
+            
+            //  1 if all positive values were in this bucket, and no negative
+            // -1 if all negative values were in this bucket, and no positive
+            //  0 if the same fraction of postiive and negative (wheighted by total count) are equal
+
+            let bucketValue = fractionPositive - fractionNegative
+            
+            _histogramValues[i] = bucketValue
+
+            Log.d("for \(result.type)[\(i)] = \(bucketValue) - positiveValues.count \(positiveValues.count) negativeValues.count \(negativeValues.count) fractionPositive \(fractionPositive) fractionNegative \(fractionNegative) positiveBucketValueCount \(positiveBucketValueCount) negativeBucketValueCount \(negativeBucketValueCount)")
+
+            let absBucketValue = abs(bucketValue)
+              
+            if absBucketValue > largestValue { largestValue = absBucketValue }
         }
-        
-        self.histogramValues = _histogramValues
+
+        // normalize values so the largest value is at -1 or 1
+        if largestValue != 0 {
+            self.histogramValues = _histogramValues.map { $0 * 1/largestValue }
+        } else {
+            self.histogramValues = _histogramValues
+        }
         self.minValue = _minValue
     }
 
@@ -171,6 +187,7 @@ class HistogramStumpDecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
         histogramString += "\(histogramValues[histogramValues.count-1])]"
         
         let swift = """
+          \(indentation)// Stumped with Histogram of \(result.type) values in \(histogramValues.count) buckets
           \(indentation)let value = \(methodCallString)(for: .\(result.type))
           \(indentation)let minValue = \(self.minValue)
           \(indentation)let bucketSize = \(self.bucketSize)
