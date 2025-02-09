@@ -12,58 +12,48 @@ struct ImageSequenceView: View {
         @Bindable var viewModel = viewModel
         return ZStack {
             VStack {
-
-            ZStack(alignment: .center) {
-                // selected frame 
-                FrameView()
-                  .frame(maxWidth: .infinity, alignment: .center)
-                
-                // show progress bars on top of the image at the bottom
-                ProgressBars()
-
-                if viewModel.interactionMode == .edit {
-                    // left panel
-                    HStack {
-                        ZStack(alignment: .leading) {
-                            LeftPanel()
-                        }
-                        Spacer()
+                HStack {
+                    if viewModel.interactionMode == .edit {
+                        // left panel
+                        LeftPanel()
                     }
-
-                    // right panel
-                    HStack {
-                        Spacer()
-                        ZStack(alignment: .trailing) {
-                            RightPanel()
-                              .frame(alignment: .trailing)
-                        }
+                    ZStack(alignment: .center) {
+                        // selected frame 
+                        FrameView()
+                          .frame(maxWidth: .infinity, alignment: .center)
+                        
+                        // show progress bars on top of the image at the bottom
+                        ProgressBars()
+                    }
+                    if viewModel.interactionMode == .edit {
+                        // right panel
+                        RightPanel()
                     }
                 }
+                Spacer()
+                // buttons below the selected frame 
+                BottomControls()
+                
+                if viewModel.interactionMode == .edit,
+                   viewModel.showFilmstrip
+                {
+                    Spacer().frame(maxHeight: 30)
+                    // the filmstrip at the bottom
+                    FilmstripView()
+                      .frame(maxWidth: .infinity)
+                      .transition(.slide)
+                    Spacer().frame(minHeight: 15, maxHeight: 25)
+                }
+                
+                // scrub slider at the bottom
+                if viewModel.imageSequenceSize > 0 {
+                    ScrubSliderView()
+                }
             }
-            Spacer()
-            // buttons below the selected frame 
-            BottomControls()
+              .frame(maxWidth: .infinity, maxHeight: .infinity)
+              .padding([.bottom, .leading, .trailing])
+              .background(viewModel.backgroundColor)
             
-            if viewModel.interactionMode == .edit,
-               viewModel.showFilmstrip
-            {
-                Spacer().frame(maxHeight: 30)
-                // the filmstrip at the bottom
-                FilmstripView()
-                  .frame(maxWidth: .infinity)
-                  .transition(.slide)
-                Spacer().frame(minHeight: 15, maxHeight: 25)
-            }
-            
-            // scrub slider at the bottom
-            if viewModel.imageSequenceSize > 0 {
-                ScrubSliderView()
-            }
-        }
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .padding([.bottom, .leading, .trailing])
-          .background(viewModel.backgroundColor)
-
             if viewModel.shouldShowInitialInstructions {
                 InitialInstructionsView()
             }
