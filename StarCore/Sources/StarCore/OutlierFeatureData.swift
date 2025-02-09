@@ -17,5 +17,16 @@ public struct OutlierFeatureData: Sendable {
         }
         self.values = values
     }
+
+    public func decisionTreeValue(for type: OutlierGroupFeature) -> Double  {
+        let index = type.sortOrder
+        if index >= 0,
+           index < values.count
+        {
+            return values[index]
+        } else {
+            return 0
+        }
+    }
 }
 
