@@ -39,30 +39,18 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
     public init (type: OutlierGroupFeature,
                  value: Double,
                  lessThan: SwiftDecisionTree,
-                 lessThanStumpValue: Double,
                  greaterThan: SwiftDecisionTree,
-                 greaterThanStumpValue: Double,
                  indent: Int,            // really recursion level
-                 newMethodLevel: Int,    // how far we recurse before making a new method
-                 stump: Bool = false)
+                 newMethodLevel: Int)    // how far we recurse before making a new method
     {
         self.type = type
         self.value = value
         self.lessThan = lessThan
         self.greaterThan = greaterThan
         self.indent = indent
-        self.lessThanStumpValue = lessThanStumpValue
-        self.greaterThanStumpValue = greaterThanStumpValue
         self.newMethodLevel = newMethodLevel
-        self.stump = stump
     }
 
-    // stump means cutting off the tree at this node, and returning stumped values
-    // of the test data on either side of the split
-    var stump: Bool
-    let lessThanStumpValue: Double
-    let greaterThanStumpValue: Double
-    
     // the kind of value we are deciding upon
     let type: OutlierGroupFeature
 
@@ -91,18 +79,10 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
 
     func classification(of group: ClassifiableOutlierGroup) async -> Double {
         let outlierValue = group.decisionTreeValue(for: type)
-        if stump {
-            if outlierValue < value {
-                return lessThanStumpValue
-            } else {
-                return greaterThanStumpValue
-            }
+        if outlierValue < value {
+            return await lessThan.classification(of: group)
         } else {
-            if outlierValue < value {
-                return await lessThan.classification(of: group)
-            } else {
-                return await greaterThan.classification(of: group)
-            }
+            return await greaterThan.classification(of: group)
         }
     }
 
@@ -116,20 +96,11 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
             if features[i] == type {
                 let outlierValue = values[i]
 
-                if stump {
-                    if outlierValue < value {
-                        return lessThanStumpValue
-                    } else {
-                        return greaterThanStumpValue
-                    }
+                if outlierValue < value {
+                    return await lessThan.classification(of: features, and: values)
                 } else {
-                    if outlierValue < value {
-                        return await lessThan.classification(of: features, and: values)
-                    } else {
-                        return await greaterThan.classification(of: features, and: values)
-                    }
+                    return await greaterThan.classification(of: features, and: values)
                 }
-                
             }
         }
         fatalError("cannot find \(type)")
@@ -164,41 +135,24 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
         var indentation = ""
         for _ in 0..<initialIndent+(indent % newMethodLevel) { indentation += "    " }
 
-        if stump {
+        if indent != 0,
+           indent % newMethodLevel == 0
+        {
+            // make a subtree instead of extending the tree further
+            let subtree = DecisionSubtree(rootNode: self)
 
-            var methodCallString = "group.decisionTreeValue"
-            
-            if type.isAsync {
-                methodCallString = "await group.decisionTreeValueAsync"
-            }
+            var specialIndentation = ""
+            for _ in 0..<initialIndent+newMethodLevel { specialIndentation += "    " }
             
             let swift = """
-              \(indentation)if \(methodCallString)(for: .\(type)) < \(value) {
-              \(indentation)    return \(lessThanStumpValue)
-              \(indentation)} else {
-              \(indentation)    return \(greaterThanStumpValue)
-              \(indentation)}
+              \(specialIndentation)return await \(subtree.methodName)(group)
               """
-            return (swift, [])
+            return (swift, [subtree])
         } else {
-            if indent != 0,
-               indent % newMethodLevel == 0
-            {
-                // make a subtree instead of extending the tree further
-                let subtree = DecisionSubtree(rootNode: self)
-
-                var specialIndentation = ""
-                for _ in 0..<initialIndent+newMethodLevel { specialIndentation += "    " }
-                
-                let swift = """
-                  \(specialIndentation)return await \(subtree.methodName)(group)
-                  """
-                return (swift, [subtree])
-            } else {
-                return furtherRecurseSwiftCode
-            }            
-            
-        }
+            return furtherRecurseSwiftCode
+        }            
     }
 }
+
+
 

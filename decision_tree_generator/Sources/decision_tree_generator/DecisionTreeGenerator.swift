@@ -22,16 +22,13 @@ actor DecisionTreeGenerator {
     let decisionTypes: [OutlierGroupFeature]
     let decisionSplitTypes: [DecisionSplitType]
     let maxDepth: Int
-    let pruneTree: Bool
     
     public init(withTypes types: [OutlierGroupFeature] = OutlierGroupFeature.allCases,
                 andSplitTypes splitTypes: [DecisionSplitType] = [.median],
-                pruneTree: Bool = true,
                 maxDepth: Int? = nil)
     {
         decisionTypes = types
         decisionSplitTypes = splitTypes
-        self.pruneTree = pruneTree
         if let maxDepth = maxDepth {
             self.maxDepth = maxDepth
         } else {
@@ -65,7 +62,7 @@ actor DecisionTreeGenerator {
             for validationIndex in 0..<inputDataSplit.count {
                 try await taskGroup.addTask() { 
                     // generate a tree from this validation data
-                    var validationData = inputDataSplit[validationIndex]
+                    let validationData = inputDataSplit[validationIndex]
                     
                     // use the remaining data for training
                     let trainingData = ClassifiedData()
@@ -144,13 +141,6 @@ actor DecisionTreeGenerator {
 
         let filename = "\(baseFilename)\(hashPrefix).swift"
 
-        var pruneString = ""
-        if pruneTree {
-            pruneString = "Trees were pruned with test data"
-        } else {
-            pruneString = "Trees were NOT pruned with test data"
-        }
-
         var depthString = ""
         if maxDepth < 0 {
             depthString = "Trees were computed to the maximum depth possible"
@@ -167,8 +157,6 @@ actor DecisionTreeGenerator {
                 The classifications of \(forest.count) trees are combined here with weights from test data.
                 
                 \(depthString)
-
-                \(pruneString)
 
              \(treesTypeString)
               */
@@ -254,12 +242,6 @@ actor DecisionTreeGenerator {
         digest.update(data: Data("\(trainingData.positiveData.count)".utf8))
         digest.update(data: Data("\(trainingData.negativeData.count)".utf8))
 
-        if pruneTree {
-            digest.update(data: Data("PRUNE".utf8))
-        } else {
-            digest.update(data: Data("NO PRUNE".utf8))
-        }
-        
         var inputFilesString = ""
         var inputFilesArray = "\(indentation)["
         for inputFilename in inputFilenames {
@@ -348,18 +330,13 @@ actor DecisionTreeGenerator {
         Log.d("getting root")
 
         // the root tree node with all of the test data 
-        var tree = await decisionTreeNode(withTrainingData: trainingData,
+        let tree = await decisionTreeNode(withTrainingData: trainingData,
                                           indented: 0,
                                           decisionTypes: decisionTypes,
                                           decisionSplitTypes: decisionSplitTypes,
                                           maxDepth: maxDepth)
 
 
-        if pruneTree {
-            // prune this mother fucker with test data
-            // this can take a long time
-            tree = await prune(tree: tree, with: testData)
-        }
         let (generatedSwiftCode, subtrees) = tree.swiftCode
 
         var swiftSubtreeCode = ""
@@ -386,21 +363,6 @@ actor DecisionTreeGenerator {
               """
         }
 
-        var pruneString = ""
-        
-        if pruneTree {
-            pruneString =
-              """
-              This tree was pruned with test data
-              
-              """
-        } else {
-            pruneString =
-              """
-                 This tree was NOT pruned with test data
-              
-              """
-        }
         
         let swiftString = """
           /*
@@ -413,7 +375,6 @@ actor DecisionTreeGenerator {
              from input data described by:
           \(inputFilesString)
           \(treeString)
-          \(pruneString)
           */
           
           import Foundation
@@ -435,8 +396,7 @@ actor DecisionTreeGenerator {
                                                          negativeTrainingSize: \(trainingData.negativeData.count),
                                                          decisionTypes: \(decisionTypeString),
                                                          decisionSplitTypes: \(decisionSplitTypeString),
-                                                         maxDepth: \(maxDepth),
-                                                         pruned: \(pruneTree)))
+                                                         maxDepth: \(maxDepth))
               
               public let generationSecondsSince1970 = \(generationDateSince1970)
 
@@ -473,7 +433,7 @@ actor DecisionTreeGenerator {
                                    decisionTypes: decisionTypes,
                                    decisionSplitTypes: decisionSplitTypes,
                                    maxDepth: maxDepth,
-                                   pruned: pruneTree))
+                                   pruned: false))
         
         return DecisionTreeStruct(name: hashPrefix,
                                   swiftCode: swiftString,
@@ -577,11 +537,12 @@ fileprivate func getValueDistributions(of values: [[Double]],
     return array
 }
 
-    // XXX document what this does
+// XXX document what this does
 fileprivate func recurseOn(result: DecisionResult, indent: Int,
                            decisionTypes: [OutlierGroupFeature],
                            decisionSplitTypes: [DecisionSplitType],
-                           maxDepth: Int) async -> DecisionTreeNode {
+                           maxDepth: Int) async -> SwiftDecisionTree
+{
     //Log.d("best at indent \(indent) was \(result.type) \(String(format: "%g", result.lessThanSplit)) \(String(format: "%g", result.greaterThanSplit)) \(String(format: "%g", result.value)) < Should \(await result.lessThanPositive.count) < ShouldNot \(await result.lessThanNegative.count) > Should  \(await result.lessThanPositive.count) > ShouldNot \(await result.greaterThanNegative.count)")
     
     // we've identified the best type to differentiate the test data
@@ -610,19 +571,38 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
     let greaterThanStumpValue = greaterThanPaintDiv / (greaterThanPaintDiv + Double(greaterThanNotPaintCount)/notPaintMax) * 2 - 1
     
     //Log.i("greaterThanPaintCount \(greaterThanPaintCount) greaterThanNotPaintCount \(greaterThanNotPaintCount) greaterThanStumpValue \(greaterThanStumpValue)")
-    
+    /*
+
+     extend this further, to not return one value on either side of a split,
+     but instead to calculate a score based upon how var it is from the central value
+     if the given value is the central value, return 0
+     calculate a histogram of some size (10, more?),
+     bracketed by the points where the data is all positive or negative.
+     use a quick method to calculate what bucket the source fills into,
+     and return that value
+
+
+     histogram starts at smallest value
+     histogram ends at largest value
+     histogram has X buckets (10-20?)
+     each bucket has a specific range of values that it holds
+     for each bucket, see how many positive and negative results we have for it
+     result for each bucket is calculated based upon a
+     sum values for each result (+1 or -1)/(total results for bucket)
+     So if they are all +1, the result for the bucket is +1
+     
+
+     
+     */
     
     if at(max: indent + 2, at: maxDepth) {
         // stump, don't extend the tree branches further
-        return DecisionTreeNode(type: result.type,
-                                value: result.value,
-                                lessThan: FullyPositiveTreeNode(indent: 0), // not used
-                                lessThanStumpValue: lessThanStumpValue,
-                                greaterThan: FullyPositiveTreeNode(indent: 0), // not used
-                                greaterThanStumpValue: greaterThanStumpValue,
-                                indent: indent/* + 1*/,
-                                newMethodLevel: globalMaxIfDepth,
-                                stump: true)
+        return StumpedDecisionTreeNode(type: result.type,
+                                       value: result.value,
+                                       lessThanStumpValue: lessThanStumpValue,
+                                       greaterThanStumpValue: greaterThanStumpValue,
+                                       indent: indent/* + 1*/,
+                                       newMethodLevel: globalMaxIfDepth)
     } else {
         
         let lessThanPositive = result.lessThanPositive//.map { $0 }
@@ -684,9 +664,7 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
         let ret = DecisionTreeNode(type: result.type,
                                    value: result.value,
                                    lessThan: lessResponse.treeNode,
-                                   lessThanStumpValue: lessResponse.stumpValue,
                                    greaterThan: greaterResponse.treeNode,
-                                   greaterThanStumpValue: greaterResponse.stumpValue,
                                    indent: indent,
                                    newMethodLevel: globalMaxIfDepth)
         
@@ -846,9 +824,7 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                       DecisionTreeNode(type: type,
                                        value: (paintDist.max + notPaintDist.min) / 2,
                                        lessThan: FullyPositiveTreeNode(indent: indent + 1),
-                                       lessThanStumpValue: 1,
                                        greaterThan: FullyNegativeTreeNode(indent: indent + 1),
-                                       greaterThanStumpValue: -1,
                                        indent: indent,
                                        newMethodLevel: globalMaxIfDepth)
                      /*
@@ -872,9 +848,7 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                       DecisionTreeNode(type: type,
                                        value: (notPaintDist.max + paintDist.min) / 2,
                                        lessThan: FullyNegativeTreeNode(indent: indent + 1),
-                                       lessThanStumpValue: -1,
                                        greaterThan: FullyPositiveTreeNode(indent: indent + 1),
-                                       greaterThanStumpValue: 1,
                                        indent: indent,
                                        newMethodLevel: globalMaxIfDepth)
                       /*
@@ -1282,85 +1256,5 @@ public func runTest(of classifier: OutlierGroupClassifier,
     }
 
     return (numberGood, numberBad)
-}
-
-fileprivate func prune(tree: SwiftDecisionTree,
-                       with testData: ClassifiedData) async -> SwiftDecisionTree
-{
-    // first split out the test data into chunks
-
-    // then run tests in parallel
-
-    let chunkedTestData = testData.split(into: ProcessInfo.processInfo.activeProcessorCount)
-
-    var (bestGood, bestBad) = await runTest(of: tree, onChunks: chunkedTestData)
-
-    let total = bestGood + bestBad
-    
-    var bestPercentageGood = Double(bestGood)/Double(total)*100
-    let origPercentageGood = bestPercentageGood
-    
-    if bestBad == 0 {
-        // can't get better than this, on point trying
-        Log.i("not pruning tree with \(bestPercentageGood) initial test results.  Use a different test data set for pruning.")
-        return tree
-    } 
-    
-    Log.i("Prune start: bestGood \(bestGood), bestBad \(bestBad) \(bestPercentageGood)% good on \(testData.count) data points")
-
-    // prune from the root node, checking how well the tree performs on the test data
-    // with and without stumping the node in question.
-    // If the non-stumped test results aren't better, then cut the tree off at that node
-    
-    if let rootNode = tree as? DecisionTreeNode {
-        // iterate over every DecisionTreeNode and try stumping it and comparing to the
-        // best found score so far
-        
-        var nodesToStump: [DecisionTreeNode] = [rootNode]
-    
-        while nodesToStump.count > 0 {
-            let stumpNode = nodesToStump.removeFirst()
-            if !stumpNode.stump {
-                stumpNode.stump = true
-
-                let (good, _) = await runTest(of: tree, onChunks: chunkedTestData)
-                /*
-                 >= stumps when they're equal
-                 >  doesn't stump in that case
-                 */
-                if good > bestGood {
-                    bestGood = good
-                    bestPercentageGood = Double(bestGood)/Double(total)*100
-                    // this was better, keep the stump
-                    Log.i("pruning \(nodesToStump.count) nodes \(bestPercentageGood)% good better by \(good-bestGood) on \(testData.count) data points keeping stump w/ bestGood \(bestGood) \(bestPercentageGood)% good")
-                } else {
-                    // it was worse, remove stump
-                    stumpNode.stump = false
-                    if let lessNode = stumpNode.lessThan as? DecisionTreeNode {
-                        // XXX narrow down data to that on this side
-
-                        if let _ = lessNode.lessThan as? DecisionTreeNode,
-                           let _ = lessNode.greaterThan as? DecisionTreeNode
-                        {
-                            nodesToStump.append(lessNode)
-                        }
-                    }
-                    if let greaterNode = stumpNode.greaterThan as? DecisionTreeNode {
-                        // XXX narrow down data to that on this side
-                        if let _ = greaterNode.lessThan as? DecisionTreeNode,
-                           let _ = greaterNode.greaterThan as? DecisionTreeNode
-                        {
-                            nodesToStump.append(greaterNode)
-                        }
-                    }
-                    Log.i("Prune check: worse by \(good-bestGood) on \(testData.count) data points")
-                }
-            }
-        }
-    }
-
-    Log.i("after pruning, \(origPercentageGood)% to \(bestPercentageGood)%, a \(bestPercentageGood-origPercentageGood)% improvement")
-    
-    return tree
 }
 

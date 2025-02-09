@@ -93,12 +93,6 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
             """)
     var forestSize: Int? = nil
 
-    @Flag(name: [.customLong("no-prune")],
-          help:"""
-            Turn off pruning of trees, which can be slow
-            """)
-    var noPrune = false
-
     @Argument(help: """
             A list of files, which can be either a reference to a config.json file,
             or a reference to a directory containing data csv files.
@@ -427,7 +421,6 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
         
         let generator = DecisionTreeGenerator(withTypes: decisionTypes,
                                               andSplitTypes: [.median],
-                                              pruneTree: !noPrune,
                                               maxDepth: maxDepth)
 
         
@@ -655,11 +648,8 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
         
         Log.i("Calculating decision tree with \(trainingData.positiveData.count) should paint \(trainingData.negativeData.count) should not paint test data outlier groups")
 
-        let prune = !noPrune && testData.positiveData.count != 0 && testData.negativeData.count != 0
-        
         let generator = DecisionTreeGenerator(withTypes: decisionTypes,
                                               andSplitTypes: splitTypes,
-                                              pruneTree: prune,
                                               maxDepth: maxDepth)
 
         let baseFilename = "../starDecisionTrees/Sources/starDecisionTrees/OutlierGroupDecisionTree_"
