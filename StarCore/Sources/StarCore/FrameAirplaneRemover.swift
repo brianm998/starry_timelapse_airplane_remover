@@ -958,6 +958,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let ret = await outlierGroups.promoteDust(in: boundingBox)
 
         await self.markAsChanged()
+        await updateCombineSubjects()
         
         try await outlierGroups.writeOutliersBinary(to: self.outliersDirname)
 
