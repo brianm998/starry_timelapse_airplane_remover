@@ -196,12 +196,12 @@ public actor HoughLineMatrixBlobConnector {
 
     public func process(_ args: Args) async {
 
-        let startTime = Date().timeIntervalSince1970
+        //let startTime = Date().timeIntervalSince1970
         
         // first, assemble matrix from the blobrefs in the analyzer
         let fullFrameImage = await analyzer.pixelatedImage
 
-        let t1 = Date().timeIntervalSince1970
+        //let t1 = Date().timeIntervalSince1970
         
         let matrix = fullFrameImage.splitIntoMatrix(maxWidth: args.elementWidth,
                                                     maxHeight: args.elementHeight,
@@ -215,7 +215,7 @@ public actor HoughLineMatrixBlobConnector {
                                                    overlapPercent: args.overlapPercent)
         
         
-        let t2 = Date().timeIntervalSince1970
+        //let t2 = Date().timeIntervalSince1970
 
         await withTaskGroup(of: Void.self) { taskGroup in
             // for each matrix element:
