@@ -550,59 +550,22 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
     var lessResponse: TreeResponse?
     var greaterResponse: TreeResponse?
     
-    let lessThanPaintCount = result.lessThanPositive.count
-    let lessThanNotPaintCount = result.lessThanNegative.count
-    
-    let greaterThanPaintCount = result.greaterThanPositive.count
-    let greaterThanNotPaintCount = result.greaterThanNegative.count
-    
-    let paintMax = Double(lessThanPaintCount+greaterThanPaintCount)
-    let notPaintMax = Double(lessThanNotPaintCount+greaterThanNotPaintCount)
-    
-    // divide by max to even out 1/10 disparity in true/false data
-    let lessThanPaintDiv = Double(lessThanPaintCount)/paintMax
-    let greaterThanPaintDiv = Double(greaterThanPaintCount)/paintMax
-    
-    let lessThanStumpValue = lessThanPaintDiv / (lessThanPaintDiv + Double(lessThanNotPaintCount)/notPaintMax) * 2 - 1
-    
-    //Log.i("lessThanPaintCount \(lessThanPaintCount) lessThanNotPaintCount \(lessThanNotPaintCount) lessThanStumpValue \(lessThanStumpValue)")
-    
-    
-    let greaterThanStumpValue = greaterThanPaintDiv / (greaterThanPaintDiv + Double(greaterThanNotPaintCount)/notPaintMax) * 2 - 1
-    
-    //Log.i("greaterThanPaintCount \(greaterThanPaintCount) greaterThanNotPaintCount \(greaterThanNotPaintCount) greaterThanStumpValue \(greaterThanStumpValue)")
-    /*
-
-     extend this further, to not return one value on either side of a split,
-     but instead to calculate a score based upon how var it is from the central value
-     if the given value is the central value, return 0
-     calculate a histogram of some size (10, more?),
-     bracketed by the points where the data is all positive or negative.
-     use a quick method to calculate what bucket the source fills into,
-     and return that value
-
-
-     histogram starts at smallest value
-     histogram ends at largest value
-     histogram has X buckets (10-20?)
-     each bucket has a specific range of values that it holds
-     for each bucket, see how many positive and negative results we have for it
-     result for each bucket is calculated based upon a
-     sum values for each result (+1 or -1)/(total results for bucket)
-     So if they are all +1, the result for the bucket is +1
-     
-
-     
-     */
-    
     if at(max: indent + 2, at: maxDepth) {
         // stump, don't extend the tree branches further
-        return StumpedDecisionTreeNode(type: result.type,
-                                       value: result.value,
-                                       lessThanStumpValue: lessThanStumpValue,
-                                       greaterThanStumpValue: greaterThanStumpValue,
-                                       indent: indent/* + 1*/,
-                                       newMethodLevel: globalMaxIfDepth)
+        let useOldStump = false
+
+        if useOldStump {
+            // this is the old stump code
+            
+            return StumpedDecisionTreeNode(result: result,
+                                           indent: indent/* + 1*/,
+                                           newMethodLevel: globalMaxIfDepth)
+        } else {
+            return HistogramStumpDecisionTreeNode(result: result,
+                                                  indent: indent/* + 1*/,
+                                                  newMethodLevel: globalMaxIfDepth,
+                                                  bucketCount: 100) // XXX guess XXX 
+        }
     } else {
         
         let lessThanPositive = result.lessThanPositive//.map { $0 }
@@ -638,8 +601,7 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
                   decisionTypes: _decisionTypes,
                   decisionSplitTypes: _decisionSplitTypes,
                   maxDepth: maxDepth)
-                return TreeResponse(treeNode: lessTree, position: .less,
-                                  stumpValue: lessThanStumpValue)
+                return TreeResponse(treeNode: lessTree, position: .less)
 //            }
         }
         
@@ -652,8 +614,7 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
               decisionTypes: _decisionTypes,
               decisionSplitTypes: _decisionSplitTypes,
               maxDepth: maxDepth)
-        greaterResponse = TreeResponse(treeNode: greaterTree, position: .greater,
-                                       stumpValue: greaterThanStumpValue)
+        greaterResponse = TreeResponse(treeNode: greaterTree, position: .greater)
         
         lessResponse = await lessResponseTask.value
     }
@@ -1143,10 +1104,9 @@ fileprivate struct TreeResponse: Sendable {
     
     let treeNode: SwiftDecisionTree
     let position: Place
-    let stumpValue: Double
 }
     
-fileprivate struct DecisionResult: Sendable {
+struct DecisionResult: Sendable {
     let type: OutlierGroupFeature
     let value: Double
     let lessThanPositive: [OutlierFeatureData]

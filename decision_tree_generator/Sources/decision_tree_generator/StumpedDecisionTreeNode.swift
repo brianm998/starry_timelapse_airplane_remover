@@ -5,20 +5,39 @@ import StarCore
 // a stumped node, with no further recursion
 class StumpedDecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
 
-    public init (type: OutlierGroupFeature,
-                 value: Double,
-                 lessThanStumpValue: Double,
-                 greaterThanStumpValue: Double,
+    public init (result: DecisionResult,
                  indent: Int,            // really recursion level
                  newMethodLevel: Int)    // how far we recurse before making a new method
                  
     {
-        self.type = type
-        self.value = value
+        self.result = result
+        self.type = result.type
+        self.value = result.value
         self.indent = indent
-        self.lessThanStumpValue = lessThanStumpValue
-        self.greaterThanStumpValue = greaterThanStumpValue
         self.newMethodLevel = newMethodLevel
+
+        let lessThanPaintCount = result.lessThanPositive.count
+        let lessThanNotPaintCount = result.lessThanNegative.count
+        
+        let greaterThanPaintCount = result.greaterThanPositive.count
+        let greaterThanNotPaintCount = result.greaterThanNegative.count
+        
+        let paintMax = Double(lessThanPaintCount+greaterThanPaintCount)
+        let notPaintMax = Double(lessThanNotPaintCount+greaterThanNotPaintCount)
+        
+        // divide by max to even out 1/10 disparity in true/false data
+        let lessThanPaintDiv = Double(lessThanPaintCount)/paintMax
+        let greaterThanPaintDiv = Double(greaterThanPaintCount)/paintMax
+
+        self.lessThanStumpValue = lessThanPaintDiv / (lessThanPaintDiv + Double(lessThanNotPaintCount)/notPaintMax) * 2 - 1
+        
+        //Log.i("lessThanPaintCount \(lessThanPaintCount) lessThanNotPaintCount \(lessThanNotPaintCount) lessThanStumpValue \(lessThanStumpValue)")
+        
+        
+        self.greaterThanStumpValue = greaterThanPaintDiv / (greaterThanPaintDiv + Double(greaterThanNotPaintCount)/notPaintMax) * 2 - 1
+        
+        //Log.i("greaterThanPaintCount \(greaterThanPaintCount) greaterThanNotPaintCount \(greaterThanNotPaintCount) greaterThanStumpValue \(greaterThanStumpValue)")
+        
     }
 
     // stump means cutting off the tree at this node, and returning stumped values
@@ -32,6 +51,8 @@ class StumpedDecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
     // the value that we are splitting upon
     let value: Double
 
+    let result: DecisionResult
+    
     var valueString: String {
         "\(value)"
           .replacingOccurrences(of: ".", with: "_")
