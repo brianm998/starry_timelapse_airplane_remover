@@ -99,6 +99,7 @@ struct FilmstripImageView: View {
                                 Spacer()
                                   .frame(width: 8)
                                 Text(frameState.shortString)
+                                  .font(.system(size: 12))
                                   .foregroundColor(frameState.color)
                                 Spacer()
                             }
