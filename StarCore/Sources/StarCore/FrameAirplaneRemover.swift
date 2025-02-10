@@ -241,8 +241,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     internal var outliersLoadedFromFile = false
 
     // doubly linked list
-    weak var previousFrame: FrameAirplaneRemover?
-    weak var nextFrame: FrameAirplaneRemover?
+    public weak var previousFrame: FrameAirplaneRemover?
+    public weak var nextFrame: FrameAirplaneRemover?
 
     func getPreviousFrame() -> FrameAirplaneRemover? { previousFrame }
     
@@ -319,6 +319,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                      atSize: .original)
         {
             self.state = .complete
+        } else if FileManager.default.fileExists(atPath: "\(await self.outliersDirname)/\(BlobBinarySaver.outlierBinaryFilename)") {
+            // if we have outliers, mark it as userModified (classified),
+            // even if some are not classified
+            self.state = .userModified
         }
         
         if let frameStateChangeCallback = callbacks.frameStateChangeCallback {
