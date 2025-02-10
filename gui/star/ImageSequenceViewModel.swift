@@ -223,6 +223,10 @@ public final class ImageSequenceViewModel {
 
     var smallDustMaxString: String = ""
 
+    var numberOfFramesToProcess: Int = 1
+
+    var reprocessFrames = false
+    
     convenience init(withConfig jsonConfigFilename: String,
                      closure: @escaping @Sendable (Int, Double, Int, Double) -> Void) async throws
     {
@@ -880,7 +884,7 @@ public final class ImageSequenceViewModel {
         if isProcessingAllFrames { return }
         isProcessingAllFrames = true
 
-        Log.d("processAllFrames start")
+        Log.d("processAllFrames start from \(startIndex) to \(endIndex)")
         
         Task.detached(priority: .medium) { [self] in
             // XXX a crude version of the FinalProcessor, could be better
@@ -894,47 +898,56 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    // fully reprocess this frame
-    func reprocess(_ frame: FrameAirplaneRemover) async {
+    // clears self.numberOfFrames frames starting from given frame
+    func clearProcessing(from frame: FrameAirplaneRemover) async {
         if let frame = self.currentFrame {
-            Task.detached(priority: .userInitiated) { // do we need this detached task?
-                await frame.set(state: .unprocessed)
-                frame.imageAccessor.deleteAllImages(frameIndex: frame.frameIndex)
-                Task { @MainActor in
-                    self.frameViewMode = .original
-                }
-
-                var existingImages: Set<FrameViewMode> = [.original]
-                
-                if frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
-                                                   ofType: .aligned,
-                                                   atSize: .original)
+            let numberOfFramesToProcess = self.numberOfFramesToProcess
+            Log.d("clearProcessing numberOfFramesToProcess \(numberOfFramesToProcess)")
+            await Task.detached(priority: .userInitiated) { // do we need this detached task?
+                var numberOfFramesLeft = numberOfFramesToProcess
+                var currentFrame: FrameAirplaneRemover? = frame
+                while let frameToClear = currentFrame,
+                      numberOfFramesLeft > 0
                 {
-                    existingImages.insert(.aligned)
-                }
+                    await frameToClear.set(state: .unprocessed)
+                    frameToClear.imageAccessor.deleteAllImages(frameIndex: frameToClear.frameIndex)
+                    Task { @MainActor in
+                        self.frameViewMode = .original
+                    }
 
-                if frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
-                                                   ofType: .subtraction,
-                                                   atSize: .original)
-                {
-                    existingImages.insert(.subtraction)
-                }
+                    var existingImages: Set<FrameViewMode> = [.original]
+                    
+                    if frameToClear.imageAccessor.imageExists(frameIndex: frameToClear.frameIndex,
+                                                       ofType: .aligned,
+                                                       atSize: .original)
+                    {
+                        existingImages.insert(.aligned)
+                    }
 
-                Task { @MainActor in
-                    self.currentFrameView.existingImages = existingImages
+                    if frameToClear.imageAccessor.imageExists(frameIndex: frameToClear.frameIndex,
+                                                       ofType: .subtraction,
+                                                       atSize: .original)
+                    {
+                        existingImages.insert(.subtraction)
+                    }
+
+                    Task { @MainActor in
+                        self.currentFrameView.existingImages = existingImages
+                    }
+                    
+                    let binaryBlobFilename = await frameToClear.blobBinaryFilename
+                    // get rid of the outlier files
+                    do {
+                        Log.d("trying to remove \(binaryBlobFilename)")
+                        try FileManager.default.removeItem(atPath: binaryBlobFilename)
+                    } catch {
+                        Log.e("error removing \(binaryBlobFilename): \(error)")
+                    }
+                    
+                    currentFrame = await frameToClear.nextFrame
+                    numberOfFramesLeft -= 1
                 }
-                
-                let binaryBlobFilename = await frame.blobBinaryFilename
-                // get rid of the outlier files
-                do {
-                    Log.d("trying to remove \(binaryBlobFilename)")
-                    try FileManager.default.removeItem(atPath: binaryBlobFilename)
-                } catch {
-                    Log.e("error removing \(binaryBlobFilename): \(error)")
-                }
-                // re-find them
-                await self.findOutliersAndRender(frame: frame)
-            }
+            }.value
         } else {
             // XXX probably should do something here
         }

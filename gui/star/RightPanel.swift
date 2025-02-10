@@ -22,7 +22,7 @@ struct RightPanel: View {
     @FocusState private var minimumClassificationSizeIsFirstResponder: Bool
     @FocusState private var dustbinLevelIsFirstResponder: Bool
     @FocusState private var smallDustMaxIsFirstResponder: Bool
-
+    
     var body: some View {
         @Bindable var viewModel = viewModel
         return Group {
@@ -187,36 +187,51 @@ struct RightPanel: View {
                             Toggle("show full resolution", isOn: $viewModel.showFullResolution)
                               .foregroundColor(.white)
 
-                            EditableNumberOfFramesToProcessView()
-                    
                             let frameView = viewModel.currentFrameView
 
-                                Button() {
-                                    Task {
-                                        if let frame = viewModel.currentFrame {
-                                            await viewModel.reprocess(frame)
+                            EditableNumberOfFramesToProcessConcurrentlyView()
+
+                            Toggle("reprocess fully", isOn: $viewModel.reprocessFrames)
+                              .foregroundColor(.white)
+                            
+                            Button() {
+                                Task {
+                                    if let frame = viewModel.currentFrame {
+                                        // XXX reprocess
+                                        if viewModel.reprocessFrames {
+                                            await viewModel.clearProcessing(from: frame)
                                         }
-                                    }
-                                } label: {
-                                    Text("Process as")
-                                }
-                                  .disabled(viewModel.isProcessingAllFrames ||
-                                              viewModel.renderingCurrentFrame)
-
-                                Picker("", selection: $viewModel.detectionType) {
-                                    ForEach(DetectionType.allCases, id: \.self) { value in
-                                        Text(value.rawValue).tag(value)
+                                        viewModel.processFrames(from: frame.frameIndex,
+                                                                to: frame.frameIndex+viewModel.numberOfFramesToProcess)
                                     }
                                 }
-                                  .frame(maxWidth: 120)
-                                  .onChange(of: viewModel.detectionType) {
-                                    Task {
-                                        await constants.set(detectionType: viewModel.detectionType)
+                            } label: {
+                                if viewModel.reprocessFrames {
+                                    Text("Re-Process the next")
+                                } else {
+                                    Text("Process the next")
+                                }
+                            }
+                              .disabled(viewModel.isProcessingAllFrames ||
+                                          viewModel.renderingCurrentFrame)
 
-                                        // stick it in user preferences
-                                        self.viewModel.userPreferences.processingType = viewModel.detectionType
-                                    }
+
+                            EditableNumberOfFramesToProcessView()
+
+                            Picker("", selection: $viewModel.detectionType) {
+                                ForEach(DetectionType.allCases, id: \.self) { value in
+                                    Text(value.rawValue).tag(value)
+                                }
+                            }
+                              .frame(maxWidth: 120)
+                              .onChange(of: viewModel.detectionType) {
+                                  Task {
+                                      await constants.set(detectionType: viewModel.detectionType)
+
+                                      // stick it in user preferences
+                                      self.viewModel.userPreferences.processingType = viewModel.detectionType
                                   }
+                              }
 
                             Button() {
                                 Task {
@@ -270,7 +285,7 @@ struct RightPanel: View {
 }
 
 
-struct EditableNumberOfFramesToProcessView: View {
+struct EditableNumberOfFramesToProcessConcurrentlyView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     @State private var editFrameNumberMode = false
@@ -309,6 +324,50 @@ struct EditableNumberOfFramesToProcessView: View {
             }
         } else {
             Text("process \(frameNumberString) frames at once")
+              .foregroundColor(.white)
+              .cursor(.dragLink, tag: "editableFrameNumberView")
+              .onTapGesture(count: 2) {
+                  self.editFrameNumberMode = true
+              }
+        }
+    }
+}
+
+struct EditableNumberOfFramesToProcessView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+
+    @State private var editFrameNumberMode = false
+    @State private var editFrameNumberModeString = ""
+    
+    var body: some View {
+        let frameNumberString = String(format: "%d", viewModel.numberOfFramesToProcess)
+        if self.editFrameNumberMode {
+            HStack {
+                TextField("\(frameNumberString)",
+                          text: $editFrameNumberModeString)
+                  .frame(maxWidth: 38)
+                  .onSubmit {
+                      let filtered = editFrameNumberModeString.filter { "0123456789".contains($0) }
+                      if let newIntValue = Int(filtered),
+                         newIntValue >= 0,
+                         newIntValue < self.viewModel.imageSequenceSize
+                      {
+                          self.viewModel.numberOfFramesToProcess = newIntValue
+                          
+                          self.editFrameNumberMode = false
+                          self.editFrameNumberModeString = ""
+                      }
+                  }
+                if self.viewModel.numberOfFramesToProcess == 1 {
+                    Text("frame as")
+                      .foregroundColor(.white)
+                } else {
+                    Text("frames as")
+                      .foregroundColor(.white)
+                }
+            }
+        } else {
+            Text("\(frameNumberString) frames as")
               .foregroundColor(.white)
               .cursor(.dragLink, tag: "editableFrameNumberView")
               .onTapGesture(count: 2) {
