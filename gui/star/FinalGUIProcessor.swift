@@ -45,6 +45,8 @@ public actor FinalGUIProcessor {
         {
             lastFrameIndex = endIndex
         }
+
+        Log.d("process frames from \(firstFrameIndex)..<\(lastFrameIndex)")
         
         try? await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
             var semaphores = [AsyncSemaphore?](repeating: nil, count: framesCount)
@@ -180,7 +182,7 @@ public actor FinalGUIProcessor {
                     }
                 }
             }
-            for frameIndex in 0..<framesCount {
+            for frameIndex in firstFrameIndex..<lastFrameIndex {
                 if !haveFinalProcessed[frameIndex] {
                     Task.detached(priority: .userInitiated) {
                         await finalProcess(atIndex: frameIndex,
