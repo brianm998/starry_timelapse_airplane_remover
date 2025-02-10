@@ -579,13 +579,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public var blobBinaryFilename: String { // not used anymore?
+    public var blobBinaryFilename: String { 
         get async {
             let config = await configManager.config()
             return "\(config.outlierOutputDirname)/\(frameIndex)/\(BlobBinarySaver.outlierBinaryFilename)"
         }
     }
     
+    public var dustbinBinaryFilename: String { 
+        get async {
+            let config = await configManager.config()
+            return "\(config.outlierOutputDirname)/\(frameIndex)/\(BlobBinarySaver.dustbinBinaryFilename)"
+        }
+    }
+    
+
+
     public func loadOutliersFromBinaryFile() async throws -> OutlierGroups? {
         let config = await configManager.config()
         let dirname = "\(config.outlierOutputDirname)/\(frameIndex)"

@@ -118,7 +118,10 @@ struct RightPanel: View {
                               .focused($dustbinLevelIsFirstResponder)
                               .onSubmit {
                                   let filtered = viewModel.dustbinLevelString.filter { "0123456789.-".contains($0) }
-                                  if let newValue = Double(filtered) {
+                                  if let newValue = Double(filtered),
+                                     newValue >= -1,
+                                     newValue <= 1
+                                  {
                                       viewModel.dustbinLevel = newValue
                                       viewModel.dustbinLevelString = "\(newValue)"
                                       self.dustbinLevelIsFirstResponder = false

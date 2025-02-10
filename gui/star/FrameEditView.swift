@@ -116,6 +116,16 @@ struct FrameEditView: View {
                   case .paint:
                       update(frame: frameView, shouldPaint: true,
                              between: selectionStart, and: end_location)
+
+                      // if we are showing the dustbin, recompute the image after the razor
+                      if viewModel.shouldShowDustbin {
+                          Task {
+                              if let frame = frameView.frame {
+                                  await self.viewModel.computeDustbinImage(forFrame: frame)
+                              }
+                          }
+                      }
+                      
                   case .clear:
                       update(frame: frameView, shouldPaint: false,
                              between: selectionStart, and: end_location)
@@ -231,10 +241,11 @@ struct FrameEditView: View {
         if let frame = frameView.frame {
             let new_value = shouldPaint
             Task.detached(priority: .userInitiated) {
-               await frame.userSelectAllOutliers(toShouldPaint: new_value,
+                await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                  between: selectionStart,
                                                  and: end_location,
                                                  includingDustbin: viewModel.shouldShowDustbin)
+                await viewModel.setOutlierGroups(forFrame: frame)
                 await MainActor.run {
                     viewModel.selectionStart = nil
                     viewModel.selectionEnd = nil

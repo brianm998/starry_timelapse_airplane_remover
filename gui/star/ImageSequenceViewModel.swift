@@ -910,6 +910,8 @@ public final class ImageSequenceViewModel {
                       numberOfFramesLeft > 0
                 {
                     await frameToClear.set(state: .unprocessed)
+                    await frameToClear.updateCombineSubjects()
+
                     frameToClear.imageAccessor.deleteAllImages(frameIndex: frameToClear.frameIndex)
                     Task { @MainActor in
                         self.frameViewMode = .original
@@ -943,7 +945,15 @@ public final class ImageSequenceViewModel {
                     } catch {
                         Log.e("error removing \(binaryBlobFilename): \(error)")
                     }
-                    
+
+                    let dustbinBinaryFilename = await frameToClear.dustbinBinaryFilename
+                    do {
+                        Log.d("trying to remove \(dustbinBinaryFilename)")
+                        try FileManager.default.removeItem(atPath: dustbinBinaryFilename)
+                    } catch {
+                        Log.e("error removing \(dustbinBinaryFilename): \(error)")
+                    }
+
                     currentFrame = await frameToClear.nextFrame
                     numberOfFramesLeft -= 1
                 }
