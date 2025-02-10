@@ -391,12 +391,12 @@ actor DecisionTreeGenerator {
               public let sha256Prefix = "\(hashPrefix)"
               public let maxDepth = \(maxDepth)
               public let type: ClassifierType = .tree(DecisionTreeParams(name: \"\(hashPrefix)\",
-                                                         inputSequences: \(inputFilesArray),
-                                                         positiveTrainingSize: \(trainingData.positiveData.count),
-                                                         negativeTrainingSize: \(trainingData.negativeData.count),
-                                                         decisionTypes: \(decisionTypeString),
-                                                         decisionSplitTypes: \(decisionSplitTypeString),
-                                                         maxDepth: \(maxDepth))
+                                                      inputSequences: \(inputFilesArray),
+                                                      positiveTrainingSize: \(trainingData.positiveData.count),
+                                                      negativeTrainingSize: \(trainingData.negativeData.count),
+                                                      decisionTypes: \(decisionTypeString),
+                                                      decisionSplitTypes: \(decisionSplitTypeString),
+                                                      maxDepth: \(maxDepth)))
               
               public let generationSecondsSince1970 = \(generationDateSince1970)
 
@@ -552,7 +552,7 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
     
     if at(max: indent + 2, at: maxDepth) {
         // stump, don't extend the tree branches further
-        let useOldStump = false
+        let useOldStump = true
 
         if useOldStump {
             // this is the old stump code
@@ -561,10 +561,10 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
                                            indent: indent/* + 1*/,
                                            newMethodLevel: globalMaxIfDepth)
         } else {
+            // this seems to give bad results, and even worse when combined together :(
             return HistogramStumpDecisionTreeNode(result: result,
                                                   indent: indent/* + 1*/,
-                                                  newMethodLevel: globalMaxIfDepth,
-                                                  bucketCount: 100) // XXX guess XXX 
+                                                  newMethodLevel: globalMaxIfDepth)
         }
     } else {
         
