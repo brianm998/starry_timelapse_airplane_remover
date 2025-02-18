@@ -34,6 +34,8 @@ If this works, the ground is rotated slightly as well.
 
 The benefits of this step are that the subtraction image produced by the next step is a lot cleaner.  Most, if not all, stars in the aligned image will be very close in position to the same star in the frame being processed.  The greatly reduces the noise level during processing.
 
+In addition, when we paint over undesired pixels in a frame with an aligned neighbor, the parts of the sky that are replaced are going to be closer to the right location.
+
 If this step fails for whatever reason, Star will fall back to using the neighboring frame without alignment.  Obvious bright airplanes should still be caught in this case.
 
 ### Subtraction Image
