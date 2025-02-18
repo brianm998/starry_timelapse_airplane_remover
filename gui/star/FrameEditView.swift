@@ -23,7 +23,7 @@ struct FrameEditView: View {
             let outlierArrowLength = self.viewModel.frameWidth/self.viewModel.outlierArrowLength
             
             let min = (geometry.size.height/(viewModel.frameHeight+outlierArrowLength*2))
-            let full_max = self.viewModel.showFullResolution ? 1 : 0.6 // XXX hardcoded constants
+            let full_max: CGFloat = self.viewModel.showFullResolution ? 3 : 0.66 // XXX hardcoded constants that should be in the gui
             let max = min < full_max ? full_max : min
 
             ZoomableView(size: CGSize(width: viewModel.frameWidth+outlierArrowLength*2,
@@ -117,14 +117,6 @@ struct FrameEditView: View {
                       update(frame: frameView, shouldPaint: true,
                              between: selectionStart, and: end_location)
 
-                      // if we are showing the dustbin, recompute the image after the razor
-                      if viewModel.shouldShowDustbin {
-                          Task {
-                              if let frame = frameView.frame {
-                                  await self.viewModel.computeDustbinImage(forFrame: frame)
-                              }
-                          }
-                      }
                       
                   case .clear:
                       update(frame: frameView, shouldPaint: false,
@@ -246,6 +238,14 @@ struct FrameEditView: View {
                                                  and: end_location,
                                                  includingDustbin: viewModel.shouldShowDustbin)
                 await viewModel.setOutlierGroups(forFrame: frame)
+
+                // if we are showing the dustbin, recompute the image
+                if await viewModel.shouldShowDustbin {
+                    if let frame = await frameView.frame {
+                        await self.viewModel.computeDustbinImage(forFrame: frame)
+                    }
+                }
+                
                 await MainActor.run {
                     viewModel.selectionStart = nil
                     viewModel.selectionEnd = nil
