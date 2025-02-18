@@ -245,8 +245,7 @@ struct RightPanel: View {
                             } label: {
                                 Text("Render Updates")
                             }
-                              .disabled(frameView.frameState == .complete ||
-                                        frameView.outlierViews == nil ||
+                              .disabled(frameView.outlierViews == nil ||
                                         viewModel.renderingCurrentFrame)
                         }
                     }
