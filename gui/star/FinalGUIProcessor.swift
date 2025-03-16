@@ -60,6 +60,12 @@ public actor FinalGUIProcessor {
                     semaphores[index] = semaphore
                     taskGroup.addTask() {
                         await semaphore.wait()
+
+                        if await viewModel.reprocessFrames {
+                            await viewModel.clearProcessing(from: frame)
+                            try await frame.deleteOutliers()
+                        }
+                        
                         if await !frame.processingState().isReadyForInterframeProcessing {
                             // this frame needs to have outliers found
 

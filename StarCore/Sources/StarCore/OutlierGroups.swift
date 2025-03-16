@@ -140,6 +140,11 @@ public actor OutlierGroups {
 
     public static let outlierGroupPaintJsonFilename = "OutlierGroupPaintData.json"
 
+    public func clear() {
+        self.members = [:]
+        self.dustbin = [:]
+    }
+
     // uses the newer binary blob format
     public init(at frameIndex: Int,
                 fromOutlierDir outlierDir: String) async throws
@@ -305,6 +310,20 @@ public actor OutlierGroups {
         // save dustbin
         await self.writeBinary(outlierMap: self.dustbin,
                          to: "\(dirname)/\(BlobBinarySaver.dustbinBinaryFilename)")
+    }
+
+    // removes outliers.bin and dust.bin from outliers dir for this frame
+    public func removeOutliersBinary(from dirname: String) async throws {
+
+        let outlierBinaryFilename = "\(dirname)/\(BlobBinarySaver.outlierBinaryFilename)"
+        if FileManager.default.fileExists(atPath: outlierBinaryFilename) {
+            try FileManager.default.removeItem(atPath: outlierBinaryFilename)
+        }
+
+        let dustbinFilename = "\(dirname)/\(BlobBinarySaver.dustbinBinaryFilename)"
+        if FileManager.default.fileExists(atPath: dustbinFilename) {
+            try FileManager.default.removeItem(atPath: dustbinFilename)
+        }
     }
 
     private func writeBinary(outlierMap: [UInt16: OutlierGroup], to filename: String) async {

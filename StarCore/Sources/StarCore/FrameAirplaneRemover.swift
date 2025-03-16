@@ -977,6 +977,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         return ret
     }
+
+    public func deleteOutliers() async throws {
+        await try outlierGroups?.removeOutliersBinary(from: self.outliersDirname)
+        await outlierGroups?.clear()
+    }
     
     public func deleteOutliers(in boundingBox: BoundingBox) async throws {
         await outlierGroups?.deleteOutliers(in: boundingBox)
