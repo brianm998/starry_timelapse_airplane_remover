@@ -124,10 +124,10 @@ push enter
             return outputFilename
         } catch {
             if let error = error as? ShellOutError {
-                Log.e("STDERR: \(error.message)") // log STDERR
-                Log.e("STDOUT: \(error.output)")  // log STDOUT
+                Log.i("STDERR: \(error.message)") // log STDERR
+                Log.i("STDOUT: \(error.output)")  // log STDOUT
             } else {
-                Log.e("\(error)")
+                Log.i("\(error)")
             }
             // if the alignment fails, simply hard link them together
             // assuming same volume :(
