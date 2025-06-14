@@ -127,6 +127,7 @@ public struct FrameEditImageView: View {
                         dustbinImage
                           .renderingMode(.template) 
                           .foregroundColor(.yellow)
+                          .opacity(viewModel.dustbinOpacity)
                     }
 
                     // then the outliers that have view models

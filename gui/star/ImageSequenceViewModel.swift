@@ -147,6 +147,8 @@ public final class ImageSequenceViewModel {
 
     var outlierOpacity = 1.0
 
+    var dustbinOpacity = 0.7
+
     var interactionMode: InteractionMode = .scrub
 
     var previousInteractionMode: InteractionMode = .scrub
@@ -677,8 +679,8 @@ public final class ImageSequenceViewModel {
 
     func setOutlierGroups(forFrame frame: FrameAirplaneRemover) async {
         Task.detached(priority: .userInitiated) {
-          let outlierGroups = await frame.outlierGroupList()
-            if let outlierGroups = outlierGroups {
+            let outlierGroups = await frame.outlierGroupList()
+            if let outlierGroups {
                 Log.d("got \(outlierGroups.count) groups for frame \(frame.frameIndex)")
                 var newOutlierGroups: [OutlierGroupViewModel] = []
                 for group in outlierGroups {
@@ -704,6 +706,8 @@ public final class ImageSequenceViewModel {
                     self.frames[frame.frameIndex].outlierViews = foo
                    // self.objectWillChange.send()
                 }
+            } else {
+                // need to load outliers, we don't have any
             }
         }
     }

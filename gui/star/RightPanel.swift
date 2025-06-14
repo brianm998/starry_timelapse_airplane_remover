@@ -181,6 +181,12 @@ struct RightPanel: View {
                             Slider(value: $viewModel.outlierOpacity, in : 0...1)
                               .frame(maxWidth: 140, alignment: .bottom)
                             
+                            Text("Dustbin Opacity")
+                              .foregroundColor(.white)
+                            
+                            Slider(value: $viewModel.dustbinOpacity, in : 0...1)
+                              .frame(maxWidth: 140, alignment: .bottom)
+                            
                             Text("Frame Opacity")
                               .foregroundColor(.white)
                             
