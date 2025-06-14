@@ -712,11 +712,103 @@ public final class ImageSequenceViewModel {
         }
     }
     
-    func computeDustbinImage(forFrame frame: FrameAirplaneRemover) async {
+    func computeSmallOutlierImage(forFrame frame: FrameAirplaneRemover) async {
+        /*
+         _Much_ better UI performance when outliers smaller than a threshold of
+         around 40 pixels are not presented in the UI separate from these images
+
+         compute here two images which are similar to the dustbin image,
+         but instead contain all outliers smaller than a given threshold.
+         One image for outliers we will paint, the other for outliers we will not.
+         each is a monochrome image, can be displayed in the view layer as colored.
+
+         XXX
+
+         still need to:
+
+         - make the hardcoded '40' value here in in FrameEditView a runtime UI config
+
+         */
+        
+        let width  = Int(self.frameWidth)
+        let height = Int(self.frameHeight)
+        Task.detached(priority: .userInitiated) {
+            var positiveOutlierArray = [UInt8](repeating: 0, count: 2*width*height)
+            var negativeOutlierArray = [UInt8](repeating: 0, count: 2*width*height)
+            if let outlierGroups = await frame.getOutlierGroups() {
+                for group in await outlierGroups.getMembers().values {
+                    if group.size <= 40 { // XXX sync with same value @ FrameEditView:139
+                        if let shouldPaint = await group.shouldPaint(),
+                           shouldPaint.willPaint
+                      {
+                            for pixel in group.pixelSet {
+                                let index = 2*(pixel.y*width+pixel.x)
+                                var value = pixel.intensity/0xFF
+                                if value > UInt8.max { value = UInt16(UInt8.max) }
+                                positiveOutlierArray[index] = UInt8(value)
+                                positiveOutlierArray[index+1] = 0xFF // make it visible
+                            }
+                        } else {
+                            for pixel in group.pixelSet {
+                                let index = 2*(pixel.y*width+pixel.x)
+                                var value = pixel.intensity/0xFF
+                                if value > UInt8.max { value = UInt16(UInt8.max) }
+                                negativeOutlierArray[index] = UInt8(value)
+                                negativeOutlierArray[index+1] = 0xFF // make it visible
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let dataProvider = CGDataProvider(data: positiveOutlierArray.data as CFData),
+               let image = CGImage(width: width,
+                                   height: height,
+                                   bitsPerComponent: 8,
+                                   bitsPerPixel: 16,
+                                   bytesPerRow: 2*width,
+                                   space: CGColorSpaceCreateDeviceGray(),
+                                   bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue),
+                                   provider: dataProvider,
+                                   decode: nil,
+                                   shouldInterpolate: false,
+                                   intent: .defaultIntent)
+            {
+                let nsImage = NSImage(cgImage: image, size: .zero)
+                let swiftUIImage = Image(nsImage: nsImage)
+                await MainActor.run {
+                    self.frames[frame.frameIndex].positiveOutlierImage = swiftUIImage
+                }
+            }
+
+            if let dataProvider = CGDataProvider(data: negativeOutlierArray.data as CFData),
+               let image = CGImage(width: width,
+                                   height: height,
+                                   bitsPerComponent: 8,
+                                   bitsPerPixel: 16,
+                                   bytesPerRow: 2*width,
+                                   space: CGColorSpaceCreateDeviceGray(),
+                                   bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue),
+                                   provider: dataProvider,
+                                   decode: nil,
+                                   shouldInterpolate: false,
+                                   intent: .defaultIntent)
+            {
+                let nsImage = NSImage(cgImage: image, size: .zero)
+                let swiftUIImage = Image(nsImage: nsImage)
+                await MainActor.run {
+                    self.frames[frame.frameIndex].negativeOutlierImage = swiftUIImage
+                }
+            }
+        }
+    }
+    
+    func computeDustbinImage(forFrame frame: FrameAirplaneRemover) {
         // write an image from all of the dustbin, as there can be too much dust
         // to make each particle an outlier view 
         let width  = Int(self.frameWidth)
         let height = Int(self.frameHeight)
+        Log.d("computing dustbin image for frame \(frame.frameIndex)")
         Task.detached(priority: .userInitiated) {
             var dustbinArray = [UInt8](repeating: 0, count: 2*width*height)
             if let outlierGroups = await frame.outlierGroupDustbinList() {
@@ -730,8 +822,11 @@ public final class ImageSequenceViewModel {
                         dustbinArray[index+1] = 0xFF // make it visible
                     }
                 }
+            } else {
+                Log.d("frame \(frame.frameIndex) has NO outliers :(")
             }
 
+            Log.d("computed dustbin image for frame \(frame.frameIndex)")
             if let dataProvider = CGDataProvider(data: dustbinArray.data as CFData),
                let image = CGImage(width: width,
                                    height: height,
@@ -748,6 +843,7 @@ public final class ImageSequenceViewModel {
                 let nsImage = NSImage(cgImage: image, size: .zero)
                 let swiftUIImage = Image(nsImage: nsImage)
                 await MainActor.run {
+                    Log.d("set dustbin image for frame \(frame.frameIndex)")
                     self.frames[frame.frameIndex].dustbinImage = swiftUIImage
                 }
             }

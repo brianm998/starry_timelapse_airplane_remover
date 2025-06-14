@@ -126,12 +126,15 @@ struct FrameEditView: View {
                                  between: selectionStart,
                                  and: end_location)
 
-                      // if we are showing the dustbin, recompute the image after the razor
-                      if viewModel.shouldShowDustbin {
+                      if let frame = frameView.frame {
+                          // recompute small outlier images after the razor
                           Task {
-                              if let frame = frameView.frame {
-                                  await self.viewModel.computeDustbinImage(forFrame: frame)
-                              }
+                              await self.viewModel.computeSmallOutlierImage(forFrame: frame)
+                          }
+                          
+                          // if we are showing the dustbin, recompute the image after the razor
+                          if viewModel.shouldShowDustbin {
+                              self.viewModel.computeDustbinImage(forFrame: frame)
                           }
                       }
                       
@@ -238,7 +241,9 @@ struct FrameEditView: View {
                                                  and: end_location,
                                                  includingDustbin: viewModel.shouldShowDustbin)
                 await viewModel.setOutlierGroups(forFrame: frame)
-
+                
+                await self.viewModel.computeSmallOutlierImage(forFrame: frame)
+                
                 // if we are showing the dustbin, recompute the image
                 if await viewModel.shouldShowDustbin {
                     if let frame = await frameView.frame {

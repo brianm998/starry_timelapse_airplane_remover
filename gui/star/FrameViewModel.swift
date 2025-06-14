@@ -70,10 +70,13 @@ public class FrameViewModel {
     var outlierViews: [OutlierGroupViewModel]?
     var loadingOutlierViews: Bool = false
 
-    var shouldShowDustbin = false
     var dustbinImage: Image?
     var loadingDustbinViews: Bool = false
 
+    // images for all outliers too small to have their own UI views
+    var positiveOutlierImage: Image?
+    var negativeOutlierImage: Image?
+    
     // we don't keep full resolution images here
 
     var thumbnailImage: Image = initialImage
@@ -130,8 +133,9 @@ public class FrameViewModel {
         self.outlierViews = newOutlierViews
 
         if let frame {
-            Task {
+            Task.detached(priority: .userInitiated) {
                 await frame.getOutlierGroups()?.dumpInDustbin(dustbin)
+                await self.viewModel.computeSmallOutlierImage(forFrame: frame)
                 await self.viewModel.computeDustbinImage(forFrame: frame)
                 await frame.updateCombineSubjects()
                 try await frame.getOutlierGroups()?.writeOutliersBinary(to: frame.outliersDirname)
@@ -154,8 +158,9 @@ public class FrameViewModel {
         self.outlierViews = newOutlierViews
 
         if let frame {
-            Task {
+            Task.detached(priority: .userInitiated) {
                 await frame.getOutlierGroups()?.dumpInDustbin(dustbin)
+                await self.viewModel.computeSmallOutlierImage(forFrame: frame)
                 await self.viewModel.computeDustbinImage(forFrame: frame)
                 try await frame.getOutlierGroups()?.writeOutliersBinary(to: frame.outliersDirname)
                 await frame.updateCombineSubjects()
@@ -169,14 +174,15 @@ public class FrameViewModel {
     {
         let gestureBounds = BoundingBox(between: selectionStart, and: end_location)
 
-        Task {
-            if let frame {
+        if let frame {
+            Task.detached(priority: .userInitiated) {
                 let _ = try await frame.promoteDust(in: gestureBounds)
 
+                await self.viewModel.computeSmallOutlierImage(forFrame: frame)
                 // update the dustbin image
                 await self.viewModel.computeDustbinImage(forFrame: frame)
                 
-                await viewModel.setOutlierGroups(forFrame: frame)
+              await self.viewModel.setOutlierGroups(forFrame: frame)
                 await frame.updateCombineSubjects()            
             }
         }

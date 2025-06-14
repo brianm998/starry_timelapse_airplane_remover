@@ -64,18 +64,22 @@ public struct FrameEditImageView: View {
             viewModel.loadingOutliers = true
 
             let FU = viewModel
-            Task {
+            Task.detached(priority: .userInitiated) {
                 let _ = try await frame.loadOutliers(loadOnly: true)
-                await self.viewModel.setOutlierGroups(forFrame: frame)
-                await MainActor.run {
+                await self.viewModel.computeSmallOutlierImage(forFrame: frame)
+                Task { @MainActor in
+                    await self.viewModel.setOutlierGroups(forFrame: frame)
                     frameView.loadingOutlierViews = false
                     FU.loadingOutliers = FU.loadingOutlierGroups
+
+                    await maybeLoadDustbin()
+
                 }
             }
         } 
     }
 
-    private func maybeLoadDustbin() { 
+    private func maybeLoadDustbin() {
         // try loading dustbin outliers if there aren't any present
         let frameView = self.viewModel.frames[self.viewModel.currentIndex]
 
@@ -86,7 +90,7 @@ public struct FrameEditImageView: View {
         {
             frameView.loadingDustbinViews = true
 
-            Task {
+            Task.detached(priority: .userInitiated) {
                 await self.viewModel.computeDustbinImage(forFrame: frame)
                 await MainActor.run {
                     frameView.loadingDustbinViews = false
@@ -120,21 +124,35 @@ public struct FrameEditImageView: View {
                 ZStack() {
                     // in edit mode, show outliers groups
 
-                    // dustbin does below
-                    if self.viewModel.shouldShowDustbin,
-                       let dustbinImage = frameView.dustbinImage
-                    {
-                        dustbinImage
-                          .renderingMode(.template) 
-                          .foregroundColor(.yellow)
-                          .opacity(viewModel.dustbinOpacity)
+                    // dustbin goes below
+                    if let dustbinImage = frameView.dustbinImage {
+                        if self.viewModel.shouldShowDustbin {
+                            dustbinImage
+                              .renderingMode(.template) 
+                              .foregroundColor(.yellow)
+                              .opacity(viewModel.dustbinOpacity)
+                        }
                     }
 
+                    if let smallPositiveOutlierImage = frameView.positiveOutlierImage {
+                        smallPositiveOutlierImage
+                          .renderingMode(.template) 
+                          .foregroundColor(.red)
+                    }
+                    
+                    if let smallNegativeOutlierImage = frameView.negativeOutlierImage {
+                        smallNegativeOutlierImage
+                          .renderingMode(.template) 
+                          .foregroundColor(.green)
+                    }
+                    
                     // then the outliers that have view models
                     if let outlierViews = frameView.outlierViews {
                         ForEach(outlierViews) { outlierViewModel in
-                            OutlierGroupView(groupViewModel: outlierViewModel)
-                              .id(localID)
+                            if outlierViewModel.group.size > 40 { // XXX use a constant here
+                                OutlierGroupView(groupViewModel: outlierViewModel)
+                                  .id(localID)
+                            }
                         }
                     }
                 }.opacity(viewModel.outlierOpacity)
@@ -142,7 +160,6 @@ public struct FrameEditImageView: View {
         }
           .onChange(of: viewModel.currentIndex, initial: true) {
               maybeLoadOutliers()
-              maybeLoadDustbin()
           }
           .onChange(of: viewModel.shouldShowDustbin) {
               maybeLoadDustbin()

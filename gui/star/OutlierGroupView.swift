@@ -112,7 +112,6 @@ struct OutlierGroupView: View {
                             bottom_line_height / 2 + half_bounds_height)
             }
 
-
             self.outlierView
               .onHover { groupViewModel.selectArrow($0) }
             
@@ -146,7 +145,7 @@ struct OutlierGroupView: View {
                           }
                       }
                   }
-              }
+            } 
         }
     }
 
