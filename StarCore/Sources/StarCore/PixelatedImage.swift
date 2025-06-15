@@ -43,6 +43,7 @@ public final class PixelatedImage: Sendable {
         // the number of bits per pixel, not per component
         case eightBit([UInt8])
         case sixteenBit([UInt16])
+        case thirtyTwoBit([UInt32])
         // XXX add another for more bit depth
         
         init(from array: [UInt8]) {
@@ -53,16 +54,39 @@ public final class PixelatedImage: Sendable {
             self = .sixteenBit(array)
         }
 
+        init(from array: [UInt32]) {
+            self = .thirtyTwoBit(array)
+        }
+
         var data: Data {
             switch self {
             case .eightBit(let arr):
                 return arr.data
             case .sixteenBit(let arr):
                 return arr.data
+            case .thirtyTwoBit(let arr):
+                return arr.data
             }
         }
     }
     
+    public convenience init(width: Int,
+                            height: Int,
+                            grayscale32BitImageData imageData: [UInt32])
+    {
+        self.init(width: width,
+                  height: height,
+                  imageData: DataFormat(from: imageData),
+                  bitsPerPixel: 32,
+                  bytesPerRow: 2*width,
+                  bitsPerComponent: 32,
+                  bytesPerPixel: 2,
+                  bitmapInfo: .byteOrder32Little, 
+                  componentsPerPixel: 1,
+                  colorSpace: CGColorSpaceCreateDeviceGray(),
+                  ciFormat: .Af)
+    }
+
     public convenience init(width: Int,
                             height: Int,
                             grayscale16BitImageData imageData: [UInt16])
@@ -187,6 +211,10 @@ public final class PixelatedImage: Sendable {
 
     func readPixel(atX x: Int, andY y: Int) -> Pixel {
         switch imageData {
+        case .thirtyTwoBit(let arr):
+            fatalError("not supported yet")
+            break
+            
         case .sixteenBit(let arr):
             let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
             var pixel = Pixel()
@@ -211,6 +239,18 @@ public final class PixelatedImage: Sendable {
     func sortablePixels(baseX: Int, baseY: Int) -> [SortablePixel] {
         var ret: [SortablePixel] = []
         switch imageData {
+        case .thirtyTwoBit(let arr):
+            for x in 0..<width {
+                for y in 0..<height {
+                    let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
+                    if arr[offset] != 0 {
+                        ret.append(SortablePixel(x: x + baseX,
+                                                 y: y + baseY,
+                                                 intensity: UInt16(arr[offset]))) // XXX numerical overflow happens here :(
+                    }
+                }
+            }
+            
         case .sixteenBit(let arr):
             for x in 0..<width {
                 for y in 0..<height {
@@ -244,6 +284,9 @@ public final class PixelatedImage: Sendable {
 
     func intensity(atX x: Int, andY y: Int) -> UInt {
         switch imageData {
+        case .thirtyTwoBit(let array):
+            fatalError("NOT SUPPORTED YET")
+
         case .sixteenBit(let arr):
             let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
             var intensity: UInt = 0
@@ -361,10 +404,14 @@ public final class PixelatedImage: Sendable {
         switch self.imageData {
         case .eightBit(_):
             fatalError("NOT SUPPORTED YET")
+        case .thirtyTwoBit(_):
+            fatalError("NOT SUPPORTED YET")
         case .sixteenBit(let origImagePixels):
             
             switch otherFrame.imageData {
                 
+            case .thirtyTwoBit(_):
+                fatalError("NOT SUPPORTED YET")
             case .eightBit(_):
                 fatalError("NOT SUPPORTED YET")
             case .sixteenBit(let otherImagePixels):
@@ -508,6 +555,31 @@ public final class PixelatedImage: Sendable {
                    matrixHeight > 0
                 {
                     switch imageData {
+                    case .thirtyTwoBit(let arr):
+                        var matrixImageData = [UInt32](repeating: 0, count: matrixWidth*matrixHeight)
+                        for y in 0..<matrixHeight {
+                            arr.withUnsafeBufferPointer { sourcePtr in
+                                if let baseAddress = sourcePtr.baseAddress {
+                                    memmove(&matrixImageData[y*matrixWidth],
+                                            baseAddress + (y+yOffset)*width+xOffset,
+                                            matrixWidth*4)
+                                } else {
+                                    Log.w("cannot memmove")
+                                }
+                            }
+                        }
+
+                        let matrixImage = PixelatedImage(width: matrixWidth,
+                                                         height: matrixHeight,
+                                                         grayscale32BitImageData: matrixImageData)
+
+                        let element = ImageMatrixElement(x: xOffset,
+                                                         y: yOffset,
+                                                         image: matrixImage)
+                        
+                        //Log.i("matrix element [\(xOffset), \(yOffset)] image width \(matrixWidth) matrix height \(matrixHeight)")
+                        matrix.append(element)
+                        
                     case .sixteenBit(let arr):
                         var matrixImageData = [UInt16](repeating: 0, count: matrixWidth*matrixHeight)
                         for y in 0..<matrixHeight {
@@ -616,6 +688,14 @@ extension ContiguousBytes {
 
     // convert Data to [UInt8]
     public var uInt8Array: [UInt8] { objects() }
+}
+
+// convert a [UInt32] array to Data
+extension Array<UInt32> {
+    public var data: Data {
+        let data = self.withUnsafeBufferPointer { Data(buffer: $0) }
+        return data
+    }
 }
 
 // convert a [UInt16] array to Data

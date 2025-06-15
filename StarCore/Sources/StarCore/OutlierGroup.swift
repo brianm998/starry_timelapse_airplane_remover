@@ -551,7 +551,7 @@ public actor OutlierGroup: CustomStringConvertible,
     }
     
     func blob() -> Blob {
-        Blob(pixelSet, id: id, frameIndex: frameIndex)
+        Blob(pixelSet, id: UInt32(id), frameIndex: frameIndex)
     }
 
     public func medianIntensity() -> UInt16 {

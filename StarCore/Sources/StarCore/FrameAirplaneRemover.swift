@@ -501,6 +501,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let format = image.imageData // make a copy
 
         switch format {
+        case .thirtyTwoBit(_):
+            Log.e("frame \(self.frameIndex) cannot load 32 bit image here now")
+                
         case .eightBit(_):
             Log.e("8 bit not supported here now")
         case .sixteenBit(var outputData):
@@ -649,11 +652,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 //    public func outliersLoaded() { self.outlierGroups != nil }
 
     public func loadOutliers(loadOnly: Bool = false) async throws {
-        if isLoadingOutliers { return }
+        Log.i("FUCKING loading")
+        if isLoadingOutliers {
+            Log.w("FUCKING Not loading twice")
+            return
+        }
         isLoadingOutliers = true
         if self.outlierGroups == nil {
             // nil outlier groups means that we haven't tried to get outliers for this frame yet
-            Log.d("frame \(frameIndex) loading outliers")
+            Log.d("FUCKING frame \(frameIndex) loading outliers")
             if let outlierGroups = try await loadOutliersFromFile() {
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
                 Log.d("frame \(frameIndex) loading outliers from file")
@@ -781,6 +788,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                                     atSize: .original)
         {
             switch image.imageData {
+            case .thirtyTwoBit(_):
+                Log.e("frame \(frameIndex) cannot load 32 bit validation image")
+                
             case .eightBit(let validationArr):
                 await classifyOutliers(with: validationArr)
                 shouldUseDecisionTree = false
@@ -855,10 +865,23 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public func outlierGroupDustbinList() async -> [OutlierGroup]? {
+        Log.d("FUCKING CRAP")
         if let outlierGroups {
             let groups = await outlierGroups.getDustbin()
+            Log.d("FUCKING CRAPPY \(groups.count) groups")
             return groups.map {$0.value}
+        } else {
+            Log.d("FUCKING LOADING THAT SHIT")
+            try? await loadOutliers()
+            if let outlierGroups {
+                let groups = await outlierGroups.getDustbin()
+                Log.d("FUCKING CRAPPY \(groups.count) groups")
+                return groups.map {$0.value}
+            } else {
+                Log.d("FUCKING CRAPPIER NO GROUPS")
+            }
         }
+        Log.d("FUCKING CRAPPIER NO GROUPS")
         return nil
     }
 
@@ -980,7 +1003,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func deleteOutliers() async throws {
         await try outlierGroups?.removeOutliersBinary(from: self.outliersDirname)
-        await outlierGroups?.clear()
+        self.outlierGroups = nil
     }
     
     public func deleteOutliers(in boundingBox: BoundingBox) async throws {

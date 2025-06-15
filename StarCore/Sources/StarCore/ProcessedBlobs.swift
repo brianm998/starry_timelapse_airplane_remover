@@ -17,11 +17,11 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 public actor ProcessedBlobs {
-    private var blobs: Set<UInt16> = []
+    private var blobs: Set<UInt32> = []
 
-    func getBlobs() -> Set<UInt16> { blobs }
+    func getBlobs() -> Set<UInt32> { blobs }
     
-    func contains(_ id: UInt16) -> Bool {
+    func contains(_ id: UInt32) -> Bool {
         blobs.contains(id)
     }
 
@@ -29,7 +29,7 @@ public actor ProcessedBlobs {
         blobs.contains(blob.id)
     }
 
-    func insert(_ id: UInt16) {
+    func insert(_ id: UInt32) {
         _ = blobs.insert(id)
     }
 

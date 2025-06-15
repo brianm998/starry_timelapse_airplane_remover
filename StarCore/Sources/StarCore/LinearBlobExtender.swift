@@ -24,7 +24,7 @@ public actor LinearBlobExtender {
     let analyzer: BlobAnalyzer
     let frameIndex: Int
     
-    init(blobMap: [UInt16: Blob],
+    init(blobMap: [UInt32: Blob],
          width: Int,
          height: Int,
          frameIndex: Int) async
@@ -36,7 +36,7 @@ public actor LinearBlobExtender {
                                            frameIndex: frameIndex)
     }
 
-    public func blobMap() async -> [UInt16:Blob] {
+    public func blobMap() async -> [UInt32:Blob] {
         await analyzer.mapOfBlobs()
     }
 
@@ -216,14 +216,14 @@ public actor LinearBlobExtender {
     // used for passing processing data around to different methods
     final class Data: Sendable {
         let args: LinearBlobExtender.Args
-        let blobMap: [UInt16:Blob]
+        let blobMap: [UInt32:Blob]
         let blobImage: PixelatedImage
         let iterationBlob: OptionalActor<Blob>
         let processedBlobs: ProcessedBlobs
         let analyzer: BlobAnalyzer
 
         public init(args: LinearBlobExtender.Args,
-                    blobMap: [UInt16:Blob],
+                    blobMap: [UInt32:Blob],
                     blobImage: PixelatedImage,
                     iterationBlob: OptionalActor<Blob>,
                     processedBlobs: ProcessedBlobs,
@@ -339,8 +339,8 @@ fileprivate func maybeAbsorb(x: Int,
 
     let intensity = data.blobImage.intensity(atX: x, andY: y)
     
-    if intensity < UInt16.max,
-       let newBlob = data.blobMap[UInt16(intensity)],
+    if intensity < UInt32.max,
+       let newBlob = data.blobMap[UInt32(intensity)],
        newBlob != _iterationBlob
     {
         //Log.d("frame \(frameIndex) processing blob \(_iterationBlob) @ [\(x), \(y)] found other blob \(newBlob)")

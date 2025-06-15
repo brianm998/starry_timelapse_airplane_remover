@@ -52,9 +52,9 @@ public class AbstractBlobProcessor {
     internal func shouldRunStep(atIndex index: Int) -> Bool { true }
     
     // runs each step in sequence and returns the result
-    public func process(frame: FrameAirplaneRemover) async throws -> [UInt16:Blob] {
+    public func process(frame: FrameAirplaneRemover) async throws -> [UInt32:Blob] {
         self.frame = frame
-        var blobMap: [UInt16:Blob] = [:]
+        var blobMap: [UInt32:Blob] = [:]
 
         // align neighbor frame, subtract it, sort pixels
         let (subtractionArray, originalImage) = try await self.setup()
@@ -152,12 +152,12 @@ public class AbstractBlobProcessor {
 
     // change only the ids of the blobs, so that they are all in a line from 1, onwards.
     // necessary becasuse of deleted blobs in the middle, helps to avoid UInt16 overflow
-    internal func compactBlobIds(of blobMap: [UInt16:Blob]) -> [UInt16:Blob] {
+    internal func compactBlobIds(of blobMap: [UInt32:Blob]) -> [UInt32:Blob] {
         let array = Array(blobMap.values)
-        Log.i("compactBlobIds \(array.count) blobs, \(UInt16.max-UInt16(array.count)) ids left in UInt16 space")
-        var newBlobMap: [UInt16:Blob] = [:]
+      //  Log.i("compactBlobIds \(array.count) blobs, \(UInt16.max-UInt16(array.count)) ids left in UInt16 space")
+        var newBlobMap: [UInt32:Blob] = [:]
         for (index, blob) in array.enumerated() {
-            let newId = UInt16(index+1) // can't use zero for blob ids
+            let newId = UInt32(index+1) // can't use zero for blob ids
             blob.id = newId
             newBlobMap[newId] = blob
         }
@@ -165,12 +165,12 @@ public class AbstractBlobProcessor {
     }
     
     // slice up blobs as directed by the user
-    internal func applyUserSlices(_ blobMap: [UInt16:Blob]) async throws -> [UInt16:Blob] {
+    internal func applyUserSlices(_ blobMap: [UInt32:Blob]) async throws -> [UInt32:Blob] {
         guard let frame else { return [:] }
 
-        var newBlobs: [UInt16:Blob] = blobMap
+        var newBlobs: [UInt32:Blob] = blobMap
         
-        var maxKey: UInt16 = 0
+        var maxKey: UInt32 = 0
         
         for slice in await frame.getUserSlices() {
             var newBlobPixels: Set<SortablePixel> = []
@@ -212,6 +212,8 @@ public class AbstractBlobProcessor {
                 Log.d("frame \(frameIndex) loaded subtraction image")
                 subtractionImage = image
                 switch image.imageData {
+                case .thirtyTwoBit(let array):
+                    Log.e("frame \(frameIndex) 32 bit images not supported here yet")
                 case .sixteenBit(let array):
                     subtractionArray = array
                 case .eightBit(_):
@@ -240,6 +242,8 @@ public class AbstractBlobProcessor {
                 fatalError("NOT SUPPORTED YET")
             case .sixteenBit(let origImagePixels):
                 subtractionArray = origImagePixels
+            case .thirtyTwoBit(let array):
+                fatalError("NOT SUPPORTED YET")
             }
             Log.d("frame \(frameIndex) loaded subtractionArray with \(subtractionArray.count) items")
         }
@@ -268,7 +272,7 @@ public class AbstractBlobProcessor {
         }
     }
 }
-
+/*
 public func nextIndex(from blobMap: [UInt16:Blob]) -> UInt16? {
     for i in 1..<UInt16.max {
         if blobMap[i] == nil {
@@ -277,3 +281,4 @@ public func nextIndex(from blobMap: [UInt16:Blob]) -> UInt16? {
     }
     return nil
 }
+*/

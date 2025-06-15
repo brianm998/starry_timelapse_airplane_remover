@@ -36,7 +36,7 @@ public actor HoughLineMatrixBlobConnector {
     let analyzer: BlobAnalyzer
     let frameIndex: Int
     
-    init(blobMap: [UInt16: Blob],
+    init(blobMap: [UInt32: Blob],
          width: Int,
          height: Int,
          frameIndex: Int) async
@@ -48,7 +48,7 @@ public actor HoughLineMatrixBlobConnector {
                                            frameIndex: frameIndex)
     }
 
-    public func blobMap() async -> [UInt16:Blob] {
+    public func blobMap() async -> [UInt32:Blob] {
         await analyzer.mapOfBlobs()
     }
 
@@ -285,8 +285,8 @@ fileprivate func process(element: ImageMatrixElement,
                                               numberOfAdjecentPixels: args.sideIterationPixels)
             { x, y, direction in
                 if let potentialBlobId = blobElement.intensity(atX: x, andY: y),
-                   potentialBlobId < UInt16.max,
-                   let blob = blobMap[UInt16(potentialBlobId)]
+                   potentialBlobId < UInt32.max,
+                   let blob = blobMap[UInt32(potentialBlobId)]
                 {
                     if let lastSeenBlob = await lastSeenBlob.value,
                        lastSeenBlob == blob

@@ -19,6 +19,7 @@ nonisolated(unsafe) public let customBlobProcessor = CustomBlobProcessor()
 public enum DetectionType: String, Codable, CaseIterable, Sendable {
     case mild       // 2-4x faster than excessive, finds fewer dimmer airplanes
     case strong     // get more airplanes than normal and not take forever
+    case stronger   // excessive with a final small processor
     case excessive  // takes much longer, finds a LOT more bad signals
     case custom     // user configured
     
@@ -28,6 +29,8 @@ public enum DetectionType: String, Codable, CaseIterable, Sendable {
             return MildBlobProcessor()
         case .strong:
             return StrongBlobProcessor()
+        case .stronger:
+            return StrongerBlobProcessor()
         case .excessive:
             return ExcessiveBlobProcessor()
         case .custom:

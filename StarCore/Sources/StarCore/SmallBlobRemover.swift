@@ -19,17 +19,17 @@ You should have received a copy of the GNU General Public License along with sta
 // gets rid of dimmer blobs off by themselves 
 public actor SmallBlobRemover {
 
-    private var blobMap: [UInt16: Blob]
+    private var blobMap: [UInt32: Blob]
     private let frameIndex: Int
     
-    init(blobMap: [UInt16: Blob],
-         frameIndex: Int) 
+    init(blobMap: [UInt32: Blob],
+         frameIndex: Int)
     {
         self.blobMap = blobMap
         self.frameIndex = frameIndex
     }
     
-    public func blobMap() async -> [UInt16:Blob] { blobMap }
+    public func blobMap() async -> [UInt32:Blob] { blobMap }
     
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         let minBlobSize: Int       // blobs smaller than this are ignored
@@ -41,9 +41,9 @@ public actor SmallBlobRemover {
         public func description(for type: ArgType) -> String {
             switch type {
             case .minBlobSize:
-                return "blobs smaller than this are ignored"
+                return "blobs smaller than this are discarded"
             case .intensityFloor:
-                return "all blobs above this are ignored"
+                return "all blobs less intense than this are discarded"
             }
         }
 

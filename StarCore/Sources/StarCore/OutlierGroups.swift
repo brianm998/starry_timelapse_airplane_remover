@@ -165,13 +165,13 @@ public actor OutlierGroups {
             {
                 await outlierGroup.shouldPaint(shouldPaint)
             }
-            self.members[id] = outlierGroup
+            self.members[outlierGroup.id] = outlierGroup
         }
 
         if let dustbinBlobs {
             for (id, blob) in dustbinBlobs {
                 let outlierGroup = await blob.outlierGroup(at: frameIndex)
-                self.dustbin[id] = outlierGroup
+                self.dustbin[outlierGroup.id] = outlierGroup
             }
         }
     }
@@ -236,7 +236,7 @@ public actor OutlierGroups {
     public func applyRazor(in boundingBox: BoundingBox, includingDustbin: Bool) async -> Bool {
         var newBlobPixels: Set<SortablePixel> = []
         var newOutlierGroups: [OutlierGroup] = []
-        var maxKey: UInt16 = 0
+        var maxKey: UInt16 = 1
         // first apply razor to members
         for (key, group) in members {
             if key > maxKey { maxKey = key }
@@ -270,7 +270,7 @@ public actor OutlierGroups {
             members[newOutlier.id] = newOutlier
         }
         if newBlobPixels.count > 0 {
-            let slicedOutlier = await Blob(newBlobPixels, id: maxKey, frameIndex: frameIndex).outlierGroup(at: frameIndex)
+            let slicedOutlier = await Blob(newBlobPixels, id: UInt32(maxKey), frameIndex: frameIndex).outlierGroup(at: frameIndex)
             members[slicedOutlier.id] = slicedOutlier
             return true
         } else {
@@ -327,7 +327,7 @@ public actor OutlierGroups {
     }
 
     private func writeBinary(outlierMap: [UInt16: OutlierGroup], to filename: String) async {
-        var blobMap: [UInt16: Blob] = [:]
+        var blobMap: [UInt32: Blob] = [:]
 
         for outlier in outlierMap.values {
             let blob = await outlier.blob()

@@ -53,7 +53,7 @@ public actor LinearBlobConnector {
     let analyzer: BlobAnalyzer
     let frameIndex: Int
     
-    init(blobMap: [UInt16: Blob],
+    init(blobMap: [UInt32: Blob],
          width: Int,
          height: Int,
          frameIndex: Int) async
@@ -65,7 +65,7 @@ public actor LinearBlobConnector {
                                            frameIndex: frameIndex)
     }
 
-    public func blobMap() async -> [UInt16:Blob] {
+    public func blobMap() async -> [UInt32:Blob] {
         await analyzer.mapOfBlobs()
     }
 
@@ -273,14 +273,14 @@ public actor LinearBlobConnector {
     fileprivate final class Data: Sendable {
         let args: Args
         let processedBlobs: ProcessedBlobs
-        let blobMap: [UInt16:Blob]
+        let blobMap: [UInt32:Blob]
         let blobRefs: BlobRefs
         let analyzer: BlobAnalyzer
         let frameIndex: Int
 
         init(args: Args,
              processedBlobs: ProcessedBlobs,
-             blobMap: [UInt16:Blob],
+             blobMap: [UInt32:Blob],
              blobRefs: BlobRefs,
              analyzer: BlobAnalyzer,
              frameIndex: Int)
@@ -467,7 +467,7 @@ fileprivate func iterate(on blobLine: Line,
 
     if let start, let end {
         //Log.d("frame \(frameIndex) blob \(fullBlob.id) iterating between \(start) and \(end)")
-        let linearBlobIds = SetActor<UInt16>()
+        let linearBlobIds = SetActor<UInt32>()
         // iterate over the line and absorbs all blobs along it into a new blob
         // remove all ids expept for the one from the combined blob ids from the blob map
         

@@ -56,7 +56,7 @@ public class FullFrameBlobber {
 
     public let pixelStatusTracker: PixelStatusTracker
     
-    private var newBlobId: UInt16 = 1 // start at one as zero means no blob
+    private var newBlobId: UInt32 = 1 // start at one as zero means no blob
     
     // neighbor search policies
     public enum NeighborType {
@@ -171,7 +171,7 @@ public class FullFrameBlobber {
                 // no higher neighbors
                 // a local maximum, this pixel is a blob seed
 
-                if newBlobId < UInt16.max {
+                if newBlobId < UInt32.max {
                     let newBlob = Blob(pixel,
                                        id: newBlobId,
                                        frameIndex: frameIndex,
@@ -203,8 +203,8 @@ public class FullFrameBlobber {
         Log.i("frame \(frameIndex) found \(blobs.count) blobs")
     }
     
-    public var blobMap: [UInt16:Blob] {
-        var ret: [UInt16:Blob] = [:]
+    public var blobMap: [UInt32:Blob] {
+        var ret: [UInt32:Blob] = [:]
         for blob in self.blobs { ret[blob.id] = blob }
         return ret
     }

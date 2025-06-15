@@ -15,7 +15,7 @@ import logging
 public actor Blob: CustomStringConvertible,
                    Hashable
 {
-    nonisolated(unsafe) public var id: UInt16
+    nonisolated(unsafe) public var id: UInt32
     public let frameIndex: Int
     public var pixels: Set<SortablePixel> = []
     public weak var statusTracker: PixelStatusTracker?
@@ -27,7 +27,7 @@ public actor Blob: CustomStringConvertible,
     }
 
     public init(_ pixels: Set<SortablePixel>, // more than UInt16.max pixels is bad
-                id: UInt16,
+                id: UInt32,
                 frameIndex: Int,
                 statusTracker: PixelStatusTracker? = nil)
     {
@@ -37,7 +37,7 @@ public actor Blob: CustomStringConvertible,
         self.statusTracker = statusTracker
     }
     
-    public init(id: UInt16,
+    public init(id: UInt32,
                 frameIndex: Int,
                 statusTracker: PixelStatusTracker? = nil)
     {
@@ -47,7 +47,7 @@ public actor Blob: CustomStringConvertible,
     }
     
     public init(_ pixel: SortablePixel,
-                id: UInt16,
+                id: UInt32,
                 frameIndex: Int,
                 statusTracker: PixelStatusTracker? = nil)
     {
@@ -68,7 +68,7 @@ public actor Blob: CustomStringConvertible,
         self.frameIndex = frameIndex
         self.pixels = [ ]
 
-        self.id = persitentDataArray[index]
+        self.id = UInt32(persitentDataArray[index]) // convert from UInt16 to UInt32
         index += 1
         
         let pixelCount = persitentDataArray[index]
@@ -89,7 +89,7 @@ public actor Blob: CustomStringConvertible,
               statusTracker: self.statusTracker)
     }
     
-    public func update(id: UInt16) { self.id = id }
+    public func update(id: UInt32) { self.id = id }
     
     public func persistentDataArray() -> [UInt16] {
         let size = self.persistentDataSizeBytes()
@@ -113,7 +113,9 @@ public actor Blob: CustomStringConvertible,
         // can crash if pixels.count > UInt16.max 
         let pixelCount = UInt16(pixelCountForSave)
 
-        array[index] = self.id
+        if self.id > UInt16.max { Log.e("blob id \(self.id) is too big") }
+        
+        array[index] = UInt16(self.id)  // convert from UInt32 to UInt16 
         index += 1
 
         array[index] = pixelCount
@@ -784,7 +786,7 @@ public actor Blob: CustomStringConvertible,
     
     public func outlierGroup(at frameIndex: Int) -> OutlierGroup {
         if let _outlierGroup { return _outlierGroup }
-        let group = OutlierGroup(id: self.id,
+        let group = OutlierGroup(id: UInt16(self.id),
                                  size: UInt(self.pixels.count),
                                  brightness: UInt(self.intensity()),
                                  bounds: self.boundingBox(),

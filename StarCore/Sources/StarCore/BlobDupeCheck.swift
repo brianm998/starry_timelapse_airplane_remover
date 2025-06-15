@@ -19,7 +19,7 @@ You should have received a copy of the GNU General Public License along with sta
 // gets rid of small blobs by themselves in nowhere
 public actor BlobDupeCheck {
     
-    init(blobMap: [UInt16: Blob],
+    init(blobMap: [UInt32: Blob],
          width: Int,
          height: Int,
          frameIndex: Int,

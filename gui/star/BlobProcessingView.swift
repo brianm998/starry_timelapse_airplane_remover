@@ -77,6 +77,10 @@ struct BlobProcessingView: View {
                            The signal that may still not be noticed here includes when an airplane
                            is seen as a series of small dim dots in the image.
                            """)
+                case .stronger:
+                    Text("""
+                           XXX write this XXX
+                           """)
                 case .excessive:
                     Text("""
                            The Excessive detection type can produce an excessive amount of blob data.
