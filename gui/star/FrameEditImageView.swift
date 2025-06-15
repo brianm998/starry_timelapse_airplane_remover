@@ -53,30 +53,39 @@ public struct FrameEditImageView: View {
     }
 
     private func maybeLoadOutliers() {
-        // try loading outliers if there aren't any present
         let frameView = self.viewModel.frames[self.viewModel.currentIndex]
+        Log.d("maybeLoadOutliers loading already = \(frameView.loadingOutlierViews)")
+        // try loading outliers if there aren't any present
 
-        if frameView.outlierViews == nil,
-           !frameView.loadingOutlierViews,
-           let frame = frameView.frame
-        {
-            frameView.loadingOutlierViews = true
-            viewModel.loadingOutliers = true
+        if frameView.outlierViews == nil {
+            if  !frameView.loadingOutlierViews {
+                if let frame = frameView.frame {
+                    Log.d("maybeLoadOutliers actually loading")
+                    frameView.loadingOutlierViews = true
+                    viewModel.loadingOutliers = true
+                    
+                    let FU = viewModel
+                    Task.detached(priority: .userInitiated) {
+                        Log.d("maybeLoadOutliers actually loading in background")
+                        let _ = try await frame.loadOutliers(loadOnly: true)
+                        await self.viewModel.computeSmallOutlierImage(forFrame: frame)
+                        Task { @MainActor in
+                            Log.d("maybeLoadOutliers done loading, putting outliers in view")
+                            await self.viewModel.setOutlierGroups(forFrame: frame)
+                            frameView.loadingOutlierViews = false
+                            FU.loadingOutliers = FU.loadingOutlierGroups
 
-            let FU = viewModel
-            Task.detached(priority: .userInitiated) {
-                let _ = try await frame.loadOutliers(loadOnly: true)
-                await self.viewModel.computeSmallOutlierImage(forFrame: frame)
-                Task { @MainActor in
-                    await self.viewModel.setOutlierGroups(forFrame: frame)
-                    frameView.loadingOutlierViews = false
-                    FU.loadingOutliers = FU.loadingOutlierGroups
-
-                    await maybeLoadDustbin()
-
+                            maybeLoadDustbin()
+                            maybeLoadSmallOutliers()
+                        }
+                    }
                 }
             }
-        } 
+        } else {
+            // this frame already has outliers, make sure we have images for them
+            maybeLoadDustbin()
+            maybeLoadSmallOutliers()
+        }
     }
 
     private func maybeLoadDustbin() {
@@ -97,6 +106,17 @@ public struct FrameEditImageView: View {
                 }
             }
         } 
+    }
+
+    private func maybeLoadSmallOutliers() {
+        // try loading dustbin outliers if there aren't any present
+        let frameView = self.viewModel.frames[self.viewModel.currentIndex]
+
+        if let frame = frameView.frame,
+           (frameView.positiveOutlierImage == nil || frameView.negativeOutlierImage == nil)
+        {
+            self.viewModel.computeSmallOutlierImage(forFrame: frame)
+        }
     }
 
     public var body: some View {
@@ -134,6 +154,7 @@ public struct FrameEditImageView: View {
                         }
                     }
 
+                    // then small outliers in single images by state
                     if let smallPositiveOutlierImage = frameView.positiveOutlierImage {
                         smallPositiveOutlierImage
                           .renderingMode(.template) 

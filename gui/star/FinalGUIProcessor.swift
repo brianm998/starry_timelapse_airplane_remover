@@ -113,7 +113,6 @@ public actor FinalGUIProcessor {
 
             numberFramesProcessing = num_processed
 
-            var currentIndex = 0
             let numNeighbors = await viewModel.config?.config().numberFinalProcessingNeighborsNeeded ?? 1
 
             /*
@@ -154,8 +153,7 @@ public actor FinalGUIProcessor {
                     }
                     signalIndex += 1
                 }
-                Log.d("got frame \(frame) currentIndex \(currentIndex)")
-
+ 
                 var startIndex = frame.frameIndex - numNeighbors
                 if startIndex < 0 { startIndex = 0 }
                 var endIndex = frame.frameIndex + numNeighbors

@@ -712,7 +712,7 @@ public final class ImageSequenceViewModel {
         }
     }
     
-    func computeSmallOutlierImage(forFrame frame: FrameAirplaneRemover) async {
+    func computeSmallOutlierImage(forFrame frame: FrameAirplaneRemover) {
         /*
          _Much_ better UI performance when outliers smaller than a threshold of
          around 40 pixels are not presented in the UI separate from these images
