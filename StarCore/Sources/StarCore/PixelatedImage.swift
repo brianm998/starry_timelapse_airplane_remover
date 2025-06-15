@@ -246,7 +246,7 @@ public final class PixelatedImage: Sendable {
                     if arr[offset] != 0 {
                         ret.append(SortablePixel(x: x + baseX,
                                                  y: y + baseY,
-                                                 intensity: UInt16(arr[offset]))) // XXX numerical overflow happens here :(
+                                                 value: .thirtyTwoBit(arr[offset]))) // XXX numerical overflow was happening here :(
                     }
                 }
             }
@@ -258,7 +258,7 @@ public final class PixelatedImage: Sendable {
                     if arr[offset] != 0 {
                         ret.append(SortablePixel(x: x + baseX,
                                                  y: y + baseY,
-                                                 intensity: arr[offset]))
+                                                 value: .sixteenBit(arr[offset])))
                     }
                 }
             }
@@ -270,7 +270,7 @@ public final class PixelatedImage: Sendable {
                     if arr[offset] != 0 {
                         ret.append(SortablePixel(x: x + baseX,
                                                  y: y + baseY,
-                                                 intensity: UInt16(arr[offset])))
+                                                 value: .eightBit(arr[offset])))
                     }
                 }
             }
@@ -284,15 +284,28 @@ public final class PixelatedImage: Sendable {
 
     func intensity(atX x: Int, andY y: Int) -> UInt {
         switch imageData {
-        case .thirtyTwoBit(let array):
-            fatalError("NOT SUPPORTED YET")
+        case .thirtyTwoBit(let arr):
+            let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
+            var intensity: UInt = 0
+            if offset < arr.count {
+                intensity += UInt(arr[offset])
+                if self.componentsPerPixel >= 2 {
+                    intensity += UInt(arr[offset+1])
+                }
+                if self.componentsPerPixel >= 3 {
+                    intensity += UInt(arr[offset+2])
+                }
+                if self.componentsPerPixel == 4 {
+                    intensity += UInt(arr[offset+3])
+                }
+            }
+            return intensity
 
         case .sixteenBit(let arr):
             let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
             var intensity: UInt = 0
             if offset < arr.count {
-                var pixel = Pixel()
-                pixel.red = arr[offset]
+                intensity += UInt(arr[offset])
                 if self.componentsPerPixel >= 2 {
                     intensity += UInt(arr[offset+1])
                 }
@@ -632,7 +645,7 @@ fileprivate func isImage(_ image: PixelatedImage,
     if x < 0 || y < 0 { return nil }
     
     let sortablePixel = SortablePixel(x: x, y: y,
-                                      intensity: 0) // not used here
+                                      value: .eightBit(0)) // not used here
 
     if blobPixels.contains(sortablePixel) { return nil }
 

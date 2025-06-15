@@ -557,7 +557,7 @@ public actor OutlierGroup: CustomStringConvertible,
     public func medianIntensity() -> UInt16 {
         if pixelSet.count == 0 { return 0 }
         if let _medianIntensity { return _medianIntensity }
-        let intensities = pixelSet.map { $0.intensity }
+        let intensities = pixelSet.map { $0.uInt16Value }
         if intensities.count == 0 {
             _medianIntensity = 0
             return 0
@@ -572,7 +572,7 @@ public actor OutlierGroup: CustomStringConvertible,
         if let _maxIntensity { return _maxIntensity }
         var ret: UInt16 = 0
         for pixel in pixelSet {
-            if pixel.intensity > ret { ret = pixel.intensity }
+            if pixel.uInt16Value > ret { ret = pixel.uInt16Value }
         }
         _maxIntensity = ret
         return ret

@@ -3,21 +3,26 @@ import Foundation
 // a monochrome pixel that is used by the blobber
 public struct SortablePixel: Hashable,
                              /*@preconcurrency*/ CustomStringConvertible,
-                             Codable,
                              Sendable,
                              Identifiable
 {
     public let x: Int
     public let y: Int
-    public let intensity: UInt16
+    public let value: ValueType
+
+    public enum ValueType : Sendable {
+        case eightBit(UInt8)
+        case sixteenBit(UInt16)
+        case thirtyTwoBit(UInt32)
+    }
     
     public init(x: Int = 0,
                 y: Int = 0,
-                intensity: UInt16 = 0)
+                value: ValueType)
     {
         self.x = x
         self.y = y
-        self.intensity = intensity
+        self.value = value
     }
 
     fileprivate let impossibilyLargeImageWidth = 5000000000000
@@ -59,12 +64,6 @@ public struct SortablePixel: Hashable,
         }
     }
 
-    enum CodingKeys: String, CodingKey {
-        case x
-        case y
-        case intensity
-    }
-    
     public static func == (lhs: SortablePixel, rhs: SortablePixel) -> Bool {
         return lhs.x == rhs.x && lhs.y == rhs.y
     }
@@ -76,6 +75,38 @@ public struct SortablePixel: Hashable,
 
     public var description: String { "[\(x), \(y)]" }
 
+    public var uInt32Value: UInt32 {
+        switch self.value {
+        case .eightBit(let eightBits):
+            return UInt32(eightBits)
+        case .sixteenBit(let sixteenBits):
+            return UInt32(sixteenBits)
+        case .thirtyTwoBit(let thirtyTwoBits):
+            return thirtyTwoBits
+        }
+    }
+
+    public var uInt16Value: UInt16 {
+        switch self.value {
+        case .eightBit(let eightBits):
+            return UInt16(eightBits)
+        case .sixteenBit(let sixteenBits):
+            return sixteenBits
+        case .thirtyTwoBit(let thirtyTwoBits):
+            fatalError("cannot convert to 16 bits")
+        }
+    }
+
+    public var intensity: Double {
+        switch self.value {
+        case .eightBit(let eightBits):
+            return Double(eightBits)/0xFF
+        case .sixteenBit(let sixteenBits):
+            return Double(sixteenBits)/0xFFFF
+        case .thirtyTwoBit(let thirtyTwoBits):
+            return Double(thirtyTwoBits)/0xFFFFFFFF
+        }
+    }
 
     /*
       returns percentage that they are similar
@@ -87,23 +118,13 @@ public struct SortablePixel: Hashable,
          return 100 if one is zero and the other is not
      */
     public func contrast(with otherPixel: SortablePixel) -> Double {
-        let diff = Double(abs(Int32(self.intensity) - Int32(otherPixel.intensity)))
-        let max = Double(max(self.intensity, otherPixel.intensity))
+
+        var otherPixelIntensity = otherPixel.uInt32Value
+        var selfIntensity = self.uInt32Value
+        
+        let diff = Double(abs(Int32(selfIntensity) - Int32(otherPixelIntensity)))
+        let max = Double(max(selfIntensity, otherPixelIntensity))
         
         return diff / max * 100
-    }
-
-    public init(from decoder: Decoder) throws {
-        let values = try decoder.container(keyedBy: CodingKeys.self)
-        x = try values.decode(Int.self, forKey: .x)
-        y = try values.decode(Int.self, forKey: .y)
-        intensity = try values.decode(UInt16.self, forKey: .intensity)
-    }
-
-     public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(x, forKey: .x)
-        try container.encode(y, forKey: .y)
-        try container.encode(intensity, forKey: .intensity)
     }
 }

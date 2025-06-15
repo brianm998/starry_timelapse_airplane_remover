@@ -890,7 +890,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         var blobImageData = [UInt8](repeating: 0, count: width*height)
         for blob in blobs {
             for pixel in await blob.getPixels() {
-                let imageIntensity = pixel.intensity >> 8
+                let imageIntensity = pixel.uInt16Value >> 8
                 blobImageData[pixel.y*width+pixel.x] = UInt8(imageIntensity)//0xFF // make different per blob?
             }
         }
@@ -1002,7 +1002,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public func deleteOutliers() async throws {
-        await try outlierGroups?.removeOutliersBinary(from: self.outliersDirname)
+        try await outlierGroups?.removeOutliersBinary(from: self.outliersDirname)
         self.outlierGroups = nil
     }
     

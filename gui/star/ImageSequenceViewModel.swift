@@ -743,7 +743,7 @@ public final class ImageSequenceViewModel {
                       {
                             for pixel in group.pixelSet {
                                 let index = 2*(pixel.y*width+pixel.x)
-                                var value = pixel.intensity/0xFF
+                                var value = pixel.uInt16Value/0xFF
                                 if value > UInt8.max { value = UInt16(UInt8.max) }
                                 positiveOutlierArray[index] = UInt8(value)
                                 positiveOutlierArray[index+1] = 0xFF // make it visible
@@ -751,7 +751,7 @@ public final class ImageSequenceViewModel {
                         } else {
                             for pixel in group.pixelSet {
                                 let index = 2*(pixel.y*width+pixel.x)
-                                var value = pixel.intensity/0xFF
+                                var value = pixel.uInt16Value/0xFF
                                 if value > UInt8.max { value = UInt16(UInt8.max) }
                                 negativeOutlierArray[index] = UInt8(value)
                                 negativeOutlierArray[index+1] = 0xFF // make it visible
@@ -816,7 +816,7 @@ public final class ImageSequenceViewModel {
                 for group in outlierGroups {
                     for pixel in group.pixelSet {
                         let index = 2*(pixel.y*width+pixel.x)
-                        var value = pixel.intensity/0xFF
+                        var value = pixel.uInt16Value/0xFF
                         if value > UInt8.max { value = UInt16(UInt8.max) }
                         dustbinArray[index] = UInt8(value)
                         dustbinArray[index+1] = 0xFF // make it visible

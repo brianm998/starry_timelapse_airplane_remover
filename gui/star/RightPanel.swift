@@ -221,7 +221,7 @@ struct RightPanel: View {
                                     Text("Process the next")
                                 }
                             }
-                              .disabled(viewModel.isProcessingAllFrames ||
+                              .disabled(//viewModel.isProcessingAllFrames ||
                                           viewModel.renderingCurrentFrame)
 
 

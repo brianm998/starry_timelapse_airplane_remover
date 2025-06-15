@@ -497,7 +497,7 @@ fileprivate func calculateMedianBrightness(of group: OutlierGroup) -> Double {
     var values: [UInt16] = []
     for pixel in group.pixelSet {  
         if pixel.intensity > 0 {
-            values.append(pixel.intensity)
+            values.append(pixel.uInt16Value)
         }
     }
     // XXX all zero pixels :(
@@ -511,7 +511,7 @@ fileprivate func calculateMedianBrightness(of group: OutlierGroup) -> Double {
 fileprivate func calculateMaxBrightness(of group: OutlierGroup) -> Double { 
     var max: UInt16 = 0
     for pixel in group.pixelSet {  
-        if pixel.intensity > max { max = pixel.intensity }
+        if pixel.uInt16Value > max { max = pixel.uInt16Value }
     }
     return Double(max)
 }

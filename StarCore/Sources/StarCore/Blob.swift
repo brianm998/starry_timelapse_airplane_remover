@@ -77,7 +77,7 @@ public actor Blob: CustomStringConvertible,
         for _ in 0..<pixelCount {
             pixels.update(with: SortablePixel(x: Int(persitentDataArray[index]),
                                               y: Int(persitentDataArray[index+1]),
-                                              intensity: persitentDataArray[index+2]))
+                                              value: .sixteenBit(persitentDataArray[index+2])))
             index += 3
         }
     }
@@ -128,7 +128,7 @@ public actor Blob: CustomStringConvertible,
             array[index] = UInt16(pixel.y)
             index += 1
 
-            array[index] = pixel.intensity
+            array[index] = pixel.uInt16Value
             index += 1
         }
 
@@ -190,8 +190,8 @@ public actor Blob: CustomStringConvertible,
         for pixel in pixels {
             let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
 
-            let intensity = Double(pixel.intensity)/0xFFFF
-            
+            let intensity = pixel.intensity
+          
             if distance < 1 {
                 ret += intensity
             } else {
@@ -260,7 +260,7 @@ public actor Blob: CustomStringConvertible,
     // removes all pixels below the given intensity floor
     public func intensityTrim(by intensityFloor: UInt16) {
         for pixel in pixels {
-            if pixel.intensity < intensityFloor {
+            if pixel.uInt16Value < intensityFloor {
                 pixels.remove(pixel)
             }
         }
@@ -432,7 +432,7 @@ public actor Blob: CustomStringConvertible,
     public func removePixels(dimmerThan intensity: UInt16) {
         var shouldReset = false
         for pixel in pixels {
-            if pixel.intensity < intensity {
+            if pixel.uInt16Value < intensity {
                 pixels.remove(pixel)
                 shouldReset = true
             }
@@ -590,7 +590,7 @@ public actor Blob: CustomStringConvertible,
     public func medianIntensity() -> UInt16 {
         if pixels.count == 0 { return 0 }
         if let _medianIntensity { return _medianIntensity }
-        let intensities = pixels.map { $0.intensity }
+        let intensities = pixels.map { $0.uInt16Value }
         if intensities.count == 0 {
             _medianIntensity = 0
             return 0
@@ -605,7 +605,7 @@ public actor Blob: CustomStringConvertible,
         if let _maxIntensity { return _maxIntensity }
         var ret: UInt16 = 0
         for pixel in pixels {
-            if pixel.intensity > ret { ret = pixel.intensity }
+            if pixel.uInt16Value > ret { ret = pixel.uInt16Value }
         }
         _maxIntensity = ret
         return ret
@@ -663,9 +663,12 @@ public actor Blob: CustomStringConvertible,
             
             let newPixels = await otherBlob.getPixels()
             var updatedPixels = self.pixels
+            if newPixels.count == 0 { Log.e("frame \(frameIndex) blob \(self.id) other blob to add has no pixels and size \(await otherBlob.size())") }
             for otherPixel in newPixels {
                 await statusTracker?.record(status: .blobbed(self), for: otherPixel)
-                updatedPixels.update(with: otherPixel)
+                if updatedPixels.update(with: otherPixel) != nil {
+                    Log.w("frame \(frameIndex) blob \(self.id) update with duplicate pixel")
+                }
             }
             self.pixels = updatedPixels
             reset()
@@ -673,7 +676,7 @@ public actor Blob: CustomStringConvertible,
             let selfAfterSize = self.size()
 
             if selfAfterSize != selfBeforeSize + (await otherBlob.size()) {
-                Log.w("frame \(frameIndex) blob \(self.id) \(selfAfterSize) != \(selfBeforeSize) + \(await otherBlob.size())")
+                Log.w("frame \(frameIndex) blob \(self.id) \(selfAfterSize) != \(selfBeforeSize) + \(await otherBlob.size()) newPixels.count \(newPixels.count)")
 //                if frameIndex == 0 {
                   //  Log.i("frame \(frameIndex) blob \(self.id) \(self.pixels.count) pixels \(self.pixels)")
                     //Log.i("frame \(frameIndex) other blob \(otherBlob.id) pixels \(await otherBlob.pixels)")
@@ -738,7 +741,7 @@ public actor Blob: CustomStringConvertible,
         let boundingBox = self.boundingBox()
         var ret = [UInt16](repeating: 0, count: boundingBox.size)
         for pixel in pixels {
-            ret[(pixel.y-boundingBox.min.y)*boundingBox.width+(pixel.x-boundingBox.min.x)] = pixel.intensity
+            ret[(pixel.y-boundingBox.min.y)*boundingBox.width+(pixel.x-boundingBox.min.x)] = pixel.uInt16Value
         }
         _pixelValues = ret
         return ret

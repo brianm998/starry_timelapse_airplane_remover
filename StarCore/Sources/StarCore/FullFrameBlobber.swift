@@ -127,7 +127,7 @@ public class FullFrameBlobber {
 
                 if intensity > minIntensity {
                     // these pixels are both sorted and added to the pixels multi array
-                    let pixel = SortablePixel(x: x, y: y, intensity: intensity)
+                    let pixel = SortablePixel(x: x, y: y, value: .sixteenBit(intensity))
                     pixels[x][y] = pixel
                     sortedPixels.append(pixel)
                 } else {
@@ -142,7 +142,7 @@ public class FullFrameBlobber {
 
                     // some pixels are too dim to even track
                     if contrast < minContrast {
-                        let pixel = SortablePixel(x: x, y: y, intensity: intensity)
+                        let pixel = SortablePixel(x: x, y: y, value: .sixteenBit(intensity))
                         pixels[x][y] = pixel
                     }
                 }
