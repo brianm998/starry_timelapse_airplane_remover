@@ -20,7 +20,7 @@ public class StrongerBlobProcessor: AbstractBlobProcessor {
         super.init()
         self.steps = [
 
-          .findBlobs(.init(minPixelIntensity: 5750,
+          .findBlobs(.init(minPixelIntensity: 5000,
                            startContrastSize: 10,
                            endContrastSize: 50,
                            startMinContrast: 86,
@@ -74,8 +74,8 @@ public class StrongerBlobProcessor: AbstractBlobProcessor {
 
           .frameState(.filter6),
 
-          .smallBlobRemover(.init(minBlobSize: 8,
-                                  intensityFloor: 1000)),
+          .smallBlobRemover(.init(minBlobSize: 7,
+                                  intensityFloor: 1600)),
 
 
           .frameState(.filter7),
