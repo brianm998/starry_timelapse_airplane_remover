@@ -1010,7 +1010,7 @@ public final class ImageSequenceViewModel {
                       numberOfFramesLeft > 0
                 {
                     await frameToClear.set(state: .unprocessed)
-                    await frameToClear.updateCombineSubjects()
+                    //await frameToClear.updateCombineSubjects()
 
                     frameToClear.imageAccessor.deleteAllImages(frameIndex: frameToClear.frameIndex)
                     Task { @MainActor in
@@ -1020,15 +1020,15 @@ public final class ImageSequenceViewModel {
                     var existingImages: Set<FrameViewMode> = [.original]
                     
                     if frameToClear.imageAccessor.imageExists(frameIndex: frameToClear.frameIndex,
-                                                       ofType: .aligned,
-                                                       atSize: .original)
+                                                              ofType: .aligned,
+                                                              atSize: .original)
                     {
                         existingImages.insert(.aligned)
                     }
 
                     if frameToClear.imageAccessor.imageExists(frameIndex: frameToClear.frameIndex,
-                                                       ofType: .subtraction,
-                                                       atSize: .original)
+                                                              ofType: .subtraction,
+                                                              atSize: .original)
                     {
                         existingImages.insert(.subtraction)
                     }
@@ -1056,6 +1056,14 @@ public final class ImageSequenceViewModel {
 
                     currentFrame = await frameToClear.nextFrame
                     numberOfFramesLeft -= 1
+                    Task { @MainActor in
+                        let frameView = self.frames[frameToClear.frameIndex]
+                        frameView.dustbinImage = nil
+                        frameView.positiveOutlierImage = nil
+                        frameView.negativeOutlierImage = nil
+                        frameView.outlierViews = nil
+                    }
+
                 }
             }.value
         } else {
