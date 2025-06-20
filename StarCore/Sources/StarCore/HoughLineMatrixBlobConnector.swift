@@ -16,6 +16,99 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
+// keep one of these inside each Task in the TaskGroup
+public class BlobMapper {
+    public var mappings: Set<BlobMapping>
+
+    public init() {
+        self.mappings = Set<BlobMapping>()
+    }
+
+    public init(mappings: Set<BlobMapping>) {
+        self.mappings = mappings
+    }
+    
+    // return true when the mapping was already present, false when it was added
+    public func map(blobID1: UInt32, to blobID2: UInt32) -> Bool {
+        let mapping = BlobMapping(blobID1, blobID2)
+        if mappings.contains(mapping) {
+            return true
+        } else {
+            mappings.insert(mapping)
+            return false
+        }
+    }
+
+    // outputs a list of lists of adjecent blobs
+    public var mappingLists: [[UInt32]] {
+        // 1) Build an adjacency list
+        var graph = [UInt32: Set<UInt32>]()
+        for m in mappings {
+            graph[m.id1, default: []].insert(m.id2)
+            graph[m.id2, default: []].insert(m.id1)
+        }
+
+        // 2) Track which nodes we’ve already visited
+        var visited = Set<UInt32>()
+        var groups: [[UInt32]] = []
+
+        // 3) For each node, if not visited, BFS/DFS to collect its component
+        for node in graph.keys {
+            guard !visited.contains(node) else { continue }
+            var stack = [node]
+            var component = [UInt32]()
+
+            visited.insert(node)
+            while let current = stack.popLast() {
+                component.append(current)
+                for neighbor in graph[current]! {
+                    if !visited.contains(neighbor) {
+                        visited.insert(neighbor)
+                        stack.append(neighbor)
+                    }
+                }
+            }
+
+            // Optionally sort each component for determinism
+            groups.append(component.sorted())
+        }
+
+        return groups
+    }
+    
+    public static func + (lhs: BlobMapper, rhs: BlobMapper) -> BlobMapper {
+        BlobMapper(mappings: lhs.mappings.union(rhs.mappings)) 
+    }
+}
+
+public struct BlobMapping: Hashable, Equatable, Sendable {
+    let id1: UInt32
+    let id2: UInt32
+
+    public init(_ id1: UInt32, _ id2: UInt32) {
+        self.id1 = id1
+        self.id2 = id2
+    }
+    
+    public func contains(id: UInt32) -> Bool { id1 == id || id2 == id }
+    
+    public static func == (lhs: BlobMapping, rhs: BlobMapping) -> Bool {
+        // [a,b] == [a,b]
+        if lhs.id1 == rhs.id1,
+           lhs.id2 == rhs.id2
+        {
+            return true
+        }
+        // [a,b] == [b,a]
+        if lhs.id1 == rhs.id2,
+           lhs.id2 == rhs.id1
+        {
+            return true
+        }
+        return false
+    }
+}
+
 public actor OptionalActor<T> {
     private var internalValue: T? = nil
 
@@ -48,9 +141,9 @@ public actor HoughLineMatrixBlobConnector {
                                            frameIndex: frameIndex)
     }
 
-    public func blobMap() async -> [UInt32:Blob] {
-        await analyzer.mapOfBlobs()
-    }
+    private var internalBlobMap: [UInt32:Blob] = [:]
+    
+    public func blobMap() async -> [UInt32:Blob] { internalBlobMap }
 
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         let elementWidth: Int  // size in pixels of the width of each matrix element
@@ -135,7 +228,7 @@ public actor HoughLineMatrixBlobConnector {
                             maxHoughLines: self.maxHoughLines,
                             sideIterationPixels: self.sideIterationPixels,
                             maxBlobDistance: value)
-
+                
             default:
                 return nil
             }
@@ -202,13 +295,15 @@ public actor HoughLineMatrixBlobConnector {
         let fullFrameImage = await analyzer.pixelatedImage
 
         //let t1 = Date().timeIntervalSince1970
-        
+
+        // a matrix of images from the original image for this frame
         let matrix = fullFrameImage.splitIntoMatrix(maxWidth: args.elementWidth,
                                                     maxHeight: args.elementHeight,
                                                     overlapPercent: args.overlapPercent)
 
         let blobImage = await analyzer.pixelatedImage
 
+        // a matrix of images from in image that keeps track of each blob's pixels
         // used to find blobs independently for each element
         let blobMatrix = blobImage.splitIntoMatrix(maxWidth: args.elementWidth,
                                                    maxHeight: args.elementHeight,
@@ -217,27 +312,85 @@ public actor HoughLineMatrixBlobConnector {
         
         //let t2 = Date().timeIntervalSince1970
 
-        await withTaskGroup(of: Void.self) { taskGroup in
+        // start with the full list of blobs from the analyzer
+        internalBlobMap = await analyzer.mapOfBlobs()
+        Log.d("frame \(frameIndex) starting with \(internalBlobMap.count) blobs")
+
+        let initialBlobCount = internalBlobMap.count
+        
+        // determine what blobs can be combined
+        let mappings = await withTaskGroup(of: Set<BlobMapping>.self) { taskGroup in
             // for each matrix element:
             for (index, element) in matrix.enumerated() {
                 let blobElement = blobMatrix[index]
                 taskGroup.addTask { [self] in
-                    await StarCore.process(element: element,
-                                           blobElement: blobElement,
-                                           with: args,
-                                           frameIndex: frameIndex,
-                                           analyzer: analyzer)
+                    let ret = await StarCore.process(element: element,
+                                                     blobElement: blobElement,
+                                                     with: args,
+                                                     frameIndex: frameIndex,
+                                                     blobMap: internalBlobMap)
+                    Log.d("frame \(frameIndex) element \(index) is done")
+                    return ret
+                }
+            }
+            var ret = Set<BlobMapping>()
+            for await blobMapping in taskGroup {
+                Log.d("ret \(ret.count) adding \(blobMapping.count) mappings")
+                ret = ret.union(blobMapping)
+                Log.d("ret \(ret.count) after adding \(blobMapping.count) mappings")
+            }
+            Log.d("returning set")
+            return ret
+        }
+        Log.d("frame \(frameIndex) done calculating lines got \(mappings.count) mappings")
+
+        let blobMapper = BlobMapper(mappings: mappings)
+        
+        // next produce a list of blob ids that are all part of a new combined blob
+        let mappingLists = blobMapper.mappingLists
+
+        Log.d("frame \(frameIndex) combining blobs into \(mappingLists.count) merged blobs")
+        await withTaskGroup(of: Optional<Blob>.self) { taskGroup in
+            for mappingList in mappingLists {
+                // a list of blobs that should all be removed
+                //Log.d("mappingList.list.count \(mappingList.list.count)")
+
+                let blobList = mappingList.compactMap { internalBlobMap[$0] }
+
+                //Log.d("blobList.count \(blobList.count)")
+
+                // remove blob ids from the list from the blob map
+                for blobId in mappingList { internalBlobMap.removeValue(forKey: blobId) }
+
+                taskGroup.addTask { [self] in
+                    return await StarCore.combine(blobList)
+                }
+                for await blob in taskGroup {
+                    if let blob {
+                        internalBlobMap[blob.id] = blob
+                    }
                 }
             }
         }
+        let finalBlobCount = internalBlobMap.count
+        Log.d("frame \(frameIndex) done with \(internalBlobMap.count) blobs \(initialBlobCount-finalBlobCount) difference")
     }
+}
+
+fileprivate func combine(_ blobList: [Blob]) async -> Blob? {
+    if blobList.count == 0 { return nil }
+    let first = blobList[0]
+    for i in 1..<blobList.count {
+        await first.absorb(blobList[i])
+    }
+    return first
 }
 
 fileprivate func process(element: ImageMatrixElement,
                          blobElement: ImageMatrixElement,
                          with args: HoughLineMatrixBlobConnector.Args,
                          frameIndex: Int,
-                         analyzer: BlobAnalyzer) async
+                         blobMap: [UInt32: Blob]) async -> Set<BlobMapping>
 { 
     //let elementStartTime = Date().timeIntervalSince1970
     let processedBlobs = SetActor<Blob>()
@@ -260,7 +413,7 @@ fileprivate func process(element: ImageMatrixElement,
         lines = Array(lines[0..<args.maxHoughLines])
     }
 
-    let blobMap = await analyzer.mapOfBlobs()
+    let ret = SetActor<BlobMapping>()
     
     // iterate over lines in order of score
     for line in lines {
@@ -319,10 +472,10 @@ fileprivate func process(element: ImageMatrixElement,
                                  element iteration
                                  
                                  */
-                                
-                                if await previousBlob.absorb(blob, always: true) {
-                                    await analyzer.replace(blob: blob, with: previousBlob)
-                                }
+
+                                // XXX make a new mapping here
+                                await ret.insert(BlobMapping(blob.id, previousBlob.id))
+
                             } else {
                                 // if too far, discard previous blob ref and keep track of new blob
                                 await lastSeenBlob.set(blob)
@@ -340,6 +493,8 @@ fileprivate func process(element: ImageMatrixElement,
         //let lineEndTime = Date().timeIntervalSince1970
         //Log.d("frame \(frameIndex) times line finished in \(lineEndTime-lineStartTime)")
     }
+
+    return await ret.set
 }
 
 func distance(_ x1: Int, _ y1: Int, _ x2: Int, _ y2: Int) -> Double {
