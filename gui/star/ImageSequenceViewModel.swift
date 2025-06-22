@@ -818,8 +818,12 @@ public final class ImageSequenceViewModel {
                         let index = 2*(pixel.y*width+pixel.x)
                         var value = pixel.uInt16Value/0xFF
                         if value > UInt8.max { value = UInt16(UInt8.max) }
-                        dustbinArray[index] = UInt8(value)
-                        dustbinArray[index+1] = 0xFF // make it visible
+                        if index < dustbinArray.count {
+                            dustbinArray[index] = UInt8(value)
+                            dustbinArray[index+1] = 0xFF // make it visible
+                        } else {
+                            Log.w("pixel \(pixel) has invalid index")
+                        }
                     }
                 }
             } else {
