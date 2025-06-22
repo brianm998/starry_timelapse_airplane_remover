@@ -120,6 +120,7 @@ struct FrameEditView: View {
                   case .clear:
                       update(frame: frameView, shouldPaint: false,
                              between: selectionStart, and: end_location)
+                      
                   case .shovel:
                       Log.d("applying shovel")
                       applyShovel(to: frameView,

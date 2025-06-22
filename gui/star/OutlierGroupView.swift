@@ -295,6 +295,7 @@ struct OutlierGroupView: View {
                 if let outlier_group = await outlierGroups.members[self.groupViewModel.group.id] {
                     // update the outlier group in the background
                     await outlier_group.shouldPaint(shouldPaint)
+                    await frame.markAsChanged()
                 } else {
                     Log.e("HOLY FUCK")
                 }

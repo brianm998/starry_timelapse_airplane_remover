@@ -1270,6 +1270,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     Log.d("applying decision tree")
                     if isInDustbin {
                         await self.outlierGroups?.promoteFromDustbin(group)
+                        await self.markAsChanged()
                     }
                     await group.shouldPaint(.fromClassifier(await classifier.classification(of: group)))
                 }
@@ -1323,6 +1324,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             await self.foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
                 if isInDustbin {
                     await self.outlierGroups?.promoteFromDustbin(group)
+                    await self.markAsChanged()
                 }
                 await group.shouldPaint(.userSelected(shouldPaint))
             }
@@ -1341,6 +1343,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 if await group.shouldPaint() == nil {
                     if isInDustbin {
                         await self.outlierGroups?.promoteFromDustbin(group)
+                        await self.markAsChanged()
                     }
                     await group.shouldPaint(.userSelected(shouldPaint))
                 }
@@ -1374,6 +1377,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                        includingDustbin: includingDustbin) { group, isInDustbin in
             if isInDustbin {
                 await self.outlierGroups?.promoteFromDustbin(group)
+                await self.markAsChanged()
             }
             await group.shouldPaint(.userSelected(shouldPaint))
         }
@@ -1613,6 +1617,7 @@ fileprivate class OutlierClassifier {
 
                     if dustbin.count > 0 {
                         for chunk in dustbin.split(into: max) {
+                            let frame = self.frame
                             taskGroup.addTask {
                                 for group in chunk {
                                     if await group.shouldPaint() == nil || overwrite {
@@ -1622,6 +1627,7 @@ fileprivate class OutlierClassifier {
                                         await group.shouldPaint(.fromClassifier(classification),
                                                                 markAsChanged: false)
                                         await outlierGroups.promoteFromDustbin(group)
+                                        await frame.markAsChanged()
                                     }
                                 }
                             }
