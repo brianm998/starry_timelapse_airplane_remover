@@ -136,6 +136,10 @@ public class FullFrameBlobber {
             maxX = bounds.max.x
             minY = bounds.min.y
             maxY = bounds.max.y
+            if minX < 0 { minX = 0 }
+            if minY < 0 { minY = 0 }
+            if maxX > imageWidth { maxX = imageWidth }
+            if maxY > imageHeight { maxY = imageHeight }
         }
         
         for x in minX..<maxX {
