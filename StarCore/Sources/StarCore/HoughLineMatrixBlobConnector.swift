@@ -27,17 +27,6 @@ public class BlobMapper {
     public init(mappings: Set<BlobMapping>) {
         self.mappings = mappings
     }
-    
-    // return true when the mapping was already present, false when it was added
-    public func map(blobID1: UInt32, to blobID2: UInt32) -> Bool {
-        let mapping = BlobMapping(blobID1, blobID2)
-        if mappings.contains(mapping) {
-            return true
-        } else {
-            mappings.insert(mapping)
-            return false
-        }
-    }
 
     // outputs a list of lists of adjecent blobs
     public var mappingLists: [[UInt32]] {
@@ -81,6 +70,7 @@ public class BlobMapper {
     }
 }
 
+// indicates that two blobs are linked, i.e. mapped together
 public struct BlobMapping: Hashable, Equatable, Sendable {
     let id1: UInt32
     let id2: UInt32
@@ -119,11 +109,15 @@ public actor OptionalActor<T> {
     public func set(_ value: T?) { internalValue = value }
 }
 
-// partitions the full blob map image into a number of segments
-// then iterates over lines in order of score,
-// keeping track of what blobs are detected
-// within some pixel radius of each line
-// then combines blobs that are 'close enough'
+// attempts to combine blobs which are along detected lines by:
+// 
+// partitioning the full blob map image into a number of smaller slightly overlapping segments
+// then iterating over lines in order of score, keeping track of what blobs are detected.
+// within some pixel radius of each line, then combines blobs that are 'close enough'
+//
+// First a list of matching blobs from each segment is determined for each segment parallel
+// Then the full list of matching blobs is condensed into groups of matching blobs
+// Last these matching blobs are condensed into single blobs
 public actor HoughLineMatrixBlobConnector {
 
     let analyzer: BlobAnalyzer
@@ -336,7 +330,7 @@ public actor HoughLineMatrixBlobConnector {
             var ret = Set<BlobMapping>()
             for await blobMapping in taskGroup {
                 Log.d("ret \(ret.count) adding \(blobMapping.count) mappings")
-                ret = ret.union(blobMapping)
+                ret = ret.union(blobMapping) // XXX Crashed here :(
                 Log.d("ret \(ret.count) after adding \(blobMapping.count) mappings")
             }
             Log.d("returning set")
@@ -473,7 +467,7 @@ fileprivate func process(element: ImageMatrixElement,
                                  
                                  */
 
-                                // XXX make a new mapping here
+                                // make a new mapping here
                                 await ret.insert(BlobMapping(blob.id, previousBlob.id))
 
                             } else {
