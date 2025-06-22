@@ -1268,10 +1268,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
                 if apply {
                     Log.d("applying decision tree")
-                    await group.shouldPaint(.fromClassifier(await classifier.classification(of: group)))
                     if isInDustbin {
                         await self.outlierGroups?.promoteFromDustbin(group)
                     }
+                    await group.shouldPaint(.fromClassifier(await classifier.classification(of: group)))
                 }
             }
         } else {
@@ -1321,10 +1321,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     {
         await Task.detached(priority: .userInitiated) {
             await self.foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
-                await group.shouldPaint(.userSelected(shouldPaint))
                 if isInDustbin {
                     await self.outlierGroups?.promoteFromDustbin(group)
                 }
+                await group.shouldPaint(.userSelected(shouldPaint))
             }
             // 
         }.value
@@ -1339,10 +1339,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         await Task.detached(priority: .userInitiated) {
             await self.foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
                 if await group.shouldPaint() == nil {
-                    await group.shouldPaint(.userSelected(shouldPaint))
                     if isInDustbin {
                         await self.outlierGroups?.promoteFromDustbin(group)
                     }
+                    await group.shouldPaint(.userSelected(shouldPaint))
                 }
             }
         }.value
@@ -1372,10 +1372,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         await foreachOutlierGroupMulti(between: startLocation,
                                        and: endLocation,
                                        includingDustbin: includingDustbin) { group, isInDustbin in
-            await group.shouldPaint(.userSelected(shouldPaint))
             if isInDustbin {
                 await self.outlierGroups?.promoteFromDustbin(group)
             }
+            await group.shouldPaint(.userSelected(shouldPaint))
         }
         Task { @MainActor in
             await self.updateCombineSubjects()
