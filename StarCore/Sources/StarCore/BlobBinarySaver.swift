@@ -57,11 +57,15 @@ public struct BlobBinaryLoader {
         index += 1
         var blobMap: [UInt32:Blob] = [:]
         for _ in 0..<numberOfBlobs {
-            let blob = Blob(frameIndex: frameIndex,
-                            with: blobDataArray,
-                            atIndex: index)
-            index += await blob.persistentDataSizeBytes() / 2
-            blobMap[blob.id] = blob
+            if let blob = Blob(frameIndex: frameIndex,
+                               with: blobDataArray,
+                               atIndex: index)
+            {
+                index += await blob.persistentDataSizeBytes() / 2
+                blobMap[blob.id] = blob
+            } else {
+                Log.d("unable to load blob")
+            }
         }
         return blobMap
     }

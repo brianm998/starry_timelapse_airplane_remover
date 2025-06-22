@@ -57,10 +57,10 @@ public actor Blob: CustomStringConvertible,
         self.statusTracker = statusTracker
     }
 
-    public init(frameIndex: Int,
-                with persitentDataArray: [UInt16],
-                atIndex index: Int,
-                statusTracker: PixelStatusTracker? = nil)
+    public init?(frameIndex: Int,
+                 with persitentDataArray: [UInt16],
+                 atIndex index: Int,
+                 statusTracker: PixelStatusTracker? = nil)
     {
         self.statusTracker = statusTracker
         var index = index
@@ -68,17 +68,26 @@ public actor Blob: CustomStringConvertible,
         self.frameIndex = frameIndex
         self.pixels = [ ]
 
-        self.id = UInt32(persitentDataArray[index]) // convert from UInt16 to UInt32
-        index += 1
-        
-        let pixelCount = persitentDataArray[index]
-        index += 1
-        
-        for _ in 0..<pixelCount {
-            pixels.update(with: SortablePixel(x: Int(persitentDataArray[index]),
-                                              y: Int(persitentDataArray[index+1]),
-                                              value: .sixteenBit(persitentDataArray[index+2])))
-            index += 3
+        if index+1 < persitentDataArray.count {
+            self.id = UInt32(persitentDataArray[index]) // convert from UInt16 to UInt32
+            index += 1
+            
+            let pixelCount = persitentDataArray[index]
+            index += 1
+            
+            for _ in 0..<pixelCount {
+                if index+3 <= persitentDataArray.count {
+                    pixels.update(with: SortablePixel(x: Int(persitentDataArray[index]),
+                                                      y: Int(persitentDataArray[index+1]),
+                                                      value: .sixteenBit(persitentDataArray[index+2])))
+                    index += 3
+                } else {
+                    Log.w("frame \(frameIndex) blob \(id) went out of range")
+                }
+            }
+        } else {
+            Log.w("cannot create blob index \(index) is too big for persitentDataArray count of \(persitentDataArray.count)")
+            return nil
         }
     }
 
