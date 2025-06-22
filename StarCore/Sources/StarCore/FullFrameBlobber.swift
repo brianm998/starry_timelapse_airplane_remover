@@ -43,6 +43,10 @@ public class FullFrameBlobber {
 
     public let imageWidth: Int
     public let imageHeight: Int
+
+    // only operate within this area
+    public let bounds: BoundingBox?
+    
     public let subtractionPixelData: [UInt16]
 
     public let originalImage: PixelatedImage
@@ -81,6 +85,7 @@ public class FullFrameBlobber {
                 args: BlobFinder.Args,
                 imageWidth: Int,
                 imageHeight: Int,
+                within bounds: BoundingBox? = nil,
                 subtractionPixelData: [UInt16],
                 originalImage: PixelatedImage,
                 frameIndex: Int,
@@ -95,6 +100,7 @@ public class FullFrameBlobber {
         self.args = args
         self.imageWidth = imageWidth
         self.imageHeight = imageHeight
+        self.bounds = bounds
         self.subtractionPixelData = subtractionPixelData
         self.originalImage = originalImage
         self.frameIndex = frameIndex
@@ -112,17 +118,28 @@ public class FullFrameBlobber {
                                     count: imageWidth)
 
 
+        let minContrast = args.startMinContrast
+
+        var minX = 0
+        var maxX = imageWidth
+
+        var minY = 0
         var maxY = imageHeight
-        
+
         if let ignoreLowerPixels = config.ignoreLowerPixels {
             maxY = imageHeight - ignoreLowerPixels
             if maxY < 0 { maxY = 0 }
         }
 
-        let minContrast = args.startMinContrast
+        if let bounds {
+            minX = bounds.min.x
+            maxX = bounds.max.x
+            minY = bounds.min.y
+            maxY = bounds.max.y
+        }
         
-        for x in 0..<imageWidth {
-            for y in 0..<maxY {
+        for x in minX..<maxX {
+            for y in minY..<maxY {
                 let intensity = subtractionPixelData[y*imageWidth+x]
 
                 if intensity > minIntensity {

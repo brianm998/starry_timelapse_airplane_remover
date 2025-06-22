@@ -116,11 +116,28 @@ struct FrameEditView: View {
                   case .paint:
                       update(frame: frameView, shouldPaint: true,
                              between: selectionStart, and: end_location)
-
                       
                   case .clear:
                       update(frame: frameView, shouldPaint: false,
                              between: selectionStart, and: end_location)
+                  case .shovel:
+                      Log.d("applying shovel")
+                      applyShovel(to: frameView,
+                                  between: selectionStart,
+                                  and: end_location)
+                      
+                      if let frame = frameView.frame {
+                          // recompute small outlier images after the shovel
+                          Task { 
+                              await self.viewModel.computeSmallOutlierImage(forFrame: frame)
+                          }
+                          
+                          // if we are showing the dustbin, recompute the image after the shovel
+                          if viewModel.shouldShowDustbin {
+                              self.viewModel.computeDustbinImage(forFrame: frame)
+                          }
+                      }
+                      
                   case .razor:
                       applyRazor(to: frameView,
                                  between: selectionStart,
@@ -128,7 +145,7 @@ struct FrameEditView: View {
 
                       if let frame = frameView.frame {
                           // recompute small outlier images after the razor
-                          Task {
+                          Task { 
                               await self.viewModel.computeSmallOutlierImage(forFrame: frame)
                           }
                           
@@ -142,7 +159,6 @@ struct FrameEditView: View {
                       dumpInDustbin(from: frameView,
                                     between: selectionStart,
                                     and: end_location) 
-                      break
                       
                   case .getDust:
                       extractDust(from: frameView,
@@ -186,6 +202,22 @@ struct FrameEditView: View {
          }
     }
 
+    private func applyShovel(to frameView: FrameViewModel,
+                             between selectionStart: CGPoint,
+                             and end_location: CGPoint)
+    {
+        let gestureBounds = BoundingBox(between: selectionStart, and: end_location)
+
+        if let frame = frameView.frame {
+            Log.d("shoveling frame \(frame.frameIndex) @ \(gestureBounds)")
+            Task.detached(priority: .userInitiated) {
+                await shovelFrame(to: frame, in: gestureBounds, with: viewModel)
+            }
+        }
+        viewModel.selectionStart = nil
+        viewModel.selectionEnd = nil
+    }
+    
     private func applyRazor(to frameView: FrameViewModel,
                             between selectionStart: CGPoint,
                             and end_location: CGPoint)

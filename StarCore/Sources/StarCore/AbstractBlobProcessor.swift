@@ -52,7 +52,10 @@ public class AbstractBlobProcessor {
     internal func shouldRunStep(atIndex index: Int) -> Bool { true }
     
     // runs each step in sequence and returns the result
-    public func process(frame: FrameAirplaneRemover) async throws -> [UInt32:Blob] {
+    public func process(frame: FrameAirplaneRemover,
+                        within bounds: BoundingBox? = nil)
+      async throws -> [UInt32:Blob]
+    {
         self.frame = frame
         var blobMap: [UInt32:Blob] = [:]
 
@@ -72,7 +75,8 @@ public class AbstractBlobProcessor {
                 blobMap = await BlobFinder().process(args,
                                                      subtractionArray: subtractionArray,
                                                      originalImage: originalImage,
-                                                     frame: frame)
+                                                     frame: frame,
+                                                     within: bounds)
                 
             case .applyUserSlices:
                 blobMap = try await applyUserSlices(blobMap)
@@ -213,7 +217,7 @@ public class AbstractBlobProcessor {
                 subtractionImage = image
                 switch image.imageData {
                 case .thirtyTwoBit(let array):
-                    Log.e("frame \(frameIndex) 32 bit images not supported here yet")
+                    fatalError("frame \(frameIndex) 32 bit images not supported here yet")
                 case .sixteenBit(let array):
                     subtractionArray = array
                 case .eightBit(_):

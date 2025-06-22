@@ -175,7 +175,8 @@ public class BlobFinder {
     public func process(_ args: Args,
                         subtractionArray: [UInt16],
                         originalImage: PixelatedImage,
-                        frame: FrameAirplaneRemover) async -> [UInt32: Blob]
+                        frame: FrameAirplaneRemover,
+                        within bounds: BoundingBox? = nil) async -> [UInt32: Blob]
     {
         // detect blobs of difference in brightness in the subtraction array
         // airplanes show up as lines or dots in a line
@@ -185,6 +186,7 @@ public class BlobFinder {
                                              args: args,
                                              imageWidth: frame.width,
                                              imageHeight: frame.height,
+                                             within: bounds,
                                              subtractionPixelData: subtractionArray,
                                              originalImage: originalImage,
                                              frameIndex: frame.frameIndex,

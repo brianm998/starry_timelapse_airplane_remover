@@ -449,6 +449,18 @@ public actor Blob: CustomStringConvertible,
         if shouldReset { reset() }
     }
     
+    // mutates the blob by removing all pixels with the bounds
+    public func removePixels(within bounds: BoundingBox) {
+        var shouldReset = false
+        for pixel in pixels {
+            if bounds.contains(pixel) {
+                pixels.remove(pixel)
+                shouldReset = true
+            }
+        }
+        if shouldReset { reset() }
+    }
+    
     // trims outlying pixels from the group, ones that are not
     // close enough to the ideal line for this group
     public func lineTrim() async -> Set<SortablePixel>  {

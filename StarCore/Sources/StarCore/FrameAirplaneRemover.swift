@@ -94,9 +94,7 @@ public class FrameObserver {
         self.numberOfUndecidedOutliers = numberOfUndecidedOutliers
         self.numberOfDustbinOutliers = numberOfDustbinOutliers
     }
-
 }
-
 
 final public actor FrameAirplaneRemover: Equatable, Hashable {
 
@@ -502,7 +500,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         switch format {
         case .thirtyTwoBit(_):
-            Log.e("frame \(self.frameIndex) cannot load 32 bit image here now")
+            fatalError("frame \(self.frameIndex) cannot load 32 bit image here now")
                 
         case .eightBit(_):
             Log.e("8 bit not supported here now")
@@ -596,13 +594,27 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
-
-
     public func loadOutliersFromBinaryFile() async throws -> OutlierGroups? {
         let config = await configManager.config()
         let dirname = "\(config.outlierOutputDirname)/\(frameIndex)"
 
         return try await OutlierGroups(at: frameIndex, fromOutlierDir: dirname)
+    }
+    
+    // re-runs outlier detection within bounds with current settings
+    public func findOutliers(within bounds: BoundingBox) async throws {
+        Log.d("shovel frame \(frameIndex) finding outliers within bounds \(bounds)")
+        mkdir(await self.outliersDirname)
+
+        let blobProcessor = await constants.getDetectionType().blobProcessor
+        
+        let newBlobMap = try await blobProcessor.process(frame: self, within: bounds)
+
+        // add new blobs to outlier groups, fore-going any classification for now
+        await outlierGroups?.add(blobs: newBlobMap, within: bounds)
+
+        try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)
+        Log.d("shovel frame \(frameIndex) done finding outliers within bounds \(bounds)")
     }
     
     public func findOutliers() async throws {
@@ -649,18 +661,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         self.set(state: .readyForInterFrameProcessing)
     }
 
-//    public func outliersLoaded() { self.outlierGroups != nil }
-
     public func loadOutliers(loadOnly: Bool = false) async throws {
-        Log.i("FUCKING loading")
         if isLoadingOutliers {
-            Log.w("FUCKING Not loading twice")
+            Log.w("Not loading twice")
             return
         }
         isLoadingOutliers = true
         if self.outlierGroups == nil {
             // nil outlier groups means that we haven't tried to get outliers for this frame yet
-            Log.d("FUCKING frame \(frameIndex) loading outliers")
+            Log.d("frame \(frameIndex) loading outliers")
             if let outlierGroups = try await loadOutliersFromFile() {
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
                 Log.d("frame \(frameIndex) loading outliers from file")
@@ -789,7 +798,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         {
             switch image.imageData {
             case .thirtyTwoBit(_):
-                Log.e("frame \(frameIndex) cannot load 32 bit validation image")
+                fatalError("frame \(frameIndex) cannot load 32 bit validation image")
                 
             case .eightBit(let validationArr):
                 await classifyOutliers(with: validationArr)
@@ -865,23 +874,18 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public func outlierGroupDustbinList() async -> [OutlierGroup]? {
-        Log.d("FUCKING CRAP")
         if let outlierGroups {
             let groups = await outlierGroups.getDustbin()
-            Log.d("FUCKING CRAPPY \(groups.count) groups")
             return groups.map {$0.value}
         } else {
-            Log.d("FUCKING LOADING THAT SHIT")
             try? await loadOutliers()
             if let outlierGroups {
                 let groups = await outlierGroups.getDustbin()
-                Log.d("FUCKING CRAPPY \(groups.count) groups")
                 return groups.map {$0.value}
             } else {
-                Log.d("FUCKING CRAPPIER NO GROUPS")
+                Log.w("NO GROUPS")
             }
         }
-        Log.d("FUCKING CRAPPIER NO GROUPS")
         return nil
     }
 

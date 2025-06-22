@@ -76,8 +76,14 @@ public struct BlobMapping: Hashable, Equatable, Sendable {
     let id2: UInt32
 
     public init(_ id1: UInt32, _ id2: UInt32) {
-        self.id1 = id1
-        self.id2 = id2
+        // make sure the ids are ordered so (2,1) == (1,2)
+        if id1 < id2 {
+            self.id1 = id1
+            self.id2 = id2
+        } else {
+            self.id1 = id2
+            self.id2 = id1
+        }
     }
     
     public func contains(id: UInt32) -> Bool { id1 == id || id2 == id }
@@ -86,12 +92,6 @@ public struct BlobMapping: Hashable, Equatable, Sendable {
         // [a,b] == [a,b]
         if lhs.id1 == rhs.id1,
            lhs.id2 == rhs.id2
-        {
-            return true
-        }
-        // [a,b] == [b,a]
-        if lhs.id1 == rhs.id2,
-           lhs.id2 == rhs.id1
         {
             return true
         }

@@ -16,6 +16,7 @@ public enum SelectionMode: String, Equatable, CaseIterable {
     case paint
     case clear
     case razor
+    case shovel
     case dustbin
     case getDust
     case multi
@@ -524,6 +525,8 @@ public final class ImageSequenceViewModel {
             return .red
         case .clear:
             return .green
+        case .shovel:
+            return .gray
         case .razor:
             return .yellow
         case .dustbin:

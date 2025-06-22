@@ -40,6 +40,64 @@ public actor OutlierGroups {
         }
     }
 
+    // adds blobs as outlier groups within the bounds, and slices out
+    // any pixels from existing outlier groups within the bounds
+    public func add(blobs: [UInt32:Blob], within bounds: BoundingBox) async {
+        var maxID: UInt16 = 0
+
+        var newMembers: [UInt16: OutlierGroup] = [:]
+        var newDustbin: [UInt16: OutlierGroup] = [:]
+
+        // iterate through all existing outlier groups, 
+        //  if they're inside the bounding box, discard them
+        //  if they're overlapping the bounding box, remove offending pixels
+        //  if they're outside the bounding box, keep them
+        for (id, group) in members {
+            if id > maxID { maxID = id }
+
+            if let overlap = group.bounds.overlap(with: bounds) {
+                if bounds.contains(group.bounds) {
+                    // this outlier group is entirely within the bounds, dump it
+                } else {
+                    let blob = await group.blob()
+                    await blob.removePixels(within: overlap)
+                    newMembers[id] = await blob.outlierGroup(at: frameIndex)
+                }
+            } else {
+                // this outlier doesn't overlap at all, keep it
+                newMembers[id] = group
+            }
+        }
+
+        for (id, group) in dustbin {
+            if id > maxID { maxID = id }
+
+            if let overlap = group.bounds.overlap(with: bounds) {
+                if bounds.contains(group.bounds) {
+                    // this outlier group is entirely within the bounds, dump it
+                } else {
+                    let blob = await group.blob()
+                    await blob.removePixels(within: overlap)
+                    newDustbin[id] = await blob.outlierGroup(at: frameIndex)
+                }
+            } else {
+                // this outlier doesn't overlap at all, keep it
+                newDustbin[id] = group
+            }
+        }
+
+
+        // add the new blobs as outlier groups
+        for blob in blobs.values {
+            maxID += 1
+            let id = maxID
+            newMembers[id] = await blob.outlierGroup(at: frameIndex)
+        }
+        
+        self.members = newMembers
+        self.dustbin = newDustbin
+    }
+    
     public func get(with id: UInt16) -> OutlierGroup? { members[id] }
     
     public func dumpInDustbin(_ member: OutlierGroup) {

@@ -253,7 +253,6 @@ fileprivate func finalProcess(atIndex currentIndex: Int,
         await frame.set(frameSavingState: .saving)
         Log.d("frame \(frame.frameIndex) saveNow for real")
         do {
-
             try await frame.loadOutliers()
             try await frame.finish()
             await frame.changesHandled()
@@ -279,4 +278,26 @@ fileprivate func finalProcess(atIndex currentIndex: Int,
     //finalSemaphore.signal()
 
     Log.d("final process done at index \(currentIndex)")
+}
+
+// re-process within the given bounds
+func shovelFrame(to frame: FrameAirplaneRemover,
+                 in gestureBounds: BoundingBox,
+                 with viewModel: ImageSequenceViewModel) async
+{
+    Log.d("shovel frame \(frame.frameIndex)")
+    do {
+        // discards any existing outlier pixels that are within the given bounds
+        try await frame.findOutliers(within: gestureBounds)
+        Task { @MainActor in
+            let frameView = await viewModel.frames[frame.frameIndex]
+            frameView.outlierViews = nil
+            
+            await viewModel.setOutlierGroups(forFrame: frame)
+        }
+        await frame.set(state: .complete)
+    } catch {
+        Log.e("error finding outliers for frame \(frame.frameIndex): \(error)")
+    }
+
 }

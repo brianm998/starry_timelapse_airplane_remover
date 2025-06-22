@@ -27,6 +27,8 @@ public actor SetActor<T> where T: Hashable {
         self.internalSet = []
     }
 
+    public var count: Int { internalSet.count }
+    
     public func insert(_ value: T) {
         internalSet.insert(value)
     }
@@ -418,6 +420,7 @@ fileprivate func processBlob(_ blob: Blob,
         // maybe recurse on a better line from a smaller amount
         await iterate(on: blobLine,
                       over: fullBlob,
+                      frameIndex: frameIndex,
                       data: data,
                       lineBorder: data.args.lineBorder,
                       maxIterationCount: data.args.maxIterationCount,
@@ -431,6 +434,7 @@ fileprivate func processBlob(_ blob: Blob,
 
 fileprivate func iterate(on blobLine: Line,
                          over fullBlob: Blob,
+                         frameIndex: Int,
                          // how much furter to look at the ends of the line
                          data: LinearBlobConnector.Data,
                          lineBorder: Int,
@@ -439,7 +443,7 @@ fileprivate func iterate(on blobLine: Line,
                          adjecentPixelsOnIteration: Int) async
 {
     // we have an ideal origin zero line for this blob
-    //Log.d("frame \(frameIndex) blob \(fullBlob.id) has line \(blobLine)")
+    Log.d("frame \(frameIndex) blob \(fullBlob.id) has line \(blobLine)")
 
     var start: DoubleCoord?
     var end: DoubleCoord?
@@ -466,7 +470,7 @@ fileprivate func iterate(on blobLine: Line,
     }
 
     if let start, let end {
-        //Log.d("frame \(frameIndex) blob \(fullBlob.id) iterating between \(start) and \(end)")
+        Log.d("frame \(frameIndex) blob \(fullBlob.id) iterating between \(start) and \(end)")
         let linearBlobIds = SetActor<UInt32>()
         // iterate over the line and absorbs all blobs along it into a new blob
         // remove all ids expept for the one from the combined blob ids from the blob map
@@ -496,7 +500,7 @@ fileprivate func iterate(on blobLine: Line,
             let linearBlob = await Blob(id: data.analyzer.maxBlobId,
                                         frameIndex: data.frameIndex)
 
-            //Log.d("frame \(data.analyzer.frameIndex) blob \(fullBlob.id) found \(linearBlobIds.count) linear blobs")
+            Log.d("frame \(data.analyzer.frameIndex) blob \(fullBlob.id) found \(await linearBlobIds.count) linear blobs")
             
             // we found more than one blob along the line
 
@@ -514,7 +518,7 @@ fileprivate func iterate(on blobLine: Line,
 
             await data.analyzer.update(blob: linearBlob)
 
-            //Log.d("frame \(data.analyzer.frameIndex) fullBlob \(fullBlob.id) after absorb \(await fullBlob.pixels.count) pixels \(await fullBlob.pixels)")
+            Log.d("frame \(data.analyzer.frameIndex) fullBlob \(fullBlob.id) after absorb \(await fullBlob.pixels.count)")
             
             /*
              If we have a line from this new blob, it is likely
@@ -526,20 +530,21 @@ fileprivate func iterate(on blobLine: Line,
 
             if let line = await fullBlob.originZeroLine {
                 if iterationCount < maxIterationCount {
-                    //Log.d("frame \(data.analyzer.frameIndex) ITERATING iterationCount \(iterationCount)")
+                    Log.d("frame \(data.analyzer.frameIndex) ITERATING iterationCount \(iterationCount)")
                     await iterate(on: line,
                                   over: linearBlob,
+                                  frameIndex: frameIndex,
                                   data: data,
                                   lineBorder: lineBorder,
                                   iterationCount: iterationCount + 1,
                                   maxIterationCount: maxIterationCount,
                                   adjecentPixelsOnIteration: adjecentPixelsOnIteration)
                 } else {
-                    //Log.d("frame \(data.analyzer.frameIndex) NOT ITERATING iterationCount \(iterationCount)")
+                    Log.d("frame \(data.analyzer.frameIndex) NOT ITERATING iterationCount \(iterationCount)")
                 }
             }
         } else {
-            //Log.d("frame \(data.analyzer.frameIndex) only found \(linearBlobSet.count) linear blobs")
+            Log.d("frame \(data.analyzer.frameIndex) only found \(linearBlobSet.count) linear blobs")
         }
     }
 }
