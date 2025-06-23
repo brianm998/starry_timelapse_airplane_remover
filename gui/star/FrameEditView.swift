@@ -130,7 +130,8 @@ struct FrameEditView: View {
                           if let frame = frameView.frame {
                               // recompute small outlier images after the shovel
                               Task { 
-                                  await self.viewModel.computeSmallOutlierImage(forFrame: frame)
+                                  self.viewModel.computeSmallOutlierImage(forFrame: frame)
+                                  await frame.markAsChanged()
                               }
                               
                               // if we are showing the dustbin, recompute the image after the shovel
