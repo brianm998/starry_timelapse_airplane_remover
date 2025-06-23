@@ -126,16 +126,17 @@ struct FrameEditView: View {
                       applyShovel(to: frameView,
                                   between: selectionStart,
                                   and: end_location)
-                      
-                      if let frame = frameView.frame {
-                          // recompute small outlier images after the shovel
-                          Task { 
-                              await self.viewModel.computeSmallOutlierImage(forFrame: frame)
-                          }
-                          
-                          // if we are showing the dustbin, recompute the image after the shovel
-                          if viewModel.shouldShowDustbin {
-                              self.viewModel.computeDustbinImage(forFrame: frame)
+                      {
+                          if let frame = frameView.frame {
+                              // recompute small outlier images after the shovel
+                              Task { 
+                                  await self.viewModel.computeSmallOutlierImage(forFrame: frame)
+                              }
+                              
+                              // if we are showing the dustbin, recompute the image after the shovel
+                              if viewModel.shouldShowDustbin {
+                                  self.viewModel.computeDustbinImage(forFrame: frame)
+                              }
                           }
                       }
                       
@@ -205,18 +206,24 @@ struct FrameEditView: View {
 
     private func applyShovel(to frameView: FrameViewModel,
                              between selectionStart: CGPoint,
-                             and end_location: CGPoint)
+                             and end_location: CGPoint,
+                             completion: @escaping () -> Void)
     {
         let gestureBounds = BoundingBox(between: selectionStart, and: end_location)
 
         if let frame = frameView.frame {
             Log.d("shoveling frame \(frame.frameIndex) @ \(gestureBounds)")
-            Task.detached(priority: .userInitiated) {
-                await shovelFrame(to: frame, in: gestureBounds, with: viewModel)
+            Task {
+                await Task.detached(priority: .userInitiated) {
+                    await shovelFrame(to: frame, in: gestureBounds, with: viewModel)
+                }.value
+                Task { @MainActor in 
+                    completion()
+                    viewModel.selectionStart = nil
+                    viewModel.selectionEnd = nil
+                }
             }
         }
-        viewModel.selectionStart = nil
-        viewModel.selectionEnd = nil
     }
     
     private func applyRazor(to frameView: FrameViewModel,

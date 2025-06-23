@@ -86,7 +86,8 @@ public actor OutlierGroups {
             }
         }
 
-
+        maxID += 1
+        
         // add the new blobs as outlier groups
         for blob in blobs.values {
             maxID += 1
