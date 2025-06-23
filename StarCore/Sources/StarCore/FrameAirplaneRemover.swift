@@ -1324,13 +1324,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             await self.foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
                 if isInDustbin {
                     await self.outlierGroups?.promoteFromDustbin(group)
-                    await self.markAsChanged()
                 }
                 await group.shouldPaint(.userSelected(shouldPaint))
             }
             // 
         }.value
         Task { @MainActor in
+            await self.markAsChanged()
             await self.updateCombineSubjects()
         }
     }
@@ -1343,13 +1343,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 if await group.shouldPaint() == nil {
                     if isInDustbin {
                         await self.outlierGroups?.promoteFromDustbin(group)
-                        await self.markAsChanged()
                     }
                     await group.shouldPaint(.userSelected(shouldPaint))
                 }
             }
         }.value
         Task { @MainActor in
+            await self.markAsChanged()
             await self.updateCombineSubjects()
         }
     }
@@ -1363,6 +1363,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             await group.shouldPaint(.userSelected(shouldPaint))
         }
         Task { @MainActor in
+            await self.markAsChanged()
             await self.updateCombineSubjects()
         }
     }
@@ -1382,6 +1383,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             await group.shouldPaint(.userSelected(shouldPaint))
         }
         Task { @MainActor in
+            await self.markAsChanged()
             await self.updateCombineSubjects()
         }
     }
