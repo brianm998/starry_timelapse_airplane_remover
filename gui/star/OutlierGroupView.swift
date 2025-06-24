@@ -8,6 +8,8 @@ import logging
 
 struct OutlierGroupView: View {
 
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+
     @State var groupViewModel: OutlierGroupViewModel
 
     @Environment(\.openWindow) private var openWindow
@@ -57,6 +59,7 @@ struct OutlierGroupView: View {
                   .frame(width: arrow_length, height: arrow_height)
                   .offset(x: half_frame_width + half_arrow_length,
                           y: center_y - half_frame_height/* + half_bounds_height*/)
+                
 
                 // arrow on bottom 
                 arrowImage(named: "arrow.up")
@@ -113,7 +116,16 @@ struct OutlierGroupView: View {
             }
 
             self.outlierView
-              .onHover { groupViewModel.selectArrow($0) }
+              .onHover {
+                  groupViewModel.selectArrow($0)
+              }
+              .onChange(of: groupViewModel.arrowSelected) {
+                  if groupViewModel.arrowSelected {
+                      viewModel.cursor = .dragLink
+                  } else {
+                      viewModel.cursor = .crosshair
+                  }
+              }
             
             // tap gesture toggles paintability of the tapped group
               .onTapGesture {

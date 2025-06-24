@@ -60,6 +60,9 @@ public final class ImageSequenceViewModel {
     }
 
     var eraser: NighttimeAirplaneRemover?
+
+    var cursor: NSCursor = .crosshair
+
     var noImageExplainationText: String = "Loading..."
 
     var backgroundColor = ViewModel.defaultBackgroundColor
