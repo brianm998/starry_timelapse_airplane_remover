@@ -26,6 +26,7 @@ struct FrameEditView: View {
             let full_max: CGFloat = self.viewModel.showFullResolution ? 3 : 0.66 // XXX hardcoded constants that should be in the gui
             let max = min < full_max ? full_max : min
 
+            CursorView(cursor: .crosshair) {
             ZoomableView(size: CGSize(width: viewModel.frameWidth+outlierArrowLength*2,
                                       height: viewModel.frameHeight+outlierArrowLength*2),
                          min: min,
@@ -33,7 +34,7 @@ struct FrameEditView: View {
                          showsIndicators: true)
             {
                 // the currently visible frame
-                self.imageView
+                    self.imageView
             }
               .onChange(of: viewModel.currentIndex) { oldValue, _ in
                   // add any changes the user may have made to the save queue
@@ -57,6 +58,7 @@ struct FrameEditView: View {
                       }
                   }
               }
+                }
         }
     }
     
@@ -66,7 +68,6 @@ struct FrameEditView: View {
 
             FrameEditImageView()
               .frame(width: viewModel.frameWidth, height: viewModel.frameHeight)
-              .cursor(.crosshair, tag: "frameEdit")
             
             // this is the selection overlay
             if let selectionStart = viewModel.selectionStart,
@@ -278,9 +279,9 @@ struct FrameEditView: View {
             let new_value = shouldPaint
             Task.detached(priority: .userInitiated) {
                 await frame.userSelectAllOutliers(toShouldPaint: new_value,
-                                                 between: selectionStart,
-                                                 and: end_location,
-                                                 includingDustbin: viewModel.shouldShowDustbin)
+                                                  between: selectionStart,
+                                                  and: end_location,
+                                                  includingDustbin: viewModel.shouldShowDustbin)
                 await viewModel.setOutlierGroups(forFrame: frame)
                 
                 await self.viewModel.computeSmallOutlierImage(forFrame: frame)
