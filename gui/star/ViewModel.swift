@@ -52,6 +52,20 @@ public final class ViewModel {
 
     var eraserTask: Task<(),Never>?
     
+    var cursor: NSCursor = .arrow
+
+    var cursorStack: [NSCursor] = []
+    
+    func pushCursor(_ cursor: NSCursor) {
+        cursorStack.append(cursor)
+        self.cursor = cursor
+    }
+    
+    func popCursor() {
+        cursorStack.removeLast()
+        self.cursor = cursorStack.last ?? .arrow
+    }
+
     // prepare for another sequence
     func unloadSequence() {
         imageSequence = nil

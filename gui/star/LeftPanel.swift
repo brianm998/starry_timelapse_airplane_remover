@@ -45,7 +45,7 @@ struct LeftPanel: View {
                   .foregroundColor(.gray)
             }
               .buttonStyle(PlainButtonStyle())
-              .cursor(.resizeLeft, tag: "leftPanelOpen")
+              .cursor(.resizeLeft)
         }
           .padding(10)
           .background(Color(white: 0.22))
@@ -148,6 +148,7 @@ struct LeftPanel: View {
               .frame(maxHeight: 10)
 
             ExpandUpButton($viewModel.showAllFrameViewModes)
+              .cursor(.resizeUp)
         }
     }
     
@@ -161,7 +162,7 @@ struct LeftPanel: View {
                   .foregroundColor(.gray)
             }
               .buttonStyle(PlainButtonStyle())
-              .cursor(.resizeRight, tag: "leftPanel")
+              .cursor(.resizeRight)
         }
           .padding(10)
           .background(Color(white: 0.22))

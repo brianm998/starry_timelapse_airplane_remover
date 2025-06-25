@@ -14,6 +14,7 @@ actor ArrayActor<T> {
 
 struct FrameEditView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    @Environment(ViewModel.self) var topViewModel: ViewModel
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -26,33 +27,31 @@ struct FrameEditView: View {
             let full_max: CGFloat = self.viewModel.showFullResolution ? 3 : 0.66 // XXX hardcoded constants that should be in the gui
             let max = min < full_max ? full_max : min
 
-            CursorView(cursor: viewModel.cursor) {
-                ZoomableView(size: CGSize(width: viewModel.frameWidth+outlierArrowLength*2,
-                                          height: viewModel.frameHeight+outlierArrowLength*2),
-                             min: min,
-                             max: max,
-                             showsIndicators: true)
-                {
-                    // the currently visible frame
-                    self.imageView
-                }
-                  .onChange(of: viewModel.currentIndex) { oldValue, _ in
-                      // add any changes the user may have made to the save queue
-                      if oldValue >= 0,
-                         oldValue < self.viewModel.frames.count
-                      {
-                          let frameView = self.viewModel.frames[oldValue]
-                          Task {
-                              if let frameToSave = frameView.frame,
-                                 await frameToSave.hasChanges()
-                              {
-                                  await MainActor.run {
-                                      self.viewModel.saveToFile(frame: frameToSave) {
-                                          Log.d("saving frame \(frameToSave.frameIndex)")
-                                          // await MainActor.run {
-                                          await self.viewModel.refresh(frame: frameToSave)
-                                          // }
-                                      }
+            ZoomableView(size: CGSize(width: viewModel.frameWidth+outlierArrowLength*2,
+                                      height: viewModel.frameHeight+outlierArrowLength*2),
+                         min: min,
+                         max: max,
+                         showsIndicators: true)
+            {
+                // the currently visible frame
+                self.imageView
+            }
+              .onChange(of: viewModel.currentIndex) { oldValue, _ in
+                  // add any changes the user may have made to the save queue
+                  if oldValue >= 0,
+                     oldValue < self.viewModel.frames.count
+                  {
+                      let frameView = self.viewModel.frames[oldValue]
+                      Task {
+                          if let frameToSave = frameView.frame,
+                             await frameToSave.hasChanges()
+                          {
+                              await MainActor.run {
+                                  self.viewModel.saveToFile(frame: frameToSave) {
+                                      Log.d("saving frame \(frameToSave.frameIndex)")
+                                      // await MainActor.run {
+                                      await self.viewModel.refresh(frame: frameToSave)
+                                      // }
                                   }
                               }
                           }
@@ -92,12 +91,17 @@ struct FrameEditView: View {
             }
         }
           .gesture(self.selectionDragGesture)
+          .cursor(.crosshair)
     }
 
+    @State private var isDragging = false
+    
     var selectionDragGesture: some Gesture {
         DragGesture()
           .onChanged { gesture in
               let location = gesture.location
+              if !isDragging { topViewModel.pushCursor(.pointingHand) }
+              isDragging = true
               if viewModel.selectionStart != nil {
                   // updating during drag is too slow
                   viewModel.selectionEnd = location
@@ -107,6 +111,8 @@ struct FrameEditView: View {
               Log.v("location \(location)")
           }
           .onEnded { gesture in
+              topViewModel.popCursor()
+              isDragging = false
               let end_location = gesture.location
               if let selectionStart = viewModel.selectionStart {
                   Log.v("end location \(end_location) drag start \(selectionStart)")

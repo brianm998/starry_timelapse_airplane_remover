@@ -18,7 +18,7 @@ struct EditableFrameNumberView: View {
                 TextField("\(frameNumberString)",
                           text: $editFrameNumberModeString)
                   .frame(maxWidth: 38)
-                  .cursor(.arrow, tag: "editableFrameNumberView")
+                  .cursor(.arrow)
                   .onSubmit {
                       let filtered = editFrameNumberModeString.filter { "0123456789".contains($0) }
                       if let newIntValue = Int(filtered),
@@ -34,7 +34,7 @@ struct EditableFrameNumberView: View {
         } else {
             Text("frame \(frameNumberString)")
               .foregroundColor(.white)
-              .cursor(.dragLink, tag: "editableFrameNumberView")
+              .cursor(.dragLink)
               .onTapGesture(count: 2) {
                   self.editFrameNumberMode = true
               }

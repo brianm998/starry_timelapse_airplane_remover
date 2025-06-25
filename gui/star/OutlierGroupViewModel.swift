@@ -113,6 +113,14 @@ class OutlierGroupViewModel: Identifiable {
             }
         }
     }
+
+    var willPaint: Bool? {
+        if let will_paint = self.paintObserver.shouldPaint {
+            return will_paint.willPaint 
+        } else {
+            return nil          // don't know
+        }
+    }
     
     var groupColor: Color {
         if isSelected { return .orange }

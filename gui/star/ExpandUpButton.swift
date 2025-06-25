@@ -21,5 +21,6 @@ public struct ExpandUpButton: View {
             }
         }
           .buttonStyle(PlainButtonStyle())
+          .cursor(isOpen ? .resizeDown : .resizeUp)
     }
 }

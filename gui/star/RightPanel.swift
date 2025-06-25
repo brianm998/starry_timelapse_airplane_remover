@@ -266,7 +266,7 @@ struct RightPanel: View {
                           .foregroundColor(.gray)
                     }
                       .buttonStyle(PlainButtonStyle())
-                      .cursor(.resizeRight, tag: "rightPanel")
+                      .cursor(.resizeRight)
 
                 }
                   .padding(10)
@@ -282,7 +282,7 @@ struct RightPanel: View {
                           .foregroundColor(.gray)
                     }
                       .buttonStyle(PlainButtonStyle())
-                      .cursor(.resizeLeft, tag: "rightPanel")
+                      .cursor(.resizeLeft)
                 }
                   .padding(10)
                   .background(Color(white: 0.22))
@@ -308,7 +308,7 @@ struct EditableNumberOfFramesToProcessConcurrentlyView: View {
                 TextField("\(frameNumberString)",
                           text: $editFrameNumberModeString)
                   .frame(maxWidth: 38)
-                  .cursor(.arrow, tag: "editableFrameNumberView")
+                  .cursor(.arrow)
                   .onSubmit {
                       let filtered = editFrameNumberModeString.filter { "0123456789".contains($0) }
                       if let newIntValue = Int(filtered),
@@ -333,7 +333,7 @@ struct EditableNumberOfFramesToProcessConcurrentlyView: View {
         } else {
             Text("process \(frameNumberString) frames at once")
               .foregroundColor(.white)
-              .cursor(.dragLink, tag: "editableFrameNumberView")
+              .cursor(.dragLink)
               .onTapGesture(count: 2) {
                   self.editFrameNumberMode = true
               }
@@ -377,7 +377,7 @@ struct EditableNumberOfFramesToProcessView: View {
         } else {
             Text("\(frameNumberString) frames as")
               .foregroundColor(.white)
-              .cursor(.dragLink, tag: "editableFrameNumberView")
+              .cursor(.dragLink)
               .onTapGesture(count: 2) {
                   self.editFrameNumberMode = true
               }

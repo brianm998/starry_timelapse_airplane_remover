@@ -1,4 +1,5 @@
 import SwiftUI
+import logging
 
 
 /// A SwiftUI wrapper for `CursorHostingView`
@@ -60,3 +61,27 @@ final class CursorHostingView<Content: View>: NSHostingView<Content> {
     }
 }
 
+// 1) A ViewModifier that can own @EnvironmentObject
+struct CursorModifier: ViewModifier {
+    @Environment(ViewModel.self) var viewModel: ViewModel
+    let cursor: NSCursor
+
+    func body(content: Content) -> some View {
+        content
+          .onHover { inside in
+              if inside {
+                  viewModel.pushCursor(cursor)
+              } else {
+                  viewModel.popCursor()
+              }
+          }
+    }
+}
+
+// 2) A nice View extension to apply it
+extension View {
+    /// Installs a hover‐driven cursor change using your ViewModel in the environment.
+    func cursor(_ cursor: NSCursor) -> some View {
+        self.modifier(CursorModifier(cursor: cursor))
+    }
+}

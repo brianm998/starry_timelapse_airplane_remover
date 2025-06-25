@@ -44,18 +44,21 @@ struct OutlierGroupView: View {
 
                 // arrow on left side
                 arrowImage(named: "arrow.right")
+                  .cursor(self.currentCursor)
                   .frame(width: arrow_length, height: arrow_height)
                   .offset(x: -half_arrow_length - half_frame_width,
                           y: center_y - half_frame_height/* + half_bounds_height*/)
 
                 // arrow on top
                 arrowImage(named: "arrow.down")
+                  .cursor(self.currentCursor)
                   .frame(width: arrow_height, height: arrow_length)
                   .offset(x: center_x - half_frame_width/* - half_bounds_width*/,
                           y: -half_frame_height - half_arrow_length)
 
                 // arrow on right side
                 arrowImage(named: "arrow.left")
+                  .cursor(self.currentCursor)
                   .frame(width: arrow_length, height: arrow_height)
                   .offset(x: half_frame_width + half_arrow_length,
                           y: center_y - half_frame_height/* + half_bounds_height*/)
@@ -63,6 +66,7 @@ struct OutlierGroupView: View {
 
                 // arrow on bottom 
                 arrowImage(named: "arrow.up")
+                  .cursor(self.currentCursor)
                   .frame(width: arrow_height, height: arrow_length)
                   .offset(x: center_x - half_frame_width/* - half_bounds_width*/,
                           y: half_arrow_length + half_frame_height)
@@ -116,16 +120,10 @@ struct OutlierGroupView: View {
             }
 
             self.outlierView
-              .onHover {
-                  groupViewModel.selectArrow($0)
+              .onHover { isInside in
+                  groupViewModel.selectArrow(isInside)
               }
-              .onChange(of: groupViewModel.arrowSelected) {
-                  if groupViewModel.arrowSelected {
-                      viewModel.cursor = .dragLink
-                  } else {
-                      viewModel.cursor = .crosshair
-                  }
-              }
+              .cursor(self.currentCursor)
             
             // tap gesture toggles paintability of the tapped group
               .onTapGesture {
@@ -158,6 +156,18 @@ struct OutlierGroupView: View {
                       }
                   }
             } 
+        }
+    }
+
+    var currentCursor: NSCursor {
+        if let willPaint = groupViewModel.willPaint {
+            if willPaint {
+                return .dragLink
+            } else {
+                return .operationNotAllowed
+            }
+        } else {
+            return .dragLink
         }
     }
 

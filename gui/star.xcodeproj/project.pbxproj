@@ -68,7 +68,6 @@
 		D3FBFA0C2CE1B18700A23FC6 /* StarPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA0A2CE1B18700A23FC6 /* StarPicker.swift */; };
 		D3FBFA0E2CE25BC600A23FC6 /* RightPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA0D2CE25BC600A23FC6 /* RightPanel.swift */; };
 		D3FBFA102CE25CAA00A23FC6 /* LeftPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA0F2CE25CAA00A23FC6 /* LeftPanel.swift */; };
-		D3FBFA152CE460AD00A23FC6 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA132CE460AD00A23FC6 /* AppDelegate.swift */; };
 		D3FBFA182CE700A700A23FC6 /* FrameEditImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA172CE700A700A23FC6 /* FrameEditImageView.swift */; };
 		D3FBFA1F2CE8FF0500A23FC6 /* ImageSequenceViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA1E2CE8FF0500A23FC6 /* ImageSequenceViewModel.swift */; };
 		D3FBFA212CE91B3800A23FC6 /* CircularProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA202CE91B3800A23FC6 /* CircularProgressView.swift */; };
@@ -157,7 +156,6 @@
 		D3FBFA0A2CE1B18700A23FC6 /* StarPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarPicker.swift; sourceTree = "<group>"; };
 		D3FBFA0D2CE25BC600A23FC6 /* RightPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RightPanel.swift; sourceTree = "<group>"; };
 		D3FBFA0F2CE25CAA00A23FC6 /* LeftPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeftPanel.swift; sourceTree = "<group>"; };
-		D3FBFA132CE460AD00A23FC6 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		D3FBFA172CE700A700A23FC6 /* FrameEditImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameEditImageView.swift; sourceTree = "<group>"; };
 		D3FBFA1E2CE8FF0500A23FC6 /* ImageSequenceViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSequenceViewModel.swift; sourceTree = "<group>"; };
 		D3FBFA202CE91B3800A23FC6 /* CircularProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularProgressView.swift; sourceTree = "<group>"; };
@@ -242,7 +240,6 @@
 				D3FBFA202CE91B3800A23FC6 /* CircularProgressView.swift */,
 				D3FBFA1E2CE8FF0500A23FC6 /* ImageSequenceViewModel.swift */,
 				D3FBFA172CE700A700A23FC6 /* FrameEditImageView.swift */,
-				D3FBFA132CE460AD00A23FC6 /* AppDelegate.swift */,
 				D3FBFA0F2CE25CAA00A23FC6 /* LeftPanel.swift */,
 				D3FBFA0D2CE25BC600A23FC6 /* RightPanel.swift */,
 				D3FBFA092CE1B18700A23FC6 /* LimitedSelectionPicker.swift */,
@@ -498,7 +495,6 @@
 				D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */,
 				D33FFC1E2A2D39BA00F38194 /* ProgressBars.swift in Sources */,
 				D3FBFA272CEAC0FF00A23FC6 /* InfoDialogView.swift in Sources */,
-				D3FBFA152CE460AD00A23FC6 /* AppDelegate.swift in Sources */,
 				D33FFC202A2D3BCD00F38194 /* FrameViewModel.swift in Sources */,
 				D33FFC242A2D48F300F38194 /* FrameEditView.swift in Sources */,
 				D32F6DAE2A4D1C0100704870 /* RenderAllFramesButton.swift in Sources */,
@@ -705,7 +701,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.7.2;
+				MARKETING_VERSION = 0.7.3;
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -748,7 +744,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.7.2;
+				MARKETING_VERSION = 0.7.3;
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -780,7 +776,7 @@
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 12.5;
-				MARKETING_VERSION = 0.7.2;
+				MARKETING_VERSION = 0.7.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -799,7 +795,7 @@
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 12.5;
-				MARKETING_VERSION = 0.7.2;
+				MARKETING_VERSION = 0.7.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -816,7 +812,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.7.2;
+				MARKETING_VERSION = 0.7.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -833,7 +829,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.7.2;
+				MARKETING_VERSION = 0.7.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

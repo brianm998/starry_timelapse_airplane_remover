@@ -40,7 +40,7 @@ public enum InteractionMode: String, Equatable, CaseIterable {
 public let frameProcessingMonitor = FileSystemMonitor(max: 32) // XXX make this configurable
 
 // used for loading frames, loading 20 at a time is faster than 1000
-fileprivate let frameLoadMonitor = FileSystemMonitor(max: 28) // XXX makd this configurable
+fileprivate let frameLoadMonitor = FileSystemMonitor(max: 28) // XXX make this configurable
 
 
 // view model for a sequence of images
@@ -60,8 +60,6 @@ public final class ImageSequenceViewModel {
     }
 
     var eraser: NighttimeAirplaneRemover?
-
-    var cursor: NSCursor = .crosshair
 
     var noImageExplainationText: String = "Loading..."
 

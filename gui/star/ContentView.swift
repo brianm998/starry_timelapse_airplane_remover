@@ -17,15 +17,18 @@ struct ContentView: View {
             if viewModel.isLoadingImageSequence {
                 ImageSequenceLoadingView()
             } else if let imageSequenceViewModel = viewModel.imageSequence {
-                ImageSequenceView()
-                  .environment(imageSequenceViewModel)
-                  .navigationTitle(imageSequenceViewModel.windowTitle)
+                CursorView(cursor: viewModel.cursor) {
+                    ImageSequenceView()
+                      .environment(imageSequenceViewModel)
+                      .navigationTitle(imageSequenceViewModel.windowTitle)
+                }
             } else {
                 InitialView()
             }
             // these may show on top
             if viewModel.showInfoDialog { InfoDialogView() }
             if viewModel.showErrorAlert { self.errorAlert }
+
         }
     }
 
