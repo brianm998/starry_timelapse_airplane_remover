@@ -17,7 +17,7 @@ class FrameSaveQueue {
     var purgatoryCount: Int = 0
 
     func readyToSave(frame: FrameAirplaneRemover,
-                     waitTime: TimeInterval = 20,
+                     waitTime: TimeInterval = 10,
                      completionClosure: @Sendable @escaping () async -> Void) async
     {
         Task.detached {
