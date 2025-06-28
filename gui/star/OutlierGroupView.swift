@@ -21,8 +21,8 @@ struct OutlierGroupView: View {
             let frameWidth = groupViewModel.viewModel.frameWidth
             let frameHeight = groupViewModel.viewModel.frameHeight
             let bounds = groupViewModel.bounds
-            let unknown_paint = groupViewModel.paintObserver.shouldPaint?.willPaint == nil
-            let will_paint = groupViewModel.paintObserver.shouldPaint?.willPaint ?? false
+            let unknown_paint = groupViewModel.paintObserver.shouldPaint?.willRemove == nil
+            let will_paint = groupViewModel.paintObserver.shouldPaint?.willRemove ?? false
             let arrow_length = groupViewModel.viewModel.arrowLength
             let arrow_height = groupViewModel.viewModel.arrowHeight
             let line_width = groupViewModel.viewModel.lineWidth
@@ -148,27 +148,15 @@ struct OutlierGroupView: View {
                                   } else if groupViewModel.viewModel.multiChoice {
                                       openMultiChoiceSheet()
                                   } else {
-                                      togglePaintReason(origShouldPaint) {
+                                      toggleRemoveReason(origShouldPaint) {
                                           topViewModel.replaceCursor(self.currentCursor)
                                       }
                                   }
                               } else {
                                   // handle outliers without a paint decision 
-                                  togglePaintReason() {
+                                  toggleRemoveReason() {
                                       topViewModel.replaceCursor(self.currentCursor)
                                   }
-                              }
-                              Log.d("replaceCursor")
-                              if let willPaint = groupViewModel.willPaint {
-                                  if willPaint {
-                                      Log.d("fucking current cursor is keep because will paint")
-
-                                  } else {
-                                      Log.d("fucking current cursor is remove because will not paint")
-
-                                  }
-                              } else {
-                                  Log.d("fucking current cursor is remove because paint unknown")
                               }
                           }
                       }
@@ -184,8 +172,8 @@ struct OutlierGroupView: View {
         case .information:
             return .infoPointing
         default: 
-            if let willPaint = groupViewModel.willPaint {
-                if willPaint {
+            if let willRemove = groupViewModel.willRemove {
+                if willRemove {
                     return .keepPointing
                 } else {
                     return .removePointing
@@ -308,7 +296,7 @@ struct OutlierGroupView: View {
             let shouldPaint = await self.groupViewModel.group.shouldPaint()
             await MainActor.run {
                 if let shouldPaint {
-                    if shouldPaint.willPaint {
+                    if shouldPaint.willRemove {
                         self.groupViewModel.viewModel.multiChoicePaintType = .keep
                     } else {
                         self.groupViewModel.viewModel.multiChoicePaintType = .remove
@@ -322,12 +310,12 @@ struct OutlierGroupView: View {
     }
     
     // used when user selects an outlier group outisde of details selection mode 
-    func togglePaintReason(_ origShouldPaint: PaintReason? = nil, closure: @escaping () -> Void) {
+    func toggleRemoveReason(_ origShouldPaint: RemoveReason? = nil, closure: @escaping () -> Void) {
         var will_paint = false
         if let origShouldPaint = origShouldPaint {
-            will_paint = origShouldPaint.willPaint
+            will_paint = origShouldPaint.willRemove
         }
-        let shouldPaint = PaintReason.userSelected(!will_paint)
+        let shouldPaint = RemoveReason.userSelected(!will_paint)
 
         Task {
             // update the view model to show the change quickly
@@ -364,7 +352,7 @@ struct OutlierGroupView: View {
               Task {
                   let shouldPaint = await group.shouldPaint()
                   await MainActor.run {
-                      togglePaintReason(shouldPaint){
+                      toggleRemoveReason(shouldPaint){
                           topViewModel.replaceCursor(self.currentCursor)
                       }
                   }

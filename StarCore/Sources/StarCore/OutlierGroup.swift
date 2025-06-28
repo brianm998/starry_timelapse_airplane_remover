@@ -28,9 +28,9 @@ nonisolated(unsafe) public var IMAGE_HEIGHT: Double?
 public class OutlierPaintObserver {
     public init() { }
     
-    public var shouldPaint: PaintReason?
+    public var shouldPaint: RemoveReason?
 
-    public func set(shouldPaint: PaintReason?) {
+    public func set(shouldPaint: RemoveReason?) {
         self.shouldPaint = shouldPaint
     }
 }
@@ -187,9 +187,9 @@ public actor OutlierGroup: CustomStringConvertible,
         return (distanceSum/Double(pixelSet.count), totalLength)
     }
     
-    public func shouldPaint() -> PaintReason? { _shouldPaint }
+    public func shouldPaint() -> RemoveReason? { _shouldPaint }
 
-    fileprivate var _shouldPaint: PaintReason?  // should we paint this group, and why?
+    fileprivate var _shouldPaint: RemoveReason?  // should we paint this group, and why?
 
     public var paintObserver: OutlierPaintObserver?
 
@@ -197,7 +197,7 @@ public actor OutlierGroup: CustomStringConvertible,
         self.paintObserver = paintObserver
     }
     
-    public func shouldPaint(_ shouldPaint: PaintReason, markAsChanged: Bool = true) async {
+    public func shouldPaint(_ shouldPaint: RemoveReason, markAsChanged: Bool = true) async {
         //Log.d("\(self) should paint \(shouldPaint) self.frame \(self.frame)")
         self._shouldPaint = shouldPaint
 

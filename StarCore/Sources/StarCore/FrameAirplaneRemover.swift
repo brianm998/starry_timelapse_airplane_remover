@@ -174,7 +174,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             var totalUnknown: Int = 0
             for (_, group) in outliers {
                 if let shouldPaint = await group.shouldPaint() {
-                    if shouldPaint.willPaint {
+                    if shouldPaint.willRemove {
                         totalPositive += 1
                     } else {
                         totalNegative += 1
@@ -430,7 +430,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         mkdir(await self.outliersDirname)
         
-        await self.writeOutliersPaintReasons()
+        await self.writeOutliersRemoveReasons()
 
         self.set(state: .finishing)
 
@@ -1065,7 +1065,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let config = await configManager.config()
 
         // the alpha mask that we will convolve across all paintable pixels
-        let paintMask = PaintMask(innerWallSize: config.outlierGroupPaintBorderInnerWallPixels,
+        let paintMask = RemoveMask(innerWallSize: config.outlierGroupPaintBorderInnerWallPixels,
                                   radius: config.outlierGroupPaintBorderPixels)
         
         let paintMaskIntRadius = Int(paintMask.radius)
@@ -1075,7 +1075,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         for (_, group) in await outlierGroups.getMembers() {
             if let reason = await group.shouldPaint(),
-               reason.willPaint
+               reason.willRemove
             {
                 shouldPaint = true
                 //Log.d("frame \(frameIndex) painting over group \(group) for reason \(reason)")
@@ -1510,7 +1510,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(self.frameIndex) DONE writeOutlierValuesCSV")
     }
 
-    public func writeOutliersPaintReasons() async {
+    public func writeOutliersRemoveReasons() async {
         let config = await configManager.config()
         if config.writeOutlierGroupFiles {
             do {

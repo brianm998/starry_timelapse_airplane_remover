@@ -176,7 +176,7 @@ public actor OutlierGroups {
         self.outlierYAxisImageData = [UInt8](repeating: 0, count: 0) // XXX
     }
 
-    public static func loadOutlierGroupPaintData(from filename: String) async throws -> [UInt16:PaintReason]? {
+    public static func loadOutlierGroupPaintData(from filename: String) async throws -> [UInt16:RemoveReason]? {
         if FileManager.default.fileExists(atPath: filename) {
 
             let decoder = JSONDecoder()
@@ -192,7 +192,7 @@ public actor OutlierGroups {
 
             let (paintData, _) = try await URLSession.shared.data(for: URLRequest(url: paintfileurl as URL))
 
-            return try decoder.decode([UInt16:PaintReason].self, from: paintData)
+            return try decoder.decode([UInt16:RemoveReason].self, from: paintData)
         }
         return nil
     }
@@ -405,7 +405,7 @@ public actor OutlierGroups {
         mkdir(frameDir)
 
         // data to save for paint reasons for all outliers in this frame
-        var outlierGroupPaintData: [UInt16:PaintReason] = [:]
+        var outlierGroupPaintData: [UInt16:RemoveReason] = [:]
 
         Log.d("frame \(frameIndex) has \(members.count) members")
         
@@ -455,7 +455,7 @@ public actor OutlierGroups {
         // write into this array from the pixels in this group
         for (_, group) in self.members {
             if let shouldPaint = await group.shouldPaint(),
-               shouldPaint.willPaint
+               shouldPaint.willRemove
             {
                 /*
                  // paint the group bounds for help debugging

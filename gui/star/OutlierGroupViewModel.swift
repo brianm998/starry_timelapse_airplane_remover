@@ -32,7 +32,7 @@ class OutlierGroupViewModel: Identifiable {
 
     let id = UUID()
     
-    fileprivate func setWillPaint(from paintReason: PaintReason?) {
+    fileprivate func setWillPaint(from paintReason: RemoveReason?) {
         paintObserver.shouldPaint = paintReason
     }
 
@@ -84,7 +84,7 @@ class OutlierGroupViewModel: Identifiable {
 
     var isSelected = false // selected for the details view
 
-//    var willPaint: Bool?
+//    var willRemove: Bool?
 
     let group: OutlierGroup
     let name: UInt16
@@ -114,9 +114,9 @@ class OutlierGroupViewModel: Identifiable {
         }
     }
 
-    var willPaint: Bool? {
+    var willRemove: Bool? {
         if let will_paint = self.paintObserver.shouldPaint {
-            return will_paint.willPaint 
+            return will_paint.willRemove 
         } else {
             return nil          // don't know
         }
@@ -126,7 +126,7 @@ class OutlierGroupViewModel: Identifiable {
         if isSelected { return .orange }
 
         if let will_paint = self.paintObserver.shouldPaint {
-          if will_paint.willPaint {
+          if will_paint.willRemove {
                 return .red
             } else {
                 return .green
@@ -141,7 +141,7 @@ class OutlierGroupViewModel: Identifiable {
         
         if let will_paint = self.paintObserver.shouldPaint {
             if self.arrowSelected {            
-                if will_paint.willPaint {
+                if will_paint.willRemove {
                     return .red
                 } else {
                     return .green

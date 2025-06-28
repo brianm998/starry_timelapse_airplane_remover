@@ -785,7 +785,7 @@ public final class ImageSequenceViewModel {
                 for group in await outlierGroups.getMembers().values {
                     if group.size <= 40 { // XXX sync with same value @ FrameEditView:139
                         if let shouldPaint = await group.shouldPaint(),
-                           shouldPaint.willPaint
+                           shouldPaint.willRemove
                       {
                             for pixel in group.pixelSet {
                                 let index = 2*(pixel.y*width+pixel.x)
@@ -988,7 +988,7 @@ public final class ImageSequenceViewModel {
                                    to shouldPaint: Bool,
                                    renderImmediately: Bool = true)
     {
-    //    let reason = PaintReason.userSelected(shouldPaint)
+    //    let reason = RemoveReason.userSelected(shouldPaint)
         
         if let frame = frameView.frame {
             // update the real actor in the background

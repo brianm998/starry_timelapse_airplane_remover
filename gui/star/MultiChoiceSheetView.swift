@@ -227,7 +227,7 @@ struct MultiChoiceSheetView: View {
                 await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                   overlapping: multiChoiceOutlierView.groupViewModel.group)
                 // save outlier paintability changes here
-                await frame.writeOutliersPaintReasons()
+                await frame.writeOutliersRemoveReasons()
             }
 //        }
     }

@@ -11,8 +11,8 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-// A square paint mask of opacity levels 
-struct PaintMask {
+// A square remove mask of opacity levels 
+struct RemoveMask {
     let pixels: [Double]        // 0...1
     let size: Int               // both width and height, always square
 

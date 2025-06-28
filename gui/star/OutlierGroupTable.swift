@@ -7,9 +7,9 @@ typealias DTColumn = TableColumn<OutlierGroupTableRow,
                                  Text,
                                  Text>
 
-enum WillPaintType: Comparable {
-    case willPaint
-    case willNotPaint
+enum WillRemoveType: Comparable {
+    case willRemove
+    case keep
     case unknown
 }
 
@@ -19,16 +19,16 @@ struct OutlierGroupTableRow: Identifiable {
     
     let name: UInt16
     let size: UInt
-    let willPaint: Bool?
+    let willRemove: Bool?
     let centerX: Int
     let centerY: Int
     
-    var willPaintType: WillPaintType {
-        if let willPaint = willPaint {
-            if willPaint {
-                return .willPaint
+    var willRemoveType: WillRemoveType {
+        if let willRemove = willRemove {
+            if willRemove {
+                return .willRemove
             } else {
-                return .willNotPaint
+                return .keep
             }
         } else {
             return .unknown
@@ -83,9 +83,9 @@ struct OutlierGroupTableRow: Identifiable {
 
         let shouldPaint = await group.shouldPaint()
         if let shouldPaint = shouldPaint {
-            willPaint = shouldPaint.willPaint
+            willRemove = shouldPaint.willRemove
         } else {
-            willPaint = nil
+            willRemove = nil
         }
 
         dt_size = await group.decisionTreeValueAsync(for: .size)
@@ -168,24 +168,24 @@ struct OutlierGroupTable: View {
         }//}.width(min: 30, ideal: 40, max: 80)
     }
 
-    func image(for type: WillPaintType) -> Image {
+    func image(for type: WillRemoveType) -> Image {
         switch type {
-        case .willPaint:
+        case .willRemove:
             return Image(systemName: "paintbrush")
-        case .willNotPaint:
+        case .keep:
             return Image(systemName: "xmark.seal")
         case .unknown:
             return Image(systemName: "camera.metering.unknown")
         }
     }
     
-    var willPaintColumn: TableColumn<OutlierGroupTableRow,
+    var willRemoveColumn: TableColumn<OutlierGroupTableRow,
                                      KeyPathComparator<OutlierGroupTableRow>,
                                      Image,
                                      Text> {
         TableColumn("paint",
-                    value: \OutlierGroupTableRow.willPaintType) { (row: OutlierGroupTableRow) in
-            image(for: row.willPaintType)
+                    value: \OutlierGroupTableRow.willRemoveType) { (row: OutlierGroupTableRow) in
+            image(for: row.willRemoveType)
         }.width(min: 10, ideal: 20, max: 80)
     }
     
@@ -235,7 +235,7 @@ struct OutlierGroupTable: View {
                     // current compiler can't take more than 10 columns at once here
 
                     if self.outlierWindowViewModel.showName { nameColumn }
-                    willPaintColumn
+                    willRemoveColumn
                     self.sizeColumn
 
     // not used now, it's ugly being scaled w/ image size, we show actual pixels in gui
