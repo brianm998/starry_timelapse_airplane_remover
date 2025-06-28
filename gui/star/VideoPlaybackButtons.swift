@@ -7,12 +7,12 @@ struct VideoPlaybackButtons : View {
 
     var body: some View {
         // XXX these should really use modifiers but those don't work :(
-        let start_shortcut_key: KeyEquivalent = "b" // make this bottom arror
+        let start_shortcut_key: KeyEquivalent = "b" // make this bottom arrow
         let fast_previous_shortcut_key: KeyEquivalent = "z"
         let fast_next_shortcut_key: KeyEquivalent = "x"
         let previous_shortcut_key: KeyEquivalent = .leftArrow
-        let backwards_shortcut_key: KeyEquivalent = "r"
-        let end_button_shortcut_key: KeyEquivalent = "f" // make this top arror
+        let backwards_shortcut_key: KeyEquivalent = "w"
+        let end_button_shortcut_key: KeyEquivalent = "f" // make this top arrow
 
         let button_color = Color(white: 202/256)
 

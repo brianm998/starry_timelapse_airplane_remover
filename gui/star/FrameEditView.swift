@@ -36,6 +36,9 @@ struct FrameEditView: View {
                 // the currently visible frame
                 self.imageView
             }
+              .onChange(of: viewModel.selectionMode) {
+                  topViewModel.replaceCursor(self.currentCrosshairCursor)
+              }
               .onChange(of: viewModel.currentIndex) { oldValue, _ in
                   // add any changes the user may have made to the save queue
                   if oldValue >= 0,
