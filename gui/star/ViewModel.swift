@@ -62,14 +62,22 @@ public final class ViewModel {
     }
 
     func replaceCursor(_ cursor: NSCursor) {
-        cursorStack.removeLast()
-        cursorStack.append(cursor)
-        self.cursor = cursor
+        if cursorStack.count > 0 {
+            cursorStack.removeLast()
+            cursorStack.append(cursor)
+            self.cursor = cursor
+        } else {
+            self.cursor = cursor
+        }
     }
     
     func popCursor() {
-        cursorStack.removeLast()
-        self.cursor = cursorStack.last ?? .arrow
+        if cursorStack.count > 0 {
+            cursorStack.removeLast()
+            self.cursor = cursorStack.last ?? .arrow
+        } else {
+            self.cursor = .arrow
+        }
     }
 
     // prepare for another sequence
