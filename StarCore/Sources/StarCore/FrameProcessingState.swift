@@ -62,8 +62,8 @@ public enum FrameProcessingState: Int,
     case waitingToLoadImages
     case loadingImages
     case loadingImages1
-    case painting
-    case painting2
+    case creatingRemovalMask
+    case assemblingProcessedFrame
     case writingOutputFile
     case complete
 
@@ -123,10 +123,10 @@ public enum FrameProcessingState: Int,
             return "loading images"
         case .loadingImages1:
             return "loading images 1"
-        case .painting:
+        case .creatingRemovalMask:
             return "creating paint mask"
-        case .painting2:
-            return "painting"
+        case .assemblingProcessedFrame:
+            return "calculating processed frame"
         case .writingOutputFile:
             return "writing to disk"
         case .complete:
@@ -184,9 +184,9 @@ public enum FrameProcessingState: Int,
             return true
         case .loadingImages1:
             return true
-        case .painting:
+        case .creatingRemovalMask:
             return true
-        case .painting2:
+        case .assemblingProcessedFrame:
             return true
         case .writingOutputFile:
             return true
@@ -245,9 +245,9 @@ public enum FrameProcessingState: Int,
             return "loading 1"
         case .loadingImages1:
             return "loading 2"
-        case .painting:
+        case .creatingRemovalMask:
             return "paint mask"
-        case .painting2:
+        case .assemblingProcessedFrame:
             return "painting"
         case .writingOutputFile:
             return "writing"
@@ -305,9 +305,9 @@ public enum FrameProcessingState: Int,
             return .yellow
         case .loadingImages1:
             return .yellow
-        case .painting:
+        case .creatingRemovalMask:
             return .yellow
-        case .painting2:
+        case .assemblingProcessedFrame:
             return .yellow
         case .writingOutputFile:
             return .yellow

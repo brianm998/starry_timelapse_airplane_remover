@@ -236,10 +236,15 @@ public struct Config: Codable, Sendable, Transferable {
     // 0.7.1 completely reworked excessive processing mode, memory fixes, blob processing window,
     //       custom blob processing, more user prefs
     //       dustbin filled by adding another .isolated decision tree before inter-frame processing
+    // 0.7.3 small blobs as image / lots of other gui updates / fixes
+    //       32bit BlobID / fix HoughLineMatrix processor
+    //       add shovel to gui
+    //       cursors and icons in gui
+    //       lots of renaming
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.7.2"
+    public static let latestVersion = "0.7.3"
     
     public var basename: String {
         let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)-\(self.detectionType.rawValue)"
@@ -324,7 +329,7 @@ public struct Config: Codable, Sendable, Transferable {
             case .thumbnail:
                 return nil
             }
-        case .paintMask:
+        case .removeMask:
             switch size {
             case .original:
                 return "\(self.outputPath)/\(self.basename)-paintMask"
@@ -368,7 +373,7 @@ public struct Config: Codable, Sendable, Transferable {
             if let dir = self.dirForImage(ofType: .subtraction, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .validation, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .blobs, atSize: .preview) { ret.append(dir) }
-            if let dir = self.dirForImage(ofType: .paintMask, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .removeMask, atSize: .preview) { ret.append(dir) }
         }
         if self.writeFrameThumbnailFiles {
             if let dir = self.dirForImage(ofType: .original, atSize: .thumbnail) { ret.append(dir) }

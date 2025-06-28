@@ -424,7 +424,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     // run after shouldRemove has been set for each group, 
-    // does the final painting and then writes out the output files
+    // does the final removing and then writes out the output files
     public func finish() async throws {
         Log.d("frame \(self.frameIndex) starting to finish")
         
@@ -505,11 +505,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         case .eightBit(_):
             Log.e("8 bit not supported here now")
         case .sixteenBit(var outputData):
-            Log.d("frame \(self.frameIndex) painting over airplanes")
+            Log.d("frame \(self.frameIndex) removing over airplanes")
 
-            try await self.paintOverAirplanes(image: image,
-                                              toData: &outputData,
-                                              otherFrame: otherFrame)
+            try await self.removeAirplanes(image: image,
+                                           toData: &outputData,
+                                           otherFrame: otherFrame)
 
             Log.d("frame \(self.frameIndex) writing output files")
             self.set(state: .writingOutputFile)
@@ -772,7 +772,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         await foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
             if gestureBounds.contains(other: group.bounds) {
                 // check to make sure this outlier's bounding box is fully contained
-                // otherwise don't change paint status
+                // otherwise don't change removal status
                 await closure(group, isInTrash)
             }
         }
@@ -1022,20 +1022,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // Mark - Paint
 
     /*
-     Logic about painting undesired elements from the image.
+     Logic about removing undesired elements from the image.
 
-     Painting is done with data from a neighboring, aligned frame.
+     Removing is done with data from a neighboring, aligned frame.
 
      Pixels to be painted over come from validated outlier groups,
      that logic is elsewhere.
      */
 
     // actually paint over outlier groups that have been selected as airplane tracks
-    internal func paintOverAirplanes(image: PixelatedImage,
-                                     toData data: inout [UInt16],
-                                     otherFrame: PixelatedImage) async throws
+    internal func removeAirplanes(image: PixelatedImage,
+                                  toData data: inout [UInt16],
+                                  otherFrame: PixelatedImage) async throws
     {
-        Log.i("frame \(frameIndex) painting airplane outlier groups")
+        Log.i("frame \(frameIndex) removing airplane outlier groups")
 
         // paint over every outlier in the paint list with pixels from the adjecent frames
         guard let outlierGroups = outlierGroups else {
@@ -1044,11 +1044,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         guard await outlierGroups.getMembers().count > 0 else {
-            Log.v("no outliers, not painting")
+            Log.v("no outliers, not removing")
             return
         }
         
-        self.set(state: .painting)
+        self.set(state: .creatingRemovalMask)
 
         // the alpha level to apply to each pixel in the image
         // indexed by y*width+x
@@ -1059,16 +1059,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         // first go through the outlier groups and determine what alpha
         // level to apply to each pixel in this frame.
-        // alpha zero means no painting, keep original pixel
+        // alpha zero means no removing, keep original pixel
         // alpha one means overwrite original pixel entierly with data from other frame
 
         let config = await configManager.config()
 
-        // the alpha mask that we will convolve across all paintable pixels
-        let paintMask = RemoveMask(innerWallSize: config.outlierGroupPaintBorderInnerWallPixels,
-                                  radius: config.outlierGroupPaintBorderPixels)
+        // the alpha mask that we will convolve across all removable pixels
+        let removeMask = RemoveMask(innerWallSize: config.outlierGroupPaintBorderInnerWallPixels,
+                                    radius: config.outlierGroupPaintBorderPixels)
         
-        let paintMaskIntRadius = Int(paintMask.radius)
+        let removeMaskIntRadius = Int(removeMask.radius)
 
         // only paint when we have found at least one positive outlier group
         var shouldRemove = false
@@ -1078,15 +1078,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                reason.willRemove
             {
                 shouldRemove = true
-                //Log.d("frame \(frameIndex) painting over group \(group) for reason \(reason)")
+                //Log.d("frame \(frameIndex) removing over group \(group) for reason \(reason)")
 
                 for pixel in group.pixelSet {
                     // start in frame coords
-                    let maskStartX = pixel.x - paintMaskIntRadius
-                    let maskStartY = pixel.y - paintMaskIntRadius
+                    let maskStartX = pixel.x - removeMaskIntRadius
+                    let maskStartY = pixel.y - removeMaskIntRadius
 
-                    for maskX in 0..<paintMask.size {
-                        for maskY in 0..<paintMask.size {
+                    for maskX in 0..<removeMask.size {
+                        for maskY in 0..<removeMask.size {
                             let frameX = maskX + maskStartX
                             let frameY = maskY + maskStartY
 
@@ -1096,10 +1096,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                frameY < height
                             {
                                 let frameIndex = frameY*width+frameX
-                                let maskIndex = maskY*paintMask.size+maskX
+                                let maskIndex = maskY*removeMask.size+maskX
                                 
                                 let frameAlpha = alphaLevels[frameIndex]
-                                let maskAlpha = paintMask.pixels[maskIndex]
+                                let maskAlpha = removeMask.pixels[maskIndex]
                                 if maskAlpha > frameAlpha {
                                     alphaLevels[frameIndex] = maskAlpha
                                     alphaYAxis[frameY] = 0xFF
@@ -1112,7 +1112,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         if config.writeOutlierGroupFiles { // XXX this config value is very much overloaded
-            var paintMaskImageData = [UInt8](repeating: 0, count: width*height)
+            var removeMaskImageData = [UInt8](repeating: 0, count: width*height)
 
             for y in 0 ..< height {
                 if alphaYAxis[y] == 0 { continue }
@@ -1122,29 +1122,30 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     if alpha > 0 {
                         var value = Int(alpha*Double(0xFF))
                         if value > 0xFF { value = 0xFF }
-                        paintMaskImageData[index] = UInt8(value)
+                        removeMaskImageData[index] = UInt8(value)
                     }
                 }
             }
 
-            let paintMaskImage = PixelatedImage(width: width, height: height,
-                                                grayscale8BitImageData: paintMaskImageData)
-            let (_,_) = await (try imageAccessor.save(paintMaskImage,
+            let removeMaskImage = PixelatedImage(width: width, height: height,
+                                                grayscale8BitImageData: removeMaskImageData)
+            let (_,_) = await (try imageAccessor.save(removeMaskImage,
                                                       frameIndex: frameIndex,
-                                                      as: .paintMask,
+                                                      as: .removeMask,
                                                       atSize: .original,
                                                       overwrite: true),
-                               try imageAccessor.save(paintMaskImage,
+                               try imageAccessor.save(removeMaskImage,
                                                       frameIndex: frameIndex,
-                                                      as: .paintMask,
+                                                      as: .removeMask,
                                                       atSize: .preview,
                                                       overwrite: true))
         }
 
         if shouldRemove {
-            self.set(state: .painting2)
+            self.set(state: .assemblingProcessedFrame)
             
-            // then actually paint each non zero alpha pizel
+            // then actually remove each non zero alpha pixel,
+            // replacing it with one from another frame
             for y in 0 ..< height {
                 if alphaYAxis[y] == 0 { continue }
                 for x in 0 ..< width {
@@ -1152,11 +1153,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     if alpha > 0 {
                         if alpha > 1 { alpha = 1 }
 
-                        paint(x: x, y: y,
-                              alpha: alpha,
-                              toData: &data,
-                              image: image,
-                              otherFrame: otherFrame)
+                        updatePixel(x: x, y: y,
+                                    alpha: alpha,
+                                    toData: &data,
+                                    image: image,
+                                    from: otherFrame)
 
                         /*
 
@@ -1178,47 +1179,47 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     // paint over a selected outlier pixel with data from pixels from adjecent frames
-    internal func paint(x: Int, y: Int,
-                        alpha: Double,
-                        toData data: inout [UInt16],
-                        image: PixelatedImage,
-                        otherFrame: PixelatedImage)
+    internal func updatePixel(x: Int, y: Int,
+                              alpha: Double,
+                              toData data: inout [UInt16],
+                              image: PixelatedImage,
+                              from otherFrame: PixelatedImage)
     {
-        let paintPixel = otherFrame.readPixel(atX: x, andY: y)
+        let overwritingPixel = otherFrame.readPixel(atX: x, andY: y)
 
         if otherFrame.componentsPerPixel == 4, // has alpha channel
-           paintPixel.alpha != 0xFFFF   // alpha is not fully opaque
+           overwritingPixel.alpha != 0xFFFF   // alpha is not fully opaque
         {
             // ignore transparent pixels
             // don't paint over with them
             return
         }
 
-        self.paint(x: x, y: y,
-                   alpha: alpha,
-                   toData: &data,
-                   image: image,
-                   paintPixel: paintPixel)
+        self.updatePixel(x: x, y: y,
+                         alpha: alpha,
+                         toData: &data,
+                         image: image,
+                         with: overwritingPixel)
     }
 
 
     // paint over a selected outlier pixel with data from pixels from adjecent frames
-    internal func paint(x: Int, y: Int,
-                        alpha: Double,
-                        toData data: inout [UInt16],
-                        image: PixelatedImage,
-                        paintPixel: Pixel)
+    internal func updatePixel(x: Int, y: Int,
+                              alpha: Double,
+                              toData data: inout [UInt16],
+                              image: PixelatedImage,
+                              with overwritingPixel: Pixel)
     {
-        var paintPixel = paintPixel
+        var overwritingPixel = overwritingPixel
         let op = image.readPixel(atX: x, andY: y)
 
         // don't make the original image brighter at this pixel
         // leave the original value there in this case
-        if op.intensity < paintPixel.intensity { return }
+        if op.intensity < overwritingPixel.intensity { return }
         
         if alpha < 1 {
             // merge in original value
-            paintPixel = Pixel(merging: paintPixel, with: op, atAlpha: alpha)
+            overwritingPixel = Pixel(merging: overwritingPixel, with: op, atAlpha: alpha)
         }
 
         // the is the place in the image data to write to
@@ -1227,16 +1228,18 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // actually paint over that airplane like thing in the image data
         if self.bytesPerPixel == 2 {
             data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
-                                 with: [paintPixel.red])
+                                 with: [overwritingPixel.red])
         } else if self.bytesPerPixel == 6 {
             data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
-                                 with: [paintPixel.red, paintPixel.green, paintPixel.blue])
+                                 with: [overwritingPixel.red,
+                                        overwritingPixel.green,
+                                        overwritingPixel.blue])
 
         } else if self.bytesPerPixel == 8 {
             data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
-                                 with: [paintPixel.red,
-                                        paintPixel.green,
-                                        paintPixel.blue,
+                                 with: [overwritingPixel.red,
+                                        overwritingPixel.green,
+                                        overwritingPixel.blue,
                                         0xFFFF])
         }
     }
@@ -1582,7 +1585,7 @@ fileprivate class OutlierClassifier {
         self.frame = frame
     }
 
-    // classifies OutlierGroup actors in OutlierGroups, marking them as paintable or not
+    // classifies OutlierGroup actors in OutlierGroups, marking them as removable or not
     // uses the .all classifier, which digs into neighboring frames for more data
     func classifyAll(_ outlierGroups: OutlierGroups,
                      overwrite: Bool = false,
@@ -1641,7 +1644,7 @@ fileprivate class OutlierClassifier {
        // }.value
     }
 
-    // classifies OutlierGroup actors in OutlierGroups, marking them as paintable or not
+    // classifies OutlierGroup actors in OutlierGroups, marking them as removable or not
     // uses the .all classifier, which digs into neighboring frames for more data
     func classifyAll(_ outliers: [OutlierGroup], overwrite: Bool = false) async {
 //        await Task.detached(priority: .userInitiated) {

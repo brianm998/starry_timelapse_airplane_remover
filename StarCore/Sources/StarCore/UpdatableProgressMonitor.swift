@@ -217,11 +217,11 @@ public actor UpdatableProgressMonitor {
             updates.append(update)
         }
         
-        if let update = progressLine(for: .painting) {
+        if let update = progressLine(for: .creatingRemovalMask) {
             updates.append(update)
         }
         
-        if let update = progressLine(for: .painting2) {
+        if let update = progressLine(for: .assemblingProcessedFrame) {
             updates.append(update)
         }
         

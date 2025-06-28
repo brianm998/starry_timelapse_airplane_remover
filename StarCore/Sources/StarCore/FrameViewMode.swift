@@ -20,9 +20,9 @@ public enum FrameViewMode: String,
     case subtraction            // the result of subtracting an aligned neighbor frame
     case blobs                  // blobs detected from the subtraction frame
     case validation             // an image of exactly what pixels have been identified as unwanted
-    case paintMask              // the paint mask created from the validation image
+    case removeMask              // the remove mask created from the validation image
     case processed              // the final processed image, 
-                                // the paint mask is used as a layer mask for the aligned neighbor 
+                                // the remove mask is used as a layer mask for the aligned neighbor 
  
     public var localizedName: LocalizedStringKey {
         LocalizedStringKey(rawValue)
@@ -36,8 +36,8 @@ public enum FrameViewMode: String,
             return "subtracted"
         case .blobs:
             return "blob"
-        case .paintMask:
-            return "pmask"
+        case .removeMask:
+            return "rmask"
         case .validation:
             return "valid"
         case .processed:
@@ -55,8 +55,8 @@ public enum FrameViewMode: String,
             return "subtracted frame"
         case .blobs:
             return "initially detected blobs"
-        case .paintMask:
-            return "computed paint mask"
+        case .removeMask:
+            return "computed removal mask"
         case .validation:
             return "validation data"
         case .processed:
