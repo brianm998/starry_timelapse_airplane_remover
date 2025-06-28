@@ -290,7 +290,7 @@ func shovelFrame(to frame: FrameAirplaneRemover,
         // discards any existing outlier pixels that are within the given bounds
         try await frame.findOutliers(within: gestureBounds)
         await Task { @MainActor in
-            let frameView = await viewModel.frames[frame.frameIndex]
+            let frameView = viewModel.frames[frame.frameIndex]
             frameView.outlierViews = nil
             
             await viewModel.setOutlierGroups(forFrame: frame)
