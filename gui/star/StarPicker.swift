@@ -63,11 +63,11 @@ public struct VerticalStarPicker<Selection, Content: View> : View
     @Environment(\.isEnabled) var isEnabled
 
     private let title: String?
-    private let content: (Selection,Bool) -> Content
+    private let content: (Selection,Bool,Bool) -> Content
 
     public init(_ title: String? = nil,
                 selection: Binding<Selection>,
-                @ViewBuilder content: @escaping (Selection,Bool) -> Content)
+                @ViewBuilder content: @escaping (Selection,Bool,Bool) -> Content)
     {
         self.title = title
         self._selection = selection
@@ -86,7 +86,7 @@ public struct VerticalStarPicker<Selection, Content: View> : View
             VStack(alignment: .leading) {
                 ForEach(Selection.allCases, id: \.self) { value in
                     if value == selection {
-                        content(value, isEnabled)
+                        content(value, isEnabled, true)
                           .padding(4)
                           .background(.white)
                           .cornerRadius(5)
@@ -94,7 +94,7 @@ public struct VerticalStarPicker<Selection, Content: View> : View
                               selection = value
                           }
                     } else {
-                        content(value, isEnabled)
+                        content(value, isEnabled, false)
                           .padding(4)
                           .onTapGesture { _ in
                               selection = value

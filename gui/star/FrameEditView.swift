@@ -91,16 +91,66 @@ struct FrameEditView: View {
             }
         }
           .gesture(self.selectionDragGesture)
-          .cursor(.crosshair)
+          .cursor(self.currentCrosshairCursor)
     }
 
+    var currentCrosshairCursor: NSCursor {
+        switch viewModel.selectionMode {
+        case .paint:
+            return .removeCrosshair
+        case .clear:
+            return .keepCrosshair
+        case .shovel:
+            return .shovelCrosshair
+        case .razor:
+            return .razorCrosshair
+            
+        case .dustbin:
+            return .deleteTrashCrosshair
+            
+        case .getDust:
+            return .extractTrashCrosshair
+        case .details:
+            return .infoCrosshair
+
+        case .multi:
+            return .multiCrosshair
+
+        }
+    }
+    
+    var currentPointingCursor: NSCursor {
+        switch viewModel.selectionMode {
+        case .paint:
+            return .removePointing
+        case .clear:
+            return .keepPointing
+        case .shovel:
+            return .shovelPointing
+        case .razor:
+            return .razorPointing
+            
+        case .dustbin:
+            return .deleteTrashPointing
+            
+        case .getDust:
+            return .extractTrashPointing
+        case .details:
+            return .infoPointing
+
+        case .multi:
+            return .multiPointing
+
+        }
+    }
+    
     @State private var isDragging = false
     
     var selectionDragGesture: some Gesture {
         DragGesture()
           .onChanged { gesture in
               let location = gesture.location
-              if !isDragging { topViewModel.pushCursor(.pointingHand) }
+              if !isDragging { topViewModel.pushCursor(self.currentPointingCursor) }
               isDragging = true
               if viewModel.selectionStart != nil {
                   // updating during drag is too slow

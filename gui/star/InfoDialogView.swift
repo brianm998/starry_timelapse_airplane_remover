@@ -25,7 +25,7 @@ struct InfoDialogView: View {
                         
                         HStack(alignment: .top) {
                             VerticalStarPicker("",
-                                               selection: $viewModel.currentInfoType) { value, _ in
+                                               selection: $viewModel.currentInfoType) { value, _, _ in
                                 Text(value.shortName).tag(value)
                                   .font(.title)
                                 //.foregroundColor(.white)

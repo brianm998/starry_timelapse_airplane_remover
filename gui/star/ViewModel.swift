@@ -60,6 +60,12 @@ public final class ViewModel {
         cursorStack.append(cursor)
         self.cursor = cursor
     }
+
+    func replaceCursor(_ cursor: NSCursor) {
+        cursorStack.removeLast()
+        cursorStack.append(cursor)
+        self.cursor = cursor
+    }
     
     func popCursor() {
         cursorStack.removeLast()

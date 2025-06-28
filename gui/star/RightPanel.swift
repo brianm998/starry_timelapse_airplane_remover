@@ -91,8 +91,15 @@ struct RightPanel: View {
                                 }.frame(maxWidth: 140)
                             }
 
-                            VerticalStarPicker("selection mode", selection: $viewModel.selectionMode) { value, _ in
-                                Text(value.localizedName).tag(value)
+                            VerticalStarPicker("Tool", selection: $viewModel.selectionMode) { value, isEnabled, isSelected in
+                                HStack {
+                                    Image(value.iconName)
+                                      .resizable()
+                                      .frame(width: 40, height: 40)
+                                    Text(value.displayName)
+                                      .foregroundColor(isSelected ? .black : .white)
+                                      .tag(value)
+                                }
                             }
                               .help("""
                                       What happens when outlier groups are selected?

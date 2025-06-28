@@ -25,6 +25,48 @@ public enum SelectionMode: String, Equatable, CaseIterable {
     var localizedName: LocalizedStringKey {
         LocalizedStringKey(rawValue)
     }
+
+    var iconName: String {
+        switch self {
+        case .paint:
+            return "remove_icon"
+        case .clear:
+            return "keep_icon"
+        case .razor:
+            return "razor_icon"
+        case .shovel:
+            return "shovel_icon"
+        case .dustbin:
+            return "add_to_trash_icon"
+        case .getDust:
+            return "remove_from_trash_icon"
+        case .multi:
+            return "multi_choice_icon"
+        case .details:
+            return "info_icon"
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .paint:
+            return "Remove"
+        case .clear:
+            return "Keep"
+        case .razor:
+            return "Razor"
+        case .shovel:
+            return "Shovel"
+        case .dustbin:
+            return "Trash"
+        case .getDust:
+            return "Get from Trash"
+        case .multi:
+            return "Multi"
+        case .details:
+            return "Information"
+        }
+    }
 }
 
 public enum InteractionMode: String, Equatable, CaseIterable {
