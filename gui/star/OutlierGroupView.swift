@@ -128,9 +128,9 @@ struct OutlierGroupView: View {
             
             // tap gesture toggles paintability of the tapped group
               .onTapGesture {
-                  if groupViewModel.viewModel.selectionMode == .dustbin {
-                      // dump the tapped outlier into the dustbin
-                      groupViewModel.viewModel.frames[groupViewModel.group.frameIndex].dumpInDustbin(groupViewModel.group)
+                  if groupViewModel.viewModel.selectionMode == .trash {
+                      // dump the tapped outlier into the trash
+                      groupViewModel.viewModel.frames[groupViewModel.group.frameIndex].dumpInTrash(groupViewModel.group)
                       topViewModel.replaceCursor(self.currentCursor)
                   } else {                   
                       Task {
@@ -143,7 +143,7 @@ struct OutlierGroupView: View {
 
                                   Log.d("groupViewModel.viewModel.selectionMode \(groupViewModel.viewModel.selectionMode)")
                                   
-                                  if groupViewModel.viewModel.selectionMode == .details {
+                                  if groupViewModel.viewModel.selectionMode == .information {
                                       handleDetailsMode()
                                   } else if groupViewModel.viewModel.multiChoice {
                                       openMultiChoiceSheet()
@@ -179,9 +179,9 @@ struct OutlierGroupView: View {
 
     var currentCursor: NSCursor {
         switch viewModel.selectionMode {
-        case .dustbin:
+        case .trash:
             return .deleteTrashPointing
-        case .details:
+        case .information:
             return .infoPointing
         default: 
             if let willPaint = groupViewModel.willPaint {
@@ -309,13 +309,13 @@ struct OutlierGroupView: View {
             await MainActor.run {
                 if let shouldPaint {
                     if shouldPaint.willPaint {
-                        self.groupViewModel.viewModel.multiChoicePaintType = .clear
+                        self.groupViewModel.viewModel.multiChoicePaintType = .keep
                     } else {
-                        self.groupViewModel.viewModel.multiChoicePaintType = .paint
+                        self.groupViewModel.viewModel.multiChoicePaintType = .remove
                     }
                 } else {
                     // this is aguess
-                    self.groupViewModel.viewModel.multiChoicePaintType = .clear
+                    self.groupViewModel.viewModel.multiChoicePaintType = .keep
                 }
             }
         }

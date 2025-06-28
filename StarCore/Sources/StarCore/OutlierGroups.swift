@@ -15,7 +15,7 @@ import Cocoa
 import logging
 
 // holds all the outlier groups for a frame
-// including the dustbin
+// including the trash
 
 public actor OutlierGroups {
 
@@ -27,7 +27,7 @@ public actor OutlierGroups {
     public var members: [UInt16: OutlierGroup] // keyed by id
 
     // outliers which have failed the first round, but are here if that was wrong
-    public var dustbin: [UInt16: OutlierGroup] // keyed by id
+    public var trash: [UInt16: OutlierGroup] // keyed by id
 
     public func add(_ member: OutlierGroup) {
         members[member.id] = member
@@ -36,7 +36,7 @@ public actor OutlierGroups {
     public func add(_ newMembers: [OutlierGroup]) {
         for member in newMembers {
             self.members[member.id] = member
-            self.dustbin.removeValue(forKey: member.id)
+            self.trash.removeValue(forKey: member.id)
         }
     }
 
@@ -46,7 +46,7 @@ public actor OutlierGroups {
         var maxID: UInt16 = 0
 
         var newMembers: [UInt16: OutlierGroup] = [:]
-        var newDustbin: [UInt16: OutlierGroup] = [:]
+        var newTrash: [UInt16: OutlierGroup] = [:]
 
         // iterate through all existing outlier groups, 
         //  if they're inside the bounding box, discard them
@@ -69,7 +69,7 @@ public actor OutlierGroups {
             }
         }
 
-        for (id, group) in dustbin {
+        for (id, group) in trash {
             if id > maxID { maxID = id }
 
             if let overlap = group.bounds.overlap(with: bounds) {
@@ -78,11 +78,11 @@ public actor OutlierGroups {
                 } else {
                     let blob = await group.blob()
                     await blob.removePixels(within: overlap)
-                    newDustbin[id] = await blob.outlierGroup(at: frameIndex)
+                    newTrash[id] = await blob.outlierGroup(at: frameIndex)
                 }
             } else {
                 // this outlier doesn't overlap at all, keep it
-                newDustbin[id] = group
+                newTrash[id] = group
             }
         }
 
@@ -96,39 +96,39 @@ public actor OutlierGroups {
         }
         
         self.members = newMembers
-        self.dustbin = newDustbin
+        self.trash = newTrash
     }
     
     public func get(with id: UInt16) -> OutlierGroup? { members[id] }
     
-    public func dumpInDustbin(_ member: OutlierGroup) {
-        dustbin[member.id] = member
+    public func dumpInTrash(_ member: OutlierGroup) {
+        trash[member.id] = member
     }
 
-    public func dumpInDustbin(_ newMembers: [OutlierGroup]) {
+    public func dumpInTrash(_ newMembers: [OutlierGroup]) {
         for member in newMembers {
-            self.dustbin[member.id] = member
+            self.trash[member.id] = member
             self.members.removeValue(forKey: member.id)
         }
     }
 
-    public func promoteFromDustbin(_ member: OutlierGroup) {
+    public func promoteFromTrash(_ member: OutlierGroup) {
         members[member.id] = member
-        dustbin.removeValue(forKey: member.id)
+        trash.removeValue(forKey: member.id)
     }
 
     public func asyncHash(into hasher: inout Hasher) async {
         for (_, member) in members {
             hasher.combine(member)
         }
-        for (_, member) in dustbin {
+        for (_, member) in trash {
             hasher.combine(member)
         }
     }
 
     public func getMembers() -> [UInt16: OutlierGroup] { members }
 
-    public func getDustbin() -> [UInt16: OutlierGroup] { dustbin }
+    public func getTrash() -> [UInt16: OutlierGroup] { trash }
 
     // image data from an image with non zero pixels set with an outlier id
     public var outlierImageData: [UInt16] = [] // outlier ids for frame, row major indexed
@@ -157,7 +157,7 @@ public actor OutlierGroups {
                 outlierImageData[index] = id
             }
         }
-        for (id, group) in dustbin {
+        for (id, group) in trash {
             for pixel in group.pixelSet {
                 let index = pixel.y*width+pixel.x
                 outlierImageData[index] = id
@@ -167,11 +167,11 @@ public actor OutlierGroups {
     
     public init(frameIndex: Int,
                 members: [UInt16: OutlierGroup] = [:],
-                dustbin: [UInt16: OutlierGroup] = [:])
+                trash: [UInt16: OutlierGroup] = [:])
     {
         self.frameIndex = frameIndex
         self.members = members
-        self.dustbin = dustbin
+        self.trash = trash
         self.outlierImageData = [UInt16](repeating: 0, count: 0) // XXX ???
         self.outlierYAxisImageData = [UInt8](repeating: 0, count: 0) // XXX
     }
@@ -201,7 +201,7 @@ public actor OutlierGroups {
 
     public func clear() {
         self.members = [:]
-        self.dustbin = [:]
+        self.trash = [:]
     }
 
     // uses the newer binary blob format
@@ -211,11 +211,11 @@ public actor OutlierGroups {
         self.frameIndex = frameIndex
         let blobBinaryLoader = BlobBinaryLoader()
         let blobs = try await blobBinaryLoader.load(from: outlierDir, with: frameIndex)
-        let dustbinBlobs = try? await blobBinaryLoader.loadDustbin(from: outlierDir, with: frameIndex)
+        let trashBlobs = try? await blobBinaryLoader.loadTrash(from: outlierDir, with: frameIndex)
         let outlierGroupPaintDataFilename = "\(outlierDir)/\(OutlierGroups.outlierGroupPaintJsonFilename)"
         let outlierGroupPaintData = try await OutlierGroups.loadOutlierGroupPaintData(from: outlierGroupPaintDataFilename)
         self.members = [:]
-        self.dustbin = [:]
+        self.trash = [:]
         
         for (id, blob) in blobs {
             let outlierGroup = await blob.outlierGroup(at: frameIndex)
@@ -227,10 +227,10 @@ public actor OutlierGroups {
             self.members[outlierGroup.id] = outlierGroup
         }
 
-        if let dustbinBlobs {
-            for (id, blob) in dustbinBlobs {
+        if let trashBlobs {
+            for (id, blob) in trashBlobs {
                 let outlierGroup = await blob.outlierGroup(at: frameIndex)
-                self.dustbin[outlierGroup.id] = outlierGroup
+                self.trash[outlierGroup.id] = outlierGroup
             }
         }
     }
@@ -292,7 +292,7 @@ public actor OutlierGroups {
         return Array(ret.values)
     }
 
-    public func applyRazor(in boundingBox: BoundingBox, includingDustbin: Bool) async -> Bool {
+    public func applyRazor(in boundingBox: BoundingBox, includingTrash: Bool) async -> Bool {
         var newBlobPixels: Set<SortablePixel> = []
         var newOutlierGroups: [OutlierGroup] = []
         var maxKey: UInt16 = 1
@@ -309,15 +309,15 @@ public actor OutlierGroups {
             }
         }
 
-        // then apply it to the dustbin too, if requested
-        if includingDustbin {
-            for (key, group) in dustbin {
+        // then apply it to the trash too, if requested
+        if includingTrash {
+            for (key, group) in trash {
                 if key > maxKey { maxKey = key }
                 if let overlap = boundingBox.overlap(with: group.bounds) {
                     let blobToSlice = await group.blob()
                     let newPixels = await blobToSlice.slice(with: overlap)
                     newBlobPixels.formUnion(newPixels)
-                    dustbin.removeValue(forKey: key)
+                    trash.removeValue(forKey: key)
                     let newOutlierGroup = await blobToSlice.outlierGroup(at: frameIndex)
                     newOutlierGroups.append(newOutlierGroup)
                 }
@@ -339,9 +339,9 @@ public actor OutlierGroups {
 
     public func promoteDust(in gestureBounds: BoundingBox) -> [OutlierGroup] {
         var ret: [OutlierGroup] = []
-        for (key, group) in dustbin {
+        for (key, group) in trash {
             if gestureBounds.contains(group.bounds) {
-                dustbin.removeValue(forKey: key)
+                trash.removeValue(forKey: key)
                 ret.append(group)
                 members[key] = group
             }
@@ -366,9 +366,9 @@ public actor OutlierGroups {
         await self.writeBinary(outlierMap: self.members,
                          to: "\(dirname)/\(BlobBinarySaver.outlierBinaryFilename)")
 
-        // save dustbin
-        await self.writeBinary(outlierMap: self.dustbin,
-                         to: "\(dirname)/\(BlobBinarySaver.dustbinBinaryFilename)")
+        // save trash
+        await self.writeBinary(outlierMap: self.trash,
+                         to: "\(dirname)/\(BlobBinarySaver.trashBinaryFilename)")
     }
 
     // removes outliers.bin and dust.bin from outliers dir for this frame
@@ -379,9 +379,9 @@ public actor OutlierGroups {
             try FileManager.default.removeItem(atPath: outlierBinaryFilename)
         }
 
-        let dustbinFilename = "\(dirname)/\(BlobBinarySaver.dustbinBinaryFilename)"
-        if FileManager.default.fileExists(atPath: dustbinFilename) {
-            try FileManager.default.removeItem(atPath: dustbinFilename)
+        let trashFilename = "\(dirname)/\(BlobBinarySaver.trashBinaryFilename)"
+        if FileManager.default.fileExists(atPath: trashFilename) {
+            try FileManager.default.removeItem(atPath: trashFilename)
         }
     }
 

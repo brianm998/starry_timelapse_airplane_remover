@@ -64,7 +64,7 @@ public class FrameObserver {
     public var numberOfPositiveOutliers: Int? 
     public var numberOfNegativeOutliers: Int? 
     public var numberOfUndecidedOutliers: Int?
-    public var numberOfDustbinOutliers: Int?
+    public var numberOfTrashOutliers: Int?
 
     // XXX stick more here, like state
     
@@ -80,19 +80,19 @@ public class FrameObserver {
         self.numberOfUndecidedOutliers = numberOfUndecidedOutliers
     }
 
-    public func set(numberOfDustbinOutliers: Int) {
-        self.numberOfDustbinOutliers = numberOfDustbinOutliers
+    public func set(numberOfTrashOutliers: Int) {
+        self.numberOfTrashOutliers = numberOfTrashOutliers
     }
     
     func set(numberOfPositiveOutliers: Int,
              numberOfNegativeOutliers: Int,
              numberOfUndecidedOutliers: Int,
-             numberOfDustbinOutliers: Int)
+             numberOfTrashOutliers: Int)
     {
         self.numberOfPositiveOutliers = numberOfPositiveOutliers
         self.numberOfNegativeOutliers = numberOfNegativeOutliers
         self.numberOfUndecidedOutliers = numberOfUndecidedOutliers
-        self.numberOfDustbinOutliers = numberOfDustbinOutliers
+        self.numberOfTrashOutliers = numberOfTrashOutliers
     }
 }
 
@@ -184,13 +184,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
 
-            let dustbinCount = await outlierGroups?.getDustbin().count ?? 0
+            let trashCount = await outlierGroups?.getTrash().count ?? 0
             
             // update the observer here
             await observer?.set(numberOfPositiveOutliers: totalPositive,
                                 numberOfNegativeOutliers: totalNegative,
                                 numberOfUndecidedOutliers: totalUnknown,
-                                numberOfDustbinOutliers: dustbinCount)
+                                numberOfTrashOutliers: trashCount)
         }
     }
 
@@ -587,10 +587,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
-    public var dustbinBinaryFilename: String { 
+    public var trashBinaryFilename: String { 
         get async {
             let config = await configManager.config()
-            return "\(config.outlierOutputDirname)/\(frameIndex)/\(BlobBinarySaver.dustbinBinaryFilename)"
+            return "\(config.outlierOutputDirname)/\(frameIndex)/\(BlobBinarySaver.trashBinaryFilename)"
         }
     }
     
@@ -633,15 +633,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         let classifier = OutlierClassifier(frame: self)
 
-        let dustbinLevel = await constants.getDustbinLevel()
+        let trashLevel = await constants.getTrashLevel()
 
         // this changes based upon Y value
-        let smallDustMax = await constants.getSmallDustMax()
+        let smallTrashMax = await constants.getSmallTrashMax()
         
         let (good, bad, featureTime, classificationTime, outlierCount) =
           await classifier.promoteAndClassify(blobs,
-                                              dustbinLevel: dustbinLevel,
-                                              smallDustMax: smallDustMax)
+                                              trashLevel: trashLevel,
+                                              smallTrashMax: smallTrashMax)
         Task {
             await classificationTimingDataHolder.set(featureTime: featureTime,
                                                      classificationTime: classificationTime,
@@ -651,7 +651,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // XXX promote featureTime and classificationTime to the gui
         
         await self.outlierGroups?.add(good)
-        await self.outlierGroups?.dumpInDustbin(bad)
+        await self.outlierGroups?.dumpInTrash(bad)
         
         // here we write the outlier binaries through the outlierGroups
         try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)
@@ -711,32 +711,32 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         self.outlierGroups = OutlierGroups(frameIndex: frameIndex)
     }
     
-    public func foreachOutlierGroup(includingDustbin: Bool,
+    public func foreachOutlierGroup(includingTrash: Bool,
                                     _ closure: @Sendable (OutlierGroup, Bool) async -> Void) async
     {
         if let outlierGroups {
             for (_, group) in await outlierGroups.getMembers() {
                 await closure(group, false)
             }
-            for (_, group) in await outlierGroups.getDustbin() {
+            for (_, group) in await outlierGroups.getTrash() {
                 await closure(group, true)
             }
         } 
     }
 
-    public func foreachOutlierGroupMulti(includingDustbin: Bool,
+    public func foreachOutlierGroupMulti(includingTrash: Bool,
                                          _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Void) async
     {
         if let outlierGroups {
             await Task.detached(priority: .userInitiated) {
 
                 let outliers = await Array(outlierGroups.getMembers().values)
-                var dustbin: [OutlierGroup] = []
+                var trash: [OutlierGroup] = []
 
-                if includingDustbin {
-                    dustbin = await Array(outlierGroups.getDustbin().values)
+                if includingTrash {
+                    trash = await Array(outlierGroups.getTrash().values)
                 }
-                await foreachOutlier(in: outliers, with: dustbin, closure)
+                await foreachOutlier(in: outliers, with: trash, closure)
             }.value
         } 
     }
@@ -747,7 +747,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func foreachOutlierGroupMulti(between startLocation: CGPoint,
                                          and endLocation: CGPoint,
-                                         includingDustbin: Bool, 
+                                         includingTrash: Bool, 
                                          _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Void) async
     {
         // first get bounding box from start and end location
@@ -769,16 +769,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let gestureBounds = BoundingBox(min: Coord(x: Int(minX), y: Int(minY)),
                                         max: Coord(x: Int(maxX), y: Int(maxY)))
         
-        await foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
+        await foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
             if gestureBounds.contains(other: group.bounds) {
                 // check to make sure this outlier's bounding box is fully contained
                 // otherwise don't change paint status
-                await closure(group, isInDustbin)
+                await closure(group, isInTrash)
             }
         }
     }
 
-    public func maybeApplyOutlierGroupClassifier(includingDustbin: Bool) async throws {
+    public func maybeApplyOutlierGroupClassifier(includingTrash: Bool) async throws {
 
         var shouldUseDecisionTree = true
         /*
@@ -824,7 +824,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if shouldUseDecisionTree {
             Log.i("frame \(frameIndex) classifying outliers with decision tree")
             self.set(state: .secondClassification)
-            await self.applyDecisionTreeToAllOutliers(includingDustbin: includingDustbin)
+            await self.applyDecisionTreeToAllOutliers(includingTrash: includingTrash)
         }
     }
 
@@ -873,14 +873,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return nil
     }
 
-    public func outlierGroupDustbinList() async -> [OutlierGroup]? {
+    public func outlierGroupTrashList() async -> [OutlierGroup]? {
         if let outlierGroups {
-            let groups = await outlierGroups.getDustbin()
+            let groups = await outlierGroups.getTrash()
             return groups.map {$0.value}
         } else {
             try? await loadOutliers()
             if let outlierGroups {
-                let groups = await outlierGroups.getDustbin()
+                let groups = await outlierGroups.getTrash()
                 return groups.map {$0.value}
             } else {
                 Log.w("NO GROUPS")
@@ -910,7 +910,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
     }
 
-    public func applyRazor(in boundingBox: BoundingBox, includingDustbin: Bool) async throws {
+    public func applyRazor(in boundingBox: BoundingBox, includingTrash: Bool) async throws {
         /*
          - find all outliers that have some match with this bounding box
          - remove them from outlier groups list
@@ -920,7 +920,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
          */
 
         if await outlierGroups?.applyRazor(in: boundingBox,
-                                           includingDustbin: includingDustbin) ?? false
+                                           includingTrash: includingTrash) ?? false
         {
             await self.markAsChanged()
 
@@ -1247,11 +1247,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
      UI related methods
      */
     
-    public func applyDecisionTreeToAutoSelectedOutliers(includingDustbin: Bool,
+    public func applyDecisionTreeToAutoSelectedOutliers(includingTrash: Bool,
                                                         overwrite: Bool = false,
                                                         minimumSize: Int? = nil) async {
         if let classifier = await currentClassifier.get(for: .all) {
-            await foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
+            await foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
                 if let minimumSize,
                    group.size < minimumSize { return }
                 
@@ -1268,8 +1268,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
                 if apply {
                     Log.d("applying decision tree")
-                    if isInDustbin {
-                        await self.outlierGroups?.promoteFromDustbin(group)
+                    if isInTrash {
+                        await self.outlierGroups?.promoteFromTrash(group)
                         await self.markAsChanged()
                     }
                     await group.shouldPaint(.fromClassifier(await classifier.classification(of: group)))
@@ -1280,13 +1280,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public func clearOutlierGroupValueCaches(includingDustbin: Bool) async {
-        await foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, _ in
+    public func clearOutlierGroupValueCaches(includingTrash: Bool) async {
+        await foreachOutlierGroupMulti(includingTrash: includingTrash) { group, _ in
             await group.clearFeatureValueCache()
         }
     }
 
-    public func applyDecisionTreeToAllOutliers(includingDustbin: Bool,
+    public func applyDecisionTreeToAllOutliers(includingTrash: Bool,
                                                         overwrite: Bool = true,
                                                         minimumSize: Int? = nil) async
     {
@@ -1318,12 +1318,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
     
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
-                                      includingDustbin: Bool) async
+                                      includingTrash: Bool) async
     {
         await Task.detached(priority: .userInitiated) {
-            await self.foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
-                if isInDustbin {
-                    await self.outlierGroups?.promoteFromDustbin(group)
+            await self.foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
+                if isInTrash {
+                    await self.outlierGroups?.promoteFromTrash(group)
                 }
                 await group.shouldPaint(.userSelected(shouldPaint))
             }
@@ -1336,13 +1336,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public func userSelectUndecidedOutliers(toShouldPaint shouldPaint: Bool,
-                                            includingDustbin: Bool) async
+                                            includingTrash: Bool) async
     {
         await Task.detached(priority: .userInitiated) {
-            await self.foreachOutlierGroupMulti(includingDustbin: includingDustbin) { group, isInDustbin in
+            await self.foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
                 if await group.shouldPaint() == nil {
-                    if isInDustbin {
-                        await self.outlierGroups?.promoteFromDustbin(group)
+                    if isInTrash {
+                        await self.outlierGroups?.promoteFromTrash(group)
                     }
                     await group.shouldPaint(.userSelected(shouldPaint))
                 }
@@ -1371,13 +1371,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
                                       between startLocation: CGPoint,
                                       and endLocation: CGPoint,
-                                      includingDustbin: Bool) async
+                                      includingTrash: Bool) async
     {
         await foreachOutlierGroupMulti(between: startLocation,
                                        and: endLocation,
-                                       includingDustbin: includingDustbin) { group, isInDustbin in
-            if isInDustbin {
-                await self.outlierGroups?.promoteFromDustbin(group)
+                                       includingTrash: includingTrash) { group, isInTrash in
+            if isInTrash {
+                await self.outlierGroups?.promoteFromTrash(group)
                 await self.markAsChanged()
             }
             await group.shouldPaint(.userSelected(shouldPaint))
@@ -1548,10 +1548,10 @@ fileprivate func writeOutlierValuesCSVPrivate(to csvFilename: String,
             }
         }
         Log.d("frame \(frame.frameIndex) writeOutlierValuesCSV 2a")
-        // append dustbin values too
-        if let dustbin = await frame.outlierGroups?.getDustbin().values {
-            Log.d("frame \(frame.frameIndex) writeOutlierValuesCSV appending dustbin")
-            for outlier in dustbin {
+        // append trash values too
+        if let trash = await frame.outlierGroups?.getTrash().values {
+            Log.d("frame \(frame.frameIndex) writeOutlierValuesCSV appending trash")
+            for outlier in trash {
                 await valueMatrix.append(outlierGroup: outlier)
             }
         }
@@ -1586,7 +1586,7 @@ fileprivate class OutlierClassifier {
     // uses the .all classifier, which digs into neighboring frames for more data
     func classifyAll(_ outlierGroups: OutlierGroups,
                      overwrite: Bool = false,
-                     includingDustbin: Bool) async
+                     includingTrash: Bool) async
     {
  //       await Task.detached(priority: .userInitiated) {
             await withTaskGroup(of: Void.self) { taskGroup in
@@ -1614,11 +1614,11 @@ fileprivate class OutlierClassifier {
                         }
                     }
                 }
-                if includingDustbin {
-                    let dustbin = await Array(outlierGroups.getDustbin().values)
+                if includingTrash {
+                    let trash = await Array(outlierGroups.getTrash().values)
 
-                    if dustbin.count > 0 {
-                        for chunk in dustbin.split(into: max) {
+                    if trash.count > 0 {
+                        for chunk in trash.split(into: max) {
                             let frame = self.frame
                             taskGroup.addTask {
                                 for group in chunk {
@@ -1628,7 +1628,7 @@ fileprivate class OutlierClassifier {
                                         let classification = await classifier.classification(of: group)
                                         await group.shouldPaint(.fromClassifier(classification),
                                                                 markAsChanged: false)
-                                        await outlierGroups.promoteFromDustbin(group)
+                                        await outlierGroups.promoteFromTrash(group)
                                         await frame.markAsChanged()
                                     }
                                 }
@@ -1673,8 +1673,8 @@ fileprivate class OutlierClassifier {
 
     // classifies blobs with the .isolated classifier, and promotes them to separate groups
     func promoteAndClassify(_ blobs: [Blob],
-                            dustbinLevel: Double = 0.0,
-                            smallDustMax: Int = 20) async
+                            trashLevel: Double = 0.0,
+                            smallTrashMax: Int = 20) async
       -> ([OutlierGroup], [OutlierGroup], TimeInterval, TimeInterval, Int)
     {
         let frame = self.frame
@@ -1717,7 +1717,7 @@ fileprivate class OutlierClassifier {
                                  min at the bottom of the screen - 0
                                  
                                  */
-                                let minSize = Int(Double(smallDustMax)*(1.0 - centerY))
+                                let minSize = Int(Double(smallTrashMax)*(1.0 - centerY))
 
                                 // don't process smaller blobs any further
                                 if outlierGroup.size <= minSize {
@@ -1731,7 +1731,7 @@ fileprivate class OutlierClassifier {
 
                                 // when promoting blobs to outlier groups, we first use the .isolated classifier
                                 // and separate blobs into two groups based upon a threshold in this classification.
-                                // one group is the dustbin, which has a very high likelyhood of not being useful
+                                // one group is the trash, which has a very high likelyhood of not being useful
                                 // the other group are the outlier groups that will get processed further
 
                                 if let classifier {
@@ -1774,7 +1774,7 @@ fileprivate class OutlierClassifier {
                     totalClassificationTime += classTime
                     totalOutliers += chunkCount
                     for value in values {
-                        if value.classification > dustbinLevel {
+                        if value.classification > trashLevel {
                             // it's good
                             good.append(value.outlier)
                         } else {
@@ -1791,15 +1791,15 @@ fileprivate class OutlierClassifier {
 }
 
 fileprivate func foreachOutlier(in outliers: [OutlierGroup],
-                                with dustbin: [OutlierGroup],
+                                with trash: [OutlierGroup],
                                 _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Void) async {
     await withTaskGroup(of: Void.self) { taskGroup in
 
-        // max number of concurrent tasks (for each outliers and dustbin)
+        // max number of concurrent tasks (for each outliers and trash)
         let max = 10            // XXX hardcoded constant
 
         let outlierChunkSize = outliers.count/max
-        let dustbinChunkSize = dustbin.count/max
+        let trashChunkSize = trash.count/max
 
         if outliers.count > 0 {
             for chunk in outliers.chunks(of: outlierChunkSize) {
@@ -1810,8 +1810,8 @@ fileprivate func foreachOutlier(in outliers: [OutlierGroup],
                 }
             }
         }
-        if dustbin.count > 0 {
-            for chunk in dustbin.chunks(of: dustbinChunkSize) {
+        if trash.count > 0 {
+            for chunk in trash.chunks(of: trashChunkSize) {
                 taskGroup.addTask() {
                     for group in chunk {
                         await closure(group, true)

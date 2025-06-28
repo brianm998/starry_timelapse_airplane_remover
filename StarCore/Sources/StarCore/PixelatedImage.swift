@@ -10,11 +10,85 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
+/*
+
+ XXX
+ write a unit test that tests splitIntoMatrix on an image,
+ comparing the input image with the returned matrix.
+ make sure it works for both 16 and 32 bit images, 32 bit may be broken
+ XXX
+ 
+ */
+
+
+
 import Foundation
 import CoreGraphics
 import KHTSwift
 import logging
 import Cocoa
+
+fileprivate let doingMemoryTesting = false
+
+fileprivate let activeImageCounter = ActiveImageCounter()
+
+fileprivate actor ActiveImageCounter {
+    private var counts: [String: Int] = [:]
+    private let sleepIntervalNanoseconds: UInt64 = 5_000_000_000
+    
+    init() {
+        Task {
+            try? await Task.sleep(nanoseconds: sleepIntervalNanoseconds)
+            await self.log()
+        }
+    }
+
+    private func log() {
+        Task {
+            Log.d("we have \(self.currentCount) active images")
+            for key in counts.keys {
+                if let count = counts[key] {
+                    Log.d("\(key) has \(count) active images")
+                }
+            }
+            try? await Task.sleep(nanoseconds: sleepIntervalNanoseconds)
+            await self.log()
+        }
+    }
+
+    private func hashKey(for file: String, and function: String, at line: Int) -> String {
+        "\(file)@\(function):\(line)"
+    }
+
+    var currentCount: Int {
+        var ret: Int = 0
+        counts.values.map { ret += $0 }
+        return ret
+    }
+    
+    func add(for file: String,
+             and function: String,
+             at line: Int)    
+    {
+        let key = hashKey(for: file, and: function, at: line)
+        let existing = counts[key, default: 0]
+        counts[key] = existing+1
+    }
+    
+    func decrement(for file: String,
+                   and function: String,
+                   at line: Int)
+    {
+        let key = hashKey(for: file, and: function, at: line)
+        let existing = counts[key, default: 0]
+        if existing == 1 {
+            counts.removeValue(forKey: key)
+        } else {
+            counts[key] = existing-1
+        }
+    } 
+}
+
 
 public final class PixelatedImage: Sendable {
     public let width: Int
@@ -78,9 +152,9 @@ public final class PixelatedImage: Sendable {
                   height: height,
                   imageData: DataFormat(from: imageData),
                   bitsPerPixel: 32,
-                  bytesPerRow: 2*width,
+                  bytesPerRow: 4*width,
                   bitsPerComponent: 32,
-                  bytesPerPixel: 2,
+                  bytesPerPixel: 4,
                   bitmapInfo: .byteOrder32Little, 
                   componentsPerPixel: 1,
                   colorSpace: CGColorSpaceCreateDeviceGray(),
@@ -131,8 +205,14 @@ public final class PixelatedImage: Sendable {
                 bitmapInfo: CGBitmapInfo,
                 componentsPerPixel: Int,
                 colorSpace: CGColorSpace,
-                ciFormat: CIFormat)    
+                ciFormat: CIFormat,
+                file: String = #file,
+                function: String = #function,
+                line: Int = #line)    
     {
+        self.file = file
+        self.function = function
+        self.line = line
         self.width = width
         self.height = height
         self.imageData = imageData
@@ -144,6 +224,9 @@ public final class PixelatedImage: Sendable {
         self.componentsPerPixel = componentsPerPixel
         self.colorSpace = colorSpace
         self.ciFormat = ciFormat
+        if doingMemoryTesting {
+            Task { await activeImageCounter.add(for: file, and: function, at: line) }
+        }
     }
 
     public func updated(with imageData: [UInt16]) -> PixelatedImage {
@@ -159,11 +242,33 @@ public final class PixelatedImage: Sendable {
                               colorSpace: self.colorSpace,
                               ciFormat: self.ciFormat)
     }
+
+    deinit {
+        if doingMemoryTesting {
+            // allow these values to outlive deinit
+            let _file = file
+            let _function = function
+            let _line = line
+            Task { await activeImageCounter.decrement(for: _file, and: _function, at: _line) }
+        }
+    }
+
+    fileprivate let file: String
+    fileprivate let function: String
+    fileprivate let line: Int
     
-    init?(_ image: CGImage) {
+    init?(_ image: CGImage,
+          file: String = #file,
+          function: String = #function,
+          line: Int = #line)
+    {
         //Log.w("START")
         // assert(image.colorSpace?.model == .rgb)
 
+        self.file = file
+        self.function = function
+        self.line = line
+        
         if Thread.isMainThread { Log.w("ON MAIN THREAD") }
         
         self.width = image.width
@@ -202,6 +307,9 @@ public final class PixelatedImage: Sendable {
                 self.imageData = .eightBit(data.uInt8Array)
             } else {
                 self.imageData = .sixteenBit(data.uInt16Array)
+            }
+            if doingMemoryTesting {
+                Task { await activeImageCounter.add(for: file, and: function, at: line) }
             }
         } else {
             Log.e("DOH")
@@ -569,6 +677,7 @@ public final class PixelatedImage: Sendable {
                 {
                     switch imageData {
                     case .thirtyTwoBit(let arr):
+                        //fatalError("THIS MIGHT BE BROKEN")
                         var matrixImageData = [UInt32](repeating: 0, count: matrixWidth*matrixHeight)
                         for y in 0..<matrixHeight {
                             arr.withUnsafeBufferPointer { sourcePtr in
@@ -631,7 +740,11 @@ public final class PixelatedImage: Sendable {
         Log.i("matrix  has \(matrix.count) rows")
         return matrix
     }
-    
+
+    // an element of the whole image, for testing
+    var imageMatrixElement: ImageMatrixElement {
+        ImageMatrixElement(x: 0, y: 0, image: self)
+    }
 }
 
 fileprivate func isImage(_ image: PixelatedImage,

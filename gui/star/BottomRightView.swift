@@ -117,8 +117,8 @@ struct BottomRightView: View {
                         Text("loading outlier views")
                           .foregroundColor(.green)
                     }
-                    if frameView.loadingDustbinViews {
-                        Text("loading outlier dustbin views")
+                    if frameView.loadingTrashViews {
+                        Text("loading outlier trash views")
                           .foregroundColor(.orange)
                     }
                 }
@@ -140,10 +140,10 @@ struct BottomRightView: View {
                             Text("\(numUndecided) undecided")
                               .foregroundColor(.orange)
                         }
-                        if let numDustbin = frameView.frameObserver.numberOfDustbinOutliers,
-                           numDustbin > 0
+                        if let numTrash = frameView.frameObserver.numberOfTrashOutliers,
+                           numTrash > 0
                         {
-                            Text("\(numDustbin) in dustbin")
+                            Text("\(numTrash) in trash")
                               .foregroundColor(.yellow)
                         }
                     }

@@ -9,7 +9,7 @@ struct ApplyDecisionTreeButton: View {
             Task {
                 do {
                     if let frame = viewModel.currentFrame {
-                        await frame.applyDecisionTreeToAutoSelectedOutliers(includingDustbin: viewModel.shouldShowDustbin,
+                        await frame.applyDecisionTreeToAutoSelectedOutliers(includingTrash: viewModel.shouldShowTrash,
                                                                             overwrite: !viewModel.classifyOnlyUnclassified,
                                                                             minimumSize: viewModel.minimumClassificationSize)
                         try? await viewModel.render(frame: frame) {

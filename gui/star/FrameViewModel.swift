@@ -70,8 +70,8 @@ public class FrameViewModel {
     var outlierViews: [OutlierGroupViewModel]?
     var loadingOutlierViews: Bool = false
 
-    var dustbinImage: Image?
-    var loadingDustbinViews: Bool = false
+    var trashImage: Image?
+    var loadingTrashViews: Bool = false
 
     // images for all outliers too small to have their own UI views
     var positiveOutlierImage: Image?
@@ -114,43 +114,43 @@ public class FrameViewModel {
         }
     }
 
-    // puts view outliers into the dustbin
-    public func dumpInDustbin(between selectionStart: CGPoint,
+    // puts view outliers into the trash
+    public func dumpInTrash(between selectionStart: CGPoint,
                               and end_location: CGPoint)
     {
         let gestureBounds = BoundingBox(between: selectionStart, and: end_location)
 
         var newOutlierViews: [OutlierGroupViewModel] = []
-        var dustbin: [OutlierGroup] = []
+        var trash: [OutlierGroup] = []
 
         outlierViews?.forEach() { group in
             if !gestureBounds.contains(other: group.bounds) {
                 newOutlierViews.append(group)
             } else {
-                dustbin.append(group.group)   
+                trash.append(group.group)   
             }
         }
         self.outlierViews = newOutlierViews
 
         if let frame {
             Task.detached(priority: .userInitiated) {
-                await frame.getOutlierGroups()?.dumpInDustbin(dustbin)
+                await frame.getOutlierGroups()?.dumpInTrash(trash)
                 await self.viewModel.computeSmallOutlierImage(forFrame: frame)
-                await self.viewModel.computeDustbinImage(forFrame: frame)
+                await self.viewModel.computeTrashImage(forFrame: frame)
                 await frame.updateCombineSubjects()
                 try await frame.getOutlierGroups()?.writeOutliersBinary(to: frame.outliersDirname)
             }
         }
     }
 
-    // puts view outliers into the dustbin
-    public func dumpInDustbin(_ badGroup: OutlierGroup) {
+    // puts view outliers into the trash
+    public func dumpInTrash(_ badGroup: OutlierGroup) {
         var newOutlierViews: [OutlierGroupViewModel] = []
-        var dustbin: [OutlierGroup] = []
+        var trash: [OutlierGroup] = []
 
         outlierViews?.forEach() { group in
             if group.group.id == badGroup.id {
-                dustbin.append(group.group)   
+                trash.append(group.group)   
             } else {
                 newOutlierViews.append(group)
             }
@@ -159,16 +159,16 @@ public class FrameViewModel {
 
         if let frame {
             Task.detached(priority: .userInitiated) {
-                await frame.getOutlierGroups()?.dumpInDustbin(dustbin)
+                await frame.getOutlierGroups()?.dumpInTrash(trash)
                 await self.viewModel.computeSmallOutlierImage(forFrame: frame)
-                await self.viewModel.computeDustbinImage(forFrame: frame)
+                await self.viewModel.computeTrashImage(forFrame: frame)
                 try await frame.getOutlierGroups()?.writeOutliersBinary(to: frame.outliersDirname)
                 await frame.updateCombineSubjects()
             }
         }
     }
 
-    // pulls outliers out of the dustbin into the view
+    // pulls outliers out of the trash into the view
     public func extractDust(between selectionStart: CGPoint,
                             and end_location: CGPoint)
     {
@@ -179,8 +179,8 @@ public class FrameViewModel {
                 let _ = try await frame.promoteDust(in: gestureBounds)
 
                 await self.viewModel.computeSmallOutlierImage(forFrame: frame)
-                // update the dustbin image
-                await self.viewModel.computeDustbinImage(forFrame: frame)
+                // update the trash image
+                await self.viewModel.computeTrashImage(forFrame: frame)
                 
               await self.viewModel.setOutlierGroups(forFrame: frame)
                 await frame.updateCombineSubjects()            

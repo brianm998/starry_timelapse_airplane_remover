@@ -169,9 +169,9 @@ public actor FinalProcessor {
                         // run as a deferred task so we never block here
                         Task(priority: .high) {
                             do {
-                                await frameToFinish.clearOutlierGroupValueCaches(includingDustbin: true)
+                                await frameToFinish.clearOutlierGroupValueCaches(includingTrash: true)
 
-                                try await frameToFinish.maybeApplyOutlierGroupClassifier(includingDustbin: false)
+                                try await frameToFinish.maybeApplyOutlierGroupClassifier(includingTrash: false)
                                 await frameToFinish.set(state: .outlierProcessingComplete)
 
                                 Log.v("FINAL THREAD frame \(indexToProcess) classified")
@@ -284,7 +284,7 @@ public actor FinalProcessor {
                     Log.d("adding frame \(frame.frameIndex) to final queue")
                     taskGroup.addTask() {
 
-                        try await frame.maybeApplyOutlierGroupClassifier(includingDustbin: false)
+                        try await frame.maybeApplyOutlierGroupClassifier(includingTrash: false)
 
                         await frame.set(state: .outlierProcessingComplete)
                         try await self.finish(frame: frame)

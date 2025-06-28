@@ -75,7 +75,7 @@ public struct FrameEditImageView: View {
                             frameView.loadingOutlierViews = false
                             FU.loadingOutliers = FU.loadingOutlierGroups
 
-                            maybeLoadDustbin()
+                            maybeLoadTrash()
                             maybeLoadSmallOutliers()
                         }
                     }
@@ -83,33 +83,33 @@ public struct FrameEditImageView: View {
             }
         } else {
             // this frame already has outliers, make sure we have images for them
-            maybeLoadDustbin()
+            maybeLoadTrash()
             maybeLoadSmallOutliers()
         }
     }
 
-    private func maybeLoadDustbin() {
-        // try loading dustbin outliers if there aren't any present
+    private func maybeLoadTrash() {
+        // try loading trash outliers if there aren't any present
         let frameView = self.viewModel.frames[self.viewModel.currentIndex]
 
-        if viewModel.shouldShowDustbin,
-           frameView.dustbinImage == nil,
-           !frameView.loadingDustbinViews,
+        if viewModel.shouldShowTrash,
+           frameView.trashImage == nil,
+           !frameView.loadingTrashViews,
            let frame = frameView.frame
         {
-            frameView.loadingDustbinViews = true
+            frameView.loadingTrashViews = true
 
             Task.detached(priority: .userInitiated) {
-                await self.viewModel.computeDustbinImage(forFrame: frame)
+                await self.viewModel.computeTrashImage(forFrame: frame)
                 await MainActor.run {
-                    frameView.loadingDustbinViews = false
+                    frameView.loadingTrashViews = false
                 }
             }
         } 
     }
 
     private func maybeLoadSmallOutliers() {
-        // try loading dustbin outliers if there aren't any present
+        // try loading trash outliers if there aren't any present
         let frameView = self.viewModel.frames[self.viewModel.currentIndex]
 
         if let frame = frameView.frame,
@@ -144,13 +144,13 @@ public struct FrameEditImageView: View {
                 ZStack() {
                     // in edit mode, show outliers groups
 
-                    // dustbin goes below
-                    if let dustbinImage = frameView.dustbinImage {
-                        if self.viewModel.shouldShowDustbin {
-                            dustbinImage
+                    // trash goes below
+                    if let trashImage = frameView.trashImage {
+                        if self.viewModel.shouldShowTrash {
+                            trashImage
                               .renderingMode(.template) 
                               .foregroundColor(.yellow)
-                              .opacity(viewModel.dustbinOpacity)
+                              .opacity(viewModel.trashOpacity)
                         }
                     }
 
@@ -182,8 +182,8 @@ public struct FrameEditImageView: View {
           .onChange(of: viewModel.currentIndex, initial: true) {
               maybeLoadOutliers()
           }
-          .onChange(of: viewModel.shouldShowDustbin) {
-              maybeLoadDustbin()
+          .onChange(of: viewModel.shouldShowTrash) {
+              maybeLoadTrash()
           }
     }
 }

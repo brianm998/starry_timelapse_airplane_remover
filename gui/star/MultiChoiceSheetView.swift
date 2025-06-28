@@ -3,8 +3,8 @@ import StarCore
 import logging
 
 public enum MultiChoicePaintType: String, Equatable, CaseIterable {
-    case paint
-    case clear
+    case remove
+    case keep
 
     var localizedName: LocalizedStringKey {
         LocalizedStringKey(rawValue)
@@ -48,27 +48,27 @@ struct MultiChoiceSheetView: View {
                 switch multiChoiceType {
                 case .all:
                     switch multiChoicePaintType {
-                    case .paint:
+                    case .remove:
                         Text("Paint overlapping outliers in all \(frames.count) frames")
-                    case .clear:
+                    case .keep:
                         Text("Clear overlapping outliers in all \(frames.count) frames")
                     }
 
                 case .allAfter:
                     let numFrames = frames.count - currentIndex + 1
                     switch multiChoicePaintType {
-                    case .paint:
+                    case .remove:
                         Text("Paint overlapping outliers in \(numFrames) frames from frame \(currentIndex) to the end")
-                    case .clear:
+                    case .keep:
                         Text("Clear overlapping outliers in \(numFrames) frames from frame \(currentIndex) to the end")
                     }
 
                 case .allBefore:
                     let numFrames = currentIndex + 1
                     switch multiChoicePaintType {
-                    case .paint:
+                    case .remove:
                         Text("Paint overlapping outliers in \(numFrames) frames from the start ending at frame \(currentIndex)")
-                    case .clear:
+                    case .keep:
                         Text("Clear overlapping outliers in \(numFrames) frames from the start ending at frame \(currentIndex)")
                     }
 
@@ -84,14 +84,14 @@ struct MultiChoiceSheetView: View {
                     switch multiChoiceType {
                     case .all:
                         switch multiChoicePaintType {
-                        case .paint:
-                            Button("Paint") {
+                        case .remove:
+                            Button("Remove") {
                                 // paint all overapping outliers
                                 self.updateFrames(shouldPaint: true)
                                 self.isVisible = false
                             }
-                        case .clear:
-                            Button("Clear") {
+                        case .keep:
+                            Button("Keep") {
                                 // XXX clear all overapping outliers
                                 self.updateFrames(shouldPaint: false)
                                 self.isVisible = false
@@ -99,16 +99,16 @@ struct MultiChoiceSheetView: View {
                         }
                     case .allAfter:
                         switch multiChoicePaintType {
-                        case .paint:
-                            Button("Paint") {
+                        case .remove:
+                            Button("Remove") {
                                 // paint all overapping outliers
                                 // after and including currentIndex
                                 self.updateFrames(shouldPaint: true,
                                                   startIndex: currentIndex)
                                 self.isVisible = false
                             }
-                        case .clear:
-                            Button("Clear") {
+                        case .keep:
+                            Button("Keep") {
                                 // clear all overapping outliers
                                 // after and including currentIndex
                                 self.updateFrames(shouldPaint: false,
@@ -118,8 +118,8 @@ struct MultiChoiceSheetView: View {
                         }
                     case .allBefore:
                         switch multiChoicePaintType {
-                        case .paint:
-                            Button("Paint") {
+                        case .remove:
+                            Button("Remove") {
                                 // paint all overapping outliers
                                 // before and including currentIndex
                                 self.updateFrames(shouldPaint: true,
@@ -127,8 +127,8 @@ struct MultiChoiceSheetView: View {
                                                   endIndex: currentIndex)
                                 self.isVisible = false
                             }
-                        case .clear:
-                            Button("Clear") {
+                        case .keep:
+                            Button("Keep") {
                                 // clear all overapping outliers
                                 // before and including currentIndex
                                 self.updateFrames(shouldPaint: false,
@@ -141,8 +141,8 @@ struct MultiChoiceSheetView: View {
                     case .someAfter:
                         HStack {
                             switch multiChoicePaintType {
-                            case .paint:
-                                Button("Paint") {
+                            case .remove:
+                                Button("Remove") {
                                     // paint overapping outliers in
                                     // currentIndex and number_of_frames after
                                     self.updateFrames(shouldPaint: true,
@@ -150,8 +150,8 @@ struct MultiChoiceSheetView: View {
                                                       endIndex: currentIndex + number_of_frames)
                                     self.isVisible = false
                                 }
-                            case .clear:
-                                Button("Clear") {
+                            case .keep:
+                                Button("Keep") {
                                     // clear overapping outliers in
                                     // currentIndex and number_of_frames after
                                     self.updateFrames(shouldPaint: false,
@@ -168,8 +168,8 @@ struct MultiChoiceSheetView: View {
                     case .someBefore:
                         HStack {
                             switch multiChoicePaintType {
-                            case .paint:
-                                Button("Paint") {
+                            case .remove:
+                                Button("Remove") {
                                     // paint overapping outliers in
                                     // currentIndex and number_of_frames before
                                     self.updateFrames(shouldPaint: true,
@@ -177,8 +177,8 @@ struct MultiChoiceSheetView: View {
                                                       endIndex: currentIndex)
                                     self.isVisible = false
                                 }
-                            case .clear:
-                                Button("Clear") {
+                            case .keep:
+                                Button("Keep") {
                                     // clear overapping outliers in
                                     // currentIndex and number_of_frames before
                                     self.updateFrames(shouldPaint: false,

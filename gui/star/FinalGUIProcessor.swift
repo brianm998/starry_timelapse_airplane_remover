@@ -246,7 +246,7 @@ fileprivate func finalProcess(atIndex currentIndex: Int,
 
         await frame.set(state: .secondClassification)
         
-        await frame.applyDecisionTreeToAllOutliers(includingDustbin: viewModel.shouldShowDustbin)
+        await frame.applyDecisionTreeToAllOutliers(includingTrash: viewModel.shouldShowTrash)
       
         await frame.set(state: .outlierProcessingComplete)
 

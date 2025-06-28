@@ -15,10 +15,10 @@ public enum MultiSelectionType: String, Equatable, CaseIterable {
 }
 
 public enum MultiSelectionPaintType: String, Equatable, CaseIterable {
-    case paint
-    case clear
-    case paintOverlaps
-    case clearOverlaps
+    case remove
+    case keep
+    case removeOverlaps
+    case keepOverlaps
 
     var localizedName: LocalizedStringKey {
         LocalizedStringKey(rawValue)
@@ -63,26 +63,26 @@ struct MultiSelectSheetView: View {
             switch multiSelectionType {
             case .all:
                 switch multiSelectionPaintType {
-                case .paint:
+                case .remove:
                     Text("Paint outliers in this area in all \(frames.count) frames")
-                case .clear:
+                case .keep:
                     Text("Clear outliers in this area in all \(frames.count) frames")
-                case .paintOverlaps:
+                case .removeOverlaps:
                     Text("Paint overlaying outliers in this area in all \(frames.count) frames")
-                case .clearOverlaps:
+                case .keepOverlaps:
                     Text("Clear overlaying outliers in this area in all \(frames.count) frames")
                 }
                 
             case .allAfter:
                 let numFrames = frames.count - currentIndex + 1
                 switch multiSelectionPaintType {
-                case .paint:
+                case .remove:
                     Text("Paint outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
-                case .clear:
+                case .keep:
                     Text("Clear outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
-                case .paintOverlaps:
+                case .removeOverlaps:
                     Text("Paint overlaying outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
-                case .clearOverlaps:
+                case .keepOverlaps:
                     Text("Clear overlaying outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
 
                 }
@@ -90,13 +90,13 @@ struct MultiSelectSheetView: View {
             case .allBefore:
                 let numFrames = currentIndex + 1
                 switch multiSelectionPaintType {
-                case .paint:
+                case .remove:
                     Text("Paint outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
-                case .clear:
+                case .keep:
                     Text("Clear outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
-                case .paintOverlaps:
+                case .removeOverlaps:
                     Text("Paint overlaying outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
-                case .clearOverlaps:
+                case .keepOverlaps:
                     Text("Clear overlaying outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
                 }
 
@@ -114,13 +114,13 @@ struct MultiSelectSheetView: View {
                 case .all:
                     Button("Modify") {
                         switch multiSelectionPaintType {
-                        case .paint:
+                        case .remove:
                             self.updateFrames(shouldPaint: true)
-                        case .clear:
+                        case .keep:
                             self.updateFrames(shouldPaint: false)
-                        case .paintOverlaps:
+                        case .removeOverlaps:
                             self.updateOverlappersInFrames(shouldPaint: true)
-                        case .clearOverlaps:
+                        case .keepOverlaps:
                             self.updateOverlappersInFrames(shouldPaint: false)
                         }
                         self.isVisible = false
@@ -130,16 +130,16 @@ struct MultiSelectSheetView: View {
                     Button("Modify") {
 
                         switch multiSelectionPaintType {
-                        case .paint:
+                        case .remove:
                             self.updateFrames(shouldPaint: true,
                                               startIndex: currentIndex)
-                        case .clear:
+                        case .keep:
                             self.updateFrames(shouldPaint: false,
                                               startIndex: currentIndex)
-                        case .paintOverlaps:
+                        case .removeOverlaps:
                             self.updateOverlappersInFrames(shouldPaint: true,
                                                            startIndex: currentIndex)
-                        case .clearOverlaps:
+                        case .keepOverlaps:
                             self.updateOverlappersInFrames(shouldPaint: false,
                                                            startIndex: currentIndex)
                         }
@@ -150,19 +150,19 @@ struct MultiSelectSheetView: View {
                     Button("Modify") {
 
                         switch multiSelectionPaintType {
-                        case .paint:
+                        case .remove:
                             self.updateFrames(shouldPaint: true,
                                               startIndex: 0,
                                               endIndex: currentIndex)
-                        case .clear:
+                        case .keep:
                             self.updateFrames(shouldPaint: false,
                                               startIndex: 0,
                                               endIndex: currentIndex)
-                        case .paintOverlaps:
+                        case .removeOverlaps:
                             self.updateOverlappersInFrames(shouldPaint: true,
                                                            startIndex: 0,
                                                            endIndex: currentIndex)
-                        case .clearOverlaps:
+                        case .keepOverlaps:
                             self.updateOverlappersInFrames(shouldPaint: true,
                                                            startIndex: 0,
                                                            endIndex: currentIndex)
@@ -176,20 +176,20 @@ struct MultiSelectSheetView: View {
 
 
                             switch multiSelectionPaintType {
-                            case .paint:
+                            case .remove:
                                 self.updateFrames(shouldPaint: true,
                                                   startIndex: currentIndex,
                                                   endIndex: currentIndex + number_of_frames)
-                            case .clear:
+                            case .keep:
                                 self.updateFrames(shouldPaint: false,
                                                   startIndex: currentIndex,
                                                   endIndex: currentIndex + number_of_frames)
-                            case .paintOverlaps:
+                            case .removeOverlaps:
                                 self.updateOverlappersInFrames(shouldPaint: true,
                                                                startIndex: currentIndex,
                                                                endIndex: currentIndex + number_of_frames)
 
-                            case .clearOverlaps:
+                            case .keepOverlaps:
                                 self.updateOverlappersInFrames(shouldPaint: false,
                                                                startIndex: currentIndex,
                                                                endIndex: currentIndex + number_of_frames)
@@ -206,20 +206,20 @@ struct MultiSelectSheetView: View {
                     HStack {
                         Button("Modify") {
                             switch multiSelectionPaintType {
-                            case .paint:
+                            case .remove:
                                 self.updateFrames(shouldPaint: true,
                                                   startIndex: currentIndex - number_of_frames,
                                                   endIndex: currentIndex)
-                            case .clear:
+                            case .keep:
                                 self.updateFrames(shouldPaint: false,
                                                   startIndex: currentIndex - number_of_frames,
                                                   endIndex: currentIndex)
-                            case .paintOverlaps:
+                            case .removeOverlaps:
                                 self.updateOverlappersInFrames(shouldPaint: true,
                                                                startIndex: currentIndex - number_of_frames,
                                                                endIndex: currentIndex)
 
-                           case .clearOverlaps:
+                           case .keepOverlaps:
                                 self.updateOverlappersInFrames(shouldPaint: false,
                                                                startIndex: currentIndex - number_of_frames,
                                                                endIndex: currentIndex)
@@ -304,7 +304,7 @@ struct MultiSelectSheetView: View {
                         await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                           between: selectionStart,
                                                           and: selectionEnd,
-                                                          includingDustbin: viewModel.shouldShowDustbin)
+                                                          includingTrash: viewModel.shouldShowTrash)
                         // save outlier paintability changes here
                         await frame.writeOutliersPaintReasons()
 
@@ -345,8 +345,8 @@ struct MultiSelectSheetView: View {
                             let new_value = shouldPaint
                             await frame.foreachOutlierGroupMulti(between: selectionStart,
                                                                  and: selectionEnd,
-                                                                 includingDustbin: viewModel.shouldShowDustbin)
-                            { group, isInDustbin in
+                                                                 includingTrash: viewModel.shouldShowTrash)
+                            { group, isInTrash in
                                 await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                                   overlapping: group)
 

@@ -13,14 +13,14 @@ public enum VideoPlayMode: String, Equatable, CaseIterable {
 }
 
 public enum SelectionMode: String, Equatable, CaseIterable {
-    case paint
-    case clear
+    case remove
+    case keep
     case razor
     case shovel
-    case dustbin
-    case getDust
+    case trash
+    case removeFromTrash
     case multi
-    case details
+    case information
     
     var localizedName: LocalizedStringKey {
         LocalizedStringKey(rawValue)
@@ -28,42 +28,42 @@ public enum SelectionMode: String, Equatable, CaseIterable {
 
     var iconName: String {
         switch self {
-        case .paint:
+        case .remove:
             return "remove_icon"
-        case .clear:
+        case .keep:
             return "keep_icon"
         case .razor:
             return "razor_icon"
         case .shovel:
             return "shovel_icon"
-        case .dustbin:
+        case .trash:
             return "add_to_trash_icon"
-        case .getDust:
+        case .removeFromTrash:
             return "remove_from_trash_icon"
         case .multi:
             return "multi_choice_icon"
-        case .details:
+        case .information:
             return "info_icon"
         }
     }
 
     var displayName: String {
         switch self {
-        case .paint:
+        case .remove:
             return "Remove"
-        case .clear:
+        case .keep:
             return "Keep"
         case .razor:
             return "Razor"
         case .shovel:
             return "Shovel"
-        case .dustbin:
+        case .trash:
             return "Trash"
-        case .getDust:
+        case .removeFromTrash:
             return "Get from Trash"
         case .multi:
             return "Multi"
-        case .details:
+        case .information:
             return "Information"
         }
     }
@@ -173,10 +173,10 @@ public final class ImageSequenceViewModel {
 
     var selectedOutliers = Set<OutlierGroupTableRow.ID>()
 
-    var selectionMode = SelectionMode.paint {
+    var selectionMode = SelectionMode.remove {
         didSet {
-            if selectionMode == .getDust {
-                shouldShowDustbin = true
+            if selectionMode == .removeFromTrash {
+                shouldShowTrash = true
             }
         }
     }
@@ -191,7 +191,7 @@ public final class ImageSequenceViewModel {
 
     var outlierOpacity = 1.0
 
-    var dustbinOpacity = 0.7
+    var trashOpacity = 0.7
 
     var interactionMode: InteractionMode = .scrub
 
@@ -220,10 +220,10 @@ public final class ImageSequenceViewModel {
     var showAllFrameProcessingStates = false
 
     var multiSelectionType: MultiSelectionType = .all
-    var multiSelectionPaintType: MultiSelectionPaintType = .clear
+    var multiSelectionPaintType: MultiSelectionPaintType = .keep
 
     var multiChoiceSheetShowing = false
-    var multiChoicePaintType: MultiChoicePaintType = .clear
+    var multiChoicePaintType: MultiChoicePaintType = .keep
     var multiChoiceType: MultiSelectionType = .all
 
     // the outlier grop we're starting a multi choice from
@@ -246,28 +246,28 @@ public final class ImageSequenceViewModel {
 
     var shouldShowInitialInstructions: Bool = false
 
-    var shouldShowDustbin: Bool = false
+    var shouldShowTrash: Bool = false
 
     var minimumClassificationSize: Int = 20
     var minimumClassificationSizeString = ""
 
     var classifyOnlyUnclassified: Bool = true
 
-    var dustbinLevel: Double {
+    var trashLevel: Double {
         didSet {
-            Task { await constants.set(dustbinLevel: self.dustbinLevel) }
+            Task { await constants.set(trashLevel: self.trashLevel) }
         }
     }
 
-    var dustbinLevelString: String = ""
+    var trashLevelString: String = ""
     
-    var smallDustMax: Int {
+    var smallTrashMax: Int {
         didSet {
-            Task { await constants.set(smallDustMax: self.smallDustMax) }
+            Task { await constants.set(smallTrashMax: self.smallTrashMax) }
         }
     }
 
-    var smallDustMaxString: String = ""
+    var smallTrashMaxString: String = ""
 
     var numberOfFramesToProcess: Int = 1
 
@@ -346,8 +346,8 @@ public final class ImageSequenceViewModel {
 
     init(with configManager: ConfigManager, closure: @Sendable @escaping (Int, Double, Int, Double) -> Void) async throws {
 
-        self.dustbinLevel = await constants.getDustbinLevel()
-        self.smallDustMax = await constants.getSmallDustMax()
+        self.trashLevel = await constants.getTrashLevel()
+        self.smallTrashMax = await constants.getSmallTrashMax()
         
         let config = configManager.config()
 
@@ -564,19 +564,19 @@ public final class ImageSequenceViewModel {
     
     var selectionColor: Color {
         switch self.selectionMode {
-        case .paint:
+        case .remove:
             return .red
-        case .clear:
+        case .keep:
             return .green
         case .shovel:
             return .gray
         case .razor:
             return .yellow
-        case .dustbin:
+        case .trash:
             return .pink
-        case .getDust:
+        case .removeFromTrash:
             return .mint
-        case .details:
+        case .information:
             return .blue
         case .multi:
             return .purple      // XXX ???
@@ -763,7 +763,7 @@ public final class ImageSequenceViewModel {
          _Much_ better UI performance when outliers smaller than a threshold of
          around 40 pixels are not presented in the UI separate from these images
 
-         compute here two images which are similar to the dustbin image,
+         compute here two images which are similar to the trash image,
          but instead contain all outliers smaller than a given threshold.
          One image for outliers we will paint, the other for outliers we will not.
          each is a monochrome image, can be displayed in the view layer as colored.
@@ -849,24 +849,24 @@ public final class ImageSequenceViewModel {
         }
     }
     
-    func computeDustbinImage(forFrame frame: FrameAirplaneRemover) {
-        // write an image from all of the dustbin, as there can be too much dust
+    func computeTrashImage(forFrame frame: FrameAirplaneRemover) {
+        // write an image from all of the trash, as there can be too much trash
         // to make each particle an outlier view 
         let width  = Int(self.frameWidth)
         let height = Int(self.frameHeight)
-        Log.d("computing dustbin image for frame \(frame.frameIndex)")
+        Log.d("computing trash image for frame \(frame.frameIndex)")
         Task.detached(priority: .userInitiated) {
-            var dustbinArray = [UInt8](repeating: 0, count: 2*width*height)
-            if let outlierGroups = await frame.outlierGroupDustbinList() {
-                Log.d("frame \(frame.frameIndex) has \(outlierGroups.count) dustbin groups")
+            var trashArray = [UInt8](repeating: 0, count: 2*width*height)
+            if let outlierGroups = await frame.outlierGroupTrashList() {
+                Log.d("frame \(frame.frameIndex) has \(outlierGroups.count) trash groups")
                 for group in outlierGroups {
                     for pixel in group.pixelSet {
                         let index = 2*(pixel.y*width+pixel.x)
                         var value = pixel.uInt16Value/0xFF
                         if value > UInt8.max { value = UInt16(UInt8.max) }
-                        if index < dustbinArray.count {
-                            dustbinArray[index] = UInt8(value)
-                            dustbinArray[index+1] = 0xFF // make it visible
+                        if index < trashArray.count {
+                            trashArray[index] = UInt8(value)
+                            trashArray[index+1] = 0xFF // make it visible
                         } else {
                             Log.w("pixel \(pixel) has invalid index")
                         }
@@ -876,8 +876,8 @@ public final class ImageSequenceViewModel {
                 Log.d("frame \(frame.frameIndex) has NO outliers :(")
             }
 
-            Log.d("computed dustbin image for frame \(frame.frameIndex)")
-            if let dataProvider = CGDataProvider(data: dustbinArray.data as CFData),
+            Log.d("computed trash image for frame \(frame.frameIndex)")
+            if let dataProvider = CGDataProvider(data: trashArray.data as CFData),
                let image = CGImage(width: width,
                                    height: height,
                                    bitsPerComponent: 8,
@@ -893,8 +893,8 @@ public final class ImageSequenceViewModel {
                 let nsImage = NSImage(cgImage: image, size: .zero)
                 let swiftUIImage = Image(nsImage: nsImage)
                 await MainActor.run {
-                    Log.d("set dustbin image for frame \(frame.frameIndex)")
-                    self.frames[frame.frameIndex].dustbinImage = swiftUIImage
+                    Log.d("set trash image for frame \(frame.frameIndex)")
+                    self.frames[frame.frameIndex].trashImage = swiftUIImage
                 }
             }
         }
@@ -994,7 +994,7 @@ public final class ImageSequenceViewModel {
             // update the real actor in the background
             Task.detached(priority: .userInitiated) {
                 await frame.userSelectUndecidedOutliers(toShouldPaint: shouldPaint,
-                                                        includingDustbin: self.shouldShowDustbin)
+                                                        includingTrash: self.shouldShowTrash)
 
                 if renderImmediately {
                     // XXX make render here an option in settings
@@ -1017,7 +1017,7 @@ public final class ImageSequenceViewModel {
             // update the real actor in the background
             Task.detached {
                 await frame.userSelectAllOutliers(toShouldPaint: shouldPaint,
-                                                  includingDustbin: self.shouldShowDustbin)
+                                                  includingTrash: self.shouldShowTrash)
 
                 if renderImmediately {
                     // XXX make render here an option in settings
@@ -1096,19 +1096,19 @@ public final class ImageSequenceViewModel {
                         Log.e("error removing \(binaryBlobFilename): \(error)")
                     }
 
-                    let dustbinBinaryFilename = await frameToClear.dustbinBinaryFilename
+                    let trashBinaryFilename = await frameToClear.trashBinaryFilename
                     do {
-                        Log.d("trying to remove \(dustbinBinaryFilename)")
-                        try FileManager.default.removeItem(atPath: dustbinBinaryFilename)
+                        Log.d("trying to remove \(trashBinaryFilename)")
+                        try FileManager.default.removeItem(atPath: trashBinaryFilename)
                     } catch {
-                        Log.e("error removing \(dustbinBinaryFilename): \(error)")
+                        Log.e("error removing \(trashBinaryFilename): \(error)")
                     }
 
                     currentFrame = await frameToClear.nextFrame
                     numberOfFramesLeft -= 1
                     Task { @MainActor in
                         let frameView = self.frames[frameToClear.frameIndex]
-                        frameView.dustbinImage = nil
+                        frameView.trashImage = nil
                         frameView.positiveOutlierImage = nil
                         frameView.negativeOutlierImage = nil
                         frameView.outlierViews = nil
@@ -1135,7 +1135,7 @@ public final class ImageSequenceViewModel {
                 // XXX set state
                 await frame.set(state: .secondClassification)
                 
-                await frame.applyDecisionTreeToAllOutliers(includingDustbin: self.shouldShowDustbin)
+                await frame.applyDecisionTreeToAllOutliers(includingTrash: self.shouldShowTrash)
                 
                 try await self.render(frame: frame, now: true) {
                     Task {

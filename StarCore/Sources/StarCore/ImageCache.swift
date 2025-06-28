@@ -4,7 +4,7 @@ import logging
 import Cocoa
 import Semaphore
 
-public let imageCache = ImageCache(cacheLimit: 100) // XXX guess
+public let imageCache = ImageCache(cacheLimit: 10) // XXX guess
 
 /*
 
@@ -90,7 +90,7 @@ public actor ImageCache {
 }
 
 public func loadImageInt(filename: String) async throws -> PixelatedImage? {
-    //print("ImageCache loadImageInt(filename: \(filename))")
+    Log.d("ImageCache loadImageInt(filename: \(filename))")
     let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
     let request = URLRequest(url: imageURL as URL)
     let (data, _) = try await URLSession.shared.data(for: request)

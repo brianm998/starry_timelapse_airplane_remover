@@ -30,7 +30,7 @@ You should have received a copy of the GNU General Public License along with sta
  ]
 */
 public struct BlobBinaryLoader {
-    // returns good blobs first, then the dustbin
+    // returns good blobs first, then the trash
     public func load(from dirname: String,
                      with frameIndex: Int) async throws -> [UInt32: Blob]
     {
@@ -38,10 +38,10 @@ public struct BlobBinaryLoader {
                           with: frameIndex)
     }
 
-    public func loadDustbin(from dirname: String,
+    public func loadTrash(from dirname: String,
                             with frameIndex: Int) async throws -> [UInt32: Blob]
     {
-         try await loadMap(from: "\(dirname)/\(BlobBinarySaver.dustbinBinaryFilename)",
+         try await loadMap(from: "\(dirname)/\(BlobBinarySaver.trashBinaryFilename)",
                            with: frameIndex)
     }
 
@@ -81,7 +81,9 @@ public actor BlobBinarySaver {
     }
 
     public static let outlierBinaryFilename = "outliers.bin"
-    public static let dustbinBinaryFilename = "dust.bin"
+
+    // the trash used to be called the dustbin
+    public static let trashBinaryFilename = "dust.bin" 
     
     public func save(to filename: String) async {
         // save the blob refs as an image here

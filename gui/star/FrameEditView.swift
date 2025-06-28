@@ -96,21 +96,21 @@ struct FrameEditView: View {
 
     var currentCrosshairCursor: NSCursor {
         switch viewModel.selectionMode {
-        case .paint:
+        case .remove:
             return .removeCrosshair
-        case .clear:
+        case .keep:
             return .keepCrosshair
         case .shovel:
             return .shovelCrosshair
         case .razor:
             return .razorCrosshair
             
-        case .dustbin:
+        case .trash:
             return .deleteTrashCrosshair
             
-        case .getDust:
+        case .removeFromTrash:
             return .extractTrashCrosshair
-        case .details:
+        case .information:
             return .infoCrosshair
 
         case .multi:
@@ -121,21 +121,21 @@ struct FrameEditView: View {
     
     var currentPointingCursor: NSCursor {
         switch viewModel.selectionMode {
-        case .paint:
+        case .remove:
             return .removePointing
-        case .clear:
+        case .keep:
             return .keepPointing
         case .shovel:
             return .shovelPointing
         case .razor:
             return .razorPointing
             
-        case .dustbin:
+        case .trash:
             return .deleteTrashPointing
             
-        case .getDust:
+        case .removeFromTrash:
             return .extractTrashPointing
-        case .details:
+        case .information:
             return .infoPointing
 
         case .multi:
@@ -170,11 +170,11 @@ struct FrameEditView: View {
                   let frameView = viewModel.currentFrameView
                   
                   switch viewModel.selectionMode {
-                  case .paint:
+                  case .remove:
                       update(frame: frameView, shouldPaint: true,
                              between: selectionStart, and: end_location)
                       
-                  case .clear:
+                  case .keep:
                       update(frame: frameView, shouldPaint: false,
                              between: selectionStart, and: end_location)
                       
@@ -191,9 +191,9 @@ struct FrameEditView: View {
                                   await frame.markAsChanged()
                               }
                               
-                              // if we are showing the dustbin, recompute the image after the shovel
-                              if viewModel.shouldShowDustbin {
-                                  self.viewModel.computeDustbinImage(forFrame: frame)
+                              // if we are showing the trash, recompute the image after the shovel
+                              if viewModel.shouldShowTrash {
+                                  self.viewModel.computeTrashImage(forFrame: frame)
                               }
                           }
                       }
@@ -209,23 +209,23 @@ struct FrameEditView: View {
                               await self.viewModel.computeSmallOutlierImage(forFrame: frame)
                           }
                           
-                          // if we are showing the dustbin, recompute the image after the razor
-                          if viewModel.shouldShowDustbin {
-                              self.viewModel.computeDustbinImage(forFrame: frame)
+                          // if we are showing the trash, recompute the image after the razor
+                          if viewModel.shouldShowTrash {
+                              self.viewModel.computeTrashImage(forFrame: frame)
                           }
                       }
                       
-                  case .dustbin:
-                      dumpInDustbin(from: frameView,
+                  case .trash:
+                      dumpInTrash(from: frameView,
                                     between: selectionStart,
                                     and: end_location) 
                       
-                  case .getDust:
+                  case .removeFromTrash:
                       extractDust(from: frameView,
                                   between: selectionStart,
                                   and: end_location) 
 
-                  case .details:
+                  case .information:
                       //let _ = Log.d("DETAILS")
 
                       if let frame = frameView.frame {
@@ -235,7 +235,7 @@ struct FrameEditView: View {
                               
                               await frame.foreachOutlierGroupMulti(between: selectionStart,
                                                                    and: end_location,
-                                                                   includingDustbin: viewModel.shouldShowDustbin) { group, isInDustbin in // XXX isInDustbin not presented in UI
+                                                                   includingTrash: viewModel.shouldShowTrash) { group, isInTrash in // XXX isInTrash not presented in UI
                                   let new_row = await OutlierGroupTableRow(group)
                                   await _outlierGroupTableRows.append(new_row)
                               }
@@ -293,7 +293,7 @@ struct FrameEditView: View {
         if let frame = frameView.frame {
             Task.detached(priority: .userInitiated) {
                 try await frame.applyRazor(in: gestureBounds,
-                                           includingDustbin: viewModel.shouldShowDustbin)
+                                           includingTrash: viewModel.shouldShowTrash)
                 await viewModel.setOutlierGroups(forFrame: frame)
                 await MainActor.run {
                     viewModel.selectionStart = nil
@@ -306,17 +306,17 @@ struct FrameEditView: View {
         }
     }
 
-    // takes outliers from the view layer and dumps them in the dustbin
-    private func dumpInDustbin(from frameView: FrameViewModel,
+    // takes outliers from the view layer and dumps them in the trash
+    private func dumpInTrash(from frameView: FrameViewModel,
                                between selectionStart: CGPoint,
                                and end_location: CGPoint)
     {
-        frameView.dumpInDustbin(between: selectionStart, and: end_location)
+        frameView.dumpInTrash(between: selectionStart, and: end_location)
         viewModel.selectionStart = nil
         viewModel.selectionEnd = nil
     }
 
-    // promotes outliers from dustbin to the view layer
+    // promotes outliers from trash to the view layer
     private func extractDust(from frameView: FrameViewModel,
                              between selectionStart: CGPoint,
                              and end_location: CGPoint)
@@ -337,15 +337,15 @@ struct FrameEditView: View {
                 await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                   between: selectionStart,
                                                   and: end_location,
-                                                  includingDustbin: viewModel.shouldShowDustbin)
+                                                  includingTrash: viewModel.shouldShowTrash)
                 await viewModel.setOutlierGroups(forFrame: frame)
                 
                 await self.viewModel.computeSmallOutlierImage(forFrame: frame)
                 
-                // if we are showing the dustbin, recompute the image
-                if await viewModel.shouldShowDustbin {
+                // if we are showing the trash, recompute the image
+                if await viewModel.shouldShowTrash {
                     if let frame = await frameView.frame {
-                        await self.viewModel.computeDustbinImage(forFrame: frame)
+                        await self.viewModel.computeTrashImage(forFrame: frame)
                     }
                 }
                 

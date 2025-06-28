@@ -20,8 +20,8 @@ struct RightPanel: View {
     let foobar2 = 138.0/255.0
 
     @FocusState private var minimumClassificationSizeIsFirstResponder: Bool
-    @FocusState private var dustbinLevelIsFirstResponder: Bool
-    @FocusState private var smallDustMaxIsFirstResponder: Bool
+    @FocusState private var trashLevelIsFirstResponder: Bool
+    @FocusState private var smallTrashMaxIsFirstResponder: Bool
     
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -114,39 +114,39 @@ struct RightPanel: View {
                             Toggle("Show Ignore Bar", isOn: $viewModel.showIgnoreLowerBar)
                               .foregroundColor(.white)
                             
-                            Toggle("Show Dustbin", isOn: $viewModel.shouldShowDustbin)
+                            Toggle("Show Trash", isOn: $viewModel.shouldShowTrash)
                               .foregroundColor(.white)
 
-                            Text("Dustbin Level")
+                            Text("Trash Level")
                               .foregroundColor(.yellow)
-                            TextField("\(viewModel.dustbinLevel)",
-                                      text: $viewModel.dustbinLevelString)
+                            TextField("\(viewModel.trashLevel)",
+                                      text: $viewModel.trashLevelString)
                               .frame(maxWidth: 60)
-                              .focused($dustbinLevelIsFirstResponder)
+                              .focused($trashLevelIsFirstResponder)
                               .onSubmit {
-                                  let filtered = viewModel.dustbinLevelString.filter { "0123456789.-".contains($0) }
+                                  let filtered = viewModel.trashLevelString.filter { "0123456789.-".contains($0) }
                                   if let newValue = Double(filtered),
                                      newValue >= -1,
                                      newValue <= 1
                                   {
-                                      viewModel.dustbinLevel = newValue
-                                      viewModel.dustbinLevelString = "\(newValue)"
-                                      self.dustbinLevelIsFirstResponder = false
+                                      viewModel.trashLevel = newValue
+                                      viewModel.trashLevelString = "\(newValue)"
+                                      self.trashLevelIsFirstResponder = false
                                   }
                               }
                             
-                            Text("Small Dust Max")
+                            Text("Small Trash Max")
                               .foregroundColor(.yellow)
-                            TextField("\(viewModel.smallDustMax)",
-                                      text: $viewModel.smallDustMaxString)
+                            TextField("\(viewModel.smallTrashMax)",
+                                      text: $viewModel.smallTrashMaxString)
                               .frame(maxWidth: 60)
-                              .focused($smallDustMaxIsFirstResponder)
+                              .focused($smallTrashMaxIsFirstResponder)
                               .onSubmit {
-                                  let filtered = viewModel.smallDustMaxString.filter { "0123456789".contains($0) }
+                                  let filtered = viewModel.smallTrashMaxString.filter { "0123456789".contains($0) }
                                   if let newValue = Int(filtered) {
-                                      viewModel.smallDustMax = newValue
-                                      viewModel.smallDustMaxString = "\(newValue)"
-                                      self.smallDustMaxIsFirstResponder = false
+                                      viewModel.smallTrashMax = newValue
+                                      viewModel.smallTrashMaxString = "\(newValue)"
+                                      self.smallTrashMaxIsFirstResponder = false
                                   }
                               }
                             
@@ -188,10 +188,10 @@ struct RightPanel: View {
                             Slider(value: $viewModel.outlierOpacity, in : 0...1)
                               .frame(maxWidth: 140, alignment: .bottom)
                             
-                            Text("Dustbin Opacity")
+                            Text("Trash Opacity")
                               .foregroundColor(.white)
                             
-                            Slider(value: $viewModel.dustbinOpacity, in : 0...1)
+                            Slider(value: $viewModel.trashOpacity, in : 0...1)
                               .frame(maxWidth: 140, alignment: .bottom)
                             
                             Text("Frame Opacity")
