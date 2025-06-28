@@ -334,7 +334,7 @@ struct FrameEditView: View {
         if let frame = frameView.frame {
             let new_value = shouldRemove
             Task.detached(priority: .userInitiated) {
-                await frame.userSelectAllOutliers(toShouldPaint: new_value,
+                await frame.userSelectAllOutliers(toShouldRemove: new_value,
                                                   between: selectionStart,
                                                   and: end_location,
                                                   includingTrash: viewModel.shouldShowTrash)

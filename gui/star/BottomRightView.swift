@@ -167,7 +167,7 @@ struct BottomRightView: View {
               .sheet(isPresented: $viewModel.multiSelectSheetShowing) {
                   MultiSelectSheetView(isVisible: $viewModel.multiSelectSheetShowing,
                                        multiSelectionType: $viewModel.multiSelectionType,
-                                       multiSelectionPaintType: $viewModel.multiSelectionPaintType,
+                                       multiSelectionRemovalType: $viewModel.multiSelectionRemovalType,
                                        frames: $viewModel.frames,
                                        currentIndex: $viewModel.currentIndex,
                                        selectionStart: $viewModel.selectionStart,

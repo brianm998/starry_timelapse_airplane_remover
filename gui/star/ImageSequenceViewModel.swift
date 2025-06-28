@@ -220,7 +220,7 @@ public final class ImageSequenceViewModel {
     var showAllFrameProcessingStates = false
 
     var multiSelectionType: MultiSelectionType = .all
-    var multiSelectionPaintType: MultiSelectionPaintType = .keep
+    var multiSelectionRemovalType: MultiSelectionRemovalType = .keep
 
     var multiChoiceSheetShowing = false
     var multiChoicePaintType: MultiChoicePaintType = .keep
@@ -993,7 +993,7 @@ public final class ImageSequenceViewModel {
         if let frame = frameView.frame {
             // update the real actor in the background
             Task.detached(priority: .userInitiated) {
-                await frame.userSelectUndecidedOutliers(toShouldPaint: shouldRemove,
+                await frame.userSelectUndecidedOutliers(toShouldRemove: shouldRemove,
                                                         includingTrash: self.shouldShowTrash)
 
                 if renderImmediately {
@@ -1011,12 +1011,12 @@ public final class ImageSequenceViewModel {
                              to shouldRemove: Bool,
                              renderImmediately: Bool = true)
     {
-        Log.d("setAllFrameOutliers in frame \(frameView.frameIndex) to should paint \(shouldRemove)")
+        Log.d("setAllFrameOutliers in frame \(frameView.frameIndex) to should remove \(shouldRemove)")
         
         if let frame = frameView.frame {
             // update the real actor in the background
             Task.detached {
-                await frame.userSelectAllOutliers(toShouldPaint: shouldRemove,
+                await frame.userSelectAllOutliers(toShouldRemove: shouldRemove,
                                                   includingTrash: self.shouldShowTrash)
 
                 if renderImmediately {

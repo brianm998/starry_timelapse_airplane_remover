@@ -1317,7 +1317,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(self.frameIndex) DONE applyDecisionTreeToAllOutliers")
     }
     
-    public func userSelectAllOutliers(toShouldPaint shouldRemove: Bool,
+    public func userSelectAllOutliers(toShouldRemove shouldRemove: Bool,
                                       includingTrash: Bool) async
     {
         await Task.detached(priority: .userInitiated) {
@@ -1335,7 +1335,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public func userSelectUndecidedOutliers(toShouldPaint shouldRemove: Bool,
+    public func userSelectUndecidedOutliers(toShouldRemove shouldRemove: Bool,
                                             includingTrash: Bool) async
     {
         await Task.detached(priority: .userInitiated) {
@@ -1354,7 +1354,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public func userSelectAllOutliers(toShouldPaint shouldRemove: Bool,
+    public func userSelectAllOutliers(toShouldRemove shouldRemove: Bool,
                                       overlapping group: OutlierGroup) async
     {
         guard let outlierGroups else { return }
@@ -1368,7 +1368,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
-    public func userSelectAllOutliers(toShouldPaint shouldRemove: Bool,
+    public func userSelectAllOutliers(toShouldRemove shouldRemove: Bool,
                                       between startLocation: CGPoint,
                                       and endLocation: CGPoint,
                                       includingTrash: Bool) async

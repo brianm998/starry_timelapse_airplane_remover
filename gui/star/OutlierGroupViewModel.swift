@@ -10,7 +10,7 @@ import logging
 class OutlierGroupViewModel: Identifiable {
 
     // XXX make the UI use this to see changes in paintability
-    var paintObserver = OutlierPaintObserver() 
+    var removeObserver = OutlierRemovalObserver() 
     
     init(viewModel: ImageSequenceViewModel,
          group: OutlierGroup,
@@ -24,16 +24,16 @@ class OutlierGroupViewModel: Identifiable {
         self.bounds = bounds
         self.image = image
 
-        await group.set(paintObserver: paintObserver)
+        await group.set(removeObserver: removeObserver)
         if let shouldRemove = await group.shouldRemove() {
-            paintObserver.shouldRemove = shouldRemove
+            removeObserver.shouldRemove = shouldRemove
         }
     }
 
     let id = UUID()
     
     fileprivate func setWillPaint(from paintReason: RemoveReason?) {
-        paintObserver.shouldRemove = paintReason
+        removeObserver.shouldRemove = paintReason
     }
 
     private var _line: Line?
@@ -115,7 +115,7 @@ class OutlierGroupViewModel: Identifiable {
     }
 
     var willRemove: Bool? {
-        if let will_paint = self.paintObserver.shouldRemove {
+        if let will_paint = self.removeObserver.shouldRemove {
             return will_paint.willRemove 
         } else {
             return nil          // don't know
@@ -125,7 +125,7 @@ class OutlierGroupViewModel: Identifiable {
     var groupColor: Color {
         if isSelected { return .orange }
 
-        if let will_paint = self.paintObserver.shouldRemove {
+        if let will_paint = self.removeObserver.shouldRemove {
           if will_paint.willRemove {
                 return .red
             } else {
@@ -139,7 +139,7 @@ class OutlierGroupViewModel: Identifiable {
     var arrowColor: Color {
         if isSelected { return .blue }
         
-        if let will_paint = self.paintObserver.shouldRemove {
+        if let will_paint = self.removeObserver.shouldRemove {
             if self.arrowSelected {            
                 if will_paint.willRemove {
                     return .red

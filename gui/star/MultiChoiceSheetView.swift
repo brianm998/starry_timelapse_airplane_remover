@@ -224,7 +224,7 @@ struct MultiChoiceSheetView: View {
         if let frame = frameView.frame {
             let new_value = shouldRemove
 //            Task.detached(priority: .userInitiated) {
-                await frame.userSelectAllOutliers(toShouldPaint: new_value,
+                await frame.userSelectAllOutliers(toShouldRemove: new_value,
                                                   overlapping: multiChoiceOutlierView.groupViewModel.group)
                 // save outlier paintability changes here
                 await frame.writeOutliersRemoveReasons()

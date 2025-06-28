@@ -14,7 +14,7 @@ public enum MultiSelectionType: String, Equatable, CaseIterable {
     }
 }
 
-public enum MultiSelectionPaintType: String, Equatable, CaseIterable {
+public enum MultiSelectionRemovalType: String, Equatable, CaseIterable {
     case remove
     case keep
     case removeOverlaps
@@ -30,7 +30,7 @@ struct MultiSelectSheetView: View {
     
     @Binding var isVisible: Bool
     @Binding var multiSelectionType: MultiSelectionType
-    @Binding var multiSelectionPaintType: MultiSelectionPaintType
+    @Binding var multiSelectionRemovalType: MultiSelectionRemovalType
     @Binding var frames: [FrameViewModel]
     @Binding var currentIndex: Int
     @Binding var selectionStart: CGPoint?
@@ -41,10 +41,10 @@ struct MultiSelectSheetView: View {
         VStack {
             Spacer()
               .frame(minWidth: 300)
-            Text("Change painting in the selected area across more than one frame.")
+            Text("Change removing in the selected area across more than one frame.")
 
-            Picker("", selection: $multiSelectionPaintType) {
-                ForEach(MultiSelectionPaintType.allCases, id: \.self) { value in
+            Picker("", selection: $multiSelectionRemovalType) {
+                ForEach(MultiSelectionRemovalType.allCases, id: \.self) { value in
                     Text(value.localizedName).tag(value)
                 }
             }
@@ -62,42 +62,42 @@ struct MultiSelectSheetView: View {
 
             switch multiSelectionType {
             case .all:
-                switch multiSelectionPaintType {
+                switch multiSelectionRemovalType {
                 case .remove:
-                    Text("Paint outliers in this area in all \(frames.count) frames")
+                    Text("Remove outliers in this area in all \(frames.count) frames")
                 case .keep:
-                    Text("Clear outliers in this area in all \(frames.count) frames")
+                    Text("Keep outliers in this area in all \(frames.count) frames")
                 case .removeOverlaps:
-                    Text("Paint overlaying outliers in this area in all \(frames.count) frames")
+                    Text("Remove overlaying outliers in this area in all \(frames.count) frames")
                 case .keepOverlaps:
-                    Text("Clear overlaying outliers in this area in all \(frames.count) frames")
+                    Text("Keep overlaying outliers in this area in all \(frames.count) frames")
                 }
                 
             case .allAfter:
                 let numFrames = frames.count - currentIndex + 1
-                switch multiSelectionPaintType {
+                switch multiSelectionRemovalType {
                 case .remove:
-                    Text("Paint outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
+                    Text("Remove outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
                 case .keep:
-                    Text("Clear outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
+                    Text("Keep outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
                 case .removeOverlaps:
-                    Text("Paint overlaying outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
+                    Text("Remove overlaying outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
                 case .keepOverlaps:
-                    Text("Clear overlaying outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
+                    Text("Keep overlaying outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
 
                 }
                     
             case .allBefore:
                 let numFrames = currentIndex + 1
-                switch multiSelectionPaintType {
+                switch multiSelectionRemovalType {
                 case .remove:
-                    Text("Paint outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
+                    Text("Remove outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
                 case .keep:
-                    Text("Clear outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
+                    Text("Keep outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
                 case .removeOverlaps:
-                    Text("Paint overlaying outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
+                    Text("Remove overlaying outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
                 case .keepOverlaps:
-                    Text("Clear overlaying outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
+                    Text("Keep overlaying outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
                 }
 
            case .someAfter:
@@ -113,7 +113,7 @@ struct MultiSelectSheetView: View {
                 switch multiSelectionType {
                 case .all:
                     Button("Modify") {
-                        switch multiSelectionPaintType {
+                        switch multiSelectionRemovalType {
                         case .remove:
                             self.updateFrames(shouldRemove: true)
                         case .keep:
@@ -129,7 +129,7 @@ struct MultiSelectSheetView: View {
                 case .allAfter:
                     Button("Modify") {
 
-                        switch multiSelectionPaintType {
+                        switch multiSelectionRemovalType {
                         case .remove:
                             self.updateFrames(shouldRemove: true,
                                               startIndex: currentIndex)
@@ -149,7 +149,7 @@ struct MultiSelectSheetView: View {
                 case .allBefore:
                     Button("Modify") {
 
-                        switch multiSelectionPaintType {
+                        switch multiSelectionRemovalType {
                         case .remove:
                             self.updateFrames(shouldRemove: true,
                                               startIndex: 0,
@@ -175,7 +175,7 @@ struct MultiSelectSheetView: View {
                         Button("Modify") {
 
 
-                            switch multiSelectionPaintType {
+                            switch multiSelectionRemovalType {
                             case .remove:
                                 self.updateFrames(shouldRemove: true,
                                                   startIndex: currentIndex,
@@ -205,7 +205,7 @@ struct MultiSelectSheetView: View {
                 case .someBefore:
                     HStack {
                         Button("Modify") {
-                            switch multiSelectionPaintType {
+                            switch multiSelectionRemovalType {
                             case .remove:
                                 self.updateFrames(shouldRemove: true,
                                                   startIndex: currentIndex - number_of_frames,
@@ -238,51 +238,6 @@ struct MultiSelectSheetView: View {
         }.frame(minWidth: 300, idealWidth: 450, maxWidth: 800)
     }
 
-    // no longer used, base .dusbin and .getDust off of this
-    /*
-    private func deleteFromFrames(startIndex: Int = 0, endIndex: Int? = nil) {
-        let end = endIndex ?? frames.count
-        let frames = self.frames
-        let currentIndex = currentIndex
-        if let selectionStart = selectionStart,
-           let selectionEnd = selectionEnd
-        {
-            for frameView in frames {
-                if frameView.frameIndex >= startIndex,
-                   frameView.frameIndex <= end
-                {
-                    let gestureBounds = frameView.deleteOutliers(between: selectionStart,
-                                                             and: selectionEnd)
-
-                    if let frame = frameView.frame {
-                        Task.detached(priority: .userInitiated) {
-                            do {
-                                try await frame.deleteOutliers(in: gestureBounds)
-                                // save outlier paintability changes here
-                                await frame.writeOutliersRemoveReasons()
-                                Task {
-                                    try? await viewModel.render(frame: frame, closure: nil)
-                                }
-                                
-                            } catch {
-                                // XXX handle errors here better
-                                Log.e("failed to delete outliers: \(error)")
-                            }
-                            if currentIndex == frame.frameIndex {
-                                Task {
-                                    await MainActor.run {
-                                        self.selectionStart = nil
-                                        self.selectionEnd = nil
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-*/
     private func updateFrames(shouldRemove: Bool,
                               startIndex: Int = 0,
                               endIndex: Int? = nil)
@@ -301,11 +256,11 @@ struct MultiSelectSheetView: View {
                 {
                     let new_value = shouldRemove
                     Task {
-                        await frame.userSelectAllOutliers(toShouldPaint: new_value,
+                        await frame.userSelectAllOutliers(toShouldRemove: new_value,
                                                           between: selectionStart,
                                                           and: selectionEnd,
                                                           includingTrash: viewModel.shouldShowTrash)
-                        // save outlier paintability changes here
+                        // save outlier removeability changes here
                         await frame.writeOutliersRemoveReasons()
 
                         Task {
@@ -347,11 +302,11 @@ struct MultiSelectSheetView: View {
                                                                  and: selectionEnd,
                                                                  includingTrash: viewModel.shouldShowTrash)
                             { group, isInTrash in
-                                await frame.userSelectAllOutliers(toShouldPaint: new_value,
+                                await frame.userSelectAllOutliers(toShouldRemove: new_value,
                                                                   overlapping: group)
 
                             }
-                            // save outlier paintability changes here
+                            // save outlier removeability changes here
                             await frame.writeOutliersRemoveReasons()
 
                             Task {

@@ -25,7 +25,7 @@ nonisolated(unsafe) public var IMAGE_HEIGHT: Double?
 
 @MainActor
 @Observable
-public class OutlierPaintObserver {
+public class OutlierRemovalObserver {
     public init() { }
     
     public var shouldRemove: RemoveReason?
@@ -189,22 +189,22 @@ public actor OutlierGroup: CustomStringConvertible,
     
     public func shouldRemove() -> RemoveReason? { _shouldRemove }
 
-    fileprivate var _shouldRemove: RemoveReason?  // should we paint this group, and why?
+    fileprivate var _shouldRemove: RemoveReason?  // should we remove this group, and why?
 
-    public var paintObserver: OutlierPaintObserver?
+    public var removeObserver: OutlierRemovalObserver?
 
-    public func set(paintObserver: OutlierPaintObserver) {
-        self.paintObserver = paintObserver
+    public func set(removeObserver: OutlierRemovalObserver) {
+        self.removeObserver = removeObserver
     }
     
     public func shouldRemove(_ shouldRemove: RemoveReason, markAsChanged: Bool = true) async {
-        //Log.d("\(self) should paint \(shouldRemove) self.frame \(self.frame)")
+        //Log.d("\(self) should remove \(shouldRemove) self.frame \(self.frame)")
         self._shouldRemove = shouldRemove
 
         // XXX update frame that it's different
         if markAsChanged { await self.frame?.markAsChanged() }
 
-        await paintObserver?.set(shouldRemove: shouldRemove)
+        await removeObserver?.set(shouldRemove: shouldRemove)
     }
 
     // has to be optional so we can read OuterlierGroups as codable
@@ -323,7 +323,7 @@ public actor OutlierGroup: CustomStringConvertible,
     
     private var cachedTestImage: CGImage? 
 
-    fileprivate func testPaintAt(x: Int, y: Int, pixel: Pixel, imageData: inout Data) -> Bool {
+    fileprivate func testRemoveAt(x: Int, y: Int, pixel: Pixel, imageData: inout Data) -> Bool {
         
         let bytesPerPixel = 64/8
         
@@ -346,7 +346,7 @@ public actor OutlierGroup: CustomStringConvertible,
     }
     
     // outputs an image the same size as this outlier's bounding box,
-    // coloring the outlier pixels red if will paint, green if not
+    // coloring the outlier pixels red if will remove, green if not
     public func testImage() async -> CGImage? {
 
         let bytesPerPixel = 64/8
@@ -375,10 +375,10 @@ public actor OutlierGroup: CustomStringConvertible,
 
             //Log.d("centralCoord \(centralCoord)")
             line.iterate(.forwards, from: centralCoord) { x, y, iterationDirection in
-                testPaintAt(x: x, y: y, pixel: pixel, imageData: &imageData)
+                testRemoveAt(x: x, y: y, pixel: pixel, imageData: &imageData)
             }
             line.iterate(.backwards, from: centralCoord) { x, y, iterationDirection in
-                testPaintAt(x: x, y: y, pixel: pixel, imageData: &imageData)
+                testRemoveAt(x: x, y: y, pixel: pixel, imageData: &imageData)
             }
         }
         

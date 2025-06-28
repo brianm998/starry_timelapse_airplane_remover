@@ -21,8 +21,8 @@ struct OutlierGroupView: View {
             let frameWidth = groupViewModel.viewModel.frameWidth
             let frameHeight = groupViewModel.viewModel.frameHeight
             let bounds = groupViewModel.bounds
-            let unknown_paint = groupViewModel.paintObserver.shouldRemove?.willRemove == nil
-            let will_paint = groupViewModel.paintObserver.shouldRemove?.willRemove ?? false
+            let unknown_paint = groupViewModel.removeObserver.shouldRemove?.willRemove == nil
+            let will_paint = groupViewModel.removeObserver.shouldRemove?.willRemove ?? false
             let arrow_length = groupViewModel.viewModel.arrowLength
             let arrow_height = groupViewModel.viewModel.arrowHeight
             let line_width = groupViewModel.viewModel.lineWidth
