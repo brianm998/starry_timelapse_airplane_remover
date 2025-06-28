@@ -1,17 +1,17 @@
 import SwiftUI
 import StarCore
 
-// this button clears everything
+// this button keeps everything
 
-struct ClearAllButton: View {
+struct KeepAllButton: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     var body: some View {
         Button(action: {
             viewModel.setAllCurrentFrameOutliers(to: false, renderImmediately: false)
         }) {
-            Text("Clear All")
+            Text("Keep All")
         }
-          .help("don't paint any of the outlier groups in the frame")
+          .help("keep all of the outlier groups in the frame")
     }
 }

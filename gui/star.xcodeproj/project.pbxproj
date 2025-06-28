@@ -26,8 +26,6 @@
 		D33FFC122A2CF92900F38194 /* VideoPlaybackButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC102A2CF92900F38194 /* VideoPlaybackButtons.swift */; };
 		D33FFC142A2CFAED00F38194 /* ImageSequenceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC132A2CFAED00F38194 /* ImageSequenceView.swift */; };
 		D33FFC162A2CFF4700F38194 /* LoadAllOutliersButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC152A2CFF4700F38194 /* LoadAllOutliersButton.swift */; };
-		D33FFC182A2D007800F38194 /* PaintAllButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC172A2D007800F38194 /* PaintAllButton.swift */; };
-		D33FFC1A2A2D02A300F38194 /* ClearAllButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC192A2D02A300F38194 /* ClearAllButton.swift */; };
 		D33FFC1E2A2D39BA00F38194 /* ProgressBars.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC1D2A2D39BA00F38194 /* ProgressBars.swift */; };
 		D33FFC202A2D3BCD00F38194 /* FrameViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC1F2A2D3BCD00F38194 /* FrameViewModel.swift */; };
 		D33FFC232A2D48F300F38194 /* FrameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC212A2D48F300F38194 /* FrameView.swift */; };
@@ -50,6 +48,8 @@
 		D386FA2F298B617400878B56 /* starUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2E298B617400878B56 /* starUITestsLaunchTests.swift */; };
 		D392EB0C2E0AFE320020E16A /* CursorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D392EB0B2E0AFE320020E16A /* CursorView.swift */; };
 		D392EB152E0C48D60020E16A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D392EB142E0C48D60020E16A /* Assets.xcassets */; };
+		D392EB182E101CDF0020E16A /* RemoveAllButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D392EB172E101CDF0020E16A /* RemoveAllButton.swift */; };
+		D392EB192E101CDF0020E16A /* KeepAllButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D392EB162E101CDF0020E16A /* KeepAllButton.swift */; };
 		D39EEDF42C027AD800DD5BC4 /* ClearUndecidedButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39EEDF32C027AD700DD5BC4 /* ClearUndecidedButton.swift */; };
 		D3A0D3AE2CF383DF00FD2E9E /* ExpandUpButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */; };
 		D3A0D3B02CF3AEB800FD2E9E /* FinalGUIProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A0D3AF2CF3AEB800FD2E9E /* FinalGUIProcessor.swift */; };
@@ -116,8 +116,6 @@
 		D33FFC102A2CF92900F38194 /* VideoPlaybackButtons.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoPlaybackButtons.swift; sourceTree = "<group>"; };
 		D33FFC132A2CFAED00F38194 /* ImageSequenceView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ImageSequenceView.swift; sourceTree = "<group>"; };
 		D33FFC152A2CFF4700F38194 /* LoadAllOutliersButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LoadAllOutliersButton.swift; sourceTree = "<group>"; };
-		D33FFC172A2D007800F38194 /* PaintAllButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PaintAllButton.swift; sourceTree = "<group>"; };
-		D33FFC192A2D02A300F38194 /* ClearAllButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ClearAllButton.swift; sourceTree = "<group>"; };
 		D33FFC1D2A2D39BA00F38194 /* ProgressBars.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ProgressBars.swift; sourceTree = "<group>"; };
 		D33FFC1F2A2D3BCD00F38194 /* FrameViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameViewModel.swift; sourceTree = "<group>"; };
 		D33FFC212A2D48F300F38194 /* FrameView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameView.swift; sourceTree = "<group>"; };
@@ -143,6 +141,8 @@
 		D386FA2E298B617400878B56 /* starUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = starUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		D392EB0B2E0AFE320020E16A /* CursorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorView.swift; sourceTree = "<group>"; };
 		D392EB142E0C48D60020E16A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		D392EB162E101CDF0020E16A /* KeepAllButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeepAllButton.swift; sourceTree = "<group>"; };
+		D392EB172E101CDF0020E16A /* RemoveAllButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoveAllButton.swift; sourceTree = "<group>"; };
 		D39EEDF32C027AD700DD5BC4 /* ClearUndecidedButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ClearUndecidedButton.swift; sourceTree = "<group>"; };
 		D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpandUpButton.swift; sourceTree = "<group>"; };
 		D3A0D3AF2CF3AEB800FD2E9E /* FinalGUIProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinalGUIProcessor.swift; sourceTree = "<group>"; };
@@ -229,6 +229,8 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D392EB162E101CDF0020E16A /* KeepAllButton.swift */,
+				D392EB172E101CDF0020E16A /* RemoveAllButton.swift */,
 				D392EB0B2E0AFE320020E16A /* CursorView.swift */,
 				D3B373092D50857400B56342 /* ProcessRemainingFramesButton.swift */,
 				D35618712D24CCF80001814D /* OutlierWindowView.swift */,
@@ -271,8 +273,6 @@
 				D33FFC212A2D48F300F38194 /* FrameView.swift */,
 				D33FFC1F2A2D3BCD00F38194 /* FrameViewModel.swift */,
 				D33FFC1D2A2D39BA00F38194 /* ProgressBars.swift */,
-				D33FFC192A2D02A300F38194 /* ClearAllButton.swift */,
-				D33FFC172A2D007800F38194 /* PaintAllButton.swift */,
 				D33FFC152A2CFF4700F38194 /* LoadAllOutliersButton.swift */,
 				D33FFC132A2CFAED00F38194 /* ImageSequenceView.swift */,
 				D33FFC0F2A2CF92900F38194 /* SystemButton.swift */,
@@ -470,7 +470,6 @@
 				D33FFC112A2CF92900F38194 /* SystemButton.swift in Sources */,
 				D32F6DB42A4D2BF800704870 /* ApplyDecisionTreeButton.swift in Sources */,
 				D332F6FF29B63DA2009E2796 /* InitialView.swift in Sources */,
-				D33FFC1A2A2D02A300F38194 /* ClearAllButton.swift in Sources */,
 				D3FBFA082CE132C400A23FC6 /* ProcessAllFramesButton.swift in Sources */,
 				D33FFC282A2D4F7E00F38194 /* FilmstripView.swift in Sources */,
 				D33FFC262A2D4E8600F38194 /* FilmstripImageView.swift in Sources */,
@@ -509,11 +508,12 @@
 				D3FBFA102CE25CAA00A23FC6 /* LeftPanel.swift in Sources */,
 				D3DC07FC2C077DEB0031A3AE /* EditableFrameNumberView.swift in Sources */,
 				D3FBFA0E2CE25BC600A23FC6 /* RightPanel.swift in Sources */,
+				D392EB182E101CDF0020E16A /* RemoveAllButton.swift in Sources */,
+				D392EB192E101CDF0020E16A /* KeepAllButton.swift in Sources */,
 				D39EEDF42C027AD800DD5BC4 /* ClearUndecidedButton.swift in Sources */,
 				D32F6DAC2A4D1A6E00704870 /* BottomControls.swift in Sources */,
 				D3FBFA1F2CE8FF0500A23FC6 /* ImageSequenceViewModel.swift in Sources */,
 				D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */,
-				D33FFC182A2D007800F38194 /* PaintAllButton.swift in Sources */,
 				D3A0D3B02CF3AEB800FD2E9E /* FinalGUIProcessor.swift in Sources */,
 				D3CD86792CF5815100D2D53F /* InitialInstructionsView.swift in Sources */,
 				D32F6DBA2A4E6FCE00704870 /* BottomRightView.swift in Sources */,

@@ -12,15 +12,15 @@ struct StarCommands: Commands {
         if let viewModel = viewModel.imageSequence {
             CommandMenu("Actions") {
 
-                PaintAllButton()
+                RemoveAllButton()
                   .environment(viewModel)
-                  .keyboardShortcut("p", modifiers: [])
-                ClearAllButton()
-                  .environment(viewModel)
-                  .keyboardShortcut("c", modifiers: [])
-                ClearUndecidedButton()
+                  .keyboardShortcut("a", modifiers: [])
+                KeepAllButton()
                   .environment(viewModel)
                   .keyboardShortcut("k", modifiers: [])
+                ClearUndecidedButton()
+                  .environment(viewModel)
+                  .keyboardShortcut("u", modifiers: [])
                 ProcessAllFramesButton()
                   .environment(viewModel)
                 ProcessRemainingFramesButton()

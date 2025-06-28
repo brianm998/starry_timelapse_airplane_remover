@@ -830,8 +830,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     // used to classify outliers given a validation image.
     // this validation image contains a non zero pixel for each outlier
-    // that should be painted over.
-    // any outlier that matches any pixels is classified to paint here.
+    // that should be removed.
+    // any outlier that matches any pixels is classified to remove here.
     private func classifyOutliers(with validationData: [UInt8]) async {
         Log.d("frame \(frameIndex) classifying outliers with validation image data")
 
@@ -1019,27 +1019,27 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // XXX add y-axis here too
     }
 
-        // Mark - Paint
+        // Mark - Removal
 
     /*
      Logic about removing undesired elements from the image.
 
      Removing is done with data from a neighboring, aligned frame.
 
-     Pixels to be painted over come from validated outlier groups,
+     Pixels to be removed come from validated outlier groups,
      that logic is elsewhere.
      */
 
-    // actually paint over outlier groups that have been selected as airplane tracks
+    // actually remove outlier groups that have been selected as airplane tracks
     internal func removeAirplanes(image: PixelatedImage,
                                   toData data: inout [UInt16],
                                   otherFrame: PixelatedImage) async throws
     {
         Log.i("frame \(frameIndex) removing airplane outlier groups")
 
-        // paint over every outlier in the paint list with pixels from the adjecent frames
+        // remove every outlier in the list with pixels from the adjecent frames
         guard let outlierGroups = outlierGroups else {
-            Log.e("cannot paint without outlier groups")
+            Log.e("cannot remove pixels without outlier groups")
             return
         }
 
@@ -1070,7 +1070,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         let removeMaskIntRadius = Int(removeMask.radius)
 
-        // only paint when we have found at least one positive outlier group
+        // only remove when we have found at least one positive outlier group
         var shouldRemove = false
         
         for (_, group) in await outlierGroups.getMembers() {
@@ -1178,7 +1178,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    // paint over a selected outlier pixel with data from pixels from adjecent frames
+    // remove a selected outlier pixel with data from pixels from adjecent frames
     internal func updatePixel(x: Int, y: Int,
                               alpha: Double,
                               toData data: inout [UInt16],
@@ -1191,7 +1191,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
            overwritingPixel.alpha != 0xFFFF   // alpha is not fully opaque
         {
             // ignore transparent pixels
-            // don't paint over with them
             return
         }
 
@@ -1203,7 +1202,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
 
-    // paint over a selected outlier pixel with data from pixels from adjecent frames
+    // remove a selected outlier pixel with data from pixels from adjecent frames
     internal func updatePixel(x: Int, y: Int,
                               alpha: Double,
                               toData data: inout [UInt16],
@@ -1225,22 +1224,25 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // the is the place in the image data to write to
         let offset = (Int(y) * bytesPerRow/2) + (Int(x) * bytesPerPixel/2)
 
-        // actually paint over that airplane like thing in the image data
+        // actually remove that airplane like thing in the image data
         if self.bytesPerPixel == 2 {
+            // one componant per pixel, binary 16 bit image
             data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
                                  with: [overwritingPixel.red])
         } else if self.bytesPerPixel == 6 {
+            // three componants per pixel, RGB 16 bit image
             data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
                                  with: [overwritingPixel.red,
                                         overwritingPixel.green,
                                         overwritingPixel.blue])
 
         } else if self.bytesPerPixel == 8 {
+            // four componants per pixel, RGBA 16 bit image
             data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
                                  with: [overwritingPixel.red,
                                         overwritingPixel.green,
                                         overwritingPixel.blue,
-                                        0xFFFF])
+                                        0xFFFF]) // always write full opacity
         }
     }
 

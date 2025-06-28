@@ -1,17 +1,17 @@
 import SwiftUI
 import StarCore
 
-// this button paints everything
+// this button removes everything
 
-struct PaintAllButton: View {
+struct RemoveAllButton: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     var body: some View {
         Button(action: {
             viewModel.setAllCurrentFrameOutliers(to: true, renderImmediately: false)
         }) {
-            Text("Paint All")
+            Text("Remove All")
         }
-          .help("paint all of the outlier groups in the frame")
+          .help("remove all of the outlier groups in the frame")
     }
 }
