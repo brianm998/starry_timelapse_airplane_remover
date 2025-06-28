@@ -173,8 +173,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             var totalNegative: Int = 0
             var totalUnknown: Int = 0
             for (_, group) in outliers {
-                if let shouldPaint = await group.shouldPaint() {
-                    if shouldPaint.willRemove {
+                if let shouldRemove = await group.shouldRemove() {
+                    if shouldRemove.willRemove {
                         totalPositive += 1
                     } else {
                         totalNegative += 1
@@ -423,7 +423,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         try await loadOutliers()
     }
 
-    // run after shouldPaint has been set for each group, 
+    // run after shouldRemove has been set for each group, 
     // does the final painting and then writes out the output files
     public func finish() async throws {
         Log.d("frame \(self.frameIndex) starting to finish")
@@ -857,8 +857,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     }
                     if groupIsValid { break }
                 }
-                //Log.d("group \(group) shouldPaint \(String(describing: group.shouldPaint))")
-                await group.shouldPaint(.userSelected(groupIsValid))
+                //Log.d("group \(group) shouldRemove \(String(describing: group.shouldRemove))")
+                await group.shouldRemove(.userSelected(groupIsValid))
             }
         } else {
             Log.w("cannot classify nil outlier groups")
@@ -1071,13 +1071,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let paintMaskIntRadius = Int(paintMask.radius)
 
         // only paint when we have found at least one positive outlier group
-        var shouldPaint = false
+        var shouldRemove = false
         
         for (_, group) in await outlierGroups.getMembers() {
-            if let reason = await group.shouldPaint(),
+            if let reason = await group.shouldRemove(),
                reason.willRemove
             {
-                shouldPaint = true
+                shouldRemove = true
                 //Log.d("frame \(frameIndex) painting over group \(group) for reason \(reason)")
 
                 for pixel in group.pixelSet {
@@ -1141,7 +1141,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                                       overwrite: true))
         }
 
-        if shouldPaint {
+        if shouldRemove {
             self.set(state: .painting2)
             
             // then actually paint each non zero alpha pizel
@@ -1257,8 +1257,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 
                 var apply = true
                 if !overwrite,
-                   let shouldPaint = await group.shouldPaint() {
-                    switch shouldPaint {
+                   let shouldRemove = await group.shouldRemove() {
+                    switch shouldRemove {
                     case .userSelected(_):
                         // leave user selected ones in place
                         apply = false
@@ -1272,7 +1272,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         await self.outlierGroups?.promoteFromTrash(group)
                         await self.markAsChanged()
                     }
-                    await group.shouldPaint(.fromClassifier(await classifier.classification(of: group)))
+                    await group.shouldRemove(.fromClassifier(await classifier.classification(of: group)))
                 }
             }
         } else {
@@ -1317,7 +1317,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(self.frameIndex) DONE applyDecisionTreeToAllOutliers")
     }
     
-    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
+    public func userSelectAllOutliers(toShouldPaint shouldRemove: Bool,
                                       includingTrash: Bool) async
     {
         await Task.detached(priority: .userInitiated) {
@@ -1325,7 +1325,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 if isInTrash {
                     await self.outlierGroups?.promoteFromTrash(group)
                 }
-                await group.shouldPaint(.userSelected(shouldPaint))
+                await group.shouldRemove(.userSelected(shouldRemove))
             }
             // 
         }.value
@@ -1335,16 +1335,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public func userSelectUndecidedOutliers(toShouldPaint shouldPaint: Bool,
+    public func userSelectUndecidedOutliers(toShouldPaint shouldRemove: Bool,
                                             includingTrash: Bool) async
     {
         await Task.detached(priority: .userInitiated) {
             await self.foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
-                if await group.shouldPaint() == nil {
+                if await group.shouldRemove() == nil {
                     if isInTrash {
                         await self.outlierGroups?.promoteFromTrash(group)
                     }
-                    await group.shouldPaint(.userSelected(shouldPaint))
+                    await group.shouldRemove(.userSelected(shouldRemove))
                 }
             }
         }.value
@@ -1354,13 +1354,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
+    public func userSelectAllOutliers(toShouldPaint shouldRemove: Bool,
                                       overlapping group: OutlierGroup) async
     {
         guard let outlierGroups else { return }
 
         for group in await outlierGroups.groups(overlapping: group) {
-            await group.shouldPaint(.userSelected(shouldPaint))
+            await group.shouldRemove(.userSelected(shouldRemove))
         }
         Task { @MainActor in
             await self.markAsChanged()
@@ -1368,7 +1368,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
-    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
+    public func userSelectAllOutliers(toShouldPaint shouldRemove: Bool,
                                       between startLocation: CGPoint,
                                       and endLocation: CGPoint,
                                       includingTrash: Bool) async
@@ -1380,7 +1380,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 await self.outlierGroups?.promoteFromTrash(group)
                 await self.markAsChanged()
             }
-            await group.shouldPaint(.userSelected(shouldPaint))
+            await group.shouldRemove(.userSelected(shouldRemove))
         }
         Task { @MainActor in
             await self.markAsChanged()
@@ -1602,12 +1602,12 @@ fileprivate class OutlierClassifier {
                     for chunk in outliers.split(into: max) {
                         taskGroup.addTask {
                             for group in chunk {
-                                if await group.shouldPaint() == nil || overwrite {
+                                if await group.shouldRemove() == nil || overwrite {
                                     // only apply classifier when no other classification is otherwise present
                                     // XXX we need to grab the feature data from the FrameDataHarvester
                                     //let featureData = await group.featureData(dataHarvester: dataHarvester)
                                     let classification = await classifier.classification(of: group)
-                                    await group.shouldPaint(.fromClassifier(classification),
+                                    await group.shouldRemove(.fromClassifier(classification),
                                                             markAsChanged: false)
                                 }
                             }
@@ -1622,11 +1622,11 @@ fileprivate class OutlierClassifier {
                             let frame = self.frame
                             taskGroup.addTask {
                                 for group in chunk {
-                                    if await group.shouldPaint() == nil || overwrite {
+                                    if await group.shouldRemove() == nil || overwrite {
                                         // only apply classifier when no other classification is otherwise present
                                         //let featureData = await group.featureData(dataHarvester: dataHarvester)
                                         let classification = await classifier.classification(of: group)
-                                        await group.shouldPaint(.fromClassifier(classification),
+                                        await group.shouldRemove(.fromClassifier(classification),
                                                                 markAsChanged: false)
                                         await outlierGroups.promoteFromTrash(group)
                                         await frame.markAsChanged()
@@ -1655,11 +1655,11 @@ fileprivate class OutlierClassifier {
                     for chunk in outliers.split(into: max) {
                         taskGroup.addTask {
                             for group in chunk {
-                                if await group.shouldPaint() == nil || overwrite {
+                                if await group.shouldRemove() == nil || overwrite {
                                     // only apply classifier when no other classification is otherwise present
                                     //let featureData = await group.featureData(dataHarvester: dataHarvester)
                                     let classification = await classifier.classification(of: group)
-                                    await group.shouldPaint(.fromClassifier(classification),
+                                    await group.shouldRemove(.fromClassifier(classification),
                                                             markAsChanged: false)
                                 }
                             }

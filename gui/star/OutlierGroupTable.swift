@@ -81,9 +81,9 @@ struct OutlierGroupTableRow: Identifiable {
         centerX = group.bounds.center.x
         centerY = group.bounds.center.y
 
-        let shouldPaint = await group.shouldPaint()
-        if let shouldPaint = shouldPaint {
-            willRemove = shouldPaint.willRemove
+        let shouldRemove = await group.shouldRemove()
+        if let shouldRemove = shouldRemove {
+            willRemove = shouldRemove.willRemove
         } else {
             willRemove = nil
         }

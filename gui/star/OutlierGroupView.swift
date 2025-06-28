@@ -21,8 +21,8 @@ struct OutlierGroupView: View {
             let frameWidth = groupViewModel.viewModel.frameWidth
             let frameHeight = groupViewModel.viewModel.frameHeight
             let bounds = groupViewModel.bounds
-            let unknown_paint = groupViewModel.paintObserver.shouldPaint?.willRemove == nil
-            let will_paint = groupViewModel.paintObserver.shouldPaint?.willRemove ?? false
+            let unknown_paint = groupViewModel.paintObserver.shouldRemove?.willRemove == nil
+            let will_paint = groupViewModel.paintObserver.shouldRemove?.willRemove ?? false
             let arrow_length = groupViewModel.viewModel.arrowLength
             let arrow_height = groupViewModel.viewModel.arrowHeight
             let line_width = groupViewModel.viewModel.lineWidth
@@ -134,7 +134,7 @@ struct OutlierGroupView: View {
                       topViewModel.replaceCursor(self.currentCursor)
                   } else {                   
                       Task {
-                          let origShouldPaint = await groupViewModel.group.shouldPaint() 
+                          let origShouldPaint = await groupViewModel.group.shouldRemove() 
                           
                           await MainActor.run {
                               if let origShouldPaint {
@@ -293,10 +293,10 @@ struct OutlierGroupView: View {
         self.groupViewModel.viewModel.multiChoiceSheetShowing = true
         self.groupViewModel.viewModel.multiChoiceOutlierView = self
         Task {
-            let shouldPaint = await self.groupViewModel.group.shouldPaint()
+            let shouldRemove = await self.groupViewModel.group.shouldRemove()
             await MainActor.run {
-                if let shouldPaint {
-                    if shouldPaint.willRemove {
+                if let shouldRemove {
+                    if shouldRemove.willRemove {
                         self.groupViewModel.viewModel.multiChoicePaintType = .keep
                     } else {
                         self.groupViewModel.viewModel.multiChoicePaintType = .remove
@@ -315,11 +315,11 @@ struct OutlierGroupView: View {
         if let origShouldPaint = origShouldPaint {
             will_paint = origShouldPaint.willRemove
         }
-        let shouldPaint = RemoveReason.userSelected(!will_paint)
+        let shouldRemove = RemoveReason.userSelected(!will_paint)
 
         Task {
             // update the view model to show the change quickly
-            await self.groupViewModel.group.shouldPaint(shouldPaint)
+            await self.groupViewModel.group.shouldRemove(shouldRemove)
 
                                  
             // update frame view model too
@@ -329,7 +329,7 @@ struct OutlierGroupView: View {
             {
                 if let outlier_group = await outlierGroups.members[self.groupViewModel.group.id] {
                     // update the outlier group in the background
-                    await outlier_group.shouldPaint(shouldPaint)
+                    await outlier_group.shouldRemove(shouldRemove)
                     await frame.markAsChanged()
                     Task { @MainActor in
                         closure()
@@ -350,9 +350,9 @@ struct OutlierGroupView: View {
           .onTapGesture {
               let group = self.groupViewModel.group
               Task {
-                  let shouldPaint = await group.shouldPaint()
+                  let shouldRemove = await group.shouldRemove()
                   await MainActor.run {
-                      toggleRemoveReason(shouldPaint){
+                      toggleRemoveReason(shouldRemove){
                           topViewModel.replaceCursor(self.currentCursor)
                       }
                   }

@@ -87,13 +87,13 @@ struct MultiChoiceSheetView: View {
                         case .remove:
                             Button("Remove") {
                                 // paint all overapping outliers
-                                self.updateFrames(shouldPaint: true)
+                                self.updateFrames(shouldRemove: true)
                                 self.isVisible = false
                             }
                         case .keep:
                             Button("Keep") {
                                 // XXX clear all overapping outliers
-                                self.updateFrames(shouldPaint: false)
+                                self.updateFrames(shouldRemove: false)
                                 self.isVisible = false
                             }
                         }
@@ -103,7 +103,7 @@ struct MultiChoiceSheetView: View {
                             Button("Remove") {
                                 // paint all overapping outliers
                                 // after and including currentIndex
-                                self.updateFrames(shouldPaint: true,
+                                self.updateFrames(shouldRemove: true,
                                                   startIndex: currentIndex)
                                 self.isVisible = false
                             }
@@ -111,7 +111,7 @@ struct MultiChoiceSheetView: View {
                             Button("Keep") {
                                 // clear all overapping outliers
                                 // after and including currentIndex
-                                self.updateFrames(shouldPaint: false,
+                                self.updateFrames(shouldRemove: false,
                                                   startIndex: currentIndex)
                                 self.isVisible = false
                             }
@@ -122,7 +122,7 @@ struct MultiChoiceSheetView: View {
                             Button("Remove") {
                                 // paint all overapping outliers
                                 // before and including currentIndex
-                                self.updateFrames(shouldPaint: true,
+                                self.updateFrames(shouldRemove: true,
                                                   startIndex: 0,
                                                   endIndex: currentIndex)
                                 self.isVisible = false
@@ -131,7 +131,7 @@ struct MultiChoiceSheetView: View {
                             Button("Keep") {
                                 // clear all overapping outliers
                                 // before and including currentIndex
-                                self.updateFrames(shouldPaint: false,
+                                self.updateFrames(shouldRemove: false,
                                                   startIndex: 0,
                                                   endIndex: currentIndex)
                                 self.isVisible = false
@@ -145,7 +145,7 @@ struct MultiChoiceSheetView: View {
                                 Button("Remove") {
                                     // paint overapping outliers in
                                     // currentIndex and number_of_frames after
-                                    self.updateFrames(shouldPaint: true,
+                                    self.updateFrames(shouldRemove: true,
                                                       startIndex: currentIndex,
                                                       endIndex: currentIndex + number_of_frames)
                                     self.isVisible = false
@@ -154,7 +154,7 @@ struct MultiChoiceSheetView: View {
                                 Button("Keep") {
                                     // clear overapping outliers in
                                     // currentIndex and number_of_frames after
-                                    self.updateFrames(shouldPaint: false,
+                                    self.updateFrames(shouldRemove: false,
                                                       startIndex: currentIndex,
                                                       endIndex: currentIndex + number_of_frames)
                                     self.isVisible = false
@@ -172,7 +172,7 @@ struct MultiChoiceSheetView: View {
                                 Button("Remove") {
                                     // paint overapping outliers in
                                     // currentIndex and number_of_frames before
-                                    self.updateFrames(shouldPaint: true,
+                                    self.updateFrames(shouldRemove: true,
                                                       startIndex: currentIndex - number_of_frames,
                                                       endIndex: currentIndex)
                                     self.isVisible = false
@@ -181,7 +181,7 @@ struct MultiChoiceSheetView: View {
                                 Button("Keep") {
                                     // clear overapping outliers in
                                     // currentIndex and number_of_frames before
-                                    self.updateFrames(shouldPaint: false,
+                                    self.updateFrames(shouldRemove: false,
                                                       startIndex: currentIndex - number_of_frames,
                                                       endIndex: currentIndex)
                                     self.isVisible = false
@@ -203,26 +203,26 @@ struct MultiChoiceSheetView: View {
         }
     }
 
-    private func updateFrames(shouldPaint: Bool,
+    private func updateFrames(shouldRemove: Bool,
                               startIndex: Int = 0,
                               endIndex: Int? = nil)
     {
 //        Task.detached(priority: .userInitiated) {
-            Log.d("update frames shouldPaint \(shouldPaint) startIndex \(startIndex) endIndex \(endIndex)")
+            Log.d("update frames shouldRemove \(shouldRemove) startIndex \(startIndex) endIndex \(endIndex)")
             let end = endIndex ?? frames.count
             for frame in frames {
                 if frame.frameIndex >= startIndex,
                    frame.frameIndex <= end
                 {
-                  Task { await self.update(frame: frame, shouldPaint: shouldPaint) }
+                  Task { await self.update(frame: frame, shouldRemove: shouldRemove) }
                 }
             }
 //        }
     }
         
-    private func update(frame frameView: FrameViewModel, shouldPaint: Bool) async {
+    private func update(frame frameView: FrameViewModel, shouldRemove: Bool) async {
         if let frame = frameView.frame {
-            let new_value = shouldPaint
+            let new_value = shouldRemove
 //            Task.detached(priority: .userInitiated) {
                 await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                   overlapping: multiChoiceOutlierView.groupViewModel.group)

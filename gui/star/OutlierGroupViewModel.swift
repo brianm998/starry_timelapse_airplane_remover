@@ -25,15 +25,15 @@ class OutlierGroupViewModel: Identifiable {
         self.image = image
 
         await group.set(paintObserver: paintObserver)
-        if let shouldPaint = await group.shouldPaint() {
-            paintObserver.shouldPaint = shouldPaint
+        if let shouldRemove = await group.shouldRemove() {
+            paintObserver.shouldRemove = shouldRemove
         }
     }
 
     let id = UUID()
     
     fileprivate func setWillPaint(from paintReason: RemoveReason?) {
-        paintObserver.shouldPaint = paintReason
+        paintObserver.shouldRemove = paintReason
     }
 
     private var _line: Line?
@@ -75,7 +75,7 @@ class OutlierGroupViewModel: Identifiable {
     
     deinit {
      // let group = self.group
-    //  Task { await group.set(shouldPaintDidChange: nil) }
+    //  Task { await group.set(shouldRemoveDidChange: nil) }
     }
     
     var viewModel: ImageSequenceViewModel
@@ -115,7 +115,7 @@ class OutlierGroupViewModel: Identifiable {
     }
 
     var willRemove: Bool? {
-        if let will_paint = self.paintObserver.shouldPaint {
+        if let will_paint = self.paintObserver.shouldRemove {
             return will_paint.willRemove 
         } else {
             return nil          // don't know
@@ -125,7 +125,7 @@ class OutlierGroupViewModel: Identifiable {
     var groupColor: Color {
         if isSelected { return .orange }
 
-        if let will_paint = self.paintObserver.shouldPaint {
+        if let will_paint = self.paintObserver.shouldRemove {
           if will_paint.willRemove {
                 return .red
             } else {
@@ -139,7 +139,7 @@ class OutlierGroupViewModel: Identifiable {
     var arrowColor: Color {
         if isSelected { return .blue }
         
-        if let will_paint = self.paintObserver.shouldPaint {
+        if let will_paint = self.paintObserver.shouldRemove {
             if self.arrowSelected {            
                 if will_paint.willRemove {
                     return .red

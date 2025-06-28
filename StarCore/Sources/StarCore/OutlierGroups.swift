@@ -220,9 +220,9 @@ public actor OutlierGroups {
         for (id, blob) in blobs {
             let outlierGroup = await blob.outlierGroup(at: frameIndex)
             if let outlierGroupPaintData,
-               let shouldPaint = outlierGroupPaintData[outlierGroup.id]
+               let shouldRemove = outlierGroupPaintData[outlierGroup.id]
             {
-                await outlierGroup.shouldPaint(shouldPaint)
+                await outlierGroup.shouldRemove(shouldRemove)
             }
             self.members[outlierGroup.id] = outlierGroup
         }
@@ -411,9 +411,9 @@ public actor OutlierGroups {
         
         for group in members.values {
             // collate paint reasons for each group
-            if let shouldPaint = await group.shouldPaint() {
-                //Log.d("frame \(frameIndex) group \(group.id) shouldPaint \(shouldPaint)")
-                outlierGroupPaintData[group.id] = shouldPaint
+            if let shouldRemove = await group.shouldRemove() {
+                //Log.d("frame \(frameIndex) group \(group.id) shouldRemove \(shouldRemove)")
+                outlierGroupPaintData[group.id] = shouldRemove
             }
         }
 
@@ -454,8 +454,8 @@ public actor OutlierGroups {
 
         // write into this array from the pixels in this group
         for (_, group) in self.members {
-            if let shouldPaint = await group.shouldPaint(),
-               shouldPaint.willRemove
+            if let shouldRemove = await group.shouldRemove(),
+               shouldRemove.willRemove
             {
                 /*
                  // paint the group bounds for help debugging

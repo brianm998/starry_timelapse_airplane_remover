@@ -28,10 +28,10 @@ nonisolated(unsafe) public var IMAGE_HEIGHT: Double?
 public class OutlierPaintObserver {
     public init() { }
     
-    public var shouldPaint: RemoveReason?
+    public var shouldRemove: RemoveReason?
 
-    public func set(shouldPaint: RemoveReason?) {
-        self.shouldPaint = shouldPaint
+    public func set(shouldRemove: RemoveReason?) {
+        self.shouldRemove = shouldRemove
     }
 }
 
@@ -187,9 +187,9 @@ public actor OutlierGroup: CustomStringConvertible,
         return (distanceSum/Double(pixelSet.count), totalLength)
     }
     
-    public func shouldPaint() -> RemoveReason? { _shouldPaint }
+    public func shouldRemove() -> RemoveReason? { _shouldRemove }
 
-    fileprivate var _shouldPaint: RemoveReason?  // should we paint this group, and why?
+    fileprivate var _shouldRemove: RemoveReason?  // should we paint this group, and why?
 
     public var paintObserver: OutlierPaintObserver?
 
@@ -197,14 +197,14 @@ public actor OutlierGroup: CustomStringConvertible,
         self.paintObserver = paintObserver
     }
     
-    public func shouldPaint(_ shouldPaint: RemoveReason, markAsChanged: Bool = true) async {
-        //Log.d("\(self) should paint \(shouldPaint) self.frame \(self.frame)")
-        self._shouldPaint = shouldPaint
+    public func shouldRemove(_ shouldRemove: RemoveReason, markAsChanged: Bool = true) async {
+        //Log.d("\(self) should paint \(shouldRemove) self.frame \(self.frame)")
+        self._shouldRemove = shouldRemove
 
         // XXX update frame that it's different
         if markAsChanged { await self.frame?.markAsChanged() }
 
-        await paintObserver?.set(shouldPaint: shouldPaint)
+        await paintObserver?.set(shouldRemove: shouldRemove)
     }
 
     // has to be optional so we can read OuterlierGroups as codable
@@ -316,8 +316,8 @@ public actor OutlierGroup: CustomStringConvertible,
     
     public func asyncHash(into hasher: inout Hasher) {
         self.hash(into: &hasher)
-        if let _shouldPaint {
-            hasher.combine(_shouldPaint)
+        if let _shouldRemove {
+            hasher.combine(_shouldRemove)
         }
     }
     

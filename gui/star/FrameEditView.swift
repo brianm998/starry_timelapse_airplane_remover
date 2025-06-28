@@ -171,11 +171,11 @@ struct FrameEditView: View {
                   
                   switch viewModel.selectionMode {
                   case .remove:
-                      update(frame: frameView, shouldPaint: true,
+                      update(frame: frameView, shouldRemove: true,
                              between: selectionStart, and: end_location)
                       
                   case .keep:
-                      update(frame: frameView, shouldPaint: false,
+                      update(frame: frameView, shouldRemove: false,
                              between: selectionStart, and: end_location)
                       
                   case .shovel:
@@ -327,12 +327,12 @@ struct FrameEditView: View {
     }
     
     private func update(frame frameView: FrameViewModel,
-                        shouldPaint: Bool,
+                        shouldRemove: Bool,
                         between selectionStart: CGPoint,
                         and end_location: CGPoint)
     {
         if let frame = frameView.frame {
-            let new_value = shouldPaint
+            let new_value = shouldRemove
             Task.detached(priority: .userInitiated) {
                 await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                   between: selectionStart,

@@ -784,8 +784,8 @@ public final class ImageSequenceViewModel {
             if let outlierGroups = await frame.getOutlierGroups() {
                 for group in await outlierGroups.getMembers().values {
                     if group.size <= 40 { // XXX sync with same value @ FrameEditView:139
-                        if let shouldPaint = await group.shouldPaint(),
-                           shouldPaint.willRemove
+                        if let shouldRemove = await group.shouldRemove(),
+                           shouldRemove.willRemove
                       {
                             for pixel in group.pixelSet {
                                 let index = 2*(pixel.y*width+pixel.x)
@@ -965,35 +965,35 @@ public final class ImageSequenceViewModel {
 
 // methods used in image sequence view
 //public extension ImageSequenceViewModel {
-    func setAllCurrentFrameOutliers(to shouldPaint: Bool,
+    func setAllCurrentFrameOutliers(to shouldRemove: Bool,
                                     renderImmediately: Bool = true)
     {
         let currentFrameView = self.currentFrameView
         setAllFrameOutliers(in: currentFrameView,
-                            to: shouldPaint,
+                            to: shouldRemove,
                             renderImmediately: renderImmediately)
     }
 
 
-    func setUndecidedFrameOutliers(to shouldPaint: Bool,
+    func setUndecidedFrameOutliers(to shouldRemove: Bool,
                                    renderImmediately: Bool = true)
     {
         let currentFrameView = self.currentFrameView
         setUndecidedFrameOutliers(in: currentFrameView,
-                                  to: shouldPaint,
+                                  to: shouldRemove,
                                   renderImmediately: renderImmediately)
     }
     
     func setUndecidedFrameOutliers(in frameView: FrameViewModel,
-                                   to shouldPaint: Bool,
+                                   to shouldRemove: Bool,
                                    renderImmediately: Bool = true)
     {
-    //    let reason = RemoveReason.userSelected(shouldPaint)
+    //    let reason = RemoveReason.userSelected(shouldRemove)
         
         if let frame = frameView.frame {
             // update the real actor in the background
             Task.detached(priority: .userInitiated) {
-                await frame.userSelectUndecidedOutliers(toShouldPaint: shouldPaint,
+                await frame.userSelectUndecidedOutliers(toShouldPaint: shouldRemove,
                                                         includingTrash: self.shouldShowTrash)
 
                 if renderImmediately {
@@ -1008,15 +1008,15 @@ public final class ImageSequenceViewModel {
     }
     
     func setAllFrameOutliers(in frameView: FrameViewModel,
-                             to shouldPaint: Bool,
+                             to shouldRemove: Bool,
                              renderImmediately: Bool = true)
     {
-        Log.d("setAllFrameOutliers in frame \(frameView.frameIndex) to should paint \(shouldPaint)")
+        Log.d("setAllFrameOutliers in frame \(frameView.frameIndex) to should paint \(shouldRemove)")
         
         if let frame = frameView.frame {
             // update the real actor in the background
             Task.detached {
-                await frame.userSelectAllOutliers(toShouldPaint: shouldPaint,
+                await frame.userSelectAllOutliers(toShouldPaint: shouldRemove,
                                                   includingTrash: self.shouldShowTrash)
 
                 if renderImmediately {
