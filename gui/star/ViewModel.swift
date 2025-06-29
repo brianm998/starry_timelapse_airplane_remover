@@ -5,6 +5,12 @@ import StarCore
 import Zoomable
 import logging
 
+
+enum CursorStackItem {
+    case literal(NSCursor)
+    case method(() -> NSCursor)
+}
+
 // the overall view model
 @MainActor @Observable
 public final class ViewModel {
@@ -54,18 +60,37 @@ public final class ViewModel {
     
     var cursor: NSCursor = .arrow
 
-    var cursorStack: [NSCursor] = []
+    var cursorStack: [CursorStackItem] = []
     
     func pushCursor(_ cursor: NSCursor) {
-        cursorStack.append(cursor)
+        cursorStack.append(.literal(cursor))
         self.cursor = cursor
     }
 
+    func pushCursor(_ cursorMethod: @escaping () -> NSCursor) {
+        cursorStack.append(.method(cursorMethod))
+        self.cursor = cursorMethod()
+    }
+
+    func refreshCursor() {
+        if let lastCursor = cursorStack.last {
+            switch lastCursor {
+            case .literal(let cursor):
+                self.cursor = cursor
+            case .method(let cursorMethod):
+                self.cursor = cursorMethod()
+            }
+        } else {
+            // fallback
+            self.cursor = .arrow
+        }
+    }
+    
     func replaceCursor(_ cursor: NSCursor) {
         if cursorStack.count > 0 {
             cursorStack.removeLast()
         }
-        cursorStack.append(cursor)
+        cursorStack.append(.literal(cursor))
         self.cursor = cursor
     }
     
@@ -73,7 +98,16 @@ public final class ViewModel {
         if cursorStack.count > 0 {
             cursorStack.removeLast()
         }
-        self.cursor = cursorStack.last ?? .arrow
+        if let lastCursor = cursorStack.last {
+            switch lastCursor {
+            case .literal(let cursor):
+                self.cursor = cursor
+            case .method(let cursorMethod):
+                self.cursor = cursorMethod()
+            }
+        } else {
+            self.cursor = .arrow
+        }
     }
 
     // prepare for another sequence

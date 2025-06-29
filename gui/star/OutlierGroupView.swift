@@ -131,7 +131,7 @@ struct OutlierGroupView: View {
                   if groupViewModel.viewModel.selectionMode == .trash {
                       // dump the tapped outlier into the trash
                       groupViewModel.viewModel.frames[groupViewModel.group.frameIndex].dumpInTrash(groupViewModel.group)
-                      topViewModel.replaceCursor(self.currentCursor)
+                      topViewModel.refreshCursor()
                   } else {                   
                       Task {
                           let origShouldPaint = await groupViewModel.group.shouldRemove() 
@@ -149,13 +149,13 @@ struct OutlierGroupView: View {
                                       openMultiChoiceSheet()
                                   } else {
                                       toggleRemoveReason(origShouldPaint) {
-                                          topViewModel.replaceCursor(self.currentCursor)
+                                          topViewModel.refreshCursor()
                                       }
                                   }
                               } else {
                                   // handle outliers without a paint decision 
                                   toggleRemoveReason() {
-                                      topViewModel.replaceCursor(self.currentCursor)
+                                      topViewModel.refreshCursor()
                                   }
                               }
                           }
@@ -165,7 +165,7 @@ struct OutlierGroupView: View {
         }
     }
 
-    var currentCursor: NSCursor {
+    func currentCursor() -> NSCursor {
         switch viewModel.selectionMode {
         case .trash:
             return .deleteTrashPointing
@@ -352,8 +352,8 @@ struct OutlierGroupView: View {
               Task {
                   let shouldRemove = await group.shouldRemove()
                   await MainActor.run {
-                      toggleRemoveReason(shouldRemove){
-                          topViewModel.replaceCursor(self.currentCursor)
+                      toggleRemoveReason(shouldRemove) {
+                          topViewModel.refreshCursor()
                       }
                   }
               }

@@ -37,7 +37,7 @@ struct FrameEditView: View {
                 self.imageView
             }
               .onChange(of: viewModel.selectionMode) {
-                  topViewModel.replaceCursor(self.currentCrosshairCursor)
+                  topViewModel.refreshCursor()
               }
               .onChange(of: viewModel.currentIndex) { oldValue, _ in
                   // add any changes the user may have made to the save queue
@@ -97,7 +97,7 @@ struct FrameEditView: View {
           .cursor(self.currentCrosshairCursor)
     }
 
-    var currentCrosshairCursor: NSCursor {
+    func currentCrosshairCursor() -> NSCursor {
         switch viewModel.selectionMode {
         case .remove:
             return .removeCrosshair

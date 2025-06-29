@@ -78,6 +78,22 @@ struct CursorModifier: ViewModifier {
     }
 }
 
+struct CursorMethodModifier: ViewModifier {
+    @Environment(ViewModel.self) var viewModel: ViewModel
+    let method: () -> NSCursor
+
+    func body(content: Content) -> some View {
+        content
+          .onHover { inside in
+              if inside {
+                  viewModel.pushCursor(method)
+              } else {
+                  viewModel.popCursor()
+              }
+          }
+    }
+}
+
 // 2) A nice View extension to apply it
 extension View {
     /// Installs a hover‐driven cursor change using your ViewModel in the environment.
@@ -86,37 +102,14 @@ extension View {
     }
 }
 
+extension View {
+    /// Installs a hover‐driven cursor change using your ViewModel in the environment.
+    func cursor(_ method: @escaping () -> NSCursor) -> some View {
+        self.modifier(CursorMethodModifier(method: method))
+    }
+}
+
 extension NSCursor {
-/*
-    public class var paint: NSCursor {
-        NSCursor(image: NSImage(named: "paintbrush_icon")!,
-                 hotSpot: .init(x: 8, y: 24))
-    }
-    public class var eraser: NSCursor {
-        NSCursor(image: NSImage(named: "eraser_icon")!,
-                 hotSpot: .init(x: 7, y: 27))
-    }
-*/
-    public class var undo: NSCursor {
-        NSCursor(image: NSImage(named: "undo_icon")!,
-                 hotSpot: .init(x: 3, y: 12))
-    }
-
-    public class var razor: NSCursor {
-        NSCursor(image: NSImage(named: "razor_icon")!,
-                 hotSpot: .init(x: 3, y: 23))
-    }
-
-    public class var remove: NSCursor {
-        NSCursor(image: NSImage(named: "remove_icon")!,
-                 hotSpot: .init(x: 15, y: 15))
-    }
-
-    public class var keep: NSCursor {
-        NSCursor(image: NSImage(named: "keep_icon")!,
-                 hotSpot: .init(x: 15, y: 15))
-    }
-
     public class var removeCrosshair: NSCursor {
         NSCursor(image: NSImage(named: "remove_crosshair")!,
                  hotSpot: .init(x: 45/3, y: 45/3))

@@ -42,12 +42,12 @@ struct StarCommands: Commands {
                   .environment(viewModel)
                 LoadAllOutliersButton(loadingType: .all)
                   .environment(viewModel)
-                Button(action: {
+                Button() {
                            openWindow(id: StarApp.blobProcessingStepsWindowName)
-                       },
+                       }
                        label: {
                            Text("Blob Processing Window")
-                       })
+                       }
             }
 
             // this is really just here to enable keyboard shortcuts 
