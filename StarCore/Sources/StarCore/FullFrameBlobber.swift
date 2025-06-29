@@ -141,6 +141,11 @@ public class FullFrameBlobber {
             if maxX > imageWidth { maxX = imageWidth }
             if maxY > imageHeight { maxY = imageHeight }
         }
+
+        // Swift runtime failure: Range requires lowerBound <= upperBound + 0 [inlined]
+        guard minX < maxX,
+              minY < maxY
+        else { return }
         
         for x in minX..<maxX {
             for y in minY..<maxY {
