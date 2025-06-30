@@ -12,6 +12,7 @@ public enum VideoPlayMode: String, Equatable, CaseIterable {
     case reverse
 }
 
+// XXX rename this to ToolType
 public enum SelectionMode: String, Equatable, CaseIterable {
     case remove
     case keep
@@ -392,9 +393,9 @@ public final class ImageSequenceViewModel {
         // the image accessor always has the orignal config
         let imageAccessor = ImageAccessor(config: configManager.config(),
                                           imageSequence: imageSequence,
-                                          frameIndexToBaseNameMap: frameIndexToBaseNameMap) { frameIndex, image, type, size in
+                                          frameIndexToBaseNameMap: frameIndexToBaseNameMap) { [weak self] frameIndex, image, type, size in
             Task { @MainActor in 
-                self.frames[frameIndex].savedImage(image, ofType: type, atSize: size)
+                self?.frames[frameIndex].savedImage(image, ofType: type, atSize: size)
             }
         }
 

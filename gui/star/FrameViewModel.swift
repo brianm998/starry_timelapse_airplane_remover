@@ -15,7 +15,7 @@ public class FrameViewModel {
         self.viewModel = viewModel
     }
 
-    let viewModel: ImageSequenceViewModel
+    private weak var viewModel: ImageSequenceViewModel?
 
     var existingImages: Set<FrameViewMode> = []
     
@@ -132,11 +132,13 @@ public class FrameViewModel {
         }
         self.outlierViews = newOutlierViews
 
-        if let frame {
+        if let frame,
+           let viewModel
+        {
             Task.detached(priority: .userInitiated) {
                 await frame.getOutlierGroups()?.dumpInTrash(trash)
-                await self.viewModel.computeSmallOutlierImage(forFrame: frame)
-                await self.viewModel.computeTrashImage(forFrame: frame)
+                await viewModel.computeSmallOutlierImage(forFrame: frame)
+                await viewModel.computeTrashImage(forFrame: frame)
                 await frame.updateCombineSubjects()
                 try await frame.getOutlierGroups()?.writeOutliersBinary(to: frame.outliersDirname)
             }
@@ -157,11 +159,13 @@ public class FrameViewModel {
         }
         self.outlierViews = newOutlierViews
 
-        if let frame {
+        if let frame,
+           let viewModel
+        {
             Task.detached(priority: .userInitiated) {
                 await frame.getOutlierGroups()?.dumpInTrash(trash)
-                await self.viewModel.computeSmallOutlierImage(forFrame: frame)
-                await self.viewModel.computeTrashImage(forFrame: frame)
+                await viewModel.computeSmallOutlierImage(forFrame: frame)
+                await viewModel.computeTrashImage(forFrame: frame)
                 try await frame.getOutlierGroups()?.writeOutliersBinary(to: frame.outliersDirname)
                 await frame.updateCombineSubjects()
             }
@@ -174,15 +178,17 @@ public class FrameViewModel {
     {
         let gestureBounds = BoundingBox(between: selectionStart, and: end_location)
 
-        if let frame {
+        if let frame,
+           let viewModel
+        {
             Task.detached(priority: .userInitiated) {
                 let _ = try await frame.promoteDust(in: gestureBounds)
 
-                await self.viewModel.computeSmallOutlierImage(forFrame: frame)
+                await viewModel.computeSmallOutlierImage(forFrame: frame)
                 // update the trash image
-                await self.viewModel.computeTrashImage(forFrame: frame)
+                await viewModel.computeTrashImage(forFrame: frame)
                 
-              await self.viewModel.setOutlierGroups(forFrame: frame)
+                await viewModel.setOutlierGroups(forFrame: frame)
                 await frame.updateCombineSubjects()            
             }
         }
