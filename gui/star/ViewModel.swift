@@ -72,6 +72,7 @@ public final class ViewModel {
         self.cursor = cursorMethod()
     }
 
+    // makes sure the showing cursor is still valid after any kind of change happens
     func refreshCursor() {
         if let lastCursor = cursorStack.last {
             switch lastCursor {
@@ -85,7 +86,9 @@ public final class ViewModel {
             self.cursor = .arrow
         }
     }
-    
+
+    // better to push a method if possible, this assumes
+    // that no other view has changed cursor state 
     func replaceCursor(_ cursor: NSCursor) {
         if cursorStack.count > 0 {
             cursorStack.removeLast()
@@ -98,16 +101,7 @@ public final class ViewModel {
         if cursorStack.count > 0 {
             cursorStack.removeLast()
         }
-        if let lastCursor = cursorStack.last {
-            switch lastCursor {
-            case .literal(let cursor):
-                self.cursor = cursor
-            case .method(let cursorMethod):
-                self.cursor = cursorMethod()
-            }
-        } else {
-            self.cursor = .arrow
-        }
+        refreshCursor()
     }
 
     // prepare for another sequence
