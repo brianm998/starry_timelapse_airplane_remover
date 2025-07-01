@@ -208,9 +208,7 @@ struct FrameEditView: View {
 
                       if let frame = frameView.frame {
                           // recompute small outlier images after the razor
-                          Task { 
-                              await self.viewModel.computeSmallOutlierImage(forFrame: frame)
-                          }
+                          self.viewModel.computeSmallOutlierImage(forFrame: frame)
                           
                           // if we are showing the trash, recompute the image after the razor
                           if viewModel.shouldShowTrash {
