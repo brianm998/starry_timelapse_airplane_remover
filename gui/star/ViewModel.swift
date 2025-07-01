@@ -11,6 +11,16 @@ enum CursorStackItem {
     case method(() -> NSCursor)
 }
 
+@MainActor @Observable
+public final class LoggingViewModel {
+    var logs: [String] = []
+
+    var level: Log.Level = .warn
+    
+    func clearLogs() { logs = [] }
+}
+
+
 // the overall view model
 @MainActor @Observable
 public final class ViewModel {

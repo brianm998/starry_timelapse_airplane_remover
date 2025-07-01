@@ -150,7 +150,6 @@ import StarDecisionTrees
     
  */
 
- 
 @main
 struct StarApp: App {
 
@@ -183,6 +182,7 @@ struct StarApp: App {
     
     var body: some Scene {
         let viewModel = ViewModel()
+        let loggingViewModel = LoggingViewModel()
 
         WindowGroup(id: StarApp.blobProcessingStepsWindowName) {
             BlobProcessingView()
@@ -197,11 +197,20 @@ struct StarApp: App {
         WindowGroup(id: StarApp.debugWindowName) {
             DebugView()
               .environment(viewModel)
+              .environment(loggingViewModel)
         }
-        
+
         WindowGroup(id: StarApp.mainWindowName) {
             ContentView()
               .environment(viewModel)
+              .onAppear {
+                  Log.add(handler: GUILogHandler(at: loggingViewModel.level,
+                                                 with: loggingViewModel), for: .gui)
+              }
+              .onChange(of: loggingViewModel.level) {
+                  Log.add(handler: GUILogHandler(at: loggingViewModel.level,
+                                                 with: loggingViewModel), for: .gui)
+              }
         }
         .defaultLaunchBehavior(.presented)
         .commands {
@@ -253,4 +262,36 @@ extension Array {
     }
 }
 
+
+
+public final class GUILogHandler: LogHandler {
+
+    private let dateFormatter = DateFormatter()
+    public let level: Log.Level
+    private let viewModel: LoggingViewModel
+    
+    public init(at level: Log.Level, with viewModel: LoggingViewModel) {
+        self.level = level
+        self.viewModel = viewModel
+        dateFormatter.dateFormat = "H:mm:ss.SSSS"
+    }
+
+    public func log(message: String,
+                    at fileLocation: String,
+                    with data: LogData?,
+                    at logLevel: Log.Level,
+                    logTime: TimeInterval)
+    {
+        let date = Date(timeIntervalSinceReferenceDate: logTime)
+        let dateString = self.dateFormatter.string(from: date)
+
+        Task { @MainActor in
+            if let data = data {
+                viewModel.logs.append("\(dateString) | \(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)")
+            } else {
+                viewModel.logs.append("\(dateString) | \(logLevel.emo) \(logLevel) | \(fileLocation): \(message)")
+            }
+        }
+    }
+}
 
