@@ -15,6 +15,9 @@ enum CursorStackItem {
 public final class LoggingViewModel {
     var logs: [GUILogHandler.LogLine] = []
 
+    var maxGUILogLines = 100000 // guess
+    var maxGUILogLinesString = "100000" // guess
+    
     // level for what is shown in the gui
     var level: Log.Level = .warn
 

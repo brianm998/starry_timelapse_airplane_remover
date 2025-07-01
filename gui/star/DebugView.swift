@@ -51,6 +51,19 @@ struct DebugView: View {
                   .pickerStyle(.menu)
                   .fixedSize(horizontal: true, vertical: false)
 
+                Text("Max Log Lines") 
+                TextField("\(loggingViewModel.maxGUILogLines)",
+                          text: $loggingViewModel.maxGUILogLinesString)
+                  .onSubmit {
+                      let filtered = loggingViewModel.maxGUILogLinesString.filter { "0123456789".contains($0) }
+                      if let newValue = Int(filtered) {
+                          loggingViewModel.maxGUILogLines = newValue
+                          loggingViewModel.maxGUILogLinesString = "\(newValue)"
+                          //self.trashLevelIsFirstResponder = false
+                      }
+                  }
+                  .fixedSize(horizontal: true, vertical: false)
+                
                 Button {
                     loggingViewModel.clearLogs()
                 } label: {
@@ -61,41 +74,59 @@ struct DebugView: View {
                   .frame(width: 4)
                   .fixedSize(horizontal: false, vertical: true)
 
-                Toggle(isOn: $loggingViewModel.fileLogEnabled) {
-                    Text("Enable File Logging")
-                      .foregroundColor(loggingViewModel.fileLogEnabled ? .black : .gray)
-                }
-                
-                Picker(selection: $loggingViewModel.fileLogLevel) {
-                    ForEach(Log.Level.allCases, id: \.self) { level in
-                        Text("\(level.emo) \(level.rawValue)")
+                HStack(spacing: 0) {
+                    Toggle(isOn: $loggingViewModel.fileLogEnabled) {
+                        Text("")
+                          .foregroundColor(loggingViewModel.fileLogEnabled ? .black : .gray)
                     }
-                } label: {
-                    Text("File Log Level")
-                      .foregroundColor(loggingViewModel.fileLogEnabled ? .black : .gray)
+                    
+                    Picker(selection: $loggingViewModel.fileLogLevel) {
+                        ForEach(Log.Level.allCases, id: \.self) { level in
+                            Text("\(level.emo) \(level.rawValue)")
+                        }
+                    } label: {
+                        Text("Log to file at level")
+                          .foregroundColor(loggingViewModel.fileLogEnabled ? .black : .gray)
+                    }
+                      .pickerStyle(.menu)
+                      .fixedSize(horizontal: true, vertical: false)
+                      .disabled(!loggingViewModel.fileLogEnabled)
                 }
-                  .pickerStyle(.menu)
-                  .fixedSize(horizontal: true, vertical: false)
-                  .disabled(!loggingViewModel.fileLogEnabled)
-
                 Spacer()
             }
             VStack(alignment: .leading) {
-                ScrollView {
-                    VStack(alignment: .leading) {
-                        Grid(alignment: .leading) {
-                            ForEach(loggingViewModel.logs, id: \.self) { logLine in
-                                if logLine.level <= filterLevel {
-                                    GridRow {
-                                        Text(self.dateFormatter.string(from: logLine.time))
-                                        Text(logLine.level.emo)
-                                        Text(logLine.fileLocation)
-                                        Text(logLine.message)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading) {
+                            Grid(alignment: .leading) {
+                                ForEach(loggingViewModel.logs.indices, id: \.self) { index in
+                                    let logLine = loggingViewModel.logs[index]
+                                    if logLine.level <= filterLevel {
+                                        GridRow {
+                                            Text(self.dateFormatter.string(from: logLine.time))
+                                            Text(logLine.level.emo)
+                                            Text(logLine.fileLocation)
+                                            Text(logLine.message)
+                                        }
+                                          .id(index)
                                     }
                                 }
                             }
                         }
                     }
+                      .onChange(of: loggingViewModel.logs.count) { _ in
+                          guard let last = loggingViewModel.logs.indices.last else { return }
+                          withAnimation(.easeOut) {
+                              proxy.scrollTo(last, anchor: .bottom)
+                          }
+                      }
+                    // also scroll to bottom on first appear
+                      .onAppear {
+                          if let last = loggingViewModel.logs.indices.last {
+                              proxy.scrollTo(last, anchor: .bottom)
+                          }
+                      }
+                    
                 }
             }
         }

@@ -330,6 +330,14 @@ public final class GUILogHandler: LogHandler {
                                   message: message)
 
             viewModel.logs.append(logLine)
+
+            // truncate gui logs at a certain level as they're kept in ram
+            if viewModel.logs.count > viewModel.maxGUILogLines {
+                let numberToRemove = viewModel.logs.count - viewModel.maxGUILogLines
+                if numberToRemove < viewModel.logs.count {
+                    viewModel.logs.removeFirst(numberToRemove)
+                }
+            }
         }
     }
 }
