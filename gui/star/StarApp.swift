@@ -171,18 +171,38 @@ struct StarApp: App {
             }
         }
 
+        // sets the prefix for log filenames
+        Log.name = "Star-logs"
+        
         // XXX make this for debug builds only
         #if DEBUG
         Log.add(handler: ConsoleLogHandler(at: .debug), for: .console)
-        #else
-        // setup a log handler for the gui
         #endif
         Log.i("Starting Up")
     }
+
+    func enableGUILogs() {
+        Log.add(handler: GUILogHandler(at: loggingViewModel.level,
+                                       with: loggingViewModel), for: .gui)
+    }
+
+    func enableFileLogs() {
+        if loggingViewModel.fileLogEnabled {
+            do {
+                Log.add(handler: try FileLogHandler(at: loggingViewModel.fileLogLevel),
+                        for: .file)
+            } catch {
+                Log.e("cannot add file log handler: \(error)")
+            }
+        } else {
+            Log.removeHandler(for: .file)
+        }
+    }
+    
+    let loggingViewModel = LoggingViewModel()
     
     var body: some Scene {
         let viewModel = ViewModel()
-        let loggingViewModel = LoggingViewModel()
 
         WindowGroup(id: StarApp.blobProcessingStepsWindowName) {
             BlobProcessingView()
@@ -203,13 +223,15 @@ struct StarApp: App {
         WindowGroup(id: StarApp.mainWindowName) {
             ContentView()
               .environment(viewModel)
-              .onAppear {
-                  Log.add(handler: GUILogHandler(at: loggingViewModel.level,
-                                                 with: loggingViewModel), for: .gui)
-              }
+              .onAppear { enableGUILogs() }
               .onChange(of: loggingViewModel.level) {
-                  Log.add(handler: GUILogHandler(at: loggingViewModel.level,
-                                                 with: loggingViewModel), for: .gui)
+                  enableGUILogs()
+              }
+              .onChange(of: loggingViewModel.fileLogEnabled) {
+                  enableFileLogs()
+              }
+              .onChange(of: loggingViewModel.fileLogLevel) {
+                  enableFileLogs()
               }
         }
         .defaultLaunchBehavior(.presented)

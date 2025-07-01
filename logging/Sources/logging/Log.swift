@@ -138,6 +138,10 @@ public class Log {
         Task { await gremlin.add(handler: handler, for: outputType) }
     }
 
+    public static func removeHandler(for outputType: Log.Output) {
+        Task { await gremlin.removeHandler(for: outputType) }
+    }
+
     private nonisolated(unsafe) static var minimumLogLevel: Log.Level = .error
     
     public enum Output: Sendable {
@@ -1002,6 +1006,11 @@ public actor LogGremlin {
 
     private var minimumLogLevel: Log.Level = .error
     
+    func removeHandler(for outputType: Log.Output) {
+        handlers.removeValue(forKey: outputType)
+        // XXX recompute minimumLogLevel here?
+    }
+
     func add(handler: LogHandler, for outputType: Log.Output) {
         handlers[outputType] = handler
         if handler.level < minimumLogLevel {

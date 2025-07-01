@@ -15,7 +15,12 @@ enum CursorStackItem {
 public final class LoggingViewModel {
     var logs: [GUILogHandler.LogLine] = []
 
+    // level for what is shown in the gui
     var level: Log.Level = .warn
+
+    var fileLogEnabled = false
+    // level for what is written to file
+    var fileLogLevel: Log.Level = .verbose
     
     func clearLogs() { logs = [] }
 }
