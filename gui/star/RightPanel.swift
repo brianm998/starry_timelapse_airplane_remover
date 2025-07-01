@@ -95,7 +95,7 @@ struct RightPanel: View {
                                 HStack {
                                     Image(value.iconName)
                                       .resizable()
-                                      .frame(width: 40, height: 40)
+                                      .frame(width: 35, height: 35)
                                     Text(value.displayName)
                                       .foregroundColor(isSelected ? .black : .white)
                                       .tag(value)
