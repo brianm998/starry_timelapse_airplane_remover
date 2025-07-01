@@ -456,13 +456,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.i("frame \(self.frameIndex) finishing")
 
         self.set(state: .waitingToLoadImages)
-
-       var (image, otherFrame) = try await finalMonitor.load() {
-            await self.set(state: .loadingImages)
-            return await (imageAccessor.loadInt(frameIndex: frameIndex,
+        let fi = self.frameIndex
+        let ia = self.imageAccessor
+        var (image, otherFrame) = try await finalMonitor.load() { [weak self] in
+            //guard let self else { return }
+            await self?.set(state: .loadingImages)
+            return await (ia.loadInt(frameIndex: fi,
                                                 type: .original,
                                                 atSize: .original),
-                          imageAccessor.loadInt(frameIndex: frameIndex,
+                          ia.loadInt(frameIndex: fi,
                                                 type: .aligned,
                                                 atSize: .original))
         }
