@@ -158,6 +158,7 @@ struct StarApp: App {
 
     public static let outlierGroupTableWindowName = "outlierGroupTableWindow"
     public static let blobProcessingStepsWindowName = "blobProcessingStepsWindow"
+    public static let debugWindowName = "debugWindow"
     public static let mainWindowName = "mainWindow"
     
     init() {
@@ -174,6 +175,8 @@ struct StarApp: App {
         // XXX make this for debug builds only
         #if DEBUG
         Log.add(handler: ConsoleLogHandler(at: .debug), for: .console)
+        #else
+        // setup a log handler for the gui
         #endif
         Log.i("Starting Up")
     }
@@ -191,6 +194,11 @@ struct StarApp: App {
               .environment(viewModel)
         }
 
+        WindowGroup(id: StarApp.debugWindowName) {
+            DebugView()
+              .environment(viewModel)
+        }
+        
         WindowGroup(id: StarApp.mainWindowName) {
             ContentView()
               .environment(viewModel)
@@ -198,6 +206,21 @@ struct StarApp: App {
         .defaultLaunchBehavior(.presented)
         .commands {
             StarCommands(viewModel: viewModel)
+            CommandGroup(after: .windowList) {
+                Divider()  // optional separator
+                Button("Blob Processing Window") {
+                    openWindow(id: StarApp.blobProcessingStepsWindowName)
+                }
+                  .keyboardShortcut("p", modifiers: [.option/*.command, .shift*/])
+                Button("Outlier Information Window") {
+                    openWindow(id: StarApp.outlierGroupTableWindowName) 
+                }
+                  .keyboardShortcut("o", modifiers: [.option])
+                Button("Debug Window") {
+                    openWindow(id: StarApp.debugWindowName) 
+                }
+                  .keyboardShortcut("d", modifiers: [.option])
+            }
         }
 
         // this shows up as stars and wand in the upper right of the menu bar

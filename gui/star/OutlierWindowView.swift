@@ -38,6 +38,7 @@ struct OutlierWindowView: View {
                 houghLineArgs
             }
         }
+          .navigationTitle("Star Outlier Info Window")
     }
 
     var houghLineArgs: some View {

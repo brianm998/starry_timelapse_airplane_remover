@@ -11,7 +11,6 @@ struct StarCommands: Commands {
     var body: some Commands {
         if let viewModel = viewModel.imageSequence {
             CommandMenu("Actions") {
-
                 RemoveAllButton()
                   .environment(viewModel)
                   .keyboardShortcut("a", modifiers: [])
@@ -42,14 +41,8 @@ struct StarCommands: Commands {
                   .environment(viewModel)
                 LoadAllOutliersButton(loadingType: .all)
                   .environment(viewModel)
-                Button() {
-                           openWindow(id: StarApp.blobProcessingStepsWindowName)
-                       }
-                       label: {
-                           Text("Blob Processing Window")
-                       }
             }
-
+            
             // this is really just here to enable keyboard shortcuts 
             CommandMenu("Tools") {
                 ChangeToolButton(tool: .remove)

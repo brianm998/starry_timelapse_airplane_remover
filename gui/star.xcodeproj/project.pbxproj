@@ -51,6 +51,7 @@
 		D392EB182E101CDF0020E16A /* RemoveAllButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D392EB172E101CDF0020E16A /* RemoveAllButton.swift */; };
 		D392EB192E101CDF0020E16A /* KeepAllButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D392EB162E101CDF0020E16A /* KeepAllButton.swift */; };
 		D392EB1B2E104D410020E16A /* ChangeToolButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D392EB1A2E104D410020E16A /* ChangeToolButton.swift */; };
+		D392EB682E1395CB0020E16A /* DebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D392EB672E1395CB0020E16A /* DebugView.swift */; };
 		D39EEDF42C027AD800DD5BC4 /* ClearUndecidedButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39EEDF32C027AD700DD5BC4 /* ClearUndecidedButton.swift */; };
 		D3A0D3AE2CF383DF00FD2E9E /* ExpandUpButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */; };
 		D3A0D3B02CF3AEB800FD2E9E /* FinalGUIProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A0D3AF2CF3AEB800FD2E9E /* FinalGUIProcessor.swift */; };
@@ -145,6 +146,7 @@
 		D392EB162E101CDF0020E16A /* KeepAllButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeepAllButton.swift; sourceTree = "<group>"; };
 		D392EB172E101CDF0020E16A /* RemoveAllButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoveAllButton.swift; sourceTree = "<group>"; };
 		D392EB1A2E104D410020E16A /* ChangeToolButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeToolButton.swift; sourceTree = "<group>"; };
+		D392EB672E1395CB0020E16A /* DebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugView.swift; sourceTree = "<group>"; };
 		D39EEDF32C027AD700DD5BC4 /* ClearUndecidedButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ClearUndecidedButton.swift; sourceTree = "<group>"; };
 		D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpandUpButton.swift; sourceTree = "<group>"; };
 		D3A0D3AF2CF3AEB800FD2E9E /* FinalGUIProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinalGUIProcessor.swift; sourceTree = "<group>"; };
@@ -231,6 +233,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D392EB672E1395CB0020E16A /* DebugView.swift */,
 				D392EB1A2E104D410020E16A /* ChangeToolButton.swift */,
 				D392EB162E101CDF0020E16A /* KeepAllButton.swift */,
 				D392EB172E101CDF0020E16A /* RemoveAllButton.swift */,
@@ -506,6 +509,7 @@
 				D33FFC242A2D48F300F38194 /* FrameEditView.swift in Sources */,
 				D32F6DAE2A4D1C0100704870 /* RenderAllFramesButton.swift in Sources */,
 				D3FBFA0B2CE1B18700A23FC6 /* LimitedSelectionPicker.swift in Sources */,
+				D392EB682E1395CB0020E16A /* DebugView.swift in Sources */,
 				D3FBFA212CE91B3800A23FC6 /* CircularProgressView.swift in Sources */,
 				D392EB0C2E0AFE320020E16A /* CursorView.swift in Sources */,
 				D3FBFA0C2CE1B18700A23FC6 /* StarPicker.swift in Sources */,
