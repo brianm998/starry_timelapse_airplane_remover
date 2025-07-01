@@ -266,6 +266,22 @@ extension Array {
 
 public final class GUILogHandler: LogHandler {
 
+    public struct LogLine: Hashable {
+        let time: Date
+        let level: Log.Level
+        let fileLocation: String
+        let message: String
+    //    let data: (any LogData)?
+
+        public static func == (lhs: LogLine, rhs: LogLine) -> Bool {
+            lhs.time == rhs.time &&
+            lhs.level == rhs.level &&
+            lhs.fileLocation == rhs.fileLocation &&
+            lhs.message == rhs.message
+        }
+        
+    }
+    
     private let dateFormatter = DateFormatter()
     public let level: Log.Level
     private let viewModel: LoggingViewModel
@@ -278,7 +294,7 @@ public final class GUILogHandler: LogHandler {
 
     public func log(message: String,
                     at fileLocation: String,
-                    with data: LogData?,
+                    with data: (any LogData)?,
                     at logLevel: Log.Level,
                     logTime: TimeInterval)
     {
@@ -286,11 +302,12 @@ public final class GUILogHandler: LogHandler {
         let dateString = self.dateFormatter.string(from: date)
 
         Task { @MainActor in
-            if let data = data {
-                viewModel.logs.append("\(dateString) | \(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)")
-            } else {
-                viewModel.logs.append("\(dateString) | \(logLevel.emo) \(logLevel) | \(fileLocation): \(message)")
-            }
+            let logLine = LogLine(time: date,
+                                  level: logLevel,
+                                  fileLocation: fileLocation,
+                                  message: message)
+
+            viewModel.logs.append(logLine)
         }
     }
 }

@@ -13,13 +13,12 @@ enum CursorStackItem {
 
 @MainActor @Observable
 public final class LoggingViewModel {
-    var logs: [String] = []
+    var logs: [GUILogHandler.LogLine] = []
 
     var level: Log.Level = .warn
     
     func clearLogs() { logs = [] }
 }
-
 
 // the overall view model
 @MainActor @Observable
