@@ -144,6 +144,7 @@ public class Log {
         case console
         case file
         case alert
+        case gui
     }
 
     public nonisolated(unsafe) static var name: String = "log"
