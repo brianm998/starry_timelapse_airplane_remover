@@ -17,7 +17,9 @@ import logging
 
 
  */
+
 struct DebugView: View {
+
     @Environment(ViewModel.self) var viewModel: ViewModel
     @Environment(LoggingViewModel.self) var loggingViewModel: LoggingViewModel
 
@@ -29,7 +31,7 @@ struct DebugView: View {
     @State private var isPinnedToBottom: Bool = true
 
     @State private var isScrolling: Bool = false
-    
+
     /// How close (in points) the last message’s bottom must be
     /// to the viewport bottom to be considered “at bottom.”
     private let bottomThreshold: CGFloat = 20
@@ -39,7 +41,7 @@ struct DebugView: View {
     public init() {
         dateFormatter.dateFormat = "H:mm:ss.SSSS"
     }
-
+    
     var body: some View {
         @Bindable var loggingViewModel = loggingViewModel
         return VStack(alignment: .leading) {
@@ -54,6 +56,11 @@ struct DebugView: View {
           .navigationTitle("Star Debug")
     }
 
+
+    
+    @State private var allowFocus = false
+
+    
     // the top bar of buttons above the logs
     func topView(with proxy: ScrollViewProxy) -> some View {
         @Bindable var loggingViewModel = loggingViewModel
@@ -79,6 +86,16 @@ struct DebugView: View {
             Text("Max Log Lines") 
             TextField("\(loggingViewModel.maxGUILogLines)",
                       text: $loggingViewModel.maxGUILogLinesString)
+
+              .focusable(allowFocus)          // If false, field will not accept focus
+              .onAppear {
+                  // Prevent initial focus
+                  allowFocus = false
+                  // Re-enable normal focusing after a tiny delay
+                  DispatchQueue.main.async {
+                      allowFocus = true
+                  }
+              }            
               .onSubmit {
                   let filtered = loggingViewModel.maxGUILogLinesString.filter { "0123456789".contains($0) }
                   if let newValue = Int(filtered) {
@@ -146,7 +163,7 @@ struct DebugView: View {
             HStack {
                 Space(width: 10)
                 ScrollView {
-                    VStack(alignment: .leading) {
+                    HStack {
                         Grid(alignment: .leading) {
                             ForEach(loggingViewModel.logs.indices, id: \.self) { index in
                                 let logLine = loggingViewModel.logs[index]
@@ -157,7 +174,7 @@ struct DebugView: View {
                                         Text(logLine.fileLocation)
                                         Text(logLine.message)
                                     }
-                                    // 3) Measure this items bottom Y
+                                      // measure this items min Y
                                       .background(
                                         GeometryReader { geo in
                                             ZStack {
@@ -173,8 +190,8 @@ struct DebugView: View {
                                 }
                             }
                         }
+                        Spacer()    // force things to the left
                     }
-                    
                 }
                   .coordinateSpace(name: "scroll")
 
@@ -233,6 +250,7 @@ struct DebugView: View {
                   }
                 Space(width: 10)
             }
+              //.frame(maxWidth: .infinity)
             Space(height: 10)
         }
     }
