@@ -24,7 +24,7 @@ struct DebugView: View {
     @Environment(LoggingViewModel.self) var loggingViewModel: LoggingViewModel
 
     // show only this level and above in the gui
-    @State private var filterLevel: Log.Level = .verbose
+    @State private var filterLevel: Log.Level = .warn
 
     @State private var lastItemBottom: CGFloat = .zero
     @State private var viewportHeight: CGFloat = .zero

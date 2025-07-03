@@ -19,7 +19,7 @@ public final class LoggingViewModel {
     var maxGUILogLinesString = "100000" // guess
     
     // level for what is shown in the gui
-    var level: Log.Level = .debug
+    var level: Log.Level = .info
 
     var fileLogEnabled = false
     // level for what is written to file
