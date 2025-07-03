@@ -6,12 +6,14 @@ import logging
   allow sorting data by time
   allow copying log data to clipboard
   allow searching by text
-  keep maximum number of lines in gui logs
+  add scroll to bottom button
 
  * allow sorting existing data by log level (instead of changing the log level reported at)
  * update gui logging to report structured data
  * filter logs
  * add switch to enable file logging at separate log level (show file name in gui somewhere)
+ * keep maximum number of lines in gui logs
+ * disable bottom scrolling when not at the bottom
 
 
  */
@@ -22,6 +24,16 @@ struct DebugView: View {
     // show only this level and above in the gui
     @State private var filterLevel: Log.Level = .verbose
 
+    @State private var lastItemBottom: CGFloat = .zero
+    @State private var viewportHeight: CGFloat = .zero
+    @State private var isPinnedToBottom: Bool = true
+
+    @State private var isScrolling: Bool = false
+    
+    /// How close (in points) the last message’s bottom must be
+    /// to the viewport bottom to be considered “at bottom.”
+    private let bottomThreshold: CGFloat = 20
+    
     private let dateFormatter = DateFormatter()
 
     public init() {
@@ -108,15 +120,72 @@ struct DebugView: View {
                                             Text(logLine.fileLocation)
                                             Text(logLine.message)
                                         }
+                                        // 3) Measure this items bottom Y
+                                        // XXX 
+                                          .background(
+                                            GeometryReader { geo in
+                                                ZStack {
+                                                    Color.clear
+                                                      .preference(
+                                                        key: LastItemBottomKey.self,
+                                                        value: geo.frame(in: .named("scroll")).minY
+                                                      )
+                                                }
+                                            }
+                                          )
                                           .id(index)
                                     }
                                 }
                             }
                         }
+                        
                     }
-                      .onChange(of: loggingViewModel.logs.count) { _ in
-                          guard let last = loggingViewModel.logs.indices.last else { return }
-                          withAnimation(.easeOut) {
+                      .coordinateSpace(name: "scroll")
+
+                      .onScrollPhaseChange { oldPhase, newPhase in
+                          // Set isScrolling to true when the user is interacting or decelerating
+                          self.isScrolling = newPhase != .idle 
+                      }                    
+                      .readSize() { size in
+                          viewportHeight = size.height
+                          // if we’re showing fewer messages initially and they fit exactly,
+                          // you may want to pin on appear:
+                          if lastItemBottom <= size.height + bottomThreshold {
+                              isPinnedToBottom = true
+                          }
+                          
+                      }
+                    
+                       // Update our state when preferences change:
+                      .onPreferenceChange(LastItemBottomKey.self) { newBottom in
+                          // if that bottom is within threshold of viewport bottom, pin
+                          lastItemBottom = newBottom
+                          if isScrolling {
+                              // only apply this logic when the user is scrolling
+                              if lastItemBottom <= viewportHeight + bottomThreshold {
+                                  isPinnedToBottom = true
+                                  if let last = loggingViewModel.logs.indices.last  {
+                                      withAnimation(.none) {
+                                          proxy.scrollTo(last, anchor: .bottom)
+                                      }
+                                  }
+                              } else {
+                                  isPinnedToBottom = false
+                              }
+                          } else if isPinnedToBottom {
+                              if let last = loggingViewModel.logs.indices.last  {
+                                  withAnimation(.none) {
+                                      proxy.scrollTo(last, anchor: .bottom)
+                                  }
+                              }
+                          }
+                      }
+
+                    // 6) Only auto-scroll on new messages *if* we’re pinned
+                      .onChange(of: loggingViewModel.logs.count) { 
+                          guard isPinnedToBottom,
+                                let last = loggingViewModel.logs.indices.last else { return }
+                          withAnimation(.none) {
                               proxy.scrollTo(last, anchor: .bottom)
                           }
                       }
@@ -126,10 +195,21 @@ struct DebugView: View {
                               proxy.scrollTo(last, anchor: .bottom)
                           }
                       }
-                    
                 }
             }
         }
           .navigationTitle("Star Debug")
     }
 }
+
+// 1) PreferenceKey for last-item bottom position (in named coordinate space)
+private struct LastItemBottomKey: PreferenceKey {
+    static let defaultValue: CGFloat = .zero
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        // we only care about the last one
+        value = nextValue()
+    }
+}
+
+
+
