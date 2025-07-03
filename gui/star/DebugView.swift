@@ -39,6 +39,91 @@ struct DebugView: View {
     public init() {
         dateFormatter.dateFormat = "H:mm:ss.SSSS"
     }
+
+    func topView(with proxy: ScrollViewProxy) -> some View {
+        @Bindable var loggingViewModel = loggingViewModel
+        return HStack {
+            Spacer()
+
+            Picker("Log Level", selection: $loggingViewModel.level) {
+                ForEach(Log.Level.allCases, id: \.self) { level in
+                    Text("\(level.emo) \(level.rawValue)")
+                }
+            }
+              .pickerStyle(.menu)
+              .fixedSize(horizontal: true, vertical: false)
+
+            Picker("Show", selection: $filterLevel) {
+                ForEach(Log.Level.allCases, id: \.self) { level in
+                    Text("\(level.emo) \(level.rawValue)")
+                }
+            }
+              .pickerStyle(.menu)
+              .fixedSize(horizontal: true, vertical: false)
+
+            Text("Max Log Lines") 
+            TextField("\(loggingViewModel.maxGUILogLines)",
+                      text: $loggingViewModel.maxGUILogLinesString)
+              .onSubmit {
+                  let filtered = loggingViewModel.maxGUILogLinesString.filter { "0123456789".contains($0) }
+                  if let newValue = Int(filtered) {
+                      loggingViewModel.maxGUILogLines = newValue
+                      loggingViewModel.maxGUILogLinesString = "\(newValue)"
+                      //self.trashLevelIsFirstResponder = false
+                  }
+              }
+              .fixedSize(horizontal: true, vertical: false)
+
+            Button {
+                copyToClipboard(string: loggingViewModel.rawLogs)
+            } label: {
+                Text("Copy to Clipboard")
+            }
+            
+            Button {
+                self.isPinnedToBottom = true
+                if let last = loggingViewModel.logs.indices.last  {
+                    withAnimation(.none) {
+                        proxy.scrollTo(last, anchor: .bottom)
+                    }
+                }
+            } label: {
+                Text("Scroll to Bottom")
+            }
+              .disabled(isPinnedToBottom)
+
+            Button {
+                loggingViewModel.clearLogs()
+            } label: {
+                Text("Clear")
+            }
+
+            Divider()
+              .frame(width: 4)
+              .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 0) {
+                Toggle(isOn: $loggingViewModel.fileLogEnabled) {
+                    Text("")
+                      .foregroundColor(loggingViewModel.fileLogEnabled ? .black : .gray)
+                }
+                
+                Picker(selection: $loggingViewModel.fileLogLevel) {
+                    ForEach(Log.Level.allCases, id: \.self) { level in
+                        Text("\(level.emo) \(level.rawValue)")
+                    }
+                } label: {
+                    Text("Log to file at level")
+                      .foregroundColor(loggingViewModel.fileLogEnabled ? .black : .gray)
+                }
+                  .pickerStyle(.menu)
+                  .fixedSize(horizontal: true, vertical: false)
+                  .disabled(!loggingViewModel.fileLogEnabled)
+            }
+            Spacer()
+        }
+        
+    }
     
     var body: some View {
         @Bindable var loggingViewModel = loggingViewModel
@@ -46,87 +131,7 @@ struct DebugView: View {
             Space(height: 10)
             ScrollViewReader { proxy in
                 VStack(alignment: .leading) {
-                    HStack {
-                        Spacer()
-
-                        Picker("Log Level", selection: $loggingViewModel.level) {
-                            ForEach(Log.Level.allCases, id: \.self) { level in
-                                Text("\(level.emo) \(level.rawValue)")
-                            }
-                        }
-                          .pickerStyle(.menu)
-                          .fixedSize(horizontal: true, vertical: false)
-
-                        Picker("Show", selection: $filterLevel) {
-                            ForEach(Log.Level.allCases, id: \.self) { level in
-                                Text("\(level.emo) \(level.rawValue)")
-                            }
-                        }
-                          .pickerStyle(.menu)
-                          .fixedSize(horizontal: true, vertical: false)
-
-                        Text("Max Log Lines") 
-                        TextField("\(loggingViewModel.maxGUILogLines)",
-                                  text: $loggingViewModel.maxGUILogLinesString)
-                          .onSubmit {
-                              let filtered = loggingViewModel.maxGUILogLinesString.filter { "0123456789".contains($0) }
-                              if let newValue = Int(filtered) {
-                                  loggingViewModel.maxGUILogLines = newValue
-                                  loggingViewModel.maxGUILogLinesString = "\(newValue)"
-                                  //self.trashLevelIsFirstResponder = false
-                              }
-                          }
-                          .fixedSize(horizontal: true, vertical: false)
-
-                        Button {
-                            copyToClipboard(string: loggingViewModel.rawLogs)
-                        } label: {
-                            Text("Copy to Clipboard")
-                        }
-                        
-                        Button {
-                            self.isPinnedToBottom = true
-                            if let last = loggingViewModel.logs.indices.last  {
-                                withAnimation(.none) {
-                                    proxy.scrollTo(last, anchor: .bottom)
-                                }
-                            }
-                        } label: {
-                            Text("Scroll to Bottom")
-                        }
-                          .disabled(isPinnedToBottom)
-
-                        Button {
-                            loggingViewModel.clearLogs()
-                        } label: {
-                            Text("Clear")
-                        }
-
-                        Divider()
-                          .frame(width: 4)
-                          .fixedSize(horizontal: false, vertical: true)
-
-                        HStack(spacing: 0) {
-                            Toggle(isOn: $loggingViewModel.fileLogEnabled) {
-                                Text("")
-                                  .foregroundColor(loggingViewModel.fileLogEnabled ? .black : .gray)
-                            }
-                            
-                            Picker(selection: $loggingViewModel.fileLogLevel) {
-                                ForEach(Log.Level.allCases, id: \.self) { level in
-                                    Text("\(level.emo) \(level.rawValue)")
-                                }
-                            } label: {
-                                Text("Log to file at level")
-                                  .foregroundColor(loggingViewModel.fileLogEnabled ? .black : .gray)
-                            }
-                              .pickerStyle(.menu)
-                              .fixedSize(horizontal: true, vertical: false)
-                              .disabled(!loggingViewModel.fileLogEnabled)
-                        }
-                        Spacer()
-                    }
-                    
+                    topView(with: proxy)
                     VStack(alignment: .leading) {
                         HStack {
                             Space(width: 10)
