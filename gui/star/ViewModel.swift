@@ -19,13 +19,23 @@ public final class LoggingViewModel {
     var maxGUILogLinesString = "100000" // guess
     
     // level for what is shown in the gui
-    var level: Log.Level = .warn
+    var level: Log.Level = .debug
 
     var fileLogEnabled = false
     // level for what is written to file
-    var fileLogLevel: Log.Level = .verbose
+    var fileLogLevel: Log.Level = .info
     
     func clearLogs() { logs = [] }
+
+    // all current logs as one log per line in a big string
+    var rawLogs: String {
+        var ret: String = ""
+        for log in logs {
+            ret += log.logLine
+            ret += "\n"
+        }
+        return ret
+    }
 }
 
 // the overall view model

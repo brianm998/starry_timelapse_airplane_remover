@@ -290,30 +290,37 @@ public final class GUILogHandler: LogHandler {
 
     public struct LogLine: Hashable {
         let time: Date
+        let timeString: String
         let level: Log.Level
         let fileLocation: String
         let message: String
     //    let data: (any LogData)?
 
+ 
         public static func == (lhs: LogLine, rhs: LogLine) -> Bool {
             lhs.time == rhs.time &&
             lhs.level == rhs.level &&
             lhs.fileLocation == rhs.fileLocation &&
             lhs.message == rhs.message
         }
-        
+
+        // this entire log as a single line of string, without any newline
+        public var logLine: String {
+            "\(timeString) | \(level.emo) \(level) | \(fileLocation): \(message)"
+        }
     }
     
-    private let dateFormatter = DateFormatter()
     public let level: Log.Level
     private let viewModel: LoggingViewModel
+
+    private let dateFormatter = DateFormatter()
     
     public init(at level: Log.Level, with viewModel: LoggingViewModel) {
         self.level = level
         self.viewModel = viewModel
         dateFormatter.dateFormat = "H:mm:ss.SSSS"
     }
-
+       
     public func log(message: String,
                     at fileLocation: String,
                     with data: (any LogData)?,
@@ -321,10 +328,10 @@ public final class GUILogHandler: LogHandler {
                     logTime: TimeInterval)
     {
         let date = Date(timeIntervalSinceReferenceDate: logTime)
-        let dateString = self.dateFormatter.string(from: date)
 
         Task { @MainActor in
             let logLine = LogLine(time: date,
+                                  timeString: self.dateFormatter.string(from: date),
                                   level: logLevel,
                                   fileLocation: fileLocation,
                                   message: message)
