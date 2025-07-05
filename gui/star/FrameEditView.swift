@@ -190,13 +190,13 @@ struct FrameEditView: View {
                           if let frame = frameView.frame {
                               // recompute small outlier images after the shovel
                               Task { 
-                                  self.viewModel.computeSmallOutlierImage(forFrame: frame)
+                                  frameView.computeSmallOutlierImage()
                                   await frame.markAsChanged()
                               }
                               
                               // if we are showing the trash, recompute the image after the shovel
                               if viewModel.shouldShowTrash {
-                                  self.viewModel.computeTrashImage(forFrame: frame)
+                                  frameView.computeTrashImage()
                               }
                           }
                       }
@@ -208,11 +208,11 @@ struct FrameEditView: View {
 
                       if let frame = frameView.frame {
                           // recompute small outlier images after the razor
-                          self.viewModel.computeSmallOutlierImage(forFrame: frame)
+                          frameView.computeSmallOutlierImage()
                           
                           // if we are showing the trash, recompute the image after the razor
                           if viewModel.shouldShowTrash {
-                              self.viewModel.computeTrashImage(forFrame: frame)
+                              frameView.computeTrashImage()
                           }
                       }
                       
@@ -295,7 +295,7 @@ struct FrameEditView: View {
             Task.detached(priority: .userInitiated) {
                 try await frame.applyRazor(in: gestureBounds,
                                            includingTrash: viewModel.shouldShowTrash)
-                await viewModel.setOutlierGroups(forFrame: frame)
+                await frameView.setOutlierGroups()
                 await MainActor.run {
                     viewModel.selectionStart = nil
                     viewModel.selectionEnd = nil
@@ -339,14 +339,14 @@ struct FrameEditView: View {
                                                   between: selectionStart,
                                                   and: end_location,
                                                   includingTrash: viewModel.shouldShowTrash)
-                await viewModel.setOutlierGroups(forFrame: frame)
+                await frameView.setOutlierGroups()
                 
-                await self.viewModel.computeSmallOutlierImage(forFrame: frame)
+                await frameView.computeSmallOutlierImage()
                 
                 // if we are showing the trash, recompute the image
                 if await viewModel.shouldShowTrash {
                     if let frame = await frameView.frame {
-                        await self.viewModel.computeTrashImage(forFrame: frame)
+                        await frameView.computeTrashImage()
                     }
                 }
                 

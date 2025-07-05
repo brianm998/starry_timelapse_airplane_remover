@@ -15,7 +15,7 @@ struct ApplyDecisionTreeButton: View {
                         try? await viewModel.render(frame: frame) {
                             Task {
                                 await viewModel.refresh(frame: frame)
-                                await viewModel.setOutlierGroups(forFrame: frame)
+                                await viewModel.frames[frame.frameIndex].setOutlierGroups()
                             }
                         }
                     }

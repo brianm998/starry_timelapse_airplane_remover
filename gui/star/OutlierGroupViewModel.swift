@@ -12,7 +12,7 @@ class OutlierGroupViewModel: Identifiable {
     // XXX make the UI use this to see changes in paintability
     var removeObserver = OutlierRemovalObserver() 
     
-    init(viewModel: ImageSequenceViewModel,
+    init(viewModel: FrameViewModel,
          group: OutlierGroup,
          name: UInt16,
          bounds: BoundingBox,
@@ -78,7 +78,7 @@ class OutlierGroupViewModel: Identifiable {
     //  Task { await group.set(shouldRemoveDidChange: nil) }
     }
     
-    var viewModel: ImageSequenceViewModel
+    weak var viewModel: FrameViewModel?
     
     var arrowSelected = false // hovered over on frame view
 
@@ -99,7 +99,9 @@ class OutlierGroupViewModel: Identifiable {
             {
                 let frameIndex = frame.frameIndex
                 await MainActor.run {
-                    if let outlierViewModels = viewModel.frames[frameIndex].outlierViews {
+                    if let viewModel,
+                       let outlierViewModels = viewModel.outlierViews
+                    {
                         // deselect all others first
                         for outlierViewModel in outlierViewModels {
                             if outlierViewModel.name != name,

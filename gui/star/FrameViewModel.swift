@@ -10,12 +10,17 @@ import Combine
 @MainActor @Observable
 public class FrameViewModel {
 
-    init(_ frameIndex: Int, viewModel: ImageSequenceViewModel) {
-        self.frameIndex = frameIndex
-        self.viewModel = viewModel
-    }
+    let frameWidth: CGFloat
+    let frameHeight: CGFloat
 
-    private weak var viewModel: ImageSequenceViewModel?
+    init(_ frameIndex: Int,
+         frameWidth: CGFloat,
+         frameHeight: CGFloat)
+    {
+        self.frameWidth = frameWidth
+        self.frameHeight = frameHeight
+        self.frameIndex = frameIndex
+    }
 
     var existingImages: Set<FrameViewMode> = []
     
@@ -132,13 +137,11 @@ public class FrameViewModel {
         }
         self.outlierViews = newOutlierViews
 
-        if let frame,
-           let viewModel
-        {
+        if let frame {
             Task.detached(priority: .userInitiated) {
                 await frame.getOutlierGroups()?.dumpInTrash(trash)
-                await viewModel.computeSmallOutlierImage(forFrame: frame)
-                await viewModel.computeTrashImage(forFrame: frame)
+                await self.computeSmallOutlierImage()
+                await self.computeTrashImage()
                 await frame.updateCombineSubjects()
                 try await frame.getOutlierGroups()?.writeOutliersBinary(to: frame.outliersDirname)
             }
@@ -159,13 +162,11 @@ public class FrameViewModel {
         }
         self.outlierViews = newOutlierViews
 
-        if let frame,
-           let viewModel
-        {
+        if let frame {
             Task.detached(priority: .userInitiated) {
                 await frame.getOutlierGroups()?.dumpInTrash(trash)
-                await viewModel.computeSmallOutlierImage(forFrame: frame)
-                await viewModel.computeTrashImage(forFrame: frame)
+                await self.computeSmallOutlierImage()
+                await self.computeTrashImage()
                 try await frame.getOutlierGroups()?.writeOutliersBinary(to: frame.outliersDirname)
                 await frame.updateCombineSubjects()
             }
@@ -178,21 +179,210 @@ public class FrameViewModel {
     {
         let gestureBounds = BoundingBox(between: selectionStart, and: end_location)
 
-        if let frame,
-           let viewModel
-        {
+        if let frame {
             Task.detached(priority: .userInitiated) {
                 let _ = try await frame.promoteDust(in: gestureBounds)
 
-                await viewModel.computeSmallOutlierImage(forFrame: frame)
+                await self.computeSmallOutlierImage()
                 // update the trash image
-                await viewModel.computeTrashImage(forFrame: frame)
+                await self.computeTrashImage()
                 
-                await viewModel.setOutlierGroups(forFrame: frame)
+                await self.setOutlierGroups()
                 await frame.updateCombineSubjects()            
             }
         }
     }
+
+
+    func computeSmallOutlierImage() {
+        guard let frame else {
+            Log.w("cannot compute small outlier image with no frame reference")
+            return
+        }
+        /*
+         _Much_ better UI performance when outliers smaller than a threshold of
+         around 40 pixels are not presented in the UI separate from these images
+
+         compute here two images which are similar to the trash image,
+         but instead contain all outliers smaller than a given threshold.
+         One image for outliers we will paint, the other for outliers we will not.
+         each is a monochrome image, can be displayed in the view layer as colored.
+
+         XXX
+
+         still need to:
+
+         - make the hardcoded '40' value here in in FrameEditView a runtime UI config
+
+         */
+        
+        let width  = Int(self.frameWidth)
+        let height = Int(self.frameHeight)
+        Task.detached(priority: .userInitiated) {
+            var positiveOutlierArray = [UInt8](repeating: 0, count: 2*width*height)
+            var negativeOutlierArray = [UInt8](repeating: 0, count: 2*width*height)
+            if let outlierGroups = await frame.getOutlierGroups() {
+                for group in await outlierGroups.getMembers().values {
+                    if group.size <= 40 { // XXX sync with same value @ FrameEditView:139
+                        if let shouldRemove = await group.shouldRemove(),
+                           shouldRemove.willRemove
+                      {
+                            for pixel in group.pixelSet {
+                                let index = 2*(pixel.y*width+pixel.x)
+                                var value = pixel.uInt16Value/0xFF
+                                if value > UInt8.max { value = UInt16(UInt8.max) }
+                                positiveOutlierArray[index] = UInt8(value)
+                                positiveOutlierArray[index+1] = 0xFF // make it visible
+                            }
+                        } else {
+                            for pixel in group.pixelSet {
+                                let index = 2*(pixel.y*width+pixel.x)
+                                var value = pixel.uInt16Value/0xFF
+                                if value > UInt8.max { value = UInt16(UInt8.max) }
+                                negativeOutlierArray[index] = UInt8(value)
+                                negativeOutlierArray[index+1] = 0xFF // make it visible
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let dataProvider = CGDataProvider(data: positiveOutlierArray.data as CFData),
+               let image = CGImage(width: width,
+                                   height: height,
+                                   bitsPerComponent: 8,
+                                   bitsPerPixel: 16,
+                                   bytesPerRow: 2*width,
+                                   space: CGColorSpaceCreateDeviceGray(),
+                                   bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue),
+                                   provider: dataProvider,
+                                   decode: nil,
+                                   shouldInterpolate: false,
+                                   intent: .defaultIntent)
+            {
+                let nsImage = NSImage(cgImage: image, size: .zero)
+                let swiftUIImage = Image(nsImage: nsImage)
+                await MainActor.run {
+                    self.positiveOutlierImage = swiftUIImage
+                }
+            }
+
+            if let dataProvider = CGDataProvider(data: negativeOutlierArray.data as CFData),
+               let image = CGImage(width: width,
+                                   height: height,
+                                   bitsPerComponent: 8,
+                                   bitsPerPixel: 16,
+                                   bytesPerRow: 2*width,
+                                   space: CGColorSpaceCreateDeviceGray(),
+                                   bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue),
+                                   provider: dataProvider,
+                                   decode: nil,
+                                   shouldInterpolate: false,
+                                   intent: .defaultIntent)
+            {
+                let nsImage = NSImage(cgImage: image, size: .zero)
+                let swiftUIImage = Image(nsImage: nsImage)
+                await MainActor.run {
+                    self.negativeOutlierImage = swiftUIImage
+                }
+            }
+        }
+    }
+    
+    func computeTrashImage() {
+        guard let frame else {
+            Log.w("cannot compute trash image with no frame reference")
+            return
+        }
+        // write an image from all of the trash, as there can be too much trash
+        // to make each particle an outlier view 
+        let width  = Int(self.frameWidth)
+        let height = Int(self.frameHeight)
+        Log.d("computing trash image for frame \(frame.frameIndex)")
+        Task.detached(priority: .userInitiated) {
+            var trashArray = [UInt8](repeating: 0, count: 2*width*height)
+            if let outlierGroups = await frame.outlierGroupTrashList() {
+                Log.d("frame \(frame.frameIndex) has \(outlierGroups.count) trash groups")
+                for group in outlierGroups {
+                    for pixel in group.pixelSet {
+                        let index = 2*(pixel.y*width+pixel.x)
+                        var value = pixel.uInt16Value/0xFF
+                        if value > UInt8.max { value = UInt16(UInt8.max) }
+                        if index < trashArray.count {
+                            trashArray[index] = UInt8(value)
+                            trashArray[index+1] = 0xFF // make it visible
+                        } else {
+                            Log.w("pixel \(pixel) has invalid index")
+                        }
+                    }
+                }
+            } else {
+                Log.d("frame \(frame.frameIndex) has NO outliers :(")
+            }
+
+            Log.d("computed trash image for frame \(frame.frameIndex)")
+            if let dataProvider = CGDataProvider(data: trashArray.data as CFData),
+               let image = CGImage(width: width,
+                                   height: height,
+                                   bitsPerComponent: 8,
+                                   bitsPerPixel: 16,
+                                   bytesPerRow: 2*width,
+                                   space: CGColorSpaceCreateDeviceGray(),
+                                   bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue),
+                                   provider: dataProvider,
+                                   decode: nil,
+                                   shouldInterpolate: false,
+                                   intent: .defaultIntent)
+            {
+                let nsImage = NSImage(cgImage: image, size: .zero)
+                let swiftUIImage = Image(nsImage: nsImage)
+                await MainActor.run {
+                    Log.d("set trash image for frame \(frame.frameIndex)")
+                    self.trashImage = swiftUIImage
+                }
+            }
+        }
+    }
+    
+    func setOutlierGroups() async {
+        guard let frame else {
+            Log.w("cannot set outlier groups with no frame reference")
+            return
+        }
+        Task.detached(priority: .userInitiated) {
+            let outlierGroups = await frame.outlierGroupList()
+            if let outlierGroups {
+                Log.d("got \(outlierGroups.count) groups for frame \(frame.frameIndex)")
+                var newOutlierGroups: [OutlierGroupViewModel] = []
+                for group in outlierGroups {
+                    if let cgImage = await group.testImage() { // XXX heap corruption here :(
+                        var size = CGSize()
+                        size.width = CGFloat(cgImage.width)
+                        size.height = CGFloat(cgImage.height)
+                        let outlierImage = NSImage(cgImage: cgImage, size: size)
+                        
+                        let groupView = await OutlierGroupViewModel(viewModel: self,
+                                                                    group: group,
+                                                                    name: group.id,
+                                                                    bounds: group.bounds,
+                                                                    image: outlierImage)
+                        newOutlierGroups.append(groupView)
+                    } else {
+                        Log.e("frame \(frame.frameIndex) outlier group no image")
+                    }
+                }
+                
+                let foo = newOutlierGroups
+                await MainActor.run {
+                    self.outlierViews = foo
+                   // self.objectWillChange.send()
+                }
+            } else {
+                // need to load outliers, we don't have any
+            }
+        }
+    }
+    
 }
 
 // XXX make this a loading view

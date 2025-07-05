@@ -207,8 +207,8 @@ public actor FinalGUIProcessor {
             Task { @MainActor in
                 if let frameView = await viewModel?.frames[frame.frameIndex] {
                     frameView.outlierViews = nil
+                    await frameView.setOutlierGroups()
                 }
-                await viewModel?.setOutlierGroups(forFrame: frame)
             }
             await frame.set(state: .readyForInterFrameProcessing)
         } catch {
@@ -262,7 +262,7 @@ fileprivate func finalProcess(atIndex currentIndex: Int,
         await frame.set(frameSavingState: .notSaving)
 
         Task { @MainActor in
-            await viewModel.setOutlierGroups(forFrame: frame)
+            await frames[currentIndex].setOutlierGroups()
             viewModel.numberOfFramesProcessed += 1
         }
 
@@ -293,7 +293,7 @@ func shovelFrame(to frame: FrameAirplaneRemover,
             let frameView = viewModel.frames[frame.frameIndex]
             frameView.outlierViews = nil
             
-            await viewModel.setOutlierGroups(forFrame: frame)
+            await frameView.setOutlierGroups()
         }.value
         await frame.set(state: .complete)
     } catch {

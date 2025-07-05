@@ -17,15 +17,16 @@ struct OutlierGroupView: View {
 
     var body: some View {
         @Bindable var groupViewModel = groupViewModel
+        @Bindable var viewModel = viewModel
         ZStack() {
-            let frameWidth = groupViewModel.viewModel.frameWidth
-            let frameHeight = groupViewModel.viewModel.frameHeight
+            let frameWidth = viewModel.frameWidth
+            let frameHeight = viewModel.frameHeight
             let bounds = groupViewModel.bounds
             let unknown_paint = groupViewModel.removeObserver.shouldRemove?.willRemove == nil
             let will_paint = groupViewModel.removeObserver.shouldRemove?.willRemove ?? false
-            let arrow_length = groupViewModel.viewModel.arrowLength
-            let arrow_height = groupViewModel.viewModel.arrowHeight
-            let line_width = groupViewModel.viewModel.lineWidth
+            let arrow_length = viewModel.arrowLength
+            let arrow_height = viewModel.arrowHeight
+            let line_width = viewModel.lineWidth
             let center_x = CGFloat(bounds.center.x)
             let center_y = CGFloat(bounds.center.y)
 
@@ -78,12 +79,12 @@ struct OutlierGroupView: View {
                 // lines across the frame between the arrows and outlier group bounds
                 let left_line_width = CGFloat(bounds.min.x)
 
-                let right_line_width = groupViewModel.viewModel.frameWidth -
+                let right_line_width = viewModel.frameWidth -
                   left_line_width - bounds_width
 
                 let top_line_height = CGFloat(bounds.min.y)
 
-                let bottom_line_height = groupViewModel.viewModel.frameHeight -
+                let bottom_line_height = viewModel.frameHeight -
                   top_line_height - bounds_height
 
                 let bounds_center_x = CGFloat(bounds.center.x)
@@ -128,9 +129,9 @@ struct OutlierGroupView: View {
             
             // tap gesture toggles paintability of the tapped group
               .onTapGesture {
-                  if groupViewModel.viewModel.selectionMode == .trash {
+                  if viewModel.selectionMode == .trash {
                       // dump the tapped outlier into the trash
-                      groupViewModel.viewModel.frames[groupViewModel.group.frameIndex].dumpInTrash(groupViewModel.group)
+                      viewModel.frames[groupViewModel.group.frameIndex].dumpInTrash(groupViewModel.group)
                       topViewModel.refreshCursor()
                   } else {                   
                       Task {
@@ -141,11 +142,11 @@ struct OutlierGroupView: View {
                                   // change the paintability of this outlier group
                                   // set it to user selected opposite previous value
 
-                                  Log.d("groupViewModel.viewModel.selectionMode \(groupViewModel.viewModel.selectionMode)")
+                                  Log.d("viewModel.selectionMode \(viewModel.selectionMode)")
                                   
-                                  if groupViewModel.viewModel.selectionMode == .information {
+                                  if viewModel.selectionMode == .information {
                                       handleDetailsMode()
-                                  } else if groupViewModel.viewModel.multiChoice {
+                                  } else if viewModel.multiChoice {
                                       openMultiChoiceSheet()
                                   } else {
                                       toggleRemoveReason(origShouldPaint) {
@@ -186,8 +187,8 @@ struct OutlierGroupView: View {
 
     var outlierView: some View {
         let bounds = self.groupViewModel.bounds
-        let frameWidth = self.groupViewModel.viewModel.frameWidth
-        let frameHeight = self.groupViewModel.viewModel.frameHeight
+        let frameWidth = viewModel.frameWidth
+        let frameHeight = viewModel.frameHeight
         let half_bounds_height = CGFloat(bounds.height/2)
         let half_bounds_width = CGFloat(bounds.width/2)
         let paint_color = self.groupViewModel.groupColor
@@ -250,14 +251,14 @@ struct OutlierGroupView: View {
             Log.w("DETAILS")
             // here we want to select just this outlier
 
-            if self.groupViewModel.viewModel.outlierGroupTableRows.count == 1,
-               self.groupViewModel.viewModel.outlierGroupTableRows[0].name == self.groupViewModel.group.id
+            if viewModel.outlierGroupTableRows.count == 1,
+               viewModel.outlierGroupTableRows[0].name == self.groupViewModel.group.id
             {
                 // just toggle the selectablility of this one
                 // XXX need separate enums for selection does paint and selection does do info
             } else {
                 // make this row the only selected one
-                let frame_view = self.groupViewModel.viewModel.frames[self.groupViewModel.group.frameIndex]
+                let frame_view = viewModel.frames[self.groupViewModel.group.frameIndex]
                 if let frame = frame_view.frame,
                    let group = await frame.outlierGroup(named: self.groupViewModel.group.id)
                 {
@@ -271,11 +272,11 @@ struct OutlierGroupView: View {
                     let new_row = await OutlierGroupTableRow(group)
                     self.groupViewModel.isSelected = true
                     await MainActor.run {
-                        self.groupViewModel.viewModel.outlierGroupWindowFrame = frame
-                        self.groupViewModel.viewModel.outlierGroupTableRows = [new_row]
-                        self.groupViewModel.viewModel.selectedOutliers = [new_row.id]
+                        viewModel.outlierGroupWindowFrame = frame
+                        viewModel.outlierGroupTableRows = [new_row]
+                        viewModel.selectedOutliers = [new_row.id]
 
-                        if self.groupViewModel.viewModel.shouldShowOutlierGroupTableWindow() {
+                        if viewModel.shouldShowOutlierGroupTableWindow() {
                             openWindow(id: StarApp.outlierGroupTableWindowName) 
                         }
                     }
@@ -290,20 +291,20 @@ struct OutlierGroupView: View {
         // show a dialog like the multi selection dialog
         // which allows changing any outlier groups in other
         // frames which have any pixels in the same spot
-        self.groupViewModel.viewModel.multiChoiceSheetShowing = true
-        self.groupViewModel.viewModel.multiChoiceOutlierView = self
+        viewModel.multiChoiceSheetShowing = true
+        viewModel.multiChoiceOutlierView = self
         Task {
             let shouldRemove = await self.groupViewModel.group.shouldRemove()
             await MainActor.run {
                 if let shouldRemove {
                     if shouldRemove.willRemove {
-                        self.groupViewModel.viewModel.multiChoicePaintType = .keep
+                        viewModel.multiChoicePaintType = .keep
                     } else {
-                        self.groupViewModel.viewModel.multiChoicePaintType = .remove
+                        viewModel.multiChoicePaintType = .remove
                     }
                 } else {
                     // this is aguess
-                    self.groupViewModel.viewModel.multiChoicePaintType = .keep
+                    viewModel.multiChoicePaintType = .keep
                 }
             }
         }
@@ -324,7 +325,7 @@ struct OutlierGroupView: View {
                                  
             // update frame view model too
             
-            if let frame = self.groupViewModel.viewModel.currentFrame,
+            if let frame = viewModel.currentFrame,
                let outlierGroups = await frame.outlierGroups
             {
                 if let outlier_group = await outlierGroups.members[self.groupViewModel.group.id] {

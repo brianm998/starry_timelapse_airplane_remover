@@ -49,7 +49,7 @@ struct LoadAllOutliersButton: View {
 
                                 Task { @MainActor in
                                     viewModel.numberOfFramesWithOutliersLoaded += 1
-                                    await viewModel.setOutlierGroups(forFrame: frame)
+                                    await frameView.setOutlierGroups()
                                 }
                             }
                         } else {

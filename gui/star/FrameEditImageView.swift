@@ -68,10 +68,10 @@ public struct FrameEditImageView: View {
                     Task.detached(priority: .userInitiated) {
                         Log.d("maybeLoadOutliers actually loading in background")
                         let _ = try await frame.loadOutliers(loadOnly: true)
-                        await self.viewModel.computeSmallOutlierImage(forFrame: frame)
+                        await frameView.computeSmallOutlierImage()
                         Task { @MainActor in
                             Log.d("maybeLoadOutliers done loading, putting outliers in view")
-                            await self.viewModel.setOutlierGroups(forFrame: frame)
+                            await frameView.setOutlierGroups()
                             frameView.loadingOutlierViews = false
                             FU.loadingOutliers = FU.loadingOutlierGroups
 
@@ -100,7 +100,7 @@ public struct FrameEditImageView: View {
             frameView.loadingTrashViews = true
 
             Task.detached(priority: .userInitiated) {
-                await self.viewModel.computeTrashImage(forFrame: frame)
+                await frameView.computeTrashImage()
                 await MainActor.run {
                     frameView.loadingTrashViews = false
                 }
@@ -115,7 +115,7 @@ public struct FrameEditImageView: View {
         if let frame = frameView.frame,
            (frameView.positiveOutlierImage == nil || frameView.negativeOutlierImage == nil)
         {
-            self.viewModel.computeSmallOutlierImage(forFrame: frame)
+            frameView.computeSmallOutlierImage()
         }
     }
 
