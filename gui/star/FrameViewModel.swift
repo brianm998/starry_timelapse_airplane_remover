@@ -10,15 +10,7 @@ import Combine
 @MainActor @Observable
 public class FrameViewModel {
 
-    let frameWidth: CGFloat
-    let frameHeight: CGFloat
-
-    init(_ frameIndex: Int,
-         frameWidth: CGFloat,
-         frameHeight: CGFloat)
-    {
-        self.frameWidth = frameWidth
-        self.frameHeight = frameHeight
+    init(_ frameIndex: Int) {
         self.frameIndex = frameIndex
     }
 
@@ -216,8 +208,8 @@ public class FrameViewModel {
 
          */
         
-        let width  = Int(self.frameWidth)
-        let height = Int(self.frameHeight)
+        let width  = Int(frame.width)
+        let height = Int(frame.height)
         Task.detached(priority: .userInitiated) {
             var positiveOutlierArray = [UInt8](repeating: 0, count: 2*width*height)
             var negativeOutlierArray = [UInt8](repeating: 0, count: 2*width*height)
@@ -296,8 +288,8 @@ public class FrameViewModel {
         }
         // write an image from all of the trash, as there can be too much trash
         // to make each particle an outlier view 
-        let width  = Int(self.frameWidth)
-        let height = Int(self.frameHeight)
+        let width  = Int(frame.width)
+        let height = Int(frame.height)
         Log.d("computing trash image for frame \(frame.frameIndex)")
         Task.detached(priority: .userInitiated) {
             var trashArray = [UInt8](repeating: 0, count: 2*width*height)

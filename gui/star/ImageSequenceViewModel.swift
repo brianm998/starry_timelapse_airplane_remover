@@ -627,7 +627,7 @@ public final class ImageSequenceViewModel {
     
     func set(numberOfFrames: Int) {
         self.frames = [FrameViewModel](count: numberOfFrames) {
-            i in FrameViewModel(i, frameWidth: frameWidth, frameHeight: frameHeight)
+            i in FrameViewModel(i)
         }
     }
     
