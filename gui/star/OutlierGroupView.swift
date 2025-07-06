@@ -215,7 +215,7 @@ struct OutlierGroupView: View {
                 }
                 
                 // draw line here
-                if let line = self.groupViewModel.line {
+                if self.groupViewModel.line != nil {
                     Path { path in
                         path.addLines(self.groupViewModel.pointsForLineOnBounds)
                         path.closeSubpath()

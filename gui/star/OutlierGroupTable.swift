@@ -431,7 +431,8 @@ struct OutlierGroupTable: View {
                             }
                         }
                     }
-                } .onChange(of: viewModel.selectedOutliers) {newValue in 
+                } .onChange(of: viewModel.selectedOutliers) { 
+                    let newValue = viewModel.selectedOutliers
                     Log.d("selected outliers \(newValue)")
                     Task { await outlierWindowViewModel.loadLineInfo() }
                     if let frame = viewModel.outlierGroupWindowFrame {
@@ -464,7 +465,7 @@ struct OutlierGroupTable: View {
                         }
                     }
                 } .onChange(of: sortOrder) {
-                    viewModel.outlierGroupTableRows.sort(using: $0)
+                    viewModel.outlierGroupTableRows.sort(using: sortOrder)
                 } .onDisappear() {
                     // without this selection will persist 
                     if let frame = viewModel.outlierGroupWindowFrame {

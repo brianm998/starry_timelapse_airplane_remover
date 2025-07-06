@@ -206,7 +206,7 @@ struct FrameEditView: View {
                                  between: selectionStart,
                                  and: end_location)
 
-                      if let frame = frameView.frame {
+                     
                           // recompute small outlier images after the razor
                           frameView.computeSmallOutlierImage()
                           
@@ -214,7 +214,7 @@ struct FrameEditView: View {
                           if viewModel.shouldShowTrash {
                               frameView.computeTrashImage()
                           }
-                      }
+                      
                       
                   case .trash:
                       dumpInTrash(from: frameView,
@@ -345,9 +345,7 @@ struct FrameEditView: View {
                 
                 // if we are showing the trash, recompute the image
                 if await viewModel.shouldShowTrash {
-                    if let frame = await frameView.frame {
-                        await frameView.computeTrashImage()
-                    }
+                    await frameView.computeTrashImage()
                 }
                 
                 await MainActor.run {

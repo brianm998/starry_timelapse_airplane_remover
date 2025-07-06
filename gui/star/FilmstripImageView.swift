@@ -17,7 +17,7 @@ struct FilmstripImageView: View {
                 Text("\(frameIndex)").foregroundColor(.white)
                   .layoutPriority(8)
                 Spacer()
-                let circleSize: CGFloat = 8
+                
                 switch frameView.outliersLoaded {
                 case .unloaded:
                     // show nothing when unloaded

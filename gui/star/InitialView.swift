@@ -105,7 +105,7 @@ struct InitialView: View {
 
     func handleDrop(providers: [NSItemProvider]) -> Bool {
         for provider in providers {
-            provider.loadObject(ofClass: NSPasteboard.PasteboardType.self) {
+            _ = provider.loadObject(ofClass: NSPasteboard.PasteboardType.self) {
                 pasteboardItem, _ in
                 if let pasteboardItem {
                     if let url = URL(string: pasteboardItem.rawValue) {

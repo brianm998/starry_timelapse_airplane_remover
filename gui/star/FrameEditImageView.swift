@@ -94,8 +94,7 @@ public struct FrameEditImageView: View {
 
         if viewModel.shouldShowTrash,
            frameView.trashImage == nil,
-           !frameView.loadingTrashViews,
-           let frame = frameView.frame
+           !frameView.loadingTrashViews
         {
             frameView.loadingTrashViews = true
 
@@ -112,9 +111,7 @@ public struct FrameEditImageView: View {
         // try loading trash outliers if there aren't any present
         let frameView = self.viewModel.frames[self.viewModel.currentIndex]
 
-        if let frame = frameView.frame,
-           (frameView.positiveOutlierImage == nil || frameView.negativeOutlierImage == nil)
-        {
+        if (frameView.positiveOutlierImage == nil || frameView.negativeOutlierImage == nil) {
             frameView.computeSmallOutlierImage()
         }
     }

@@ -46,9 +46,7 @@ struct BlobProcessingView: View {
         VStack(alignment: .leading) {
             Text("Blob Processing Steps")
 
-            if let detectionType,
-               let imageSequence = viewModel.imageSequence
-            {
+            if let imageSequence = viewModel.imageSequence {
                 @Bindable var imageSequence = imageSequence
                 
                 Picker("Current Detection Type", selection: $imageSequence.detectionType) {

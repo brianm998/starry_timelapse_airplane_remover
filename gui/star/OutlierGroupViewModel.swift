@@ -94,10 +94,7 @@ class OutlierGroupViewModel: Identifiable {
     func selectArrow(_ selected: Bool) {
         arrowSelected = selected
         Task {
-            if selected,
-               let frame = await group.frame
-            {
-                let frameIndex = frame.frameIndex
+            if selected {
                 await MainActor.run {
                     if let viewModel,
                        let outlierViewModels = viewModel.outlierViews
