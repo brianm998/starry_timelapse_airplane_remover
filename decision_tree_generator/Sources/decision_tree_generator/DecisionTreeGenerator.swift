@@ -56,52 +56,61 @@ actor DecisionTreeGenerator {
         let inputDataSplit = inputData.shuffleSplit(into: treeCount)
 
 
-        let trees = try await withLimitedThrowingTaskGroup(of: TreeForestResult.self) { taskGroup in
-            //var validationData = ClassifiedData()
-            var results: [TreeForestResult] = []
-            for validationIndex in 0..<inputDataSplit.count {
-                try await taskGroup.addTask() { 
-                    // generate a tree from this validation data
-                    let validationData = inputDataSplit[validationIndex]
-                    
-                    // use the remaining data for training
-                    let trainingData = ClassifiedData()
-                    for i in 0..<inputDataSplit.count {
-                        if i != validationIndex {
-                            trainingData += inputDataSplit[i]
-                        }
-                    }
+        //let trees = try await withLimitedThrowingTaskGroup(of: TreeForestResult.self) { taskGroup in
+        //var validationData = ClassifiedData()
+        var trees: [TreeForestResult] = []
+        for validationIndex in 0..<inputDataSplit.count {
 
-                    Log.i("have \(validationData.count) validationData, \(testData.map { $0.count }.reduce(0, +)) testData and \(trainingData.count) trainingData @ validation index \(validationIndex)")
-                    
-                    let tree = try await self.generateTree(withTrainingData: trainingData,
-                                                           andTestData: validationData,
-                                                           inputFilenames: inputFilenames,
-                                                           baseFilename: baseFilename,
-                                                           treeIndex: validationIndex)
+            /*
 
-                    Log.i("generated tree")
-                    
-                    // save this generated swift code to a file
-                    if FileManager.default.fileExists(atPath: tree.filename) {
-                        Log.i("overwriting already existing filename \(tree.filename)")
-                        try FileManager.default.removeItem(atPath: tree.filename)
-                    }
+             rewrite this to use a semaphore to allow 2-3 trees to be generated at once
+             (make a command line parameter?)
+             do this by creating Tasks that return the TreeForestResult,
+             waiting for the semaphore before starting.
 
-                    // write to file
-                    FileManager.default.createFile(atPath: tree.filename,
-                                            contents: tree.swiftCode.data(using: .utf8),
-                                            attributes: nil)
-
-                    // run test on test data
-                    let (treeGood, treeBad) = await runTest(of: tree, onChunks: testData)
-                    let score = Double(treeGood)/Double(treeGood + treeBad)
-                    
-                    return TreeForestResult(tree: tree, testScore: score)
+             with latest data, making 8 trees at once uses too much RAM :(
+             but making only one at once makes it take hours, and could use more
+             RAM and CPU to go faster.
+             
+             */
+            
+            // generate a tree from this validation data
+            let validationData = inputDataSplit[validationIndex]
+            
+            // use the remaining data for training
+            let trainingData = ClassifiedData()
+            for i in 0..<inputDataSplit.count {
+                if i != validationIndex {
+                    trainingData += inputDataSplit[i]
                 }
             }
-            try await taskGroup.forEach() { results.append($0) }
-            return results
+
+            Log.i("have \(validationData.count) validationData, \(testData.map { $0.count }.reduce(0, +)) testData and \(trainingData.count) trainingData @ validation index \(validationIndex)")
+            
+            let tree = try await self.generateTree(withTrainingData: trainingData,
+                                                   andTestData: validationData,
+                                                   inputFilenames: inputFilenames,
+                                                   baseFilename: baseFilename,
+                                                   treeIndex: validationIndex)
+
+            Log.i("generated tree")
+            
+            // save this generated swift code to a file
+            if FileManager.default.fileExists(atPath: tree.filename) {
+                Log.i("overwriting already existing filename \(tree.filename)")
+                try FileManager.default.removeItem(atPath: tree.filename)
+            }
+
+            // write to file
+            FileManager.default.createFile(atPath: tree.filename,
+                                           contents: tree.swiftCode.data(using: .utf8),
+                                           attributes: nil)
+
+            // run test on test data
+            let (treeGood, treeBad) = await runTest(of: tree, onChunks: testData)
+            let score = Double(treeGood)/Double(treeGood + treeBad)
+
+            trees.append(TreeForestResult(tree: tree, testScore: score)) 
         }
 
         return trees

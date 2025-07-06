@@ -30,7 +30,7 @@ fi
 # the OutlierGroup classification features are updated, to either
 # give different values for existing features, or to add or remove features.
 
-./regen_outlier_values.pl
+#./regen_outlier_values.pl
 
 # apply outlier group classification to the raw outlier feature data
 # to sort them into positive_data.csv and negative_data.csv files
@@ -44,20 +44,30 @@ cd ../decision_tree_generator
 # condense the csv files into a single spot
 ./condense_outlier_csv_files.pl /qp/star_validated/$1
 
+echo "test/train split"
 
 # split them for test/train
 ./outlier_csv_split.pl /qp/star_validated/$1
 
 # build trees
 # tree for all classifiers
-swift run -Xswiftc -O decision_tree_generator --forest 8 --no-prune -t /qp/star_validated/$1-test /qp/star_validated/$1-train
+swift run -Xswiftc -O decision_tree_generator --forest 8 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
 
 # tree for just isolated classifiers
-swift run -Xswiftc -O decision_tree_generator --treeType isolated --forest 8 --no-prune -t /qp/star_validated/$1-test /qp/star_validated/$1-train
+# XXX these are getting over 10 megabytes now, maybe limit the tree size by stumping?
+#swift run -Xswiftc -O decision_tree_generator --treeType isolated --forest 8 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
 
-#.build/debug/decision_tree_generator --forest 12 --no-prune -n 28 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
-#.build/debug/decision_tree_generator --forest 16 --no-prune -n 28 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
-#.build/debug/decision_tree_generator --forest 24 --no-prune -n 28 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
+#swift run -Xswiftc -O decision_tree_generator --treeType isolated --forest 5 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
+
+#swift run -Xswiftc -O decision_tree_generator --treeType isolated --forest 3 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
+
+#swift run -Xswiftc -O decision_tree_generator --treeType isolated --forest 2 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
+
+## try isolated with max depth param and smaller forest
+#swift run -Xswiftc -O decision_tree_generator --max-depth 10 --treeType isolated --forest 6 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
+
+## try isolated with max depth param
+#swift run -Xswiftc -O decision_tree_generator --max-depth 12 --treeType isolated --forest 4 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
 
 
 # re-compile trees

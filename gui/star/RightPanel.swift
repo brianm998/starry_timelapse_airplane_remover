@@ -123,6 +123,10 @@ struct RightPanel: View {
                             Toggle("Show Trash", isOn: $viewModel.shouldShowTrash)
                               .foregroundColor(.white)
 
+                            /*
+                             XXX for some unknown reason, these grab focus and refuse
+                             XXX to let it go :(
+                             
                             Text("Trash Level")
                               .foregroundColor(.yellow)
                             TextField("\(viewModel.trashLevel)",
@@ -140,8 +144,8 @@ struct RightPanel: View {
                                   }
                                   self.focusedField = nil
                               }
-                            
-                            Text("Small Trash Max")
+
+                              Text("Small Trash Max")
                               .foregroundColor(.yellow)
                             TextField("\(viewModel.smallTrashMax)",
                                       text: $viewModel.smallTrashMaxString)
@@ -155,7 +159,6 @@ struct RightPanel: View {
                                   }
                                   self.focusedField = nil
                               }
-                            
                             Text("Minimum Classification Size")
                               .foregroundColor(.orange)
                             TextField("\(viewModel.minimumClassificationSize)",
@@ -173,6 +176,7 @@ struct RightPanel: View {
                                   self.focusedField = nil
                               }
 
+*/                            
                             Toggle("Only Unclassified", isOn: $viewModel.classifyOnlyUnclassified)
                               .foregroundColor(.orange)
                             

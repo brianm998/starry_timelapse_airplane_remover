@@ -5,10 +5,13 @@
 	"LRT_03_16_2024-fx3-2-aurora-topaz-star-v-0_7_0-strong",
 	"LRT_07_15_2023-a7riiia-2-aurora-topaz-star-v-0_7_0-strong"
     ],
+    "/sp/tmp/" : [
+	"LRT_06_04_2024-a7riii-2-aurora-topaz-star-v-0_7_2-strong"
+    ],
     "/qp/tmp/" : [
 	"LRT_11_30_2024-a9-1-aurora-topaz-star-v-0_7_1-excessive"
     ],
     "ranges" : {
-	"LRT_11_30_2024-a9-1-aurora-topaz-star-v-0_7_1-excessive" : { "lastFrame": 330 }
+	"LRT_11_30_2024-a9-1-aurora-topaz-star-v-0_7_1-excessive" : { "lastFrame": 872 }
     }
 }

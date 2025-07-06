@@ -41,14 +41,14 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
 
           .frameState(.filter2),
 
-          // reconnect some lines that may have been split up
-          .linearBlobConnector(.init(scanSize: 6, 
+          // connect nearby blobs that are linear but still separate
+          .linearBlobConnector(.init(scanSize: 10, 
                                      blobsSmallerThan: 6800,
-                                     blobsLargerThan: 4,
-                                     lineBorder: 8,
-                                     minLineScore: 15,
+                                     blobsLargerThan: 20,
+                                     lineBorder: 15,
+                                     minLineScore: 35,
                                      adjecentPixelsOnIteration: 5,
-                                     maxIterationCount: 30)),
+                                     maxIterationCount: 10)),
 
           .frameState(.filter3),
 

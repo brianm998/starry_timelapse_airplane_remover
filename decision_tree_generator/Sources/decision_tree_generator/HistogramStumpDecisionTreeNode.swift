@@ -34,8 +34,7 @@ class HistogramStumpDecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
     
     public init(result: DecisionResult,
                 indent: Int,            // really recursion level
-                newMethodLevel: Int,    // how far we recurse before making a new method
-                bucketCount: Int)       // how many buckets does the histogram have?
+                newMethodLevel: Int)    // how far we recurse before making a new method
     {
         self.result = result
         self.indent = indent
@@ -73,7 +72,36 @@ class HistogramStumpDecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
         }
 
         Log.d("for \(result.type) have \(positiveValues.count) \(negativeValues.count) minValue \(_minValue) maxValue \(maxValue) result.greaterThanPositive \(result.greaterThanPositive.count) result.greaterThanNegative \(result.greaterThanNegative.count) result.lessThanPositive \(result.lessThanPositive.count) result.lessThanNegative \(result.lessThanNegative.count)")
-       
+
+
+        // calculate the bucket count, make sure we don't use too many buckets
+        // with too many samples, creates lots of zeros :(
+
+        var bucketCount = 64
+        
+        let valuesCount = positiveValues.count + negativeValues.count
+        if valuesCount == 1 {
+            bucketCount = 1
+        } else if valuesCount < 16 {
+            bucketCount = 2
+        } else if valuesCount < 64 {
+            bucketCount = 4
+        } else if valuesCount < 128 {
+            bucketCount = 8
+        } else if valuesCount < 256 {
+            bucketCount = 12
+        } else if valuesCount < 512 {
+            bucketCount = 18
+        } else if valuesCount < 1024 {
+            bucketCount = 24
+        } else if valuesCount < 2048 {
+            bucketCount = 28
+        } else if valuesCount < 4096 {
+            bucketCount = 28
+        } else if valuesCount < 8192 {
+            bucketCount = 32
+        }
+        
         // calculate the size of each histogram bucket
 
         self.bucketSize = (maxValue - _minValue)/Double(bucketCount)

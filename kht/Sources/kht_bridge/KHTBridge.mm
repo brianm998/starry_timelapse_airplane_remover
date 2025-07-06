@@ -14,7 +14,7 @@
 
 +(NSArray *) translate:(NSImage*)image {
   // return value for run_kht below
-  kht::ListOfLines lineList = kht::ListOfLines();
+  kht::ListOfLines lineList = kht::ListOfLines(); // XXX dealocated?
 
   cv::Mat im, eightBit, canny;
 

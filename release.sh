@@ -24,9 +24,9 @@ set -e
 # next build the decision tree code into a static, universal library (.a file)
 # this can be large, and is linked into the gui, cli and decision tree generator apps
 ####
-cd StarDecisionTrees
-./release.sh
-cd ..
+#cd StarDecisionTrees
+#./release.sh
+#cd ..
 
 # results end up here:
 # StarDecisionTrees/lib

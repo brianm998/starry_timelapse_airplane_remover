@@ -80,6 +80,7 @@ public class MildBlobProcessor: AbstractBlobProcessor {
 
         self.steps = [
 
+          // initial detection of blobs from subtraction image
           .findBlobs(.init(minPixelIntensity: 8000,
                            startContrastSize: 10,
                            endContrastSize: 200,
@@ -93,6 +94,7 @@ public class MildBlobProcessor: AbstractBlobProcessor {
           .save(.blobs),          
           .frameState(.filter1),
 
+          // use hough line detection to identify lines and connect blobs along them
           .houghLineMatrixBlobConnector(.init(elementWidth: 600,
                                               elementHeight: 400,
                                               overlapPercent: 20,
@@ -103,12 +105,12 @@ public class MildBlobProcessor: AbstractBlobProcessor {
           .frameState(.filter2),
 
 
-          // reconnect some lines that may have been split up
+          // connect nearby blobs that are linear but still separate
           .linearBlobConnector(.init(scanSize: 10, 
                                      blobsSmallerThan: 6800,
-                                     blobsLargerThan: 4,
-                                     lineBorder: 8,
-                                     minLineScore: 15,
+                                     blobsLargerThan: 20,
+                                     lineBorder: 15,
+                                     minLineScore: 35,
                                      adjecentPixelsOnIteration: 5,
                                      maxIterationCount: 10)),
 
