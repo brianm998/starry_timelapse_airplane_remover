@@ -101,7 +101,9 @@ push enter
             try ObjC.catchException {
                 // first try to run hugin star alignment 
                 try shellOut(to: "\(StarAlignment.pathToBinary)/\(StarAlignment.binaryName)",
-                             arguments: ["--use-given-order", "-a", baseName,
+                             arguments: ["--align-to-first",
+                                         "--use-given-order",
+                                         "-a", baseName,
                                          referenceImageName, alignmentImageName],
                              at: outputDirname)
                 Log.d("alignment worked")
