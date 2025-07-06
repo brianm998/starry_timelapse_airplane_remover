@@ -41,3 +41,29 @@ public actor ProcessedBlobs {
         blobs = blobs.union(await otherSet.getBlobs())
     }
 }
+
+public class ProcessedBlobsSync {
+    private var blobs: Set<UInt32> = []
+
+    func getBlobs() -> Set<UInt32> { blobs }
+    
+    func contains(_ id: UInt32) -> Bool {
+        blobs.contains(id)
+    }
+
+    func contains(_ blob: Blob) -> Bool {
+        blobs.contains(blob.id)
+    }
+
+    func insert(_ id: UInt32) {
+        _ = blobs.insert(id)
+    }
+
+    func insert(_ blob: Blob) {
+        _ = blobs.insert(blob.id)
+    }
+
+    func union(with otherSet: ProcessedBlobs) async {
+        blobs = blobs.union(await otherSet.getBlobs())
+    }
+}

@@ -274,8 +274,11 @@ public actor LinearBlobConnector {
         let blobMap = await analyzer.mapOfBlobs()
         let startTime = Date().timeIntervalSince1970
 
+
+        var processedBlobs = ProcessedBlobsSync()
+        
         let data = LinearBlobConnector.Data(args: args,
-                                            processedBlobs: .init(),
+                                            processedBlobs: .init(), // XXX go away
                                             blobMap: await analyzer.mapOfBlobs(),
                                             blobRefs: await analyzer.blobRefsObj,
                                             analyzer: analyzer,
@@ -292,8 +295,8 @@ public actor LinearBlobConnector {
             for sortedBlob in sortedBlobs {
                 let blob = sortedBlob.blob
 
-                if await data.processedBlobs.contains(blob.id) { continue }
-                await data.processedBlobs.insert(blob.id)
+                if await processedBlobs.contains(blob.id) { continue }
+                await processedBlobs.insert(blob.id)
     
                 // only deal with blobs in a certain size range
                 let blobSize = await blob.size()
@@ -306,20 +309,16 @@ public actor LinearBlobConnector {
 
                 taskGroup.addTask {
                     // find a cloud of neighbors 
-                    let (neighborCloud, newProcessedBlobs) =
+                    let neighborCloud =
                       await StarCore.neighborCloud(of: blob,
                                                    blobRefs: data.blobRefs,
                                                    blobMap: data.blobMap,
-                                                   scanSize: data.args.scanSize,
-                                                   processedBlobs: data.processedBlobs)
-                    
-                    await data.processedBlobs.union(with: newProcessedBlobs)
+                                                   scanSize: data.args.scanSize)
                     
                     if neighborCloud.count != 0 { 
                         await processBlob(blob,
                                           data: data,
-                                          neighborCloud: neighborCloud,
-                                          newProcessedBlobs: newProcessedBlobs)
+                                          neighborCloud: neighborCloud)
                     }
                 }
             }
@@ -332,8 +331,7 @@ public actor LinearBlobConnector {
 
 fileprivate func processBlob(_ blob: Blob,
                              data: LinearBlobConnector.Data,
-                             neighborCloud: Set<Blob>,
-                             newProcessedBlobs: ProcessedBlobs) async
+                             neighborCloud: Set<Blob>) async
 {
     let startTime = Date().timeIntervalSince1970
     

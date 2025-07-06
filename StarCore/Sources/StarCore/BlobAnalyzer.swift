@@ -193,7 +193,7 @@ public actor BlobAnalyzer {
             await closure(id.id, id.blob)
         }
     }
-
+/*
     // returns a set of neighbors, and a set of blob ids that have been processed already.
     // repeats the direct neighbor scan for all found neighbors,
     // so that all members of this neighbor set are within scanSize
@@ -208,7 +208,7 @@ public actor BlobAnalyzer {
                                      scanSize: scanSize,
                                      processedBlobs: processedBlobs)
     }
-
+*/
     public func logBlobs() async {
         Log.d("frame \(frameIndex) has \(blobMap.count) blobs")
         for (_, blob) in blobMap {
@@ -259,12 +259,14 @@ public final class BlobRefs: Sendable {
 internal func neighborCloud(of blob: Blob,
                             blobRefs: BlobRefs,
                             blobMap: [UInt32: Blob],
-                            scanSize: Int = 12,
-                            processedBlobs: ProcessedBlobs) async -> (Set<Blob>, ProcessedBlobs)
+                            scanSize: Int = 12) async -> Set<Blob>
 {
     var blobsToProcess = [blob]
     var ret: Set<Blob> = []
 
+    var processedBlobs = ProcessedBlobsSync()
+    processedBlobs.insert(blob)
+    
     while blobsToProcess.count > 0 {
         let blobToProcess = blobsToProcess.removeFirst()
         for otherBlob in await StarCore.directNeighbors(of: blobToProcess,
@@ -272,14 +274,14 @@ internal func neighborCloud(of blob: Blob,
                                                         blobMap: blobMap,
                                                         scanSize: scanSize)
         {
-            if !(await processedBlobs.contains(otherBlob.id)) {
-                await processedBlobs.insert(otherBlob.id) // XXX combine this with above
+            if !(processedBlobs.contains(otherBlob.id)) {
+                processedBlobs.insert(otherBlob.id) // XXX combine this with above
                 ret.insert(otherBlob)
                 blobsToProcess.append(otherBlob)
             }
         }
     }
-    return (ret, processedBlobs)
+    return ret
 }
 
 
