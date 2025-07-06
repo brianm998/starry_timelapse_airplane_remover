@@ -127,8 +127,8 @@ struct RightPanel: View {
                               .foregroundColor(.yellow)
                             TextField("\(viewModel.trashLevel)",
                                       text: $viewModel.trashLevelString)
-                              .frame(maxWidth: 60)
                               .focused($focusedField, equals: .trashLevel)
+                              .frame(maxWidth: 60)
                               .onSubmit {
                                   let filtered = viewModel.trashLevelString.filter { "0123456789.-".contains($0) }
                                   if let newValue = Double(filtered),
@@ -137,8 +137,8 @@ struct RightPanel: View {
                                   {
                                       viewModel.trashLevel = newValue
                                       viewModel.trashLevelString = "\(newValue)"
-                                      self.focusedField = nil
                                   }
+                                  self.focusedField = nil
                               }
                             
                             Text("Small Trash Max")
@@ -152,8 +152,8 @@ struct RightPanel: View {
                                   if let newValue = Int(filtered) {
                                       viewModel.smallTrashMax = newValue
                                       viewModel.smallTrashMaxString = "\(newValue)"
-                                      self.focusedField = nil
                                   }
+                                  self.focusedField = nil
                               }
                             
                             Text("Minimum Classification Size")
@@ -169,8 +169,8 @@ struct RightPanel: View {
                                   {
                                       viewModel.minimumClassificationSize = newIntValue
                                       viewModel.minimumClassificationSizeString = "\(newIntValue)"
-                                      self.focusedField = nil
                                   }
+                                  self.focusedField = nil
                               }
 
                             Toggle("Only Unclassified", isOn: $viewModel.classifyOnlyUnclassified)
