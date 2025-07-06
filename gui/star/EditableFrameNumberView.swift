@@ -2,12 +2,14 @@ import SwiftUI
 import StarCore
 
 // a view that shows the current frame number being shown,
-// and on double tap, allows editing of what number to show
+// and on tap, allows editing of what number to show
 struct EditableFrameNumberView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     @State private var editFrameNumberMode = false
     @State private var editFrameNumberModeString = ""
+
+    @FocusState private var isFocused: Bool
     
     var body: some View {
         let frameNumberString = String(format: "%d", viewModel.currentIndex)
@@ -17,6 +19,7 @@ struct EditableFrameNumberView: View {
                   .foregroundColor(.white)
                 TextField("\(frameNumberString)",
                           text: $editFrameNumberModeString)
+                  .focused($isFocused)
                   .frame(maxWidth: 38)
                   .cursor(.arrow)
                   .onSubmit {
@@ -34,9 +37,10 @@ struct EditableFrameNumberView: View {
         } else {
             Text("frame \(frameNumberString)")
               .foregroundColor(.white)
-              .cursor(.dragLink)
-              .onTapGesture(count: 2) {
+              .cursor(.iBeam)
+              .onTapGesture(count: 1) {
                   self.editFrameNumberMode = true
+                  self.isFocused = true
               }
         }
     }
