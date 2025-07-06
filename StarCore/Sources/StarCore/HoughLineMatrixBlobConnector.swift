@@ -288,7 +288,7 @@ public actor HoughLineMatrixBlobConnector {
     }
 }
 
-fileprivate func combine(_ blobList: [Blob]) async -> Blob? {
+internal func combine(_ blobList: [Blob]) async -> Blob? {
     if blobList.count == 0 { return nil }
     let first = blobList[0]
     for i in 1..<blobList.count {

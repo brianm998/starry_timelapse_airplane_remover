@@ -67,9 +67,9 @@ public actor LinearBlobConnector {
                                            frameIndex: frameIndex)
     }
 
-    public func blobMap() async -> [UInt32:Blob] {
-        await analyzer.mapOfBlobs()
-    }
+    private var internalBlobMap: [UInt32:Blob] = [:]
+    
+    public func blobMap() async -> [UInt32:Blob] { internalBlobMap }
 
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         let scanSize: Int         // how far in each direction to look for neighbors
@@ -268,7 +268,8 @@ public actor LinearBlobConnector {
 
     public func process(_ args: Args) async {
 
-        let blobMap = await analyzer.mapOfBlobs()
+        internalBlobMap = await analyzer.mapOfBlobs()
+        //let blobMap = await analyzer.mapOfBlobs()
         let startTime = Date().timeIntervalSince1970
 
 
@@ -281,7 +282,7 @@ public actor LinearBlobConnector {
                                             frameIndex: frameIndex)
 
         var blobSizes: [BlobSize] = []
-        for (id, blob) in blobMap {
+        for (id, blob) in internalBlobMap {
             blobSizes.append(BlobSize(id: id, size: await blob.size(), blob: blob))
         }
 
@@ -289,7 +290,7 @@ public actor LinearBlobConnector {
 
         Log.i("frame \(frameIndex) processing \(sortedBlobs.count) blobs")
         
-        await withTaskGroup(of: Void.self) { taskGroup in
+        let mappings = await withTaskGroup(of: Set<BlobMapping>.self) { taskGroup in
             for sortedBlob in sortedBlobs {
                 let blob = sortedBlob.blob
 
@@ -314,14 +315,57 @@ public actor LinearBlobConnector {
                                                    scanSize: data.args.scanSize)
                     
                     if neighborCloud.count != 0 { 
-                        await processBlob(blob,
-                                          data: data,
-                                          neighborCloud: neighborCloud)
+                        return await processBlob(blob,
+                                                 data: data,
+                                                 neighborCloud: neighborCloud)
+                    } else {
+                        return []
                     }
                 }
             }
-            await taskGroup.waitForAll()
+
+            var ret = Set<BlobMapping>()
+            for await blobMapping in taskGroup {
+                Log.d("ret \(ret.count) adding \(blobMapping.count) mappings")
+                ret = ret.union(blobMapping) // XXX Crashed here :(
+                Log.d("ret \(ret.count) after adding \(blobMapping.count) mappings")
+            }
+            Log.d("returning set")
+            return ret
         }
+
+        Log.d("frame \(frameIndex) Constructing blob mapper")
+        
+        let blobMapper = BlobMapper(mappings: mappings)
+
+        // next produce a list of blob ids that are all part of a new combined blob
+        let mappingLists = blobMapper.mappingLists
+
+
+        Log.d("frame \(frameIndex) combining blobs into \(mappingLists.count) merged blobs")
+        await withTaskGroup(of: Optional<Blob>.self) { taskGroup in
+            for mappingList in mappingLists {
+                // a list of blobs that should all be removed
+                //Log.d("mappingList.list.count \(mappingList.list.count)")
+
+                let blobList = mappingList.compactMap { internalBlobMap[$0] }
+
+                //Log.d("blobList.count \(blobList.count)")
+
+                // remove blob ids from the list from the blob map
+                for blobId in mappingList { internalBlobMap.removeValue(forKey: blobId) }
+
+                taskGroup.addTask {
+                    return await StarCore.combine(blobList)
+                }
+                for await blob in taskGroup {
+                    if let blob {
+                        internalBlobMap[blob.id] = blob
+                    }
+                }
+            }
+        }
+        
         let endTime = Date().timeIntervalSince1970
         Log.d("frame \(frameIndex) processed in \(endTime-startTime) seconds")
     }
@@ -329,7 +373,7 @@ public actor LinearBlobConnector {
 
 fileprivate func processBlob(_ blob: Blob,
                              data: LinearBlobConnector.Data,
-                             neighborCloud: Set<Blob>) async
+                             neighborCloud: Set<Blob>) async -> Set<BlobMapping>
 {
     let startTime = Date().timeIntervalSince1970
     
@@ -386,7 +430,7 @@ fileprivate func processBlob(_ blob: Blob,
         
         // first iterate on the best line for the full blob
         // maybe recurse on a better line from a smaller amount
-        let numIterations =
+        let mappings =
           await iterate(on: blobLine,
                         over: fullBlob,
                         frameIndex: frameIndex,
@@ -395,12 +439,14 @@ fileprivate func processBlob(_ blob: Blob,
                         maxIterationCount: data.args.maxIterationCount,
                         adjecentPixelsOnIteration: data.args.adjecentPixelsOnIteration)
 
-        Log.d("frame \(frameIndex) iterated \(numIterations) times on blob \(blob)")
-
-        // trim the blob here?
-    } 
+        let endTime = Date().timeIntervalSince1970
+        Log.d("frame \(frameIndex) processed blob \(blob) in \(endTime-startTime) seconds")
+        
+        return mappings
+    }
     let endTime = Date().timeIntervalSince1970
     Log.d("frame \(frameIndex) processed blob \(blob) in \(endTime-startTime) seconds")
+    return Set<BlobMapping>()
 }
 
 fileprivate func iterate(on blobLine: Line,
@@ -411,7 +457,7 @@ fileprivate func iterate(on blobLine: Line,
                          lineBorder: Int,
                          iterationCount: Int = 0,
                          maxIterationCount: Int,
-                         adjecentPixelsOnIteration: Int) async -> Int
+                         adjecentPixelsOnIteration: Int) async -> Set<BlobMapping>
 {
     // we have an ideal origin zero line for this blob
     Log.d("frame \(frameIndex) blob \(fullBlob.id) has line \(blobLine)")
@@ -440,6 +486,8 @@ fileprivate func iterate(on blobLine: Line,
         end = DoubleCoord(x: 0, y: Double(max))
     }
 
+    var ret = Set<BlobMapping>()
+    
     if let start, let end {
         Log.d("frame \(frameIndex) blob \(fullBlob.id) iterating between \(start) and \(end)")
         let linearBlobIds = SetActor<UInt32>()
@@ -462,61 +510,26 @@ fileprivate func iterate(on blobLine: Line,
             }
         }
 
-        let linearBlobSet = await linearBlobIds.set.compactMap { data.blobMap[$0] }
+        var linearBlobSet = await linearBlobIds.set.compactMap { data.blobMap[$0] }
         
         if linearBlobSet.count > 1 {
-            // use nextIndex(from blobMap:) here?
-            // re-use data.analyzer.maxBlobId until we absorb another blob
-            // and then grab its id instead, as maxBlobId is already used 
-            let linearBlob = await Blob(id: data.analyzer.maxBlobId,
-                                        frameIndex: data.frameIndex)
 
+            let firstBlob = linearBlobSet.removeFirst()
+            
             Log.d("frame \(data.analyzer.frameIndex) blob \(fullBlob.id) found \(await linearBlobIds.count) linear blobs")
             
             // we found more than one blob along the line
+            // record a mapping between them 
 
-            // the others will get eaten and thrown away :(
             for otherBlob in linearBlobSet {
-                if await linearBlob.absorb(otherBlob, always: true) {
-                    //Log.d("frame \(data.analyzer.frameIndex) removing \(otherBlob) \(await otherBlob.pixels.count) pixels \(await otherBlob.pixels)")
-                    await data.analyzer.remove(blob: otherBlob)
-                    if await linearBlob.id == data.analyzer.maxBlobId {
-                        // reuse other blob's id to avoid overrunning UInt16.max
-                        await linearBlob.update(id: otherBlob.id)
-                    }
-                }
+                ret.insert(BlobMapping(firstBlob.id, otherBlob.id))
             }
-
-            await data.analyzer.update(blob: linearBlob)
 
             Log.d("frame \(data.analyzer.frameIndex) fullBlob \(fullBlob.id) after absorb \(await fullBlob.pixels.count)")
             
-            /*
-             If we have a line from this new blob, it is likely
-             more accurate than the one we iterated on before.
-
-             try recursing and iterating on this new line with some border
-             to see what we might find.
-             */
-
-            if let line = await fullBlob.originZeroLine {
-                if iterationCount < maxIterationCount {
-                    Log.d("frame \(data.analyzer.frameIndex) ITERATING iterationCount \(iterationCount)")
-                    return await iterate(on: line,
-                                         over: linearBlob,
-                                         frameIndex: frameIndex,
-                                         data: data,
-                                         lineBorder: lineBorder,
-                                         iterationCount: iterationCount + 1,
-                                         maxIterationCount: maxIterationCount,
-                                         adjecentPixelsOnIteration: adjecentPixelsOnIteration) + 1
-                } else {
-                    Log.d("frame \(data.analyzer.frameIndex) NOT ITERATING iterationCount \(iterationCount)")
-                }
-            }
         } else {
             Log.d("frame \(data.analyzer.frameIndex) only found \(linearBlobSet.count) linear blobs")
         }
     }
-    return 1
+    return ret
 }
