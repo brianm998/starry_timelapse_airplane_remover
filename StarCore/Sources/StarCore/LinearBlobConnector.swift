@@ -286,7 +286,7 @@ public actor LinearBlobConnector {
             blobSizes.append(BlobSize(id: id, size: await blob.size(), blob: blob))
         }
 
-        var sortedBlobs = blobSizes.sorted { $0.size > $1.size }
+        let sortedBlobs = blobSizes.sorted { $0.size > $1.size }
         
         await withTaskGroup(of: Void.self) { taskGroup in
             for sortedBlob in sortedBlobs {
@@ -304,23 +304,23 @@ public actor LinearBlobConnector {
                     continue
                 }
 
-                // find a cloud of neighbors 
-                let (neighborCloud, newProcessedBlobs) =
-                  await StarCore.neighborCloud(of: blob,
-                                               blobRefs: data.blobRefs,
-                                               blobMap: data.blobMap,
-                                               scanSize: data.args.scanSize,
-                                               processedBlobs: data.processedBlobs)
-                
-                await data.processedBlobs.union(with: newProcessedBlobs)
-                
-                if neighborCloud.count == 0 { continue }
-                
                 taskGroup.addTask {
-                    await processBlob(blob,
-                                      data: data,
-                                      neighborCloud: neighborCloud,
-                                      newProcessedBlobs: newProcessedBlobs)
+                    // find a cloud of neighbors 
+                    let (neighborCloud, newProcessedBlobs) =
+                      await StarCore.neighborCloud(of: blob,
+                                                   blobRefs: data.blobRefs,
+                                                   blobMap: data.blobMap,
+                                                   scanSize: data.args.scanSize,
+                                                   processedBlobs: data.processedBlobs)
+                    
+                    await data.processedBlobs.union(with: newProcessedBlobs)
+                    
+                    if neighborCloud.count != 0 { 
+                        await processBlob(blob,
+                                          data: data,
+                                          neighborCloud: neighborCloud,
+                                          newProcessedBlobs: newProcessedBlobs)
+                    }
                 }
             }
             await taskGroup.waitForAll()
@@ -361,7 +361,7 @@ fileprivate func processBlob(_ blob: Blob,
     
     // render a KHT on this full blob
     if let blobLine = await fullBlob.originZeroLine,
-       await fullBlob.pixelScore(for: blobLine) > data.args.minLineScore
+       await fullBlob.linePixelScore(for: blobLine) > data.args.minLineScore
     {
 
         //Log.d("iterating on blob \(id)")

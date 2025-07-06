@@ -196,14 +196,32 @@ public actor Blob: CustomStringConvertible,
 
     
     // assumes zero, zero origin line
-    public func pixelScore(for line: Line) -> Double {
+    public func linePixelScore(for line: Line) -> Double {
         let standardLine = line.standardLine
         var ret: Double = 0.0
         for pixel in pixels {
             let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
 
-            let intensity = pixel.intensity
           
+            if distance < 1 {
+                ret += 1.0
+            } else {
+                ret += 1.0/(distance*distance)
+            }
+        }
+
+        return ret
+    }
+    
+    // assumes zero, zero origin line
+    public func lineIntensityScore(for line: Line) -> Double {
+        let standardLine = line.standardLine
+        var ret: Double = 0.0
+        for pixel in pixels {
+            let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
+            
+            let intensity = pixel.intensity
+
             if distance < 1 {
                 ret += intensity
             } else {
