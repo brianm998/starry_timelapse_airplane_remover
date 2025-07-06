@@ -19,9 +19,15 @@ struct RightPanel: View {
     let foobar = 134.0/255.0 // XXX make a custom color from these
     let foobar2 = 138.0/255.0
 
-    @FocusState private var minimumClassificationSizeIsFirstResponder: Bool
-    @FocusState private var trashLevelIsFirstResponder: Bool
-    @FocusState private var smallTrashMaxIsFirstResponder: Bool
+    enum FocusedField: Hashable {
+        case trashLevel
+        case smallTrashMax
+        case minimumClassificationSize
+        case numberOfFramesToProcess
+        case numberOfFramesToProcessConcurrently
+    }
+
+    @FocusState private var focusedField: FocusedField?
     
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -122,7 +128,7 @@ struct RightPanel: View {
                             TextField("\(viewModel.trashLevel)",
                                       text: $viewModel.trashLevelString)
                               .frame(maxWidth: 60)
-                              .focused($trashLevelIsFirstResponder)
+                              .focused($focusedField, equals: .trashLevel)
                               .onSubmit {
                                   let filtered = viewModel.trashLevelString.filter { "0123456789.-".contains($0) }
                                   if let newValue = Double(filtered),
@@ -131,7 +137,7 @@ struct RightPanel: View {
                                   {
                                       viewModel.trashLevel = newValue
                                       viewModel.trashLevelString = "\(newValue)"
-                                      self.trashLevelIsFirstResponder = false
+                                      self.focusedField = nil
                                   }
                               }
                             
@@ -140,13 +146,13 @@ struct RightPanel: View {
                             TextField("\(viewModel.smallTrashMax)",
                                       text: $viewModel.smallTrashMaxString)
                               .frame(maxWidth: 60)
-                              .focused($smallTrashMaxIsFirstResponder)
+                              .focused($focusedField, equals: .smallTrashMax)
                               .onSubmit {
                                   let filtered = viewModel.smallTrashMaxString.filter { "0123456789".contains($0) }
                                   if let newValue = Int(filtered) {
                                       viewModel.smallTrashMax = newValue
                                       viewModel.smallTrashMaxString = "\(newValue)"
-                                      self.smallTrashMaxIsFirstResponder = false
+                                      self.focusedField = nil
                                   }
                               }
                             
@@ -155,7 +161,7 @@ struct RightPanel: View {
                             TextField("\(viewModel.minimumClassificationSize)",
                                       text: $viewModel.minimumClassificationSizeString)
                               .frame(maxWidth: 60)
-                              .focused($minimumClassificationSizeIsFirstResponder)
+                              .focused($focusedField, equals: .minimumClassificationSize)
                               .onSubmit {
                                   let filtered = viewModel.minimumClassificationSizeString.filter { "0123456789".contains($0) }
                                   if let newIntValue = Int(filtered),
@@ -163,7 +169,7 @@ struct RightPanel: View {
                                   {
                                       viewModel.minimumClassificationSize = newIntValue
                                       viewModel.minimumClassificationSizeString = "\(newIntValue)"
-                                      self.minimumClassificationSizeIsFirstResponder = false
+                                      self.focusedField = nil
                                   }
                               }
 
@@ -205,7 +211,7 @@ struct RightPanel: View {
 
                             let frameView = viewModel.currentFrameView
 
-                            EditableNumberOfFramesToProcessConcurrentlyView()
+                            EditableNumberOfFramesToProcessConcurrentlyView(focusedField: $focusedField)
 
                             Toggle("reprocess fully", isOn: $viewModel.reprocessFrames)
                               .foregroundColor(.white)
@@ -232,7 +238,7 @@ struct RightPanel: View {
                                           viewModel.renderingCurrentFrame)
 
 
-                            EditableNumberOfFramesToProcessView()
+                            EditableNumberOfFramesToProcessView(focusedField: $focusedField)
 
                             Picker("", selection: $viewModel.detectionType) {
                                 ForEach(DetectionType.allCases, id: \.self) { value in
@@ -303,6 +309,8 @@ struct RightPanel: View {
 struct EditableNumberOfFramesToProcessConcurrentlyView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
+    let focusedField: FocusState<RightPanel.FocusedField?>.Binding
+    
     @State private var editFrameNumberMode = false
     @State private var editFrameNumberModeString = ""
     
@@ -314,6 +322,7 @@ struct EditableNumberOfFramesToProcessConcurrentlyView: View {
                   .foregroundColor(.white)
                 TextField("\(frameNumberString)",
                           text: $editFrameNumberModeString)
+                  .focused(focusedField, equals: RightPanel.FocusedField.numberOfFramesToProcessConcurrently)
                   .frame(maxWidth: 38)
                   .cursor(.arrow)
                   .onSubmit {
@@ -340,9 +349,10 @@ struct EditableNumberOfFramesToProcessConcurrentlyView: View {
         } else {
             Text("process \(frameNumberString) frames at once")
               .foregroundColor(.white)
-              .cursor(.dragLink)
-              .onTapGesture(count: 2) {
+              .cursor(.iBeam)
+              .onTapGesture(count: 1) {
                   self.editFrameNumberMode = true
+                  focusedField.wrappedValue = RightPanel.FocusedField.numberOfFramesToProcessConcurrently
               }
         }
     }
@@ -350,6 +360,8 @@ struct EditableNumberOfFramesToProcessConcurrentlyView: View {
 
 struct EditableNumberOfFramesToProcessView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+
+    let focusedField: FocusState<RightPanel.FocusedField?>.Binding
 
     @State private var editFrameNumberMode = false
     @State private var editFrameNumberModeString = ""
@@ -360,6 +372,7 @@ struct EditableNumberOfFramesToProcessView: View {
             HStack {
                 TextField("\(frameNumberString)",
                           text: $editFrameNumberModeString)
+                  .focused(focusedField, equals: RightPanel.FocusedField.numberOfFramesToProcess)
                   .frame(maxWidth: 38)
                   .onSubmit {
                       let filtered = editFrameNumberModeString.filter { "0123456789".contains($0) }
@@ -384,9 +397,10 @@ struct EditableNumberOfFramesToProcessView: View {
         } else {
             Text("\(frameNumberString) frames as")
               .foregroundColor(.white)
-              .cursor(.dragLink)
-              .onTapGesture(count: 2) {
+              .cursor(.iBeam)
+              .onTapGesture(count: 1) {
                   self.editFrameNumberMode = true
+                  focusedField.wrappedValue = RightPanel.FocusedField.numberOfFramesToProcess
               }
         }
     }
