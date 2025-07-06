@@ -177,7 +177,7 @@ fileprivate func process(_ blob: Blob,
     if await blob.size() > args.minBlobSize, // ignore small blobs
        let lineLength = await blob.lineLength(), // must know the line length
        lineLength > args.minLineLength,          // line length must be big enough
-       let lineFillAmount = await blob.blobLineScore(), // must know the line fill amount
+       let lineFillAmount = await blob.blobLineIntensityScore(), // must know the line fill amount
        lineFillAmount > args.minLineFillAmount    // line fill amount must be big enough
     {
         // trim that shit

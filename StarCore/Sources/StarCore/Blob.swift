@@ -186,12 +186,15 @@ public actor Blob: CustomStringConvertible,
     private var _medianIntensity: UInt16?
     private var _boundingBox: BoundingBox?
     private var _blobLine: Line?
-    private var _blobLineScore: Double?
+    private var _blobLineIntensityScore: Double?
+    private var _blobLinePixelScore: Double?
     private var _pixelValues: [UInt16]?
     private var _outlierGroup: OutlierGroup?
-    
-    public func blobLineScore() -> Double? { _blobLineScore }
 
+    public func blobLineIntensityScore() -> Double? { _blobLineIntensityScore }
+    public func blobLinePixelScore() -> Double? { _blobLinePixelScore }
+
+    
     // assumes zero, zero origin line
     public func pixelScore(for line: Line) -> Double {
         let standardLine = line.standardLine
@@ -222,7 +225,8 @@ public actor Blob: CustomStringConvertible,
                                                             frameIndex: frameIndex).line
             {
                 _blobLine = lineInfo.line
-                _blobLineScore = lineInfo.score
+                _blobLineIntensityScore = lineInfo.intensityScore
+                _blobLinePixelScore = lineInfo.pixelScore
             }
             return _blobLine
         }
@@ -347,7 +351,8 @@ public actor Blob: CustomStringConvertible,
         _pixelValues = nil
         _outlierGroup = nil
         _blobLine = nil
-        _blobLineScore = nil
+        _blobLineIntensityScore = nil
+        _blobLinePixelScore = nil
         _averageDistanceFromIdealLine = nil
         _membersArray = nil
         _maxIntensity = nil

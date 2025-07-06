@@ -67,7 +67,8 @@ public enum OutlierGroupFeature: String,
 
     case nearbyDirectOverlapScore
     case boundingBoxOverlapScore
-    case lineFillAmount
+    case lineIntensityScore
+    case linePixelScore
     case borderBrightness
 
     case bunchCount
@@ -201,7 +202,7 @@ public enum OutlierGroupFeature: String,
             return 22
         case .boundingBoxOverlapScore:
             return 23
-        case .lineFillAmount:
+        case .lineIntensityScore:
             return 24
         case .borderBrightness:
             return 25
@@ -221,6 +222,8 @@ public enum OutlierGroupFeature: String,
             return 32
         case .neighborLineDistanceScore:
             return 33
+        case .linePixelScore:
+            return 34
         }
     }
 
@@ -268,7 +271,9 @@ public enum OutlierGroupFeature: String,
             return true
         case .lineLength:    
             return true
-        case .lineFillAmount:
+        case .lineIntensityScore:
+            return true
+        case .linePixelScore:
             return true
         case .bunchCount:    
             return true
@@ -318,8 +323,13 @@ public enum OutlierGroupFeature: String,
             } else {
                 return 0
             }
-        case .lineFillAmount:   // depends upon group.line for properties
-            return await group.getLineScore() ?? 0
+
+        case .lineIntensityScore:   // depends upon group.line for properties
+            return await group.getLineIntensityScore() ?? 0
+
+        case .linePixelScore:   // depends upon group.line for properties
+            return await group.getLinePixelScore() ?? 0
+
         case .bunchCount:       // depends upon pixel set
             return await Double(group.bunchCount())
         case .medianBunchSize:  // depends upon pixel set
@@ -432,7 +442,9 @@ public enum OutlierGroupFeature: String,
         case .lineLength:    // depends upon group.line for properties
             fatalError("call decisionTreeValue for this type")
 
-        case .lineFillAmount:   // depends upon group.line for properties
+        case .lineIntensityScore:   // depends upon group.line for properties
+            fatalError("call decisionTreeValue for this type")
+        case .linePixelScore:
             fatalError("call decisionTreeValue for this type")
         case .bunchCount:       // depends upon pixel set
             fatalError("call decisionTreeValue for this type")

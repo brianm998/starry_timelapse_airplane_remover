@@ -32,7 +32,7 @@ public final class OutlierWindowViewModel {
             let outlier = selectedOutliers[0]
             let finder = await outlier.lineFinder
             var data = finder.lineData
-            data.sort { $0.score > $1.score }
+            data.sort { $0.intensityScore > $1.intensityScore }
             self.lineInfo = data
         }
     }
@@ -66,7 +66,8 @@ public final class OutlierWindowViewModel {
     public var showLineLength = true
     public var showNearbyDirectOverlapScore = true
     public var showBoundingBoxOverlapScore = true
-    public var showLineFillAmount = true
+    public var showLineIntensityScore = true
+    public var showLinePixelScore = true
     public var showBorderBrightness = true
     public var showBunchCount = true
     public var showMedianBunchSize = true
@@ -110,7 +111,8 @@ public final class OutlierWindowViewModel {
         showLineLength = value
         showNearbyDirectOverlapScore = value
         showBoundingBoxOverlapScore = value
-        showLineFillAmount = value
+        showLineIntensityScore = value
+        showLinePixelScore = value
         showBorderBrightness = value
         showBunchCount = value
         showMedianBunchSize = value

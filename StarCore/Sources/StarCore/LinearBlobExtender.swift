@@ -344,7 +344,7 @@ fileprivate func maybeAbsorb(x: Int,
        newBlob != _iterationBlob
     {
         //Log.d("frame \(frameIndex) processing blob \(_iterationBlob) @ [\(x), \(y)] found other blob \(newBlob)")
-        if let oldScore = await _iterationBlob.blobLineScore() {
+        if let oldScore = await _iterationBlob.blobLineIntensityScore() {
             let blobCopy = await _iterationBlob.copy
             if await blobCopy.absorb(newBlob, always: true) {
 
@@ -358,7 +358,7 @@ fileprivate func maybeAbsorb(x: Int,
                 //let blobSize = await _iterationBlob.size()
                 
                 if let _ = await blobCopy.line,
-                   let newScore = await blobCopy.blobLineScore()
+                   let newScore = await blobCopy.blobLineIntensityScore()
                 {
                     //Log.d("frame \(frameIndex) processing blob \(_iterationBlob) @ [\(x), \(y)] oldScore \(oldScore) newScore \(newScore)")
                     if newScore*data.args.scoreMultiplier > oldScore {

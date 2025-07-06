@@ -52,7 +52,7 @@ fileprivate actor ActiveImageCounter {
                 }
             }
             try? await Task.sleep(nanoseconds: sleepIntervalNanoseconds)
-            await self.log()
+            self.log()
         }
     }
 
@@ -62,7 +62,7 @@ fileprivate actor ActiveImageCounter {
 
     var currentCount: Int {
         var ret: Int = 0
-        counts.values.map { ret += $0 }
+        _  = counts.values.map { ret += $0 }
         return ret
     }
     
@@ -319,7 +319,7 @@ public final class PixelatedImage: Sendable {
 
     func readPixel(atX x: Int, andY y: Int) -> Pixel {
         switch imageData {
-        case .thirtyTwoBit(let arr):
+        case .thirtyTwoBit(_):
             fatalError("not supported yet")
             break
             

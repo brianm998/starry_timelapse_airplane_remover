@@ -79,17 +79,31 @@ public struct CombinedHoughLineFinder: Sendable {
                                           y: Double(bounds.height)),
                       votes: 66)
 
-        let f1Score = self.finders[0].pixelScore(for: self.finders[0].originZeroLine(from: f1))
+        let f1IntensityScore =
+          self.finders[0].intensityScore(for: self.finders[0].originZeroLine(from: f1))
 
-        base.append(.init(line: f1, score: f1Score, border: -1))
+        let f1PixelScore =
+          self.finders[0].pixelScore(for: self.finders[0].originZeroLine(from: f1))
+
+        base.append(.init(line: f1,
+                          intensityScore: f1IntensityScore,
+                          pixelScore: f1PixelScore,
+                          border: -1))
 
         let f2 = Line(point1: DoubleCoord(x: Double(bounds.width), y: 0),
                       point2: DoubleCoord(x: 0, y: Double(bounds.height)),
                       votes: 68)
 
-        let f2Score = self.finders[0].pixelScore(for: self.finders[0].originZeroLine(from: f2))
+        let f2IntensityScore =
+          self.finders[0].intensityScore(for: self.finders[0].originZeroLine(from: f2))
 
-        base.append(.init(line: f2, score: f2Score, border: -2))
+        let f2PixelScore =
+          self.finders[0].pixelScore(for: self.finders[0].originZeroLine(from: f2))
+
+        base.append(.init(line: f2,
+                          intensityScore: f2IntensityScore,
+                          pixelScore: f2PixelScore,
+                          border: -2))
 
         return base
     }
@@ -97,7 +111,7 @@ public struct CombinedHoughLineFinder: Sendable {
     public var line: HoughLineFinder.LineInfo? {
         var data = self.lineData
 
-        data.sort { $0.score > $1.score }
+        data.sort { $0.intensityScore > $1.intensityScore }
 
         if data.count > 0 {
             return data[0]
@@ -268,6 +282,22 @@ public struct HoughLineFinder: Sendable {
         for pixel in data {
             let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
 
+            if distance < 1 {
+                ret += 1.0
+            } else {
+                ret += 1.0/(distance*distance)
+            }
+        }
+
+        return ret
+    }
+
+    public func intensityScore(for line: Line) -> Double {
+        let standardLine = line.standardLine
+        var ret: Double = 0.0
+        for pixel in data {
+            let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
+
             let intensity = Double(pixel.intensity)/0xFFFF
             
             if distance < 1 {
@@ -290,7 +320,8 @@ public struct HoughLineFinder: Sendable {
         public let id = UUID()
         
         public let line: Line
-        public let score: Double
+        public let intensityScore: Double
+        public let pixelScore: Double
         public let border: Int
     }
     
@@ -302,9 +333,9 @@ public struct HoughLineFinder: Sendable {
             for i in 0..<lines.count {
                 let originZeroLine = self.originZeroLine(from: lines[i])
 
-                let lineScore = pixelScore(for: originZeroLine)
                 ret.append(LineInfo(line: lines[i],
-                                    score: lineScore,
+                                    intensityScore: intensityScore(for: originZeroLine),
+                                    pixelScore: pixelScore(for: originZeroLine),
                                     border: self.imageDataBorderSize))
             }
         }
@@ -335,7 +366,8 @@ public struct HoughLineFinder: Sendable {
              */
 
             if lines.count > 0 {
-                var bestScore: Double = 0
+                var bestIntensityScore: Double = 0
+                var bestPixelScore: Double = 0
                 var bestLineIndex = 0
                 var max = lines.count
                 if max > args.maxLineConstant { max = args.maxLineConstant } 
@@ -343,17 +375,20 @@ public struct HoughLineFinder: Sendable {
                 for i in 0..<max {
                     let originZeroLine = self.originZeroLine(from: lines[i])
 
-                    let lineScore = pixelScore(for: originZeroLine)
+                    let intensityScore = intensityScore(for: originZeroLine)
+                    let pixelScore = pixelScore(for: originZeroLine)
                     
-                    if lineScore > bestScore {
+                    if intensityScore > bestIntensityScore {
                         //Log.d("line \(i) is best theta \(lines[i].theta) avg median max \(avg) \(median) \(max)")
-                        bestScore = lineScore
+                        bestIntensityScore = intensityScore
+                        bestPixelScore = pixelScore
                         bestLineIndex = i
                     }
                 }
 
                 return LineInfo(line: lines[bestLineIndex],
-                                score: bestScore,
+                                intensityScore: bestIntensityScore,
+                                pixelScore: bestPixelScore,
                                 border: 0)                
             }
         }

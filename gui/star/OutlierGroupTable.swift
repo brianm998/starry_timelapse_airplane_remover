@@ -60,7 +60,8 @@ struct OutlierGroupTableRow: Identifiable {
 
     let dt_nearbyDirectOverlapScore: Double
     let dt_boundingBoxOverlapScore: Double
-    let dt_lineFillAmount: Double
+    let dt_lineIntensityScore: Double
+    let dt_linePixelScore: Double
     let dt_borderBrightness : Double
 
     let dt_bunchCount : Double
@@ -114,7 +115,8 @@ struct OutlierGroupTableRow: Identifiable {
 
         dt_nearbyDirectOverlapScore = await group.decisionTreeValueAsync(for: .nearbyDirectOverlapScore)
         dt_boundingBoxOverlapScore = await group.decisionTreeValueAsync(for: .boundingBoxOverlapScore)
-        dt_lineFillAmount = await group.decisionTreeValueAsync(for: .lineFillAmount)
+        dt_lineIntensityScore = await group.decisionTreeValueAsync(for: .lineIntensityScore)
+        dt_linePixelScore = await group.decisionTreeValueAsync(for: .linePixelScore)
         dt_borderBrightness = await group.decisionTreeValueAsync(for: .borderBrightness)
 
         dt_bunchCount = await group.decisionTreeValueAsync(for: .bunchCount)
@@ -353,10 +355,16 @@ struct OutlierGroupTable: View {
                                 row.dt_boundingBoxOverlapScore
                             }
                         }
-                        if self.outlierWindowViewModel.showLineFillAmount {
-                            self.tableColumn(for: "lineFillAmount",
-                                             value: \.dt_lineFillAmount) { row in
-                                row.dt_lineFillAmount
+                        if self.outlierWindowViewModel.showLineIntensityScore {
+                            self.tableColumn(for: "lineIntensityScore",
+                                             value: \.dt_lineIntensityScore) { row in
+                                row.dt_lineIntensityScore
+                            }
+                        }
+                        if self.outlierWindowViewModel.showLinePixelScore {
+                            self.tableColumn(for: "linePixelScore",
+                                             value: \.dt_linePixelScore) { row in
+                                row.dt_linePixelScore
                             }
                         }
                         if self.outlierWindowViewModel.showBorderBrightness {

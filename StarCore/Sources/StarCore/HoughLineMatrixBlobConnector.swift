@@ -401,7 +401,7 @@ fileprivate func process(element: ImageMatrixElement,
     //let houghLinesTime = Date().timeIntervalSince1970
 
     var lines = finder.lineData
-    lines.sort { $0.score > $1.score }
+    lines.sort { $0.intensityScore > $1.intensityScore }
 
     if lines.count > args.maxHoughLines {
         lines = Array(lines[0..<args.maxHoughLines])

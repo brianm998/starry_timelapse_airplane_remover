@@ -142,7 +142,8 @@ struct OutlierWindowView: View {
                 Toggle("LineLength", isOn: $outlierWindowViewModel.showLineLength)
                 Toggle("NearbyDirectOverlapScore", isOn: $outlierWindowViewModel.showNearbyDirectOverlapScore)
                 Toggle("BoundingBoxOverlapScore", isOn: $outlierWindowViewModel.showBoundingBoxOverlapScore)
-                Toggle("LineFillAmount", isOn: $outlierWindowViewModel.showLineFillAmount)
+                Toggle("LineIntensityScore", isOn: $outlierWindowViewModel.showLineIntensityScore)
+                Toggle("LinePixelScore", isOn: $outlierWindowViewModel.showLinePixelScore)
                 Toggle("BorderBrightness", isOn: $outlierWindowViewModel.showBorderBrightness)
                 Toggle("BunchCount", isOn: $outlierWindowViewModel.showBunchCount)
                 Toggle("MedianBunchSize", isOn: $outlierWindowViewModel.showMedianBunchSize)
@@ -306,7 +307,7 @@ struct HoughLinesTableView: View {
     @Environment(OutlierWindowViewModel.self) var outlierWindowViewModel: OutlierWindowViewModel
 
     @State var sortOrder: [KeyPathComparator<HoughLineFinder.LineInfo>] = [
-      .init(\.score, order: SortOrder.forward)
+      .init(\.intensityScore, order: SortOrder.forward)
     ]
     
     var body: some View {
@@ -319,8 +320,11 @@ struct HoughLinesTableView: View {
                       selection: $outlierWindowViewModel.selectedLines,
                       sortOrder: $sortOrder)
                 {
-                    TableColumn("Score", value: \.score) { row in
-                        Text(String(format: "%.2f", row.score))
+                    TableColumn("IntensityScore", value: \.intensityScore) { row in
+                        Text(String(format: "%.2f", row.intensityScore))
+                    }
+                    TableColumn("PixelScore", value: \.pixelScore) { row in
+                        Text(String(format: "%.2f", row.pixelScore))
                     }
                     TableColumn("Theta", value: \.line.theta) { row in
                         Text(String(format: "%.2f", row.line.theta))

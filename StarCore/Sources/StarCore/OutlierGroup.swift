@@ -66,20 +66,28 @@ public actor OutlierGroup: CustomStringConvertible,
     // lazy calculcated properties
 
     fileprivate var _line: Line? = nil
-    fileprivate var lineScore: Double? = nil
+    fileprivate var lineIntensityScore: Double? = nil
+    fileprivate var linePixelScore: Double? = nil
 
     fileprivate var lineLoaded = false
     fileprivate var shouldLoadLine = true
 
-    public func getLineScore() async -> Double? {
+    public func getLineIntensityScore() async -> Double? {
         // make sure the line is loaded, otherwise no score
         if !lineLoaded { let _ = await self.line() }
-        return lineScore         
+        return lineIntensityScore         
     }
-    
+
+    public func getLinePixelScore() async -> Double? {
+        // make sure the line is loaded, otherwise no score
+        if !lineLoaded { let _ = await self.line() }
+        return linePixelScore         
+    }
+
     public func set(line: HoughLineFinder.LineInfo) {
         _line = line.line
-        lineScore = line.score
+        lineIntensityScore = line.intensityScore
+        linePixelScore = line.pixelScore
         lineLoaded = true
     }
 
