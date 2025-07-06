@@ -78,7 +78,6 @@ public actor LinearBlobConnector {
         let lineBorder: Int       // how much furter to look at the ends of the line
         let minLineScore: Double // don't process full blobs with > average line dist
         let adjecentPixelsOnIteration: Int // how far to iterate on adject pixels
-        let maxIterationCount: Int // maximum times to iterate on line improvement
 
         public typealias Types = ArgType
         public var id: Self { self }
@@ -97,8 +96,6 @@ public actor LinearBlobConnector {
                 return "don't process full blobs with a line score less than this"
             case .adjecentPixelsOnIteration:
                 return "how far to iterate on adject pixels"
-            case .maxIterationCount:
-                return "maximum times to iterate on line improvement"
             }
         }
         
@@ -109,7 +106,6 @@ public actor LinearBlobConnector {
             case lineBorder
             case minLineScore
             case adjecentPixelsOnIteration
-            case maxIterationCount
         }
 
         public func isInteger(_ type: ArgType) -> Bool {
@@ -136,8 +132,6 @@ public actor LinearBlobConnector {
                 return minLineScore
             case .adjecentPixelsOnIteration:
                 return Double(adjecentPixelsOnIteration)
-            case .maxIterationCount:
-                return Double(maxIterationCount)
             }
         }
 
@@ -157,11 +151,8 @@ public actor LinearBlobConnector {
                             blobsLargerThan: self.blobsLargerThan,
                             lineBorder: self.lineBorder,
                             minLineScore: value,
-                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
-                            maxIterationCount: self.maxIterationCount)
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration)
             case .adjecentPixelsOnIteration:
-                return nil
-            case .maxIterationCount:
                 return nil
             }
         }
@@ -174,8 +165,7 @@ public actor LinearBlobConnector {
                             blobsLargerThan: self.blobsLargerThan,
                             lineBorder: self.lineBorder,
                             minLineScore: self.minLineScore,
-                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
-                            maxIterationCount: self.maxIterationCount)
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration)
 
             case .blobsSmallerThan:
                 return Args(scanSize: self.scanSize,
@@ -183,8 +173,7 @@ public actor LinearBlobConnector {
                             blobsLargerThan: self.blobsLargerThan,
                             lineBorder: self.lineBorder,
                             minLineScore: self.minLineScore,
-                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
-                            maxIterationCount: self.maxIterationCount)
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration)
 
             case .blobsLargerThan:
                 return Args(scanSize: self.scanSize,
@@ -192,8 +181,7 @@ public actor LinearBlobConnector {
                             blobsLargerThan: value,
                             lineBorder: self.lineBorder,
                             minLineScore: self.minLineScore,
-                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
-                            maxIterationCount: self.maxIterationCount)
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration)
 
             case .lineBorder:
                 return Args(scanSize: self.scanSize,
@@ -201,8 +189,7 @@ public actor LinearBlobConnector {
                             blobsLargerThan: self.blobsLargerThan,
                             lineBorder: value,
                             minLineScore: self.minLineScore,
-                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
-                            maxIterationCount: self.maxIterationCount)
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration)
 
             case .minLineScore:
                 return nil
@@ -213,17 +200,7 @@ public actor LinearBlobConnector {
                             blobsLargerThan: self.blobsLargerThan,
                             lineBorder: self.lineBorder,
                             minLineScore: self.minLineScore,
-                            adjecentPixelsOnIteration: value,
-                            maxIterationCount: self.maxIterationCount)
-
-            case .maxIterationCount:
-                return Args(scanSize: self.scanSize,
-                            blobsSmallerThan: self.blobsSmallerThan,
-                            blobsLargerThan: self.blobsLargerThan,
-                            lineBorder: self.lineBorder,
-                            minLineScore: self.minLineScore,
-                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
-                            maxIterationCount: value)
+                            adjecentPixelsOnIteration: value)
             }
         }
         
@@ -232,8 +209,7 @@ public actor LinearBlobConnector {
                     blobsLargerThan: Int = 0,
                     lineBorder: Int = 0,
                     minLineScore: Double = 3,
-                    adjecentPixelsOnIteration: Int = 5,
-                    maxIterationCount: Int = 10)
+                    adjecentPixelsOnIteration: Int = 5)
         {
             self.scanSize = scanSize
             self.blobsSmallerThan = blobsSmallerThan
@@ -241,7 +217,6 @@ public actor LinearBlobConnector {
             self.lineBorder = lineBorder
             self.minLineScore = minLineScore
             self.adjecentPixelsOnIteration = adjecentPixelsOnIteration
-            self.maxIterationCount = maxIterationCount
         }
     }
 
@@ -436,7 +411,6 @@ fileprivate func processBlob(_ blob: Blob,
                         frameIndex: frameIndex,
                         data: data,
                         lineBorder: data.args.lineBorder,
-                        maxIterationCount: data.args.maxIterationCount,
                         adjecentPixelsOnIteration: data.args.adjecentPixelsOnIteration)
 
         let endTime = Date().timeIntervalSince1970
@@ -456,7 +430,6 @@ fileprivate func iterate(on blobLine: Line,
                          data: LinearBlobConnector.Data,
                          lineBorder: Int,
                          iterationCount: Int = 0,
-                         maxIterationCount: Int,
                          adjecentPixelsOnIteration: Int) async -> Set<BlobMapping>
 {
     // we have an ideal origin zero line for this blob

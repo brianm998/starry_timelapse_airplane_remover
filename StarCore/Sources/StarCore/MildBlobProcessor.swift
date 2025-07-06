@@ -111,8 +111,7 @@ public class MildBlobProcessor: AbstractBlobProcessor {
                                      blobsLargerThan: 20,
                                      lineBorder: 15,
                                      minLineScore: 35,
-                                     adjecentPixelsOnIteration: 5,
-                                     maxIterationCount: 10)),
+                                     adjecentPixelsOnIteration: 5)),
 
 
           .frameState(.filter3),
