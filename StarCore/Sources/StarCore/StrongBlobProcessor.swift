@@ -64,13 +64,13 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
 
 
           // reconnect some lines that may have been split up
-          .linearBlobConnector(.init(scanSize: 6, 
+          .linearBlobConnector(.init(scanSize: 10, 
                                      blobsSmallerThan: 6800,
                                      blobsLargerThan: 4,
                                      lineBorder: 8,
                                      minLineScore: 3,
                                      adjecentPixelsOnIteration: 5,
-                                     maxIterationCount: 3)),
+                                     maxIterationCount: 10)),
 
 
           .frameState(.filter3),

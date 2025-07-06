@@ -103,6 +103,18 @@ public class MildBlobProcessor: AbstractBlobProcessor {
           .frameState(.filter2),
 
 
+          // reconnect some lines that may have been split up
+          .linearBlobConnector(.init(scanSize: 10, 
+                                     blobsSmallerThan: 6800,
+                                     blobsLargerThan: 4,
+                                     lineBorder: 8,
+                                     minLineScore: 3,
+                                     adjecentPixelsOnIteration: 5,
+                                     maxIterationCount: 10)),
+
+
+          .frameState(.filter3),
+          
           // try to combine lines in another way
           .linearBlobExtender(.init(minBlobSize: 30,
                                     lineExtension: 25,
@@ -112,12 +124,12 @@ public class MildBlobProcessor: AbstractBlobProcessor {
                                     sideIterationPixels: 5)),
 
 
-          .frameState(.filter3),
 
+
+          .frameState(.filter4),
 
           .compactBlobIds,
           
-          .frameState(.filter4),
           
           .blobLineTrim(.init(minBlobSize: 40,
                               minLineLength: 30,

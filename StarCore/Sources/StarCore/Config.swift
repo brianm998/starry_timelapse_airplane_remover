@@ -241,6 +241,7 @@ public struct Config: Codable, Sendable, Transferable {
     //       add shovel to gui
     //       cursors and icons in gui
     //       lots of renaming
+    //       debug logging view
     
     public var starVersion = Config.latestVersion
 

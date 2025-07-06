@@ -48,7 +48,7 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
                                      lineBorder: 8,
                                      minLineScore: 3,
                                      adjecentPixelsOnIteration: 5,
-                                     maxIterationCount: 3)),
+                                     maxIterationCount: 30)),
 
           .frameState(.filter3),
 
