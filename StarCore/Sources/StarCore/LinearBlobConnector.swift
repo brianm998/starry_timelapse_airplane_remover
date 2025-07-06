@@ -272,7 +272,7 @@ public actor LinearBlobConnector {
         let startTime = Date().timeIntervalSince1970
 
 
-        var processedBlobs = ProcessedBlobsSync()
+        let processedBlobs = ProcessedBlobsSync()
         
         let data = LinearBlobConnector.Data(args: args,
                                             blobMap: await analyzer.mapOfBlobs(),
@@ -293,8 +293,8 @@ public actor LinearBlobConnector {
             for sortedBlob in sortedBlobs {
                 let blob = sortedBlob.blob
 
-                if await processedBlobs.contains(blob.id) { continue }
-                await processedBlobs.insert(blob.id)
+                if processedBlobs.contains(blob.id) { continue }
+                processedBlobs.insert(blob.id)
     
                 // only deal with blobs in a certain size range
                 let blobSize = await blob.size()

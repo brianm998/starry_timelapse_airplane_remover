@@ -217,7 +217,7 @@ public actor OutlierGroups {
         self.members = [:]
         self.trash = [:]
         
-        for (id, blob) in blobs {
+        for (_, blob) in blobs {
             let outlierGroup = await blob.outlierGroup(at: frameIndex)
             if let outlierGroupPaintData,
                let shouldRemove = outlierGroupPaintData[outlierGroup.id]
@@ -228,7 +228,7 @@ public actor OutlierGroups {
         }
 
         if let trashBlobs {
-            for (id, blob) in trashBlobs {
+            for (_, blob) in trashBlobs {
                 let outlierGroup = await blob.outlierGroup(at: frameIndex)
                 self.trash[outlierGroup.id] = outlierGroup
             }

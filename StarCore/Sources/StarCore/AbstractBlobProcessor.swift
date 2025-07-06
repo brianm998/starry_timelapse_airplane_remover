@@ -216,7 +216,7 @@ public class AbstractBlobProcessor {
                 Log.d("frame \(frameIndex) loaded subtraction image")
                 subtractionImage = image
                 switch image.imageData {
-                case .thirtyTwoBit(let array):
+                case .thirtyTwoBit(_):
                     fatalError("frame \(frameIndex) 32 bit images not supported here yet")
                 case .sixteenBit(let array):
                     subtractionArray = array
@@ -246,7 +246,7 @@ public class AbstractBlobProcessor {
                 fatalError("NOT SUPPORTED YET")
             case .sixteenBit(let origImagePixels):
                 subtractionArray = origImagePixels
-            case .thirtyTwoBit(let array):
+            case .thirtyTwoBit(_):
                 fatalError("NOT SUPPORTED YET")
             }
             Log.d("frame \(frameIndex) loaded subtractionArray with \(subtractionArray.count) items")
