@@ -68,7 +68,7 @@ public class StrongBlobProcessor: AbstractBlobProcessor {
                                      blobsSmallerThan: 6800,
                                      blobsLargerThan: 4,
                                      lineBorder: 8,
-                                     minLineScore: 3,
+                                     minLineScore: 15,
                                      adjecentPixelsOnIteration: 5,
                                      maxIterationCount: 10)),
 
