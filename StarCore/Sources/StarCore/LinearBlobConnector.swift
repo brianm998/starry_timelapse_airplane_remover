@@ -286,6 +286,8 @@ public actor LinearBlobConnector {
         }
 
         let sortedBlobs = blobSizes.sorted { $0.size > $1.size }
+
+        Log.i("frame \(frameIndex) processing \(sortedBlobs.count) blobs")
         
         await withTaskGroup(of: Void.self) { taskGroup in
             for sortedBlob in sortedBlobs {
@@ -379,15 +381,21 @@ fileprivate func processBlob(_ blob: Blob,
 
          */
 
+        let midTime = Date().timeIntervalSince1970
+        Log.d("frame \(frameIndex) before iterating on \(blob) in \(midTime-startTime) seconds")
+        
         // first iterate on the best line for the full blob
         // maybe recurse on a better line from a smaller amount
-        await iterate(on: blobLine,
-                      over: fullBlob,
-                      frameIndex: frameIndex,
-                      data: data,
-                      lineBorder: data.args.lineBorder,
-                      maxIterationCount: data.args.maxIterationCount,
-                      adjecentPixelsOnIteration: data.args.adjecentPixelsOnIteration)
+        let numIterations =
+          await iterate(on: blobLine,
+                        over: fullBlob,
+                        frameIndex: frameIndex,
+                        data: data,
+                        lineBorder: data.args.lineBorder,
+                        maxIterationCount: data.args.maxIterationCount,
+                        adjecentPixelsOnIteration: data.args.adjecentPixelsOnIteration)
+
+        Log.d("frame \(frameIndex) iterated \(numIterations) times on blob \(blob)")
 
         // trim the blob here?
     } 
@@ -403,7 +411,7 @@ fileprivate func iterate(on blobLine: Line,
                          lineBorder: Int,
                          iterationCount: Int = 0,
                          maxIterationCount: Int,
-                         adjecentPixelsOnIteration: Int) async
+                         adjecentPixelsOnIteration: Int) async -> Int
 {
     // we have an ideal origin zero line for this blob
     Log.d("frame \(frameIndex) blob \(fullBlob.id) has line \(blobLine)")
@@ -494,14 +502,14 @@ fileprivate func iterate(on blobLine: Line,
             if let line = await fullBlob.originZeroLine {
                 if iterationCount < maxIterationCount {
                     Log.d("frame \(data.analyzer.frameIndex) ITERATING iterationCount \(iterationCount)")
-                    await iterate(on: line,
-                                  over: linearBlob,
-                                  frameIndex: frameIndex,
-                                  data: data,
-                                  lineBorder: lineBorder,
-                                  iterationCount: iterationCount + 1,
-                                  maxIterationCount: maxIterationCount,
-                                  adjecentPixelsOnIteration: adjecentPixelsOnIteration)
+                    return await iterate(on: line,
+                                         over: linearBlob,
+                                         frameIndex: frameIndex,
+                                         data: data,
+                                         lineBorder: lineBorder,
+                                         iterationCount: iterationCount + 1,
+                                         maxIterationCount: maxIterationCount,
+                                         adjecentPixelsOnIteration: adjecentPixelsOnIteration) + 1
                 } else {
                     Log.d("frame \(data.analyzer.frameIndex) NOT ITERATING iterationCount \(iterationCount)")
                 }
@@ -510,4 +518,5 @@ fileprivate func iterate(on blobLine: Line,
             Log.d("frame \(data.analyzer.frameIndex) only found \(linearBlobSet.count) linear blobs")
         }
     }
+    return 1
 }
