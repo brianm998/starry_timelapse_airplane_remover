@@ -79,7 +79,7 @@ struct Main: AsyncParsableCommand {
         let negativeOutlierDataCSVFilename = "\(dirname)/negative_data.csv"
 
         if FileManager.default.fileExists(atPath: paintDataJsonFilename) {
-            let paintReasonMap: [UInt16:PaintReason] =
+            let paintReasonMap: [UInt16:RemoveReason] =
               try await read(fromJsonFilename: paintDataJsonFilename)
             if FileManager.default.fileExists(atPath: outlierDataCSVFilename) {
                 let allCSVData = try await readCSV(from: outlierDataCSVFilename)
@@ -93,7 +93,7 @@ struct Main: AsyncParsableCommand {
                         let outlierFeatureData = Array(csvRow.dropFirst())
                         let outlierId = UInt16(outlierIdDouble)
                         if let paintReason = paintReasonMap[outlierId] {
-                            if paintReason.willPaint {
+                            if paintReason.willRemove {
                                 positiveRows.append(outlierFeatureData)
                             } else {
                                 negativeRows.append(outlierFeatureData)
