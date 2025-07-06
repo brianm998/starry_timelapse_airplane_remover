@@ -247,21 +247,18 @@ public actor LinearBlobConnector {
 
     fileprivate final class Data: Sendable {
         let args: Args
-        let processedBlobs: ProcessedBlobs
         let blobMap: [UInt32:Blob]
         let blobRefs: BlobRefs
         let analyzer: BlobAnalyzer
         let frameIndex: Int
 
         init(args: Args,
-             processedBlobs: ProcessedBlobs,
              blobMap: [UInt32:Blob],
              blobRefs: BlobRefs,
              analyzer: BlobAnalyzer,
              frameIndex: Int)
         {
             self.args = args
-            self.processedBlobs = processedBlobs
             self.blobMap = blobMap
             self.blobRefs = blobRefs
             self.analyzer = analyzer
@@ -278,7 +275,6 @@ public actor LinearBlobConnector {
         var processedBlobs = ProcessedBlobsSync()
         
         let data = LinearBlobConnector.Data(args: args,
-                                            processedBlobs: .init(), // XXX go away
                                             blobMap: await analyzer.mapOfBlobs(),
                                             blobRefs: await analyzer.blobRefsObj,
                                             analyzer: analyzer,
