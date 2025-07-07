@@ -273,7 +273,7 @@ public actor HoughLineMatrixBlobConnector {
                 // remove blob ids from the list from the blob map
                 for blobId in mappingList { internalBlobMap.removeValue(forKey: blobId) }
 
-                taskGroup.addTask { [self] in
+                taskGroup.addTask { 
                     return await StarCore.combine(blobList)
                 }
                 for await blob in taskGroup {
@@ -292,7 +292,7 @@ internal func combine(_ blobList: [Blob]) async -> Blob? {
     if blobList.count == 0 { return nil }
     let first = blobList[0]
     for i in 1..<blobList.count {
-        await first.absorb(blobList[i])
+        _ = await first.absorb(blobList[i])
     }
     return first
 }

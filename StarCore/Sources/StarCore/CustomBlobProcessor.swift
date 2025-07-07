@@ -137,7 +137,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                 saveStepsToFile()
             }
 
-        case .blobDupeCheck(let step):
+        case .blobDupeCheck(_):
             break
 
         case .linearBlobConnector(let args):
@@ -164,10 +164,10 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
                 saveStepsToFile()
             }
 
-        case .save(let imageType):
+        case .save(_):
             break
 
-        case .frameState(let processingState):
+        case .frameState(_):
             break
 
         case .houghLineMatrixBlobConnector(let args):

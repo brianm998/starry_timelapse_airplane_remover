@@ -92,7 +92,7 @@ public struct SortablePixel: Hashable,
             return UInt16(eightBits)
         case .sixteenBit(let sixteenBits):
             return sixteenBits
-        case .thirtyTwoBit(let thirtyTwoBits):
+        case .thirtyTwoBit(_):
             fatalError("cannot convert to 16 bits")
         }
     }
@@ -119,8 +119,8 @@ public struct SortablePixel: Hashable,
      */
     public func contrast(with otherPixel: SortablePixel) -> Double {
 
-        var otherPixelIntensity = otherPixel.uInt32Value
-        var selfIntensity = self.uInt32Value
+        let otherPixelIntensity = otherPixel.uInt32Value
+        let selfIntensity = self.uInt32Value
         
         let diff = Double(abs(Int32(selfIntensity) - Int32(otherPixelIntensity)))
         let max = Double(max(selfIntensity, otherPixelIntensity))
