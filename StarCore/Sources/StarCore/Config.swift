@@ -150,8 +150,13 @@ public struct Config: Codable, Sendable, Transferable {
     public var writeFrameThumbnailFiles: Bool
 
     // how far in each direction do we go when doing final processing?
+    // used for OutlierGroupFeature data
     public var numberFinalProcessingNeighborsNeeded = 2 // in each direction
 
+    // align this many total neighbor frames for both
+    // creating the subtraction image and calculating pixel values during removal
+    public var numberAlignedNeighborFrames = 4 // total
+    
     public var supportedImageFileTypes = [".tif", ".tiff"] // XXX move this out
 
     // XXX use this to try to avoid running out of memory somehow
@@ -237,11 +242,13 @@ public struct Config: Codable, Sendable, Transferable {
     //       custom blob processing, more user prefs
     //       dustbin filled by adding another .isolated decision tree before inter-frame processing
     // 0.7.3 small blobs as image / lots of other gui updates / fixes
-    //       32bit BlobID / fix HoughLineMatrix processor
+    //       32bit BlobID
+    //       fix HoughLineMatrix processor
     //       add shovel to gui
     //       cursors and icons in gui
     //       lots of renaming
     //       debug logging view
+    //       lines better connected, fixed LinearBlobConnector
     
     public var starVersion = Config.latestVersion
 

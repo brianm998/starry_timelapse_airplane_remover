@@ -519,6 +519,85 @@ public final class PixelatedImage: Sendable {
         Log.i("image written to \(imageFilename)")
     }
 
+    // linearly merges all images together
+    public func mergeWith(_ otherImages: [PixelatedImage]) throws -> PixelatedImage {
+        Log.d("mergeWith \(otherImages.count) other images")
+        switch self.imageData {
+        case .eightBit(_):
+            fatalError("cannot merge eight bit images")
+        case .thirtyTwoBit(_):
+            fatalError("cannot merge thirty two bit images")
+        case .sixteenBit(let origImagePixels):
+            var otherImagePixelList: [[UInt16]] = []
+            for otherImage in otherImages {
+                guard self.width == otherImage.width,
+                      self.height == otherImage.height,
+                      self.bitsPerPixel == otherImage.bitsPerPixel,
+                      self.bytesPerRow == otherImage.bytesPerRow,
+                      self.bitsPerComponent == otherImage.bitsPerComponent,
+                      self.bytesPerPixel == otherImage.bytesPerPixel
+                else {
+                    fatalError("cannot merge images with different params")
+                }
+                switch otherImage.imageData {
+                case .eightBit(_):
+                    fatalError("cannot merge eight bit images")
+                case .thirtyTwoBit(_):
+                    fatalError("cannot merge thirty two bit images")
+                case .sixteenBit(let otherImagePixels):
+                    otherImagePixelList.append(otherImagePixels)
+                }
+            }
+
+
+            Log.d("merge creating pointers")
+            let pointers: [UnsafePointer<UInt16>] = otherImagePixelList.map { arr in
+                arr.withUnsafeBufferPointer { buf in
+                    guard let base = buf.baseAddress else {
+                        fatalError("Buffer was empty!")
+                    }
+                    return base
+                }
+            }
+            
+            Log.d("merge about to create image data")
+            let imageData = averageBuffersAccelerate(pointers, count: origImagePixels.count)
+
+            /*
+            var imageData = [UInt16](repeating: 0, count: origImagePixels.count)
+
+            for i in 0..<imageData.count {
+                if i % 1000 == 0 { Log.d("merging pixel \(i)") }
+
+                var newValue: UInt32 = 0
+
+                newValue += UInt32(origImagePixels[i])
+                for otherImagePixels in otherImagePixelList {
+                    newValue += UInt32(otherImagePixels[i])
+                }
+                newValue /= UInt32(otherImages.count + 1)
+                if newValue >= UInt16.max {
+                    newValue == UInt16.max
+                }
+                imageData[i] = UInt16(newValue)
+            }
+            */
+            Log.d("mergeWith creating image")
+            
+            return .init(width: self.width,
+                         height: self.height,
+                         imageData: DataFormat(from: imageData),
+                         bitsPerPixel: self.bitsPerPixel,
+                         bytesPerRow: self.bytesPerRow,
+                         bitsPerComponent: self.bitsPerComponent,
+                         bytesPerPixel: self.bytesPerPixel,
+                         bitmapInfo: .byteOrder16Little, 
+                         componentsPerPixel: self.componentsPerPixel,
+                         colorSpace: self.colorSpace,
+                         ciFormat: self.ciFormat)
+        }
+    }
+    
     // returns a 16 bit grayscale image that results from subtrating
     // the given frame from this frame
     public func subtract(_ otherFrame: PixelatedImage) -> PixelatedImage {
@@ -896,4 +975,66 @@ public class ImageMatrixElement: @unchecked Sendable, Hashable, CustomStringConv
     }
     
     public var description: String { "MatrixElement: [\(x), \(y)] -> [\(width), \(height)]" }
+}
+
+
+import Accelerate
+
+/// Averages N UInt16 buffers into one UInt16 buffer of the same length.
+/// - Parameters:
+///   - buffers: an array of pointers to UInt16 data (each length “count”)
+///   - count: number of pixels per buffer
+/// - Returns: a new [UInt16] where each element = sum(buffers[i][j]) / N
+func averageBuffersAccelerate(
+  _ buffers: [UnsafePointer<UInt16>],
+  count: Int) -> [UInt16]
+{
+  // 1) Accumulate in Float
+  var sum = [Float](repeating: 0, count: count)
+  for ptr in buffers {
+    // Convert UInt16 → Float
+    var floatBuf = [Float](repeating: 0, count: count)
+    vDSP.convertElements(
+      of: UnsafeBufferPointer(start: ptr, count: count),
+      to: &floatBuf
+    )
+    // sum += floatBuf
+    vDSP.add(floatBuf, sum, result: &sum)
+  }
+
+  // 2) Divide each element by N
+  let invN = Float(1) / Float(buffers.count)
+  var avg = [Float](repeating: 0, count: count)
+  vDSP.multiply(invN, sum, result: &avg)
+
+  // 3) Clamp & convert back to UInt16
+  var out = [UInt16](repeating: 0, count: count)
+  for i in 0..<count {
+    // clamp to valid UInt16 range just in case
+    let v = avg[i]
+    out[i] = UInt16(min(max(v, 0), Float(UInt16.max)))
+  }
+  return out
+}
+
+
+func averageBuffersSwift(
+  _ buffers: [[UInt16]]
+) -> [UInt16] {
+  guard let first = buffers.first else { return [] }
+  let count = first.count
+  let N = UInt64(buffers.count)
+  var result = [UInt16](repeating: 0, count: count)
+
+  // Perform the work in a single nested loop
+  result.withUnsafeMutableBufferPointer { outPtr in
+    for i in 0..<count {
+      var sum: UInt64 = 0
+      for buf in buffers {
+        sum += UInt64(buf[i])
+      }
+      outPtr[i] = UInt16(sum / N)
+    }
+  }
+  return result
 }
