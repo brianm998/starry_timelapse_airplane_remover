@@ -240,6 +240,8 @@ public final class ImageSequenceViewModel {
 
     var numberOfFramesToProcessConcurrently: Int
 
+    var numberOfNeighborFrames: Int
+    
     // number of frames in the sequence we're processing
     var imageSequenceSize: Int = 0
 
@@ -354,6 +356,8 @@ public final class ImageSequenceViewModel {
 
         self.config = configManager
 
+        self.numberOfNeighborFrames = config.numberFinalProcessingNeighborsNeeded
+        
         self.numberOfFramesToProcessConcurrently = await Task { await maxFramesProcessing.getValue() }.value
         
         if let ignoreLowerPixels = config.ignoreLowerPixels {
@@ -871,77 +875,81 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    // clears self.numberOfFrames frames starting from given frame
-    func clearProcessing(from frame: FrameAirplaneRemover) async {
-        if let frame = self.currentFrame {
-            let numberOfFramesToProcess = self.numberOfFramesToProcess
-            Log.d("clearProcessing numberOfFramesToProcess \(numberOfFramesToProcess)")
-            await Task.detached(priority: .userInitiated) { // do we need this detached task?
-                var numberOfFramesLeft = numberOfFramesToProcess
-                var currentFrame: FrameAirplaneRemover? = frame
-                while let frameToClear = currentFrame,
-                      numberOfFramesLeft > 0
-                {
-                    await frameToClear.set(state: .unprocessed)
-                    //await frameToClear.updateCombineSubjects()
-
-                    frameToClear.imageAccessor.deleteAllImages(frameIndex: frameToClear.frameIndex)
-                    Task { @MainActor in
-                        self.frameViewMode = .original
-                    }
-
-                    var existingImages: Set<FrameViewMode> = [.original]
-                    
-                    if frameToClear.imageAccessor.imageExists(frameIndex: frameToClear.frameIndex,
-                                                              ofType: .aligned,
-                                                              atSize: .original)
-                    {
-                        existingImages.insert(.aligned)
-                    }
-
-                    if frameToClear.imageAccessor.imageExists(frameIndex: frameToClear.frameIndex,
-                                                              ofType: .subtraction,
-                                                              atSize: .original)
-                    {
-                        existingImages.insert(.subtraction)
-                    }
-
-                    Task { @MainActor in
-                        self.currentFrameView.existingImages = existingImages
-                    }
-                    
-                    let binaryBlobFilename = await frameToClear.blobBinaryFilename
-                    // get rid of the outlier files
-                    do {
-                        Log.d("trying to remove \(binaryBlobFilename)")
-                        try FileManager.default.removeItem(atPath: binaryBlobFilename)
-                    } catch {
-                        Log.e("error removing \(binaryBlobFilename): \(error)")
-                    }
-
-                    let trashBinaryFilename = await frameToClear.trashBinaryFilename
-                    do {
-                        Log.d("trying to remove \(trashBinaryFilename)")
-                        try FileManager.default.removeItem(atPath: trashBinaryFilename)
-                    } catch {
-                        Log.e("error removing \(trashBinaryFilename): \(error)")
-                    }
-
-                    currentFrame = await frameToClear.nextFrame
-                    numberOfFramesLeft -= 1
-                    Task { @MainActor in
-                        let frameView = self.frames[frameToClear.frameIndex]
-                        frameView.trashImage = nil
-                        frameView.positiveOutlierImage = nil
-                        frameView.negativeOutlierImage = nil
-                        frameView.outlierViews = nil
-                    }
-
-                }
-            }.value
-        } else {
-            // XXX probably should do something here
+    func clearProcessing(from startIndex: Int, to endIndex: Int) async {
+        for index in startIndex...endIndex {
+            if let frame = frames[index].frame {
+                await clearProcessing(from: frame)
+            }
         }
+    }    
+
+    func clearProcessing(from frame: FrameAirplaneRemover) async {
+        await Task.detached(priority: .userInitiated) { // do we need this detached task?
+          var numberOfFramesLeft = await self.numberOfFramesToProcess
+            var currentFrame: FrameAirplaneRemover? = frame
+            while let frameToClear = currentFrame,
+                  numberOfFramesLeft > 0
+            {
+                await frameToClear.set(state: .unprocessed)
+                //await frameToClear.updateCombineSubjects()
+                
+                frameToClear.imageAccessor.deleteAllImages(frameIndex: frameToClear.frameIndex)
+                
+                await frameToClear.setNumberOfAlignmentImages(self.numberOfNeighborFrames)
+                
+                Task { @MainActor in
+                    self.frameViewMode = .original
+                }
+
+                var existingImages: Set<FrameViewMode> = [.original]
+                
+                if frameToClear.imageAccessor.imageExists(frameIndex: frameToClear.frameIndex,
+                                                          ofType: .aligned,
+                                                          atSize: .original)
+                {
+                    existingImages.insert(.aligned)
+                }
+
+                if frameToClear.imageAccessor.imageExists(frameIndex: frameToClear.frameIndex,
+                                                          ofType: .subtraction,
+                                                          atSize: .original)
+                {
+                    existingImages.insert(.subtraction)
+                }
+
+                Task { @MainActor in
+                    self.currentFrameView.existingImages = existingImages
+                }
+                
+                let binaryBlobFilename = await frameToClear.blobBinaryFilename
+                // get rid of the outlier files
+                do {
+                    Log.d("trying to remove \(binaryBlobFilename)")
+                    try FileManager.default.removeItem(atPath: binaryBlobFilename)
+                } catch {
+                    Log.e("error removing \(binaryBlobFilename): \(error)")
+                }
+
+                let trashBinaryFilename = await frameToClear.trashBinaryFilename
+                do {
+                    Log.d("trying to remove \(trashBinaryFilename)")
+                    try FileManager.default.removeItem(atPath: trashBinaryFilename)
+                } catch {
+                    Log.e("error removing \(trashBinaryFilename): \(error)")
+                }
+
+                currentFrame = await frameToClear.nextFrame
+                numberOfFramesLeft -= 1
+                Task { @MainActor in
+                    let frameView = self.frames[frameToClear.frameIndex]
+                    frameView.trashImage = nil
+                    frameView.positiveOutlierImage = nil
+                    frameView.negativeOutlierImage = nil
+                    frameView.outlierViews = nil
+                }
+
+            }
+        }.value
     }
     
     // used to re-process a particular frame 

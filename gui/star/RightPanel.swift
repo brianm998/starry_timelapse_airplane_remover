@@ -215,6 +215,8 @@ struct RightPanel: View {
 
                             let frameView = viewModel.currentFrameView
 
+                            EditableNumberOfNeighborFrames(focusedField: $focusedField)
+
                             EditableNumberOfFramesToProcessConcurrentlyView(focusedField: $focusedField)
 
                             Toggle("reprocess fully", isOn: $viewModel.reprocessFrames)
@@ -225,7 +227,8 @@ struct RightPanel: View {
                                     if let frame = viewModel.currentFrame {
                                         // XXX reprocess
                                         if viewModel.reprocessFrames {
-                                            await viewModel.clearProcessing(from: frame)
+                                            await viewModel.clearProcessing(from: frame.frameIndex,
+                                                                            to: frame.frameIndex+viewModel.numberOfFramesToProcess)
                                         }
                                         viewModel.processFrames(from: frame.frameIndex,
                                                                 to: frame.frameIndex+viewModel.numberOfFramesToProcess)
@@ -310,27 +313,80 @@ struct RightPanel: View {
 }
 
 
+struct EditableNumberOfNeighborFrames: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+
+    let focusedField: FocusState<RightPanel.FocusedField?>.Binding
+
+    @State private var editMode = false
+    @State private var editModeString = ""
+    
+    var body: some View {
+        let frameNumberString = String(format: "%d", viewModel.numberOfNeighborFrames)
+        if self.editMode {
+            HStack {
+                Text("process with")
+                  .foregroundColor(.white)
+                TextField("\(frameNumberString)",
+                          text: $editModeString)
+                  .focused(focusedField, equals: RightPanel.FocusedField.numberOfFramesToProcessConcurrently)
+                  .frame(maxWidth: 38)
+                  .cursor(.arrow)
+                  .onSubmit {
+                      let filtered = editModeString.filter { "0123456789".contains($0) }
+                      if let newIntValue = Int(filtered),
+                         newIntValue >= 0,
+                         newIntValue < self.viewModel.imageSequenceSize
+                      {
+                          self.viewModel.numberOfNeighborFrames = newIntValue
+
+                          // stick it in user preferences
+                          //self.viewModel.userPreferences.concurrentFrames = newIntValue
+
+                          // update the global we use for this
+                          //Task { await maxFramesProcessing.set(value: newIntValue) }
+                          
+                          self.editMode = false
+                          self.editModeString = ""
+                      }
+                  }
+                Text("neighbor frames")
+                  .foregroundColor(.white)
+            }
+        } else {
+            Text("process with \(frameNumberString) neighbor frames")
+              .foregroundColor(.white)
+              .cursor(.iBeam)
+              .onTapGesture(count: 1) {
+                  self.editMode = true
+                  focusedField.wrappedValue = RightPanel.FocusedField.numberOfFramesToProcessConcurrently
+              }
+        }
+    }
+}
+
+
 struct EditableNumberOfFramesToProcessConcurrentlyView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     let focusedField: FocusState<RightPanel.FocusedField?>.Binding
     
-    @State private var editFrameNumberMode = false
-    @State private var editFrameNumberModeString = ""
+    @State private var editMode = false
+    @State private var editModeString = ""
     
     var body: some View {
         let frameNumberString = String(format: "%d", viewModel.numberOfFramesToProcessConcurrently)
-        if self.editFrameNumberMode {
+        if self.editMode {
             HStack {
                 Text("process")
                   .foregroundColor(.white)
                 TextField("\(frameNumberString)",
-                          text: $editFrameNumberModeString)
+                          text: $editModeString)
                   .focused(focusedField, equals: RightPanel.FocusedField.numberOfFramesToProcessConcurrently)
                   .frame(maxWidth: 38)
                   .cursor(.arrow)
                   .onSubmit {
-                      let filtered = editFrameNumberModeString.filter { "0123456789".contains($0) }
+                      let filtered = editModeString.filter { "0123456789".contains($0) }
                       if let newIntValue = Int(filtered),
                          newIntValue >= 0,
                          newIntValue < self.viewModel.imageSequenceSize
@@ -343,8 +399,8 @@ struct EditableNumberOfFramesToProcessConcurrentlyView: View {
                           // update the global we use for this
                           Task { await maxFramesProcessing.set(value: newIntValue) }
                           
-                          self.editFrameNumberMode = false
-                          self.editFrameNumberModeString = ""
+                          self.editMode = false
+                          self.editModeString = ""
                       }
                   }
                 Text("frames at once")
@@ -355,7 +411,7 @@ struct EditableNumberOfFramesToProcessConcurrentlyView: View {
               .foregroundColor(.white)
               .cursor(.iBeam)
               .onTapGesture(count: 1) {
-                  self.editFrameNumberMode = true
+                  self.editMode = true
                   focusedField.wrappedValue = RightPanel.FocusedField.numberOfFramesToProcessConcurrently
               }
         }
@@ -367,27 +423,27 @@ struct EditableNumberOfFramesToProcessView: View {
 
     let focusedField: FocusState<RightPanel.FocusedField?>.Binding
 
-    @State private var editFrameNumberMode = false
-    @State private var editFrameNumberModeString = ""
+    @State private var editMode = false
+    @State private var editModeString = ""
     
     var body: some View {
         let frameNumberString = String(format: "%d", viewModel.numberOfFramesToProcess)
-        if self.editFrameNumberMode {
+        if self.editMode {
             HStack {
                 TextField("\(frameNumberString)",
-                          text: $editFrameNumberModeString)
+                          text: $editModeString)
                   .focused(focusedField, equals: RightPanel.FocusedField.numberOfFramesToProcess)
                   .frame(maxWidth: 38)
                   .onSubmit {
-                      let filtered = editFrameNumberModeString.filter { "0123456789".contains($0) }
+                      let filtered = editModeString.filter { "0123456789".contains($0) }
                       if let newIntValue = Int(filtered),
                          newIntValue >= 0,
                          newIntValue < self.viewModel.imageSequenceSize
                       {
                           self.viewModel.numberOfFramesToProcess = newIntValue
                           
-                          self.editFrameNumberMode = false
-                          self.editFrameNumberModeString = ""
+                          self.editMode = false
+                          self.editModeString = ""
                       }
                   }
                 if self.viewModel.numberOfFramesToProcess == 1 {
@@ -403,7 +459,7 @@ struct EditableNumberOfFramesToProcessView: View {
               .foregroundColor(.white)
               .cursor(.iBeam)
               .onTapGesture(count: 1) {
-                  self.editFrameNumberMode = true
+                  self.editMode = true
                   focusedField.wrappedValue = RightPanel.FocusedField.numberOfFramesToProcess
               }
         }

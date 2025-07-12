@@ -329,7 +329,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         await self.updateCombineSubjects()
     }
 
-    func setNumberOfAlignmentImages(_ alignmentNumber: Int) {
+    public func setNumberOfAlignmentImages(_ alignmentNumber: Int) {
         guard let imageSequence else {
             Log.e("cannot set number of alignment images without an image sequence")
             return
@@ -1278,11 +1278,42 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     // remove a selected outlier pixel with data from pixels from adjecent frames
+    // this just sums them all, ignoring any potential bad signal, hoping to drown it out
+    // with lots of other frames
     internal func updatePixel(x: Int, y: Int,
                               alpha: Double,
                               toData data: inout [UInt16],
                               image: PixelatedImage,
                               from alignedImages: [Int:PixelatedImage])
+    {
+        var newPixels: [Pixel] = []
+
+        for image in alignedImages.values {
+            let overwritingPixel = image.readPixel(atX: x, andY: y)
+            if image.componentsPerPixel == 4, // has alpha channel
+               overwritingPixel.alpha != 0xFFFF   // alpha is not fully opaque
+            {
+                // ignore transparent pixels
+                continue
+            }
+            
+            newPixels.append(image.readPixel(atX: x, andY: y))
+        }
+
+        
+        self.updatePixel(x: x, y: y,
+                         alpha: alpha,
+                         toData: &data,
+                         image: image,
+                         with: Pixel(merging: newPixels))
+    }
+
+    // punts by just uses the first aligned image
+    internal func updatePixelPunt(x: Int, y: Int,
+                                  alpha: Double,
+                                  toData data: inout [UInt16],
+                                  image: PixelatedImage,
+                                  from alignedImages: [Int:PixelatedImage])
     {
 
         // XXX need much more complex logic here now
