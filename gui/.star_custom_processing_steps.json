@@ -1,0 +1,382 @@
+[
+  {
+    "findBlobs" : {
+      "_0" : {
+        "minContrast" : 86,
+        "minPixelIntensity" : 4000
+      }
+    }
+  },
+  {
+    "save" : {
+      "_0" : "blobs"
+    }
+  },
+  {
+    "frameState" : {
+      "_0" : 6
+    }
+  },
+  {
+    "linearBlobConnector" : {
+      "_0" : {
+        "scanSize" : 32,
+        "blobsLargerThan" : 0,
+        "maxIterationCount" : 4,
+        "adjecentPixelsOnIteration" : 5,
+        "blobsSmallerThan" : 180,
+        "maxAverageLineDistance" : 50,
+        "lineBorder" : 12
+      }
+    }
+  },
+  {
+    "save" : {
+      "_0" : "filter1"
+    }
+  },
+  {
+    "frameState" : {
+      "_0" : 7
+    }
+  },
+  {
+    "borderBrightnessBlobRemover" : {
+      "_0" : {
+        "medianIntensityFloor" : 10000,
+        "maxBrightness" : 0.5
+      }
+    }
+  },
+  {
+    "save" : {
+      "_0" : "filter2"
+    }
+  },
+  {
+    "frameState" : {
+      "_0" : 8
+    }
+  },
+  {
+    "trimWithConstants" : {
+      "_0" : {
+        "minBlobIntensity" : 1000,
+        "qualifierMedianIntensity" : 3500,
+        "qualifierSize" : 10,
+        "minBlobSize" : 15
+      }
+    }
+  },
+  {
+    "save" : {
+      "_0" : "filter3"
+    }
+  },
+  {
+    "frameState" : {
+      "_0" : 9
+    }
+  },
+  {
+    "dimIsolatedBlobRemover" : {
+      "_0" : {
+        "requiredNeighbors" : 1,
+        "minBlobSize" : 24,
+        "intensityFloor" : 5000,
+        "scanSize" : 80
+      }
+    }
+  },
+  {
+    "save" : {
+      "_0" : "filter4"
+    }
+  },
+  {
+    "frameState" : {
+      "_0" : 10
+    }
+  },
+  {
+    "isolatedBlobRemover" : {
+      "_0" : {
+        "requiredNeighbors" : 1,
+        "scanSize" : 24,
+        "minBlobSize" : 24,
+        "minNeighborSize" : 4
+      }
+    }
+  },
+  {
+    "save" : {
+      "_0" : "filter5"
+    }
+  },
+  {
+    "frameState" : {
+      "_0" : 11
+    }
+  },
+  {
+    "disconnectedBlobRemover" : {
+      "_0" : {
+        "scanSize" : 60,
+        "requiredNeighbors" : 2,
+        "intensityThreshold" : 15000,
+        "blobsSmallerThan" : 18,
+        "blobsLargerThan" : 0
+      }
+    }
+  },
+  {
+    "linearBlobConnector" : {
+      "_0" : {
+        "adjecentPixelsOnIteration" : 5,
+        "maxAverageLineDistance" : 50,
+        "blobsSmallerThan" : 120,
+        "scanSize" : 20,
+        "blobsLargerThan" : 0,
+        "maxIterationCount" : 10,
+        "lineBorder" : 10
+      }
+    }
+  },
+  {
+    "save" : {
+      "_0" : "filter6"
+    }
+  },
+  {
+    "frameState" : {
+      "_0" : 12
+    }
+  },
+  {
+    "disconnectedBlobRemover" : {
+      "_0" : {
+        "blobsLargerThan" : 8,
+        "blobsSmallerThan" : 50,
+        "requiredNeighbors" : 2,
+        "intensityThreshold" : 10000,
+        "scanSize" : 160
+      }
+    }
+  },
+  {
+    "save" : {
+      "_0" : "filter7"
+    }
+  },
+  {
+    "frameState" : {
+      "_0" : 13
+    }
+  },
+  {
+    "isolatedBlobRemover" : {
+      "_0" : {
+        "scanSize" : 124,
+        "requiredNeighbors" : 1,
+        "minNeighborSize" : 0,
+        "minBlobSize" : 24
+      }
+    }
+  },
+  {
+    "save" : {
+      "_0" : "filter8"
+    }
+  },
+  {
+    "frameState" : {
+      "_0" : 14
+    }
+  },
+  {
+    "linearBlobConnector" : {
+      "_0" : {
+        "maxIterationCount" : 10,
+        "blobsSmallerThan" : 200,
+        "scanSize" : 20,
+        "maxAverageLineDistance" : 50,
+        "lineBorder" : 50,
+        "blobsLargerThan" : 0,
+        "adjecentPixelsOnIteration" : 15
+      }
+    }
+  },
+  {
+    "save" : {
+      "_0" : "filter9"
+    }
+  },
+  {
+    "frameState" : {
+      "_0" : 15
+    }
+  },
+  {
+    "smallBlobRemover" : {
+      "_0" : {
+        "intensityFloor" : 1000,
+        "minBlobSize" : 6
+      }
+    }
+  },
+  {
+    "save" : {
+      "_0" : "filter10"
+    }
+  },
+  {
+    "frameState" : {
+      "_0" : 16
+    }
+  },
+  {
+    "isolatedBlobRemover" : {
+      "_0" : {
+        "requiredNeighbors" : 1,
+        "scanSize" : 16,
+        "minBlobSize" : 50,
+        "minNeighborSize" : 0
+      }
+    }
+  },
+  {
+    "save" : {
+      "_0" : "filter11"
+    }
+  },
+  {
+    "frameState" : {
+      "_0" : 17
+    }
+  },
+  {
+    "lineSplit" : {
+      "_0" : {
+        "maxDistance" : 12,
+        "minBlobsize" : 500,
+        "maxLineFillAmount" : 0.5,
+        "minLineScore" : 12,
+        "minAvgDistance" : 5,
+        "minLineCount" : 4,
+        "maxLines" : 8000
+      }
+    }
+  },
+  {
+    "blobLineTrim" : {
+      "_0" : {
+        "minLineLength" : 65,
+        "trimAmount" : 16,
+        "minLineFillAmount" : 0.9
+      }
+    }
+  },
+  {
+    "save" : {
+      "_0" : "filter12"
+    }
+  },
+  {
+    "frameState" : {
+      "_0" : 18
+    }
+  },
+  {
+    "linearBlobConnector" : {
+      "_0" : {
+        "blobsSmallerThan" : 180,
+        "maxIterationCount" : 10,
+        "lineBorder" : 2,
+        "scanSize" : 40,
+        "maxAverageLineDistance" : 50,
+        "blobsLargerThan" : 0,
+        "adjecentPixelsOnIteration" : 5
+      }
+    }
+  },
+  {
+    "dimIsolatedBlobRemover" : {
+      "_0" : {
+        "minBlobSize" : 50,
+        "requiredNeighbors" : 2,
+        "scanSize" : 50,
+        "intensityFloor" : 4500
+      }
+    }
+  },
+  {
+    "save" : {
+      "_0" : "filter13"
+    }
+  },
+  {
+    "frameState" : {
+      "_0" : 19
+    }
+  },
+  {
+    "smallDimBlobRemover" : {
+      "_0" : {
+        "intensityFloor" : 10000,
+        "sizeFloor" : 10,
+        "minBlobSize" : 5
+      }
+    }
+  },
+  {
+    "save" : {
+      "_0" : "filter14"
+    }
+  },
+  {
+    "frameState" : {
+      "_0" : 20
+    }
+  },
+  {
+    "isolatedBlobRemover" : {
+      "_0" : {
+        "scanSize" : 36,
+        "minNeighborSize" : 0,
+        "minBlobSize" : 30,
+        "requiredNeighbors" : 2
+      }
+    }
+  },
+  {
+    "applyUserSlices" : {
+
+    }
+  },
+  {
+    "save" : {
+      "_0" : "filter15"
+    }
+  },
+  {
+    "frameState" : {
+      "_0" : 21
+    }
+  },
+  {
+    "removeReallyBigBlobsWithSmallDimBunches" : {
+      "_0" : {
+        "minBlobSize" : 1000,
+        "maxBunchSize" : 10,
+        "intensityCeiling" : 6000,
+        "removePixelsDimmerThan" : 6000,
+        "minBunchCount" : 100
+      }
+    }
+  },
+  {
+    "save" : {
+      "_0" : "filter16"
+    }
+  }
+]

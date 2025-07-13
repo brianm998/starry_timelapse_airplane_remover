@@ -26,7 +26,7 @@ struct RightPanel: View {
         case numberOfFramesToProcess
         case numberOfFramesToProcessConcurrently
         case numberOfNeighborFrames
-        case neighborThreshold
+        case pixelThreshold
     }
 
     @FocusState private var focusedField: FocusedField?
@@ -217,7 +217,7 @@ struct RightPanel: View {
 
                             let frameView = viewModel.currentFrameView
 
-                            EditableNeighborThresholdView(focusedField: $focusedField)
+                            EditablePixelThresholdView(focusedField: $focusedField)
                             
                             EditableNumberOfNeighborFrames(focusedField: $focusedField)
 
@@ -416,22 +416,22 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
  */
 
 
-// "Neighbor Threshold"
-struct EditableNeighborThresholdView: View {
+// "Pixel Threshold"
+struct EditablePixelThresholdView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     let focusedField: FocusState<RightPanel.FocusedField?>.Binding
 
     var body: some View {
         @Bindable var viewModel = viewModel
         return EditableNumberView(
-          value: $viewModel.neighborThreshold,
+          value: $viewModel.pixelThreshold,
           minValue: 0.001,
           maxValue: 10,
-          fullTextProvider: { "Neighbor threshold: \($0)" },
-          prefixText: "Neighbor threshold: ",
+          fullTextProvider: { "Pixel threshold: \($0)" },
+          prefixText: "Pixel threshold: ",
           suffixTextProvider: { _ in "" },
           focusedField: focusedField,
-          focusField: .neighborThreshold
+          focusField: .pixelThreshold
           // no extra commit side‐effects here
         )
     }

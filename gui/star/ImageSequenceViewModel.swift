@@ -243,7 +243,7 @@ public final class ImageSequenceViewModel {
     var numberOfNeighborFrames: Int
 
     // the threshold used by used in goodPixels(thresholdFactor: )
-    var neighborThreshold: Double = 1.2
+    var pixelThreshold: Double = 1.2
     
     // number of frames in the sequence we're processing
     var imageSequenceSize: Int = 0
