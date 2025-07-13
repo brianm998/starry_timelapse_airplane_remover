@@ -389,8 +389,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             if let dirname = imageAccessor.dirForImage(ofType: .aligned,
                                                        atSize: .original)
             {
-                try removeAllFiles(in: "\(dirname)/\(frameIndex)")
-            }
+                let dirname = "\(dirname)/\(frameIndex)"
+                StarCore.mkdir(dirname)
+                try? removeAllFiles(in: dirname)
+            } 
             
             // try creating the star aligned images if we couldn't load them
             Log.i("doing star alignment at finish")
@@ -481,8 +483,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return alignedImages
     }
     
-    // lazy loaded aligned a neighboring frame
+    // lazy loaded aligned neighboring frames
     public func starAlignedImages() async throws -> [Int: PixelatedImage] {
+        Log.d("frame \(frameIndex) starAlignedImages")
         guard let imageSequence else {
             let error = "cannot align star images without an image sequence"
             Log.e(error)
@@ -490,7 +493,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
         let alignedImageMap = try await loadStarAlignedImages()
 
-        if alignedImageMap.count > 0 { return alignedImageMap }
+        if alignedImageMap.count == self.numberOfAlignedFrames { return alignedImageMap }
+
+        Log.d("frame \(frameIndex) creating new images")
         
         // create the aligned images if not found
         Log.d("frame \(frameIndex) creating aligned frame")
