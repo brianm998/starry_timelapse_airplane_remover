@@ -329,6 +329,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         await self.updateCombineSubjects()
     }
 
+    var pixelThreshold: Double = 1.2 // XXX constant
+    
+    public func set(pixelThreshold: Double) {
+        self.pixelThreshold = pixelThreshold
+    }
+    
     public func setNumberOfAlignmentImages(_ alignmentNumber: Int) {
         guard let imageSequence else {
             Log.e("cannot set number of alignment images without an image sequence")
@@ -1330,7 +1336,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // 1.2 w/ 8 neighbors is same as VVV
         // 0.8 w/ 16 neighbors kills all the baddies, but still has a bit of dark
         // 0.5 is really tight
-        let goodPixels = newPixels.goodPixels(thresholdFactor: 1.2) // XXX make this a param
+        let goodPixels = newPixels.goodPixels(thresholdFactor: self.pixelThreshold) 
 /*
         if newPixels.count != goodPixels.count {
             Log.i("frame \(frameIndex) dropped \(newPixels.count - goodPixels.count) pixels out of \(newPixels.count)")

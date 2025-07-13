@@ -354,7 +354,7 @@ public final class ImageSequenceViewModel {
 
         self.trashLevel = await constants.getTrashLevel()
         self.smallTrashMax = await constants.getSmallTrashMax()
-        
+
         let config = configManager.config()
 
         self.config = configManager
@@ -372,6 +372,8 @@ public final class ImageSequenceViewModel {
         let imageSequence = try ImageSequence(dirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
                                               supportedImageFileTypes: config.supportedImageFileTypes)
 
+        self.frameSaveQueue.viewModel = self
+        
         Log.d("loaded image sequence")
         let callbacks = self.makeCallbacks()
         

@@ -12,6 +12,8 @@ class FrameSaveQueue {
 
     init() { } 
 
+    weak var viewModel: ImageSequenceViewModel?
+    
     var savingCount: Int = 0
     var pendingSavingCount: Int = 0
     var purgatoryCount: Int = 0
@@ -50,11 +52,18 @@ class FrameSaveQueue {
                 await frame.set(frameSavingState: .saving)
                 Log.d("frame \(frame.frameIndex) saveNow for real")
                 do {
-//                    let _ = try await Task.detached {
-                        try await frame.loadOutliers()
-                        try await frame.finish()
-                        await frame.changesHandled()
-//                    }.value
+                    // update values that may have been changed by the user in the gui
+
+                    if let viewModel = await self.viewModel {
+                        // set pixelThreshold
+                        await frame.set(pixelThreshold: viewModel.pixelThreshold)
+                        // set number of aligned images
+                        await frame.setNumberOfAlignmentImages(viewModel.numberOfNeighborFrames)
+                    }
+                    
+                    try await frame.loadOutliers()
+                    try await frame.finish()
+                    await frame.changesHandled()
                 } catch {
                     Log.e("frame \(frame.frameIndex) frame save error: \(error)")
                 }
