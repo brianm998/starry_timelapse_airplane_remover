@@ -368,6 +368,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             endFrame = startFrame + alignmentNumber + 1
         }
 
+        alignmentFrames = []
+        
         // calculate the frame indicies of the frames we will use for star alignment
         for index in startFrame..<endFrame {
             if index == frameIndex { continue }
@@ -385,6 +387,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         if alignedImages.count != numberOfAlignedFrames {
 
+            Log.w("alignedImages.count != numberOfAlignedFrames (\(alignedImages.count) != \(numberOfAlignedFrames))")
+            
             // get rid of any existing files
             if let dirname = imageAccessor.dirForImage(ofType: .aligned,
                                                        atSize: .original)
