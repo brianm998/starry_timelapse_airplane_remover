@@ -25,6 +25,8 @@ struct RightPanel: View {
         case minimumClassificationSize
         case numberOfFramesToProcess
         case numberOfFramesToProcessConcurrently
+        case numberOfNeighborFrames
+        case neighborThreshold
     }
 
     @FocusState private var focusedField: FocusedField?
@@ -215,6 +217,8 @@ struct RightPanel: View {
 
                             let frameView = viewModel.currentFrameView
 
+                            EditableNeighborThresholdView(focusedField: $focusedField)
+                            
                             EditableNumberOfNeighborFrames(focusedField: $focusedField)
 
                             EditableNumberOfFramesToProcessConcurrentlyView(focusedField: $focusedField)
@@ -313,155 +317,189 @@ struct RightPanel: View {
 }
 
 
+import SwiftUI
+/*
+/// A generic “tap to edit” numeric editor supporting Int or Double.
+struct EditableNumberView<Value>: View
+where Value: Numeric & Comparable & LosslessStringConvertible {
+    /// The bound numeric value we’re editing
+    @Binding var value: Value
+    /// Inclusive lower bound for valid inputs
+    let minValue: Value
+    /// Exclusive upper bound for valid inputs
+    let maxValue: Value
+    /// Should decimal points be allowed (for Double)?
+    let allowDecimal: Bool
+    /// How to render the full-text when not editing
+    let fullTextProvider: (Value) -> String
+    /// Optional prefix inside the HStack during editing
+    let prefixText: String?
+    /// Suffix (after the TextField) during editing
+    let suffixTextProvider: (Value) -> String
+    /// Focus state binding and the specific field case
+    let focusedField: FocusState<RightPanel.FocusedField?>.Binding
+    let focusField: RightPanel.FocusedField
+    /// Extra action upon commit
+    let commitAction: (Value) -> Void
+
+    @State private var isEditing = false
+    @State private var editText = ""
+
+    init(value: Binding<Value>,
+         minValue: Value = .zero,
+         maxValue: Value,
+         allowDecimal: Bool = false,
+         fullTextProvider: @escaping (Value) -> String,
+         prefixText: String? = nil,
+         suffixTextProvider: @escaping (Value) -> String,
+         focusedField: FocusState<RightPanel.FocusedField?>.Binding,
+         focusField: RightPanel.FocusedField,
+         commitAction: @escaping (Value) -> Void = { _ in })
+    {
+        self._value = value
+        self.minValue = minValue
+        self.maxValue = maxValue
+        self.allowDecimal = allowDecimal
+        self.fullTextProvider = fullTextProvider
+        self.prefixText = prefixText
+        self.suffixTextProvider = suffixTextProvider
+        self.focusedField = focusedField
+        self.focusField = focusField
+        self.commitAction = commitAction
+    }
+
+    var body: some View {
+        let currentString = String(value)
+
+        if isEditing {
+            HStack {
+                if let prefix = prefixText {
+                    Text(prefix)
+                        .foregroundColor(.white)
+                }
+
+                TextField(currentString, text: $editText)
+                  .focused(focusedField, equals: focusField)
+                  .frame(maxWidth: 60)
+                  .cursor(.arrow)
+                  .onSubmit {
+                      // Filter input based on allowed characters
+                      let allowedChars: CharacterSet = allowDecimal
+                        ? CharacterSet(charactersIn: "0123456789.")
+                        : CharacterSet.decimalDigits
+                      let filtered = String(editText.unicodeScalars
+                                              .filter { allowedChars.contains($0) })
+                      if let newVal = Value(filtered),
+                         newVal >= minValue,
+                         newVal < maxValue {
+                          value = newVal
+                          commitAction(newVal)
+                          isEditing = false
+                          editText = ""
+                      }
+                  }
+                
+                Text(suffixTextProvider(value))
+                  .foregroundColor(.white)
+            }
+        } else {
+            Text(fullTextProvider(value))
+              .foregroundColor(.white)
+              .cursor(.iBeam)
+              .onTapGesture {
+                  isEditing = true
+                  focusedField.wrappedValue = focusField
+              }
+        }
+    }
+}
+ */
+
+
+// "Neighbor Threshold"
+struct EditableNeighborThresholdView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    let focusedField: FocusState<RightPanel.FocusedField?>.Binding
+
+    var body: some View {
+        @Bindable var viewModel = viewModel
+        return EditableNumberView(
+          value: $viewModel.neighborThreshold,
+          minValue: 0.001,
+          maxValue: 10,
+          fullTextProvider: { "Neighbor threshold: \($0)" },
+          prefixText: "Neighbor threshold: ",
+          suffixTextProvider: { _ in "" },
+          focusedField: focusedField,
+          focusField: .neighborThreshold
+          // no extra commit side‐effects here
+        )
+    }
+}
+
+// “Number of Neighbor Frames”
 struct EditableNumberOfNeighborFrames: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-
     let focusedField: FocusState<RightPanel.FocusedField?>.Binding
 
-    @State private var editMode = false
-    @State private var editModeString = ""
-    
     var body: some View {
-        let frameNumberString = String(format: "%d", viewModel.numberOfNeighborFrames)
-        if self.editMode {
-            HStack {
-                Text("process with")
-                  .foregroundColor(.white)
-                TextField("\(frameNumberString)",
-                          text: $editModeString)
-                  .focused(focusedField, equals: RightPanel.FocusedField.numberOfFramesToProcessConcurrently)
-                  .frame(maxWidth: 38)
-                  .cursor(.arrow)
-                  .onSubmit {
-                      let filtered = editModeString.filter { "0123456789".contains($0) }
-                      if let newIntValue = Int(filtered),
-                         newIntValue >= 0,
-                         newIntValue < self.viewModel.imageSequenceSize
-                      {
-                          self.viewModel.numberOfNeighborFrames = newIntValue
-
-                          // stick it in user preferences
-                          //self.viewModel.userPreferences.concurrentFrames = newIntValue
-
-                          // update the global we use for this
-                          //Task { await maxFramesProcessing.set(value: newIntValue) }
-                          
-                          self.editMode = false
-                          self.editModeString = ""
-                      }
-                  }
-                Text("neighbor frames")
-                  .foregroundColor(.white)
-            }
-        } else {
-            Text("process with \(frameNumberString) neighbor frames")
-              .foregroundColor(.white)
-              .cursor(.iBeam)
-              .onTapGesture(count: 1) {
-                  self.editMode = true
-                  focusedField.wrappedValue = RightPanel.FocusedField.numberOfFramesToProcessConcurrently
-              }
-        }
+        @Bindable var viewModel = viewModel
+        return EditableNumberView(
+          value: $viewModel.numberOfNeighborFrames,
+          minValue: 1,
+          maxValue: viewModel.imageSequenceSize,
+          fullTextProvider: { "process with \($0) neighbor frames" },
+          prefixText: "process with",
+          suffixTextProvider: { _ in "neighbor frames" },
+          focusedField: focusedField,
+          focusField: .numberOfNeighborFrames
+          // no extra commit side‐effects here
+        )
     }
 }
 
-
+// “Number of Frames To Process Concurrently”
 struct EditableNumberOfFramesToProcessConcurrentlyView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-
     let focusedField: FocusState<RightPanel.FocusedField?>.Binding
-    
-    @State private var editMode = false
-    @State private var editModeString = ""
-    
+
     var body: some View {
-        let frameNumberString = String(format: "%d", viewModel.numberOfFramesToProcessConcurrently)
-        if self.editMode {
-            HStack {
-                Text("process")
-                  .foregroundColor(.white)
-                TextField("\(frameNumberString)",
-                          text: $editModeString)
-                  .focused(focusedField, equals: RightPanel.FocusedField.numberOfFramesToProcessConcurrently)
-                  .frame(maxWidth: 38)
-                  .cursor(.arrow)
-                  .onSubmit {
-                      let filtered = editModeString.filter { "0123456789".contains($0) }
-                      if let newIntValue = Int(filtered),
-                         newIntValue >= 0,
-                         newIntValue < self.viewModel.imageSequenceSize
-                      {
-                          self.viewModel.numberOfFramesToProcessConcurrently = newIntValue
-
-                          // stick it in user preferences
-                          self.viewModel.userPreferences.concurrentFrames = newIntValue
-
-                          // update the global we use for this
-                          Task { await maxFramesProcessing.set(value: newIntValue) }
-                          
-                          self.editMode = false
-                          self.editModeString = ""
-                      }
-                  }
-                Text("frames at once")
-                  .foregroundColor(.white)
+        @Bindable var viewModel = viewModel
+        return EditableNumberView(
+            value: $viewModel.numberOfFramesToProcessConcurrently,
+            minValue: 1,
+            maxValue: viewModel.imageSequenceSize,
+            fullTextProvider: { "process \($0) frames at once" },
+            prefixText: "process",
+            suffixTextProvider: { _ in "frames at once" },
+            focusedField: focusedField,
+            focusField: .numberOfFramesToProcessConcurrently,
+            commitAction: { newVal in
+                // persist to prefs & global
+                viewModel.userPreferences.concurrentFrames = newVal
+                Task { await maxFramesProcessing.set(value: newVal) }
             }
-        } else {
-            Text("process \(frameNumberString) frames at once")
-              .foregroundColor(.white)
-              .cursor(.iBeam)
-              .onTapGesture(count: 1) {
-                  self.editMode = true
-                  focusedField.wrappedValue = RightPanel.FocusedField.numberOfFramesToProcessConcurrently
-              }
-        }
+        )
     }
 }
 
+// “Number of Frames To Process”
 struct EditableNumberOfFramesToProcessView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-
     let focusedField: FocusState<RightPanel.FocusedField?>.Binding
 
-    @State private var editMode = false
-    @State private var editModeString = ""
-    
     var body: some View {
-        let frameNumberString = String(format: "%d", viewModel.numberOfFramesToProcess)
-        if self.editMode {
-            HStack {
-                TextField("\(frameNumberString)",
-                          text: $editModeString)
-                  .focused(focusedField, equals: RightPanel.FocusedField.numberOfFramesToProcess)
-                  .frame(maxWidth: 38)
-                  .onSubmit {
-                      let filtered = editModeString.filter { "0123456789".contains($0) }
-                      if let newIntValue = Int(filtered),
-                         newIntValue >= 0,
-                         newIntValue < self.viewModel.imageSequenceSize
-                      {
-                          self.viewModel.numberOfFramesToProcess = newIntValue
-                          
-                          self.editMode = false
-                          self.editModeString = ""
-                      }
-                  }
-                if self.viewModel.numberOfFramesToProcess == 1 {
-                    Text("frame as")
-                      .foregroundColor(.white)
-                } else {
-                    Text("frames as")
-                      .foregroundColor(.white)
-                }
-            }
-        } else {
-            Text("\(frameNumberString) frames as")
-              .foregroundColor(.white)
-              .cursor(.iBeam)
-              .onTapGesture(count: 1) {
-                  self.editMode = true
-                  focusedField.wrappedValue = RightPanel.FocusedField.numberOfFramesToProcess
-              }
-        }
+        @Bindable var viewModel = viewModel
+        return EditableNumberView(
+            value: $viewModel.numberOfFramesToProcess,
+            minValue: 1,
+            maxValue: viewModel.imageSequenceSize,
+            fullTextProvider: { "\($0) frames as" },
+            // no prefix, so TextField is first
+            suffixTextProvider: { $0 == 1 ? "frame as" : "frames as" },
+            focusedField: focusedField,
+            focusField: .numberOfFramesToProcess
+            // no extra commit side‐effects here
+        )
     }
 }

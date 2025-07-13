@@ -107,3 +107,31 @@ public struct Pixel {
         UInt64(self.green)
     }
 }
+
+extension Array where Element == Pixel {
+    /// Returns the “good” pixels whose intensity is ≤ mean + K·σ.
+    func goodPixels(thresholdFactor K: Double = 3.0) -> [Pixel] {
+        let n = count
+        guard n > 1 else { return self }
+
+        // 1) compute intensities as Doubles
+        let intensities = self.map { Double($0.intensity) }
+
+        // 2) mean
+        let mean = intensities.reduce(0, +) / Double(n)
+
+        // 3) standard deviation
+        let variance = intensities
+            .map { pow($0 - mean, 2) }
+            .reduce(0, +) / Double(n)
+        let stdDev = sqrt(variance)
+
+        // 4) threshold = mean + K·stdDev
+        let threshold = mean + K * stdDev
+
+        // 5) keep all pixels with intensity ≤ threshold
+        return zip(self, intensities)
+            .filter { _, intensity in intensity <= threshold }
+            .map { pixel, _ in pixel }
+    }
+}

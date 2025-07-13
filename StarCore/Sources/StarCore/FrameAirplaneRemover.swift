@@ -371,6 +371,28 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(frameIndex) has alignment frames \(alignmentFrames)")
     }
 
+    public var numberOfAlignedFrames: Int { alignmentFrames.count }
+    
+    
+    private func loadOrCreateStarAlignedImages() async throws  -> [Int:PixelatedImage] {
+        var alignedImages = try await loadStarAlignedImages()
+
+        if alignedImages.count != numberOfAlignedFrames {
+
+            // get rid of any existing files
+            if let dirname = imageAccessor.dirForImage(ofType: .aligned,
+                                                       atSize: .original)
+            {
+                try removeAllFiles(in: "\(dirname)/\(frameIndex)")
+            }
+            
+            // try creating the star aligned images if we couldn't load them
+            Log.i("doing star alignment at finish")
+            alignedImages = try await starAlignedImages()
+        }
+        return alignedImages
+    }
+    
     private var alignmentFrames: [Int] = []
     private let baseFilename: String
 
@@ -583,14 +605,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                               overwrite: false)
         }
 
-        var alignedImages = try await loadStarAlignedImages()
+        let alignedImages = try await loadOrCreateStarAlignedImages()
 
-        if alignedImages.count == 0 {
-            // try creating the star aligned image if we can't load it
-            Log.i("doing star alignment at finish")
-            alignedImages = try await starAlignedImages()
-        }
-        
         guard alignedImages.count != 0 else {
             throw "couldn't load aligned file for finishing"
         }
@@ -1637,15 +1653,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         // load or create the aligned frame
 
-        var alignedImages = try await loadStarAlignedImages().values
-
-        if alignedImages.count == 0 {
-            Log.d("loading star aligned images")
-            // try creating the star aligned image if we can't load it
-            alignedImages = try await starAlignedImages().values
-        } else {
-            Log.d("NOT loading star aligned images")
-        }
+        let alignedImages = try await loadOrCreateStarAlignedImages().values
 
         guard alignedImages.count > 0 else {
             let error = "frame \(frameIndex) can't load any star aligned images"
@@ -2056,30 +2064,50 @@ extension String {
     }
 }
 
-extension Array where Element == Pixel {
-    /// Returns the “good” pixels whose intensity is ≤ mean + K·σ.
-    func goodPixels(thresholdFactor K: Double = 3.0) -> [Pixel] {
-        let n = count
-        guard n > 1 else { return self }
+import Foundation
 
-        // 1) compute intensities as Doubles
-        let intensities = self.map { Double($0.intensity) }
+/// Removes *only* the files in the specified directory path (non‐recursive).
+/// Subdirectories (and their contents) are left untouched.
+/// - Parameter directoryPath: the file‐system path of an existing directory.
+/// - Throws: any FileManager errors encountered during listing or removal.
+func removeAllFiles(in directoryPath: String) throws {
+    // Convert String path → URL
+    let directoryURL = URL(fileURLWithPath: directoryPath, isDirectory: true)
+    try removeAllFiles(in: directoryURL)
+}
 
-        // 2) mean
-        let mean = intensities.reduce(0, +) / Double(n)
+/// Removes *only* the files in the specified directory URL (non‐recursive).
+/// Subdirectories (and their contents) are left untouched.
+/// - Parameter directoryURL: the URL of an existing directory
+/// - Throws: any FileManager errors encountered during listing or removal
+func removeAllFiles(in directoryURL: URL) throws {
+    let fm = FileManager.default
 
-        // 3) standard deviation
-        let variance = intensities
-            .map { pow($0 - mean, 2) }
-            .reduce(0, +) / Double(n)
-        let stdDev = sqrt(variance)
+    // Ensure the URL actually points to a directory
+    var isDir: ObjCBool = false
+    guard fm.fileExists(atPath: directoryURL.path, isDirectory: &isDir),
+          isDir.boolValue
+    else {
+        throw NSError(
+            domain: NSCocoaErrorDomain,
+            code: NSFileNoSuchFileError,
+            userInfo: [NSLocalizedDescriptionKey: "Directory not found at \(directoryURL.path)"]
+        )
+    }
 
-        // 4) threshold = mean + K·stdDev
-        let threshold = mean + K * stdDev
+    // List only the top‐level contents of the directory
+    let contents = try fm.contentsOfDirectory(
+        at: directoryURL,
+        includingPropertiesForKeys: [.isDirectoryKey],
+        options: [.skipsHiddenFiles]
+    )
 
-        // 5) keep all pixels with intensity ≤ threshold
-        return zip(self, intensities)
-            .filter { _, intensity in intensity <= threshold }
-            .map { pixel, _ in pixel }
+    for fileURL in contents {
+        // Skip subdirectories
+        let resourceVals = try fileURL.resourceValues(forKeys: [.isDirectoryKey])
+        if resourceVals.isDirectory == true { continue }
+
+        // Remove the file
+        try fm.removeItem(at: fileURL)
     }
 }

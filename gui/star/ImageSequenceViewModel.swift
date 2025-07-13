@@ -241,6 +241,9 @@ public final class ImageSequenceViewModel {
     var numberOfFramesToProcessConcurrently: Int
 
     var numberOfNeighborFrames: Int
+
+    // the threshold used by used in goodPixels(thresholdFactor: )
+    var neighborThreshold: Double = 1.2
     
     // number of frames in the sequence we're processing
     var imageSequenceSize: Int = 0
@@ -885,7 +888,7 @@ public final class ImageSequenceViewModel {
 
     func clearProcessing(from frame: FrameAirplaneRemover) async {
         await Task.detached(priority: .userInitiated) { // do we need this detached task?
-          var numberOfFramesLeft = await self.numberOfFramesToProcess
+            var numberOfFramesLeft = await self.numberOfFramesToProcess
             var currentFrame: FrameAirplaneRemover? = frame
             while let frameToClear = currentFrame,
                   numberOfFramesLeft > 0
