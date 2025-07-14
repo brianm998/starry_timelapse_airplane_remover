@@ -1010,9 +1010,12 @@ func averageBuffersAccelerate(
   // 3) Clamp & convert back to UInt16
   var out = [UInt16](repeating: 0, count: count)
   for i in 0..<count {
-    // clamp to valid UInt16 range just in case
-    let v = avg[i]
-    out[i] = UInt16(min(max(v, 0), Float(UInt16.max)))
+      // clamp to valid UInt16 range just in case
+      let v = avg[i]
+      let floatValue = min(max(v, 0), Float(UInt16.max))
+      if floatValue != Float.nan {
+          out[i] = UInt16(floatValue)
+      }
   }
   return out
 }
