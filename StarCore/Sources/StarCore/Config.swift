@@ -155,7 +155,7 @@ public struct Config: Codable, Sendable, Transferable {
 
     // align this many total neighbor frames for both
     // creating the subtraction image and calculating pixel values during removal
-    public var numberAlignedNeighborFrames = 4 // total
+    public var numberAlignedNeighborFrames = 8 // total
     
     public var supportedImageFileTypes = [".tif", ".tiff"] // XXX move this out
 
@@ -249,6 +249,7 @@ public struct Config: Codable, Sendable, Transferable {
     //       lots of renaming
     //       debug logging view
     //       lines better connected, fixed LinearBlobConnector
+    //       multiple aligned images to clean up really noisy frame sequences 
     
     public var starVersion = Config.latestVersion
 
