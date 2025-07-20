@@ -329,6 +329,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         await self.updateCombineSubjects()
     }
 
+    // threshold used for throwing out bad pixels before replacing with them
     var pixelThreshold: Double = 1.2 // XXX constant
     
     public func set(pixelThreshold: Double) {
@@ -387,7 +388,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         if alignedImages.count != numberOfAlignedFrames {
 
-            Log.w("alignedImages.count != numberOfAlignedFrames (\(alignedImages.count) != \(numberOfAlignedFrames))")
+            Log.w("frame \(frameIndex) alignedImages.count != numberOfAlignedFrames (\(alignedImages.count) != \(numberOfAlignedFrames))")
             
             // get rid of any existing files
             if let dirname = imageAccessor.dirForImage(ofType: .aligned,
@@ -465,13 +466,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             for alignmentFrameIndex in alignmentFrames {
                 if alignmentFrameIndex != frameIndex {
 
-                    // XXX this is wrong :(
-
                     let origFullPath = imageSequence.filenames[alignmentFrameIndex]
+
                     if let origFilename = origFullPath.substringAfterLastSlash() {
                         
                         let alignedFilename = "\(dirname)/\(origFilename)"
-                        
+
                         if FileManager.default.fileExists(atPath: alignedFilename) {
                             Log.d("file exists at \(alignedFilename)")
                             let alignedFrame = try await imageSequence.getImage(withName: alignedFilename).image()
@@ -545,8 +545,65 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     // XXX this isn't handled well
                     Log.e("frame \(frameIndex) could not load aligned frame")
                 }
-
             }
+
+            // XXX test best pixel merge here
+            // XXX test best pixel merge here
+            // XXX test best pixel merge here
+
+
+            if let firstImage = ret.values.first {
+                // XXX we assume all image have the same resolution, bit depth, etc :(
+                var goodPixelArr = [UInt16](repeating: 0, count: width*height*firstImage.componentsPerPixel)
+                for x in 0..<width {
+                    for y in 0..<height {
+                        var pixels: [Pixel] = []
+                        for image in ret.values {
+                            pixels.append(image.readPixel(atX: x, andY: y))
+                        }
+                        let goodPixels = pixels.goodPixels(thresholdFactor: self.pixelThreshold)
+                        if goodPixels.count > 0 {
+                            let pixel = Pixel(merging: goodPixels)
+
+                            let offset = (y * width*firstImage.componentsPerPixel) + (x * firstImage.componentsPerPixel)
+                            goodPixelArr[offset] = pixel.red
+                            if firstImage.componentsPerPixel >= 2 {
+                                goodPixelArr[offset+1] = pixel.green
+                            }
+                            if firstImage.componentsPerPixel >= 3 {
+                                goodPixelArr[offset+2] = pixel.blue
+                            }
+                            if firstImage.componentsPerPixel == 4 {
+                                goodPixelArr[offset+3] = 0xFFFF//pixel.alpha
+                            }
+                        } else {
+                            Log.w("frame \(frameIndex) no good pixels at [\(x), \(y)] :(")
+                        }
+                    }
+                }
+
+                let goodPixelImage = PixelatedImage(width: width,
+                                                    height: height,
+                                                    imageData: .init(from: goodPixelArr),
+                                                    bitsPerPixel: firstImage.bitsPerPixel,
+                                                    bytesPerRow: firstImage.bytesPerRow,
+                                                    bitsPerComponent: firstImage.bitsPerComponent,
+                                                    bytesPerPixel: firstImage.bytesPerPixel,
+                                                    bitmapInfo: firstImage.bitmapInfo,
+                                                    componentsPerPixel: firstImage.componentsPerPixel,
+                                                    colorSpace: firstImage.colorSpace,
+                                                    ciFormat: firstImage.ciFormat)
+                                                    
+                try await imageAccessor.save(goodPixelImage,
+                                             frameIndex: frameIndex,
+                                             as: .aligned,
+                                             atSize: .original,
+                                             overwrite: true)
+            }
+            // XXX test best pixel merge here
+            // XXX test best pixel merge here
+            // XXX test best pixel merge here
+
             return ret
         } else {
             Log.w("frame \(frameIndex) no dirname for aligned original images")
@@ -1149,7 +1206,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // XXX add y-axis here too
     }
 
-        // Mark - Removal
+    // Mark - Removal
 
     /*
      Logic about removing undesired elements from the image.
