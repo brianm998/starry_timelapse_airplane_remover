@@ -382,6 +382,103 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public var numberOfAlignedFrames: Int { alignmentFrames.count }
     
+
+    // load or create a star aligned image for this frame
+    // this image is a composite of numberOfAlignedFrames neighbor images
+    // which have been all star-aligned with the frame at frameIndex.
+    // We then filter out pixels which are abberently brighter by self.pixelThreshold
+    // than the average for that location in all aligned images
+    private func loadOrCreateStarAlignedImage() async throws  -> PixelatedImage {
+        // load or create the aligned frame
+        if let alignedFrame = try await imageAccessor.load(frameIndex: frameIndex,
+                                                           type: .aligned,
+                                                           atSize: .original)
+        {
+            // XXX check for number of aligned images, it might be wrong?
+            return alignedFrame
+        }
+
+        // with no saved aligned frame, first load or create the set of aligned frames
+        // that we used to create the final aligned frame
+        let alignedImages = try await loadOrCreateStarAlignedImages()
+
+        if let firstImage = alignedImages.values.first {
+            // XXX we assume all image have the same resolution, bit depth, etc :(
+            var goodPixelArr = [UInt16](repeating: 0, count: width*height*firstImage.componentsPerPixel)
+            for x in 0..<width {
+                for y in 0..<height {
+                    var pixels: [Pixel] = []
+                    for image in alignedImages.values {
+                        pixels.append(image.readPixel(atX: x, andY: y))
+                    }
+                    let goodPixels = pixels.goodPixels(with: self.pixelThreshold)
+                    if goodPixels.count > 0 {
+                        let pixel = Pixel(merging: goodPixels)
+
+                        let offset = (y * width*firstImage.componentsPerPixel) + (x * firstImage.componentsPerPixel)
+                        goodPixelArr[offset] = pixel.red
+                        if firstImage.componentsPerPixel >= 2 {
+                            goodPixelArr[offset+1] = pixel.green
+                        }
+                        if firstImage.componentsPerPixel >= 3 {
+                            goodPixelArr[offset+2] = pixel.blue
+                        }
+                        if firstImage.componentsPerPixel == 4 {
+                            goodPixelArr[offset+3] = 0xFFFF//pixel.alpha
+                        }
+                    } else {
+                        Log.w("frame \(frameIndex) no good pixels at [\(x), \(y)] :(")
+                    }
+                }
+            }
+
+            let goodPixelImage = PixelatedImage(width: width,
+                                                height: height,
+                                                imageData: .init(from: goodPixelArr),
+                                                bitsPerPixel: firstImage.bitsPerPixel,
+                                                bytesPerRow: firstImage.bytesPerRow,
+                                                bitsPerComponent: firstImage.bitsPerComponent,
+                                                bytesPerPixel: firstImage.bytesPerPixel,
+                                                bitmapInfo: firstImage.bitmapInfo,
+                                                componentsPerPixel: firstImage.componentsPerPixel,
+                                                colorSpace: firstImage.colorSpace,
+                                                ciFormat: firstImage.ciFormat)
+            
+            try await imageAccessor.save(goodPixelImage,
+                                         frameIndex: frameIndex,
+                                         as: .aligned,
+                                         atSize: .original,
+                                         overwrite: true)
+
+            try await imageAccessor.save(goodPixelImage,
+                                         frameIndex: frameIndex,
+                                         as: .aligned,
+                                         atSize: .preview,
+                                         overwrite: true)
+
+            // XXX keep track somehow the number of alignment images used
+            // so we can make sure it's the same as the desired amount later
+            
+            // if everything above here has worked,
+            // then we can delete all intermediate images we used to compute the goodPixelImage
+            try removeStarAlignedImages()
+
+            return goodPixelImage
+        }
+
+        throw "unable to star align images"
+    }
+
+    private func removeStarAlignedImages() throws {
+        // get rid of any existing files
+        if let dirname = imageAccessor.dirForImage(ofType: .aligned,
+                                                   atSize: .original)
+        {
+            let dirname = "\(dirname)/\(frameIndex)"
+            StarCore.mkdir(dirname)
+            try? removeAllFiles(in: dirname)
+        } 
+    }
     
     private func loadOrCreateStarAlignedImages() async throws  -> [Int:PixelatedImage] {
         var alignedImages = try await loadStarAlignedImages()
@@ -389,19 +486,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if alignedImages.count != numberOfAlignedFrames {
 
             Log.w("frame \(frameIndex) alignedImages.count != numberOfAlignedFrames (\(alignedImages.count) != \(numberOfAlignedFrames))")
-            
-            // get rid of any existing files
-            if let dirname = imageAccessor.dirForImage(ofType: .aligned,
-                                                       atSize: .original)
-            {
-                let dirname = "\(dirname)/\(frameIndex)"
-                StarCore.mkdir(dirname)
-                try? removeAllFiles(in: dirname)
-            } 
+
+            try removeStarAlignedImages()
             
             // try creating the star aligned images if we couldn't load them
             Log.i("doing star alignment at finish")
-            alignedImages = try await starAlignedImages()
+            alignedImages = try await createStarAlignedImages()
         }
         return alignedImages
     }
@@ -486,18 +576,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         return alignedImages
     }
-    
-    // lazy loaded aligned neighboring frames
-    public func starAlignedImages() async throws -> [Int: PixelatedImage] {
+
+    // creates aligned neighboring frames
+    private func createStarAlignedImages() async throws -> [Int: PixelatedImage] {
         Log.d("frame \(frameIndex) starAlignedImages")
         guard let imageSequence else {
             let error = "cannot align star images without an image sequence"
             Log.e(error)
             throw error
         }
-        let alignedImageMap = try await loadStarAlignedImages()
-
-        if alignedImageMap.count == self.numberOfAlignedFrames { return alignedImageMap }
 
         Log.d("frame \(frameIndex) creating new images")
         
@@ -547,62 +634,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
 
-            // XXX test best pixel merge here
-            // XXX test best pixel merge here
-            // XXX test best pixel merge here
-
-
-            if let firstImage = ret.values.first {
-                // XXX we assume all image have the same resolution, bit depth, etc :(
-                var goodPixelArr = [UInt16](repeating: 0, count: width*height*firstImage.componentsPerPixel)
-                for x in 0..<width {
-                    for y in 0..<height {
-                        var pixels: [Pixel] = []
-                        for image in ret.values {
-                            pixels.append(image.readPixel(atX: x, andY: y))
-                        }
-                        let goodPixels = pixels.goodPixels(thresholdFactor: self.pixelThreshold)
-                        if goodPixels.count > 0 {
-                            let pixel = Pixel(merging: goodPixels)
-
-                            let offset = (y * width*firstImage.componentsPerPixel) + (x * firstImage.componentsPerPixel)
-                            goodPixelArr[offset] = pixel.red
-                            if firstImage.componentsPerPixel >= 2 {
-                                goodPixelArr[offset+1] = pixel.green
-                            }
-                            if firstImage.componentsPerPixel >= 3 {
-                                goodPixelArr[offset+2] = pixel.blue
-                            }
-                            if firstImage.componentsPerPixel == 4 {
-                                goodPixelArr[offset+3] = 0xFFFF//pixel.alpha
-                            }
-                        } else {
-                            Log.w("frame \(frameIndex) no good pixels at [\(x), \(y)] :(")
-                        }
-                    }
-                }
-
-                let goodPixelImage = PixelatedImage(width: width,
-                                                    height: height,
-                                                    imageData: .init(from: goodPixelArr),
-                                                    bitsPerPixel: firstImage.bitsPerPixel,
-                                                    bytesPerRow: firstImage.bytesPerRow,
-                                                    bitsPerComponent: firstImage.bitsPerComponent,
-                                                    bytesPerPixel: firstImage.bytesPerPixel,
-                                                    bitmapInfo: firstImage.bitmapInfo,
-                                                    componentsPerPixel: firstImage.componentsPerPixel,
-                                                    colorSpace: firstImage.colorSpace,
-                                                    ciFormat: firstImage.ciFormat)
-                                                    
-                try await imageAccessor.save(goodPixelImage,
-                                             frameIndex: frameIndex,
-                                             as: .aligned,
-                                             atSize: .original,
-                                             overwrite: true)
-            }
-            // XXX test best pixel merge here
-            // XXX test best pixel merge here
-            // XXX test best pixel merge here
 
             return ret
         } else {
@@ -677,12 +708,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                               overwrite: false)
         }
 
-        let alignedImages = try await loadOrCreateStarAlignedImages()
+        let alignedImage = try await loadOrCreateStarAlignedImage()
 
-        guard alignedImages.count != 0 else {
-            throw "couldn't load aligned file for finishing"
-        }
-        
         let format = image.imageData // make a copy
 
         switch format {
@@ -696,7 +723,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             try await self.removeAirplanes(image: image,
                                            toData: &outputData,
-                                           alignedImages: alignedImages)
+                                           alignedImage: alignedImage)
 
             Log.d("frame \(self.frameIndex) writing output files")
             self.set(state: .writingOutputFile)
@@ -1220,7 +1247,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // actually remove outlier groups that have been selected as airplane tracks
     internal func removeAirplanes(image: PixelatedImage,
                                   toData data: inout [UInt16],
-                                  alignedImages: [Int:PixelatedImage]) async throws
+                                  alignedImage: PixelatedImage) async throws
     {
         Log.i("frame \(frameIndex) removing airplane outlier groups")
 
@@ -1344,7 +1371,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                     alpha: alpha,
                                     toData: &data,
                                     image: image,
-                                    from: alignedImages)
+                                    from: alignedImage)
 
                         /*
 
@@ -1366,16 +1393,28 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     // remove a selected outlier pixel with data from pixels from adjecent frames
-    // this tries to use fancy logic to ignore bad pixel values
-
-    // XXX this is a waste of time :(
-
-    // it kind of works, but not really that great.
+    // this uses a pre-computed image of all 'good' pixels merged from a number
+    // of star-aligned neighbor frames
     internal func updatePixel(x: Int, y: Int,
                               alpha: Double,
                               toData data: inout [UInt16],
                               image: PixelatedImage,
-                              from alignedImages: [Int:PixelatedImage])
+                              from alignedImage: PixelatedImage)
+    {
+        self.updatePixel(x: x, y: y,
+                         alpha: alpha,
+                         toData: &data,
+                         image: image,
+                         with: alignedImage.readPixel(atX: x, andY: y))
+    }
+
+    // it kind of works, but not really that great.
+    // this tries to use fancy logic to ignore bad pixel values
+    internal func updatePixelDOH(x: Int, y: Int,
+                                 alpha: Double,
+                                 toData data: inout [UInt16],
+                                 image: PixelatedImage,
+                                 from alignedImages: [Int:PixelatedImage])
     {
         var newPixels: [Pixel] = []
 
@@ -1402,7 +1441,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // 1.2 w/ 8 neighbors is same as VVV
         // 0.8 w/ 16 neighbors kills all the baddies, but still has a bit of dark
         // 0.5 is really tight
-        let goodPixels = newPixels.goodPixels(thresholdFactor: self.pixelThreshold) 
+        let goodPixels = newPixels.goodPixels(with: self.pixelThreshold) 
 /*
         if newPixels.count != goodPixels.count {
             Log.i("frame \(frameIndex) dropped \(newPixels.count - goodPixels.count) pixels out of \(newPixels.count)")
@@ -1725,37 +1764,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         // load or create the aligned frame
 
-        let alignedImages = try await loadOrCreateStarAlignedImages().values
+        let alignedImage = try await loadOrCreateStarAlignedImage()
 
-        guard alignedImages.count > 0 else {
-            let error = "frame \(frameIndex) can't load any star aligned images"
-            Log.e(error)
-            throw error
-        }
-        
-        Log.d("frame \(frameIndex) got \(alignedImages.count) star aligned images")
-
-        let rest = Array(alignedImages.dropFirst())
-
-        guard let first = alignedImages.first else {
-            let error = "cannot get first aligned image, cannot subtract image"
-            Log.e(error)
-            throw error
-        }
-
-        Log.d("trying to merge")
-        
-        let mergedAlignedImage = try first.mergeWith(rest)
-        
-        self.set(state: .subtractingNeighbor)
-        
-        Log.i("frame \(frameIndex) finding outliers")
-
-        // subtract them
+        // subtract the aligned framek
         // result is image - alignedFrame
         // any pixel which is bright in image but not bright in alignedFrame
         // will be bright in the subtractionImage
-        let subtractionImage = image.subtract(mergedAlignedImage)
+        let subtractionImage = image.subtract(alignedImage)
 
         let config = await configManager.config()
         

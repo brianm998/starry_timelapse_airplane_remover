@@ -110,7 +110,7 @@ public struct Pixel {
 
 extension Array where Element == Pixel {
     /// Returns the “good” pixels whose intensity is ≤ mean + K·σ.
-    func goodPixels(thresholdFactor K: Double = 3.0) -> [Pixel] {
+    func goodPixels(with thresholdFactor: Double = 3.0) -> [Pixel] {
         let n = count
         guard n > 1 else { return self }
 
@@ -126,8 +126,8 @@ extension Array where Element == Pixel {
             .reduce(0, +) / Double(n)
         let stdDev = sqrt(variance)
 
-        // 4) threshold = mean + K·stdDev
-        let threshold = mean + K * stdDev
+        // 4) threshold = mean + thresholdFactor·stdDev
+        let threshold = mean + thresholdFactor * stdDev
 
         // 5) keep all pixels with intensity ≤ threshold
         return zip(self, intensities)
