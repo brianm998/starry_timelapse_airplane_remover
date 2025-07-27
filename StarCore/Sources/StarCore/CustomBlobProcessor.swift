@@ -62,7 +62,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
     }
     
     private var jsonFilename: String {
-        var filename = ".star_custom_processor_steps.json"
+        let filename = ".star_custom_processor_steps.json"
         let env = ProcessInfo.processInfo.environment
         if let homedir = env["HOME"] {
             return "\(homedir)/\(filename)"
@@ -111,7 +111,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
     }
     
     public func doubleUpdate<T>(_ argsToUpdate: any Argable<T>, _ argType: T, _ value: Double, _ stepIndex: Int) {
-        print("doubleUpdate args \(argsToUpdate) argType \(argType) value \(value) index \(index)")
+        print("doubleUpdate args \(argsToUpdate) argType \(argType) value \(value) index \(String(describing: index))")
         let currentStep = steps[stepIndex]
         
         switch currentStep {
@@ -181,7 +181,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
     }
 
     public func intUpdate<T>(_ argsToUpdate: any Argable<T>, _ argType: T, _ value: Int, _ stepIndex: Int) {
-        print("intUpdate args \(argsToUpdate) argType \(argType) value \(value) index \(index)")
+        print("intUpdate args \(argsToUpdate) argType \(argType) value \(value) index \(String(describing: index))")
         let currentStep = steps[stepIndex]
         switch currentStep {
         case .compactBlobIds:

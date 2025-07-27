@@ -264,7 +264,7 @@ internal func neighborCloud(of blob: Blob,
     var blobsToProcess = [blob]
     var ret: Set<Blob> = []
 
-    var processedBlobs = ProcessedBlobsSync()
+    let processedBlobs = ProcessedBlobsSync()
     processedBlobs.insert(blob)
     
     while blobsToProcess.count > 0 {

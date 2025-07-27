@@ -1,4 +1,7 @@
 {
+    "/rp/tmp/" : [
+	"LRT_11_30_2024-fx3-1-aurora-topaz-star-v-0_7_0-strong"
+    ],
     "/mnt/branch/star_validated" : [
 	"LRT_02_18_2023-a7sii-2-aurora-topaz-star-v-0_7_0-strong",
 	"LRT_12_22_2022-a9-2-aurora-topaz-star-v-0_7_0-strong",
@@ -12,6 +15,6 @@
 	"LRT_11_30_2024-a9-1-aurora-topaz-star-v-0_7_1-excessive"
     ],
     "ranges" : {
-	"LRT_11_30_2024-a9-1-aurora-topaz-star-v-0_7_1-excessive" : { "lastFrame": 872 }
+	"LRT_11_30_2024-a9-1-aurora-topaz-star-v-0_7_1-excessive" : { "lastFrame": 1200 }
     }
 }

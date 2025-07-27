@@ -54,8 +54,7 @@ echo "test/train split"
 swift run -Xswiftc -O decision_tree_generator --forest 8 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
 
 # tree for just isolated classifiers
-# XXX these are getting over 10 megabytes now, maybe limit the tree size by stumping?
-#swift run -Xswiftc -O decision_tree_generator --treeType isolated --forest 8 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
+swift run -Xswiftc -O decision_tree_generator --treeType isolated --forest 8 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
 
 #swift run -Xswiftc -O decision_tree_generator --treeType isolated --forest 5 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
 

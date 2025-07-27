@@ -6,7 +6,7 @@ Written as of Star 0.7.0.
 
 At a high level, Star processes each frame in the following steps.
 
-1. star-align a neighboring frame
+1. star-align some neighboring frames
 2. subtract the image from step #1 from the frame being processed
 3. detect bright groups of pixels in the image from step #2
 4. apply some heuristics to filter out a lot of the groups from step #3
@@ -41,6 +41,12 @@ However, on 14mm lenses `align-image-stack` is a lot better.  And at 20mm or lon
 
 One unfortnate side-effect of aligning images for comparison is that the ground of the image typically gets moved a small amount, even for timelapses captured on a static tripod.  This can be slightly worked around by using the `--ignore-lower-pixels` command line argument, which will not process any pixels that are the given vertical distance from the bottom of the frame.
 
+As of Star v7.3, more than one neighboring frame can be aligned with the frame being processed.  This is neessary in case with lots of noise in the sky from bright moving objects.  Previous versions of Star assumed that whatever pixels were sourced from aligned images were not noise.  That is, Star would easily replace a noisy pixel with another noisy pixel, sometimes a really bright one.  Especially closer to dawn or dusk, long streaks of satellites can end up causing really noisy situations.
+
+When using multiple aligned frames, Star applies the standard deviation of brightness between a given pixel position in each of them to determine if any of them contains a noisy value at that pixel.  This works best when aligning with more frames, which is slower.  I've found that 8 frames is a good number of frames to have aligned to each frame being processed.  This gives enough signal over the noise of artifical objects in the sky.
+
+This parameter is configurable from a minimum of 1 to the ability of your machine to process lots and lots of data.  In theory the more aligned frames the better, except for machine overload and the fact that the ground moves further when aligning more frames.  This can be a problem for removing noise next to the horizon. 
+
 ### Step #2, image subtraction
 
 The second step is to subtract the aligned image from the frame being processed.
@@ -50,6 +56,10 @@ if `align-image-stack` is not available, the unchanged neighbor frame is used in
 This subtraction image is done in greyscale, and records the amount of change in brightness between the frame being processed and one of its neighboring frames.  If the neighbor has been aligned, then almost all of the bright changes in the sky are a result of things like airplanes.  Clouds can also change brightness levels, even with really dark skies, as they can reveal stars as they move.
 
 The subtraction is really just taking each pixel value and subtracting the neibhoring frame's value for the same pixel.
+
+As of Star v7.3, the subtraction image is calculated as a sum of all aligned images.  This has the effect of reducing the noise in the subtration image, allowing for detection of noisy pixels across more than one frame.  For example, if a set of pixels is illuminated in two neighboring frames by different but nearby sources, then the subtraction image from only that one other frame would not be able to distinguish that set of pixels as noisy.
+
+With more subtraction images assembled into the subtraction image, we can more easily identify pixels in the frame being processed as undesirable noise.
 
 ### Step #3, detect groups of bright pixels in the subtraction image 
 
