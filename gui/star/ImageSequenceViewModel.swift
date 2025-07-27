@@ -863,8 +863,8 @@ public final class ImageSequenceViewModel {
     }
 
     func processFrames(from startIndex: Int? = nil, to endIndex: Int? = nil) {
-        if isProcessingAllFrames { return }
-        isProcessingAllFrames = true
+        //if isProcessingAllFrames { return }
+        //isProcessingAllFrames = true
 
         Log.d("processAllFrames start from \(startIndex) to \(endIndex)")
         
@@ -874,18 +874,20 @@ public final class ImageSequenceViewModel {
 
             await finalProcessor?.processFrames(from: startIndex, to: endIndex)
 
-            await MainActor.run {
-                self.isProcessingAllFrames = false
-            }
+//            await MainActor.run {
+//                self.isProcessingAllFrames = false
+//            }
         }
     }
 
     func clearProcessing(from startIndex: Int, to endIndex: Int) async throws {
+        Log.d("clearing processing from \(startIndex) to \(endIndex)")
         for index in startIndex...endIndex {
             if let frame = frames[index].frame {
                 try await clearProcessing(from: frame)
             }
         }
+        Log.d("done clearing processing from \(startIndex) to \(endIndex)")
     }    
 
     func clearProcessing(from frame: FrameAirplaneRemover) async throws {

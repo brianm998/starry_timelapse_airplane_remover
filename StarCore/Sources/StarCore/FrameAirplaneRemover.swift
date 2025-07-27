@@ -406,7 +406,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             // we didn't meet the above requirements, so re-do star alignment for this frame,
             // getting rid of any existing files first
-            try? removeStarAlignedImages()
+            removeStarAlignedImages()
+            removeSubtractionImages()
             try removeNnumberOfAlignedImagesForThisFrameFile()
         }
 
@@ -416,47 +417,77 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         if let firstImage = alignedImages.values.first {
             // XXX we assume all image have the same resolution, bit depth, etc :(
-
-            // image buffer for calculated alignment image
-            var goodPixelArr = [UInt16](repeating: 0, count: width*height*firstImage.componentsPerPixel)
+            
             // this is slow, parallize it?
             // we should be able to parallize this by row
             // mmapping each row into the goodPixelArr when it's done
-            for y in 0..<height {
+
+            let pixelThreshold = self.pixelThreshold
+            
+            let goodPixelArr = await withTaskGroup(of: (Int, [UInt16]).self) { taskGroup in
+                
+                // image buffer for calculated alignment image
+                var goodPixelArr = [UInt16](repeating: 0, count: width*height*firstImage.componentsPerPixel)
+                for y in 0..<height {
                 /*
 
                  Use a task group to run each row in a separate task,
                  returning a [UInt16] array for the row, mmapping it back into goodPixelArr
                  
                  */
-                for x in 0..<width {
-                    var pixels: [Pixel] = []
-                    for image in alignedImages.values {
-                        pixels.append(image.readPixel(atX: x, andY: y))
-                    }
-                    let goodPixels = pixels.goodPixels(with: self.pixelThreshold)
-                    if goodPixels.count > 0 {
-                        let pixel = Pixel(merging: goodPixels)
+                    taskGroup.addTask() {
 
-                        let offset = (y * width*firstImage.componentsPerPixel) +
-                                     (x * firstImage.componentsPerPixel)
-
-                        goodPixelArr[offset] = pixel.red
-                        if firstImage.componentsPerPixel >= 2 {
-                            goodPixelArr[offset+1] = pixel.green
+                        var goodPixelRow = [UInt16](repeating: 0, count: self.width*firstImage.componentsPerPixel)
+                        
+                        for x in 0..<self.width {
+                            var pixels: [Pixel] = []
+                            for image in alignedImages.values {
+                                pixels.append(image.readPixel(atX: x, andY: y))
+                            }
+                            let goodPixels = pixels.goodPixels(with: pixelThreshold)
+                            if goodPixels.count > 0 {
+                                let pixel = Pixel(merging: goodPixels)
+                                
+                                let offset = x * firstImage.componentsPerPixel
+                                
+                                goodPixelRow[offset] = pixel.red
+                                if firstImage.componentsPerPixel >= 2 {
+                                    goodPixelRow[offset+1] = pixel.green
+                                }
+                                if firstImage.componentsPerPixel >= 3 {
+                                    goodPixelRow[offset+2] = pixel.blue
+                                }
+                                // i.e. take the alpha into acount
+                                if firstImage.componentsPerPixel == 4 {
+                                    goodPixelRow[offset+3] = pixel.alpha
+                                }
+                                
+                            } else {
+                                Log.w("frame \(self.frameIndex) no good pixels at [\(x), \(y)] :(")
+                            }
                         }
-                        if firstImage.componentsPerPixel >= 3 {
-                            goodPixelArr[offset+2] = pixel.blue
-                        }
-                        // i.e. take the alpha into acount
-                        if firstImage.componentsPerPixel == 4 {
-                            goodPixelArr[offset+3] = pixel.alpha
-                        }
-                      
-                    } else {
-                        Log.w("frame \(frameIndex) no good pixels at [\(x), \(y)] :(")
+                        return (y, goodPixelRow)
                     }
                 }
+
+                // memmove the results here
+                for await (y, goodPixelRow) in taskGroup {
+                    let index = (y * width*firstImage.componentsPerPixel)
+                    let numBytes = goodPixelRow.count*2
+                    // memmove goodPixelRow into goodPixelArr at index
+
+                    goodPixelRow.withUnsafeBufferPointer { sourcePtr in
+                        if let baseAddress = sourcePtr.baseAddress {
+                            memmove(&goodPixelArr[index],
+                                    baseAddress,
+                                    numBytes)
+                        } else {
+                            Log.w("cannot memmove")
+                        }
+                    }
+                }
+
+                return goodPixelArr
             }
 
             let goodPixelImage = PixelatedImage(width: width,
@@ -489,7 +520,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             // if everything above here has worked,
             // then we can delete all intermediate images we used to compute the goodPixelImage
-            try removeStarAlignedImages()
+            removeStarAlignedImages()
 
             return goodPixelImage
         }
@@ -533,7 +564,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         } 
     }
         
-    public func removeStarAlignedImages() throws {
+    public func removeStarAlignedImages() {
         // get rid of any existing files
         if let dirname = imageAccessor.dirForImage(ofType: .aligned,
                                                    atSize: .original)
@@ -543,16 +574,18 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             try? removeFiles(withSuffix: ".tiff", in: dirname)
             try? removeFiles(withSuffix: ".tif", in: dirname)
         }
+    }
 
+    public func removeSubtractionImages() {
         // get rid of the subtraction here image too,
         // as it is a product of the star aligned images
-        try imageAccessor.deleteImage(frameIndex: frameIndex,
-                                      ofType: .subtraction,
-                                      atSize: .original)
+        try? imageAccessor.deleteImage(frameIndex: frameIndex,
+                                       ofType: .subtraction,
+                                       atSize: .original)
 
-        try imageAccessor.deleteImage(frameIndex: frameIndex,
-                                      ofType: .subtraction,
-                                      atSize: .preview)
+        try? imageAccessor.deleteImage(frameIndex: frameIndex,
+                                       ofType: .subtraction,
+                                       atSize: .preview)
     }
     
     private func loadOrCreateStarAlignedImages() async throws  -> [Int:PixelatedImage] {
@@ -562,7 +595,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             Log.w("frame \(frameIndex) alignedImages.count != numberOfAlignedFrames (\(alignedImages.count) != \(numberOfAlignedFrames))")
 
-            try removeStarAlignedImages()
+            removeStarAlignedImages()
+            removeSubtractionImages()
             
             // try creating the star aligned images if we couldn't load them
             Log.i("doing star alignment at finish")

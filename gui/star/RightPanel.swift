@@ -1,5 +1,6 @@
 import SwiftUI
 import StarCore
+import logging
 
 public enum FastAdvancementType: String, Equatable, CaseIterable {
     case normal
@@ -231,12 +232,17 @@ struct RightPanel: View {
                                     if let frame = viewModel.currentFrame {
                                         // XXX reprocess
                                         if viewModel.reprocessFrames {
-                                            try await viewModel.clearProcessing(from: frame.frameIndex,
-                                                                                to: frame.frameIndex+viewModel.numberOfFramesToProcess-1)
+                                            do {
+                                                try await viewModel.clearProcessing(from: frame.frameIndex,
+                                                                                    to: frame.frameIndex+viewModel.numberOfFramesToProcess-1)
+                                            } catch {
+                                                Log.e("error clearing frames: \(error)")
+                                            }
                                         }
                                         viewModel.processFrames(from: frame.frameIndex,
                                                                 to: frame.frameIndex+viewModel.numberOfFramesToProcess-1)
                                     }
+
                                 }
                             } label: {
                                 if viewModel.reprocessFrames {
