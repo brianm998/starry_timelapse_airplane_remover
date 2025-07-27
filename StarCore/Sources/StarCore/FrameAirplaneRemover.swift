@@ -420,6 +420,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // image buffer for calculated alignment image
             var goodPixelArr = [UInt16](repeating: 0, count: width*height*firstImage.componentsPerPixel)
             // this is slow, parallize it?
+            // we should be able to parallize this by row
+            // mmapping each row into the goodPixelArr when it's done
             for x in 0..<width {
                 for y in 0..<height {
                     var pixels: [Pixel] = []
@@ -444,6 +446,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         if firstImage.componentsPerPixel == 4 {
                             goodPixelArr[offset+3] = pixel.alpha
                         }
+                      
                     } else {
                         Log.w("frame \(frameIndex) no good pixels at [\(x), \(y)] :(")
                     }
@@ -533,7 +536,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             StarCore.mkdir(dirname)
             try? removeFiles(withSuffix: ".tiff", in: dirname)
             try? removeFiles(withSuffix: ".tif", in: dirname)
-        } 
+        }
+
+        // get rid of the subtraction here image too,
+        // as it is a product of the star aligned images
+        try imageAccessor.deleteImage(frameIndex: frameIndex,
+                                      ofType: .subtraction,
+                                      atSize: .original)
+
+        try imageAccessor.deleteImage(frameIndex: frameIndex,
+                                      ofType: .subtraction,
+                                      atSize: .preview)
     }
     
     private func loadOrCreateStarAlignedImages() async throws  -> [Int:PixelatedImage] {
