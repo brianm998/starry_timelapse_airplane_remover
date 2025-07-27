@@ -415,6 +415,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // that we used to create the final aligned frame
         let alignedImages = try await loadOrCreateStarAlignedImages()
 
+        self.set(state: .creatingAlignedFrame)
+        
         if let firstImage = alignedImages.values.first {
             // XXX we assume all image have the same resolution, bit depth, etc :(
             
@@ -424,7 +426,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
              
              Use a task group to run each row in a separate task,
              returning a [UInt16] array for the row, memmove'ing it back into goodPixelArr
-             
+
+             XXX make this faster by accessing image arrays directly?
              */
             
             let goodPixelArr = await withTaskGroup(of: (Int, [UInt16]).self) { taskGroup in

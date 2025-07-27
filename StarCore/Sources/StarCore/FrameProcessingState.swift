@@ -34,6 +34,7 @@ public enum FrameProcessingState: Int,
     
     case unprocessed
     case starAlignment    
+    case creatingAlignedFrame    
     case subtractingNeighbor
     case assemblingPixels
     case sortingPixels
@@ -73,6 +74,8 @@ public enum FrameProcessingState: Int,
             return "unprocessed"
         case .starAlignment:
             return "aligning stars"
+        case .creatingAlignedFrame:
+            return "creating aligned frame"
         case .subtractingNeighbor:
             return "subtracting aligned stars"
         case .assemblingPixels:
@@ -140,6 +143,8 @@ public enum FrameProcessingState: Int,
             return false
         case .starAlignment:
             return false
+        case .creatingAlignedFrame:
+            return false
         case .subtractingNeighbor:
             return false
         case .assemblingPixels:
@@ -201,6 +206,8 @@ public enum FrameProcessingState: Int,
             return "unprocessed"
         case .starAlignment:
             return "align"
+        case .creatingAlignedFrame:
+            return "combine align"
         case .subtractingNeighbor:
             return "subtract"
         case .assemblingPixels:
@@ -261,6 +268,8 @@ public enum FrameProcessingState: Int,
             return .red
         case .starAlignment:
             return .yellow
+        case .creatingAlignedFrame:
+            return .cyan
         case .subtractingNeighbor:
             return .orange
         case .assemblingPixels:
