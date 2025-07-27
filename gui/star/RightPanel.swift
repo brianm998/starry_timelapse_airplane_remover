@@ -231,11 +231,11 @@ struct RightPanel: View {
                                     if let frame = viewModel.currentFrame {
                                         // XXX reprocess
                                         if viewModel.reprocessFrames {
-                                            await viewModel.clearProcessing(from: frame.frameIndex,
-                                                                            to: frame.frameIndex+viewModel.numberOfFramesToProcess)
+                                            try await viewModel.clearProcessing(from: frame.frameIndex,
+                                                                                to: frame.frameIndex+viewModel.numberOfFramesToProcess-1)
                                         }
                                         viewModel.processFrames(from: frame.frameIndex,
-                                                                to: frame.frameIndex+viewModel.numberOfFramesToProcess)
+                                                                to: frame.frameIndex+viewModel.numberOfFramesToProcess-1)
                                     }
                                 }
                             } label: {

@@ -422,8 +422,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // this is slow, parallize it?
             // we should be able to parallize this by row
             // mmapping each row into the goodPixelArr when it's done
-            for x in 0..<width {
-                for y in 0..<height {
+            for y in 0..<height {
+                /*
+
+                 Use a task group to run each row in a separate task,
+                 returning a [UInt16] array for the row, mmapping it back into goodPixelArr
+                 
+                 */
+                for x in 0..<width {
                     var pixels: [Pixel] = []
                     for image in alignedImages.values {
                         pixels.append(image.readPixel(atX: x, andY: y))
@@ -505,7 +511,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
-    private func readNnumberOfAlignedImagesForThisFrame() -> Int? {
+    public func readNnumberOfAlignedImagesForThisFrame() -> Int? {
         if let dirname = imageAccessor.dirForImage(ofType: .aligned,
                                                    atSize: .original)
         {
@@ -516,7 +522,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return nil
     }
     
-    private func removeNnumberOfAlignedImagesForThisFrameFile() throws {
+    public func removeNnumberOfAlignedImagesForThisFrameFile() throws {
         // get rid of any existing .txt files
         if let dirname = imageAccessor.dirForImage(ofType: .aligned,
                                                    atSize: .original)
@@ -527,7 +533,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         } 
     }
         
-    private func removeStarAlignedImages() throws {
+    public func removeStarAlignedImages() throws {
         // get rid of any existing files
         if let dirname = imageAccessor.dirForImage(ofType: .aligned,
                                                    atSize: .original)

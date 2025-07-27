@@ -880,16 +880,16 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    func clearProcessing(from startIndex: Int, to endIndex: Int) async {
+    func clearProcessing(from startIndex: Int, to endIndex: Int) async throws {
         for index in startIndex...endIndex {
             if let frame = frames[index].frame {
-                await clearProcessing(from: frame)
+                try await clearProcessing(from: frame)
             }
         }
     }    
 
-    func clearProcessing(from frame: FrameAirplaneRemover) async {
-        await Task.detached(priority: .userInitiated) { // do we need this detached task?
+    func clearProcessing(from frame: FrameAirplaneRemover) async throws {
+         try await Task.detached(priority: .userInitiated) { // do we need this detached task?
             var numberOfFramesLeft = await self.numberOfFramesToProcess
             var currentFrame: FrameAirplaneRemover? = frame
             while let frameToClear = currentFrame,
@@ -897,10 +897,21 @@ public final class ImageSequenceViewModel {
             {
                 await frameToClear.set(state: .unprocessed)
                 //await frameToClear.updateCombineSubjects()
-                
+
+                // this doesn't delete the alignment and subtraction images
                 frameToClear.imageAccessor.deleteAllImages(frameIndex: frameToClear.frameIndex)
+
+                let numberOfAlignedImages = await self.numberOfNeighborFrames
                 
-                await frameToClear.setNumberOfAlignmentImages(self.numberOfNeighborFrames)
+                await frameToClear.setNumberOfAlignmentImages(numberOfAlignedImages)
+
+                let numPrevAlignedImages = await frameToClear.readNnumberOfAlignedImagesForThisFrame()
+                if numberOfAlignedImages != numPrevAlignedImages {
+                    // this does delete the alignment and subtraction images, because the next
+                    // run should use a different number of alignment images
+                    try await frameToClear.removeStarAlignedImages()
+                    try await frameToClear.removeNnumberOfAlignedImagesForThisFrameFile()
+                }
                 
                 Task { @MainActor in
                     self.frameViewMode = .original

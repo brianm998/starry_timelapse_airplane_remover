@@ -62,7 +62,7 @@ public actor FinalGUIProcessor {
                         await semaphore.wait()
 
                         if await viewModel.reprocessFrames {
-                            await viewModel.clearProcessing(from: frame)
+                            try await viewModel.clearProcessing(from: frame)
                             try await frame.deleteOutliers()
                         }
                         
