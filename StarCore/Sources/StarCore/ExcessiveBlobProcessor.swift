@@ -68,7 +68,6 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           
           .blobLineTrim(.init(minBlobSize: 40,
                               minLineLength: 30,
-                              minLineFillAmount: 10,
                               trimAmount: 9)),
 
           .frameState(.filter6),

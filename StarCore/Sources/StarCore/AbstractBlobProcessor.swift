@@ -15,14 +15,6 @@ You should have received a copy of the GNU General Public License along with sta
 
 
 
-/*
-
- problems:
-
-  - even the excessive mode sometimes doesn't combine linear blobs
- 
- */
-
 public enum BlobProcessingType: Hashable,
                                 Codable,
                                 Equatable,

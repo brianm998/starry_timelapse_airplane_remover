@@ -34,7 +34,6 @@ public actor BlobLineTrim {
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         let minBlobSize: Int          // blobs smaller than this are ignored
         let minLineLength: Double     // blobs with less line length are not processed
-        let minLineFillAmount: Double // blobs with less line fill amount are not processed
         let trimAmount: Double        // trim  pixels further from the line than this
 
         public typealias Types = ArgType
@@ -46,8 +45,6 @@ public actor BlobLineTrim {
                 return "blobs smaller than this are ignored"
             case .minLineLength:
                 return "blobs with less line length are not processed"
-            case .minLineFillAmount:
-                return "blobs with less line fill amount are not processed"
             case .trimAmount:
                 return "trim  pixels further from the line than this"
             }
@@ -56,15 +53,12 @@ public actor BlobLineTrim {
         public enum ArgType: CaseIterable, Hashable {
             case minBlobSize
             case minLineLength
-            case minLineFillAmount
             case trimAmount
         }
 
         public func isInteger(_ type: ArgType) -> Bool {
             switch type {
             case .minLineLength:
-                return false
-            case .minLineFillAmount:
                 return false
             case .trimAmount:
                 return false
@@ -79,8 +73,6 @@ public actor BlobLineTrim {
             switch type {
             case .minLineLength:
                 return minLineLength
-            case .minLineFillAmount:
-                return minLineFillAmount
             case .trimAmount:
                 return trimAmount
             case .minBlobSize:
@@ -93,19 +85,11 @@ public actor BlobLineTrim {
             case .minLineLength:
                 return Args(minBlobSize: self.minBlobSize,
                             minLineLength: value,
-                            minLineFillAmount: self.minLineFillAmount,
                             trimAmount: self.trimAmount)
 
-            case .minLineFillAmount:
-                return Args(minBlobSize: self.minBlobSize,
-                            minLineLength: self.minLineLength,
-                            minLineFillAmount: value,
-                            trimAmount: self.trimAmount)
-        
             case .trimAmount:
                 return Args(minBlobSize: self.minBlobSize,
                             minLineLength: self.minLineLength,
-                            minLineFillAmount: self.minLineFillAmount,
                             trimAmount: value)
             case .minBlobSize:
                 return nil
@@ -116,26 +100,21 @@ public actor BlobLineTrim {
             switch type {
             case .minLineLength:
                 return nil
-            case .minLineFillAmount:
-                return nil
             case .trimAmount:
                 return nil
             case .minBlobSize:
                 return Args(minBlobSize: value,
                             minLineLength: self.minLineLength,
-                            minLineFillAmount: self.minLineFillAmount,
                             trimAmount: self.trimAmount)
             }
         }
 
         public init(minBlobSize: Int,
                     minLineLength: Double,
-                    minLineFillAmount: Double,
                     trimAmount: Double)
         {
             self.minBlobSize = minBlobSize
             self.minLineLength = minLineLength
-            self.minLineFillAmount = minLineFillAmount
             self.trimAmount = trimAmount
         }
     }
@@ -174,43 +153,52 @@ fileprivate func process(_ blob: Blob,
                          frameIndex: Int,
                          maxIterations: Int) async -> [Blob]
 {
-    if await blob.size() > args.minBlobSize, // ignore small blobs
-       let lineLength = await blob.lineLength(), // must know the line length
-       lineLength > args.minLineLength,          // line length must be big enough
-       let lineFillAmount = await blob.blobLineIntensityScore(), // must know the line fill amount
-       lineFillAmount > args.minLineFillAmount    // line fill amount must be big enough
-    {
-        // trim that shit
-        let trimmedPixels = await blob.lineTrim(by: args.trimAmount)
-        if trimmedPixels.count > 0 {
-            let newBlobID = await maxBlobID.increment()
-            if newBlobID < UInt32.max {
+    // ignore small blobs
+    if await blob.size() > args.minBlobSize {
+        // must know the line length
+        if let lineLength = await blob.lineLength() {
+            // line length must be big enough
+            if lineLength > args.minLineLength {
+                // trim that shit
+                let trimmedPixels = await blob.lineTrim(by: args.trimAmount)
+                if trimmedPixels.count > 0 {
+                    let newBlobID = await maxBlobID.increment()
+                    if newBlobID < UInt32.max {
 
-                // iterate on this
-                
-                // make another blob from any trimmed pixels
-                let newBlob = Blob(trimmedPixels,
-                                   id: UInt32(newBlobID),
-                                   frameIndex: frameIndex)
+                        // iterate on this
+                        
+                        // make another blob from any trimmed pixels
+                        let newBlob = Blob(trimmedPixels,
+                                           id: UInt32(newBlobID),
+                                           frameIndex: frameIndex)
 
-                var ret = [newBlob]
-                
-                if maxIterations > 1 {
-                    await ret += process(newBlob,
-                                         with: args,
-                                         maxBlobID: maxBlobID,
-                                         frameIndex: frameIndex,
-                                         maxIterations: maxIterations-1)
+                        var ret = [newBlob]
+                        
+                        if maxIterations > 1 {
+                            await ret += process(newBlob,
+                                                 with: args,
+                                                 maxBlobID: maxBlobID,
+                                                 frameIndex: frameIndex,
+                                                 maxIterations: maxIterations-1)
+                        }
+
+                        return ret
+                    } else {
+                        // avoid arithmetic overflow
+                        Log.w("frame \(frameIndex) breaking on blob line trim because max blob id \(maxBlobID) is == UInt16.max")
+                        // re-absorb the trimmed pixels into the same blob
+                        await blob.absorb(trimmedPixels)
+                    }
                 }
-
-                return ret
             } else {
-                // avoid arithmetic overflow
-                Log.w("frame \(frameIndex) breaking on blob line trim because max blob id \(maxBlobID) is == UInt16.max")
-                // re-absorb the trimmed pixels into the same blob
-                await blob.absorb(trimmedPixels)
+                // failing here sometimes
+                Log.i("frame \(frameIndex) ignoring blob of size \(await blob.size()) \(await blob.boundingBox()) because lineLength \(lineLength) <= args.minLineLength \(args.minLineLength)")
             }
+        } else {
+            Log.i("frame \(frameIndex) ignoring blob of size \(await blob.size()) \(await blob.boundingBox()) because of no lineLength")
         }
+    } else {
+        //Log.i("frame \(frameIndex) ignoring blob of size \(await blob.size()) \(await blob.boundingBox()) because of args.minBlobSize \(args.minBlobSize)")
     }
     return []
 }

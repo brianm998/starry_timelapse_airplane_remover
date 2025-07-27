@@ -418,23 +418,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if let firstImage = alignedImages.values.first {
             // XXX we assume all image have the same resolution, bit depth, etc :(
             
-            // this is slow, parallize it?
-            // we should be able to parallize this by row
-            // mmapping each row into the goodPixelArr when it's done
-
             let pixelThreshold = self.pixelThreshold
+
+            /*
+             
+             Use a task group to run each row in a separate task,
+             returning a [UInt16] array for the row, memmove'ing it back into goodPixelArr
+             
+             */
             
             let goodPixelArr = await withTaskGroup(of: (Int, [UInt16]).self) { taskGroup in
                 
                 // image buffer for calculated alignment image
                 var goodPixelArr = [UInt16](repeating: 0, count: width*height*firstImage.componentsPerPixel)
                 for y in 0..<height {
-                /*
-
-                 Use a task group to run each row in a separate task,
-                 returning a [UInt16] array for the row, mmapping it back into goodPixelArr
-                 
-                 */
                     taskGroup.addTask() {
 
                         var goodPixelRow = [UInt16](repeating: 0, count: self.width*firstImage.componentsPerPixel)
