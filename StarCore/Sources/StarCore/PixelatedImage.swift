@@ -625,8 +625,6 @@ public final class PixelatedImage: Sendable {
                 for i in 0 ..< numPixels {
                     let origOffset = i*self.componentsPerPixel
                     let otherOffset = i*otherFrame.componentsPerPixel
-
-                    var maxBrightness: Int32 = 0
                     
                     if otherFrame.componentsPerPixel == 4,
                        otherImagePixels[otherOffset+3] != 0xFFFF
@@ -635,6 +633,9 @@ public final class PixelatedImage: Sendable {
                         // these crop up in the star alignment images
                         // there is nothing to copy from these pixels
                     } else {
+
+                        var maxBrightness: Int32 = 0
+                        
                         // rgb values of the image we're modifying at this index
                         let origRed   = Int32(origImagePixels[origOffset])
                         let origGreen = Int32(origImagePixels[origOffset+1])
@@ -647,10 +648,11 @@ public final class PixelatedImage: Sendable {
 
                         maxBrightness += origRed  + origGreen  + origBlue
                         maxBrightness -= otherRed + otherGreen + otherBlue
-                    }
-                    // record the brightness change if it is brighter
-                    if maxBrightness > 0 {
-                        subtractionArray[i] = UInt16(maxBrightness/3)
+                        
+                        // record the brightness change if it is brighter
+                        if maxBrightness > 0 {
+                            subtractionArray[i] = UInt16(maxBrightness/3)
+                        }
                     }
                 }
                 

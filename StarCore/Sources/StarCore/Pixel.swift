@@ -32,18 +32,21 @@ public struct Pixel {
         var blue: Double = 0
         var alpha: Double = 0
         var maxNumberOfComponents = 0
+        var count: Double = 0
         otherPixels.forEach { otherPixel in
             if otherPixel.numberOfComponents == 3 {
                 red += Double(otherPixel.red)
                 green += Double(otherPixel.green)
                 blue += Double(otherPixel.blue)
                 alpha += 0xFFFF
+                count += 1
             } else if otherPixel.numberOfComponents == 4 {
                 let alphaModifier = Double(otherPixel.alpha) / 0xFFFF
                 red += Double(otherPixel.red) * alphaModifier
                 green += Double(otherPixel.green) * alphaModifier
                 blue += Double(otherPixel.blue) * alphaModifier
                 alpha += Double(otherPixel.alpha)
+                count += 1
             } else {
                 Log.e("unhandled numberOfComponents \(otherPixel.numberOfComponents)")
             }
@@ -51,7 +54,6 @@ public struct Pixel {
                 maxNumberOfComponents = otherPixel.numberOfComponents
             }
         }
-        let count = Double(otherPixels.count)
         self.numberOfComponents = maxNumberOfComponents
         self.red = UInt16(red/count)
         self.green = UInt16(green/count)
@@ -61,6 +63,8 @@ public struct Pixel {
         } else {
             self.alpha = 0xFFFF
         }
+      
+      
     }
 
     // merge pixel1 in at alpha to pixel2
