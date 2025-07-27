@@ -863,6 +863,7 @@ public final class ImageSequenceViewModel {
     }
 
     func processFrames(from startIndex: Int? = nil, to endIndex: Int? = nil) {
+        Log.d("processing frames from \(startIndex) to \(endIndex)")
         //if isProcessingAllFrames { return }
         //isProcessingAllFrames = true
 
@@ -884,88 +885,81 @@ public final class ImageSequenceViewModel {
         Log.d("clearing processing from \(startIndex) to \(endIndex)")
         for index in startIndex...endIndex {
             if let frame = frames[index].frame {
-                try await clearProcessing(from: frame)
+                try await clearProcessing(of: frame)
             }
         }
         Log.d("done clearing processing from \(startIndex) to \(endIndex)")
     }    
 
-    func clearProcessing(from frame: FrameAirplaneRemover) async throws {
-         try await Task.detached(priority: .userInitiated) { // do we need this detached task?
-            var numberOfFramesLeft = await self.numberOfFramesToProcess
-            var currentFrame: FrameAirplaneRemover? = frame
-            while let frameToClear = currentFrame,
-                  numberOfFramesLeft > 0
+    func clearProcessing(of frame: FrameAirplaneRemover) async throws {
+        try await Task.detached(priority: .userInitiated) { // do we need this detached task?
+            let frameToClear = frame
+
+            await frameToClear.set(state: .unprocessed)
+            //await frameToClear.updateCombineSubjects()
+
+            // this doesn't delete the alignment and subtraction images
+            frameToClear.imageAccessor.deleteAllImages(frameIndex: frameToClear.frameIndex)
+
+            let numberOfAlignedImages = await self.numberOfNeighborFrames
+            
+            await frameToClear.setNumberOfAlignmentImages(numberOfAlignedImages)
+
+            let numPrevAlignedImages = await frameToClear.readNnumberOfAlignedImagesForThisFrame()
+            if numberOfAlignedImages != numPrevAlignedImages {
+                // this does delete the alignment and subtraction images, because the next
+                // run should use a different number of alignment images
+                try await frameToClear.removeStarAlignedImages()
+                try await frameToClear.removeNnumberOfAlignedImagesForThisFrameFile()
+            }
+            
+            Task { @MainActor in
+                self.frameViewMode = .original
+            }
+
+            var existingImages: Set<FrameViewMode> = [.original]
+            
+            if frameToClear.imageAccessor.imageExists(frameIndex: frameToClear.frameIndex,
+                                                      ofType: .aligned,
+                                                      atSize: .original)
             {
-                await frameToClear.set(state: .unprocessed)
-                //await frameToClear.updateCombineSubjects()
+                existingImages.insert(.aligned)
+            }
 
-                // this doesn't delete the alignment and subtraction images
-                frameToClear.imageAccessor.deleteAllImages(frameIndex: frameToClear.frameIndex)
+            if frameToClear.imageAccessor.imageExists(frameIndex: frameToClear.frameIndex,
+                                                      ofType: .subtraction,
+                                                      atSize: .original)
+            {
+                existingImages.insert(.subtraction)
+            }
 
-                let numberOfAlignedImages = await self.numberOfNeighborFrames
-                
-                await frameToClear.setNumberOfAlignmentImages(numberOfAlignedImages)
+            Task { @MainActor in
+                self.currentFrameView.existingImages = existingImages
+            }
+            
+            let binaryBlobFilename = await frameToClear.blobBinaryFilename
+            // get rid of the outlier files
+            do {
+                Log.d("trying to remove \(binaryBlobFilename)")
+                try FileManager.default.removeItem(atPath: binaryBlobFilename)
+            } catch {
+                Log.e("error removing \(binaryBlobFilename): \(error)")
+            }
 
-                let numPrevAlignedImages = await frameToClear.readNnumberOfAlignedImagesForThisFrame()
-                if numberOfAlignedImages != numPrevAlignedImages {
-                    // this does delete the alignment and subtraction images, because the next
-                    // run should use a different number of alignment images
-                    try await frameToClear.removeStarAlignedImages()
-                    try await frameToClear.removeNnumberOfAlignedImagesForThisFrameFile()
-                }
-                
-                Task { @MainActor in
-                    self.frameViewMode = .original
-                }
+            let trashBinaryFilename = await frameToClear.trashBinaryFilename
+            do {
+                Log.d("trying to remove \(trashBinaryFilename)")
+                try FileManager.default.removeItem(atPath: trashBinaryFilename)
+            } catch {
+                Log.e("error removing \(trashBinaryFilename): \(error)")
+            }
 
-                var existingImages: Set<FrameViewMode> = [.original]
-                
-                if frameToClear.imageAccessor.imageExists(frameIndex: frameToClear.frameIndex,
-                                                          ofType: .aligned,
-                                                          atSize: .original)
-                {
-                    existingImages.insert(.aligned)
-                }
-
-                if frameToClear.imageAccessor.imageExists(frameIndex: frameToClear.frameIndex,
-                                                          ofType: .subtraction,
-                                                          atSize: .original)
-                {
-                    existingImages.insert(.subtraction)
-                }
-
-                Task { @MainActor in
-                    self.currentFrameView.existingImages = existingImages
-                }
-                
-                let binaryBlobFilename = await frameToClear.blobBinaryFilename
-                // get rid of the outlier files
-                do {
-                    Log.d("trying to remove \(binaryBlobFilename)")
-                    try FileManager.default.removeItem(atPath: binaryBlobFilename)
-                } catch {
-                    Log.e("error removing \(binaryBlobFilename): \(error)")
-                }
-
-                let trashBinaryFilename = await frameToClear.trashBinaryFilename
-                do {
-                    Log.d("trying to remove \(trashBinaryFilename)")
-                    try FileManager.default.removeItem(atPath: trashBinaryFilename)
-                } catch {
-                    Log.e("error removing \(trashBinaryFilename): \(error)")
-                }
-
-                currentFrame = await frameToClear.nextFrame
-                numberOfFramesLeft -= 1
-                Task { @MainActor in
-                    let frameView = self.frames[frameToClear.frameIndex]
-                    frameView.trashImage = nil
-                    frameView.positiveOutlierImage = nil
-                    frameView.negativeOutlierImage = nil
-                    frameView.outlierViews = nil
-                }
-
+            Task { @MainActor in
+                let frameView = self.frames[frameToClear.frameIndex]
+                frameView.trashImage = nil
+                frameView.positiveOutlierImage = nil
+                frameView.negativeOutlierImage = nil
+                frameView.outlierViews = nil
             }
         }.value
     }

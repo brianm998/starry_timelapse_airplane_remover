@@ -18,6 +18,7 @@ public actor FinalGUIProcessor {
 
     func processFrames(from startIndex: Int? = nil, to endIndex: Int? = nil) async {
         guard let viewModel else { return }
+        Log.d("processing frames from \(startIndex) to \(endIndex)")
 
         /*
          each task group has its own semaphore that determines when it starts
@@ -31,7 +32,7 @@ public actor FinalGUIProcessor {
 
         let framesCount = await viewModel.frames.count
         var firstFrameIndex = 0
-        var lastFrameIndex = framesCount
+        var lastFrameIndex = framesCount - 1
         if let startIndex,
            startIndex >= 0,
            startIndex < framesCount
@@ -40,20 +41,20 @@ public actor FinalGUIProcessor {
         }
         
         if let endIndex,
-           endIndex > firstFrameIndex,
+           endIndex >= firstFrameIndex,
            endIndex <= framesCount
         {
             lastFrameIndex = endIndex
         }
 
-        Log.d("process frames from \(firstFrameIndex)..<\(lastFrameIndex)")
+        Log.d("process frames from \(firstFrameIndex)...\(lastFrameIndex)")
         
         try? await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
             var semaphores = [AsyncSemaphore?](repeating: nil, count: framesCount)
             var haveOutliers = [Bool](repeating: false, count: framesCount)
             var haveFinalProcessed = [Bool](repeating: false, count: framesCount)
             var numberFramesProcessing: Int = 0
-            for index in firstFrameIndex..<lastFrameIndex {
+            for index in firstFrameIndex...lastFrameIndex {
                 let frameView = await viewModel.frames[index]
                 if let frame = await frameView.frame {
                     let semaphore = AsyncSemaphore(value: 0)
