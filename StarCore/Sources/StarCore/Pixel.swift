@@ -1,4 +1,5 @@
 import Foundation
+import logging
 
 /*
 
@@ -16,25 +17,50 @@ You should have received a copy of the GNU General Public License along with sta
 // represents a 16 bit per component RGB pixel
 public struct Pixel {
     public var value: UInt64
-
-    public init() {
+    public let numberOfComponents: Int
+    
+    public init(numberOfComponents: Int) {
         self.value = 0
+        self.numberOfComponents = numberOfComponents
     }
 
+    // merge a list of other pixels together, accounting for 
     public init(merging otherPixels: [Pixel]) {
         self.value = 0
-        var red: UInt32 = 0
-        var green: UInt32 = 0
-        var blue: UInt32 = 0
+        var red: Double = 0
+        var green: Double = 0
+        var blue: Double = 0
+        var alpha: Double = 0
+        var maxNumberOfComponents = 0
         otherPixels.forEach { otherPixel in
-            red += UInt32(otherPixel.red)
-            green += UInt32(otherPixel.green)
-            blue += UInt32(otherPixel.blue)
+            if otherPixel.numberOfComponents == 3 {
+                red += Double(otherPixel.red)
+                green += Double(otherPixel.green)
+                blue += Double(otherPixel.blue)
+                alpha += 0xFFFF
+            } else if otherPixel.numberOfComponents == 4 {
+                let alphaModifier = Double(otherPixel.alpha) / 0xFFFF
+                red += Double(otherPixel.red) * alphaModifier
+                green += Double(otherPixel.green) * alphaModifier
+                blue += Double(otherPixel.blue) * alphaModifier
+                alpha += Double(otherPixel.alpha)
+            } else {
+                Log.e("unhandled numberOfComponents \(otherPixel.numberOfComponents)")
+            }
+            if otherPixel.numberOfComponents > maxNumberOfComponents {
+                maxNumberOfComponents = otherPixel.numberOfComponents
+            }
         }
-        let count = UInt32(otherPixels.count)
+        let count = Double(otherPixels.count)
+        self.numberOfComponents = maxNumberOfComponents
         self.red = UInt16(red/count)
         self.green = UInt16(green/count)
         self.blue = UInt16(blue/count)
+        if maxNumberOfComponents == 4 {
+            self.alpha = UInt16(alpha/count)
+        } else {
+            self.alpha = 0xFFFF
+        }
     }
 
     // merge pixel1 in at alpha to pixel2
@@ -50,6 +76,7 @@ public struct Pixel {
         green += UInt32(Double(pixel1.green) * alpha)
         blue += UInt32(Double(pixel1.blue) * alpha)
 
+        self.numberOfComponents = 3
         self.red = UInt16(red)
         self.green = UInt16(green)
         self.blue = UInt16(blue)

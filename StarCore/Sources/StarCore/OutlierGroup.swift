@@ -372,7 +372,7 @@ public actor OutlierGroup: CustomStringConvertible,
            let line = await self.line()
         {
             //Log.d("have LINE \(line)")
-            var pixel = Pixel()
+            var pixel = Pixel(numberOfComponents: 3)
             pixel.blue = 0xFFFF
             //            pixel.green = 0xFFFF
             //            pixel.red = 0xFFFF
@@ -392,7 +392,7 @@ public actor OutlierGroup: CustomStringConvertible,
         
 
         for pixel in pixelSet {
-            var pixelToWrite = Pixel()
+            var pixelToWrite = Pixel(numberOfComponents: 4)
             // the real color is set in the view layer 
             pixelToWrite.red = 0xFFFF
             pixelToWrite.green = 0xFFFF

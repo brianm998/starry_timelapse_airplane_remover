@@ -59,7 +59,7 @@ public enum BasicColor: String {
 
     public var pixel: Pixel {
         get {
-            var pixel = Pixel()
+            var pixel = Pixel(numberOfComponents: 3)
             switch self {
             case .black:
                pixel.red = 0x0000 

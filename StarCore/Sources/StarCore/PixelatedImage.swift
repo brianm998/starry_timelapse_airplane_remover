@@ -325,7 +325,7 @@ public final class PixelatedImage: Sendable {
             
         case .sixteenBit(let arr):
             let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
-            var pixel = Pixel()
+            var pixel = Pixel(numberOfComponents: self.componentsPerPixel)
             pixel.red = arr[offset]
             if self.componentsPerPixel >= 2 {
                 pixel.green = arr[offset+1]

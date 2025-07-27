@@ -394,8 +394,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                                            type: .aligned,
                                                            atSize: .original)
         {
-            // XXX check for number of aligned images, it might be wrong?
-            return alignedFrame
+            // check for number of aligned images, and re-do if it's different
+            if let numberAligned = self.readNnumberOfAlignedImagesForThisFrame(),
+               numberOfAlignedFrames == numberAligned
+            {
+                // we have both an existing aligned frame, and a saved number of aligned
+                // images used to calculate that frame that matches the expected number,
+                // so we can just return the aligned frame we found.
+                return alignedFrame
+            }
+
+            // we didn't meet the above requirements, so re-do star alignment for this frame,
+            // getting rid of any existing files first
+            try? removeStarAlignedImages()
+            try removeNnumberOfAlignedImagesForThisFrameFile()
         }
 
         // with no saved aligned frame, first load or create the set of aligned frames
@@ -404,7 +416,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         if let firstImage = alignedImages.values.first {
             // XXX we assume all image have the same resolution, bit depth, etc :(
+
+            // image buffer for calculated alignment image
             var goodPixelArr = [UInt16](repeating: 0, count: width*height*firstImage.componentsPerPixel)
+            // this is slow, parallize it?
             for x in 0..<width {
                 for y in 0..<height {
                     var pixels: [Pixel] = []
@@ -415,7 +430,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     if goodPixels.count > 0 {
                         let pixel = Pixel(merging: goodPixels)
 
-                        let offset = (y * width*firstImage.componentsPerPixel) + (x * firstImage.componentsPerPixel)
+                        let offset = (y * width*firstImage.componentsPerPixel) +
+                                     (x * firstImage.componentsPerPixel)
+
                         goodPixelArr[offset] = pixel.red
                         if firstImage.componentsPerPixel >= 2 {
                             goodPixelArr[offset+1] = pixel.green
@@ -423,8 +440,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         if firstImage.componentsPerPixel >= 3 {
                             goodPixelArr[offset+2] = pixel.blue
                         }
+                        // i.e. take the alpha into acount
                         if firstImage.componentsPerPixel == 4 {
-                            goodPixelArr[offset+3] = 0xFFFF//pixel.alpha
+                            goodPixelArr[offset+3] = pixel.alpha
                         }
                     } else {
                         Log.w("frame \(frameIndex) no good pixels at [\(x), \(y)] :(")
@@ -456,9 +474,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                          atSize: .preview,
                                          overwrite: true)
 
-            // XXX keep track somehow the number of alignment images used
+            // keep track of the number of alignment images used
             // so we can make sure it's the same as the desired amount later
-            
+            try self.write(numberOfAlignedImagesForThisFrame: alignedImages.count)
+
             // if everything above here has worked,
             // then we can delete all intermediate images we used to compute the goodPixelImage
             try removeStarAlignedImages()
@@ -469,6 +488,42 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         throw "unable to star align images"
     }
 
+    let numberOfAlignedImagesFilename = "number_of_aligned_images.txt"
+    
+    private func write(numberOfAlignedImagesForThisFrame: Int) throws {
+        if let dirname = imageAccessor.dirForImage(ofType: .aligned,
+                                                   atSize: .original)
+        {
+            let dirname = "\(dirname)/\(frameIndex)"
+            StarCore.mkdir(dirname)
+            // write a text file with
+            try StarCore.write(integer: numberOfAlignedImagesForThisFrame,
+                               toFile: "\(dirname)/\(numberOfAlignedImagesFilename)")
+        }
+    }
+    
+    private func readNnumberOfAlignedImagesForThisFrame() -> Int? {
+        if let dirname = imageAccessor.dirForImage(ofType: .aligned,
+                                                   atSize: .original)
+        {
+            let dirname = "\(dirname)/\(frameIndex)"
+            StarCore.mkdir(dirname)
+            return readInteger(fromFile: "\(dirname)/\(numberOfAlignedImagesFilename)")
+        }
+        return nil
+    }
+    
+    private func removeNnumberOfAlignedImagesForThisFrameFile() throws {
+        // get rid of any existing .txt files
+        if let dirname = imageAccessor.dirForImage(ofType: .aligned,
+                                                   atSize: .original)
+        {
+            let dirname = "\(dirname)/\(frameIndex)"
+            StarCore.mkdir(dirname)
+            try? removeFiles(withSuffix: ".txt", in: dirname)
+        } 
+    }
+        
     private func removeStarAlignedImages() throws {
         // get rid of any existing files
         if let dirname = imageAccessor.dirForImage(ofType: .aligned,
@@ -476,7 +531,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         {
             let dirname = "\(dirname)/\(frameIndex)"
             StarCore.mkdir(dirname)
-            try? removeAllFiles(in: dirname)
+            try? removeFiles(withSuffix: ".tiff", in: dirname)
+            try? removeFiles(withSuffix: ".tif", in: dirname)
         } 
     }
     
@@ -902,6 +958,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
             } else if !loadOnly {
+                // potentially recalculate the alignment image if necessary
+                let _ = try await self.loadOrCreateStarAlignedImage()
+                
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
                 Log.d("frame \(frameIndex) calculating outliers")
                 self.initializeEmptyOutlierGroups()
@@ -2151,8 +2210,6 @@ extension String {
     }
 }
 
-import Foundation
-
 /// Removes *only* the files in the specified directory path (non‐recursive).
 /// Subdirectories (and their contents) are left untouched.
 /// - Parameter directoryPath: the file‐system path of an existing directory.
@@ -2161,6 +2218,51 @@ func removeAllFiles(in directoryPath: String) throws {
     // Convert String path → URL
     let directoryURL = URL(fileURLWithPath: directoryPath, isDirectory: true)
     try removeAllFiles(in: directoryURL)
+}
+
+/// Removes *only* the files in the specified directory URL (non‐recursive)
+/// whose filenames end with the given suffix. Subdirectories (and their
+/// contents) are left untouched.
+/// - Parameters:
+///   - suffix: the filename suffix to match (e.g. ".txt" or "log").
+///   - directoryURL: the URL of an existing directory
+/// - Throws: any FileManager errors encountered during listing or removal
+func removeFiles(withSuffix suffix: String, in directoryPath: String) throws {
+    let fm = FileManager.default
+
+    let directoryURL = URL(fileURLWithPath: directoryPath, isDirectory: true)
+
+    // Ensure the URL actually points to a directory
+    var isDir: ObjCBool = false
+    guard fm.fileExists(atPath: directoryURL.path, isDirectory: &isDir),
+          isDir.boolValue
+    else {
+        throw NSError(
+            domain: NSCocoaErrorDomain,
+            code: NSFileNoSuchFileError,
+            userInfo: [NSLocalizedDescriptionKey: "Directory not found at \(directoryURL.path)"]
+        )
+    }
+
+    // List only the top‐level contents of the directory
+    let contents = try fm.contentsOfDirectory(
+        at: directoryURL,
+        includingPropertiesForKeys: [.isDirectoryKey],
+        options: [.skipsHiddenFiles]
+    )
+
+    for fileURL in contents {
+        // Skip subdirectories
+        let resourceVals = try fileURL.resourceValues(forKeys: [.isDirectoryKey])
+        if resourceVals.isDirectory == true { continue }
+
+        // Only remove files whose name ends with the given suffix
+        let fileName = fileURL.lastPathComponent
+        guard fileName.hasSuffix(suffix) else { continue }
+
+        // Remove the file
+        try fm.removeItem(at: fileURL)
+    }
 }
 
 /// Removes *only* the files in the specified directory URL (non‐recursive).
@@ -2197,4 +2299,29 @@ func removeAllFiles(in directoryURL: URL) throws {
         // Remove the file
         try fm.removeItem(at: fileURL)
     }
+}
+
+/// Writes the given integer to a file at the specified path.
+/// - Parameters:
+///   - value: The integer to write.
+///   - path: The file-system path (as String) where the file will be written.
+/// - Throws: An error if writing fails.
+func write(integer value: Int, toFile path: String) throws {
+    let url = URL(fileURLWithPath: path)
+    let text = String(value)
+    try text.write(to: url, atomically: true, encoding: .utf8)
+}
+
+/// Reads an integer from the file at the specified path.
+/// - Parameter path: The file-system path (as String) of the file to read.
+/// - Returns: The integer if parsing succeeds, or `nil` if reading or parsing fails.
+func readInteger(fromFile path: String) -> Int? {
+    let url = URL(fileURLWithPath: path)
+    // Try to load the file’s contents as a String
+    guard let contents = try? String(contentsOf: url, encoding: .utf8) else {
+        return nil
+    }
+    // Trim whitespace/newlines and convert to Int
+    let trimmed = contents.trimmingCharacters(in: .whitespacesAndNewlines)
+    return Int(trimmed)
 }
