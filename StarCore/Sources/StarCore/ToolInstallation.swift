@@ -2,27 +2,8 @@ import Foundation
 import logging
 
 public struct ToolPaths {
-    let ffmpegPath: String
-    let alignImageStackPath: String
-}
-
-public func resolveToolPaths() throws -> ToolPaths {
-    try installToolIfMissing("ffmpeg")
-    try installToolIfMissing("align_image_stack", formulaName: "hugin", isCask: true)
-
-    guard
-        let ffmpegPath = which("ffmpeg")
-    else {
-        throw ToolError.toolNotFound("ffmpeg")
-    }
-
-    guard
-        let alignImageStackPath = which("align_image_stack")
-    else {
-        throw ToolError.toolNotFound("align_image_stack")
-    }
-
-    return ToolPaths(ffmpegPath: ffmpegPath, alignImageStackPath: alignImageStackPath)
+    public let ffmpegPath: String
+    public let alignImageStackPath: String
 }
 
 public enum ToolError: Error, LocalizedError {
@@ -42,85 +23,127 @@ public enum ToolError: Error, LocalizedError {
     }
 }
 
+/// Runs a shell command and returns its stdout (throws on non-zero exit)
 func runShell(_ command: String, arguments: [String] = []) throws -> String {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-    process.arguments = [command] + arguments
+    let proc = Process()
+    proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    proc.arguments = [command] + arguments
 
     let pipe = Pipe()
-    process.standardOutput = pipe
-    process.standardError = pipe
+    proc.standardOutput = pipe
+    proc.standardError  = pipe
 
-    try process.run()
-    process.waitUntilExit()
+    try proc.run()
+    proc.waitUntilExit()
 
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
-    let output = String(data: data, encoding: .utf8) ?? ""
-
-    guard process.terminationStatus == 0 else {
-        throw NSError(domain: "shell", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: output])
+    let out  = String(decoding: data, as: UTF8.self)
+    guard proc.terminationStatus == 0 else {
+        throw NSError(domain: "shell",
+                      code: Int(proc.terminationStatus),
+                      userInfo: [NSLocalizedDescriptionKey: out])
     }
-
-    return output.trimmingCharacters(in: .whitespacesAndNewlines)
+    return out.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
-func which(_ command: String) -> String? {
-    return try? runShell("which", arguments: [command])
-}
-
+/// Attempts to install Homebrew if missing
 func installHomebrewIfNeeded() throws {
-    if which("brew") != nil {
+    if let brewPath = try? runShell("which", arguments: ["brew"]), !brewPath.isEmpty {
         return
     }
 
     Log.i("⚠️ Homebrew not found. Attempting to install...")
 
-    let installCommand = """
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    """
+    // Official Homebrew install script
+    let installCmd = #"/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh")"#
 
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/bin/bash")
-    process.arguments = ["-c", installCommand]
-    process.standardInput = FileHandle.standardInput
-    process.standardOutput = FileHandle.standardOutput
-    process.standardError = FileHandle.standardError
+    let proc = Process()
+    proc.executableURL = URL(fileURLWithPath: "/bin/bash")
+    proc.arguments = ["-c", installCmd]
 
-    try process.run()
-    process.waitUntilExit()
+    // <--- FIX: assign FileHandle.* explicitly
+    proc.standardInput  = FileHandle.standardInput
+    proc.standardOutput = FileHandle.standardOutput
+    proc.standardError  = FileHandle.standardError
 
-    guard process.terminationStatus == 0 else {
+    try proc.run()
+    proc.waitUntilExit()
+
+    guard proc.terminationStatus == 0 else {
         throw ToolError.unableToInstallHomebrew
     }
-
     Log.d("✅ Homebrew installed.")
 }
 
-func installToolIfMissing(_ name: String, formulaName: String? = nil, isCask: Bool = false) throws {
-    if which(name) != nil {
+/// Installs a brew formula or cask if missing
+func installToolIfMissing(_ binaryName: String,
+                          formulaName: String? = nil,
+                          isCask: Bool = false) throws {
+    // If already on PATH, skip
+    if let path = try? runShell("which", arguments: [binaryName]), !path.isEmpty {
         return
     }
 
-    Log.d("🔧 Installing \(name) via Homebrew...")
+    let pkg = formulaName ?? binaryName
+    Log.d("🔧 Installing \(pkg) via Homebrew…")
     try installHomebrewIfNeeded()
 
-
-    var brewName = name
-
-    if let formulaName { brewName = formulaName }
-    
-    let installArgs = isCask ? ["install", "--cask", brewName] : ["install", brewName]
+    let args = isCask ? ["install", "--cask", pkg] : ["install", pkg]
     do {
-        _ = try runShell("brew", arguments: installArgs)
+        _ = try runShell("brew", arguments: args)
+        Log.d("✅ \(pkg) installed.")
     } catch {
-        Log.e("error: \(error)")
-        throw ToolError.brewInstallFailed(name)
+        Log.e("Brew install failed for \(pkg): \(error)")
+        throw ToolError.brewInstallFailed(pkg)
     }
-
-    guard which(name) != nil else {
-        throw ToolError.toolNotFound(name)
-    }
-
-    Log.d("✅ \(name) installed.")
 }
 
+/// Public entry: ensures ffmpeg & align_image_stack are installed and returns their exact paths
+public func resolveToolPaths() throws -> ToolPaths {
+    // 1) Ensure installation
+    try installToolIfMissing("ffmpeg")
+    try installToolIfMissing("align_image_stack", formulaName: "hugin", isCask: true)
+
+    // 2) Locate ffmpeg via brew prefix
+    let ffmpegPrefix = try runShell("brew", arguments: ["--prefix", "ffmpeg"])
+    let ffmpegPath   = "\(ffmpegPrefix)/bin/ffmpeg"
+    guard FileManager.default.isExecutableFile(atPath: ffmpegPath) else {
+        throw ToolError.toolNotFound("ffmpeg binary not found at \(ffmpegPath)")
+    }
+
+    // 3) Locate align_image_stack inside Hugin.app
+    let appCandidate = "/Applications/Hugin.app/Contents/MacOS/align_image_stack"
+    if FileManager.default.isExecutableFile(atPath: appCandidate) {
+        return ToolPaths(ffmpegPath: ffmpegPath,
+                         alignImageStackPath: appCandidate)
+    }
+
+    // 4) Check Homebrew Caskroom location
+    let brewPrefix  = try runShell("brew", arguments: ["--prefix"])
+    let caskroomDir = "\(brewPrefix)/Caskroom/hugin"
+    if FileManager.default.fileExists(atPath: caskroomDir) {
+        let versions = try FileManager.default.contentsOfDirectory(atPath: caskroomDir)
+        for version in versions {
+            let candidate = "\(caskroomDir)/\(version)/Hugin.app/Contents/MacOS/align_image_stack"
+            if FileManager.default.isExecutableFile(atPath: candidate) {
+                return ToolPaths(ffmpegPath: ffmpegPath,
+                                 alignImageStackPath: candidate)
+            }
+
+            let candidate2 = "\(caskroomDir)/\(version)/Hugin/Hugin.app/Contents/MacOS/align_image_stack"
+            if FileManager.default.isExecutableFile(atPath: candidate2) {
+                return ToolPaths(ffmpegPath: ffmpegPath,
+                                 alignImageStackPath: candidate2)
+            }
+        }
+    }
+
+    // 5) Fallback to which
+    if let fallback = try? runShell("which", arguments: ["align_image_stack"]),
+       !fallback.isEmpty {
+        return ToolPaths(ffmpegPath: ffmpegPath,
+                         alignImageStackPath: fallback)
+    }
+
+    throw ToolError.toolNotFound("align_image_stack")
+}
