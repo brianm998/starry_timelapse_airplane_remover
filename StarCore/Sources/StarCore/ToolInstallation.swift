@@ -1,14 +1,14 @@
 import Foundation
 import logging
 
-struct ToolPaths {
+public struct ToolPaths {
     let ffmpegPath: String
     let alignImageStackPath: String
 }
 
-func resolveToolPaths() throws -> ToolPaths {
+public func resolveToolPaths() throws -> ToolPaths {
     try installToolIfMissing("ffmpeg")
-    try installToolIfMissing("align_image_stack", isCask: true)
+    try installToolIfMissing("align_image_stack", formulaName: "hugin", isCask: true)
 
     guard
         let ffmpegPath = which("ffmpeg")
@@ -25,12 +25,12 @@ func resolveToolPaths() throws -> ToolPaths {
     return ToolPaths(ffmpegPath: ffmpegPath, alignImageStackPath: alignImageStackPath)
 }
 
-enum ToolError: Error, LocalizedError {
+public enum ToolError: Error, LocalizedError {
     case unableToInstallHomebrew
     case toolNotFound(String)
     case brewInstallFailed(String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .unableToInstallHomebrew:
             return "Homebrew is not available and automatic installation failed or was denied."
@@ -96,7 +96,7 @@ func installHomebrewIfNeeded() throws {
     Log.d("✅ Homebrew installed.")
 }
 
-func installToolIfMissing(_ name: String, isCask: Bool = false) throws {
+func installToolIfMissing(_ name: String, formulaName: String? = nil, isCask: Bool = false) throws {
     if which(name) != nil {
         return
     }
@@ -104,10 +104,16 @@ func installToolIfMissing(_ name: String, isCask: Bool = false) throws {
     Log.d("🔧 Installing \(name) via Homebrew...")
     try installHomebrewIfNeeded()
 
-    let installArgs = isCask ? ["install", "--cask", name] : ["install", name]
+
+    var brewName = name
+
+    if let formulaName { brewName = formulaName }
+    
+    let installArgs = isCask ? ["install", "--cask", brewName] : ["install", brewName]
     do {
         _ = try runShell("brew", arguments: installArgs)
     } catch {
+        Log.e("error: \(error)")
         throw ToolError.brewInstallFailed(name)
     }
 
