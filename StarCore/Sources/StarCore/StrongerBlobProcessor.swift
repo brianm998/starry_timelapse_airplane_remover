@@ -47,7 +47,8 @@ public class StrongerBlobProcessor: AbstractBlobProcessor {
                                      blobsLargerThan: 20,
                                      lineBorder: 15,
                                      minLineScore: 35,
-                                     adjecentPixelsOnIteration: 5)),
+                                     adjecentPixelsOnIteration: 5,
+                                     maxBlobsProcessed: 400)),
 
           .frameState(.filter3),
 

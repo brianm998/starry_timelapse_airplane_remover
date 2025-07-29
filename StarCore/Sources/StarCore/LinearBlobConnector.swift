@@ -78,7 +78,8 @@ public actor LinearBlobConnector {
         let lineBorder: Int       // how much furter to look at the ends of the line
         let minLineScore: Double // don't process full blobs with > average line dist
         let adjecentPixelsOnIteration: Int // how far to iterate on adject pixels
-
+        let maxBlobsProcessed: Int         // don't process more blobs than this
+        
         public typealias Types = ArgType
         public var id: Self { self }
 
@@ -96,6 +97,8 @@ public actor LinearBlobConnector {
                 return "don't process full blobs with a line score less than this"
             case .adjecentPixelsOnIteration:
                 return "how far to iterate on adject pixels"
+            case .maxBlobsProcessed:
+                return "don't process more blobs than this"
             }
         }
         
@@ -106,6 +109,7 @@ public actor LinearBlobConnector {
             case lineBorder
             case minLineScore
             case adjecentPixelsOnIteration
+            case maxBlobsProcessed
         }
 
         public func isInteger(_ type: ArgType) -> Bool {
@@ -132,7 +136,10 @@ public actor LinearBlobConnector {
                 return minLineScore
             case .adjecentPixelsOnIteration:
                 return Double(adjecentPixelsOnIteration)
+            case .maxBlobsProcessed:
+                return Double(maxBlobsProcessed)
             }
+            
         }
 
         public func doubleUpdate(for type: ArgType, value: Double) -> Args? {
@@ -151,8 +158,12 @@ public actor LinearBlobConnector {
                             blobsLargerThan: self.blobsLargerThan,
                             lineBorder: self.lineBorder,
                             minLineScore: value,
-                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration)
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
+                            maxBlobsProcessed: self.maxBlobsProcessed)
             case .adjecentPixelsOnIteration:
+                return nil
+
+            case .maxBlobsProcessed:
                 return nil
             }
         }
@@ -165,7 +176,8 @@ public actor LinearBlobConnector {
                             blobsLargerThan: self.blobsLargerThan,
                             lineBorder: self.lineBorder,
                             minLineScore: self.minLineScore,
-                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration)
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
+                            maxBlobsProcessed: self.maxBlobsProcessed)
 
             case .blobsSmallerThan:
                 return Args(scanSize: self.scanSize,
@@ -173,7 +185,8 @@ public actor LinearBlobConnector {
                             blobsLargerThan: self.blobsLargerThan,
                             lineBorder: self.lineBorder,
                             minLineScore: self.minLineScore,
-                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration)
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
+                            maxBlobsProcessed: self.maxBlobsProcessed)
 
             case .blobsLargerThan:
                 return Args(scanSize: self.scanSize,
@@ -181,7 +194,8 @@ public actor LinearBlobConnector {
                             blobsLargerThan: value,
                             lineBorder: self.lineBorder,
                             minLineScore: self.minLineScore,
-                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration)
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
+                            maxBlobsProcessed: self.maxBlobsProcessed)
 
             case .lineBorder:
                 return Args(scanSize: self.scanSize,
@@ -189,7 +203,8 @@ public actor LinearBlobConnector {
                             blobsLargerThan: self.blobsLargerThan,
                             lineBorder: value,
                             minLineScore: self.minLineScore,
-                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration)
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
+                            maxBlobsProcessed: self.maxBlobsProcessed)
 
             case .minLineScore:
                 return nil
@@ -200,7 +215,17 @@ public actor LinearBlobConnector {
                             blobsLargerThan: self.blobsLargerThan,
                             lineBorder: self.lineBorder,
                             minLineScore: self.minLineScore,
-                            adjecentPixelsOnIteration: value)
+                            adjecentPixelsOnIteration: value,
+                            maxBlobsProcessed: self.maxBlobsProcessed)
+
+            case .maxBlobsProcessed:
+                return Args(scanSize: self.scanSize,
+                            blobsSmallerThan: self.blobsSmallerThan,
+                            blobsLargerThan: self.blobsLargerThan,
+                            lineBorder: self.lineBorder,
+                            minLineScore: self.minLineScore,
+                            adjecentPixelsOnIteration: self.adjecentPixelsOnIteration,
+                            maxBlobsProcessed: value)
             }
         }
         
@@ -209,7 +234,8 @@ public actor LinearBlobConnector {
                     blobsLargerThan: Int = 0,
                     lineBorder: Int = 0,
                     minLineScore: Double = 3,
-                    adjecentPixelsOnIteration: Int = 5)
+                    adjecentPixelsOnIteration: Int = 5,
+                    maxBlobsProcessed: Int = 800)
         {
             self.scanSize = scanSize
             self.blobsSmallerThan = blobsSmallerThan
@@ -217,6 +243,7 @@ public actor LinearBlobConnector {
             self.lineBorder = lineBorder
             self.minLineScore = minLineScore
             self.adjecentPixelsOnIteration = adjecentPixelsOnIteration
+            self.maxBlobsProcessed = maxBlobsProcessed
         }
     }
 
@@ -243,6 +270,7 @@ public actor LinearBlobConnector {
 
     public func process(_ args: Args) async {
 
+        Log.d("frame \(frameIndex) starting")
         internalBlobMap = await analyzer.mapOfBlobs()
         //let blobMap = await analyzer.mapOfBlobs()
         let startTime = Date().timeIntervalSince1970
@@ -261,9 +289,15 @@ public actor LinearBlobConnector {
             blobSizes.append(BlobSize(id: id, size: await blob.size(), blob: blob))
         }
 
-        let sortedBlobs = blobSizes.sorted { $0.size > $1.size }
+        var sortedBlobs = blobSizes.sorted { $0.size > $1.size }
 
-        Log.i("frame \(frameIndex) processing \(sortedBlobs.count) blobs")
+        let originalNumber = sortedBlobs.count
+        
+        if sortedBlobs.count > args.maxBlobsProcessed {
+            sortedBlobs = Array(sortedBlobs[0..<args.maxBlobsProcessed])
+        }
+        
+        Log.d("frame \(frameIndex) processing \(sortedBlobs.count) blobs out of a total of \(originalNumber)")
         
         let mappings = await withTaskGroup(of: Set<BlobMapping>.self) { taskGroup in
             for sortedBlob in sortedBlobs {
@@ -282,7 +316,7 @@ public actor LinearBlobConnector {
                 }
 
                 taskGroup.addTask {
-                    // find a cloud of neighbors 
+                    // find a cloud of neighbors
                     let neighborCloud =
                       await StarCore.neighborCloud(of: blob,
                                                    blobRefs: data.blobRefs,
@@ -301,11 +335,11 @@ public actor LinearBlobConnector {
 
             var ret = Set<BlobMapping>()
             for await blobMapping in taskGroup {
-                Log.d("ret \(ret.count) adding \(blobMapping.count) mappings")
+                Log.d("frame \(frameIndex) ret \(ret.count) adding \(blobMapping.count) mappings")
                 ret = ret.union(blobMapping) // XXX Crashed here :(
-                Log.d("ret \(ret.count) after adding \(blobMapping.count) mappings")
+                Log.d("frame \(frameIndex) ret \(ret.count) after adding \(blobMapping.count) mappings")
             }
-            Log.d("returning set")
+            Log.d("frame \(frameIndex) returning set")
             return ret
         }
 

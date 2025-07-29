@@ -107,11 +107,12 @@ public class MildBlobProcessor: AbstractBlobProcessor {
 
           // connect nearby blobs that are linear but still separate
           .linearBlobConnector(.init(scanSize: 10, 
-                                     blobsSmallerThan: 6800,
-                                     blobsLargerThan: 20,
+                                     blobsSmallerThan: 680,
+                                     blobsLargerThan: 100,
                                      lineBorder: 15,
                                      minLineScore: 35,
-                                     adjecentPixelsOnIteration: 5)),
+                                     adjecentPixelsOnIteration: 5,
+                                     maxBlobsProcessed: 400)),
 
 
           .frameState(.filter3),

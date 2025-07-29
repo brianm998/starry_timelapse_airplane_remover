@@ -249,7 +249,7 @@ public struct Config: Codable, Sendable, Transferable {
     //       lots of renaming
     //       debug logging view
     //       lines better connected, fixed LinearBlobConnector
-    //       multiple aligned images to clean up really noisy frame sequences 
+    //       use multiple aligned images to clean up really noisy frame sequences 
     
     public var starVersion = Config.latestVersion
 
