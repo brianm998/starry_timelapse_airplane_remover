@@ -1,17 +1,17 @@
 import Foundation
 import ShellOut
 
-typealias ProgressCallback = @Sendable (_ currentFrame: Int, _ totalFrames: Int) -> Void
+public typealias ProgressCallback = @Sendable (_ currentFrame: Int, _ totalFrames: Int) -> Void
 
 /// Process a video: extract frames and audio, and generate a reencode script
-func decodeVideo(
+public func decodeVideo(
     named inputPath: String,
     progress: @escaping ProgressCallback
 ) throws -> (outputDirectory: String, reencodeScript: String) {
     let inputURL = URL(fileURLWithPath: inputPath)
     let fileName = inputURL.deletingPathExtension().lastPathComponent
     let fileExtension = inputURL.pathExtension
-    let outputFolder = fileName
+    let outputFolder = inputURL.deletingLastPathComponent().appendingPathComponent(fileName).path
     let fileManager = FileManager.default
 
     try? fileManager.createDirectory(atPath: outputFolder, withIntermediateDirectories: true)
@@ -25,8 +25,7 @@ func decodeVideo(
         inputPath
     ]).trimmingCharacters(in: .whitespacesAndNewlines)
 
-    let frameRate = try shellOut(to: "awk", arguments: ["BEGIN { print \(frameRateRaw) }"])
-        .trimmingCharacters(in: .whitespacesAndNewlines)
+    let frameRate = frameRateRaw.components(separatedBy: "/")[0]
 
     let codec = try shellOut(to: ffprobePath, arguments: [
         "-v", "error", "-select_streams", "v:0",
@@ -71,6 +70,11 @@ func decodeVideo(
         ])
     }
 
+    /*
+     this script needs to be output a level higher and run against the output files,
+     not the input files
+     */
+    
     // Generate re-encode script
     let reencodeScriptPath = "\(outputFolder)/reencode.sh"
     var script = """
@@ -91,7 +95,7 @@ func decodeVideo(
 }
 
 /// Run the generated reencode script and track encoding progress
-func encodeVideo(
+public func encodeVideo(
     with scriptPath: String,
     progress: @escaping ProgressCallback
 ) throws {

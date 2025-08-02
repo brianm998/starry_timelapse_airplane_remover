@@ -48,6 +48,12 @@ struct InitialView: View {
 
             HStack {
                 VStack {
+                    
+                    Button(action: self.loadVideoToProcess) {
+                        Text("Load Video To Process").font(.largeTitle)
+                    }.buttonStyle(ShrinkingButton())
+                      .help("Load a video to process.  Make sure lots of free space is available next to the video for intermediate files.")
+                    
                     HStack {
                         
                         Button(action: self.loadImageSequence) {
@@ -197,6 +203,24 @@ struct InitialView: View {
         }
     }
 
+    func loadVideoToProcess() {
+        Log.d("load video to process")
+        let openPanel = NSOpenPanel()
+        //openPanel.allowedFileTypes = ["json"]
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+        openPanel.canChooseFiles = true
+        let response = openPanel.runModal()
+        if response == .OK {
+            if let returnedUrl = openPanel.url {
+                let path = returnedUrl.path
+                Log.d("url path \(path)")
+
+                startupWithVideoToProcess(path)
+            }
+        }
+    }
+    
     func loadImageSequence() {
         Log.d("load image sequence")
         let openPanel = NSOpenPanel()
@@ -211,6 +235,23 @@ struct InitialView: View {
                 Log.d("url path \(path)")
 
                 startupWithSequenceDir(path)
+            }
+        }
+    }
+
+    func startupWithVideoToProcess(_ path: String) {
+        viewModel.eraserTask = Task.detached(priority: .userInitiated) {
+            do {
+                try await viewModel.startup(withVideoToProcess: path)
+                Task { @MainActor in
+                    viewModel.imageSequence?.initialLoadInProgress = true
+                }
+                try await viewModel.imageSequence?.eraser?.run()
+            } catch {
+                Log.e("\(error)")
+                await MainActor.run {
+                    self.handle(error: "\(error)")
+                }
             }
         }
     }

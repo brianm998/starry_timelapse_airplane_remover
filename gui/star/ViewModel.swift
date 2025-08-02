@@ -211,6 +211,19 @@ public final class ViewModel {
             self.userPreferences.justOpened(filename: "\(config.outputPath)/\(configManager.jsonFilename())")
         }
     }
+
+    func startup(withVideoToProcess path: String) async throws {
+        isLoadingImageSequence = true
+
+        let (outputDir, reencodeScript) = try decodeVideo(named: path) { currentFrame, totalFrames in
+            Log.d("\(currentFrame)/\(totalFrames)")
+        }
+
+        Log.d("reencodeScript \(reencodeScript)")
+        Log.d("outputDir \(outputDir)")
+
+        try await startup(withNewImageSequence: outputDir)
+    }
 }
 
 
