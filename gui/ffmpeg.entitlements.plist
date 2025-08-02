@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Enable Hardened Runtime features -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+
+  <!-- Grant file-read access anywhere on disk -->
+  <key>com.apple.security.files.user-selected.read-only</key>
+  <true/>
+  <key>com.apple.security.files.absolute-path.read-only</key>
+  <array>
+    <string>/</string>
+  </array>
+
+  <!-- (Optional) If ffmpeg needs temporary files or network. -->
+  <key>com.apple.security.temporary-exception.files.home-relative-path.read-write</key>
+  <array>
+    <string>tmp</string>
+  </array>
+  <key>com.apple.security.network.client</key>
+  <true/>
+</dict>
+</plist>
