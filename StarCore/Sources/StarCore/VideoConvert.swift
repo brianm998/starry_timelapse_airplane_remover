@@ -1,5 +1,6 @@
 import Foundation
 import ShellOut
+import logging
 
 public typealias ProgressCallback = @Sendable (_ currentFrame: Int, _ totalFrames: Int) -> Void
 
@@ -12,6 +13,7 @@ public func decodeVideo(
     let fileName = inputURL.deletingPathExtension().lastPathComponent
     let fileExtension = inputURL.pathExtension
     let outputFolder = inputURL.deletingLastPathComponent().appendingPathComponent(fileName).path
+    let reencodeScriptDir = inputURL.deletingLastPathComponent().path
     let fileManager = FileManager.default
 
     try? fileManager.createDirectory(atPath: outputFolder, withIntermediateDirectories: true)
@@ -70,23 +72,22 @@ public func decodeVideo(
         ])
     }
 
-    /*
-     this script needs to be output a level higher and run against the output files,
-     not the input files
-     */
-    
     // Generate re-encode script
-    let reencodeScriptPath = "\(outputFolder)/reencode.sh"
+    let reencodeScriptPath = "\(reencodeScriptDir)/reencode-\(fileName).sh"
     var script = """
     #!/bin/bash
 
-    \(ffmpegPath) -framerate \(frameRate) -f image2 -i image_%04d.tiff \\
+    set -e
+
+    PROCESSED_FILES_DIR=$1
+    
+    \(ffmpegPath) -framerate \(frameRate) -f image2 -i "$PROCESSED_FILES_DIR"/image_%04d.tiff \\
       -c:v \(codec) -pix_fmt \(pixFmt)
     """
     if hasAudio {
         script += " \\\n  -i audio.aac -c:a copy"
     }
-    script += " \\\n  ../\(fileName)_reencoded.\(fileExtension)\n"
+    script += " \\\n  \(fileName)_reencoded.\(fileExtension)\n"
 
     try script.write(toFile: reencodeScriptPath, atomically: true, encoding: .utf8)
     try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: reencodeScriptPath)
