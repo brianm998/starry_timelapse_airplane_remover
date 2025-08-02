@@ -16,7 +16,9 @@ func decodeVideo(
 
     try? fileManager.createDirectory(atPath: outputFolder, withIntermediateDirectories: true)
 
-    let frameRateRaw = try shellOut(to: "ffprobe", arguments: [
+    let ffprobePath = ToolPaths.ffprobe
+    
+    let frameRateRaw = try shellOut(to: ffprobePath, arguments: [
         "-v", "error", "-select_streams", "v:0",
         "-show_entries", "stream=r_frame_rate",
         "-of", "default=noprint_wrappers=1:nokey=1",
@@ -26,28 +28,28 @@ func decodeVideo(
     let frameRate = try shellOut(to: "awk", arguments: ["BEGIN { print \(frameRateRaw) }"])
         .trimmingCharacters(in: .whitespacesAndNewlines)
 
-    let codec = try shellOut(to: "ffprobe", arguments: [
+    let codec = try shellOut(to: ffprobePath, arguments: [
         "-v", "error", "-select_streams", "v:0",
         "-show_entries", "stream=codec_name",
         "-of", "default=noprint_wrappers=1:nokey=1",
         inputPath
     ]).trimmingCharacters(in: .whitespacesAndNewlines)
 
-    let pixFmt = try shellOut(to: "ffprobe", arguments: [
+    let pixFmt = try shellOut(to: ffprobePath, arguments: [
         "-v", "error", "-select_streams", "v:0",
         "-show_entries", "stream=pix_fmt",
         "-of", "default=noprint_wrappers=1:nokey=1",
         inputPath
     ]).trimmingCharacters(in: .whitespacesAndNewlines)
 
-    let hasAudio = (try? shellOut(to: "ffprobe", arguments: [
+    let hasAudio = (try? shellOut(to: ffprobePath, arguments: [
         "-v", "error", "-select_streams", "a:0",
         "-show_entries", "stream=codec_type",
         "-of", "default=noprint_wrappers=1:nokey=1",
         inputPath
     ]).trimmingCharacters(in: .whitespacesAndNewlines)) == "audio"
 
-    let totalFramesStr = try shellOut(to: "ffprobe", arguments: [
+    let totalFramesStr = try shellOut(to: ffprobePath, arguments: [
         "-v", "error", "-count_frames", "-select_streams", "v:0",
         "-show_entries", "stream=nb_read_frames",
         "-of", "default=noprint_wrappers=1:nokey=1",
@@ -61,8 +63,10 @@ func decodeVideo(
         progress: progress
     )
 
+    let ffmpegPath = ToolPaths.ffmpeg
+    
     if hasAudio {
-        _ = try shellOut(to: "ffmpeg", arguments: [
+        _ = try shellOut(to: ffmpegPath, arguments: [
             "-i", inputPath, "-vn", "-acodec", "copy", "\(outputFolder)/audio.aac"
         ])
     }
@@ -72,7 +76,7 @@ func decodeVideo(
     var script = """
     #!/bin/bash
 
-    ffmpeg -framerate \(frameRate) -f image2 -i image_%04d.tiff \\
+    \(ffmpegPath) -framerate \(frameRate) -f image2 -i image_%04d.tiff \\
       -c:v \(codec) -pix_fmt \(pixFmt)
     """
     if hasAudio {
@@ -126,7 +130,7 @@ func encodeVideo(
 func runFFmpegWithProgress(
     arguments: [String],
     totalFrames: Int?,
-    ffmpegPath: String = "/usr/local/bin/ffmpeg",
+    ffmpegPath: String = ToolPaths.ffmpeg,
     progress: @escaping ProgressCallback
 ) throws {
     let process = Process()

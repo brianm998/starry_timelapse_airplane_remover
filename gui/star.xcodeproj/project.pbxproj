@@ -69,6 +69,7 @@
 		D3DC07FC2C077DEB0031A3AE /* EditableFrameNumberView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3DC07FB2C077DEA0031A3AE /* EditableFrameNumberView.swift */; };
 		D3E67E1A2E3E63E000A97C28 /* ffmpeg in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3E67DE22E3E5DE300A97C28 /* ffmpeg */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		D3E67E202E3E75FC00A97C28 /* align_image_stack in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3E67DE12E3E5DE300A97C28 /* align_image_stack */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		D3E680472E3EADAF00A97C28 /* ffprobe in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3E680452E3EAD9000A97C28 /* ffprobe */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		D3F0BFFE2C0390BA0061420D /* FrameImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F0BFFD2C0390BA0061420D /* FrameImageView.swift */; };
 		D3FBFA082CE132C400A23FC6 /* ProcessAllFramesButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA072CE132C400A23FC6 /* ProcessAllFramesButton.swift */; };
 		D3FBFA0B2CE1B18700A23FC6 /* LimitedSelectionPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA092CE1B18700A23FC6 /* LimitedSelectionPicker.swift */; };
@@ -108,6 +109,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 6;
 			files = (
+				D3E680472E3EADAF00A97C28 /* ffprobe in CopyFiles */,
 				D3E67E202E3E75FC00A97C28 /* align_image_stack in CopyFiles */,
 				D3E67E1A2E3E63E000A97C28 /* ffmpeg in CopyFiles */,
 			);
@@ -178,6 +180,7 @@
 		D3DC07FB2C077DEA0031A3AE /* EditableFrameNumberView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EditableFrameNumberView.swift; sourceTree = "<group>"; };
 		D3E67DE12E3E5DE300A97C28 /* align_image_stack */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = align_image_stack; sourceTree = "<group>"; };
 		D3E67DE22E3E5DE300A97C28 /* ffmpeg */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ffmpeg; sourceTree = "<group>"; };
+		D3E680452E3EAD9000A97C28 /* ffprobe */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ffprobe; sourceTree = "<group>"; };
 		D3F0BFFD2C0390BA0061420D /* FrameImageView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameImageView.swift; sourceTree = "<group>"; };
 		D3FBFA072CE132C400A23FC6 /* ProcessAllFramesButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessAllFramesButton.swift; sourceTree = "<group>"; };
 		D3FBFA092CE1B18700A23FC6 /* LimitedSelectionPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LimitedSelectionPicker.swift; sourceTree = "<group>"; };
@@ -354,6 +357,7 @@
 		D3E67DE32E3E5DE300A97C28 /* bin */ = {
 			isa = PBXGroup;
 			children = (
+				D3E680452E3EAD9000A97C28 /* ffprobe */,
 				D3E67DE12E3E5DE300A97C28 /* align_image_stack */,
 				D3E67DE22E3E5DE300A97C28 /* ffmpeg */,
 			);
@@ -528,7 +532,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "#!/bin/bash\n# copy and sign dylibs for align_image_stack\n\nset -e\n\n# 1) Define paths\nAPP=\"${TARGET_BUILD_DIR}/${FULL_PRODUCT_NAME}\"\nFRAMEWORKS_DIR=\"$APP/Contents/Libraries\"\nALIGN_IMAGE_STACK_BIN=\"$APP/Contents/MacOs/align_image_stack\"  \nLIB_DIR=\"$SRCROOT/../external_binaries/Libraries\"\n\n# 2) Create Frameworks dir and copy .dylib files\nmkdir -p \"$FRAMEWORKS_DIR\"\nfor dylib in \"$LIB_DIR\"/*.dylib; do\n  cp \"$dylib\" \"$FRAMEWORKS_DIR\"\ndone\n\n# 3) Rewrite each dylib’s install_name to point to @rpath\nfor dylib in \"$FRAMEWORKS_DIR\"/*.dylib; do\n  basename=\"$(basename \"$dylib\")\"\n  echo \"⭑ Setting id of $basename → @rpath/$basename\"\n  install_name_tool -id \"@rpath/$basename\" \"$dylib\"\ndone\n\n# 4) In your ffmpeg binary, redirect each reference to the in-bundle copy\nfor dylib in \"$FRAMEWORKS_DIR\"/*.dylib; do\n  old_path=\"$LIB_DIR/$(basename \"$dylib\")\"\n  new_path=\"@rpath/$(basename \"$dylib\")\"\n  echo \"⭑ Patching ffmpeg: $old_path → $new_path\"\n  install_name_tool -change \"$old_path\" \"$new_path\" \"$ALIGN_IMAGE_STACK_BIN\"\ndone\n\n# 5) Optionally add an rpath so ffmpeg knows where to look\n#echo \"⭑ Adding @executable_path/../Libraries to ffmpeg rpath\"\n#install_name_tool -add_rpath \"@executable_path/../Libraries\" \"$ALIGN_IMAGE_STACK_BIN\"\n\n# 6) Re-sign each dylib (and then ffmpeg) with Hardened Runtime + entitlements\nSIGN_IDENTITY=\"${EXPANDED_CODE_SIGN_IDENTITY}\"\nENTITLEMENTS_PLIST=\"$SRCROOT/ffmpeg.entitlements.plist\"\n\nfor file in \"$FRAMEWORKS_DIR\"/*.dylib \"$ALIGN_IMAGE_STACK_BIN\"; do\n  echo \"⭑ Codesigning $file\"\n  /usr/bin/codesign --force --timestamp \\\n     --options runtime \\\n     --entitlements \"$ENTITLEMENTS_PLIST\" \\\n     --sign \"$SIGN_IDENTITY\" \\\n     \"$file\"\ndone\n\n# 7) (For debugging) verify the runtime flag\n#codesign -d --verbose=4 \"$ALIGN_IMAGE_STACK_BIN\" | grep \"Runtime Enabled\"\n\n";
+			shellScript = "#!/bin/bash\n# copy and sign dylibs for align_image_stack\n\nset -e\n\n# 1) Define paths\nAPP=\"${TARGET_BUILD_DIR}/${FULL_PRODUCT_NAME}\"\nFRAMEWORKS_DIR=\"$APP/Contents/Libraries\"\nALIGN_IMAGE_STACK_BIN=\"$APP/Contents/MacOs/align_image_stack\"  \nLIB_DIR=\"$SRCROOT/../external_binaries/Libraries\"\n\n# 2) Create Frameworks dir and copy .dylib files\nmkdir -p \"$FRAMEWORKS_DIR\"\nfor dylib in \"$LIB_DIR\"/*.dylib; do\n  cp \"$dylib\" \"$FRAMEWORKS_DIR\"\ndone\n\n# 3) Rewrite each dylib’s install_name to point to @rpath\nfor dylib in \"$FRAMEWORKS_DIR\"/*.dylib; do\n  basename=\"$(basename \"$dylib\")\"\n  echo \"⭑ Setting id of $basename → @rpath/$basename\"\n  install_name_tool -id \"@rpath/$basename\" \"$dylib\"\ndone\n\n# 4) In your ffmpeg binary, redirect each reference to the in-bundle copy\nfor dylib in \"$FRAMEWORKS_DIR\"/*.dylib; do\n  old_path=\"$LIB_DIR/$(basename \"$dylib\")\"\n  new_path=\"@rpath/$(basename \"$dylib\")\"\n  echo \"⭑ Patching ffmpeg: $old_path → $new_path\"\n  install_name_tool -change \"$old_path\" \"$new_path\" \"$ALIGN_IMAGE_STACK_BIN\"\ndone\n\n# 5) Re-sign each dylib (and then ffmpeg) with Hardened Runtime + entitlements\nSIGN_IDENTITY=\"${EXPANDED_CODE_SIGN_IDENTITY}\"\nENTITLEMENTS_PLIST=\"$SRCROOT/ffmpeg.entitlements.plist\"\n\nfor file in \"$FRAMEWORKS_DIR\"/*.dylib \"$ALIGN_IMAGE_STACK_BIN\"; do\n  echo \"⭑ Codesigning $file\"\n  /usr/bin/codesign --force --timestamp \\\n     --options runtime \\\n     --entitlements \"$ENTITLEMENTS_PLIST\" \\\n     --sign \"$SIGN_IDENTITY\" \\\n     \"$file\"\ndone\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
