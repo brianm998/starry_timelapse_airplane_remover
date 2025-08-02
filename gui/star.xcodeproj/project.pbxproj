@@ -113,15 +113,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		D3E67E092E3E5E6F00A97C28 /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 11;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -187,19 +178,6 @@
 		D3DC07FB2C077DEA0031A3AE /* EditableFrameNumberView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EditableFrameNumberView.swift; sourceTree = "<group>"; };
 		D3E67DE12E3E5DE300A97C28 /* align_image_stack */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = align_image_stack; sourceTree = "<group>"; };
 		D3E67DE22E3E5DE300A97C28 /* ffmpeg */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ffmpeg; sourceTree = "<group>"; };
-		D3E67DE52E3E5DE300A97C28 /* libexiv2.0.27.6.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libexiv2.0.27.6.dylib; sourceTree = "<group>"; };
-		D3E67DE62E3E5DE300A97C28 /* libexpat.1.8.10.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libexpat.1.8.10.dylib; sourceTree = "<group>"; };
-		D3E67DE72E3E5DE300A97C28 /* libGLEW.2.1.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libGLEW.2.1.0.dylib; sourceTree = "<group>"; };
-		D3E67DE82E3E5DE300A97C28 /* libHalf-2_5.25.0.7.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libHalf-2_5.25.0.7.dylib"; sourceTree = "<group>"; };
-		D3E67DE92E3E5DE300A97C28 /* libhuginbase.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libhuginbase.0.0.dylib; sourceTree = "<group>"; };
-		D3E67DEA2E3E5DE300A97C28 /* libIex-2_5.25.0.7.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libIex-2_5.25.0.7.dylib"; sourceTree = "<group>"; };
-		D3E67DEC2E3E5DE300A97C28 /* libIlmImf-2_5.26.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libIlmImf-2_5.26.0.0.dylib"; sourceTree = "<group>"; };
-		D3E67DED2E3E5DE300A97C28 /* libIlmThread-2_5.25.0.7.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libIlmThread-2_5.25.0.7.dylib"; sourceTree = "<group>"; };
-		D3E67DEE2E3E5DE300A97C28 /* libImath-2_5.25.0.7.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libImath-2_5.25.0.7.dylib"; sourceTree = "<group>"; };
-		D3E67DEF2E3E5DE300A97C28 /* libjpeg.9.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libjpeg.9.dylib; sourceTree = "<group>"; };
-		D3E67DF02E3E5DE300A97C28 /* libtiff.5.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libtiff.5.dylib; sourceTree = "<group>"; };
-		D3E67DF12E3E5DE300A97C28 /* libz.1.2.13.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libz.1.2.13.dylib; sourceTree = "<group>"; };
-		D3E67E172E3E607200A97C28 /* libIexMath-2_5.25.0.7.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libIexMath-2_5.25.0.7.dylib"; sourceTree = "<group>"; };
 		D3F0BFFD2C0390BA0061420D /* FrameImageView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameImageView.swift; sourceTree = "<group>"; };
 		D3FBFA072CE132C400A23FC6 /* ProcessAllFramesButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessAllFramesButton.swift; sourceTree = "<group>"; };
 		D3FBFA092CE1B18700A23FC6 /* LimitedSelectionPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LimitedSelectionPicker.swift; sourceTree = "<group>"; };
@@ -382,31 +360,10 @@
 			path = bin;
 			sourceTree = "<group>";
 		};
-		D3E67DF22E3E5DE300A97C28 /* Libraries */ = {
-			isa = PBXGroup;
-			children = (
-				D3E67E172E3E607200A97C28 /* libIexMath-2_5.25.0.7.dylib */,
-				D3E67DE52E3E5DE300A97C28 /* libexiv2.0.27.6.dylib */,
-				D3E67DE62E3E5DE300A97C28 /* libexpat.1.8.10.dylib */,
-				D3E67DE72E3E5DE300A97C28 /* libGLEW.2.1.0.dylib */,
-				D3E67DE82E3E5DE300A97C28 /* libHalf-2_5.25.0.7.dylib */,
-				D3E67DE92E3E5DE300A97C28 /* libhuginbase.0.0.dylib */,
-				D3E67DEA2E3E5DE300A97C28 /* libIex-2_5.25.0.7.dylib */,
-				D3E67DEC2E3E5DE300A97C28 /* libIlmImf-2_5.26.0.0.dylib */,
-				D3E67DED2E3E5DE300A97C28 /* libIlmThread-2_5.25.0.7.dylib */,
-				D3E67DEE2E3E5DE300A97C28 /* libImath-2_5.25.0.7.dylib */,
-				D3E67DEF2E3E5DE300A97C28 /* libjpeg.9.dylib */,
-				D3E67DF02E3E5DE300A97C28 /* libtiff.5.dylib */,
-				D3E67DF12E3E5DE300A97C28 /* libz.1.2.13.dylib */,
-			);
-			path = Libraries;
-			sourceTree = "<group>";
-		};
 		D3E67DF42E3E5DE300A97C28 /* external_binaries */ = {
 			isa = PBXGroup;
 			children = (
 				D3E67DE32E3E5DE300A97C28 /* bin */,
-				D3E67DF22E3E5DE300A97C28 /* Libraries */,
 			);
 			name = external_binaries;
 			path = ../external_binaries;
@@ -423,7 +380,7 @@
 				D386FA0A298B617300878B56 /* Frameworks */,
 				D386FA0B298B617300878B56 /* Resources */,
 				D3E67E062E3E5E2700A97C28 /* CopyFiles */,
-				D3E67E092E3E5E6F00A97C28 /* CopyFiles */,
+				D3E67E212E3E7DF500A97C28 /* Run Script */,
 			);
 			buildRules = (
 			);
@@ -553,6 +510,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		D3E67E212E3E7DF500A97C28 /* Run Script */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Run Script";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "#!/bin/bash\n# copy and sign dylibs for align_image_stack\n\nset -e\n\n# 1) Define paths\nAPP=\"${TARGET_BUILD_DIR}/${FULL_PRODUCT_NAME}\"\nFRAMEWORKS_DIR=\"$APP/Contents/Libraries\"\nALIGN_IMAGE_STACK_BIN=\"$APP/Contents/MacOs/align_image_stack\"  \nLIB_DIR=\"$SRCROOT/../external_binaries/Libraries\"\n\n# 2) Create Frameworks dir and copy .dylib files\nmkdir -p \"$FRAMEWORKS_DIR\"\nfor dylib in \"$LIB_DIR\"/*.dylib; do\n  cp \"$dylib\" \"$FRAMEWORKS_DIR\"\ndone\n\n# 3) Rewrite each dylib’s install_name to point to @rpath\nfor dylib in \"$FRAMEWORKS_DIR\"/*.dylib; do\n  basename=\"$(basename \"$dylib\")\"\n  echo \"⭑ Setting id of $basename → @rpath/$basename\"\n  install_name_tool -id \"@rpath/$basename\" \"$dylib\"\ndone\n\n# 4) In your ffmpeg binary, redirect each reference to the in-bundle copy\nfor dylib in \"$FRAMEWORKS_DIR\"/*.dylib; do\n  old_path=\"$LIB_DIR/$(basename \"$dylib\")\"\n  new_path=\"@rpath/$(basename \"$dylib\")\"\n  echo \"⭑ Patching ffmpeg: $old_path → $new_path\"\n  install_name_tool -change \"$old_path\" \"$new_path\" \"$ALIGN_IMAGE_STACK_BIN\"\ndone\n\n# 5) Optionally add an rpath so ffmpeg knows where to look\n#echo \"⭑ Adding @executable_path/../Libraries to ffmpeg rpath\"\n#install_name_tool -add_rpath \"@executable_path/../Libraries\" \"$ALIGN_IMAGE_STACK_BIN\"\n\n# 6) Re-sign each dylib (and then ffmpeg) with Hardened Runtime + entitlements\nSIGN_IDENTITY=\"${EXPANDED_CODE_SIGN_IDENTITY}\"\nENTITLEMENTS_PLIST=\"$SRCROOT/ffmpeg.entitlements.plist\"\n\nfor file in \"$FRAMEWORKS_DIR\"/*.dylib \"$ALIGN_IMAGE_STACK_BIN\"; do\n  echo \"⭑ Codesigning $file\"\n  /usr/bin/codesign --force --timestamp \\\n     --options runtime \\\n     --entitlements \"$ENTITLEMENTS_PLIST\" \\\n     --sign \"$SIGN_IDENTITY\" \\\n     \"$file\"\ndone\n\n# 7) (For debugging) verify the runtime flag\n#codesign -d --verbose=4 \"$ALIGN_IMAGE_STACK_BIN\" | grep \"Runtime Enabled\"\n\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		D386FA09298B617300878B56 /* Sources */ = {
