@@ -68,7 +68,6 @@
 		D3D7F0FC2A2BE10D00658862 /* StarCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */; };
 		D3DC07FC2C077DEB0031A3AE /* EditableFrameNumberView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3DC07FB2C077DEA0031A3AE /* EditableFrameNumberView.swift */; };
 		D3E67E1A2E3E63E000A97C28 /* ffmpeg in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3E67DE22E3E5DE300A97C28 /* ffmpeg */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
-		D3E67E1D2E3E65C200A97C28 /* ffmpeg.entitlements.plist in Resources */ = {isa = PBXBuildFile; fileRef = D3E67E1C2E3E65C200A97C28 /* ffmpeg.entitlements.plist */; };
 		D3E67E202E3E75FC00A97C28 /* align_image_stack in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3E67DE12E3E5DE300A97C28 /* align_image_stack */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		D3F0BFFE2C0390BA0061420D /* FrameImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F0BFFD2C0390BA0061420D /* FrameImageView.swift */; };
 		D3FBFA082CE132C400A23FC6 /* ProcessAllFramesButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA072CE132C400A23FC6 /* ProcessAllFramesButton.swift */; };
@@ -201,7 +200,6 @@
 		D3E67DF02E3E5DE300A97C28 /* libtiff.5.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libtiff.5.dylib; sourceTree = "<group>"; };
 		D3E67DF12E3E5DE300A97C28 /* libz.1.2.13.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libz.1.2.13.dylib; sourceTree = "<group>"; };
 		D3E67E172E3E607200A97C28 /* libIexMath-2_5.25.0.7.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libIexMath-2_5.25.0.7.dylib"; sourceTree = "<group>"; };
-		D3E67E1C2E3E65C200A97C28 /* ffmpeg.entitlements.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = ffmpeg.entitlements.plist; sourceTree = "<group>"; };
 		D3F0BFFD2C0390BA0061420D /* FrameImageView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameImageView.swift; sourceTree = "<group>"; };
 		D3FBFA072CE132C400A23FC6 /* ProcessAllFramesButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessAllFramesButton.swift; sourceTree = "<group>"; };
 		D3FBFA092CE1B18700A23FC6 /* LimitedSelectionPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LimitedSelectionPicker.swift; sourceTree = "<group>"; };
@@ -257,7 +255,6 @@
 		D386FA04298B617300878B56 = {
 			isa = PBXGroup;
 			children = (
-				D3E67E1C2E3E65C200A97C28 /* ffmpeg.entitlements.plist */,
 				D3E67DF42E3E5DE300A97C28 /* external_binaries */,
 				D392EB142E0C48D60020E16A /* Assets.xcassets */,
 				D386FA0F298B617300878B56 /* star */,
@@ -427,7 +424,6 @@
 				D386FA0B298B617300878B56 /* Resources */,
 				D3E67E062E3E5E2700A97C28 /* CopyFiles */,
 				D3E67E092E3E5E6F00A97C28 /* CopyFiles */,
-				D3E67E1B2E3E63E900A97C28 /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -536,7 +532,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				D386FA18298B617400878B56 /* Preview Assets.xcassets in Resources */,
-				D3E67E1D2E3E65C200A97C28 /* ffmpeg.entitlements.plist in Resources */,
 				D386FA15298B617400878B56 /* Assets.xcassets in Resources */,
 				D392EB152E0C48D60020E16A /* Assets.xcassets in Resources */,
 				D366BB3A2AF84766004C9125 /* Info.plist in Resources */,
@@ -558,26 +553,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		D3E67E1B2E3E63E900A97C28 /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# Path where Xcode has copied your helpers into the .app bundle...\n\nAPP=\"${TARGET_BUILD_DIR}/${FULL_PRODUCT_NAME}\"\nHELPER_DIR=\"$APP/Contents/MacOs/\"\n\n# Path to your entitlements plist (add this file to your project)\nENTITLEMENTS_PLIST=\"${SRCROOT}/ffmpeg.entitlements.plist\"\n\necho \"Signing all helpers in $HELPER_DIR with Hardened Runtime + entitlements...\"\n\nfor bin in \"$HELPER_DIR\"/*; do\n  echo \" → Re-signing $bin\"\n  /usr/bin/codesign --force --timestamp \\\n    --options runtime \\\n    --entitlements \"$ENTITLEMENTS_PLIST\" \\\n    --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" \\\n    \"$bin\"\ndone\n\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		D386FA09298B617300878B56 /* Sources */ = {
