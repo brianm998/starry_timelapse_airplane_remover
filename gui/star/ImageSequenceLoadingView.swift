@@ -19,7 +19,23 @@ struct ImageSequenceLoadingView: View {
             }
             Spacer()
             ZStack {
-                if viewModel.amountPreviewsSaved != 1.0 {
+                if viewModel.isExtractingImageSequence {
+                    CircularProgressView(progress: $viewModel.amountExtracted)
+                      .frame(maxWidth: 500, maxHeight: 500)
+                    Spacer()
+                      .frame(maxHeight: 50)
+                    if viewModel.amountExtracted == 1.0 {
+                        VStack {
+                            Text("All \(viewModel.numberExtracted) frames extracted")
+                              .foregroundColor(.green)
+                            ProgressView()
+                              .foregroundColor(.white)
+                        }
+                    } else {
+                      Text("\(viewModel.numberExtracted) frames extracted")
+                          .foregroundColor(.white)
+                    }
+                } else if viewModel.amountPreviewsSaved != 1.0 {
                     CircularProgressView(progress: $viewModel.amountPreviewsSaved)
                       .frame(maxWidth: 500, maxHeight: 500)
                     Spacer()

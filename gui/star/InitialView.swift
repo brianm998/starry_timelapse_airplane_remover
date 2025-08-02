@@ -33,7 +33,7 @@ struct InitialView: View {
             Spacer()
               .frame(maxHeight: 100)
 
-            Text("Drop an image sequence or existing config file anywhere here")
+            Text("Drop a video, an image sequence or an existing config file anywhere here")
               .font(.title)
               .foregroundColor(.white)
             Text("or")
@@ -47,47 +47,82 @@ struct InitialView: View {
               .frame(maxHeight: 200)
 
             HStack {
-                VStack {
-                    
-                    Button(action: self.loadVideoToProcess) {
-                        Text("Load Video To Process").font(.largeTitle)
-                    }.buttonStyle(ShrinkingButton())
-                      .help("Load a video to process.  Make sure lots of free space is available next to the video for intermediate files.")
-                    
-                    HStack {
-                        
-                        Button(action: self.loadImageSequence) {
-                            Text("Load Image Sequence").font(.largeTitle)
-                        }.buttonStyle(ShrinkingButton())
-                          .help("Load an image sequence yet to be processed by star")
-                        
-                        Button(action: self.loadConfig) {
-                            Text("Load Config").font(.largeTitle)
-                        }.buttonStyle(ShrinkingButton())
-                          .help("Load a json config file from a previous run of star")
-//                          .cursor3(.pointingHand)
-                        
-                    }
-                    if viewModel.userPreferences.recentlyOpenedSequencelist.count > 0 {
+                Spacer()
+                Grid {
+                    GridRow {
                         HStack {
-                            Button(action: self.loadRecent) {
-                                Text("Open Recent").font(.largeTitle)
+                            Spacer()
+                            Button(action: self.loadVideoToProcess) {
+                                Text("Load Video").font(.largeTitle)
                             }.buttonStyle(ShrinkingButton())
-                              .help("open a recently processed sequence")
-                            
-                            Picker("\u{27F6}", selection: $previously_opened_sheet_showing_item) {
-                                let array = viewModel.userPreferences.sortedSequenceList
-                                ForEach(array, id: \.self) { option in
-                                    Text(option)
-                                }
-                            }.frame(maxWidth: 500)
-                              .pickerStyle(.menu)
+                              .help("Load a video to process.  Make sure lots of free space is available next to the video for intermediate files.")
+                        }
+                        Space(width: 20)
+                        HStack {
+                            Text("Start processing a video file.  Any kind of video file can be opened.  The individual frames will be extrated for processing.")
+                              .font(.title)
+                              .foregroundColor(.white)
+                            Spacer()
+                        } 
+                    }
+                    GridRow {
+                        HStack {
+                            Spacer()
+                            Button(action: self.loadImageSequence) {
+                                Text("Load Image Sequence").font(.largeTitle)
+                            }.buttonStyle(ShrinkingButton())
+                              .help("Load an image sequence yet to be processed by star")
+                        }
+                        Space(width: 20)
+                        HStack {
+                            Text("Start processing an images sequence which has not already been renedred into a video.  Star only supports 16 bit tiff files for each frame.")
+                              .font(.title)
+                              .foregroundColor(.white)
+                            Spacer()
                         }
                     }
-                    Spacer()
-                      .frame(maxHeight: 20)
+                    GridRow {
+                        HStack {
+                            Spacer()
+                            Button(action: self.loadConfig) {
+                                Text("Load Config").font(.largeTitle)
+                            }.buttonStyle(ShrinkingButton())
+                              .help("Load a json config file from a previous run of star")
+                        }
+                        Space(width: 20)
+                        HStack {
+                            Text("Load a star config file for a video or image sequence which has been loaded before.")
+                              .font(.title)
+                              .foregroundColor(.white)
+                            Spacer()
+                        }
+                    }
+                    if viewModel.userPreferences.recentlyOpenedSequencelist.count > 0 {
+                        GridRow {
+                            HStack {
+                                Spacer()
+                                Button(action: self.loadRecent) {
+                                    Text("Open Recent").font(.largeTitle)
+                                }.buttonStyle(ShrinkingButton())
+                                  .help("open a recently processed sequence")
+                            }
+                            Space(width: 0)
+                            HStack {
+                                Picker("\u{27F6}", selection: $previously_opened_sheet_showing_item) {
+                                    let array = viewModel.userPreferences.sortedSequenceList
+                                    ForEach(array, id: \.self) { option in
+                                        Text(option)
+                                    }
+                                }//.frame(maxWidth: 500)
+                                  .pickerStyle(.menu)
+                                Spacer()
+                            }
+                        }
+                    }
                 }
+                Spacer()
             }
+            Spacer()
         }
           .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
           .background(viewModel.backgroundColor)
@@ -145,8 +180,10 @@ struct InitialView: View {
                                     }
                                 }
                             } else {
+                                // XXX handle video drops here
                                 Task { @MainActor in
-                                    self.handle(error: "Unsupported file type \(url.path)")
+                                    startupWithVideoToProcess(url.path)
+                                    //self.handle(error: "Unsupported file type \(url.path)")
                                 }
                             }
                         } else {
@@ -233,7 +270,7 @@ struct InitialView: View {
             if let returnedUrl = openPanel.url {
                 let path = returnedUrl.path
                 Log.d("url path \(path)")
-
+                
                 startupWithSequenceDir(path)
             }
         }

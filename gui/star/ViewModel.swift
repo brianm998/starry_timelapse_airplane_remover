@@ -66,13 +66,17 @@ public final class ViewModel {
     var labelText: String = "Started"
 
     var isLoadingImageSequence = false
+    var isExtractingImageSequence = false
     var loadingImageSequenceFilename: String?
 
-    var amountLoaded = 0.0
     var numberLoaded = 0
+    var amountLoaded = 0.0      // 0.0...1.0
     var numberPreviewsSaved = 0
-    var amountPreviewsSaved = 0.0
+    var amountPreviewsSaved = 0.0 // 0.0...1.0
 
+    var numberExtracted = 0
+    var amountExtracted = 0.0 // 0.0...1.0
+    
     //var backgroundColor = Color(red: 0.4, green: 0.4, blue: 0.4)
     var backgroundColor = ViewModel.defaultBackgroundColor
 
@@ -215,10 +219,18 @@ public final class ViewModel {
     func startup(withVideoToProcess path: String) async throws {
         isLoadingImageSequence = true
 
-        let (outputDir, reencodeScript) = try decodeVideo(named: path) { currentFrame, totalFrames in
-            Log.d("\(currentFrame)/\(totalFrames)")
-        }
+        isExtractingImageSequence = true
+        let (outputDir, reencodeScript) = try await Task.detached() {
+            try decodeVideo(named: path) { currentFrame, totalFrames in
+                Task { @MainActor in
+                    self.numberExtracted = currentFrame
+                    self.amountExtracted = Double(currentFrame) / Double(totalFrames)
+                }
+            }
+        }.value
 
+        isExtractingImageSequence = false
+        
         Log.d("reencodeScript \(reencodeScript)")
         Log.d("outputDir \(outputDir)")
 
