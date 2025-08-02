@@ -8,7 +8,7 @@ public typealias ProgressCallback = @Sendable (_ currentFrame: Int, _ totalFrame
 public func decodeVideo(
     named inputPath: String,
     progress: @escaping ProgressCallback
-) throws -> (outputDirectory: String, reencodeScript: String) {
+) async throws -> (outputDirectory: String, reencodeScript: String) {
     let inputURL = URL(fileURLWithPath: inputPath)
     let fileName = inputURL.deletingPathExtension().lastPathComponent
     let fileExtension = inputURL.pathExtension
@@ -19,59 +19,97 @@ public func decodeVideo(
     try? fileManager.createDirectory(atPath: outputFolder, withIntermediateDirectories: true)
 
     let ffprobePath = ToolPaths.ffprobe
-    
-    let frameRateRaw = try shellOut(to: ffprobePath, arguments: [
-        "-v", "error", "-select_streams", "v:0",
-        "-show_entries", "stream=r_frame_rate",
-        "-of", "default=noprint_wrappers=1:nokey=1",
-        inputPath
-    ]).trimmingCharacters(in: .whitespacesAndNewlines)
+    let ffmpegPath = ToolPaths.ffmpeg
 
-    let frameRate = frameRateRaw.components(separatedBy: "/")[0]
-
-    let codec = try shellOut(to: ffprobePath, arguments: [
-        "-v", "error", "-select_streams", "v:0",
-        "-show_entries", "stream=codec_name",
-        "-of", "default=noprint_wrappers=1:nokey=1",
-        inputPath
-    ]).trimmingCharacters(in: .whitespacesAndNewlines)
-
-    let pixFmt = try shellOut(to: ffprobePath, arguments: [
-        "-v", "error", "-select_streams", "v:0",
-        "-show_entries", "stream=pix_fmt",
-        "-of", "default=noprint_wrappers=1:nokey=1",
-        inputPath
-    ]).trimmingCharacters(in: .whitespacesAndNewlines)
-
-    let hasAudio = (try? shellOut(to: ffprobePath, arguments: [
-        "-v", "error", "-select_streams", "a:0",
-        "-show_entries", "stream=codec_type",
-        "-of", "default=noprint_wrappers=1:nokey=1",
-        inputPath
-    ]).trimmingCharacters(in: .whitespacesAndNewlines)) == "audio"
-
-    let totalFramesStr = try shellOut(to: ffprobePath, arguments: [
-        "-v", "error", "-count_frames", "-select_streams", "v:0",
-        "-show_entries", "stream=nb_read_frames",
-        "-of", "default=noprint_wrappers=1:nokey=1",
-        inputPath
-    ])
+    let totalFramesTask = Task {
+        try shellOut(
+          to: ffprobePath,
+          arguments: [
+            "-v", "error", "-count_frames", "-select_streams", "v:0",
+            "-show_entries", "stream=nb_read_frames",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            inputPath
+          ]
+        )
+    }
+    let totalFramesStr = try await totalFramesTask.value
     let totalFrames = Int(totalFramesStr.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
 
-    try runFFmpegWithProgress(
-        arguments: ["-i", inputPath, "-pix_fmt", "rgb48le", "\(outputFolder)/image_%04d.tiff"],
-        totalFrames: totalFrames,
-        progress: progress
-    )
+    let ffmpegTask = Task {
+        try runFFmpegWithProgress(
+          arguments: ["-i", inputPath, "-pix_fmt", "rgb48le", "\(outputFolder)/image_%04d.tiff"],
+          totalFrames: totalFrames,
+          progress: progress
+        )
+    }
 
-    let ffmpegPath = ToolPaths.ffmpeg
-    
+    let hasAudioTask = Task {
+        (try? shellOut(
+           to: ffprobePath,
+           arguments: [
+             "-v", "error", "-select_streams", "a:0",
+             "-show_entries", "stream=codec_type",
+             "-of", "default=noprint_wrappers=1:nokey=1",
+             inputPath
+           ]
+         ).trimmingCharacters(in: .whitespacesAndNewlines)) == "audio"
+    }
+
+    let frameRateTask = Task {
+        try shellOut(
+          to: ffprobePath,
+          arguments: [
+            "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=r_frame_rate",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            inputPath
+          ]
+        ).trimmingCharacters(in: .whitespacesAndNewlines)        
+    }
+
+    let codecTask = Task {
+        try shellOut(
+          to: ffprobePath,
+          arguments: [
+            "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=codec_name",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            inputPath
+          ]
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    let pixFmtTask = Task {
+        try shellOut(
+          to: ffprobePath,
+          arguments:
+            [
+              "-v", "error", "-select_streams", "v:0",
+              "-show_entries", "stream=pix_fmt",
+              "-of", "default=noprint_wrappers=1:nokey=1",
+              inputPath
+            ]
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    let hasAudio = try await hasAudioTask.value
+
     if hasAudio {
         _ = try shellOut(to: ffmpegPath, arguments: [
             "-i", inputPath, "-vn", "-acodec", "copy", "\(outputFolder)/audio.aac"
         ])
     }
 
+    try await ffmpegTask.value
+    
+    let frameRateRaw = try await frameRateTask.value
+    let frameRate = frameRateRaw.components(separatedBy: "/")[0]
+
+    let codec = try await codecTask.value
+
+    let pixFmt = try await pixFmtTask.value
+    
+    
     // Generate re-encode script
     let reencodeScriptPath = "\(reencodeScriptDir)/reencode-\(fileName).sh"
     var script = """
@@ -125,18 +163,18 @@ public func encodeVideo(
         .dropFirst() // skip 'ffmpeg'
 
     try runFFmpegWithProgress(
-        arguments: Array(args),
-        totalFrames: totalFrames,
-        progress: progress
+      arguments: Array(args),
+      totalFrames: totalFrames,
+      progress: progress
     )
 }
 
 /// Run an ffmpeg command and parse frame progress from stderr
 func runFFmpegWithProgress(
-    arguments: [String],
-    totalFrames: Int?,
-    ffmpegPath: String = ToolPaths.ffmpeg,
-    progress: @escaping ProgressCallback
+  arguments: [String],
+  totalFrames: Int?,
+  ffmpegPath: String = ToolPaths.ffmpeg,
+  progress: @escaping ProgressCallback
 ) throws {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: ffmpegPath)
@@ -153,8 +191,8 @@ func runFFmpegWithProgress(
         // Match "frame=   123"
         if let range = line.range(of: #"frame=\s*\d+"#, options: .regularExpression) {
             let numberStr = line[range]
-                .replacingOccurrences(of: "frame=", with: "")
-                .trimmingCharacters(in: .whitespaces)
+              .replacingOccurrences(of: "frame=", with: "")
+              .trimmingCharacters(in: .whitespaces)
             if let frameNum = Int(numberStr) {
                 progress(frameNum, totalFrames ?? 0)
             }
@@ -166,8 +204,12 @@ func runFFmpegWithProgress(
     pipe.fileHandleForReading.readabilityHandler = nil
 
     if process.terminationStatus != 0 {
-        throw NSError(domain: "ffmpeg", code: Int(process.terminationStatus), userInfo: [
+        throw NSError(
+          domain: "ffmpeg",
+          code: Int(process.terminationStatus),
+          userInfo: [
             NSLocalizedDescriptionKey: "ffmpeg exited with code \(process.terminationStatus)"
-        ])
+          ]
+        )
     }
 }

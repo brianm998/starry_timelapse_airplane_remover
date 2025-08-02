@@ -221,7 +221,7 @@ public final class ViewModel {
 
         isExtractingImageSequence = true
         let (outputDir, reencodeScript) = try await Task.detached() {
-            try decodeVideo(named: path) { currentFrame, totalFrames in
+            try await decodeVideo(named: path) { currentFrame, totalFrames in
                 Task { @MainActor in
                     self.numberExtracted = currentFrame
                     self.amountExtracted = Double(currentFrame) / Double(totalFrames)
