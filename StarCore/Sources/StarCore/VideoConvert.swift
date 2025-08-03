@@ -109,7 +109,11 @@ public func decodeVideo(
 
     let pixFmt = try await pixFmtTask.value
     
-    
+    /*
+     XXX instead of generating a script here,
+     save the codec, pixel format, filename, frame rate and audio track presence in config
+     use that later as defaults in the RenderVideoSheetView UI
+     */
     // Generate re-encode script
     let reencodeScriptPath = "\(reencodeScriptDir)/reencode-\(fileName).sh"
     var script = """
@@ -133,44 +137,78 @@ public func decodeVideo(
     return (outputFolder, reencodeScriptPath)
 }
 
-/// Run the generated reencode script and track encoding progress
-public func encodeVideo(
-    with scriptPath: String,
-    progress: @escaping ProgressCallback
+public func runFFmpegWithProgress(
+  arguments: [String],
+  totalFrames: Int?,
+  ffmpegPath: String = ToolPaths.ffmpeg,
+  progress: @escaping ProgressCallback
 ) throws {
-    let folderURL = URL(fileURLWithPath: scriptPath).deletingLastPathComponent()
-    let imageFiles = try FileManager.default.contentsOfDirectory(atPath: folderURL.path)
-        .filter { $0.hasPrefix("image_") && $0.hasSuffix(".tiff") }
-    let totalFrames = imageFiles.count
+    Log.d("starting ffmpeg run")
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: ffmpegPath)
+    process.arguments = arguments
 
-    // Extract the command line from the script
-    let scriptContent = try String(contentsOfFile: scriptPath, encoding: .utf8)
-    let lines = scriptContent.split(separator: "\n")
+    let pipe = Pipe()
+    process.standardError = pipe
+    process.standardOutput = nil
 
-    guard lines.contains(where: { $0.contains("ffmpeg") }) else {
-        throw NSError(domain: "reencode", code: 1, userInfo: [NSLocalizedDescriptionKey: "No ffmpeg line found in script"])
+    let stderrCollector = StderrCollector()
+
+    pipe.fileHandleForReading.readabilityHandler = { handle in
+        let data = handle.availableData
+        guard !data.isEmpty else { return }
+
+        stderrCollector.append(data)
+
+        if let line = String(data: data, encoding: .utf8) {
+            // Match "frame=   123"
+            if let range = line.range(of: #"frame=\s*\d+"#, options: .regularExpression) {
+                let numberStr = line[range]
+                    .replacingOccurrences(of: "frame=", with: "")
+                    .trimmingCharacters(in: .whitespaces)
+                if let frameNum = Int(numberStr) {
+                    progress(frameNum, totalFrames ?? 0)
+                }
+            }
+        }
     }
 
-    // Tokenize the command line manually (basic parsing)
-    let fullCommand = lines
-        .filter { !$0.hasPrefix("#") }
-        .joined(separator: " ")
-        .replacingOccurrences(of: "\\\n", with: " ")
-        .trimmingCharacters(in: .whitespacesAndNewlines)
+    try process.run()
+    process.waitUntilExit()
+    pipe.fileHandleForReading.readabilityHandler = nil
 
-    let args = fullCommand
-        .components(separatedBy: .whitespaces)
-        .dropFirst() // skip 'ffmpeg'
-
-    try runFFmpegWithProgress(
-      arguments: Array(args),
-      totalFrames: totalFrames,
-      progress: progress
-    )
+    if process.terminationStatus != 0 {
+        let stderrMessage = String(data: stderrCollector.collectedData(), encoding: .utf8) ?? "<unreadable stderr>"
+        Log.e("video render failed: \(stderrMessage)")
+        throw NSError(
+            domain: "ffmpeg",
+            code: Int(process.terminationStatus),
+            userInfo: [
+                NSLocalizedDescriptionKey: "ffmpeg exited with code \(process.terminationStatus)",
+                "stderr": stderrMessage
+            ]
+        )
+    }
+    Log.d("ending ffmpeg run")
 }
 
-/// Run an ffmpeg command and parse frame progress from stderr
-func runFFmpegWithProgress(
+final class StderrCollector: @unchecked Sendable {
+    private var data = Data()
+    private let queue = DispatchQueue(label: "stderr.sync.queue")
+
+    func append(_ newData: Data) {
+        queue.sync {
+            data.append(newData)
+        }
+    }
+
+    func collectedData() -> Data {
+        queue.sync { data }
+    }
+}
+
+
+public func OLD_runFFmpegWithProgress(
   arguments: [String],
   totalFrames: Int?,
   ffmpegPath: String = ToolPaths.ffmpeg,
