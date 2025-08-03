@@ -70,6 +70,7 @@
 		D3E67E1A2E3E63E000A97C28 /* ffmpeg in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3E67DE22E3E5DE300A97C28 /* ffmpeg */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		D3E67E202E3E75FC00A97C28 /* align_image_stack in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3E67DE12E3E5DE300A97C28 /* align_image_stack */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		D3E680472E3EADAF00A97C28 /* ffprobe in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3E680452E3EAD9000A97C28 /* ffprobe */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		D3E680492E3FB75600A97C28 /* RenderVideoSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E680482E3FB75600A97C28 /* RenderVideoSheetView.swift */; };
 		D3F0BFFE2C0390BA0061420D /* FrameImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F0BFFD2C0390BA0061420D /* FrameImageView.swift */; };
 		D3FBFA082CE132C400A23FC6 /* ProcessAllFramesButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA072CE132C400A23FC6 /* ProcessAllFramesButton.swift */; };
 		D3FBFA0B2CE1B18700A23FC6 /* LimitedSelectionPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA092CE1B18700A23FC6 /* LimitedSelectionPicker.swift */; };
@@ -181,6 +182,7 @@
 		D3E67DE12E3E5DE300A97C28 /* align_image_stack */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = align_image_stack; sourceTree = "<group>"; };
 		D3E67DE22E3E5DE300A97C28 /* ffmpeg */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ffmpeg; sourceTree = "<group>"; };
 		D3E680452E3EAD9000A97C28 /* ffprobe */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ffprobe; sourceTree = "<group>"; };
+		D3E680482E3FB75600A97C28 /* RenderVideoSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderVideoSheetView.swift; sourceTree = "<group>"; };
 		D3F0BFFD2C0390BA0061420D /* FrameImageView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameImageView.swift; sourceTree = "<group>"; };
 		D3FBFA072CE132C400A23FC6 /* ProcessAllFramesButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessAllFramesButton.swift; sourceTree = "<group>"; };
 		D3FBFA092CE1B18700A23FC6 /* LimitedSelectionPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LimitedSelectionPicker.swift; sourceTree = "<group>"; };
@@ -259,6 +261,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D3E680482E3FB75600A97C28 /* RenderVideoSheetView.swift */,
 				D333BC0A2E23FF7000569A78 /* EditableNumberView.swift */,
 				D392EB6C2E16C6940020E16A /* Space.swift */,
 				D392EB672E1395CB0020E16A /* DebugView.swift */,
@@ -597,6 +600,7 @@
 				D3A0D3B02CF3AEB800FD2E9E /* FinalGUIProcessor.swift in Sources */,
 				D3CD86792CF5815100D2D53F /* InitialInstructionsView.swift in Sources */,
 				D32F6DBA2A4E6FCE00704870 /* BottomRightView.swift in Sources */,
+				D3E680492E3FB75600A97C28 /* RenderVideoSheetView.swift in Sources */,
 				D33FFC162A2CFF4700F38194 /* LoadAllOutliersButton.swift in Sources */,
 				D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */,
 				D3FBFA232CE91B4700A23FC6 /* ImageSequenceLoadingView.swift in Sources */,

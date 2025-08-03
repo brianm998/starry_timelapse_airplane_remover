@@ -1226,6 +1226,48 @@ public final class ImageSequenceViewModel {
             }
         }
     }
+    
+    //private var videoRenderTask: Task<Void>? = nil
+    
+    func renderVideo(named filename: String,
+                     frameRate: FrameRate,
+                     codec: FFmpegCodec,
+                     pixelFormat: FFmpegPixelFormat,
+                     muxer: FFmpegMuxer,
+                     progress: @escaping ProgressCallback,
+                     completion: @escaping @Sendable () -> Void,
+                     errorCallback: @escaping @Sendable (Error) -> Void)
+    {
+        let totalNumberOfFrames = self.frames.count
+        let rawFrameRate = frameRate.rawString
+        guard let config else {
+            errorCallback("No Config!")
+            return
+        }
+        let outputPath = config.config().outputPath
+        let basename = config.config().basename
+        
+        /*videoRenderTask = */Task.detached {
+            do {
+                try runFFmpegWithProgress(
+                  arguments: [ "-y",                  // overwrite
+                    "-framerate", rawFrameRate,       // frame rate
+                    "-pattern_type", "glob", "-i",    // input image glob
+                    "\(outputPath)/\(basename)/*.tiff", // input images
+                    "-c:v", codec.rawValue,           // codec
+                    "-pix_fmt", pixelFormat.rawValue, // pixel format
+                    "-f", muxer.rawValue,             // muxer
+                    "\(outputPath)/\(filename)"       // output filename
+                  ],
+                  totalFrames: totalNumberOfFrames,
+                  progress: progress)
+                completion()
+            } catch {
+                Log.e("video encoding error: \(error)")
+                errorCallback(error)
+            }
+        }
+    }
 }
 
 public actor CountActor {
@@ -1237,4 +1279,5 @@ public actor CountActor {
     public func isMore(than: Int) -> Bool { value > than }
     public func isMoreThanZero() -> Bool { value > 0 }
 }
+
 
