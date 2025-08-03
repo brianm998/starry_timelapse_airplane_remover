@@ -128,10 +128,6 @@ public struct FrameEditImageView: View {
                     self.previewImage
                 }
 
-                if viewModel.showIgnoreLowerBar {
-                    IgnoreBarView()
-                }
-
                 Rectangle()
                   .background(.black)
                   .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -174,6 +170,10 @@ public struct FrameEditImageView: View {
                         }
                     }
                 }.opacity(viewModel.outlierOpacity)
+                
+                if viewModel.showIgnoreLowerBar {
+                    IgnoreBarView()
+                }
             }
         }
           .onChange(of: viewModel.currentIndex, initial: true) {
