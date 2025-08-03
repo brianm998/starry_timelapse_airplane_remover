@@ -55,7 +55,7 @@ print OUT "// DO NOT EDIT BY HAND\n";
 print OUT "// DO NOT EDIT BY HAND\n";
 print OUT "// DO NOT EDIT BY HAND\n\n";
 
-print OUT "enum FFmpegPixelFormat: String, CaseIterable, Codable, Sendable {\n";
+print OUT "public enum FFmpegPixelFormat: String, CaseIterable, Codable, Sendable {\n";
 foreach my $name (keys %$fmts) {
   if(exists $fmts->{$name}{real_name}) {
     print OUT "    case $fmts->{$name}{name} = \"$fmts->{$name}{real_name}\"\n";

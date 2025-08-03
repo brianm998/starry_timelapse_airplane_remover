@@ -54,7 +54,7 @@ print OUT "// DO NOT EDIT BY HAND\n";
 print OUT "// DO NOT EDIT BY HAND\n";
 print OUT "// DO NOT EDIT BY HAND\n\n";
 
-print OUT "enum FFmpegCodec: String, CaseIterable, Codable, Sendable {\n";
+print OUT "public enum FFmpegCodec: String, CaseIterable, Codable, Sendable {\n";
 foreach my $name (keys %$codecs) {
   if(exists $codecs->{$name}{real_name}) {
     print OUT "    case $codecs->{$name}{name} = \"$codecs->{$name}{real_name}\"\n";
