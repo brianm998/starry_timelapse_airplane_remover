@@ -34,6 +34,10 @@ public enum FrameRate: Equatable, CaseIterable, Hashable {
         }
     }
 
+    public var rawString: String {
+        String(format: "%g", self.rawValue)
+    }
+    
     public init(rawValue: Double) {
         switch rawValue {
         case 24:
