@@ -42,8 +42,9 @@ public struct IgnoreBarView: View {
               .foregroundColor(.orange)
               .frame(width: viewModel.arrowLength, height: viewModel.arrowHeight) 
               .offset(x: (viewModel.frameWidth+viewModel.arrowLength)/2,
-                      y: viewModel.frameHeight/2 - viewModel.lineWidth*2 - viewModel.ignoreLowerPixels)
+                      y: viewModel.frameHeight/2 - viewModel.ignoreLowerPixels)
               .gesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.arrowHeight/2))
+              .cursor(.resizeUpDown)
 
             // arrow on the left
             Image(systemName: "chevron.right")
@@ -51,8 +52,9 @@ public struct IgnoreBarView: View {
               .foregroundColor(.orange)
               .frame(width: viewModel.arrowLength, height: viewModel.arrowHeight) 
               .offset(x: -(viewModel.frameWidth+viewModel.arrowLength)/2,
-                      y: viewModel.frameHeight/2 - viewModel.lineWidth*2 - viewModel.ignoreLowerPixels)
+                      y: viewModel.frameHeight/2 - viewModel.ignoreLowerPixels)
               .gesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.arrowHeight/2))
+              .cursor(.resizeUpDown)
 
             // orange line at the top for gestures
             Rectangle()
@@ -61,7 +63,16 @@ public struct IgnoreBarView: View {
               .frame(width: viewModel.frameWidth,
                      height: viewModel.lineWidth*4)
               .offset(y: viewModel.frameHeight/2 + viewModel.lineWidth/2 - viewModel.ignoreLowerPixels)
+
+            // larger clear selectable area for gesture
+            Rectangle()
+              .background(.clear)
+              .opacity(0.00001)
+              .frame(width: viewModel.frameWidth,
+                     height: viewModel.lineWidth*20)
+              .offset(y: viewModel.frameHeight/2 + viewModel.lineWidth/2 - viewModel.ignoreLowerPixels)
               .gesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.lineWidth*4))
+              .cursor(.resizeUpDown)
 
             // Text on the top
             if viewModel.ignoreLowerPixels > viewModel.frameHeight/11 {
