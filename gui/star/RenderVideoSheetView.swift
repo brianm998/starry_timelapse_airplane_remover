@@ -11,6 +11,7 @@ struct RenderVideoSheetView: View {
     @State private var frameRate: FrameRate = .fps_24
     @State private var codec: FFmpegCodec = .prores
     @State private var pixelFormat: FFmpegPixelFormat = .yuv444p10le
+    @State private var muxer: FFmpegMuxer = .mov
     
     var body: some View {
         HStack {
@@ -77,6 +78,7 @@ struct RenderVideoSheetView: View {
                 }
                   .onChange(of: codec) {
                       pixelFormat = codec.pixelFormats[0]
+                      muxer = codec.supportedMuxers[0]
                   }
 
                 Text(codec.description)
@@ -92,10 +94,21 @@ struct RenderVideoSheetView: View {
                 }
 
 
-                    Text("\(pixelFormat.numberOfComponents) components per pixel")
-                    Text("\(pixelFormat.bitsPerPixel) bits per pixel")
-                    Text("bit depths: \(pixelFormat.bitDepths)")
+                Text("\(pixelFormat.numberOfComponents) components per pixel")
+                Text("\(pixelFormat.bitsPerPixel) bits per pixel")
+                Text("bit depths: \(pixelFormat.bitDepths)")
+                
+                Divider()
 
+                Picker("Container", selection: $muxer) {
+                    ForEach(codec.supportedMuxers, id: \.self) { muxer in
+                        Text(muxer.rawValue)
+                    }
+                }
+
+                Text(muxer.description)
+                  .lineLimit(nil)
+                  .fixedSize(horizontal: false, vertical: true)
                 
                 HStack {
                     Spacer()

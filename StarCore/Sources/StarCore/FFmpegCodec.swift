@@ -9439,14 +9439,6 @@ public enum FFmpegCodec: String, CaseIterable, Codable, Sendable {
             return nil
         }
     }
-
-    public static var availableVideoCodecs: [FFmpegCodec] {
-        self.allCases
-          .filter { $0.canDecode }
-          .filter { $0.canEncode }
-          .filter { $0.pixelFormats.count > 0 }
-          .filter { $0.type == .video }
-    }
 }
 
 public enum CodecType: Codable {

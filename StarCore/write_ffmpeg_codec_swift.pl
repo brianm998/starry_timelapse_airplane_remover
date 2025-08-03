@@ -254,16 +254,6 @@ foreach my $name (keys %$codecs) {
 print OUT "        }\n";
 print OUT "    }\n\n";
 
-print OUT "    public static var availableVideoCodecs: [FFmpegCodec] {\n";
-print OUT "        self.allCases\n";
-print OUT '          .filter { $0.canDecode }'."\n";
-print OUT '          .filter { $0.canEncode }'."\n";
-print OUT '          .filter { $0.pixelFormats.count > 0 }'."\n";
-print OUT '          .filter { $0.type == .video }'."\n";
-print OUT "    }\n";
-print OUT "}\n\n";
-
-
 print OUT "public enum CodecType: Codable {\n";
 print OUT "    case video\n";
 print OUT "    case audio\n";
