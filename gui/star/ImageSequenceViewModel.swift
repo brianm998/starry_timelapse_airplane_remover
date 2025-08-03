@@ -217,6 +217,8 @@ public final class ImageSequenceViewModel {
 
     var multiSelectSheetShowing = false
 
+    var renderVideoSheetShowing = false
+
     var showAllFrameViewModes = false
 
     var showAllFrameProcessingStates = false

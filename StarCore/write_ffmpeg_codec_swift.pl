@@ -200,22 +200,30 @@ foreach my $name (keys %$codecs) {
   $real_name = $codecs->{$name}{name} if (exists $codecs->{$name}{real_name});
   open (FH, "../external_binaries/bin/ffmpeg -h encoder=$real_name 2>/dev/null |") || die "cannot read pix fmts: $!\n";
   my $supported_line = "[";
+  my $supported_formats = {};
+  my $short_description = undef;
   while(<FH>) {
     if(/Supported pixel formats:\s+(.*)/) {
 
       my @supported_formats = split /\s+/, $1;
       foreach my $format (@supported_formats) {
 	if ($format =~ /^\s*\d/) {
-	  $supported_line .= "._$format, ";
+	  $supported_formats->{"._$format"} = 1
 	} else {
-	  $supported_line .= ".$format, ";
+	  $supported_formats->{".$format"} = 1
 	}
       }
+    } elsif(/Encoder[^\]]+\[([^\]]+)\]:/) {
+      $short_description = $1;
     }
   }
   close FH;
+  $supported_line .= join(", ", keys %$supported_formats);
   $supported_line .= "]";
   $extra_info->{$name}{supported_line} = $supported_line;
+  if(defined $short_description) {
+    $extra_info->{$name}{description} = $short_description;
+  }
 }
 
 print OUT "    public var pixelFormats: [FFmpegPixelFormat] {\n";
@@ -225,6 +233,23 @@ foreach my $name (keys %$codecs) {
   $real_name = $codecs->{$name}{name} if (exists $codecs->{$name}{real_name});
   print OUT "        case .$real_name:\n";
   print OUT "            $extra_info->{$name}{supported_line}\n";
+}
+print OUT "        }\n";
+print OUT "    }\n\n";
+
+print OUT "    public var name: String? {\n";
+print OUT "        switch self {\n";
+foreach my $name (keys %$codecs) {
+  my $real_name = $name;
+  $real_name = $codecs->{$name}{name} if (exists $codecs->{$name}{real_name});
+  print OUT "        case .$real_name:\n";
+  if(exists $extra_info->{$name}{description}) {
+    my $value = $extra_info->{$name}{description};
+    $value =~ s/\"/\\\"/g;
+    print OUT "            return \"$value\"\n";
+  } else {
+    print OUT "            return nil\n";
+  }
 }
 print OUT "        }\n";
 print OUT "    }\n\n";

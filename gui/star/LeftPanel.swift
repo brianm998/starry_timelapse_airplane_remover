@@ -93,7 +93,7 @@ struct LeftPanel: View {
 
             Button() {
                 Log.d("render video")
-                viewModel.isRenderingVideo = true
+                viewModel.renderVideoSheetShowing = true
                 /*
 
                  need to keep track of ffmpeg parameters when we load a video
