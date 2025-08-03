@@ -249,11 +249,13 @@ public struct Config: Codable, Sendable, Transferable {
     //       lots of renaming
     //       debug logging view
     //       lines better connected, fixed LinearBlobConnector
-    //       use multiple aligned images to clean up really noisy frame sequences 
+    //       use multiple aligned images to clean up really noisy frame sequences
+    // 8.0.0 embed ffmpeg, ffprobe and align_image_stack in the app properly
+    //       allow starting directly with a video and having the image sequence extracted 
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.7.3"
+    public static let latestVersion = "8.0.0"
     
     public var basename: String {
         let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)-\(self.detectionType.rawValue)"
