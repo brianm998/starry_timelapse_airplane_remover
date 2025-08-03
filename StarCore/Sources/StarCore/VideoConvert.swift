@@ -92,7 +92,7 @@ public func decodeVideo(
         ).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    let hasAudio = try await hasAudioTask.value
+    let hasAudio = await hasAudioTask.value
 
     if hasAudio {
         _ = try shellOut(to: ffmpegPath, arguments: [

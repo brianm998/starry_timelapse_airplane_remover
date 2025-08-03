@@ -45,6 +45,7 @@ while(<FH>) {
     }
   }
 }
+close FH;
 
 print OUT "import Foundation\n\n";
 
@@ -192,10 +193,46 @@ foreach my $name (keys %$codecs) {
 print OUT "        }\n";
 print OUT "    }\n\n";
 
-print OUT "    public static var encodableDecodableVideoCodecs: [FFmpegCodec] {\n";
+print OUT "    public var pixelFormats: [FFmpegPixelFormat] {\n";
+print OUT "        switch self {\n";
+foreach my $name (keys %$codecs) {
+  my $real_name = $name;
+  $real_name = $codecs->{$name}{name} if (exists $codecs->{$name}{real_name});
+  print OUT "        case .$real_name:\n";
+
+  open (FH, "../external_binaries/bin/ffmpeg -h encoder=$real_name 2>/dev/null |") || die "cannot read pix fmts: $!\n";
+  my $supported_line = "[";
+  while(<FH>) {
+    if(/Supported pixel formats:\s+(.*)/) {
+
+      my @supported_formats = split /\s+/, $1;
+      foreach my $format (@supported_formats) {
+	if ($format =~ /^\s*\d/) {
+	  $supported_line .= "._$format, ";
+	} else {
+	  $supported_line .= ".$format, ";
+	}
+      }
+    } elsif(/^Encoder[^\]]+\[([^\]]+)\]:/) {
+#      print "$real_name is $1\n";
+    }
+  }
+  close FH;
+  $supported_line .= "]";
+  print OUT "            $supported_line\n";
+}
+
+
+
+print OUT "        }\n";
+print OUT "    }\n\n";
+
+
+print OUT "    public static var availableVideoCodecs: [FFmpegCodec] {\n";
 print OUT "        self.allCases\n";
 print OUT '          .filter { $0.canDecode }'."\n";
 print OUT '          .filter { $0.canEncode }'."\n";
+print OUT '          .filter { $0.pixelFormats.count > 0 }'."\n";
 print OUT '          .filter { $0.type == .video }'."\n";
 print OUT "    }\n";
 print OUT "}\n\n";
