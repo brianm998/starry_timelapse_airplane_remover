@@ -193,13 +193,11 @@ foreach my $name (keys %$codecs) {
 print OUT "        }\n";
 print OUT "    }\n\n";
 
-print OUT "    public var pixelFormats: [FFmpegPixelFormat] {\n";
-print OUT "        switch self {\n";
+my $extra_info = {};
+
 foreach my $name (keys %$codecs) {
   my $real_name = $name;
   $real_name = $codecs->{$name}{name} if (exists $codecs->{$name}{real_name});
-  print OUT "        case .$real_name:\n";
-
   open (FH, "../external_binaries/bin/ffmpeg -h encoder=$real_name 2>/dev/null |") || die "cannot read pix fmts: $!\n";
   my $supported_line = "[";
   while(<FH>) {
@@ -213,20 +211,23 @@ foreach my $name (keys %$codecs) {
 	  $supported_line .= ".$format, ";
 	}
       }
-    } elsif(/^Encoder[^\]]+\[([^\]]+)\]:/) {
-#      print "$real_name is $1\n";
     }
   }
   close FH;
   $supported_line .= "]";
-  print OUT "            $supported_line\n";
+  $extra_info->{$name}{supported_line} = $supported_line;
 }
 
-
-
+print OUT "    public var pixelFormats: [FFmpegPixelFormat] {\n";
+print OUT "        switch self {\n";
+foreach my $name (keys %$codecs) {
+  my $real_name = $name;
+  $real_name = $codecs->{$name}{name} if (exists $codecs->{$name}{real_name});
+  print OUT "        case .$real_name:\n";
+  print OUT "            $extra_info->{$name}{supported_line}\n";
+}
 print OUT "        }\n";
 print OUT "    }\n\n";
-
 
 print OUT "    public static var availableVideoCodecs: [FFmpegCodec] {\n";
 print OUT "        self.allCases\n";
