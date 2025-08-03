@@ -191,6 +191,13 @@ foreach my $name (keys %$codecs) {
 }
 print OUT "        }\n";
 print OUT "    }\n\n";
+
+print OUT "    public static var encodableDecodableVideoCodecs: [FFmpegCodec] {\n";
+print OUT "        self.allCases\n";
+print OUT '          .filter { $0.canDecode }'."\n";
+print OUT '          .filter { $0.canEncode }'."\n";
+print OUT '          .filter { $0.type == .video }'."\n";
+print OUT "    }\n";
 print OUT "}\n\n";
 
 

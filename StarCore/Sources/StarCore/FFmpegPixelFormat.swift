@@ -7,3548 +7,3553 @@ import Foundation
 // DO NOT EDIT BY HAND
 
 enum FFmpegPixelFormat: String, CaseIterable, Codable, Sendable {
-    case gbrp
-    case yuv444p9be
-    case ya8
-    case rgba64be
-    case bayer_bggr8
-    case bayer_bggr16be
-    case yuv444p14be
-    case yuv420p16le
-    case rgb555be
-    case bayer_bggr16le
-    case nv42
-    case yvyu422
-    case yuv422p9le
-    case gbrp12be
-    case yuva444p10be
-    case gbrapf32le
-    case gbrap16be
-    case yuv444p12le
-    case yuv411p
-    case gbrp10be
-    case gbrp12le
-    case yuv420p12be
-    case gbrp9be
-    case yuv422p16be
-    case vaapi
-    case p416le
-    case yuv444p12be
-    case bgr0
-    case bgr555be
-    case yuva444p16be
-    case argb
-    case yuv420p14be
-    case x2rgb10le
-    case nv21
-    case d3d11va_vld
-    case y210le
-    case bayer_grbg8
-    case x2rgb10be
-    case p016le
-    case p016be
-    case bgr48le
-    case yuv444p10be
-    case yuv420p10be
-    case p210le
-    case bayer_gbrg16be
-    case yuva444p
-    case bayer_rggb8
-    case yuv422p16le
-    case gbrap12le
-    case yuv420p10le
-    case gray12le
-    case bayer_rggb16be
-    case yuva420p16le
-    case yuva444p12be
-    case nv20le
-    case yuva420p16be
-    case uyyvyy411
-    case gray10le
-    case x2bgr10le
-    case vulkan
-    case yuvj420p
     case bgr555le
-    case bayer_gbrg16le
-    case yuva422p16le
-    case yuvj440p
-    case yuva420p10le
-    case rgb565le
-    case gbrpf32be
-    case mediacodec
-    case bayer_gbrg8
-    case yuv440p12be
+    case yuv444p12le
     case yuva420p9le
-    case pal8
-    case gray
-    case d3d11
-    case yuv422p14be
+    case yuv444p9le
+    case ayuv64be
+    case vaapi
+    case bayer_grbg16le
+    case yuva444p9be
+    case yuva444p10be
+    case bayer_bggr8
+    case yuva422p10le
+    case ya16be
+    case yuv422p12le
+    case yuv444p16be
+    case rgb24
+    case nv20le
+    case yuv420p9be
+    case gbrp12le
+    case d3d11va_vld
+    case rgb4
+    case argb
+    case yuva444p12be
+    case bayer_gbrg16be
+    case p016be
+    case mediacodec
+    case gray16le
+    case bgr565le
+    case yuva420p16be
+    case bayer_rggb16be
+    case dxva2_vld
+    case bgr4_byte
+    case uyyvyy411
+    case yuvj444p
+    case vdpau
+    case gbrapf32le
+    case yuva422p12le
+    case p016le
+    case yuv422p10be
+    case xvmc
+    case bgra
+    case gbrp10be
+    case yuv422p16le
+    case yuva420p16le
+    case opencl
+    case rgb444le
+    case yuv422p9le
+    case bayer_grbg8
+    case bgr565be
+    case bgr48le
+    case xyz12be
+    case cuda
     case p410be
-    case bgr48be
-    case yuva422p12be
-    case yuva422p9be
+    case gbrpf32be
+    case yuv422p12be
+    case yuv440p12le
+    case abgr
+    case ya16le
+    case yuva444p10le
+    case rgb0
+    case yuv444p9be
     case gray9le
+    case yuva444p9le
+    case yuva422p9be
+    case gray10le
+    case gbrap10be
+    case yuv420p9le
+    case yuv420p10le
+    case gbrap
+    case yuva420p
+    case gbrp
+    case yuv444p16le
+    case yuv444p10be
+    case nv21
+    case yuvj440p
+    case yuva420p10be
+    case d3d11
+    case rgb4_byte
+    case bgra64be
+    case nv16
+    case bayer_rggb8
+    case qsv
+    case gray12be
+    case yvyu422
+    case gbrp12be
+    case gray10be
+    case gbrp16be
+    case yuvj411p
+    case yuv422p
+    case bgr444le
+    case rgba64le
+    case yuva422p10be
+    case gray12le
+    case gray
+    case rgb565le
+    case x2rgb10be
+    case p410le
+    case bgr48be
+    case yuv440p12be
+    case yuva444p16le
+    case pal8
+    case bayer_bggr16be
+    case drm_prime
+    case gray16be
+    case bgr444be
+    case grayf32le
+    case rgba
+    case p010le
+    case _0rgb = "0rgb"
+    case yuv444p
+    case gbrp14le
+    case x2rgb10le
+    case monow
+    case yuv420p16le
+    case yuv422p10le
+    case gbrp14be
+    case xyz12le
+    case rgba64be
+    case yuv422p9be
+    case p416le
+    case yuv410p
+    case yuv420p12be
+    case p210be
+    case p210le
+    case gbrapf32be
+    case yuv444p10le
+    case gbrp9be
+    case yuva422p9le
+    case yuyv422
+    case bgr4
+    case yuv440p10be
+    case yuv420p10be
+    case yuva422p16le
+    case yuv440p
+    case yuva444p
+    case gbrp16le
+    case p010be
+    case x2bgr10be
+    case y210le
+    case gbrap16le
+    case bayer_rggb16le
+    case yuv422p14be
+    case yuv420p
+    case bgr555be
+    case vulkan
+    case rgb565be
+    case yuv444p14le
+    case bgr8
+    case yuvj422p
+    case yuva420p9be
+    case bayer_bggr16le
+    case bayer_gbrg8
+    case grayf32be
+    case gray9be
+    case yuv420p16be
+    case gbrpf32le
+    case bayer_grbg16be
+    case gbrp10le
+    case bayer_gbrg16le
+    case yuv444p14be
+    case bgr24
+    case yuv444p12be
+    case nv20be
+    case bgra64le
+    case yuv422p14le
+    case monob
+    case yuva422p16be
+    case y210be
+    case yuva444p16be
+    case gbrap12le
+    case gbrp9le
+    case uyvy422
+    case rgb48le
+    case rgb48be
+    case bgr0
+    case yuv420p14be
+    case gray14le
+    case yuv411p
+    case yuva444p12le
+    case rgb444be
+    case rgb8
+    case nv42
+    case rgb555le
+    case yuva420p10le
+    case yuv420p12le
+    case gbrap16be
+    case p216be
+    case rgb555be
+    case yuvj420p
+    case yuv422p16be
+    case gbrap10le
+    case yuv420p14le
+    case ayuv64le
+    case videotoolbox_vld
+    case _0bgr = "0bgr"
+    case gbrap12be
     case p216le
     case nv12
-    case yuva422p12le
-    case rgb8
-    case dxva2_vld
-    case videotoolbox_vld
-    case gbrap
-    case mmal
-    case gbrp14be
-    case yuv444p10le
-    case bgra
-    case ayuv64le
-    case yuv444p16le
-    case yuva422p10be
-    case rgb0
-    case _0rgb = "0rgb"
-    case yuv440p
-    case yuv422p
-    case yuv420p12le
-    case bgra64be
     case nv24
-    case rgb24
-    case gray16be
-    case opencl
-    case monob
-    case bgra64le
-    case p216be
-    case yuv440p12le
-    case yuv420p14le
-    case abgr
-    case bgr565le
-    case yuva420p9be
-    case gbrpf32le
-    case bgr4
-    case rgb4_byte
-    case yuv420p
-    case bgr4_byte
-    case yuv422p10be
-    case xyz12be
-    case bgr444le
-    case yuva420p10be
-    case yuv422p12le
-    case ayuv64be
-    case gray12be
-    case vdpau
-    case gbrap10le
-    case _0bgr = "0bgr"
-    case yuv440p10be
-    case nv20be
-    case monow
-    case yuva444p12le
-    case yuva444p16le
-    case cuda
-    case gbrap16le
-    case yuva422p10le
-    case yuva444p9be
-    case gbrap10be
-    case ya16be
-    case rgb555le
-    case bayer_grbg16le
-    case yuva444p9le
-    case yuv422p14le
-    case gbrp16be
-    case rgb4
-    case x2bgr10be
-    case yuva422p
-    case bgr444be
-    case gbrp14le
-    case yuyv422
-    case xvmc
-    case yuv422p12be
-    case p010be
-    case gbrp16le
-    case xyz12le
-    case p010le
-    case yuva422p16be
-    case rgb565be
-    case gbrapf32be
-    case yuv420p9be
-    case rgb48le
-    case bgr24
-    case ya16le
-    case yuva420p
     case p416be
-    case grayf32be
-    case qsv
-    case yuv440p10le
+    case yuva422p12be
+    case x2bgr10le
     case gray14be
-    case gray9be
-    case p210be
-    case yuvj422p
-    case yuv422p9be
-    case bgr565be
-    case yuv444p
-    case yuv444p16be
-    case yuv410p
-    case yuv444p9le
-    case gray14le
-    case rgb48be
-    case y210be
-    case rgb444le
-    case rgba
-    case yuva444p10le
-    case gbrp10le
-    case yuva422p9le
-    case rgba64le
-    case yuvj411p
-    case yuv422p10le
-    case yuv420p9le
-    case nv16
-    case uyvy422
-    case gbrp9le
-    case yuv420p16be
-    case yuvj444p
-    case bgr8
-    case bayer_rggb16le
-    case drm_prime
-    case bayer_grbg16be
-    case yuv444p14le
-    case gbrap12be
-    case grayf32le
-    case p410le
-    case gray10be
-    case gray16le
-    case rgb444be
+    case yuva422p
+    case ya8
+    case yuv440p10le
+    case mmal
 
 
     public var canInput: Bool {
         switch self {
-        case .gbrp:
-            true
-        case .yuv444p9be:
-            true
-        case .ya8:
-            true
-        case .rgba64be:
-            true
-        case .bayer_bggr8:
-            true
-        case .bayer_bggr16be:
-            true
-        case .yuv444p14be:
-            true
-        case .yuv420p16le:
-            true
-        case .rgb555be:
-            true
-        case .bayer_bggr16le:
-            true
-        case .nv42:
-            true
-        case .yvyu422:
-            true
-        case .yuv422p9le:
-            true
-        case .gbrp12be:
-            true
-        case .yuva444p10be:
-            true
-        case .gbrapf32le:
-            true
-        case .gbrap16be:
+        case .bgr555le:
             true
         case .yuv444p12le:
             true
-        case .yuv411p:
+        case .yuva420p9le:
             true
-        case .gbrp10be:
+        case .yuv444p9le:
             true
-        case .gbrp12le:
-            true
-        case .yuv420p12be:
-            true
-        case .gbrp9be:
-            true
-        case .yuv422p16be:
-            true
+        case .ayuv64be:
+            false
         case .vaapi:
             false
-        case .p416le:
+        case .bayer_grbg16le:
             true
-        case .yuv444p12be:
+        case .yuva444p9be:
             true
-        case .bgr0:
+        case .yuva444p10be:
             true
-        case .bgr555be:
+        case .bayer_bggr8:
             true
-        case .yuva444p16be:
+        case .yuva422p10le:
             true
-        case .argb:
+        case .ya16be:
             true
-        case .yuv420p14be:
+        case .yuv422p12le:
             true
-        case .x2rgb10le:
+        case .yuv444p16be:
             true
-        case .nv21:
-            true
-        case .d3d11va_vld:
-            false
-        case .y210le:
-            true
-        case .bayer_grbg8:
-            true
-        case .x2rgb10be:
-            false
-        case .p016le:
-            true
-        case .p016be:
-            true
-        case .bgr48le:
-            true
-        case .yuv444p10be:
-            true
-        case .yuv420p10be:
-            true
-        case .p210le:
-            true
-        case .bayer_gbrg16be:
-            true
-        case .yuva444p:
-            true
-        case .bayer_rggb8:
-            true
-        case .yuv422p16le:
-            true
-        case .gbrap12le:
-            true
-        case .yuv420p10le:
-            true
-        case .gray12le:
-            true
-        case .bayer_rggb16be:
-            true
-        case .yuva420p16le:
-            true
-        case .yuva444p12be:
+        case .rgb24:
             true
         case .nv20le:
             false
-        case .yuva420p16be:
+        case .yuv420p9be:
             true
-        case .uyyvyy411:
+        case .gbrp12le:
+            true
+        case .d3d11va_vld:
             false
-        case .gray10le:
-            true
-        case .x2bgr10le:
-            true
-        case .vulkan:
+        case .rgb4:
             false
-        case .yuvj420p:
+        case .argb:
             true
-        case .bgr555le:
+        case .yuva444p12be:
             true
-        case .bayer_gbrg16le:
+        case .bayer_gbrg16be:
             true
-        case .yuva422p16le:
-            true
-        case .yuvj440p:
-            true
-        case .yuva420p10le:
-            true
-        case .rgb565le:
-            true
-        case .gbrpf32be:
+        case .p016be:
             true
         case .mediacodec:
             false
-        case .bayer_gbrg8:
+        case .gray16le:
             true
-        case .yuv440p12be:
+        case .bgr565le:
             true
-        case .yuva420p9le:
+        case .yuva420p16be:
             true
-        case .pal8:
+        case .bayer_rggb16be:
             true
-        case .gray:
-            true
-        case .d3d11:
+        case .dxva2_vld:
             false
-        case .yuv422p14be:
+        case .bgr4_byte:
             true
+        case .uyyvyy411:
+            false
+        case .yuvj444p:
+            true
+        case .vdpau:
+            false
+        case .gbrapf32le:
+            true
+        case .yuva422p12le:
+            true
+        case .p016le:
+            true
+        case .yuv422p10be:
+            true
+        case .xvmc:
+            false
+        case .bgra:
+            true
+        case .gbrp10be:
+            true
+        case .yuv422p16le:
+            true
+        case .yuva420p16le:
+            true
+        case .opencl:
+            false
+        case .rgb444le:
+            true
+        case .yuv422p9le:
+            true
+        case .bayer_grbg8:
+            true
+        case .bgr565be:
+            true
+        case .bgr48le:
+            true
+        case .xyz12be:
+            true
+        case .cuda:
+            false
         case .p410be:
             true
-        case .bgr48be:
+        case .gbrpf32be:
             true
-        case .yuva422p12be:
+        case .yuv422p12be:
+            true
+        case .yuv440p12le:
+            true
+        case .abgr:
+            true
+        case .ya16le:
+            true
+        case .yuva444p10le:
+            true
+        case .rgb0:
+            true
+        case .yuv444p9be:
+            true
+        case .gray9le:
+            true
+        case .yuva444p9le:
             true
         case .yuva422p9be:
             true
-        case .gray9le:
+        case .gray10le:
+            true
+        case .gbrap10be:
+            true
+        case .yuv420p9le:
+            true
+        case .yuv420p10le:
+            true
+        case .gbrap:
+            true
+        case .yuva420p:
+            true
+        case .gbrp:
+            true
+        case .yuv444p16le:
+            true
+        case .yuv444p10be:
+            true
+        case .nv21:
+            true
+        case .yuvj440p:
+            true
+        case .yuva420p10be:
+            true
+        case .d3d11:
+            false
+        case .rgb4_byte:
+            true
+        case .bgra64be:
+            true
+        case .nv16:
+            false
+        case .bayer_rggb8:
+            true
+        case .qsv:
+            false
+        case .gray12be:
+            true
+        case .yvyu422:
+            true
+        case .gbrp12be:
+            true
+        case .gray10be:
+            true
+        case .gbrp16be:
+            true
+        case .yuvj411p:
+            true
+        case .yuv422p:
+            true
+        case .bgr444le:
+            true
+        case .rgba64le:
+            true
+        case .yuva422p10be:
+            true
+        case .gray12le:
+            true
+        case .gray:
+            true
+        case .rgb565le:
+            true
+        case .x2rgb10be:
+            false
+        case .p410le:
+            true
+        case .bgr48be:
+            true
+        case .yuv440p12be:
+            true
+        case .yuva444p16le:
+            true
+        case .pal8:
+            true
+        case .bayer_bggr16be:
+            true
+        case .drm_prime:
+            false
+        case .gray16be:
+            true
+        case .bgr444be:
+            true
+        case .grayf32le:
+            true
+        case .rgba:
+            true
+        case .p010le:
+            true
+        case ._0rgb:
+            true
+        case .yuv444p:
+            true
+        case .gbrp14le:
+            true
+        case .x2rgb10le:
+            true
+        case .monow:
+            true
+        case .yuv420p16le:
+            true
+        case .yuv422p10le:
+            true
+        case .gbrp14be:
+            true
+        case .xyz12le:
+            true
+        case .rgba64be:
+            true
+        case .yuv422p9be:
+            true
+        case .p416le:
+            true
+        case .yuv410p:
+            true
+        case .yuv420p12be:
+            true
+        case .p210be:
+            true
+        case .p210le:
+            true
+        case .gbrapf32be:
+            true
+        case .yuv444p10le:
+            true
+        case .gbrp9be:
+            true
+        case .yuva422p9le:
+            true
+        case .yuyv422:
+            true
+        case .bgr4:
+            false
+        case .yuv440p10be:
+            true
+        case .yuv420p10be:
+            true
+        case .yuva422p16le:
+            true
+        case .yuv440p:
+            true
+        case .yuva444p:
+            true
+        case .gbrp16le:
+            true
+        case .p010be:
+            true
+        case .x2bgr10be:
+            false
+        case .y210le:
+            true
+        case .gbrap16le:
+            true
+        case .bayer_rggb16le:
+            true
+        case .yuv422p14be:
+            true
+        case .yuv420p:
+            true
+        case .bgr555be:
+            true
+        case .vulkan:
+            false
+        case .rgb565be:
+            true
+        case .yuv444p14le:
+            true
+        case .bgr8:
+            true
+        case .yuvj422p:
+            true
+        case .yuva420p9be:
+            true
+        case .bayer_bggr16le:
+            true
+        case .bayer_gbrg8:
+            true
+        case .grayf32be:
+            true
+        case .gray9be:
+            true
+        case .yuv420p16be:
+            true
+        case .gbrpf32le:
+            true
+        case .bayer_grbg16be:
+            true
+        case .gbrp10le:
+            true
+        case .bayer_gbrg16le:
+            true
+        case .yuv444p14be:
+            true
+        case .bgr24:
+            true
+        case .yuv444p12be:
+            true
+        case .nv20be:
+            false
+        case .bgra64le:
+            true
+        case .yuv422p14le:
+            true
+        case .monob:
+            true
+        case .yuva422p16be:
+            true
+        case .y210be:
+            false
+        case .yuva444p16be:
+            true
+        case .gbrap12le:
+            true
+        case .gbrp9le:
+            true
+        case .uyvy422:
+            true
+        case .rgb48le:
+            true
+        case .rgb48be:
+            true
+        case .bgr0:
+            true
+        case .yuv420p14be:
+            true
+        case .gray14le:
+            true
+        case .yuv411p:
+            true
+        case .yuva444p12le:
+            true
+        case .rgb444be:
+            true
+        case .rgb8:
+            true
+        case .nv42:
+            true
+        case .rgb555le:
+            true
+        case .yuva420p10le:
+            true
+        case .yuv420p12le:
+            true
+        case .gbrap16be:
+            true
+        case .p216be:
+            true
+        case .rgb555be:
+            true
+        case .yuvj420p:
+            true
+        case .yuv422p16be:
+            true
+        case .gbrap10le:
+            true
+        case .yuv420p14le:
+            true
+        case .ayuv64le:
+            true
+        case .videotoolbox_vld:
+            false
+        case ._0bgr:
+            true
+        case .gbrap12be:
             true
         case .p216le:
             true
         case .nv12:
             true
-        case .yuva422p12le:
-            true
-        case .rgb8:
-            true
-        case .dxva2_vld:
-            false
-        case .videotoolbox_vld:
-            false
-        case .gbrap:
-            true
-        case .mmal:
-            false
-        case .gbrp14be:
-            true
-        case .yuv444p10le:
-            true
-        case .bgra:
-            true
-        case .ayuv64le:
-            true
-        case .yuv444p16le:
-            true
-        case .yuva422p10be:
-            true
-        case .rgb0:
-            true
-        case ._0rgb:
-            true
-        case .yuv440p:
-            true
-        case .yuv422p:
-            true
-        case .yuv420p12le:
-            true
-        case .bgra64be:
-            true
         case .nv24:
-            true
-        case .rgb24:
-            true
-        case .gray16be:
-            true
-        case .opencl:
-            false
-        case .monob:
-            true
-        case .bgra64le:
-            true
-        case .p216be:
-            true
-        case .yuv440p12le:
-            true
-        case .yuv420p14le:
-            true
-        case .abgr:
-            true
-        case .bgr565le:
-            true
-        case .yuva420p9be:
-            true
-        case .gbrpf32le:
-            true
-        case .bgr4:
-            false
-        case .rgb4_byte:
-            true
-        case .yuv420p:
-            true
-        case .bgr4_byte:
-            true
-        case .yuv422p10be:
-            true
-        case .xyz12be:
-            true
-        case .bgr444le:
-            true
-        case .yuva420p10be:
-            true
-        case .yuv422p12le:
-            true
-        case .ayuv64be:
-            false
-        case .gray12be:
-            true
-        case .vdpau:
-            false
-        case .gbrap10le:
-            true
-        case ._0bgr:
-            true
-        case .yuv440p10be:
-            true
-        case .nv20be:
-            false
-        case .monow:
-            true
-        case .yuva444p12le:
-            true
-        case .yuva444p16le:
-            true
-        case .cuda:
-            false
-        case .gbrap16le:
-            true
-        case .yuva422p10le:
-            true
-        case .yuva444p9be:
-            true
-        case .gbrap10be:
-            true
-        case .ya16be:
-            true
-        case .rgb555le:
-            true
-        case .bayer_grbg16le:
-            true
-        case .yuva444p9le:
-            true
-        case .yuv422p14le:
-            true
-        case .gbrp16be:
-            true
-        case .rgb4:
-            false
-        case .x2bgr10be:
-            false
-        case .yuva422p:
-            true
-        case .bgr444be:
-            true
-        case .gbrp14le:
-            true
-        case .yuyv422:
-            true
-        case .xvmc:
-            false
-        case .yuv422p12be:
-            true
-        case .p010be:
-            true
-        case .gbrp16le:
-            true
-        case .xyz12le:
-            true
-        case .p010le:
-            true
-        case .yuva422p16be:
-            true
-        case .rgb565be:
-            true
-        case .gbrapf32be:
-            true
-        case .yuv420p9be:
-            true
-        case .rgb48le:
-            true
-        case .bgr24:
-            true
-        case .ya16le:
-            true
-        case .yuva420p:
             true
         case .p416be:
             true
-        case .grayf32be:
+        case .yuva422p12be:
             true
-        case .qsv:
-            false
-        case .yuv440p10le:
+        case .x2bgr10le:
             true
         case .gray14be:
             true
-        case .gray9be:
+        case .yuva422p:
             true
-        case .p210be:
+        case .ya8:
             true
-        case .yuvj422p:
+        case .yuv440p10le:
             true
-        case .yuv422p9be:
-            true
-        case .bgr565be:
-            true
-        case .yuv444p:
-            true
-        case .yuv444p16be:
-            true
-        case .yuv410p:
-            true
-        case .yuv444p9le:
-            true
-        case .gray14le:
-            true
-        case .rgb48be:
-            true
-        case .y210be:
+        case .mmal:
             false
-        case .rgb444le:
-            true
-        case .rgba:
-            true
-        case .yuva444p10le:
-            true
-        case .gbrp10le:
-            true
-        case .yuva422p9le:
-            true
-        case .rgba64le:
-            true
-        case .yuvj411p:
-            true
-        case .yuv422p10le:
-            true
-        case .yuv420p9le:
-            true
-        case .nv16:
-            false
-        case .uyvy422:
-            true
-        case .gbrp9le:
-            true
-        case .yuv420p16be:
-            true
-        case .yuvj444p:
-            true
-        case .bgr8:
-            true
-        case .bayer_rggb16le:
-            true
-        case .drm_prime:
-            false
-        case .bayer_grbg16be:
-            true
-        case .yuv444p14le:
-            true
-        case .gbrap12be:
-            true
-        case .grayf32le:
-            true
-        case .p410le:
-            true
-        case .gray10be:
-            true
-        case .gray16le:
-            true
-        case .rgb444be:
-            true
         }
     }
 
     public var canOutput: Bool {
         switch self {
-        case .gbrp:
-            true
-        case .yuv444p9be:
-            true
-        case .ya8:
-            true
-        case .rgba64be:
-            true
-        case .bayer_bggr8:
-            false
-        case .bayer_bggr16be:
-            false
-        case .yuv444p14be:
-            true
-        case .yuv420p16le:
-            true
-        case .rgb555be:
-            true
-        case .bayer_bggr16le:
-            false
-        case .nv42:
-            true
-        case .yvyu422:
-            true
-        case .yuv422p9le:
-            true
-        case .gbrp12be:
-            true
-        case .yuva444p10be:
-            true
-        case .gbrapf32le:
-            true
-        case .gbrap16be:
+        case .bgr555le:
             true
         case .yuv444p12le:
             true
-        case .yuv411p:
+        case .yuva420p9le:
             true
-        case .gbrp10be:
+        case .yuv444p9le:
             true
-        case .gbrp12le:
-            true
-        case .yuv420p12be:
-            true
-        case .gbrp9be:
-            true
-        case .yuv422p16be:
-            true
+        case .ayuv64be:
+            false
         case .vaapi:
             false
-        case .p416le:
-            true
-        case .yuv444p12be:
-            true
-        case .bgr0:
-            true
-        case .bgr555be:
-            true
-        case .yuva444p16be:
-            true
-        case .argb:
-            true
-        case .yuv420p14be:
-            true
-        case .x2rgb10le:
-            true
-        case .nv21:
-            true
-        case .d3d11va_vld:
+        case .bayer_grbg16le:
             false
-        case .y210le:
+        case .yuva444p9be:
+            true
+        case .yuva444p10be:
+            true
+        case .bayer_bggr8:
             false
-        case .bayer_grbg8:
-            false
-        case .x2rgb10be:
-            false
-        case .p016le:
+        case .yuva422p10le:
             true
-        case .p016be:
+        case .ya16be:
             true
-        case .bgr48le:
+        case .yuv422p12le:
             true
-        case .yuv444p10be:
+        case .yuv444p16be:
             true
-        case .yuv420p10be:
-            true
-        case .p210le:
-            true
-        case .bayer_gbrg16be:
-            false
-        case .yuva444p:
-            true
-        case .bayer_rggb8:
-            false
-        case .yuv422p16le:
-            true
-        case .gbrap12le:
-            true
-        case .yuv420p10le:
-            true
-        case .gray12le:
-            true
-        case .bayer_rggb16be:
-            false
-        case .yuva420p16le:
-            true
-        case .yuva444p12be:
+        case .rgb24:
             true
         case .nv20le:
             false
-        case .yuva420p16be:
+        case .yuv420p9be:
             true
-        case .uyyvyy411:
+        case .gbrp12le:
+            true
+        case .d3d11va_vld:
             false
-        case .gray10le:
+        case .rgb4:
             true
-        case .x2bgr10le:
+        case .argb:
             true
-        case .vulkan:
+        case .yuva444p12be:
+            true
+        case .bayer_gbrg16be:
             false
-        case .yuvj420p:
-            true
-        case .bgr555le:
-            true
-        case .bayer_gbrg16le:
-            false
-        case .yuva422p16le:
-            true
-        case .yuvj440p:
-            true
-        case .yuva420p10le:
-            true
-        case .rgb565le:
-            true
-        case .gbrpf32be:
+        case .p016be:
             true
         case .mediacodec:
             false
-        case .bayer_gbrg8:
+        case .gray16le:
+            true
+        case .bgr565le:
+            true
+        case .yuva420p16be:
+            true
+        case .bayer_rggb16be:
             false
-        case .yuv440p12be:
-            true
-        case .yuva420p9le:
-            true
-        case .pal8:
+        case .dxva2_vld:
             false
-        case .gray:
+        case .bgr4_byte:
             true
-        case .d3d11:
+        case .uyyvyy411:
             false
-        case .yuv422p14be:
+        case .yuvj444p:
             true
+        case .vdpau:
+            false
+        case .gbrapf32le:
+            true
+        case .yuva422p12le:
+            true
+        case .p016le:
+            true
+        case .yuv422p10be:
+            true
+        case .xvmc:
+            false
+        case .bgra:
+            true
+        case .gbrp10be:
+            true
+        case .yuv422p16le:
+            true
+        case .yuva420p16le:
+            true
+        case .opencl:
+            false
+        case .rgb444le:
+            true
+        case .yuv422p9le:
+            true
+        case .bayer_grbg8:
+            false
+        case .bgr565be:
+            true
+        case .bgr48le:
+            true
+        case .xyz12be:
+            true
+        case .cuda:
+            false
         case .p410be:
             true
-        case .bgr48be:
+        case .gbrpf32be:
             true
-        case .yuva422p12be:
+        case .yuv422p12be:
+            true
+        case .yuv440p12le:
+            true
+        case .abgr:
+            true
+        case .ya16le:
+            true
+        case .yuva444p10le:
+            true
+        case .rgb0:
+            true
+        case .yuv444p9be:
+            true
+        case .gray9le:
+            true
+        case .yuva444p9le:
             true
         case .yuva422p9be:
             true
-        case .gray9le:
+        case .gray10le:
+            true
+        case .gbrap10be:
+            true
+        case .yuv420p9le:
+            true
+        case .yuv420p10le:
+            true
+        case .gbrap:
+            true
+        case .yuva420p:
+            true
+        case .gbrp:
+            true
+        case .yuv444p16le:
+            true
+        case .yuv444p10be:
+            true
+        case .nv21:
+            true
+        case .yuvj440p:
+            true
+        case .yuva420p10be:
+            true
+        case .d3d11:
+            false
+        case .rgb4_byte:
+            true
+        case .bgra64be:
+            true
+        case .nv16:
+            false
+        case .bayer_rggb8:
+            false
+        case .qsv:
+            false
+        case .gray12be:
+            true
+        case .yvyu422:
+            true
+        case .gbrp12be:
+            true
+        case .gray10be:
+            true
+        case .gbrp16be:
+            true
+        case .yuvj411p:
+            true
+        case .yuv422p:
+            true
+        case .bgr444le:
+            true
+        case .rgba64le:
+            true
+        case .yuva422p10be:
+            true
+        case .gray12le:
+            true
+        case .gray:
+            true
+        case .rgb565le:
+            true
+        case .x2rgb10be:
+            false
+        case .p410le:
+            true
+        case .bgr48be:
+            true
+        case .yuv440p12be:
+            true
+        case .yuva444p16le:
+            true
+        case .pal8:
+            false
+        case .bayer_bggr16be:
+            false
+        case .drm_prime:
+            false
+        case .gray16be:
+            true
+        case .bgr444be:
+            true
+        case .grayf32le:
+            true
+        case .rgba:
+            true
+        case .p010le:
+            true
+        case ._0rgb:
+            true
+        case .yuv444p:
+            true
+        case .gbrp14le:
+            true
+        case .x2rgb10le:
+            true
+        case .monow:
+            true
+        case .yuv420p16le:
+            true
+        case .yuv422p10le:
+            true
+        case .gbrp14be:
+            true
+        case .xyz12le:
+            true
+        case .rgba64be:
+            true
+        case .yuv422p9be:
+            true
+        case .p416le:
+            true
+        case .yuv410p:
+            true
+        case .yuv420p12be:
+            true
+        case .p210be:
+            true
+        case .p210le:
+            true
+        case .gbrapf32be:
+            true
+        case .yuv444p10le:
+            true
+        case .gbrp9be:
+            true
+        case .yuva422p9le:
+            true
+        case .yuyv422:
+            true
+        case .bgr4:
+            true
+        case .yuv440p10be:
+            true
+        case .yuv420p10be:
+            true
+        case .yuva422p16le:
+            true
+        case .yuv440p:
+            true
+        case .yuva444p:
+            true
+        case .gbrp16le:
+            true
+        case .p010be:
+            true
+        case .x2bgr10be:
+            false
+        case .y210le:
+            false
+        case .gbrap16le:
+            true
+        case .bayer_rggb16le:
+            false
+        case .yuv422p14be:
+            true
+        case .yuv420p:
+            true
+        case .bgr555be:
+            true
+        case .vulkan:
+            false
+        case .rgb565be:
+            true
+        case .yuv444p14le:
+            true
+        case .bgr8:
+            true
+        case .yuvj422p:
+            true
+        case .yuva420p9be:
+            true
+        case .bayer_bggr16le:
+            false
+        case .bayer_gbrg8:
+            false
+        case .grayf32be:
+            true
+        case .gray9be:
+            true
+        case .yuv420p16be:
+            true
+        case .gbrpf32le:
+            true
+        case .bayer_grbg16be:
+            false
+        case .gbrp10le:
+            true
+        case .bayer_gbrg16le:
+            false
+        case .yuv444p14be:
+            true
+        case .bgr24:
+            true
+        case .yuv444p12be:
+            true
+        case .nv20be:
+            false
+        case .bgra64le:
+            true
+        case .yuv422p14le:
+            true
+        case .monob:
+            true
+        case .yuva422p16be:
+            true
+        case .y210be:
+            false
+        case .yuva444p16be:
+            true
+        case .gbrap12le:
+            true
+        case .gbrp9le:
+            true
+        case .uyvy422:
+            true
+        case .rgb48le:
+            true
+        case .rgb48be:
+            true
+        case .bgr0:
+            true
+        case .yuv420p14be:
+            true
+        case .gray14le:
+            true
+        case .yuv411p:
+            true
+        case .yuva444p12le:
+            true
+        case .rgb444be:
+            true
+        case .rgb8:
+            true
+        case .nv42:
+            true
+        case .rgb555le:
+            true
+        case .yuva420p10le:
+            true
+        case .yuv420p12le:
+            true
+        case .gbrap16be:
+            true
+        case .p216be:
+            true
+        case .rgb555be:
+            true
+        case .yuvj420p:
+            true
+        case .yuv422p16be:
+            true
+        case .gbrap10le:
+            true
+        case .yuv420p14le:
+            true
+        case .ayuv64le:
+            true
+        case .videotoolbox_vld:
+            false
+        case ._0bgr:
+            true
+        case .gbrap12be:
             true
         case .p216le:
             true
         case .nv12:
             true
-        case .yuva422p12le:
-            true
-        case .rgb8:
-            true
-        case .dxva2_vld:
-            false
-        case .videotoolbox_vld:
-            false
-        case .gbrap:
-            true
-        case .mmal:
-            false
-        case .gbrp14be:
-            true
-        case .yuv444p10le:
-            true
-        case .bgra:
-            true
-        case .ayuv64le:
-            true
-        case .yuv444p16le:
-            true
-        case .yuva422p10be:
-            true
-        case .rgb0:
-            true
-        case ._0rgb:
-            true
-        case .yuv440p:
-            true
-        case .yuv422p:
-            true
-        case .yuv420p12le:
-            true
-        case .bgra64be:
-            true
         case .nv24:
-            true
-        case .rgb24:
-            true
-        case .gray16be:
-            true
-        case .opencl:
-            false
-        case .monob:
-            true
-        case .bgra64le:
-            true
-        case .p216be:
-            true
-        case .yuv440p12le:
-            true
-        case .yuv420p14le:
-            true
-        case .abgr:
-            true
-        case .bgr565le:
-            true
-        case .yuva420p9be:
-            true
-        case .gbrpf32le:
-            true
-        case .bgr4:
-            true
-        case .rgb4_byte:
-            true
-        case .yuv420p:
-            true
-        case .bgr4_byte:
-            true
-        case .yuv422p10be:
-            true
-        case .xyz12be:
-            true
-        case .bgr444le:
-            true
-        case .yuva420p10be:
-            true
-        case .yuv422p12le:
-            true
-        case .ayuv64be:
-            false
-        case .gray12be:
-            true
-        case .vdpau:
-            false
-        case .gbrap10le:
-            true
-        case ._0bgr:
-            true
-        case .yuv440p10be:
-            true
-        case .nv20be:
-            false
-        case .monow:
-            true
-        case .yuva444p12le:
-            true
-        case .yuva444p16le:
-            true
-        case .cuda:
-            false
-        case .gbrap16le:
-            true
-        case .yuva422p10le:
-            true
-        case .yuva444p9be:
-            true
-        case .gbrap10be:
-            true
-        case .ya16be:
-            true
-        case .rgb555le:
-            true
-        case .bayer_grbg16le:
-            false
-        case .yuva444p9le:
-            true
-        case .yuv422p14le:
-            true
-        case .gbrp16be:
-            true
-        case .rgb4:
-            true
-        case .x2bgr10be:
-            false
-        case .yuva422p:
-            true
-        case .bgr444be:
-            true
-        case .gbrp14le:
-            true
-        case .yuyv422:
-            true
-        case .xvmc:
-            false
-        case .yuv422p12be:
-            true
-        case .p010be:
-            true
-        case .gbrp16le:
-            true
-        case .xyz12le:
-            true
-        case .p010le:
-            true
-        case .yuva422p16be:
-            true
-        case .rgb565be:
-            true
-        case .gbrapf32be:
-            true
-        case .yuv420p9be:
-            true
-        case .rgb48le:
-            true
-        case .bgr24:
-            true
-        case .ya16le:
-            true
-        case .yuva420p:
             true
         case .p416be:
             true
-        case .grayf32be:
+        case .yuva422p12be:
             true
-        case .qsv:
-            false
-        case .yuv440p10le:
+        case .x2bgr10le:
             true
         case .gray14be:
             true
-        case .gray9be:
+        case .yuva422p:
             true
-        case .p210be:
+        case .ya8:
             true
-        case .yuvj422p:
+        case .yuv440p10le:
             true
-        case .yuv422p9be:
-            true
-        case .bgr565be:
-            true
-        case .yuv444p:
-            true
-        case .yuv444p16be:
-            true
-        case .yuv410p:
-            true
-        case .yuv444p9le:
-            true
-        case .gray14le:
-            true
-        case .rgb48be:
-            true
-        case .y210be:
+        case .mmal:
             false
-        case .rgb444le:
-            true
-        case .rgba:
-            true
-        case .yuva444p10le:
-            true
-        case .gbrp10le:
-            true
-        case .yuva422p9le:
-            true
-        case .rgba64le:
-            true
-        case .yuvj411p:
-            true
-        case .yuv422p10le:
-            true
-        case .yuv420p9le:
-            true
-        case .nv16:
-            false
-        case .uyvy422:
-            true
-        case .gbrp9le:
-            true
-        case .yuv420p16be:
-            true
-        case .yuvj444p:
-            true
-        case .bgr8:
-            true
-        case .bayer_rggb16le:
-            false
-        case .drm_prime:
-            false
-        case .bayer_grbg16be:
-            false
-        case .yuv444p14le:
-            true
-        case .gbrap12be:
-            true
-        case .grayf32le:
-            true
-        case .p410le:
-            true
-        case .gray10be:
-            true
-        case .gray16le:
-            true
-        case .rgb444be:
-            true
         }
     }
 
     public var isHardwareAccelrated: Bool {
         switch self {
-        case .gbrp:
-            false
-        case .yuv444p9be:
-            false
-        case .ya8:
-            false
-        case .rgba64be:
-            false
-        case .bayer_bggr8:
-            false
-        case .bayer_bggr16be:
-            false
-        case .yuv444p14be:
-            false
-        case .yuv420p16le:
-            false
-        case .rgb555be:
-            false
-        case .bayer_bggr16le:
-            false
-        case .nv42:
-            false
-        case .yvyu422:
-            false
-        case .yuv422p9le:
-            false
-        case .gbrp12be:
-            false
-        case .yuva444p10be:
-            false
-        case .gbrapf32le:
-            false
-        case .gbrap16be:
+        case .bgr555le:
             false
         case .yuv444p12le:
             false
-        case .yuv411p:
+        case .yuva420p9le:
             false
-        case .gbrp10be:
+        case .yuv444p9le:
             false
-        case .gbrp12le:
-            false
-        case .yuv420p12be:
-            false
-        case .gbrp9be:
-            false
-        case .yuv422p16be:
+        case .ayuv64be:
             false
         case .vaapi:
             true
-        case .p416le:
+        case .bayer_grbg16le:
             false
-        case .yuv444p12be:
+        case .yuva444p9be:
             false
-        case .bgr0:
+        case .yuva444p10be:
             false
-        case .bgr555be:
+        case .bayer_bggr8:
             false
-        case .yuva444p16be:
+        case .yuva422p10le:
             false
-        case .argb:
+        case .ya16be:
             false
-        case .yuv420p14be:
+        case .yuv422p12le:
             false
-        case .x2rgb10le:
+        case .yuv444p16be:
             false
-        case .nv21:
-            false
-        case .d3d11va_vld:
-            true
-        case .y210le:
-            false
-        case .bayer_grbg8:
-            false
-        case .x2rgb10be:
-            false
-        case .p016le:
-            false
-        case .p016be:
-            false
-        case .bgr48le:
-            false
-        case .yuv444p10be:
-            false
-        case .yuv420p10be:
-            false
-        case .p210le:
-            false
-        case .bayer_gbrg16be:
-            false
-        case .yuva444p:
-            false
-        case .bayer_rggb8:
-            false
-        case .yuv422p16le:
-            false
-        case .gbrap12le:
-            false
-        case .yuv420p10le:
-            false
-        case .gray12le:
-            false
-        case .bayer_rggb16be:
-            false
-        case .yuva420p16le:
-            false
-        case .yuva444p12be:
+        case .rgb24:
             false
         case .nv20le:
             false
-        case .yuva420p16be:
+        case .yuv420p9be:
             false
-        case .uyyvyy411:
+        case .gbrp12le:
             false
-        case .gray10le:
-            false
-        case .x2bgr10le:
-            false
-        case .vulkan:
+        case .d3d11va_vld:
             true
-        case .yuvj420p:
+        case .rgb4:
             false
-        case .bgr555le:
+        case .argb:
             false
-        case .bayer_gbrg16le:
+        case .yuva444p12be:
             false
-        case .yuva422p16le:
+        case .bayer_gbrg16be:
             false
-        case .yuvj440p:
-            false
-        case .yuva420p10le:
-            false
-        case .rgb565le:
-            false
-        case .gbrpf32be:
+        case .p016be:
             false
         case .mediacodec:
             true
-        case .bayer_gbrg8:
+        case .gray16le:
             false
-        case .yuv440p12be:
+        case .bgr565le:
             false
-        case .yuva420p9le:
+        case .yuva420p16be:
             false
-        case .pal8:
+        case .bayer_rggb16be:
             false
-        case .gray:
-            false
-        case .d3d11:
+        case .dxva2_vld:
             true
-        case .yuv422p14be:
+        case .bgr4_byte:
             false
+        case .uyyvyy411:
+            false
+        case .yuvj444p:
+            false
+        case .vdpau:
+            true
+        case .gbrapf32le:
+            false
+        case .yuva422p12le:
+            false
+        case .p016le:
+            false
+        case .yuv422p10be:
+            false
+        case .xvmc:
+            true
+        case .bgra:
+            false
+        case .gbrp10be:
+            false
+        case .yuv422p16le:
+            false
+        case .yuva420p16le:
+            false
+        case .opencl:
+            true
+        case .rgb444le:
+            false
+        case .yuv422p9le:
+            false
+        case .bayer_grbg8:
+            false
+        case .bgr565be:
+            false
+        case .bgr48le:
+            false
+        case .xyz12be:
+            false
+        case .cuda:
+            true
         case .p410be:
             false
-        case .bgr48be:
+        case .gbrpf32be:
             false
-        case .yuva422p12be:
+        case .yuv422p12be:
+            false
+        case .yuv440p12le:
+            false
+        case .abgr:
+            false
+        case .ya16le:
+            false
+        case .yuva444p10le:
+            false
+        case .rgb0:
+            false
+        case .yuv444p9be:
+            false
+        case .gray9le:
+            false
+        case .yuva444p9le:
             false
         case .yuva422p9be:
             false
-        case .gray9le:
+        case .gray10le:
+            false
+        case .gbrap10be:
+            false
+        case .yuv420p9le:
+            false
+        case .yuv420p10le:
+            false
+        case .gbrap:
+            false
+        case .yuva420p:
+            false
+        case .gbrp:
+            false
+        case .yuv444p16le:
+            false
+        case .yuv444p10be:
+            false
+        case .nv21:
+            false
+        case .yuvj440p:
+            false
+        case .yuva420p10be:
+            false
+        case .d3d11:
+            true
+        case .rgb4_byte:
+            false
+        case .bgra64be:
+            false
+        case .nv16:
+            false
+        case .bayer_rggb8:
+            false
+        case .qsv:
+            true
+        case .gray12be:
+            false
+        case .yvyu422:
+            false
+        case .gbrp12be:
+            false
+        case .gray10be:
+            false
+        case .gbrp16be:
+            false
+        case .yuvj411p:
+            false
+        case .yuv422p:
+            false
+        case .bgr444le:
+            false
+        case .rgba64le:
+            false
+        case .yuva422p10be:
+            false
+        case .gray12le:
+            false
+        case .gray:
+            false
+        case .rgb565le:
+            false
+        case .x2rgb10be:
+            false
+        case .p410le:
+            false
+        case .bgr48be:
+            false
+        case .yuv440p12be:
+            false
+        case .yuva444p16le:
+            false
+        case .pal8:
+            false
+        case .bayer_bggr16be:
+            false
+        case .drm_prime:
+            true
+        case .gray16be:
+            false
+        case .bgr444be:
+            false
+        case .grayf32le:
+            false
+        case .rgba:
+            false
+        case .p010le:
+            false
+        case ._0rgb:
+            false
+        case .yuv444p:
+            false
+        case .gbrp14le:
+            false
+        case .x2rgb10le:
+            false
+        case .monow:
+            false
+        case .yuv420p16le:
+            false
+        case .yuv422p10le:
+            false
+        case .gbrp14be:
+            false
+        case .xyz12le:
+            false
+        case .rgba64be:
+            false
+        case .yuv422p9be:
+            false
+        case .p416le:
+            false
+        case .yuv410p:
+            false
+        case .yuv420p12be:
+            false
+        case .p210be:
+            false
+        case .p210le:
+            false
+        case .gbrapf32be:
+            false
+        case .yuv444p10le:
+            false
+        case .gbrp9be:
+            false
+        case .yuva422p9le:
+            false
+        case .yuyv422:
+            false
+        case .bgr4:
+            false
+        case .yuv440p10be:
+            false
+        case .yuv420p10be:
+            false
+        case .yuva422p16le:
+            false
+        case .yuv440p:
+            false
+        case .yuva444p:
+            false
+        case .gbrp16le:
+            false
+        case .p010be:
+            false
+        case .x2bgr10be:
+            false
+        case .y210le:
+            false
+        case .gbrap16le:
+            false
+        case .bayer_rggb16le:
+            false
+        case .yuv422p14be:
+            false
+        case .yuv420p:
+            false
+        case .bgr555be:
+            false
+        case .vulkan:
+            true
+        case .rgb565be:
+            false
+        case .yuv444p14le:
+            false
+        case .bgr8:
+            false
+        case .yuvj422p:
+            false
+        case .yuva420p9be:
+            false
+        case .bayer_bggr16le:
+            false
+        case .bayer_gbrg8:
+            false
+        case .grayf32be:
+            false
+        case .gray9be:
+            false
+        case .yuv420p16be:
+            false
+        case .gbrpf32le:
+            false
+        case .bayer_grbg16be:
+            false
+        case .gbrp10le:
+            false
+        case .bayer_gbrg16le:
+            false
+        case .yuv444p14be:
+            false
+        case .bgr24:
+            false
+        case .yuv444p12be:
+            false
+        case .nv20be:
+            false
+        case .bgra64le:
+            false
+        case .yuv422p14le:
+            false
+        case .monob:
+            false
+        case .yuva422p16be:
+            false
+        case .y210be:
+            false
+        case .yuva444p16be:
+            false
+        case .gbrap12le:
+            false
+        case .gbrp9le:
+            false
+        case .uyvy422:
+            false
+        case .rgb48le:
+            false
+        case .rgb48be:
+            false
+        case .bgr0:
+            false
+        case .yuv420p14be:
+            false
+        case .gray14le:
+            false
+        case .yuv411p:
+            false
+        case .yuva444p12le:
+            false
+        case .rgb444be:
+            false
+        case .rgb8:
+            false
+        case .nv42:
+            false
+        case .rgb555le:
+            false
+        case .yuva420p10le:
+            false
+        case .yuv420p12le:
+            false
+        case .gbrap16be:
+            false
+        case .p216be:
+            false
+        case .rgb555be:
+            false
+        case .yuvj420p:
+            false
+        case .yuv422p16be:
+            false
+        case .gbrap10le:
+            false
+        case .yuv420p14le:
+            false
+        case .ayuv64le:
+            false
+        case .videotoolbox_vld:
+            true
+        case ._0bgr:
+            false
+        case .gbrap12be:
             false
         case .p216le:
             false
         case .nv12:
             false
-        case .yuva422p12le:
-            false
-        case .rgb8:
-            false
-        case .dxva2_vld:
-            true
-        case .videotoolbox_vld:
-            true
-        case .gbrap:
-            false
-        case .mmal:
-            true
-        case .gbrp14be:
-            false
-        case .yuv444p10le:
-            false
-        case .bgra:
-            false
-        case .ayuv64le:
-            false
-        case .yuv444p16le:
-            false
-        case .yuva422p10be:
-            false
-        case .rgb0:
-            false
-        case ._0rgb:
-            false
-        case .yuv440p:
-            false
-        case .yuv422p:
-            false
-        case .yuv420p12le:
-            false
-        case .bgra64be:
-            false
         case .nv24:
-            false
-        case .rgb24:
-            false
-        case .gray16be:
-            false
-        case .opencl:
-            true
-        case .monob:
-            false
-        case .bgra64le:
-            false
-        case .p216be:
-            false
-        case .yuv440p12le:
-            false
-        case .yuv420p14le:
-            false
-        case .abgr:
-            false
-        case .bgr565le:
-            false
-        case .yuva420p9be:
-            false
-        case .gbrpf32le:
-            false
-        case .bgr4:
-            false
-        case .rgb4_byte:
-            false
-        case .yuv420p:
-            false
-        case .bgr4_byte:
-            false
-        case .yuv422p10be:
-            false
-        case .xyz12be:
-            false
-        case .bgr444le:
-            false
-        case .yuva420p10be:
-            false
-        case .yuv422p12le:
-            false
-        case .ayuv64be:
-            false
-        case .gray12be:
-            false
-        case .vdpau:
-            true
-        case .gbrap10le:
-            false
-        case ._0bgr:
-            false
-        case .yuv440p10be:
-            false
-        case .nv20be:
-            false
-        case .monow:
-            false
-        case .yuva444p12le:
-            false
-        case .yuva444p16le:
-            false
-        case .cuda:
-            true
-        case .gbrap16le:
-            false
-        case .yuva422p10le:
-            false
-        case .yuva444p9be:
-            false
-        case .gbrap10be:
-            false
-        case .ya16be:
-            false
-        case .rgb555le:
-            false
-        case .bayer_grbg16le:
-            false
-        case .yuva444p9le:
-            false
-        case .yuv422p14le:
-            false
-        case .gbrp16be:
-            false
-        case .rgb4:
-            false
-        case .x2bgr10be:
-            false
-        case .yuva422p:
-            false
-        case .bgr444be:
-            false
-        case .gbrp14le:
-            false
-        case .yuyv422:
-            false
-        case .xvmc:
-            true
-        case .yuv422p12be:
-            false
-        case .p010be:
-            false
-        case .gbrp16le:
-            false
-        case .xyz12le:
-            false
-        case .p010le:
-            false
-        case .yuva422p16be:
-            false
-        case .rgb565be:
-            false
-        case .gbrapf32be:
-            false
-        case .yuv420p9be:
-            false
-        case .rgb48le:
-            false
-        case .bgr24:
-            false
-        case .ya16le:
-            false
-        case .yuva420p:
             false
         case .p416be:
             false
-        case .grayf32be:
+        case .yuva422p12be:
             false
-        case .qsv:
-            true
-        case .yuv440p10le:
+        case .x2bgr10le:
             false
         case .gray14be:
             false
-        case .gray9be:
+        case .yuva422p:
             false
-        case .p210be:
+        case .ya8:
             false
-        case .yuvj422p:
+        case .yuv440p10le:
             false
-        case .yuv422p9be:
-            false
-        case .bgr565be:
-            false
-        case .yuv444p:
-            false
-        case .yuv444p16be:
-            false
-        case .yuv410p:
-            false
-        case .yuv444p9le:
-            false
-        case .gray14le:
-            false
-        case .rgb48be:
-            false
-        case .y210be:
-            false
-        case .rgb444le:
-            false
-        case .rgba:
-            false
-        case .yuva444p10le:
-            false
-        case .gbrp10le:
-            false
-        case .yuva422p9le:
-            false
-        case .rgba64le:
-            false
-        case .yuvj411p:
-            false
-        case .yuv422p10le:
-            false
-        case .yuv420p9le:
-            false
-        case .nv16:
-            false
-        case .uyvy422:
-            false
-        case .gbrp9le:
-            false
-        case .yuv420p16be:
-            false
-        case .yuvj444p:
-            false
-        case .bgr8:
-            false
-        case .bayer_rggb16le:
-            false
-        case .drm_prime:
+        case .mmal:
             true
-        case .bayer_grbg16be:
-            false
-        case .yuv444p14le:
-            false
-        case .gbrap12be:
-            false
-        case .grayf32le:
-            false
-        case .p410le:
-            false
-        case .gray10be:
-            false
-        case .gray16le:
-            false
-        case .rgb444be:
-            false
         }
     }
 
     public var isPalleted: Bool {
         switch self {
-        case .gbrp:
-            false
-        case .yuv444p9be:
-            false
-        case .ya8:
-            false
-        case .rgba64be:
-            false
-        case .bayer_bggr8:
-            false
-        case .bayer_bggr16be:
-            false
-        case .yuv444p14be:
-            false
-        case .yuv420p16le:
-            false
-        case .rgb555be:
-            false
-        case .bayer_bggr16le:
-            false
-        case .nv42:
-            false
-        case .yvyu422:
-            false
-        case .yuv422p9le:
-            false
-        case .gbrp12be:
-            false
-        case .yuva444p10be:
-            false
-        case .gbrapf32le:
-            false
-        case .gbrap16be:
+        case .bgr555le:
             false
         case .yuv444p12le:
             false
-        case .yuv411p:
+        case .yuva420p9le:
             false
-        case .gbrp10be:
+        case .yuv444p9le:
             false
-        case .gbrp12le:
-            false
-        case .yuv420p12be:
-            false
-        case .gbrp9be:
-            false
-        case .yuv422p16be:
+        case .ayuv64be:
             false
         case .vaapi:
             false
-        case .p416le:
+        case .bayer_grbg16le:
             false
-        case .yuv444p12be:
+        case .yuva444p9be:
             false
-        case .bgr0:
+        case .yuva444p10be:
             false
-        case .bgr555be:
+        case .bayer_bggr8:
             false
-        case .yuva444p16be:
+        case .yuva422p10le:
             false
-        case .argb:
+        case .ya16be:
             false
-        case .yuv420p14be:
+        case .yuv422p12le:
             false
-        case .x2rgb10le:
+        case .yuv444p16be:
             false
-        case .nv21:
-            false
-        case .d3d11va_vld:
-            false
-        case .y210le:
-            false
-        case .bayer_grbg8:
-            false
-        case .x2rgb10be:
-            false
-        case .p016le:
-            false
-        case .p016be:
-            false
-        case .bgr48le:
-            false
-        case .yuv444p10be:
-            false
-        case .yuv420p10be:
-            false
-        case .p210le:
-            false
-        case .bayer_gbrg16be:
-            false
-        case .yuva444p:
-            false
-        case .bayer_rggb8:
-            false
-        case .yuv422p16le:
-            false
-        case .gbrap12le:
-            false
-        case .yuv420p10le:
-            false
-        case .gray12le:
-            false
-        case .bayer_rggb16be:
-            false
-        case .yuva420p16le:
-            false
-        case .yuva444p12be:
+        case .rgb24:
             false
         case .nv20le:
             false
-        case .yuva420p16be:
+        case .yuv420p9be:
             false
-        case .uyyvyy411:
+        case .gbrp12le:
             false
-        case .gray10le:
+        case .d3d11va_vld:
             false
-        case .x2bgr10le:
+        case .rgb4:
             false
-        case .vulkan:
+        case .argb:
             false
-        case .yuvj420p:
+        case .yuva444p12be:
             false
-        case .bgr555le:
+        case .bayer_gbrg16be:
             false
-        case .bayer_gbrg16le:
-            false
-        case .yuva422p16le:
-            false
-        case .yuvj440p:
-            false
-        case .yuva420p10le:
-            false
-        case .rgb565le:
-            false
-        case .gbrpf32be:
+        case .p016be:
             false
         case .mediacodec:
             false
-        case .bayer_gbrg8:
+        case .gray16le:
             false
-        case .yuv440p12be:
+        case .bgr565le:
             false
-        case .yuva420p9le:
+        case .yuva420p16be:
             false
-        case .pal8:
-            true
-        case .gray:
+        case .bayer_rggb16be:
             false
-        case .d3d11:
+        case .dxva2_vld:
             false
-        case .yuv422p14be:
+        case .bgr4_byte:
+            false
+        case .uyyvyy411:
+            false
+        case .yuvj444p:
+            false
+        case .vdpau:
+            false
+        case .gbrapf32le:
+            false
+        case .yuva422p12le:
+            false
+        case .p016le:
+            false
+        case .yuv422p10be:
+            false
+        case .xvmc:
+            false
+        case .bgra:
+            false
+        case .gbrp10be:
+            false
+        case .yuv422p16le:
+            false
+        case .yuva420p16le:
+            false
+        case .opencl:
+            false
+        case .rgb444le:
+            false
+        case .yuv422p9le:
+            false
+        case .bayer_grbg8:
+            false
+        case .bgr565be:
+            false
+        case .bgr48le:
+            false
+        case .xyz12be:
+            false
+        case .cuda:
             false
         case .p410be:
             false
-        case .bgr48be:
+        case .gbrpf32be:
             false
-        case .yuva422p12be:
+        case .yuv422p12be:
+            false
+        case .yuv440p12le:
+            false
+        case .abgr:
+            false
+        case .ya16le:
+            false
+        case .yuva444p10le:
+            false
+        case .rgb0:
+            false
+        case .yuv444p9be:
+            false
+        case .gray9le:
+            false
+        case .yuva444p9le:
             false
         case .yuva422p9be:
             false
-        case .gray9le:
+        case .gray10le:
+            false
+        case .gbrap10be:
+            false
+        case .yuv420p9le:
+            false
+        case .yuv420p10le:
+            false
+        case .gbrap:
+            false
+        case .yuva420p:
+            false
+        case .gbrp:
+            false
+        case .yuv444p16le:
+            false
+        case .yuv444p10be:
+            false
+        case .nv21:
+            false
+        case .yuvj440p:
+            false
+        case .yuva420p10be:
+            false
+        case .d3d11:
+            false
+        case .rgb4_byte:
+            false
+        case .bgra64be:
+            false
+        case .nv16:
+            false
+        case .bayer_rggb8:
+            false
+        case .qsv:
+            false
+        case .gray12be:
+            false
+        case .yvyu422:
+            false
+        case .gbrp12be:
+            false
+        case .gray10be:
+            false
+        case .gbrp16be:
+            false
+        case .yuvj411p:
+            false
+        case .yuv422p:
+            false
+        case .bgr444le:
+            false
+        case .rgba64le:
+            false
+        case .yuva422p10be:
+            false
+        case .gray12le:
+            false
+        case .gray:
+            false
+        case .rgb565le:
+            false
+        case .x2rgb10be:
+            false
+        case .p410le:
+            false
+        case .bgr48be:
+            false
+        case .yuv440p12be:
+            false
+        case .yuva444p16le:
+            false
+        case .pal8:
+            true
+        case .bayer_bggr16be:
+            false
+        case .drm_prime:
+            false
+        case .gray16be:
+            false
+        case .bgr444be:
+            false
+        case .grayf32le:
+            false
+        case .rgba:
+            false
+        case .p010le:
+            false
+        case ._0rgb:
+            false
+        case .yuv444p:
+            false
+        case .gbrp14le:
+            false
+        case .x2rgb10le:
+            false
+        case .monow:
+            false
+        case .yuv420p16le:
+            false
+        case .yuv422p10le:
+            false
+        case .gbrp14be:
+            false
+        case .xyz12le:
+            false
+        case .rgba64be:
+            false
+        case .yuv422p9be:
+            false
+        case .p416le:
+            false
+        case .yuv410p:
+            false
+        case .yuv420p12be:
+            false
+        case .p210be:
+            false
+        case .p210le:
+            false
+        case .gbrapf32be:
+            false
+        case .yuv444p10le:
+            false
+        case .gbrp9be:
+            false
+        case .yuva422p9le:
+            false
+        case .yuyv422:
+            false
+        case .bgr4:
+            false
+        case .yuv440p10be:
+            false
+        case .yuv420p10be:
+            false
+        case .yuva422p16le:
+            false
+        case .yuv440p:
+            false
+        case .yuva444p:
+            false
+        case .gbrp16le:
+            false
+        case .p010be:
+            false
+        case .x2bgr10be:
+            false
+        case .y210le:
+            false
+        case .gbrap16le:
+            false
+        case .bayer_rggb16le:
+            false
+        case .yuv422p14be:
+            false
+        case .yuv420p:
+            false
+        case .bgr555be:
+            false
+        case .vulkan:
+            false
+        case .rgb565be:
+            false
+        case .yuv444p14le:
+            false
+        case .bgr8:
+            false
+        case .yuvj422p:
+            false
+        case .yuva420p9be:
+            false
+        case .bayer_bggr16le:
+            false
+        case .bayer_gbrg8:
+            false
+        case .grayf32be:
+            false
+        case .gray9be:
+            false
+        case .yuv420p16be:
+            false
+        case .gbrpf32le:
+            false
+        case .bayer_grbg16be:
+            false
+        case .gbrp10le:
+            false
+        case .bayer_gbrg16le:
+            false
+        case .yuv444p14be:
+            false
+        case .bgr24:
+            false
+        case .yuv444p12be:
+            false
+        case .nv20be:
+            false
+        case .bgra64le:
+            false
+        case .yuv422p14le:
+            false
+        case .monob:
+            false
+        case .yuva422p16be:
+            false
+        case .y210be:
+            false
+        case .yuva444p16be:
+            false
+        case .gbrap12le:
+            false
+        case .gbrp9le:
+            false
+        case .uyvy422:
+            false
+        case .rgb48le:
+            false
+        case .rgb48be:
+            false
+        case .bgr0:
+            false
+        case .yuv420p14be:
+            false
+        case .gray14le:
+            false
+        case .yuv411p:
+            false
+        case .yuva444p12le:
+            false
+        case .rgb444be:
+            false
+        case .rgb8:
+            false
+        case .nv42:
+            false
+        case .rgb555le:
+            false
+        case .yuva420p10le:
+            false
+        case .yuv420p12le:
+            false
+        case .gbrap16be:
+            false
+        case .p216be:
+            false
+        case .rgb555be:
+            false
+        case .yuvj420p:
+            false
+        case .yuv422p16be:
+            false
+        case .gbrap10le:
+            false
+        case .yuv420p14le:
+            false
+        case .ayuv64le:
+            false
+        case .videotoolbox_vld:
+            false
+        case ._0bgr:
+            false
+        case .gbrap12be:
             false
         case .p216le:
             false
         case .nv12:
             false
-        case .yuva422p12le:
-            false
-        case .rgb8:
-            false
-        case .dxva2_vld:
-            false
-        case .videotoolbox_vld:
-            false
-        case .gbrap:
-            false
-        case .mmal:
-            false
-        case .gbrp14be:
-            false
-        case .yuv444p10le:
-            false
-        case .bgra:
-            false
-        case .ayuv64le:
-            false
-        case .yuv444p16le:
-            false
-        case .yuva422p10be:
-            false
-        case .rgb0:
-            false
-        case ._0rgb:
-            false
-        case .yuv440p:
-            false
-        case .yuv422p:
-            false
-        case .yuv420p12le:
-            false
-        case .bgra64be:
-            false
         case .nv24:
-            false
-        case .rgb24:
-            false
-        case .gray16be:
-            false
-        case .opencl:
-            false
-        case .monob:
-            false
-        case .bgra64le:
-            false
-        case .p216be:
-            false
-        case .yuv440p12le:
-            false
-        case .yuv420p14le:
-            false
-        case .abgr:
-            false
-        case .bgr565le:
-            false
-        case .yuva420p9be:
-            false
-        case .gbrpf32le:
-            false
-        case .bgr4:
-            false
-        case .rgb4_byte:
-            false
-        case .yuv420p:
-            false
-        case .bgr4_byte:
-            false
-        case .yuv422p10be:
-            false
-        case .xyz12be:
-            false
-        case .bgr444le:
-            false
-        case .yuva420p10be:
-            false
-        case .yuv422p12le:
-            false
-        case .ayuv64be:
-            false
-        case .gray12be:
-            false
-        case .vdpau:
-            false
-        case .gbrap10le:
-            false
-        case ._0bgr:
-            false
-        case .yuv440p10be:
-            false
-        case .nv20be:
-            false
-        case .monow:
-            false
-        case .yuva444p12le:
-            false
-        case .yuva444p16le:
-            false
-        case .cuda:
-            false
-        case .gbrap16le:
-            false
-        case .yuva422p10le:
-            false
-        case .yuva444p9be:
-            false
-        case .gbrap10be:
-            false
-        case .ya16be:
-            false
-        case .rgb555le:
-            false
-        case .bayer_grbg16le:
-            false
-        case .yuva444p9le:
-            false
-        case .yuv422p14le:
-            false
-        case .gbrp16be:
-            false
-        case .rgb4:
-            false
-        case .x2bgr10be:
-            false
-        case .yuva422p:
-            false
-        case .bgr444be:
-            false
-        case .gbrp14le:
-            false
-        case .yuyv422:
-            false
-        case .xvmc:
-            false
-        case .yuv422p12be:
-            false
-        case .p010be:
-            false
-        case .gbrp16le:
-            false
-        case .xyz12le:
-            false
-        case .p010le:
-            false
-        case .yuva422p16be:
-            false
-        case .rgb565be:
-            false
-        case .gbrapf32be:
-            false
-        case .yuv420p9be:
-            false
-        case .rgb48le:
-            false
-        case .bgr24:
-            false
-        case .ya16le:
-            false
-        case .yuva420p:
             false
         case .p416be:
             false
-        case .grayf32be:
+        case .yuva422p12be:
             false
-        case .qsv:
-            false
-        case .yuv440p10le:
+        case .x2bgr10le:
             false
         case .gray14be:
             false
-        case .gray9be:
+        case .yuva422p:
             false
-        case .p210be:
+        case .ya8:
             false
-        case .yuvj422p:
+        case .yuv440p10le:
             false
-        case .yuv422p9be:
-            false
-        case .bgr565be:
-            false
-        case .yuv444p:
-            false
-        case .yuv444p16be:
-            false
-        case .yuv410p:
-            false
-        case .yuv444p9le:
-            false
-        case .gray14le:
-            false
-        case .rgb48be:
-            false
-        case .y210be:
-            false
-        case .rgb444le:
-            false
-        case .rgba:
-            false
-        case .yuva444p10le:
-            false
-        case .gbrp10le:
-            false
-        case .yuva422p9le:
-            false
-        case .rgba64le:
-            false
-        case .yuvj411p:
-            false
-        case .yuv422p10le:
-            false
-        case .yuv420p9le:
-            false
-        case .nv16:
-            false
-        case .uyvy422:
-            false
-        case .gbrp9le:
-            false
-        case .yuv420p16be:
-            false
-        case .yuvj444p:
-            false
-        case .bgr8:
-            false
-        case .bayer_rggb16le:
-            false
-        case .drm_prime:
-            false
-        case .bayer_grbg16be:
-            false
-        case .yuv444p14le:
-            false
-        case .gbrap12be:
-            false
-        case .grayf32le:
-            false
-        case .p410le:
-            false
-        case .gray10be:
-            false
-        case .gray16le:
-            false
-        case .rgb444be:
+        case .mmal:
             false
         }
     }
 
     public var isBitstream: Bool {
         switch self {
-        case .gbrp:
-            false
-        case .yuv444p9be:
-            false
-        case .ya8:
-            false
-        case .rgba64be:
-            false
-        case .bayer_bggr8:
-            false
-        case .bayer_bggr16be:
-            false
-        case .yuv444p14be:
-            false
-        case .yuv420p16le:
-            false
-        case .rgb555be:
-            false
-        case .bayer_bggr16le:
-            false
-        case .nv42:
-            false
-        case .yvyu422:
-            false
-        case .yuv422p9le:
-            false
-        case .gbrp12be:
-            false
-        case .yuva444p10be:
-            false
-        case .gbrapf32le:
-            false
-        case .gbrap16be:
+        case .bgr555le:
             false
         case .yuv444p12le:
             false
-        case .yuv411p:
+        case .yuva420p9le:
             false
-        case .gbrp10be:
+        case .yuv444p9le:
             false
-        case .gbrp12le:
-            false
-        case .yuv420p12be:
-            false
-        case .gbrp9be:
-            false
-        case .yuv422p16be:
+        case .ayuv64be:
             false
         case .vaapi:
             false
-        case .p416le:
+        case .bayer_grbg16le:
             false
-        case .yuv444p12be:
+        case .yuva444p9be:
             false
-        case .bgr0:
+        case .yuva444p10be:
             false
-        case .bgr555be:
+        case .bayer_bggr8:
             false
-        case .yuva444p16be:
+        case .yuva422p10le:
             false
-        case .argb:
+        case .ya16be:
             false
-        case .yuv420p14be:
+        case .yuv422p12le:
             false
-        case .x2rgb10le:
+        case .yuv444p16be:
             false
-        case .nv21:
-            false
-        case .d3d11va_vld:
-            false
-        case .y210le:
-            false
-        case .bayer_grbg8:
-            false
-        case .x2rgb10be:
-            false
-        case .p016le:
-            false
-        case .p016be:
-            false
-        case .bgr48le:
-            false
-        case .yuv444p10be:
-            false
-        case .yuv420p10be:
-            false
-        case .p210le:
-            false
-        case .bayer_gbrg16be:
-            false
-        case .yuva444p:
-            false
-        case .bayer_rggb8:
-            false
-        case .yuv422p16le:
-            false
-        case .gbrap12le:
-            false
-        case .yuv420p10le:
-            false
-        case .gray12le:
-            false
-        case .bayer_rggb16be:
-            false
-        case .yuva420p16le:
-            false
-        case .yuva444p12be:
+        case .rgb24:
             false
         case .nv20le:
             false
-        case .yuva420p16be:
+        case .yuv420p9be:
             false
-        case .uyyvyy411:
+        case .gbrp12le:
             false
-        case .gray10le:
+        case .d3d11va_vld:
             false
-        case .x2bgr10le:
+        case .rgb4:
+            true
+        case .argb:
             false
-        case .vulkan:
+        case .yuva444p12be:
             false
-        case .yuvj420p:
+        case .bayer_gbrg16be:
             false
-        case .bgr555le:
-            false
-        case .bayer_gbrg16le:
-            false
-        case .yuva422p16le:
-            false
-        case .yuvj440p:
-            false
-        case .yuva420p10le:
-            false
-        case .rgb565le:
-            false
-        case .gbrpf32be:
+        case .p016be:
             false
         case .mediacodec:
             false
-        case .bayer_gbrg8:
+        case .gray16le:
             false
-        case .yuv440p12be:
+        case .bgr565le:
             false
-        case .yuva420p9le:
+        case .yuva420p16be:
             false
-        case .pal8:
+        case .bayer_rggb16be:
             false
-        case .gray:
+        case .dxva2_vld:
             false
-        case .d3d11:
+        case .bgr4_byte:
             false
-        case .yuv422p14be:
+        case .uyyvyy411:
+            false
+        case .yuvj444p:
+            false
+        case .vdpau:
+            false
+        case .gbrapf32le:
+            false
+        case .yuva422p12le:
+            false
+        case .p016le:
+            false
+        case .yuv422p10be:
+            false
+        case .xvmc:
+            false
+        case .bgra:
+            false
+        case .gbrp10be:
+            false
+        case .yuv422p16le:
+            false
+        case .yuva420p16le:
+            false
+        case .opencl:
+            false
+        case .rgb444le:
+            false
+        case .yuv422p9le:
+            false
+        case .bayer_grbg8:
+            false
+        case .bgr565be:
+            false
+        case .bgr48le:
+            false
+        case .xyz12be:
+            false
+        case .cuda:
             false
         case .p410be:
             false
-        case .bgr48be:
+        case .gbrpf32be:
             false
-        case .yuva422p12be:
+        case .yuv422p12be:
+            false
+        case .yuv440p12le:
+            false
+        case .abgr:
+            false
+        case .ya16le:
+            false
+        case .yuva444p10le:
+            false
+        case .rgb0:
+            false
+        case .yuv444p9be:
+            false
+        case .gray9le:
+            false
+        case .yuva444p9le:
             false
         case .yuva422p9be:
             false
-        case .gray9le:
+        case .gray10le:
+            false
+        case .gbrap10be:
+            false
+        case .yuv420p9le:
+            false
+        case .yuv420p10le:
+            false
+        case .gbrap:
+            false
+        case .yuva420p:
+            false
+        case .gbrp:
+            false
+        case .yuv444p16le:
+            false
+        case .yuv444p10be:
+            false
+        case .nv21:
+            false
+        case .yuvj440p:
+            false
+        case .yuva420p10be:
+            false
+        case .d3d11:
+            false
+        case .rgb4_byte:
+            false
+        case .bgra64be:
+            false
+        case .nv16:
+            false
+        case .bayer_rggb8:
+            false
+        case .qsv:
+            false
+        case .gray12be:
+            false
+        case .yvyu422:
+            false
+        case .gbrp12be:
+            false
+        case .gray10be:
+            false
+        case .gbrp16be:
+            false
+        case .yuvj411p:
+            false
+        case .yuv422p:
+            false
+        case .bgr444le:
+            false
+        case .rgba64le:
+            false
+        case .yuva422p10be:
+            false
+        case .gray12le:
+            false
+        case .gray:
+            false
+        case .rgb565le:
+            false
+        case .x2rgb10be:
+            false
+        case .p410le:
+            false
+        case .bgr48be:
+            false
+        case .yuv440p12be:
+            false
+        case .yuva444p16le:
+            false
+        case .pal8:
+            false
+        case .bayer_bggr16be:
+            false
+        case .drm_prime:
+            false
+        case .gray16be:
+            false
+        case .bgr444be:
+            false
+        case .grayf32le:
+            false
+        case .rgba:
+            false
+        case .p010le:
+            false
+        case ._0rgb:
+            false
+        case .yuv444p:
+            false
+        case .gbrp14le:
+            false
+        case .x2rgb10le:
+            false
+        case .monow:
+            true
+        case .yuv420p16le:
+            false
+        case .yuv422p10le:
+            false
+        case .gbrp14be:
+            false
+        case .xyz12le:
+            false
+        case .rgba64be:
+            false
+        case .yuv422p9be:
+            false
+        case .p416le:
+            false
+        case .yuv410p:
+            false
+        case .yuv420p12be:
+            false
+        case .p210be:
+            false
+        case .p210le:
+            false
+        case .gbrapf32be:
+            false
+        case .yuv444p10le:
+            false
+        case .gbrp9be:
+            false
+        case .yuva422p9le:
+            false
+        case .yuyv422:
+            false
+        case .bgr4:
+            true
+        case .yuv440p10be:
+            false
+        case .yuv420p10be:
+            false
+        case .yuva422p16le:
+            false
+        case .yuv440p:
+            false
+        case .yuva444p:
+            false
+        case .gbrp16le:
+            false
+        case .p010be:
+            false
+        case .x2bgr10be:
+            false
+        case .y210le:
+            false
+        case .gbrap16le:
+            false
+        case .bayer_rggb16le:
+            false
+        case .yuv422p14be:
+            false
+        case .yuv420p:
+            false
+        case .bgr555be:
+            false
+        case .vulkan:
+            false
+        case .rgb565be:
+            false
+        case .yuv444p14le:
+            false
+        case .bgr8:
+            false
+        case .yuvj422p:
+            false
+        case .yuva420p9be:
+            false
+        case .bayer_bggr16le:
+            false
+        case .bayer_gbrg8:
+            false
+        case .grayf32be:
+            false
+        case .gray9be:
+            false
+        case .yuv420p16be:
+            false
+        case .gbrpf32le:
+            false
+        case .bayer_grbg16be:
+            false
+        case .gbrp10le:
+            false
+        case .bayer_gbrg16le:
+            false
+        case .yuv444p14be:
+            false
+        case .bgr24:
+            false
+        case .yuv444p12be:
+            false
+        case .nv20be:
+            false
+        case .bgra64le:
+            false
+        case .yuv422p14le:
+            false
+        case .monob:
+            true
+        case .yuva422p16be:
+            false
+        case .y210be:
+            false
+        case .yuva444p16be:
+            false
+        case .gbrap12le:
+            false
+        case .gbrp9le:
+            false
+        case .uyvy422:
+            false
+        case .rgb48le:
+            false
+        case .rgb48be:
+            false
+        case .bgr0:
+            false
+        case .yuv420p14be:
+            false
+        case .gray14le:
+            false
+        case .yuv411p:
+            false
+        case .yuva444p12le:
+            false
+        case .rgb444be:
+            false
+        case .rgb8:
+            false
+        case .nv42:
+            false
+        case .rgb555le:
+            false
+        case .yuva420p10le:
+            false
+        case .yuv420p12le:
+            false
+        case .gbrap16be:
+            false
+        case .p216be:
+            false
+        case .rgb555be:
+            false
+        case .yuvj420p:
+            false
+        case .yuv422p16be:
+            false
+        case .gbrap10le:
+            false
+        case .yuv420p14le:
+            false
+        case .ayuv64le:
+            false
+        case .videotoolbox_vld:
+            false
+        case ._0bgr:
+            false
+        case .gbrap12be:
             false
         case .p216le:
             false
         case .nv12:
             false
-        case .yuva422p12le:
-            false
-        case .rgb8:
-            false
-        case .dxva2_vld:
-            false
-        case .videotoolbox_vld:
-            false
-        case .gbrap:
-            false
-        case .mmal:
-            false
-        case .gbrp14be:
-            false
-        case .yuv444p10le:
-            false
-        case .bgra:
-            false
-        case .ayuv64le:
-            false
-        case .yuv444p16le:
-            false
-        case .yuva422p10be:
-            false
-        case .rgb0:
-            false
-        case ._0rgb:
-            false
-        case .yuv440p:
-            false
-        case .yuv422p:
-            false
-        case .yuv420p12le:
-            false
-        case .bgra64be:
-            false
         case .nv24:
-            false
-        case .rgb24:
-            false
-        case .gray16be:
-            false
-        case .opencl:
-            false
-        case .monob:
-            true
-        case .bgra64le:
-            false
-        case .p216be:
-            false
-        case .yuv440p12le:
-            false
-        case .yuv420p14le:
-            false
-        case .abgr:
-            false
-        case .bgr565le:
-            false
-        case .yuva420p9be:
-            false
-        case .gbrpf32le:
-            false
-        case .bgr4:
-            true
-        case .rgb4_byte:
-            false
-        case .yuv420p:
-            false
-        case .bgr4_byte:
-            false
-        case .yuv422p10be:
-            false
-        case .xyz12be:
-            false
-        case .bgr444le:
-            false
-        case .yuva420p10be:
-            false
-        case .yuv422p12le:
-            false
-        case .ayuv64be:
-            false
-        case .gray12be:
-            false
-        case .vdpau:
-            false
-        case .gbrap10le:
-            false
-        case ._0bgr:
-            false
-        case .yuv440p10be:
-            false
-        case .nv20be:
-            false
-        case .monow:
-            true
-        case .yuva444p12le:
-            false
-        case .yuva444p16le:
-            false
-        case .cuda:
-            false
-        case .gbrap16le:
-            false
-        case .yuva422p10le:
-            false
-        case .yuva444p9be:
-            false
-        case .gbrap10be:
-            false
-        case .ya16be:
-            false
-        case .rgb555le:
-            false
-        case .bayer_grbg16le:
-            false
-        case .yuva444p9le:
-            false
-        case .yuv422p14le:
-            false
-        case .gbrp16be:
-            false
-        case .rgb4:
-            true
-        case .x2bgr10be:
-            false
-        case .yuva422p:
-            false
-        case .bgr444be:
-            false
-        case .gbrp14le:
-            false
-        case .yuyv422:
-            false
-        case .xvmc:
-            false
-        case .yuv422p12be:
-            false
-        case .p010be:
-            false
-        case .gbrp16le:
-            false
-        case .xyz12le:
-            false
-        case .p010le:
-            false
-        case .yuva422p16be:
-            false
-        case .rgb565be:
-            false
-        case .gbrapf32be:
-            false
-        case .yuv420p9be:
-            false
-        case .rgb48le:
-            false
-        case .bgr24:
-            false
-        case .ya16le:
-            false
-        case .yuva420p:
             false
         case .p416be:
             false
-        case .grayf32be:
+        case .yuva422p12be:
             false
-        case .qsv:
-            false
-        case .yuv440p10le:
+        case .x2bgr10le:
             false
         case .gray14be:
             false
-        case .gray9be:
+        case .yuva422p:
             false
-        case .p210be:
+        case .ya8:
             false
-        case .yuvj422p:
+        case .yuv440p10le:
             false
-        case .yuv422p9be:
-            false
-        case .bgr565be:
-            false
-        case .yuv444p:
-            false
-        case .yuv444p16be:
-            false
-        case .yuv410p:
-            false
-        case .yuv444p9le:
-            false
-        case .gray14le:
-            false
-        case .rgb48be:
-            false
-        case .y210be:
-            false
-        case .rgb444le:
-            false
-        case .rgba:
-            false
-        case .yuva444p10le:
-            false
-        case .gbrp10le:
-            false
-        case .yuva422p9le:
-            false
-        case .rgba64le:
-            false
-        case .yuvj411p:
-            false
-        case .yuv422p10le:
-            false
-        case .yuv420p9le:
-            false
-        case .nv16:
-            false
-        case .uyvy422:
-            false
-        case .gbrp9le:
-            false
-        case .yuv420p16be:
-            false
-        case .yuvj444p:
-            false
-        case .bgr8:
-            false
-        case .bayer_rggb16le:
-            false
-        case .drm_prime:
-            false
-        case .bayer_grbg16be:
-            false
-        case .yuv444p14le:
-            false
-        case .gbrap12be:
-            false
-        case .grayf32le:
-            false
-        case .p410le:
-            false
-        case .gray10be:
-            false
-        case .gray16le:
-            false
-        case .rgb444be:
+        case .mmal:
             false
         }
     }
 
     public var numberOfComponents: Int {
         switch self {
-        case .gbrp:
-            3
-        case .yuv444p9be:
-            3
-        case .ya8:
-            2
-        case .rgba64be:
-            4
-        case .bayer_bggr8:
-            3
-        case .bayer_bggr16be:
-            3
-        case .yuv444p14be:
-            3
-        case .yuv420p16le:
-            3
-        case .rgb555be:
-            3
-        case .bayer_bggr16le:
-            3
-        case .nv42:
-            3
-        case .yvyu422:
-            3
-        case .yuv422p9le:
-            3
-        case .gbrp12be:
-            3
-        case .yuva444p10be:
-            4
-        case .gbrapf32le:
-            4
-        case .gbrap16be:
-            4
-        case .yuv444p12le:
-            3
-        case .yuv411p:
-            3
-        case .gbrp10be:
-            3
-        case .gbrp12le:
-            3
-        case .yuv420p12be:
-            3
-        case .gbrp9be:
-            3
-        case .yuv422p16be:
-            3
-        case .vaapi:
-            0
-        case .p416le:
-            3
-        case .yuv444p12be:
-            3
-        case .bgr0:
-            3
-        case .bgr555be:
-            3
-        case .yuva444p16be:
-            4
-        case .argb:
-            4
-        case .yuv420p14be:
-            3
-        case .x2rgb10le:
-            3
-        case .nv21:
-            3
-        case .d3d11va_vld:
-            0
-        case .y210le:
-            3
-        case .bayer_grbg8:
-            3
-        case .x2rgb10be:
-            3
-        case .p016le:
-            3
-        case .p016be:
-            3
-        case .bgr48le:
-            3
-        case .yuv444p10be:
-            3
-        case .yuv420p10be:
-            3
-        case .p210le:
-            3
-        case .bayer_gbrg16be:
-            3
-        case .yuva444p:
-            4
-        case .bayer_rggb8:
-            3
-        case .yuv422p16le:
-            3
-        case .gbrap12le:
-            4
-        case .yuv420p10le:
-            3
-        case .gray12le:
-            1
-        case .bayer_rggb16be:
-            3
-        case .yuva420p16le:
-            4
-        case .yuva444p12be:
-            4
-        case .nv20le:
-            3
-        case .yuva420p16be:
-            4
-        case .uyyvyy411:
-            3
-        case .gray10le:
-            1
-        case .x2bgr10le:
-            3
-        case .vulkan:
-            0
-        case .yuvj420p:
-            3
         case .bgr555le:
             3
-        case .bayer_gbrg16le:
-            3
-        case .yuva422p16le:
-            4
-        case .yuvj440p:
-            3
-        case .yuva420p10le:
-            4
-        case .rgb565le:
-            3
-        case .gbrpf32be:
-            3
-        case .mediacodec:
-            0
-        case .bayer_gbrg8:
-            3
-        case .yuv440p12be:
+        case .yuv444p12le:
             3
         case .yuva420p9le:
             4
-        case .pal8:
-            1
-        case .gray:
-            1
-        case .d3d11:
-            0
-        case .yuv422p14be:
+        case .yuv444p9le:
             3
+        case .ayuv64be:
+            4
+        case .vaapi:
+            0
+        case .bayer_grbg16le:
+            3
+        case .yuva444p9be:
+            4
+        case .yuva444p10be:
+            4
+        case .bayer_bggr8:
+            3
+        case .yuva422p10le:
+            4
+        case .ya16be:
+            2
+        case .yuv422p12le:
+            3
+        case .yuv444p16be:
+            3
+        case .rgb24:
+            3
+        case .nv20le:
+            3
+        case .yuv420p9be:
+            3
+        case .gbrp12le:
+            3
+        case .d3d11va_vld:
+            0
+        case .rgb4:
+            3
+        case .argb:
+            4
+        case .yuva444p12be:
+            4
+        case .bayer_gbrg16be:
+            3
+        case .p016be:
+            3
+        case .mediacodec:
+            0
+        case .gray16le:
+            1
+        case .bgr565le:
+            3
+        case .yuva420p16be:
+            4
+        case .bayer_rggb16be:
+            3
+        case .dxva2_vld:
+            0
+        case .bgr4_byte:
+            3
+        case .uyyvyy411:
+            3
+        case .yuvj444p:
+            3
+        case .vdpau:
+            0
+        case .gbrapf32le:
+            4
+        case .yuva422p12le:
+            4
+        case .p016le:
+            3
+        case .yuv422p10be:
+            3
+        case .xvmc:
+            0
+        case .bgra:
+            4
+        case .gbrp10be:
+            3
+        case .yuv422p16le:
+            3
+        case .yuva420p16le:
+            4
+        case .opencl:
+            0
+        case .rgb444le:
+            3
+        case .yuv422p9le:
+            3
+        case .bayer_grbg8:
+            3
+        case .bgr565be:
+            3
+        case .bgr48le:
+            3
+        case .xyz12be:
+            3
+        case .cuda:
+            0
         case .p410be:
             3
-        case .bgr48be:
+        case .gbrpf32be:
             3
-        case .yuva422p12be:
+        case .yuv422p12be:
+            3
+        case .yuv440p12le:
+            3
+        case .abgr:
+            4
+        case .ya16le:
+            2
+        case .yuva444p10le:
+            4
+        case .rgb0:
+            3
+        case .yuv444p9be:
+            3
+        case .gray9le:
+            1
+        case .yuva444p9le:
             4
         case .yuva422p9be:
             4
-        case .gray9le:
+        case .gray10le:
             1
+        case .gbrap10be:
+            4
+        case .yuv420p9le:
+            3
+        case .yuv420p10le:
+            3
+        case .gbrap:
+            4
+        case .yuva420p:
+            4
+        case .gbrp:
+            3
+        case .yuv444p16le:
+            3
+        case .yuv444p10be:
+            3
+        case .nv21:
+            3
+        case .yuvj440p:
+            3
+        case .yuva420p10be:
+            4
+        case .d3d11:
+            0
+        case .rgb4_byte:
+            3
+        case .bgra64be:
+            4
+        case .nv16:
+            3
+        case .bayer_rggb8:
+            3
+        case .qsv:
+            0
+        case .gray12be:
+            1
+        case .yvyu422:
+            3
+        case .gbrp12be:
+            3
+        case .gray10be:
+            1
+        case .gbrp16be:
+            3
+        case .yuvj411p:
+            3
+        case .yuv422p:
+            3
+        case .bgr444le:
+            3
+        case .rgba64le:
+            4
+        case .yuva422p10be:
+            4
+        case .gray12le:
+            1
+        case .gray:
+            1
+        case .rgb565le:
+            3
+        case .x2rgb10be:
+            3
+        case .p410le:
+            3
+        case .bgr48be:
+            3
+        case .yuv440p12be:
+            3
+        case .yuva444p16le:
+            4
+        case .pal8:
+            1
+        case .bayer_bggr16be:
+            3
+        case .drm_prime:
+            0
+        case .gray16be:
+            1
+        case .bgr444be:
+            3
+        case .grayf32le:
+            1
+        case .rgba:
+            4
+        case .p010le:
+            3
+        case ._0rgb:
+            3
+        case .yuv444p:
+            3
+        case .gbrp14le:
+            3
+        case .x2rgb10le:
+            3
+        case .monow:
+            1
+        case .yuv420p16le:
+            3
+        case .yuv422p10le:
+            3
+        case .gbrp14be:
+            3
+        case .xyz12le:
+            3
+        case .rgba64be:
+            4
+        case .yuv422p9be:
+            3
+        case .p416le:
+            3
+        case .yuv410p:
+            3
+        case .yuv420p12be:
+            3
+        case .p210be:
+            3
+        case .p210le:
+            3
+        case .gbrapf32be:
+            4
+        case .yuv444p10le:
+            3
+        case .gbrp9be:
+            3
+        case .yuva422p9le:
+            4
+        case .yuyv422:
+            3
+        case .bgr4:
+            3
+        case .yuv440p10be:
+            3
+        case .yuv420p10be:
+            3
+        case .yuva422p16le:
+            4
+        case .yuv440p:
+            3
+        case .yuva444p:
+            4
+        case .gbrp16le:
+            3
+        case .p010be:
+            3
+        case .x2bgr10be:
+            3
+        case .y210le:
+            3
+        case .gbrap16le:
+            4
+        case .bayer_rggb16le:
+            3
+        case .yuv422p14be:
+            3
+        case .yuv420p:
+            3
+        case .bgr555be:
+            3
+        case .vulkan:
+            0
+        case .rgb565be:
+            3
+        case .yuv444p14le:
+            3
+        case .bgr8:
+            3
+        case .yuvj422p:
+            3
+        case .yuva420p9be:
+            4
+        case .bayer_bggr16le:
+            3
+        case .bayer_gbrg8:
+            3
+        case .grayf32be:
+            1
+        case .gray9be:
+            1
+        case .yuv420p16be:
+            3
+        case .gbrpf32le:
+            3
+        case .bayer_grbg16be:
+            3
+        case .gbrp10le:
+            3
+        case .bayer_gbrg16le:
+            3
+        case .yuv444p14be:
+            3
+        case .bgr24:
+            3
+        case .yuv444p12be:
+            3
+        case .nv20be:
+            3
+        case .bgra64le:
+            4
+        case .yuv422p14le:
+            3
+        case .monob:
+            1
+        case .yuva422p16be:
+            4
+        case .y210be:
+            3
+        case .yuva444p16be:
+            4
+        case .gbrap12le:
+            4
+        case .gbrp9le:
+            3
+        case .uyvy422:
+            3
+        case .rgb48le:
+            3
+        case .rgb48be:
+            3
+        case .bgr0:
+            3
+        case .yuv420p14be:
+            3
+        case .gray14le:
+            1
+        case .yuv411p:
+            3
+        case .yuva444p12le:
+            4
+        case .rgb444be:
+            3
+        case .rgb8:
+            3
+        case .nv42:
+            3
+        case .rgb555le:
+            3
+        case .yuva420p10le:
+            4
+        case .yuv420p12le:
+            3
+        case .gbrap16be:
+            4
+        case .p216be:
+            3
+        case .rgb555be:
+            3
+        case .yuvj420p:
+            3
+        case .yuv422p16be:
+            3
+        case .gbrap10le:
+            4
+        case .yuv420p14le:
+            3
+        case .ayuv64le:
+            4
+        case .videotoolbox_vld:
+            0
+        case ._0bgr:
+            3
+        case .gbrap12be:
+            4
         case .p216le:
             3
         case .nv12:
             3
-        case .yuva422p12le:
-            4
-        case .rgb8:
-            3
-        case .dxva2_vld:
-            0
-        case .videotoolbox_vld:
-            0
-        case .gbrap:
-            4
-        case .mmal:
-            0
-        case .gbrp14be:
-            3
-        case .yuv444p10le:
-            3
-        case .bgra:
-            4
-        case .ayuv64le:
-            4
-        case .yuv444p16le:
-            3
-        case .yuva422p10be:
-            4
-        case .rgb0:
-            3
-        case ._0rgb:
-            3
-        case .yuv440p:
-            3
-        case .yuv422p:
-            3
-        case .yuv420p12le:
-            3
-        case .bgra64be:
-            4
         case .nv24:
             3
-        case .rgb24:
-            3
-        case .gray16be:
-            1
-        case .opencl:
-            0
-        case .monob:
-            1
-        case .bgra64le:
-            4
-        case .p216be:
-            3
-        case .yuv440p12le:
-            3
-        case .yuv420p14le:
-            3
-        case .abgr:
-            4
-        case .bgr565le:
-            3
-        case .yuva420p9be:
-            4
-        case .gbrpf32le:
-            3
-        case .bgr4:
-            3
-        case .rgb4_byte:
-            3
-        case .yuv420p:
-            3
-        case .bgr4_byte:
-            3
-        case .yuv422p10be:
-            3
-        case .xyz12be:
-            3
-        case .bgr444le:
-            3
-        case .yuva420p10be:
-            4
-        case .yuv422p12le:
-            3
-        case .ayuv64be:
-            4
-        case .gray12be:
-            1
-        case .vdpau:
-            0
-        case .gbrap10le:
-            4
-        case ._0bgr:
-            3
-        case .yuv440p10be:
-            3
-        case .nv20be:
-            3
-        case .monow:
-            1
-        case .yuva444p12le:
-            4
-        case .yuva444p16le:
-            4
-        case .cuda:
-            0
-        case .gbrap16le:
-            4
-        case .yuva422p10le:
-            4
-        case .yuva444p9be:
-            4
-        case .gbrap10be:
-            4
-        case .ya16be:
-            2
-        case .rgb555le:
-            3
-        case .bayer_grbg16le:
-            3
-        case .yuva444p9le:
-            4
-        case .yuv422p14le:
-            3
-        case .gbrp16be:
-            3
-        case .rgb4:
-            3
-        case .x2bgr10be:
-            3
-        case .yuva422p:
-            4
-        case .bgr444be:
-            3
-        case .gbrp14le:
-            3
-        case .yuyv422:
-            3
-        case .xvmc:
-            0
-        case .yuv422p12be:
-            3
-        case .p010be:
-            3
-        case .gbrp16le:
-            3
-        case .xyz12le:
-            3
-        case .p010le:
-            3
-        case .yuva422p16be:
-            4
-        case .rgb565be:
-            3
-        case .gbrapf32be:
-            4
-        case .yuv420p9be:
-            3
-        case .rgb48le:
-            3
-        case .bgr24:
-            3
-        case .ya16le:
-            2
-        case .yuva420p:
-            4
         case .p416be:
             3
-        case .grayf32be:
-            1
-        case .qsv:
-            0
-        case .yuv440p10le:
+        case .yuva422p12be:
+            4
+        case .x2bgr10le:
             3
         case .gray14be:
             1
-        case .gray9be:
-            1
-        case .p210be:
-            3
-        case .yuvj422p:
-            3
-        case .yuv422p9be:
-            3
-        case .bgr565be:
-            3
-        case .yuv444p:
-            3
-        case .yuv444p16be:
-            3
-        case .yuv410p:
-            3
-        case .yuv444p9le:
-            3
-        case .gray14le:
-            1
-        case .rgb48be:
-            3
-        case .y210be:
-            3
-        case .rgb444le:
-            3
-        case .rgba:
+        case .yuva422p:
             4
-        case .yuva444p10le:
-            4
-        case .gbrp10le:
+        case .ya8:
+            2
+        case .yuv440p10le:
             3
-        case .yuva422p9le:
-            4
-        case .rgba64le:
-            4
-        case .yuvj411p:
-            3
-        case .yuv422p10le:
-            3
-        case .yuv420p9le:
-            3
-        case .nv16:
-            3
-        case .uyvy422:
-            3
-        case .gbrp9le:
-            3
-        case .yuv420p16be:
-            3
-        case .yuvj444p:
-            3
-        case .bgr8:
-            3
-        case .bayer_rggb16le:
-            3
-        case .drm_prime:
+        case .mmal:
             0
-        case .bayer_grbg16be:
-            3
-        case .yuv444p14le:
-            3
-        case .gbrap12be:
-            4
-        case .grayf32le:
-            1
-        case .p410le:
-            3
-        case .gray10be:
-            1
-        case .gray16le:
-            1
-        case .rgb444be:
-            3
         }
     }
 
     public var bitsPerPixel: Int {
         switch self {
-        case .gbrp:
-            24
-        case .yuv444p9be:
-            27
-        case .ya8:
-            16
-        case .rgba64be:
-            64
-        case .bayer_bggr8:
-            8
-        case .bayer_bggr16be:
-            16
-        case .yuv444p14be:
-            42
-        case .yuv420p16le:
-            24
-        case .rgb555be:
+        case .bgr555le:
             15
-        case .bayer_bggr16le:
+        case .yuv444p12le:
+            36
+        case .yuva420p9le:
+            22
+        case .yuv444p9le:
+            27
+        case .ayuv64be:
+            64
+        case .vaapi:
+            0
+        case .bayer_grbg16le:
             16
-        case .nv42:
-            24
-        case .yvyu422:
-            16
-        case .yuv422p9le:
-            18
-        case .gbrp12be:
+        case .yuva444p9be:
             36
         case .yuva444p10be:
             40
-        case .gbrapf32le:
-            128
-        case .gbrap16be:
-            64
-        case .yuv444p12le:
-            36
-        case .yuv411p:
-            12
-        case .gbrp10be:
-            30
-        case .gbrp12le:
-            36
-        case .yuv420p12be:
-            18
-        case .gbrp9be:
-            27
-        case .yuv422p16be:
-            32
-        case .vaapi:
-            0
-        case .p416le:
-            48
-        case .yuv444p12be:
-            36
-        case .bgr0:
-            24
-        case .bgr555be:
-            15
-        case .yuva444p16be:
-            64
-        case .argb:
-            32
-        case .yuv420p14be:
-            21
-        case .x2rgb10le:
-            30
-        case .nv21:
-            12
-        case .d3d11va_vld:
-            0
-        case .y210le:
-            20
-        case .bayer_grbg8:
+        case .bayer_bggr8:
             8
-        case .x2rgb10be:
+        case .yuva422p10le:
             30
-        case .p016le:
-            24
-        case .p016be:
-            24
-        case .bgr48le:
-            48
-        case .yuv444p10be:
-            30
-        case .yuv420p10be:
-            15
-        case .p210le:
-            20
-        case .bayer_gbrg16be:
-            16
-        case .yuva444p:
+        case .ya16be:
             32
-        case .bayer_rggb8:
-            8
-        case .yuv422p16le:
-            32
-        case .gbrap12le:
+        case .yuv422p12le:
+            24
+        case .yuv444p16be:
             48
-        case .yuv420p10le:
-            15
-        case .gray12le:
-            12
-        case .bayer_rggb16be:
-            16
-        case .yuva420p16le:
-            40
-        case .yuva444p12be:
-            48
+        case .rgb24:
+            24
         case .nv20le:
             20
-        case .yuva420p16be:
-            40
-        case .uyyvyy411:
-            12
-        case .gray10le:
-            10
-        case .x2bgr10le:
-            30
-        case .vulkan:
+        case .yuv420p9be:
+            13
+        case .gbrp12le:
+            36
+        case .d3d11va_vld:
             0
-        case .yuvj420p:
-            12
-        case .bgr555le:
-            15
-        case .bayer_gbrg16le:
-            16
-        case .yuva422p16le:
+        case .rgb4:
+            4
+        case .argb:
+            32
+        case .yuva444p12be:
             48
-        case .yuvj440p:
+        case .bayer_gbrg16be:
             16
-        case .yuva420p10le:
-            25
-        case .rgb565le:
-            16
-        case .gbrpf32be:
-            96
+        case .p016be:
+            24
         case .mediacodec:
             0
-        case .bayer_gbrg8:
-            8
-        case .yuv440p12be:
-            24
-        case .yuva420p9le:
-            22
-        case .pal8:
-            8
-        case .gray:
-            8
-        case .d3d11:
+        case .gray16le:
+            16
+        case .bgr565le:
+            16
+        case .yuva420p16be:
+            40
+        case .bayer_rggb16be:
+            16
+        case .dxva2_vld:
             0
-        case .yuv422p14be:
-            28
+        case .bgr4_byte:
+            4
+        case .uyyvyy411:
+            12
+        case .yuvj444p:
+            24
+        case .vdpau:
+            0
+        case .gbrapf32le:
+            128
+        case .yuva422p12le:
+            36
+        case .p016le:
+            24
+        case .yuv422p10be:
+            20
+        case .xvmc:
+            0
+        case .bgra:
+            32
+        case .gbrp10be:
+            30
+        case .yuv422p16le:
+            32
+        case .yuva420p16le:
+            40
+        case .opencl:
+            0
+        case .rgb444le:
+            12
+        case .yuv422p9le:
+            18
+        case .bayer_grbg8:
+            8
+        case .bgr565be:
+            16
+        case .bgr48le:
+            48
+        case .xyz12be:
+            36
+        case .cuda:
+            0
         case .p410be:
             30
-        case .bgr48be:
-            48
-        case .yuva422p12be:
-            36
-        case .yuva422p9be:
+        case .gbrpf32be:
+            96
+        case .yuv422p12be:
+            24
+        case .yuv440p12le:
+            24
+        case .abgr:
+            32
+        case .ya16le:
+            32
+        case .yuva444p10le:
+            40
+        case .rgb0:
+            24
+        case .yuv444p9be:
             27
         case .gray9le:
             9
+        case .yuva444p9le:
+            36
+        case .yuva422p9be:
+            27
+        case .gray10le:
+            10
+        case .gbrap10be:
+            40
+        case .yuv420p9le:
+            13
+        case .yuv420p10le:
+            15
+        case .gbrap:
+            32
+        case .yuva420p:
+            20
+        case .gbrp:
+            24
+        case .yuv444p16le:
+            48
+        case .yuv444p10be:
+            30
+        case .nv21:
+            12
+        case .yuvj440p:
+            16
+        case .yuva420p10be:
+            25
+        case .d3d11:
+            0
+        case .rgb4_byte:
+            4
+        case .bgra64be:
+            64
+        case .nv16:
+            16
+        case .bayer_rggb8:
+            8
+        case .qsv:
+            0
+        case .gray12be:
+            12
+        case .yvyu422:
+            16
+        case .gbrp12be:
+            36
+        case .gray10be:
+            10
+        case .gbrp16be:
+            48
+        case .yuvj411p:
+            12
+        case .yuv422p:
+            16
+        case .bgr444le:
+            12
+        case .rgba64le:
+            64
+        case .yuva422p10be:
+            30
+        case .gray12le:
+            12
+        case .gray:
+            8
+        case .rgb565le:
+            16
+        case .x2rgb10be:
+            30
+        case .p410le:
+            30
+        case .bgr48be:
+            48
+        case .yuv440p12be:
+            24
+        case .yuva444p16le:
+            64
+        case .pal8:
+            8
+        case .bayer_bggr16be:
+            16
+        case .drm_prime:
+            0
+        case .gray16be:
+            16
+        case .bgr444be:
+            12
+        case .grayf32le:
+            32
+        case .rgba:
+            32
+        case .p010le:
+            15
+        case ._0rgb:
+            24
+        case .yuv444p:
+            24
+        case .gbrp14le:
+            42
+        case .x2rgb10le:
+            30
+        case .monow:
+            1
+        case .yuv420p16le:
+            24
+        case .yuv422p10le:
+            20
+        case .gbrp14be:
+            42
+        case .xyz12le:
+            36
+        case .rgba64be:
+            64
+        case .yuv422p9be:
+            18
+        case .p416le:
+            48
+        case .yuv410p:
+            9
+        case .yuv420p12be:
+            18
+        case .p210be:
+            20
+        case .p210le:
+            20
+        case .gbrapf32be:
+            128
+        case .yuv444p10le:
+            30
+        case .gbrp9be:
+            27
+        case .yuva422p9le:
+            27
+        case .yuyv422:
+            16
+        case .bgr4:
+            4
+        case .yuv440p10be:
+            20
+        case .yuv420p10be:
+            15
+        case .yuva422p16le:
+            48
+        case .yuv440p:
+            16
+        case .yuva444p:
+            32
+        case .gbrp16le:
+            48
+        case .p010be:
+            15
+        case .x2bgr10be:
+            30
+        case .y210le:
+            20
+        case .gbrap16le:
+            64
+        case .bayer_rggb16le:
+            16
+        case .yuv422p14be:
+            28
+        case .yuv420p:
+            12
+        case .bgr555be:
+            15
+        case .vulkan:
+            0
+        case .rgb565be:
+            16
+        case .yuv444p14le:
+            42
+        case .bgr8:
+            8
+        case .yuvj422p:
+            16
+        case .yuva420p9be:
+            22
+        case .bayer_bggr16le:
+            16
+        case .bayer_gbrg8:
+            8
+        case .grayf32be:
+            32
+        case .gray9be:
+            9
+        case .yuv420p16be:
+            24
+        case .gbrpf32le:
+            96
+        case .bayer_grbg16be:
+            16
+        case .gbrp10le:
+            30
+        case .bayer_gbrg16le:
+            16
+        case .yuv444p14be:
+            42
+        case .bgr24:
+            24
+        case .yuv444p12be:
+            36
+        case .nv20be:
+            20
+        case .bgra64le:
+            64
+        case .yuv422p14le:
+            28
+        case .monob:
+            1
+        case .yuva422p16be:
+            48
+        case .y210be:
+            20
+        case .yuva444p16be:
+            64
+        case .gbrap12le:
+            48
+        case .gbrp9le:
+            27
+        case .uyvy422:
+            16
+        case .rgb48le:
+            48
+        case .rgb48be:
+            48
+        case .bgr0:
+            24
+        case .yuv420p14be:
+            21
+        case .gray14le:
+            14
+        case .yuv411p:
+            12
+        case .yuva444p12le:
+            48
+        case .rgb444be:
+            12
+        case .rgb8:
+            8
+        case .nv42:
+            24
+        case .rgb555le:
+            15
+        case .yuva420p10le:
+            25
+        case .yuv420p12le:
+            18
+        case .gbrap16be:
+            64
+        case .p216be:
+            32
+        case .rgb555be:
+            15
+        case .yuvj420p:
+            12
+        case .yuv422p16be:
+            32
+        case .gbrap10le:
+            40
+        case .yuv420p14le:
+            21
+        case .ayuv64le:
+            64
+        case .videotoolbox_vld:
+            0
+        case ._0bgr:
+            24
+        case .gbrap12be:
+            48
         case .p216le:
             32
         case .nv12:
             12
-        case .yuva422p12le:
-            36
-        case .rgb8:
-            8
-        case .dxva2_vld:
-            0
-        case .videotoolbox_vld:
-            0
-        case .gbrap:
-            32
-        case .mmal:
-            0
-        case .gbrp14be:
-            42
-        case .yuv444p10le:
-            30
-        case .bgra:
-            32
-        case .ayuv64le:
-            64
-        case .yuv444p16le:
-            48
-        case .yuva422p10be:
-            30
-        case .rgb0:
-            24
-        case ._0rgb:
-            24
-        case .yuv440p:
-            16
-        case .yuv422p:
-            16
-        case .yuv420p12le:
-            18
-        case .bgra64be:
-            64
         case .nv24:
             24
-        case .rgb24:
-            24
-        case .gray16be:
-            16
-        case .opencl:
-            0
-        case .monob:
-            1
-        case .bgra64le:
-            64
-        case .p216be:
-            32
-        case .yuv440p12le:
-            24
-        case .yuv420p14le:
-            21
-        case .abgr:
-            32
-        case .bgr565le:
-            16
-        case .yuva420p9be:
-            22
-        case .gbrpf32le:
-            96
-        case .bgr4:
-            4
-        case .rgb4_byte:
-            4
-        case .yuv420p:
-            12
-        case .bgr4_byte:
-            4
-        case .yuv422p10be:
-            20
-        case .xyz12be:
-            36
-        case .bgr444le:
-            12
-        case .yuva420p10be:
-            25
-        case .yuv422p12le:
-            24
-        case .ayuv64be:
-            64
-        case .gray12be:
-            12
-        case .vdpau:
-            0
-        case .gbrap10le:
-            40
-        case ._0bgr:
-            24
-        case .yuv440p10be:
-            20
-        case .nv20be:
-            20
-        case .monow:
-            1
-        case .yuva444p12le:
-            48
-        case .yuva444p16le:
-            64
-        case .cuda:
-            0
-        case .gbrap16le:
-            64
-        case .yuva422p10le:
-            30
-        case .yuva444p9be:
-            36
-        case .gbrap10be:
-            40
-        case .ya16be:
-            32
-        case .rgb555le:
-            15
-        case .bayer_grbg16le:
-            16
-        case .yuva444p9le:
-            36
-        case .yuv422p14le:
-            28
-        case .gbrp16be:
-            48
-        case .rgb4:
-            4
-        case .x2bgr10be:
-            30
-        case .yuva422p:
-            24
-        case .bgr444be:
-            12
-        case .gbrp14le:
-            42
-        case .yuyv422:
-            16
-        case .xvmc:
-            0
-        case .yuv422p12be:
-            24
-        case .p010be:
-            15
-        case .gbrp16le:
-            48
-        case .xyz12le:
-            36
-        case .p010le:
-            15
-        case .yuva422p16be:
-            48
-        case .rgb565be:
-            16
-        case .gbrapf32be:
-            128
-        case .yuv420p9be:
-            13
-        case .rgb48le:
-            48
-        case .bgr24:
-            24
-        case .ya16le:
-            32
-        case .yuva420p:
-            20
         case .p416be:
             48
-        case .grayf32be:
-            32
-        case .qsv:
-            0
-        case .yuv440p10le:
-            20
+        case .yuva422p12be:
+            36
+        case .x2bgr10le:
+            30
         case .gray14be:
             14
-        case .gray9be:
-            9
-        case .p210be:
-            20
-        case .yuvj422p:
-            16
-        case .yuv422p9be:
-            18
-        case .bgr565be:
-            16
-        case .yuv444p:
+        case .yuva422p:
             24
-        case .yuv444p16be:
-            48
-        case .yuv410p:
-            9
-        case .yuv444p9le:
-            27
-        case .gray14le:
-            14
-        case .rgb48be:
-            48
-        case .y210be:
+        case .ya8:
+            16
+        case .yuv440p10le:
             20
-        case .rgb444le:
-            12
-        case .rgba:
-            32
-        case .yuva444p10le:
-            40
-        case .gbrp10le:
-            30
-        case .yuva422p9le:
-            27
-        case .rgba64le:
-            64
-        case .yuvj411p:
-            12
-        case .yuv422p10le:
-            20
-        case .yuv420p9le:
-            13
-        case .nv16:
-            16
-        case .uyvy422:
-            16
-        case .gbrp9le:
-            27
-        case .yuv420p16be:
-            24
-        case .yuvj444p:
-            24
-        case .bgr8:
-            8
-        case .bayer_rggb16le:
-            16
-        case .drm_prime:
+        case .mmal:
             0
-        case .bayer_grbg16be:
-            16
-        case .yuv444p14le:
-            42
-        case .gbrap12be:
-            48
-        case .grayf32le:
-            32
-        case .p410le:
-            30
-        case .gray10be:
-            10
-        case .gray16le:
-            16
-        case .rgb444be:
-            12
         }
     }
 
     public var bitDepths: String {
         switch self {
-        case .gbrp:
-            "8-8-8"
-        case .yuv444p9be:
-            "9-9-9"
-        case .ya8:
-            "8-8"
-        case .rgba64be:
-            "16-16-16-16"
-        case .bayer_bggr8:
-            "2-4-2"
-        case .bayer_bggr16be:
-            "4-8-4"
-        case .yuv444p14be:
-            "14-14-14"
-        case .yuv420p16le:
-            "16-16-16"
-        case .rgb555be:
-            "5-5-5"
-        case .bayer_bggr16le:
-            "4-8-4"
-        case .nv42:
-            "8-8-8"
-        case .yvyu422:
-            "8-8-8"
-        case .yuv422p9le:
-            "9-9-9"
-        case .gbrp12be:
-            "12-12-12"
-        case .yuva444p10be:
-            "10-10-10-10"
-        case .gbrapf32le:
-            "32-32-32-32"
-        case .gbrap16be:
-            "16-16-16-16"
-        case .yuv444p12le:
-            "12-12-12"
-        case .yuv411p:
-            "8-8-8"
-        case .gbrp10be:
-            "10-10-10"
-        case .gbrp12le:
-            "12-12-12"
-        case .yuv420p12be:
-            "12-12-12"
-        case .gbrp9be:
-            "9-9-9"
-        case .yuv422p16be:
-            "16-16-16"
-        case .vaapi:
-            "0"
-        case .p416le:
-            "16-16-16"
-        case .yuv444p12be:
-            "12-12-12"
-        case .bgr0:
-            "8-8-8"
-        case .bgr555be:
-            "5-5-5"
-        case .yuva444p16be:
-            "16-16-16-16"
-        case .argb:
-            "8-8-8-8"
-        case .yuv420p14be:
-            "14-14-14"
-        case .x2rgb10le:
-            "10-10-10"
-        case .nv21:
-            "8-8-8"
-        case .d3d11va_vld:
-            "0"
-        case .y210le:
-            "10-10-10"
-        case .bayer_grbg8:
-            "2-4-2"
-        case .x2rgb10be:
-            "10-10-10"
-        case .p016le:
-            "16-16-16"
-        case .p016be:
-            "16-16-16"
-        case .bgr48le:
-            "16-16-16"
-        case .yuv444p10be:
-            "10-10-10"
-        case .yuv420p10be:
-            "10-10-10"
-        case .p210le:
-            "10-10-10"
-        case .bayer_gbrg16be:
-            "4-8-4"
-        case .yuva444p:
-            "8-8-8-8"
-        case .bayer_rggb8:
-            "2-4-2"
-        case .yuv422p16le:
-            "16-16-16"
-        case .gbrap12le:
-            "12-12-12-12"
-        case .yuv420p10le:
-            "10-10-10"
-        case .gray12le:
-            "12"
-        case .bayer_rggb16be:
-            "4-8-4"
-        case .yuva420p16le:
-            "16-16-16-16"
-        case .yuva444p12be:
-            "12-12-12-12"
-        case .nv20le:
-            "10-10-10"
-        case .yuva420p16be:
-            "16-16-16-16"
-        case .uyyvyy411:
-            "8-8-8"
-        case .gray10le:
-            "10"
-        case .x2bgr10le:
-            "10-10-10"
-        case .vulkan:
-            "0"
-        case .yuvj420p:
-            "8-8-8"
         case .bgr555le:
             "5-5-5"
-        case .bayer_gbrg16le:
-            "4-8-4"
-        case .yuva422p16le:
-            "16-16-16-16"
-        case .yuvj440p:
-            "8-8-8"
-        case .yuva420p10le:
-            "10-10-10-10"
-        case .rgb565le:
-            "5-6-5"
-        case .gbrpf32be:
-            "32-32-32"
-        case .mediacodec:
-            "0"
-        case .bayer_gbrg8:
-            "2-4-2"
-        case .yuv440p12be:
+        case .yuv444p12le:
             "12-12-12"
         case .yuva420p9le:
             "9-9-9-9"
-        case .pal8:
-            "8"
-        case .gray:
-            "8"
+        case .yuv444p9le:
+            "9-9-9"
+        case .ayuv64be:
+            "16-16-16-16"
+        case .vaapi:
+            "0"
+        case .bayer_grbg16le:
+            "4-8-4"
+        case .yuva444p9be:
+            "9-9-9-9"
+        case .yuva444p10be:
+            "10-10-10-10"
+        case .bayer_bggr8:
+            "2-4-2"
+        case .yuva422p10le:
+            "10-10-10-10"
+        case .ya16be:
+            "16-16"
+        case .yuv422p12le:
+            "12-12-12"
+        case .yuv444p16be:
+            "16-16-16"
+        case .rgb24:
+            "8-8-8"
+        case .nv20le:
+            "10-10-10"
+        case .yuv420p9be:
+            "9-9-9"
+        case .gbrp12le:
+            "12-12-12"
+        case .d3d11va_vld:
+            "0"
+        case .rgb4:
+            "1-2-1"
+        case .argb:
+            "8-8-8-8"
+        case .yuva444p12be:
+            "12-12-12-12"
+        case .bayer_gbrg16be:
+            "4-8-4"
+        case .p016be:
+            "16-16-16"
+        case .mediacodec:
+            "0"
+        case .gray16le:
+            "16"
+        case .bgr565le:
+            "5-6-5"
+        case .yuva420p16be:
+            "16-16-16-16"
+        case .bayer_rggb16be:
+            "4-8-4"
+        case .dxva2_vld:
+            "0"
+        case .bgr4_byte:
+            "1-2-1"
+        case .uyyvyy411:
+            "8-8-8"
+        case .yuvj444p:
+            "8-8-8"
+        case .vdpau:
+            "0"
+        case .gbrapf32le:
+            "32-32-32-32"
+        case .yuva422p12le:
+            "12-12-12-12"
+        case .p016le:
+            "16-16-16"
+        case .yuv422p10be:
+            "10-10-10"
+        case .xvmc:
+            "0"
+        case .bgra:
+            "8-8-8-8"
+        case .gbrp10be:
+            "10-10-10"
+        case .yuv422p16le:
+            "16-16-16"
+        case .yuva420p16le:
+            "16-16-16-16"
+        case .opencl:
+            "0"
+        case .rgb444le:
+            "4-4-4"
+        case .yuv422p9le:
+            "9-9-9"
+        case .bayer_grbg8:
+            "2-4-2"
+        case .bgr565be:
+            "5-6-5"
+        case .bgr48le:
+            "16-16-16"
+        case .xyz12be:
+            "12-12-12"
+        case .cuda:
+            "0"
+        case .p410be:
+            "10-10-10"
+        case .gbrpf32be:
+            "32-32-32"
+        case .yuv422p12be:
+            "12-12-12"
+        case .yuv440p12le:
+            "12-12-12"
+        case .abgr:
+            "8-8-8-8"
+        case .ya16le:
+            "16-16"
+        case .yuva444p10le:
+            "10-10-10-10"
+        case .rgb0:
+            "8-8-8"
+        case .yuv444p9be:
+            "9-9-9"
+        case .gray9le:
+            "9"
+        case .yuva444p9le:
+            "9-9-9-9"
+        case .yuva422p9be:
+            "9-9-9-9"
+        case .gray10le:
+            "10"
+        case .gbrap10be:
+            "10-10-10-10"
+        case .yuv420p9le:
+            "9-9-9"
+        case .yuv420p10le:
+            "10-10-10"
+        case .gbrap:
+            "8-8-8-8"
+        case .yuva420p:
+            "8-8-8-8"
+        case .gbrp:
+            "8-8-8"
+        case .yuv444p16le:
+            "16-16-16"
+        case .yuv444p10be:
+            "10-10-10"
+        case .nv21:
+            "8-8-8"
+        case .yuvj440p:
+            "8-8-8"
+        case .yuva420p10be:
+            "10-10-10-10"
         case .d3d11:
             "0"
-        case .yuv422p14be:
-            "14-14-14"
-        case .p410be:
+        case .rgb4_byte:
+            "1-2-1"
+        case .bgra64be:
+            "16-16-16-16"
+        case .nv16:
+            "8-8-8"
+        case .bayer_rggb8:
+            "2-4-2"
+        case .qsv:
+            "0"
+        case .gray12be:
+            "12"
+        case .yvyu422:
+            "8-8-8"
+        case .gbrp12be:
+            "12-12-12"
+        case .gray10be:
+            "10"
+        case .gbrp16be:
+            "16-16-16"
+        case .yuvj411p:
+            "8-8-8"
+        case .yuv422p:
+            "8-8-8"
+        case .bgr444le:
+            "4-4-4"
+        case .rgba64le:
+            "16-16-16-16"
+        case .yuva422p10be:
+            "10-10-10-10"
+        case .gray12le:
+            "12"
+        case .gray:
+            "8"
+        case .rgb565le:
+            "5-6-5"
+        case .x2rgb10be:
+            "10-10-10"
+        case .p410le:
             "10-10-10"
         case .bgr48be:
             "16-16-16"
-        case .yuva422p12be:
-            "12-12-12-12"
-        case .yuva422p9be:
+        case .yuv440p12be:
+            "12-12-12"
+        case .yuva444p16le:
+            "16-16-16-16"
+        case .pal8:
+            "8"
+        case .bayer_bggr16be:
+            "4-8-4"
+        case .drm_prime:
+            "0"
+        case .gray16be:
+            "16"
+        case .bgr444be:
+            "4-4-4"
+        case .grayf32le:
+            "32"
+        case .rgba:
+            "8-8-8-8"
+        case .p010le:
+            "10-10-10"
+        case ._0rgb:
+            "8-8-8"
+        case .yuv444p:
+            "8-8-8"
+        case .gbrp14le:
+            "14-14-14"
+        case .x2rgb10le:
+            "10-10-10"
+        case .monow:
+            "1"
+        case .yuv420p16le:
+            "16-16-16"
+        case .yuv422p10le:
+            "10-10-10"
+        case .gbrp14be:
+            "14-14-14"
+        case .xyz12le:
+            "12-12-12"
+        case .rgba64be:
+            "16-16-16-16"
+        case .yuv422p9be:
+            "9-9-9"
+        case .p416le:
+            "16-16-16"
+        case .yuv410p:
+            "8-8-8"
+        case .yuv420p12be:
+            "12-12-12"
+        case .p210be:
+            "10-10-10"
+        case .p210le:
+            "10-10-10"
+        case .gbrapf32be:
+            "32-32-32-32"
+        case .yuv444p10le:
+            "10-10-10"
+        case .gbrp9be:
+            "9-9-9"
+        case .yuva422p9le:
             "9-9-9-9"
-        case .gray9le:
+        case .yuyv422:
+            "8-8-8"
+        case .bgr4:
+            "1-2-1"
+        case .yuv440p10be:
+            "10-10-10"
+        case .yuv420p10be:
+            "10-10-10"
+        case .yuva422p16le:
+            "16-16-16-16"
+        case .yuv440p:
+            "8-8-8"
+        case .yuva444p:
+            "8-8-8-8"
+        case .gbrp16le:
+            "16-16-16"
+        case .p010be:
+            "10-10-10"
+        case .x2bgr10be:
+            "10-10-10"
+        case .y210le:
+            "10-10-10"
+        case .gbrap16le:
+            "16-16-16-16"
+        case .bayer_rggb16le:
+            "4-8-4"
+        case .yuv422p14be:
+            "14-14-14"
+        case .yuv420p:
+            "8-8-8"
+        case .bgr555be:
+            "5-5-5"
+        case .vulkan:
+            "0"
+        case .rgb565be:
+            "5-6-5"
+        case .yuv444p14le:
+            "14-14-14"
+        case .bgr8:
+            "3-3-2"
+        case .yuvj422p:
+            "8-8-8"
+        case .yuva420p9be:
+            "9-9-9-9"
+        case .bayer_bggr16le:
+            "4-8-4"
+        case .bayer_gbrg8:
+            "2-4-2"
+        case .grayf32be:
+            "32"
+        case .gray9be:
             "9"
+        case .yuv420p16be:
+            "16-16-16"
+        case .gbrpf32le:
+            "32-32-32"
+        case .bayer_grbg16be:
+            "4-8-4"
+        case .gbrp10le:
+            "10-10-10"
+        case .bayer_gbrg16le:
+            "4-8-4"
+        case .yuv444p14be:
+            "14-14-14"
+        case .bgr24:
+            "8-8-8"
+        case .yuv444p12be:
+            "12-12-12"
+        case .nv20be:
+            "10-10-10"
+        case .bgra64le:
+            "16-16-16-16"
+        case .yuv422p14le:
+            "14-14-14"
+        case .monob:
+            "1"
+        case .yuva422p16be:
+            "16-16-16-16"
+        case .y210be:
+            "10-10-10"
+        case .yuva444p16be:
+            "16-16-16-16"
+        case .gbrap12le:
+            "12-12-12-12"
+        case .gbrp9le:
+            "9-9-9"
+        case .uyvy422:
+            "8-8-8"
+        case .rgb48le:
+            "16-16-16"
+        case .rgb48be:
+            "16-16-16"
+        case .bgr0:
+            "8-8-8"
+        case .yuv420p14be:
+            "14-14-14"
+        case .gray14le:
+            "14"
+        case .yuv411p:
+            "8-8-8"
+        case .yuva444p12le:
+            "12-12-12-12"
+        case .rgb444be:
+            "4-4-4"
+        case .rgb8:
+            "2-3-3"
+        case .nv42:
+            "8-8-8"
+        case .rgb555le:
+            "5-5-5"
+        case .yuva420p10le:
+            "10-10-10-10"
+        case .yuv420p12le:
+            "12-12-12"
+        case .gbrap16be:
+            "16-16-16-16"
+        case .p216be:
+            "16-16-16"
+        case .rgb555be:
+            "5-5-5"
+        case .yuvj420p:
+            "8-8-8"
+        case .yuv422p16be:
+            "16-16-16"
+        case .gbrap10le:
+            "10-10-10-10"
+        case .yuv420p14le:
+            "14-14-14"
+        case .ayuv64le:
+            "16-16-16-16"
+        case .videotoolbox_vld:
+            "0"
+        case ._0bgr:
+            "8-8-8"
+        case .gbrap12be:
+            "12-12-12-12"
         case .p216le:
             "16-16-16"
         case .nv12:
             "8-8-8"
-        case .yuva422p12le:
-            "12-12-12-12"
-        case .rgb8:
-            "2-3-3"
-        case .dxva2_vld:
-            "0"
-        case .videotoolbox_vld:
-            "0"
-        case .gbrap:
-            "8-8-8-8"
-        case .mmal:
-            "0"
-        case .gbrp14be:
-            "14-14-14"
-        case .yuv444p10le:
-            "10-10-10"
-        case .bgra:
-            "8-8-8-8"
-        case .ayuv64le:
-            "16-16-16-16"
-        case .yuv444p16le:
-            "16-16-16"
-        case .yuva422p10be:
-            "10-10-10-10"
-        case .rgb0:
-            "8-8-8"
-        case ._0rgb:
-            "8-8-8"
-        case .yuv440p:
-            "8-8-8"
-        case .yuv422p:
-            "8-8-8"
-        case .yuv420p12le:
-            "12-12-12"
-        case .bgra64be:
-            "16-16-16-16"
         case .nv24:
             "8-8-8"
-        case .rgb24:
-            "8-8-8"
-        case .gray16be:
-            "16"
-        case .opencl:
-            "0"
-        case .monob:
-            "1"
-        case .bgra64le:
-            "16-16-16-16"
-        case .p216be:
-            "16-16-16"
-        case .yuv440p12le:
-            "12-12-12"
-        case .yuv420p14le:
-            "14-14-14"
-        case .abgr:
-            "8-8-8-8"
-        case .bgr565le:
-            "5-6-5"
-        case .yuva420p9be:
-            "9-9-9-9"
-        case .gbrpf32le:
-            "32-32-32"
-        case .bgr4:
-            "1-2-1"
-        case .rgb4_byte:
-            "1-2-1"
-        case .yuv420p:
-            "8-8-8"
-        case .bgr4_byte:
-            "1-2-1"
-        case .yuv422p10be:
-            "10-10-10"
-        case .xyz12be:
-            "12-12-12"
-        case .bgr444le:
-            "4-4-4"
-        case .yuva420p10be:
-            "10-10-10-10"
-        case .yuv422p12le:
-            "12-12-12"
-        case .ayuv64be:
-            "16-16-16-16"
-        case .gray12be:
-            "12"
-        case .vdpau:
-            "0"
-        case .gbrap10le:
-            "10-10-10-10"
-        case ._0bgr:
-            "8-8-8"
-        case .yuv440p10be:
-            "10-10-10"
-        case .nv20be:
-            "10-10-10"
-        case .monow:
-            "1"
-        case .yuva444p12le:
-            "12-12-12-12"
-        case .yuva444p16le:
-            "16-16-16-16"
-        case .cuda:
-            "0"
-        case .gbrap16le:
-            "16-16-16-16"
-        case .yuva422p10le:
-            "10-10-10-10"
-        case .yuva444p9be:
-            "9-9-9-9"
-        case .gbrap10be:
-            "10-10-10-10"
-        case .ya16be:
-            "16-16"
-        case .rgb555le:
-            "5-5-5"
-        case .bayer_grbg16le:
-            "4-8-4"
-        case .yuva444p9le:
-            "9-9-9-9"
-        case .yuv422p14le:
-            "14-14-14"
-        case .gbrp16be:
-            "16-16-16"
-        case .rgb4:
-            "1-2-1"
-        case .x2bgr10be:
-            "10-10-10"
-        case .yuva422p:
-            "8-8-8-8"
-        case .bgr444be:
-            "4-4-4"
-        case .gbrp14le:
-            "14-14-14"
-        case .yuyv422:
-            "8-8-8"
-        case .xvmc:
-            "0"
-        case .yuv422p12be:
-            "12-12-12"
-        case .p010be:
-            "10-10-10"
-        case .gbrp16le:
-            "16-16-16"
-        case .xyz12le:
-            "12-12-12"
-        case .p010le:
-            "10-10-10"
-        case .yuva422p16be:
-            "16-16-16-16"
-        case .rgb565be:
-            "5-6-5"
-        case .gbrapf32be:
-            "32-32-32-32"
-        case .yuv420p9be:
-            "9-9-9"
-        case .rgb48le:
-            "16-16-16"
-        case .bgr24:
-            "8-8-8"
-        case .ya16le:
-            "16-16"
-        case .yuva420p:
-            "8-8-8-8"
         case .p416be:
             "16-16-16"
-        case .grayf32be:
-            "32"
-        case .qsv:
-            "0"
-        case .yuv440p10le:
+        case .yuva422p12be:
+            "12-12-12-12"
+        case .x2bgr10le:
             "10-10-10"
         case .gray14be:
             "14"
-        case .gray9be:
-            "9"
-        case .p210be:
-            "10-10-10"
-        case .yuvj422p:
-            "8-8-8"
-        case .yuv422p9be:
-            "9-9-9"
-        case .bgr565be:
-            "5-6-5"
-        case .yuv444p:
-            "8-8-8"
-        case .yuv444p16be:
-            "16-16-16"
-        case .yuv410p:
-            "8-8-8"
-        case .yuv444p9le:
-            "9-9-9"
-        case .gray14le:
-            "14"
-        case .rgb48be:
-            "16-16-16"
-        case .y210be:
-            "10-10-10"
-        case .rgb444le:
-            "4-4-4"
-        case .rgba:
+        case .yuva422p:
             "8-8-8-8"
-        case .yuva444p10le:
-            "10-10-10-10"
-        case .gbrp10le:
+        case .ya8:
+            "8-8"
+        case .yuv440p10le:
             "10-10-10"
-        case .yuva422p9le:
-            "9-9-9-9"
-        case .rgba64le:
-            "16-16-16-16"
-        case .yuvj411p:
-            "8-8-8"
-        case .yuv422p10le:
-            "10-10-10"
-        case .yuv420p9le:
-            "9-9-9"
-        case .nv16:
-            "8-8-8"
-        case .uyvy422:
-            "8-8-8"
-        case .gbrp9le:
-            "9-9-9"
-        case .yuv420p16be:
-            "16-16-16"
-        case .yuvj444p:
-            "8-8-8"
-        case .bgr8:
-            "3-3-2"
-        case .bayer_rggb16le:
-            "4-8-4"
-        case .drm_prime:
+        case .mmal:
             "0"
-        case .bayer_grbg16be:
-            "4-8-4"
-        case .yuv444p14le:
-            "14-14-14"
-        case .gbrap12be:
-            "12-12-12-12"
-        case .grayf32le:
-            "32"
-        case .p410le:
-            "10-10-10"
-        case .gray10be:
-            "10"
-        case .gray16le:
-            "16"
-        case .rgb444be:
-            "4-4-4"
         }
     }
 
+    public static var inputOutputPixelFormats: [FFmpegPixelFormat] {
+        self.allCases
+          .filter { $0.canInput }
+          .filter { $0.canOutput }
+    }
 }

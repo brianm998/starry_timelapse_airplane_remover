@@ -7,7453 +7,7459 @@ import Foundation
 // DO NOT EDIT BY HAND
 
 enum FFmpegCodec: String, CaseIterable, Codable, Sendable {
-    case tscc
-    case speedhq
-    case speex
-    case xbin
-    case tiertexseqvideo
-    case h263
-    case idcin
-    case cdtoons
-    case huffyuv
-    case mpegh_3d_audio
-    case mdec
-    case qdmc
-    case ttf
-    case pcm_s8
-    case adpcm_sbpro_2
-    case text
-    case ylc
-    case exr
-    case sdx2_dpcm
-    case pcm_f16le
-    case pcm_s24le
-    case adpcm_aica
-    case tgq
-    case mp1
-    case adpcm_g726
-    case dss_sp
-    case loco
-    case h264
-    case smc
-    case cfhd
-    case mp3on4
-    case gdv
-    case adpcm_yamaha
-    case adpcm_ea_r2
-    case amr_nb
-    case sga
-    case tscc2
-    case iff_ilbm
-    case adpcm_sbpro_3
-    case pcm_f32le
-    case realtext
-    case photocd
-    case adpcm_ima_acorn
-    case bmp
-    case cpia
-    case qpeg
-    case smackvideo
-    case musepack7
-    case a64_multi5
-    case alac
-    case mscc
-    case adpcm_ima_dk3
-    case cscd
-    case cmv
-    case wmav1
-    case adpcm_ima_apc
-    case h261
-    case wmalossless
-    case adpcm_ima_rad
-    case adpcm_argo
-    case dxtory
-    case dvb_teletext
-    case subviewer
-    case c93
-    case kmvc
-    case amv
-    case pcm_u24be
-    case vbn
-    case srt
-    case prores
-    case smv
-    case adpcm_ima_ea_eacs
-    case bin_data
-    case yop
-    case pcm_sga
-    case v410
-    case avrn
-    case adpcm_ima_amv
-    case adpcm_dtk
-    case adpcm_4xm
-    case gsm
-    case interplay_dpcm
-    case mvdv
-    case mszh
-    case hcom
-    case ilbc
-    case adpcm_agm
-    case dvb_subtitle
-    case dsicinvideo
-    case subviewer1
-    case dds
-    case rpza
-    case adpcm_ima_smjpeg
-    case mp3adu
-    case wcmv
-    case hnm4video
-    case pam
-    case cllc
-    case vp5
-    case hap
-    case sonicls
-    case mp2
-    case rv20
-    case qdm2
-    case wmv3image
-    case amr_wb
-    case nuv
-    case m101
-    case otf
-    case hq_hqa
-    case dnxhd
-    case anm
-    case smvjpeg
-    case hdmv_text_subtitle
-    case bfi
-    case avc
-    case imc
-    case adpcm_thp_le
-    case pcm_bluray
-    case dxv
-    case sol_dpcm
-    case ttml
-    case wmavoice
-    case xsub
-    case mace3
-    case aptx_hd
-    case ssa
-    case eia_608
-    case codec2
-    case mvc1
-    case pgm
-    case kgv1
-    case h263i
-    case pcx
-    case dpx
-    case dvaudio
-    case pcm_s16le_planar
-    case dirac
-    case pcm_s24daud
-    case cdxl
-    case ptx
-    case utvideo
-    case pictor
-    case fmvc
-    case arbc
-    case adpcm_ms
-    case adpcm_afc
-    case metasound
-    case msnsiren
-    case truemotion2rt
-    case jpegxl
-    case _012v = "012v"
-    case xan_dpcm
-    case pcm_f24le
-    case nellymoser
-    case scpr
-    case bmv_video
-    case frwu
-    case adpcm_vima
-    case mmvideo
-    case r10k
-    case alias_pix
-    case avs2
-    case pcm_s32le
-    case aptx
-    case pcm_u16le
-    case pcm_s32be
-    case simbiosis_imx
-    case adpcm_ima_ssi
-    case adpcm_swf
-    case derf_dpcm
-    case msvideo1
-    case pcm_s8_planar
-    case daala
-    case s302m
-    case targa_y216
-    case wmav2
-    case eac3
-    case truemotion1
-    case _8bps = "8bps"
-    case cinepak
-    case mad
-    case pcm_s32le_planar
-    case bintext
-    case fraps
-    case dfa
-    case mjpeg
-    case pcm_u32be
-    case gem
-    case vp6f
     case hevc
-    case cljr
-    case indeo5
-    case flic
-    case sonic
-    case ra_144
-    case vmnc
-    case pcm_u8
-    case xan_wc3
-    case wmv1
-    case mss2
-    case theora
-    case wmapro
-    case h263p
-    case sipr
-    case truespeech
-    case xan_wc4
-    case gremlin_dpcm
-    case lscr
-    case dvd_subtitle
-    case brender_pix
-    case yuv4
-    case _4xm = "4xm"
-    case mvha
-    case v210x
-    case svg
-    case tak
-    case arib_caption
-    case jpeg2000
-    case adpcm_mtaf
-    case adpcm_ima_wav
-    case tta
-    case qtrle
-    case wmv2
-    case jv
-    case pcm_s16le
-    case mxpeg
-    case pcm_u24le
-    case flac
-    case ass
-    case ipu
-    case tiff
-    case binkaudio_rdft
-    case musepack8
-    case wnv1
-    case sgirle
-    case snow
-    case msrle
-    case vorbis
-    case agm
-    case roq
-    case atrac3al
-    case pgx
-    case wmv3
-    case rl2
-    case mpl2
-    case aac_latm
-    case dts
-    case xpm
-    case adpcm_ea_maxis_xa
-    case sheervideo
-    case adpcm_adx
-    case adpcm_ea_r1
-    case screenpresso
-    case westwood_snd1
-    case interplayacm
-    case adpcm_ima_alp
-    case r210
-    case thp
-    case wrapped_avframe
-    case notchlc
-    case zlib
-    case wavpack
-    case cri
-    case atrac1
-    case imm4
-    case psd
-    case stl
-    case indeo2
-    case rv10
-    case mlp
-    case sunrast
-    case ffvhuff
-    case _8svx_exp = "8svx_exp"
-    case mts2
-    case xbm
-    case celt
-    case vp6a
-    case mjpegb
-    case magicyuv
-    case v210
-    case indeo4
-    case targa
-    case dsicinaudio
-    case mpeg1video
-    case timed_id3
-    case twinvq
-    case dsd_lsbf_planar
-    case zerocodec
-    case wavesynth
-    case ra_288
-    case microdvd
-    case png
-    case binkaudio_dct
-    case shorten
-    case opus
-    case cavs
-    case dsd_msbf
-    case xface
-    case sbc
-    case vplayer
-    case pixlet
-    case smackaudio
-    case avui
-    case binkvideo
-    case pbm
-    case _8svx_fib = "8svx_fib"
-    case dsd_lsbf
-    case tqi
-    case adpcm_ima_dat4
-    case dvvideo
-    case sanm
-    case ppm
-    case truemotion2
-    case qdraw
-    case pcm_u32le
-    case pcm_mulaw
-    case sgi
-    case atrac9
-    case flv1
-    case a64_multi
-    case asv2
-    case apng
-    case g729
-    case vp8
-    case pcm_f64be
-    case aasc
-    case aac
-    case evrc
-    case dolby_e
-    case vp7
-    case escape124
-    case motionpixels
-    case clearvideo
-    case pcm_f32be
-    case aura2
-    case pcm_vidc
-    case lagarith
-    case phm
-    case mvc2
-    case txd
-    case adpcm_sbpro_4
-    case webp
-    case hqx
-    case pcm_s24be
-    case cyuv
-    case mpegts
-    case vvc
-    case qcelp
-    case rscc
-    case ljpeg
-    case vixl
-    case pcm_lxf
-    case adpcm_ima_cunning
-    case vp9
-    case adpcm_ea
-    case xma1
-    case tmv
-    case pcm_s16be_planar
-    case truehd
-    case aura
-    case fits
-    case pcm_s24le_planar
-    case adpcm_ima_iss
-    case gsm_ms
-    case adpcm_ct
-    case pcm_s16be
-    case adpcm_zork
-    case adpcm_psx
-    case mobiclip
-    case adpcm_ima_mtf
-    case gif
-    case flashsv2
-    case epg
-    case pcm_dvd
-    case fastaudio
-    case scte_35
-    case msmpeg4v1
-    case av1
-    case v408
-    case asv1
-    case y41p
-    case ws_vqa
-    case avs3
-    case iac
-    case mp4als
-    case pcm_s64le
-    case mwsc
-    case qoi
-    case g723_1
-    case adpcm_g722
-    case ffv1
-    case adpcm_xa
-    case imm5
-    case vp3
-    case flashsv
-    case tgv
-    case v308
-    case subrip
-    case adpcm_ea_r3
-    case pcm_u16be
-    case adpcm_ea_xas
-    case vble
-    case paf_video
-    case msp2
-    case adpcm_g726le
-    case vcr1
-    case prosumer
-    case svq3
-    case ayuv
-    case sp5x
-    case jacosub
-    case ape
-    case msa1
-    case bitpacked
-    case rawvideo
-    case hca
-    case adpcm_ima_ea_sead
-    case g2m
-    case dxa
-    case dst
-    case bethsoftvid
-    case pjs
-    case vb
-    case webvtt
-    case pcm_alaw
-    case comfortnoise
-    case mpeg4
-    case rv40
-    case interplayvideo
-    case mimic
-    case aic
-    case mss1
-    case roq_dpcm
-    case pcm_s64be
-    case vp6
-    case mp3
-    case vmdaudio
-    case bmv_audio
-    case pcm_f64le
-    case cdgraphics
-    case adpcm_ima_dk4
-    case mv30
-    case adpcm_ima_qt
-    case mov_text
-    case msmpeg4v3
-    case adpcm_ima_moflex
-    case argo
-    case mace6
-    case dsd_msbf_planar
-    case hdmv_pgs_subtitle
-    case adpcm_thp
-    case rasc
-    case rv30
-    case ac3
-    case ralf
-    case zmbv
-    case avrp
-    case svq1
-    case vc1
-    case vp4
-    case xwd
-    case adpcm_ima_ws
-    case tdsc
-    case dfpwm
-    case dvd_nav_packet
-    case cook
-    case adpcm_ima_apm
-    case atrac3
     case siren
-    case hymt
-    case atrac3pal
-    case _4gv = "4gv"
-    case escape130
-    case vc1image
-    case pfm
-    case atrac3p
-    case idf
-    case ansi
-    case ulti
-    case adpcm_ima_oki
-    case paf_audio
-    case mpeg2video
-    case jpegls
-    case srgc
-    case pgmyuv
-    case avs
-    case xma2
-    case msmpeg4v2
-    case indeo3
-    case klv
-    case sami
+    case _012v = "012v"
+    case dirac
+    case imm5
+    case imm4
+    case mpegh_3d_audio
+    case r210
+    case vp3
+    case cook
+    case v210
+    case prosumer
+    case sonicls
+    case adpcm_sbpro_4
+    case qdm2
+    case xbm
+    case v210x
     case fic
+    case msmpeg4v3
+    case rpza
+    case roq_dpcm
+    case ac3
+    case vbn
+    case fastaudio
+    case celt
+    case adpcm_dtk
+    case ayuv
+    case wavpack
+    case mwsc
+    case xwd
+    case avui
+    case pgx
+    case pcm_f32be
+    case avs
+    case avs3
+    case truemotion2
+    case asv2
+    case adpcm_aica
+    case rawvideo
+    case sdx2_dpcm
+    case qoi
+    case mace3
+    case mov_text
+    case vp9
+    case avrp
+    case hca
+    case ffv1
+    case mjpegb
+    case sp5x
+    case dsicinvideo
+    case alac
+    case indeo5
+    case tak
+    case notchlc
+    case mobiclip
+    case pjs
+    case pcm_s24daud
+    case dsd_msbf_planar
+    case simbiosis_imx
+    case comfortnoise
+    case jacosub
+    case vmnc
+    case xpm
+    case qcelp
+    case text
+    case adpcm_sbpro_2
+    case mp3adu
+    case musepack8
+    case yuv4
+    case atrac1
+    case vp5
+    case pcm_u24le
+    case tqi
+    case _8svx_fib = "8svx_fib"
+    case qdraw
+    case tgv
+    case av1
+    case m101
+    case adpcm_ima_apc
+    case flic
+    case mdec
+    case agm
+    case adpcm_ima_ea_sead
+    case xma2
+    case pcm_s16be_planar
+    case cfhd
+    case pcm_f64le
+    case smc
+    case adpcm_ima_iss
+    case epg
+    case sga
+    case _4xm = "4xm"
+    case opus
+    case hymt
+    case tdsc
+    case roq
+    case ra_288
+    case gif
+    case msrle
+    case dts
+    case cmv
+    case adpcm_g726
+    case bmp
+    case adpcm_ima_dk4
+    case iff_ilbm
+    case dvvideo
+    case derf_dpcm
+    case adpcm_ima_ws
+    case adpcm_ima_amv
+    case y41p
+    case r10k
+    case adpcm_4xm
+    case snow
+    case xsub
+    case vb
+    case alias_pix
+    case sanm
+    case wmalossless
+    case dss_sp
+    case svg
+    case h264
+    case scpr
+    case mxpeg
+    case daala
+    case ttf
+    case pictor
+    case ptx
+    case vp6
+    case smvjpeg
+    case flashsv
+    case bitpacked
+    case phm
+    case xma1
+    case sipr
+    case iac
+    case hdmv_text_subtitle
+    case mad
+    case avc
+    case cllc
+    case pcm_f64be
+    case h263p
+    case exr
+    case cpia
+    case hq_hqa
+    case ilbc
+    case vp4
+    case pcm_u16le
+    case prores
+    case escape130
+    case cscd
+    case tiertexseqvideo
+    case webp
+    case wmv3
+    case adpcm_thp
+    case ass
+    case adpcm_argo
+    case ansi
+    case flac
+    case smackaudio
+    case msmpeg4v1
+    case klv
+    case xface
+    case dxv
+    case truehd
+    case pcx
+    case pam
+    case atrac3
+    case adpcm_ima_acorn
+    case atrac9
+    case escape124
+    case adpcm_ea
+    case utvideo
+    case dpx
+    case adpcm_sbpro_3
+    case v408
+    case mlp
+    case wmapro
+    case xan_wc4
+    case twinvq
+    case adpcm_ima_alp
+    case loco
+    case brender_pix
+    case cdxl
+    case truemotion1
+    case adpcm_vima
+    case pcm_lxf
+    case motionpixels
+    case s302m
+    case wmv3image
+    case ra_144
+    case jpegls
+    case bfi
+    case mpl2
+    case pcm_bluray
+    case adpcm_ct
+    case vble
+    case pbm
+    case pcm_s64be
+    case frwu
+    case adpcm_ima_moflex
+    case mss1
+    case idf
+    case bmv_audio
+    case pcm_s32le_planar
+    case _8svx_exp = "8svx_exp"
+    case pcm_s32be
+    case aptx_hd
+    case pcm_u32le
+    case srt
+    case codec2
+    case timed_id3
+    case vorbis
+    case atrac3pal
+    case xbin
+    case microdvd
+    case scte_35
+    case g723_1
+    case huffyuv
+    case aura2
+    case dxa
+    case pcm_u24be
+    case vp7
+    case gdv
+    case qtrle
+    case g2m
+    case pcm_s16be
+    case arbc
+    case theora
+    case wmavoice
+    case vmdaudio
+    case msa1
+    case pcm_mulaw
+    case adpcm_agm
+    case rv10
+    case rv20
+    case zerocodec
+    case clearvideo
+    case pcm_s24be
+    case pcm_s8
+    case mpeg1video
+    case subviewer1
+    case tta
+    case sunrast
+    case kmvc
+    case lagarith
+    case webvtt
+    case msvideo1
+    case adpcm_ima_apm
+    case xan_wc3
+    case ssa
+    case anm
+    case fits
+    case aic
+    case adpcm_ima_qt
+    case rv30
+    case indeo2
+    case dfpwm
+    case ttml
+    case wmav1
+    case metasound
+    case svq3
+    case mss2
+    case adpcm_g726le
+    case adpcm_yamaha
+    case adpcm_mtaf
+    case dxtory
+    case adpcm_ima_dat4
+    case dvaudio
+    case jpeg2000
+    case screenpresso
+    case binkaudio_dct
+    case hap
+    case mpeg4
+    case yop
+    case pcm_f24le
+    case sgirle
+    case ape
+    case adpcm_ea_xas
+    case aasc
+    case pcm_u16be
+    case ppm
+    case wavesynth
+    case pcm_s24le
+    case adpcm_ms
+    case c93
+    case msmpeg4v2
+    case tscc2
+    case idcin
+    case ulti
+    case dvd_nav_packet
+    case adpcm_ima_smjpeg
+    case vp8
+    case cdgraphics
+    case adpcm_ea_maxis_xa
+    case zlib
+    case adpcm_ima_wav
+    case ljpeg
+    case smackvideo
+    case vp6f
+    case adpcm_ima_ssi
+    case xan_dpcm
+    case pcm_u8
+    case gem
+    case indeo4
+    case dvd_subtitle
+    case mp4als
+    case mp3
+    case eac3
+    case evrc
+    case sonic
+    case dvb_teletext
+    case truemotion2rt
+    case shorten
+    case bmv_video
+    case aura
+    case dnxhd
+    case sbc
+    case ws_vqa
+    case rscc
+    case wnv1
+    case h263
+    case speedhq
+    case lscr
+    case dst
+    case pgmyuv
+    case a64_multi5
+    case targa_y216
+    case vc1
+    case adpcm_thp_le
+    case cdtoons
+    case westwood_snd1
+    case qdmc
+    case photocd
+    case pcm_s64le
+    case cljr
+    case dsd_lsbf_planar
+    case indeo3
+    case interplayacm
+    case mmvideo
+    case adpcm_xa
+    case magicyuv
+    case cavs
+    case binkaudio_rdft
+    case ipu
+    case cri
+    case rv40
+    case h263i
+    case vvc
+    case wmav2
+    case mpegts
+    case ffvhuff
+    case tmv
+    case atrac3al
+    case a64_multi
+    case h261
+    case adpcm_ima_mtf
+    case dsicinaudio
+    case rasc
+    case mvc1
+    case rl2
+    case fmvc
+    case wmv2
+    case avrn
+    case ylc
+    case pcm_u32be
+    case vc1image
+    case gsm_ms
+    case mjpeg
+    case stl
+    case pfm
+    case aac
+    case srgc
+    case tscc
+    case pcm_s8_planar
+    case dsd_msbf
+    case psd
+    case dolby_e
+    case adpcm_swf
+    case fraps
+    case dds
+    case nuv
+    case mszh
+    case aac_latm
+    case v308
+    case txd
+    case dsd_lsbf
+    case atrac3p
+    case mpeg2video
+    case targa
+    case mimic
+    case pcm_sga
+    case wrapped_avframe
+    case adpcm_ima_oki
+    case pcm_vidc
+    case cyuv
+    case mp1
+    case mp3on4
+    case otf
+    case mvdv
+    case flv1
+    case amr_nb
+    case asv1
+    case sami
+    case musepack7
+    case adpcm_zork
+    case gsm
+    case _8bps = "8bps"
+    case adpcm_afc
+    case pixlet
+    case vcr1
+    case mvc2
+    case cinepak
+    case nellymoser
+    case sgi
+    case hdmv_pgs_subtitle
+    case pcm_s16le
+    case hnm4video
+    case pgm
+    case wcmv
+    case adpcm_ea_r1
+    case jpegxl
+    case pcm_f32le
+    case mvha
+    case bintext
+    case jv
+    case pcm_dvd
+    case adpcm_ima_cunning
+    case hqx
+    case dvb_subtitle
+    case hcom
+    case realtext
+    case ralf
+    case paf_video
+    case adpcm_ima_dk3
+    case tiff
+    case adpcm_adx
+    case adpcm_g722
+    case interplay_dpcm
+    case amr_wb
+    case mace6
+    case mp2
+    case adpcm_ima_rad
+    case aptx
+    case paf_audio
+    case vp6a
     case vmdvideo
+    case vplayer
+    case mts2
+    case dfa
+    case imc
+    case speex
+    case pcm_s16le_planar
+    case arib_caption
+    case zmbv
+    case svq1
+    case wmv1
+    case v410
+    case _4gv = "4gv"
+    case pcm_s24le_planar
+    case vixl
+    case subviewer
+    case gremlin_dpcm
+    case smv
+    case adpcm_ea_r3
+    case eia_608
+    case mscc
+    case argo
+    case png
+    case qpeg
+    case sol_dpcm
+    case flashsv2
+    case bethsoftvid
+    case binkvideo
+    case msp2
+    case adpcm_ea_r2
+    case adpcm_psx
+    case truespeech
+    case kgv1
+    case pcm_f16le
+    case adpcm_ima_ea_eacs
+    case subrip
+    case g729
+    case thp
+    case amv
+    case pcm_s32le
+    case tgq
+    case mv30
+    case sheervideo
+    case avs2
+    case msnsiren
+    case bin_data
+    case apng
+    case interplayvideo
+    case pcm_alaw
 
 
     public var canDecode: Bool {
         switch self {
-        case .tscc:
-            true
-        case .speedhq:
-            true
-        case .speex:
-            true
-        case .xbin:
-            true
-        case .tiertexseqvideo:
-            true
-        case .h263:
-            true
-        case .idcin:
-            true
-        case .cdtoons:
-            true
-        case .huffyuv:
-            true
-        case .mpegh_3d_audio:
-            false
-        case .mdec:
-            true
-        case .qdmc:
-            true
-        case .ttf:
-            false
-        case .pcm_s8:
-            true
-        case .adpcm_sbpro_2:
-            true
-        case .text:
-            true
-        case .ylc:
-            true
-        case .exr:
-            true
-        case .sdx2_dpcm:
-            true
-        case .pcm_f16le:
-            true
-        case .pcm_s24le:
-            true
-        case .adpcm_aica:
-            true
-        case .tgq:
-            true
-        case .mp1:
-            true
-        case .adpcm_g726:
-            true
-        case .dss_sp:
-            true
-        case .loco:
-            true
-        case .h264:
-            true
-        case .smc:
-            true
-        case .cfhd:
-            true
-        case .mp3on4:
-            true
-        case .gdv:
-            true
-        case .adpcm_yamaha:
-            true
-        case .adpcm_ea_r2:
-            true
-        case .amr_nb:
-            true
-        case .sga:
-            true
-        case .tscc2:
-            true
-        case .iff_ilbm:
-            true
-        case .adpcm_sbpro_3:
-            true
-        case .pcm_f32le:
-            true
-        case .realtext:
-            true
-        case .photocd:
-            true
-        case .adpcm_ima_acorn:
-            true
-        case .bmp:
-            true
-        case .cpia:
-            true
-        case .qpeg:
-            true
-        case .smackvideo:
-            true
-        case .musepack7:
-            true
-        case .a64_multi5:
-            false
-        case .alac:
-            true
-        case .mscc:
-            true
-        case .adpcm_ima_dk3:
-            true
-        case .cscd:
-            true
-        case .cmv:
-            true
-        case .wmav1:
-            true
-        case .adpcm_ima_apc:
-            true
-        case .h261:
-            true
-        case .wmalossless:
-            true
-        case .adpcm_ima_rad:
-            true
-        case .adpcm_argo:
-            true
-        case .dxtory:
-            true
-        case .dvb_teletext:
-            true
-        case .subviewer:
-            true
-        case .c93:
-            true
-        case .kmvc:
-            true
-        case .amv:
-            true
-        case .pcm_u24be:
-            true
-        case .vbn:
-            true
-        case .srt:
-            false
-        case .prores:
-            true
-        case .smv:
-            false
-        case .adpcm_ima_ea_eacs:
-            true
-        case .bin_data:
-            false
-        case .yop:
-            true
-        case .pcm_sga:
-            true
-        case .v410:
-            true
-        case .avrn:
-            true
-        case .adpcm_ima_amv:
-            true
-        case .adpcm_dtk:
-            true
-        case .adpcm_4xm:
-            true
-        case .gsm:
-            true
-        case .interplay_dpcm:
-            true
-        case .mvdv:
-            true
-        case .mszh:
-            true
-        case .hcom:
-            true
-        case .ilbc:
-            true
-        case .adpcm_agm:
-            true
-        case .dvb_subtitle:
-            true
-        case .dsicinvideo:
-            true
-        case .subviewer1:
-            true
-        case .dds:
-            true
-        case .rpza:
-            true
-        case .adpcm_ima_smjpeg:
-            true
-        case .mp3adu:
-            true
-        case .wcmv:
-            true
-        case .hnm4video:
-            true
-        case .pam:
-            true
-        case .cllc:
-            true
-        case .vp5:
-            true
-        case .hap:
-            true
-        case .sonicls:
-            false
-        case .mp2:
-            true
-        case .rv20:
-            true
-        case .qdm2:
-            true
-        case .wmv3image:
-            true
-        case .amr_wb:
-            true
-        case .nuv:
-            true
-        case .m101:
-            true
-        case .otf:
-            false
-        case .hq_hqa:
-            true
-        case .dnxhd:
-            true
-        case .anm:
-            true
-        case .smvjpeg:
-            true
-        case .hdmv_text_subtitle:
-            false
-        case .bfi:
-            true
-        case .avc:
-            true
-        case .imc:
-            true
-        case .adpcm_thp_le:
-            true
-        case .pcm_bluray:
-            true
-        case .dxv:
-            true
-        case .sol_dpcm:
-            true
-        case .ttml:
-            false
-        case .wmavoice:
-            true
-        case .xsub:
-            true
-        case .mace3:
-            true
-        case .aptx_hd:
-            true
-        case .ssa:
-            false
-        case .eia_608:
-            true
-        case .codec2:
-            false
-        case .mvc1:
-            true
-        case .pgm:
-            true
-        case .kgv1:
-            true
-        case .h263i:
-            true
-        case .pcx:
-            true
-        case .dpx:
-            true
-        case .dvaudio:
-            true
-        case .pcm_s16le_planar:
-            true
-        case .dirac:
-            true
-        case .pcm_s24daud:
-            true
-        case .cdxl:
-            true
-        case .ptx:
-            true
-        case .utvideo:
-            true
-        case .pictor:
-            true
-        case .fmvc:
-            true
-        case .arbc:
-            true
-        case .adpcm_ms:
-            true
-        case .adpcm_afc:
-            true
-        case .metasound:
-            true
-        case .msnsiren:
-            true
-        case .truemotion2rt:
-            true
-        case .jpegxl:
-            false
-        case ._012v:
-            true
-        case .xan_dpcm:
-            true
-        case .pcm_f24le:
-            true
-        case .nellymoser:
-            true
-        case .scpr:
-            true
-        case .bmv_video:
-            true
-        case .frwu:
-            true
-        case .adpcm_vima:
-            true
-        case .mmvideo:
-            true
-        case .r10k:
-            true
-        case .alias_pix:
-            true
-        case .avs2:
-            false
-        case .pcm_s32le:
-            true
-        case .aptx:
-            true
-        case .pcm_u16le:
-            true
-        case .pcm_s32be:
-            true
-        case .simbiosis_imx:
-            true
-        case .adpcm_ima_ssi:
-            true
-        case .adpcm_swf:
-            true
-        case .derf_dpcm:
-            true
-        case .msvideo1:
-            true
-        case .pcm_s8_planar:
-            true
-        case .daala:
-            false
-        case .s302m:
-            true
-        case .targa_y216:
-            true
-        case .wmav2:
-            true
-        case .eac3:
-            true
-        case .truemotion1:
-            true
-        case ._8bps:
-            true
-        case .cinepak:
-            true
-        case .mad:
-            true
-        case .pcm_s32le_planar:
-            true
-        case .bintext:
-            true
-        case .fraps:
-            true
-        case .dfa:
-            true
-        case .mjpeg:
-            true
-        case .pcm_u32be:
-            true
-        case .gem:
-            true
-        case .vp6f:
-            true
         case .hevc:
-            true
-        case .cljr:
-            true
-        case .indeo5:
-            true
-        case .flic:
-            true
-        case .sonic:
-            true
-        case .ra_144:
-            true
-        case .vmnc:
-            true
-        case .pcm_u8:
-            true
-        case .xan_wc3:
-            true
-        case .wmv1:
-            true
-        case .mss2:
-            true
-        case .theora:
-            true
-        case .wmapro:
-            true
-        case .h263p:
-            true
-        case .sipr:
-            true
-        case .truespeech:
-            true
-        case .xan_wc4:
-            true
-        case .gremlin_dpcm:
-            true
-        case .lscr:
-            true
-        case .dvd_subtitle:
-            true
-        case .brender_pix:
-            true
-        case .yuv4:
-            true
-        case ._4xm:
-            true
-        case .mvha:
-            true
-        case .v210x:
-            true
-        case .svg:
-            false
-        case .tak:
-            true
-        case .arib_caption:
-            false
-        case .jpeg2000:
-            true
-        case .adpcm_mtaf:
-            true
-        case .adpcm_ima_wav:
-            true
-        case .tta:
-            true
-        case .qtrle:
-            true
-        case .wmv2:
-            true
-        case .jv:
-            true
-        case .pcm_s16le:
-            true
-        case .mxpeg:
-            true
-        case .pcm_u24le:
-            true
-        case .flac:
-            true
-        case .ass:
-            true
-        case .ipu:
-            true
-        case .tiff:
-            true
-        case .binkaudio_rdft:
-            true
-        case .musepack8:
-            true
-        case .wnv1:
-            true
-        case .sgirle:
-            true
-        case .snow:
-            true
-        case .msrle:
-            true
-        case .vorbis:
-            true
-        case .agm:
-            true
-        case .roq:
-            true
-        case .atrac3al:
-            true
-        case .pgx:
-            true
-        case .wmv3:
-            true
-        case .rl2:
-            true
-        case .mpl2:
-            true
-        case .aac_latm:
-            true
-        case .dts:
-            true
-        case .xpm:
-            true
-        case .adpcm_ea_maxis_xa:
-            true
-        case .sheervideo:
-            true
-        case .adpcm_adx:
-            true
-        case .adpcm_ea_r1:
-            true
-        case .screenpresso:
-            true
-        case .westwood_snd1:
-            true
-        case .interplayacm:
-            true
-        case .adpcm_ima_alp:
-            true
-        case .r210:
-            true
-        case .thp:
-            true
-        case .wrapped_avframe:
-            true
-        case .notchlc:
-            true
-        case .zlib:
-            true
-        case .wavpack:
-            true
-        case .cri:
-            true
-        case .atrac1:
-            true
-        case .imm4:
-            true
-        case .psd:
-            true
-        case .stl:
-            true
-        case .indeo2:
-            true
-        case .rv10:
-            true
-        case .mlp:
-            true
-        case .sunrast:
-            true
-        case .ffvhuff:
-            true
-        case ._8svx_exp:
-            true
-        case .mts2:
-            true
-        case .xbm:
-            true
-        case .celt:
-            false
-        case .vp6a:
-            true
-        case .mjpegb:
-            true
-        case .magicyuv:
-            true
-        case .v210:
-            true
-        case .indeo4:
-            true
-        case .targa:
-            true
-        case .dsicinaudio:
-            true
-        case .mpeg1video:
-            true
-        case .timed_id3:
-            false
-        case .twinvq:
-            true
-        case .dsd_lsbf_planar:
-            true
-        case .zerocodec:
-            true
-        case .wavesynth:
-            true
-        case .ra_288:
-            true
-        case .microdvd:
-            true
-        case .png:
-            true
-        case .binkaudio_dct:
-            true
-        case .shorten:
-            true
-        case .opus:
-            true
-        case .cavs:
-            true
-        case .dsd_msbf:
-            true
-        case .xface:
-            true
-        case .sbc:
-            true
-        case .vplayer:
-            true
-        case .pixlet:
-            true
-        case .smackaudio:
-            true
-        case .avui:
-            true
-        case .binkvideo:
-            true
-        case .pbm:
-            true
-        case ._8svx_fib:
-            true
-        case .dsd_lsbf:
-            true
-        case .tqi:
-            true
-        case .adpcm_ima_dat4:
-            true
-        case .dvvideo:
-            true
-        case .sanm:
-            true
-        case .ppm:
-            true
-        case .truemotion2:
-            true
-        case .qdraw:
-            true
-        case .pcm_u32le:
-            true
-        case .pcm_mulaw:
-            true
-        case .sgi:
-            true
-        case .atrac9:
-            true
-        case .flv1:
-            true
-        case .a64_multi:
-            false
-        case .asv2:
-            true
-        case .apng:
-            true
-        case .g729:
-            true
-        case .vp8:
-            true
-        case .pcm_f64be:
-            true
-        case .aasc:
-            true
-        case .aac:
-            true
-        case .evrc:
-            true
-        case .dolby_e:
-            true
-        case .vp7:
-            true
-        case .escape124:
-            true
-        case .motionpixels:
-            true
-        case .clearvideo:
-            true
-        case .pcm_f32be:
-            true
-        case .aura2:
-            true
-        case .pcm_vidc:
-            true
-        case .lagarith:
-            true
-        case .phm:
-            true
-        case .mvc2:
-            true
-        case .txd:
-            true
-        case .adpcm_sbpro_4:
-            true
-        case .webp:
-            true
-        case .hqx:
-            true
-        case .pcm_s24be:
-            true
-        case .cyuv:
-            true
-        case .mpegts:
-            false
-        case .vvc:
-            false
-        case .qcelp:
-            true
-        case .rscc:
-            true
-        case .ljpeg:
-            false
-        case .vixl:
-            true
-        case .pcm_lxf:
-            true
-        case .adpcm_ima_cunning:
-            true
-        case .vp9:
-            true
-        case .adpcm_ea:
-            true
-        case .xma1:
-            true
-        case .tmv:
-            true
-        case .pcm_s16be_planar:
-            true
-        case .truehd:
-            true
-        case .aura:
-            true
-        case .fits:
-            true
-        case .pcm_s24le_planar:
-            true
-        case .adpcm_ima_iss:
-            true
-        case .gsm_ms:
-            true
-        case .adpcm_ct:
-            true
-        case .pcm_s16be:
-            true
-        case .adpcm_zork:
-            true
-        case .adpcm_psx:
-            true
-        case .mobiclip:
-            true
-        case .adpcm_ima_mtf:
-            true
-        case .gif:
-            true
-        case .flashsv2:
-            true
-        case .epg:
-            false
-        case .pcm_dvd:
-            true
-        case .fastaudio:
-            true
-        case .scte_35:
-            false
-        case .msmpeg4v1:
-            true
-        case .av1:
-            true
-        case .v408:
-            true
-        case .asv1:
-            true
-        case .y41p:
-            true
-        case .ws_vqa:
-            true
-        case .avs3:
-            false
-        case .iac:
-            true
-        case .mp4als:
-            true
-        case .pcm_s64le:
-            true
-        case .mwsc:
-            true
-        case .qoi:
-            true
-        case .g723_1:
-            true
-        case .adpcm_g722:
-            true
-        case .ffv1:
-            true
-        case .adpcm_xa:
-            true
-        case .imm5:
-            true
-        case .vp3:
-            true
-        case .flashsv:
-            true
-        case .tgv:
-            true
-        case .v308:
-            true
-        case .subrip:
-            true
-        case .adpcm_ea_r3:
-            true
-        case .pcm_u16be:
-            true
-        case .adpcm_ea_xas:
-            true
-        case .vble:
-            true
-        case .paf_video:
-            true
-        case .msp2:
-            true
-        case .adpcm_g726le:
-            true
-        case .vcr1:
-            true
-        case .prosumer:
-            true
-        case .svq3:
-            true
-        case .ayuv:
-            true
-        case .sp5x:
-            true
-        case .jacosub:
-            true
-        case .ape:
-            true
-        case .msa1:
-            true
-        case .bitpacked:
-            true
-        case .rawvideo:
-            true
-        case .hca:
-            true
-        case .adpcm_ima_ea_sead:
-            true
-        case .g2m:
-            true
-        case .dxa:
-            true
-        case .dst:
-            true
-        case .bethsoftvid:
-            true
-        case .pjs:
-            true
-        case .vb:
-            true
-        case .webvtt:
-            true
-        case .pcm_alaw:
-            true
-        case .comfortnoise:
-            true
-        case .mpeg4:
-            true
-        case .rv40:
-            true
-        case .interplayvideo:
-            true
-        case .mimic:
-            true
-        case .aic:
-            true
-        case .mss1:
-            true
-        case .roq_dpcm:
-            true
-        case .pcm_s64be:
-            true
-        case .vp6:
-            true
-        case .mp3:
-            true
-        case .vmdaudio:
-            true
-        case .bmv_audio:
-            true
-        case .pcm_f64le:
-            true
-        case .cdgraphics:
-            true
-        case .adpcm_ima_dk4:
-            true
-        case .mv30:
-            true
-        case .adpcm_ima_qt:
-            true
-        case .mov_text:
-            true
-        case .msmpeg4v3:
-            true
-        case .adpcm_ima_moflex:
-            true
-        case .argo:
-            true
-        case .mace6:
-            true
-        case .dsd_msbf_planar:
-            true
-        case .hdmv_pgs_subtitle:
-            true
-        case .adpcm_thp:
-            true
-        case .rasc:
-            true
-        case .rv30:
-            true
-        case .ac3:
-            true
-        case .ralf:
-            true
-        case .zmbv:
-            true
-        case .avrp:
-            true
-        case .svq1:
-            true
-        case .vc1:
-            true
-        case .vp4:
-            true
-        case .xwd:
-            true
-        case .adpcm_ima_ws:
-            true
-        case .tdsc:
-            true
-        case .dfpwm:
-            true
-        case .dvd_nav_packet:
-            false
-        case .cook:
-            true
-        case .adpcm_ima_apm:
-            true
-        case .atrac3:
             true
         case .siren:
             true
-        case .hymt:
+        case ._012v:
             true
-        case .atrac3pal:
+        case .dirac:
             true
-        case ._4gv:
+        case .imm5:
+            true
+        case .imm4:
+            true
+        case .mpegh_3d_audio:
             false
-        case .escape130:
+        case .r210:
             true
-        case .vc1image:
+        case .vp3:
             true
-        case .pfm:
+        case .cook:
             true
-        case .atrac3p:
+        case .v210:
             true
-        case .idf:
+        case .prosumer:
             true
-        case .ansi:
-            true
-        case .ulti:
-            true
-        case .adpcm_ima_oki:
-            true
-        case .paf_audio:
-            true
-        case .mpeg2video:
-            true
-        case .jpegls:
-            true
-        case .srgc:
-            true
-        case .pgmyuv:
-            true
-        case .avs:
-            true
-        case .xma2:
-            true
-        case .msmpeg4v2:
-            true
-        case .indeo3:
-            true
-        case .klv:
+        case .sonicls:
             false
-        case .sami:
+        case .adpcm_sbpro_4:
+            true
+        case .qdm2:
+            true
+        case .xbm:
+            true
+        case .v210x:
             true
         case .fic:
             true
+        case .msmpeg4v3:
+            true
+        case .rpza:
+            true
+        case .roq_dpcm:
+            true
+        case .ac3:
+            true
+        case .vbn:
+            true
+        case .fastaudio:
+            true
+        case .celt:
+            false
+        case .adpcm_dtk:
+            true
+        case .ayuv:
+            true
+        case .wavpack:
+            true
+        case .mwsc:
+            true
+        case .xwd:
+            true
+        case .avui:
+            true
+        case .pgx:
+            true
+        case .pcm_f32be:
+            true
+        case .avs:
+            true
+        case .avs3:
+            false
+        case .truemotion2:
+            true
+        case .asv2:
+            true
+        case .adpcm_aica:
+            true
+        case .rawvideo:
+            true
+        case .sdx2_dpcm:
+            true
+        case .qoi:
+            true
+        case .mace3:
+            true
+        case .mov_text:
+            true
+        case .vp9:
+            true
+        case .avrp:
+            true
+        case .hca:
+            true
+        case .ffv1:
+            true
+        case .mjpegb:
+            true
+        case .sp5x:
+            true
+        case .dsicinvideo:
+            true
+        case .alac:
+            true
+        case .indeo5:
+            true
+        case .tak:
+            true
+        case .notchlc:
+            true
+        case .mobiclip:
+            true
+        case .pjs:
+            true
+        case .pcm_s24daud:
+            true
+        case .dsd_msbf_planar:
+            true
+        case .simbiosis_imx:
+            true
+        case .comfortnoise:
+            true
+        case .jacosub:
+            true
+        case .vmnc:
+            true
+        case .xpm:
+            true
+        case .qcelp:
+            true
+        case .text:
+            true
+        case .adpcm_sbpro_2:
+            true
+        case .mp3adu:
+            true
+        case .musepack8:
+            true
+        case .yuv4:
+            true
+        case .atrac1:
+            true
+        case .vp5:
+            true
+        case .pcm_u24le:
+            true
+        case .tqi:
+            true
+        case ._8svx_fib:
+            true
+        case .qdraw:
+            true
+        case .tgv:
+            true
+        case .av1:
+            true
+        case .m101:
+            true
+        case .adpcm_ima_apc:
+            true
+        case .flic:
+            true
+        case .mdec:
+            true
+        case .agm:
+            true
+        case .adpcm_ima_ea_sead:
+            true
+        case .xma2:
+            true
+        case .pcm_s16be_planar:
+            true
+        case .cfhd:
+            true
+        case .pcm_f64le:
+            true
+        case .smc:
+            true
+        case .adpcm_ima_iss:
+            true
+        case .epg:
+            false
+        case .sga:
+            true
+        case ._4xm:
+            true
+        case .opus:
+            true
+        case .hymt:
+            true
+        case .tdsc:
+            true
+        case .roq:
+            true
+        case .ra_288:
+            true
+        case .gif:
+            true
+        case .msrle:
+            true
+        case .dts:
+            true
+        case .cmv:
+            true
+        case .adpcm_g726:
+            true
+        case .bmp:
+            true
+        case .adpcm_ima_dk4:
+            true
+        case .iff_ilbm:
+            true
+        case .dvvideo:
+            true
+        case .derf_dpcm:
+            true
+        case .adpcm_ima_ws:
+            true
+        case .adpcm_ima_amv:
+            true
+        case .y41p:
+            true
+        case .r10k:
+            true
+        case .adpcm_4xm:
+            true
+        case .snow:
+            true
+        case .xsub:
+            true
+        case .vb:
+            true
+        case .alias_pix:
+            true
+        case .sanm:
+            true
+        case .wmalossless:
+            true
+        case .dss_sp:
+            true
+        case .svg:
+            false
+        case .h264:
+            true
+        case .scpr:
+            true
+        case .mxpeg:
+            true
+        case .daala:
+            false
+        case .ttf:
+            false
+        case .pictor:
+            true
+        case .ptx:
+            true
+        case .vp6:
+            true
+        case .smvjpeg:
+            true
+        case .flashsv:
+            true
+        case .bitpacked:
+            true
+        case .phm:
+            true
+        case .xma1:
+            true
+        case .sipr:
+            true
+        case .iac:
+            true
+        case .hdmv_text_subtitle:
+            false
+        case .mad:
+            true
+        case .avc:
+            true
+        case .cllc:
+            true
+        case .pcm_f64be:
+            true
+        case .h263p:
+            true
+        case .exr:
+            true
+        case .cpia:
+            true
+        case .hq_hqa:
+            true
+        case .ilbc:
+            true
+        case .vp4:
+            true
+        case .pcm_u16le:
+            true
+        case .prores:
+            true
+        case .escape130:
+            true
+        case .cscd:
+            true
+        case .tiertexseqvideo:
+            true
+        case .webp:
+            true
+        case .wmv3:
+            true
+        case .adpcm_thp:
+            true
+        case .ass:
+            true
+        case .adpcm_argo:
+            true
+        case .ansi:
+            true
+        case .flac:
+            true
+        case .smackaudio:
+            true
+        case .msmpeg4v1:
+            true
+        case .klv:
+            false
+        case .xface:
+            true
+        case .dxv:
+            true
+        case .truehd:
+            true
+        case .pcx:
+            true
+        case .pam:
+            true
+        case .atrac3:
+            true
+        case .adpcm_ima_acorn:
+            true
+        case .atrac9:
+            true
+        case .escape124:
+            true
+        case .adpcm_ea:
+            true
+        case .utvideo:
+            true
+        case .dpx:
+            true
+        case .adpcm_sbpro_3:
+            true
+        case .v408:
+            true
+        case .mlp:
+            true
+        case .wmapro:
+            true
+        case .xan_wc4:
+            true
+        case .twinvq:
+            true
+        case .adpcm_ima_alp:
+            true
+        case .loco:
+            true
+        case .brender_pix:
+            true
+        case .cdxl:
+            true
+        case .truemotion1:
+            true
+        case .adpcm_vima:
+            true
+        case .pcm_lxf:
+            true
+        case .motionpixels:
+            true
+        case .s302m:
+            true
+        case .wmv3image:
+            true
+        case .ra_144:
+            true
+        case .jpegls:
+            true
+        case .bfi:
+            true
+        case .mpl2:
+            true
+        case .pcm_bluray:
+            true
+        case .adpcm_ct:
+            true
+        case .vble:
+            true
+        case .pbm:
+            true
+        case .pcm_s64be:
+            true
+        case .frwu:
+            true
+        case .adpcm_ima_moflex:
+            true
+        case .mss1:
+            true
+        case .idf:
+            true
+        case .bmv_audio:
+            true
+        case .pcm_s32le_planar:
+            true
+        case ._8svx_exp:
+            true
+        case .pcm_s32be:
+            true
+        case .aptx_hd:
+            true
+        case .pcm_u32le:
+            true
+        case .srt:
+            false
+        case .codec2:
+            false
+        case .timed_id3:
+            false
+        case .vorbis:
+            true
+        case .atrac3pal:
+            true
+        case .xbin:
+            true
+        case .microdvd:
+            true
+        case .scte_35:
+            false
+        case .g723_1:
+            true
+        case .huffyuv:
+            true
+        case .aura2:
+            true
+        case .dxa:
+            true
+        case .pcm_u24be:
+            true
+        case .vp7:
+            true
+        case .gdv:
+            true
+        case .qtrle:
+            true
+        case .g2m:
+            true
+        case .pcm_s16be:
+            true
+        case .arbc:
+            true
+        case .theora:
+            true
+        case .wmavoice:
+            true
+        case .vmdaudio:
+            true
+        case .msa1:
+            true
+        case .pcm_mulaw:
+            true
+        case .adpcm_agm:
+            true
+        case .rv10:
+            true
+        case .rv20:
+            true
+        case .zerocodec:
+            true
+        case .clearvideo:
+            true
+        case .pcm_s24be:
+            true
+        case .pcm_s8:
+            true
+        case .mpeg1video:
+            true
+        case .subviewer1:
+            true
+        case .tta:
+            true
+        case .sunrast:
+            true
+        case .kmvc:
+            true
+        case .lagarith:
+            true
+        case .webvtt:
+            true
+        case .msvideo1:
+            true
+        case .adpcm_ima_apm:
+            true
+        case .xan_wc3:
+            true
+        case .ssa:
+            false
+        case .anm:
+            true
+        case .fits:
+            true
+        case .aic:
+            true
+        case .adpcm_ima_qt:
+            true
+        case .rv30:
+            true
+        case .indeo2:
+            true
+        case .dfpwm:
+            true
+        case .ttml:
+            false
+        case .wmav1:
+            true
+        case .metasound:
+            true
+        case .svq3:
+            true
+        case .mss2:
+            true
+        case .adpcm_g726le:
+            true
+        case .adpcm_yamaha:
+            true
+        case .adpcm_mtaf:
+            true
+        case .dxtory:
+            true
+        case .adpcm_ima_dat4:
+            true
+        case .dvaudio:
+            true
+        case .jpeg2000:
+            true
+        case .screenpresso:
+            true
+        case .binkaudio_dct:
+            true
+        case .hap:
+            true
+        case .mpeg4:
+            true
+        case .yop:
+            true
+        case .pcm_f24le:
+            true
+        case .sgirle:
+            true
+        case .ape:
+            true
+        case .adpcm_ea_xas:
+            true
+        case .aasc:
+            true
+        case .pcm_u16be:
+            true
+        case .ppm:
+            true
+        case .wavesynth:
+            true
+        case .pcm_s24le:
+            true
+        case .adpcm_ms:
+            true
+        case .c93:
+            true
+        case .msmpeg4v2:
+            true
+        case .tscc2:
+            true
+        case .idcin:
+            true
+        case .ulti:
+            true
+        case .dvd_nav_packet:
+            false
+        case .adpcm_ima_smjpeg:
+            true
+        case .vp8:
+            true
+        case .cdgraphics:
+            true
+        case .adpcm_ea_maxis_xa:
+            true
+        case .zlib:
+            true
+        case .adpcm_ima_wav:
+            true
+        case .ljpeg:
+            false
+        case .smackvideo:
+            true
+        case .vp6f:
+            true
+        case .adpcm_ima_ssi:
+            true
+        case .xan_dpcm:
+            true
+        case .pcm_u8:
+            true
+        case .gem:
+            true
+        case .indeo4:
+            true
+        case .dvd_subtitle:
+            true
+        case .mp4als:
+            true
+        case .mp3:
+            true
+        case .eac3:
+            true
+        case .evrc:
+            true
+        case .sonic:
+            true
+        case .dvb_teletext:
+            true
+        case .truemotion2rt:
+            true
+        case .shorten:
+            true
+        case .bmv_video:
+            true
+        case .aura:
+            true
+        case .dnxhd:
+            true
+        case .sbc:
+            true
+        case .ws_vqa:
+            true
+        case .rscc:
+            true
+        case .wnv1:
+            true
+        case .h263:
+            true
+        case .speedhq:
+            true
+        case .lscr:
+            true
+        case .dst:
+            true
+        case .pgmyuv:
+            true
+        case .a64_multi5:
+            false
+        case .targa_y216:
+            true
+        case .vc1:
+            true
+        case .adpcm_thp_le:
+            true
+        case .cdtoons:
+            true
+        case .westwood_snd1:
+            true
+        case .qdmc:
+            true
+        case .photocd:
+            true
+        case .pcm_s64le:
+            true
+        case .cljr:
+            true
+        case .dsd_lsbf_planar:
+            true
+        case .indeo3:
+            true
+        case .interplayacm:
+            true
+        case .mmvideo:
+            true
+        case .adpcm_xa:
+            true
+        case .magicyuv:
+            true
+        case .cavs:
+            true
+        case .binkaudio_rdft:
+            true
+        case .ipu:
+            true
+        case .cri:
+            true
+        case .rv40:
+            true
+        case .h263i:
+            true
+        case .vvc:
+            false
+        case .wmav2:
+            true
+        case .mpegts:
+            false
+        case .ffvhuff:
+            true
+        case .tmv:
+            true
+        case .atrac3al:
+            true
+        case .a64_multi:
+            false
+        case .h261:
+            true
+        case .adpcm_ima_mtf:
+            true
+        case .dsicinaudio:
+            true
+        case .rasc:
+            true
+        case .mvc1:
+            true
+        case .rl2:
+            true
+        case .fmvc:
+            true
+        case .wmv2:
+            true
+        case .avrn:
+            true
+        case .ylc:
+            true
+        case .pcm_u32be:
+            true
+        case .vc1image:
+            true
+        case .gsm_ms:
+            true
+        case .mjpeg:
+            true
+        case .stl:
+            true
+        case .pfm:
+            true
+        case .aac:
+            true
+        case .srgc:
+            true
+        case .tscc:
+            true
+        case .pcm_s8_planar:
+            true
+        case .dsd_msbf:
+            true
+        case .psd:
+            true
+        case .dolby_e:
+            true
+        case .adpcm_swf:
+            true
+        case .fraps:
+            true
+        case .dds:
+            true
+        case .nuv:
+            true
+        case .mszh:
+            true
+        case .aac_latm:
+            true
+        case .v308:
+            true
+        case .txd:
+            true
+        case .dsd_lsbf:
+            true
+        case .atrac3p:
+            true
+        case .mpeg2video:
+            true
+        case .targa:
+            true
+        case .mimic:
+            true
+        case .pcm_sga:
+            true
+        case .wrapped_avframe:
+            true
+        case .adpcm_ima_oki:
+            true
+        case .pcm_vidc:
+            true
+        case .cyuv:
+            true
+        case .mp1:
+            true
+        case .mp3on4:
+            true
+        case .otf:
+            false
+        case .mvdv:
+            true
+        case .flv1:
+            true
+        case .amr_nb:
+            true
+        case .asv1:
+            true
+        case .sami:
+            true
+        case .musepack7:
+            true
+        case .adpcm_zork:
+            true
+        case .gsm:
+            true
+        case ._8bps:
+            true
+        case .adpcm_afc:
+            true
+        case .pixlet:
+            true
+        case .vcr1:
+            true
+        case .mvc2:
+            true
+        case .cinepak:
+            true
+        case .nellymoser:
+            true
+        case .sgi:
+            true
+        case .hdmv_pgs_subtitle:
+            true
+        case .pcm_s16le:
+            true
+        case .hnm4video:
+            true
+        case .pgm:
+            true
+        case .wcmv:
+            true
+        case .adpcm_ea_r1:
+            true
+        case .jpegxl:
+            false
+        case .pcm_f32le:
+            true
+        case .mvha:
+            true
+        case .bintext:
+            true
+        case .jv:
+            true
+        case .pcm_dvd:
+            true
+        case .adpcm_ima_cunning:
+            true
+        case .hqx:
+            true
+        case .dvb_subtitle:
+            true
+        case .hcom:
+            true
+        case .realtext:
+            true
+        case .ralf:
+            true
+        case .paf_video:
+            true
+        case .adpcm_ima_dk3:
+            true
+        case .tiff:
+            true
+        case .adpcm_adx:
+            true
+        case .adpcm_g722:
+            true
+        case .interplay_dpcm:
+            true
+        case .amr_wb:
+            true
+        case .mace6:
+            true
+        case .mp2:
+            true
+        case .adpcm_ima_rad:
+            true
+        case .aptx:
+            true
+        case .paf_audio:
+            true
+        case .vp6a:
+            true
         case .vmdvideo:
+            true
+        case .vplayer:
+            true
+        case .mts2:
+            true
+        case .dfa:
+            true
+        case .imc:
+            true
+        case .speex:
+            true
+        case .pcm_s16le_planar:
+            true
+        case .arib_caption:
+            false
+        case .zmbv:
+            true
+        case .svq1:
+            true
+        case .wmv1:
+            true
+        case .v410:
+            true
+        case ._4gv:
+            false
+        case .pcm_s24le_planar:
+            true
+        case .vixl:
+            true
+        case .subviewer:
+            true
+        case .gremlin_dpcm:
+            true
+        case .smv:
+            false
+        case .adpcm_ea_r3:
+            true
+        case .eia_608:
+            true
+        case .mscc:
+            true
+        case .argo:
+            true
+        case .png:
+            true
+        case .qpeg:
+            true
+        case .sol_dpcm:
+            true
+        case .flashsv2:
+            true
+        case .bethsoftvid:
+            true
+        case .binkvideo:
+            true
+        case .msp2:
+            true
+        case .adpcm_ea_r2:
+            true
+        case .adpcm_psx:
+            true
+        case .truespeech:
+            true
+        case .kgv1:
+            true
+        case .pcm_f16le:
+            true
+        case .adpcm_ima_ea_eacs:
+            true
+        case .subrip:
+            true
+        case .g729:
+            true
+        case .thp:
+            true
+        case .amv:
+            true
+        case .pcm_s32le:
+            true
+        case .tgq:
+            true
+        case .mv30:
+            true
+        case .sheervideo:
+            true
+        case .avs2:
+            false
+        case .msnsiren:
+            true
+        case .bin_data:
+            false
+        case .apng:
+            true
+        case .interplayvideo:
+            true
+        case .pcm_alaw:
             true
         }
     }
 
     public var canEncode: Bool {
         switch self {
-        case .tscc:
-            false
-        case .speedhq:
+        case .hevc:
             true
-        case .speex:
-            true
-        case .xbin:
-            false
-        case .tiertexseqvideo:
-            false
-        case .h263:
-            true
-        case .idcin:
-            false
-        case .cdtoons:
-            false
-        case .huffyuv:
-            true
-        case .mpegh_3d_audio:
-            false
-        case .mdec:
-            false
-        case .qdmc:
-            false
-        case .ttf:
-            false
-        case .pcm_s8:
-            true
-        case .adpcm_sbpro_2:
-            false
-        case .text:
-            true
-        case .ylc:
-            false
-        case .exr:
-            true
-        case .sdx2_dpcm:
-            false
-        case .pcm_f16le:
-            false
-        case .pcm_s24le:
-            true
-        case .adpcm_aica:
-            false
-        case .tgq:
-            false
-        case .mp1:
-            false
-        case .adpcm_g726:
-            true
-        case .dss_sp:
-            false
-        case .loco:
-            false
-        case .h264:
-            true
-        case .smc:
-            true
-        case .cfhd:
-            true
-        case .mp3on4:
-            false
-        case .gdv:
-            false
-        case .adpcm_yamaha:
-            true
-        case .adpcm_ea_r2:
-            false
-        case .amr_nb:
-            true
-        case .sga:
-            false
-        case .tscc2:
-            false
-        case .iff_ilbm:
-            false
-        case .adpcm_sbpro_3:
-            false
-        case .pcm_f32le:
-            true
-        case .realtext:
-            false
-        case .photocd:
-            false
-        case .adpcm_ima_acorn:
-            false
-        case .bmp:
-            true
-        case .cpia:
-            false
-        case .qpeg:
-            false
-        case .smackvideo:
-            false
-        case .musepack7:
-            false
-        case .a64_multi5:
-            true
-        case .alac:
-            true
-        case .mscc:
-            false
-        case .adpcm_ima_dk3:
-            false
-        case .cscd:
-            false
-        case .cmv:
-            false
-        case .wmav1:
-            true
-        case .adpcm_ima_apc:
-            false
-        case .h261:
-            true
-        case .wmalossless:
-            false
-        case .adpcm_ima_rad:
-            false
-        case .adpcm_argo:
-            true
-        case .dxtory:
-            false
-        case .dvb_teletext:
-            false
-        case .subviewer:
-            false
-        case .c93:
-            false
-        case .kmvc:
-            false
-        case .amv:
-            true
-        case .pcm_u24be:
-            true
-        case .vbn:
-            true
-        case .srt:
-            false
-        case .prores:
-            true
-        case .smv:
-            false
-        case .adpcm_ima_ea_eacs:
-            false
-        case .bin_data:
-            false
-        case .yop:
-            false
-        case .pcm_sga:
-            false
-        case .v410:
-            true
-        case .avrn:
-            false
-        case .adpcm_ima_amv:
-            true
-        case .adpcm_dtk:
-            false
-        case .adpcm_4xm:
-            false
-        case .gsm:
-            true
-        case .interplay_dpcm:
-            false
-        case .mvdv:
-            false
-        case .mszh:
-            false
-        case .hcom:
-            false
-        case .ilbc:
-            true
-        case .adpcm_agm:
-            false
-        case .dvb_subtitle:
-            true
-        case .dsicinvideo:
-            false
-        case .subviewer1:
-            false
-        case .dds:
-            false
-        case .rpza:
-            true
-        case .adpcm_ima_smjpeg:
-            false
-        case .mp3adu:
-            false
-        case .wcmv:
-            false
-        case .hnm4video:
-            false
-        case .pam:
-            true
-        case .cllc:
-            false
-        case .vp5:
-            false
-        case .hap:
-            true
-        case .sonicls:
-            true
-        case .mp2:
-            true
-        case .rv20:
-            true
-        case .qdm2:
-            false
-        case .wmv3image:
-            false
-        case .amr_wb:
-            true
-        case .nuv:
-            false
-        case .m101:
-            false
-        case .otf:
-            false
-        case .hq_hqa:
-            false
-        case .dnxhd:
-            true
-        case .anm:
-            false
-        case .smvjpeg:
-            false
-        case .hdmv_text_subtitle:
-            false
-        case .bfi:
-            false
-        case .avc:
-            false
-        case .imc:
-            false
-        case .adpcm_thp_le:
-            false
-        case .pcm_bluray:
-            true
-        case .dxv:
-            false
-        case .sol_dpcm:
-            false
-        case .ttml:
-            true
-        case .wmavoice:
-            false
-        case .xsub:
-            true
-        case .mace3:
-            false
-        case .aptx_hd:
-            true
-        case .ssa:
-            false
-        case .eia_608:
-            false
-        case .codec2:
-            false
-        case .mvc1:
-            false
-        case .pgm:
-            true
-        case .kgv1:
-            false
-        case .h263i:
-            false
-        case .pcx:
-            true
-        case .dpx:
-            true
-        case .dvaudio:
-            false
-        case .pcm_s16le_planar:
-            true
-        case .dirac:
-            true
-        case .pcm_s24daud:
-            true
-        case .cdxl:
-            false
-        case .ptx:
-            false
-        case .utvideo:
-            true
-        case .pictor:
-            false
-        case .fmvc:
-            false
-        case .arbc:
-            false
-        case .adpcm_ms:
-            true
-        case .adpcm_afc:
-            false
-        case .metasound:
-            false
-        case .msnsiren:
-            false
-        case .truemotion2rt:
-            false
-        case .jpegxl:
+        case .siren:
             false
         case ._012v:
             false
-        case .xan_dpcm:
-            false
-        case .pcm_f24le:
-            false
-        case .nellymoser:
+        case .dirac:
             true
-        case .scpr:
-            false
-        case .bmv_video:
-            false
-        case .frwu:
-            false
-        case .adpcm_vima:
-            false
-        case .mmvideo:
-            false
-        case .r10k:
-            true
-        case .alias_pix:
-            true
-        case .avs2:
-            false
-        case .pcm_s32le:
-            true
-        case .aptx:
-            true
-        case .pcm_u16le:
-            true
-        case .pcm_s32be:
-            true
-        case .simbiosis_imx:
-            false
-        case .adpcm_ima_ssi:
-            true
-        case .adpcm_swf:
-            true
-        case .derf_dpcm:
-            false
-        case .msvideo1:
-            true
-        case .pcm_s8_planar:
-            true
-        case .daala:
-            false
-        case .s302m:
-            true
-        case .targa_y216:
-            false
-        case .wmav2:
-            true
-        case .eac3:
-            true
-        case .truemotion1:
-            false
-        case ._8bps:
-            false
-        case .cinepak:
-            true
-        case .mad:
-            false
-        case .pcm_s32le_planar:
-            true
-        case .bintext:
-            false
-        case .fraps:
-            false
-        case .dfa:
-            false
-        case .mjpeg:
-            true
-        case .pcm_u32be:
-            true
-        case .gem:
-            false
-        case .vp6f:
-            false
-        case .hevc:
-            true
-        case .cljr:
-            true
-        case .indeo5:
-            false
-        case .flic:
-            false
-        case .sonic:
-            true
-        case .ra_144:
-            true
-        case .vmnc:
-            false
-        case .pcm_u8:
-            true
-        case .xan_wc3:
-            false
-        case .wmv1:
-            true
-        case .mss2:
-            false
-        case .theora:
-            true
-        case .wmapro:
-            false
-        case .h263p:
-            true
-        case .sipr:
-            false
-        case .truespeech:
-            false
-        case .xan_wc4:
-            false
-        case .gremlin_dpcm:
-            false
-        case .lscr:
-            false
-        case .dvd_subtitle:
-            true
-        case .brender_pix:
-            false
-        case .yuv4:
-            true
-        case ._4xm:
-            false
-        case .mvha:
-            false
-        case .v210x:
-            false
-        case .svg:
-            false
-        case .tak:
-            false
-        case .arib_caption:
-            false
-        case .jpeg2000:
-            true
-        case .adpcm_mtaf:
-            false
-        case .adpcm_ima_wav:
-            true
-        case .tta:
-            true
-        case .qtrle:
-            true
-        case .wmv2:
-            true
-        case .jv:
-            false
-        case .pcm_s16le:
-            true
-        case .mxpeg:
-            false
-        case .pcm_u24le:
-            true
-        case .flac:
-            true
-        case .ass:
-            true
-        case .ipu:
-            false
-        case .tiff:
-            true
-        case .binkaudio_rdft:
-            false
-        case .musepack8:
-            false
-        case .wnv1:
-            false
-        case .sgirle:
-            false
-        case .snow:
-            true
-        case .msrle:
-            false
-        case .vorbis:
-            true
-        case .agm:
-            false
-        case .roq:
-            true
-        case .atrac3al:
-            false
-        case .pgx:
-            false
-        case .wmv3:
-            false
-        case .rl2:
-            false
-        case .mpl2:
-            false
-        case .aac_latm:
-            false
-        case .dts:
-            true
-        case .xpm:
-            false
-        case .adpcm_ea_maxis_xa:
-            false
-        case .sheervideo:
-            false
-        case .adpcm_adx:
-            true
-        case .adpcm_ea_r1:
-            false
-        case .screenpresso:
-            false
-        case .westwood_snd1:
-            false
-        case .interplayacm:
-            false
-        case .adpcm_ima_alp:
-            true
-        case .r210:
-            true
-        case .thp:
-            false
-        case .wrapped_avframe:
-            true
-        case .notchlc:
-            false
-        case .zlib:
-            true
-        case .wavpack:
-            true
-        case .cri:
-            false
-        case .atrac1:
+        case .imm5:
             false
         case .imm4:
             false
-        case .psd:
+        case .mpegh_3d_audio:
             false
-        case .stl:
-            false
-        case .indeo2:
-            false
-        case .rv10:
+        case .r210:
             true
-        case .mlp:
-            true
-        case .sunrast:
-            true
-        case .ffvhuff:
-            true
-        case ._8svx_exp:
-            false
-        case .mts2:
-            false
-        case .xbm:
-            true
-        case .celt:
-            false
-        case .vp6a:
-            false
-        case .mjpegb:
-            false
-        case .magicyuv:
-            true
-        case .v210:
-            true
-        case .indeo4:
-            false
-        case .targa:
-            true
-        case .dsicinaudio:
-            false
-        case .mpeg1video:
-            true
-        case .timed_id3:
-            false
-        case .twinvq:
-            false
-        case .dsd_lsbf_planar:
-            false
-        case .zerocodec:
-            false
-        case .wavesynth:
-            false
-        case .ra_288:
-            false
-        case .microdvd:
-            false
-        case .png:
-            true
-        case .binkaudio_dct:
-            false
-        case .shorten:
-            false
-        case .opus:
-            true
-        case .cavs:
-            true
-        case .dsd_msbf:
-            false
-        case .xface:
-            true
-        case .sbc:
-            true
-        case .vplayer:
-            false
-        case .pixlet:
-            false
-        case .smackaudio:
-            false
-        case .avui:
-            true
-        case .binkvideo:
-            false
-        case .pbm:
-            true
-        case ._8svx_fib:
-            false
-        case .dsd_lsbf:
-            false
-        case .tqi:
-            false
-        case .adpcm_ima_dat4:
-            false
-        case .dvvideo:
-            true
-        case .sanm:
-            false
-        case .ppm:
-            true
-        case .truemotion2:
-            false
-        case .qdraw:
-            false
-        case .pcm_u32le:
-            true
-        case .pcm_mulaw:
-            true
-        case .sgi:
-            true
-        case .atrac9:
-            false
-        case .flv1:
-            true
-        case .a64_multi:
-            true
-        case .asv2:
-            true
-        case .apng:
-            true
-        case .g729:
-            false
-        case .vp8:
-            true
-        case .pcm_f64be:
-            true
-        case .aasc:
-            false
-        case .aac:
-            true
-        case .evrc:
-            false
-        case .dolby_e:
-            false
-        case .vp7:
-            false
-        case .escape124:
-            false
-        case .motionpixels:
-            false
-        case .clearvideo:
-            false
-        case .pcm_f32be:
-            true
-        case .aura2:
-            false
-        case .pcm_vidc:
-            true
-        case .lagarith:
-            false
-        case .phm:
-            true
-        case .mvc2:
-            false
-        case .txd:
-            false
-        case .adpcm_sbpro_4:
-            false
-        case .webp:
-            true
-        case .hqx:
-            false
-        case .pcm_s24be:
-            true
-        case .cyuv:
-            false
-        case .mpegts:
-            false
-        case .vvc:
-            false
-        case .qcelp:
-            false
-        case .rscc:
-            false
-        case .ljpeg:
-            true
-        case .vixl:
-            false
-        case .pcm_lxf:
-            false
-        case .adpcm_ima_cunning:
-            false
-        case .vp9:
-            true
-        case .adpcm_ea:
-            false
-        case .xma1:
-            false
-        case .tmv:
-            false
-        case .pcm_s16be_planar:
-            true
-        case .truehd:
-            true
-        case .aura:
-            false
-        case .fits:
-            true
-        case .pcm_s24le_planar:
-            true
-        case .adpcm_ima_iss:
-            false
-        case .gsm_ms:
-            true
-        case .adpcm_ct:
-            false
-        case .pcm_s16be:
-            true
-        case .adpcm_zork:
-            false
-        case .adpcm_psx:
-            false
-        case .mobiclip:
-            false
-        case .adpcm_ima_mtf:
-            false
-        case .gif:
-            true
-        case .flashsv2:
-            true
-        case .epg:
-            false
-        case .pcm_dvd:
-            true
-        case .fastaudio:
-            false
-        case .scte_35:
-            false
-        case .msmpeg4v1:
-            false
-        case .av1:
-            true
-        case .v408:
-            true
-        case .asv1:
-            true
-        case .y41p:
-            true
-        case .ws_vqa:
-            false
-        case .avs3:
-            false
-        case .iac:
-            false
-        case .mp4als:
-            false
-        case .pcm_s64le:
-            true
-        case .mwsc:
-            false
-        case .qoi:
-            true
-        case .g723_1:
-            true
-        case .adpcm_g722:
-            true
-        case .ffv1:
-            true
-        case .adpcm_xa:
-            false
-        case .imm5:
-            false
         case .vp3:
-            false
-        case .flashsv:
-            true
-        case .tgv:
-            false
-        case .v308:
-            true
-        case .subrip:
-            true
-        case .adpcm_ea_r3:
-            false
-        case .pcm_u16be:
-            true
-        case .adpcm_ea_xas:
-            false
-        case .vble:
-            false
-        case .paf_video:
-            false
-        case .msp2:
-            false
-        case .adpcm_g726le:
-            true
-        case .vcr1:
-            false
-        case .prosumer:
-            false
-        case .svq3:
-            false
-        case .ayuv:
-            true
-        case .sp5x:
-            false
-        case .jacosub:
-            false
-        case .ape:
-            false
-        case .msa1:
-            false
-        case .bitpacked:
-            true
-        case .rawvideo:
-            true
-        case .hca:
-            false
-        case .adpcm_ima_ea_sead:
-            false
-        case .g2m:
-            false
-        case .dxa:
-            false
-        case .dst:
-            false
-        case .bethsoftvid:
-            false
-        case .pjs:
-            false
-        case .vb:
-            false
-        case .webvtt:
-            true
-        case .pcm_alaw:
-            true
-        case .comfortnoise:
-            true
-        case .mpeg4:
-            true
-        case .rv40:
-            false
-        case .interplayvideo:
-            false
-        case .mimic:
-            false
-        case .aic:
-            false
-        case .mss1:
-            false
-        case .roq_dpcm:
-            true
-        case .pcm_s64be:
-            true
-        case .vp6:
-            false
-        case .mp3:
-            true
-        case .vmdaudio:
-            false
-        case .bmv_audio:
-            false
-        case .pcm_f64le:
-            true
-        case .cdgraphics:
-            false
-        case .adpcm_ima_dk4:
-            false
-        case .mv30:
-            false
-        case .adpcm_ima_qt:
-            true
-        case .mov_text:
-            true
-        case .msmpeg4v3:
-            true
-        case .adpcm_ima_moflex:
-            false
-        case .argo:
-            false
-        case .mace6:
-            false
-        case .dsd_msbf_planar:
-            false
-        case .hdmv_pgs_subtitle:
-            false
-        case .adpcm_thp:
-            false
-        case .rasc:
-            false
-        case .rv30:
-            false
-        case .ac3:
-            true
-        case .ralf:
-            false
-        case .zmbv:
-            true
-        case .avrp:
-            true
-        case .svq1:
-            true
-        case .vc1:
-            false
-        case .vp4:
-            false
-        case .xwd:
-            true
-        case .adpcm_ima_ws:
-            true
-        case .tdsc:
-            false
-        case .dfpwm:
-            true
-        case .dvd_nav_packet:
             false
         case .cook:
             false
-        case .adpcm_ima_apm:
+        case .v210:
             true
-        case .atrac3:
+        case .prosumer:
             false
-        case .siren:
-            false
-        case .hymt:
-            false
-        case .atrac3pal:
-            false
-        case ._4gv:
-            false
-        case .escape130:
-            false
-        case .vc1image:
-            false
-        case .pfm:
+        case .sonicls:
             true
-        case .atrac3p:
+        case .adpcm_sbpro_4:
             false
-        case .idf:
+        case .qdm2:
             false
-        case .ansi:
-            false
-        case .ulti:
-            false
-        case .adpcm_ima_oki:
-            false
-        case .paf_audio:
-            false
-        case .mpeg2video:
+        case .xbm:
             true
-        case .jpegls:
-            true
-        case .srgc:
-            false
-        case .pgmyuv:
-            true
-        case .avs:
-            false
-        case .xma2:
-            false
-        case .msmpeg4v2:
-            true
-        case .indeo3:
-            false
-        case .klv:
-            false
-        case .sami:
+        case .v210x:
             false
         case .fic:
             false
+        case .msmpeg4v3:
+            true
+        case .rpza:
+            true
+        case .roq_dpcm:
+            true
+        case .ac3:
+            true
+        case .vbn:
+            true
+        case .fastaudio:
+            false
+        case .celt:
+            false
+        case .adpcm_dtk:
+            false
+        case .ayuv:
+            true
+        case .wavpack:
+            true
+        case .mwsc:
+            false
+        case .xwd:
+            true
+        case .avui:
+            true
+        case .pgx:
+            false
+        case .pcm_f32be:
+            true
+        case .avs:
+            false
+        case .avs3:
+            false
+        case .truemotion2:
+            false
+        case .asv2:
+            true
+        case .adpcm_aica:
+            false
+        case .rawvideo:
+            true
+        case .sdx2_dpcm:
+            false
+        case .qoi:
+            true
+        case .mace3:
+            false
+        case .mov_text:
+            true
+        case .vp9:
+            true
+        case .avrp:
+            true
+        case .hca:
+            false
+        case .ffv1:
+            true
+        case .mjpegb:
+            false
+        case .sp5x:
+            false
+        case .dsicinvideo:
+            false
+        case .alac:
+            true
+        case .indeo5:
+            false
+        case .tak:
+            false
+        case .notchlc:
+            false
+        case .mobiclip:
+            false
+        case .pjs:
+            false
+        case .pcm_s24daud:
+            true
+        case .dsd_msbf_planar:
+            false
+        case .simbiosis_imx:
+            false
+        case .comfortnoise:
+            true
+        case .jacosub:
+            false
+        case .vmnc:
+            false
+        case .xpm:
+            false
+        case .qcelp:
+            false
+        case .text:
+            true
+        case .adpcm_sbpro_2:
+            false
+        case .mp3adu:
+            false
+        case .musepack8:
+            false
+        case .yuv4:
+            true
+        case .atrac1:
+            false
+        case .vp5:
+            false
+        case .pcm_u24le:
+            true
+        case .tqi:
+            false
+        case ._8svx_fib:
+            false
+        case .qdraw:
+            false
+        case .tgv:
+            false
+        case .av1:
+            true
+        case .m101:
+            false
+        case .adpcm_ima_apc:
+            false
+        case .flic:
+            false
+        case .mdec:
+            false
+        case .agm:
+            false
+        case .adpcm_ima_ea_sead:
+            false
+        case .xma2:
+            false
+        case .pcm_s16be_planar:
+            true
+        case .cfhd:
+            true
+        case .pcm_f64le:
+            true
+        case .smc:
+            true
+        case .adpcm_ima_iss:
+            false
+        case .epg:
+            false
+        case .sga:
+            false
+        case ._4xm:
+            false
+        case .opus:
+            true
+        case .hymt:
+            false
+        case .tdsc:
+            false
+        case .roq:
+            true
+        case .ra_288:
+            false
+        case .gif:
+            true
+        case .msrle:
+            false
+        case .dts:
+            true
+        case .cmv:
+            false
+        case .adpcm_g726:
+            true
+        case .bmp:
+            true
+        case .adpcm_ima_dk4:
+            false
+        case .iff_ilbm:
+            false
+        case .dvvideo:
+            true
+        case .derf_dpcm:
+            false
+        case .adpcm_ima_ws:
+            true
+        case .adpcm_ima_amv:
+            true
+        case .y41p:
+            true
+        case .r10k:
+            true
+        case .adpcm_4xm:
+            false
+        case .snow:
+            true
+        case .xsub:
+            true
+        case .vb:
+            false
+        case .alias_pix:
+            true
+        case .sanm:
+            false
+        case .wmalossless:
+            false
+        case .dss_sp:
+            false
+        case .svg:
+            false
+        case .h264:
+            true
+        case .scpr:
+            false
+        case .mxpeg:
+            false
+        case .daala:
+            false
+        case .ttf:
+            false
+        case .pictor:
+            false
+        case .ptx:
+            false
+        case .vp6:
+            false
+        case .smvjpeg:
+            false
+        case .flashsv:
+            true
+        case .bitpacked:
+            true
+        case .phm:
+            true
+        case .xma1:
+            false
+        case .sipr:
+            false
+        case .iac:
+            false
+        case .hdmv_text_subtitle:
+            false
+        case .mad:
+            false
+        case .avc:
+            false
+        case .cllc:
+            false
+        case .pcm_f64be:
+            true
+        case .h263p:
+            true
+        case .exr:
+            true
+        case .cpia:
+            false
+        case .hq_hqa:
+            false
+        case .ilbc:
+            true
+        case .vp4:
+            false
+        case .pcm_u16le:
+            true
+        case .prores:
+            true
+        case .escape130:
+            false
+        case .cscd:
+            false
+        case .tiertexseqvideo:
+            false
+        case .webp:
+            true
+        case .wmv3:
+            false
+        case .adpcm_thp:
+            false
+        case .ass:
+            true
+        case .adpcm_argo:
+            true
+        case .ansi:
+            false
+        case .flac:
+            true
+        case .smackaudio:
+            false
+        case .msmpeg4v1:
+            false
+        case .klv:
+            false
+        case .xface:
+            true
+        case .dxv:
+            false
+        case .truehd:
+            true
+        case .pcx:
+            true
+        case .pam:
+            true
+        case .atrac3:
+            false
+        case .adpcm_ima_acorn:
+            false
+        case .atrac9:
+            false
+        case .escape124:
+            false
+        case .adpcm_ea:
+            false
+        case .utvideo:
+            true
+        case .dpx:
+            true
+        case .adpcm_sbpro_3:
+            false
+        case .v408:
+            true
+        case .mlp:
+            true
+        case .wmapro:
+            false
+        case .xan_wc4:
+            false
+        case .twinvq:
+            false
+        case .adpcm_ima_alp:
+            true
+        case .loco:
+            false
+        case .brender_pix:
+            false
+        case .cdxl:
+            false
+        case .truemotion1:
+            false
+        case .adpcm_vima:
+            false
+        case .pcm_lxf:
+            false
+        case .motionpixels:
+            false
+        case .s302m:
+            true
+        case .wmv3image:
+            false
+        case .ra_144:
+            true
+        case .jpegls:
+            true
+        case .bfi:
+            false
+        case .mpl2:
+            false
+        case .pcm_bluray:
+            true
+        case .adpcm_ct:
+            false
+        case .vble:
+            false
+        case .pbm:
+            true
+        case .pcm_s64be:
+            true
+        case .frwu:
+            false
+        case .adpcm_ima_moflex:
+            false
+        case .mss1:
+            false
+        case .idf:
+            false
+        case .bmv_audio:
+            false
+        case .pcm_s32le_planar:
+            true
+        case ._8svx_exp:
+            false
+        case .pcm_s32be:
+            true
+        case .aptx_hd:
+            true
+        case .pcm_u32le:
+            true
+        case .srt:
+            false
+        case .codec2:
+            false
+        case .timed_id3:
+            false
+        case .vorbis:
+            true
+        case .atrac3pal:
+            false
+        case .xbin:
+            false
+        case .microdvd:
+            false
+        case .scte_35:
+            false
+        case .g723_1:
+            true
+        case .huffyuv:
+            true
+        case .aura2:
+            false
+        case .dxa:
+            false
+        case .pcm_u24be:
+            true
+        case .vp7:
+            false
+        case .gdv:
+            false
+        case .qtrle:
+            true
+        case .g2m:
+            false
+        case .pcm_s16be:
+            true
+        case .arbc:
+            false
+        case .theora:
+            true
+        case .wmavoice:
+            false
+        case .vmdaudio:
+            false
+        case .msa1:
+            false
+        case .pcm_mulaw:
+            true
+        case .adpcm_agm:
+            false
+        case .rv10:
+            true
+        case .rv20:
+            true
+        case .zerocodec:
+            false
+        case .clearvideo:
+            false
+        case .pcm_s24be:
+            true
+        case .pcm_s8:
+            true
+        case .mpeg1video:
+            true
+        case .subviewer1:
+            false
+        case .tta:
+            true
+        case .sunrast:
+            true
+        case .kmvc:
+            false
+        case .lagarith:
+            false
+        case .webvtt:
+            true
+        case .msvideo1:
+            true
+        case .adpcm_ima_apm:
+            true
+        case .xan_wc3:
+            false
+        case .ssa:
+            false
+        case .anm:
+            false
+        case .fits:
+            true
+        case .aic:
+            false
+        case .adpcm_ima_qt:
+            true
+        case .rv30:
+            false
+        case .indeo2:
+            false
+        case .dfpwm:
+            true
+        case .ttml:
+            true
+        case .wmav1:
+            true
+        case .metasound:
+            false
+        case .svq3:
+            false
+        case .mss2:
+            false
+        case .adpcm_g726le:
+            true
+        case .adpcm_yamaha:
+            true
+        case .adpcm_mtaf:
+            false
+        case .dxtory:
+            false
+        case .adpcm_ima_dat4:
+            false
+        case .dvaudio:
+            false
+        case .jpeg2000:
+            true
+        case .screenpresso:
+            false
+        case .binkaudio_dct:
+            false
+        case .hap:
+            true
+        case .mpeg4:
+            true
+        case .yop:
+            false
+        case .pcm_f24le:
+            false
+        case .sgirle:
+            false
+        case .ape:
+            false
+        case .adpcm_ea_xas:
+            false
+        case .aasc:
+            false
+        case .pcm_u16be:
+            true
+        case .ppm:
+            true
+        case .wavesynth:
+            false
+        case .pcm_s24le:
+            true
+        case .adpcm_ms:
+            true
+        case .c93:
+            false
+        case .msmpeg4v2:
+            true
+        case .tscc2:
+            false
+        case .idcin:
+            false
+        case .ulti:
+            false
+        case .dvd_nav_packet:
+            false
+        case .adpcm_ima_smjpeg:
+            false
+        case .vp8:
+            true
+        case .cdgraphics:
+            false
+        case .adpcm_ea_maxis_xa:
+            false
+        case .zlib:
+            true
+        case .adpcm_ima_wav:
+            true
+        case .ljpeg:
+            true
+        case .smackvideo:
+            false
+        case .vp6f:
+            false
+        case .adpcm_ima_ssi:
+            true
+        case .xan_dpcm:
+            false
+        case .pcm_u8:
+            true
+        case .gem:
+            false
+        case .indeo4:
+            false
+        case .dvd_subtitle:
+            true
+        case .mp4als:
+            false
+        case .mp3:
+            true
+        case .eac3:
+            true
+        case .evrc:
+            false
+        case .sonic:
+            true
+        case .dvb_teletext:
+            false
+        case .truemotion2rt:
+            false
+        case .shorten:
+            false
+        case .bmv_video:
+            false
+        case .aura:
+            false
+        case .dnxhd:
+            true
+        case .sbc:
+            true
+        case .ws_vqa:
+            false
+        case .rscc:
+            false
+        case .wnv1:
+            false
+        case .h263:
+            true
+        case .speedhq:
+            true
+        case .lscr:
+            false
+        case .dst:
+            false
+        case .pgmyuv:
+            true
+        case .a64_multi5:
+            true
+        case .targa_y216:
+            false
+        case .vc1:
+            false
+        case .adpcm_thp_le:
+            false
+        case .cdtoons:
+            false
+        case .westwood_snd1:
+            false
+        case .qdmc:
+            false
+        case .photocd:
+            false
+        case .pcm_s64le:
+            true
+        case .cljr:
+            true
+        case .dsd_lsbf_planar:
+            false
+        case .indeo3:
+            false
+        case .interplayacm:
+            false
+        case .mmvideo:
+            false
+        case .adpcm_xa:
+            false
+        case .magicyuv:
+            true
+        case .cavs:
+            true
+        case .binkaudio_rdft:
+            false
+        case .ipu:
+            false
+        case .cri:
+            false
+        case .rv40:
+            false
+        case .h263i:
+            false
+        case .vvc:
+            false
+        case .wmav2:
+            true
+        case .mpegts:
+            false
+        case .ffvhuff:
+            true
+        case .tmv:
+            false
+        case .atrac3al:
+            false
+        case .a64_multi:
+            true
+        case .h261:
+            true
+        case .adpcm_ima_mtf:
+            false
+        case .dsicinaudio:
+            false
+        case .rasc:
+            false
+        case .mvc1:
+            false
+        case .rl2:
+            false
+        case .fmvc:
+            false
+        case .wmv2:
+            true
+        case .avrn:
+            false
+        case .ylc:
+            false
+        case .pcm_u32be:
+            true
+        case .vc1image:
+            false
+        case .gsm_ms:
+            true
+        case .mjpeg:
+            true
+        case .stl:
+            false
+        case .pfm:
+            true
+        case .aac:
+            true
+        case .srgc:
+            false
+        case .tscc:
+            false
+        case .pcm_s8_planar:
+            true
+        case .dsd_msbf:
+            false
+        case .psd:
+            false
+        case .dolby_e:
+            false
+        case .adpcm_swf:
+            true
+        case .fraps:
+            false
+        case .dds:
+            false
+        case .nuv:
+            false
+        case .mszh:
+            false
+        case .aac_latm:
+            false
+        case .v308:
+            true
+        case .txd:
+            false
+        case .dsd_lsbf:
+            false
+        case .atrac3p:
+            false
+        case .mpeg2video:
+            true
+        case .targa:
+            true
+        case .mimic:
+            false
+        case .pcm_sga:
+            false
+        case .wrapped_avframe:
+            true
+        case .adpcm_ima_oki:
+            false
+        case .pcm_vidc:
+            true
+        case .cyuv:
+            false
+        case .mp1:
+            false
+        case .mp3on4:
+            false
+        case .otf:
+            false
+        case .mvdv:
+            false
+        case .flv1:
+            true
+        case .amr_nb:
+            true
+        case .asv1:
+            true
+        case .sami:
+            false
+        case .musepack7:
+            false
+        case .adpcm_zork:
+            false
+        case .gsm:
+            true
+        case ._8bps:
+            false
+        case .adpcm_afc:
+            false
+        case .pixlet:
+            false
+        case .vcr1:
+            false
+        case .mvc2:
+            false
+        case .cinepak:
+            true
+        case .nellymoser:
+            true
+        case .sgi:
+            true
+        case .hdmv_pgs_subtitle:
+            false
+        case .pcm_s16le:
+            true
+        case .hnm4video:
+            false
+        case .pgm:
+            true
+        case .wcmv:
+            false
+        case .adpcm_ea_r1:
+            false
+        case .jpegxl:
+            false
+        case .pcm_f32le:
+            true
+        case .mvha:
+            false
+        case .bintext:
+            false
+        case .jv:
+            false
+        case .pcm_dvd:
+            true
+        case .adpcm_ima_cunning:
+            false
+        case .hqx:
+            false
+        case .dvb_subtitle:
+            true
+        case .hcom:
+            false
+        case .realtext:
+            false
+        case .ralf:
+            false
+        case .paf_video:
+            false
+        case .adpcm_ima_dk3:
+            false
+        case .tiff:
+            true
+        case .adpcm_adx:
+            true
+        case .adpcm_g722:
+            true
+        case .interplay_dpcm:
+            false
+        case .amr_wb:
+            true
+        case .mace6:
+            false
+        case .mp2:
+            true
+        case .adpcm_ima_rad:
+            false
+        case .aptx:
+            true
+        case .paf_audio:
+            false
+        case .vp6a:
+            false
         case .vmdvideo:
             false
+        case .vplayer:
+            false
+        case .mts2:
+            false
+        case .dfa:
+            false
+        case .imc:
+            false
+        case .speex:
+            true
+        case .pcm_s16le_planar:
+            true
+        case .arib_caption:
+            false
+        case .zmbv:
+            true
+        case .svq1:
+            true
+        case .wmv1:
+            true
+        case .v410:
+            true
+        case ._4gv:
+            false
+        case .pcm_s24le_planar:
+            true
+        case .vixl:
+            false
+        case .subviewer:
+            false
+        case .gremlin_dpcm:
+            false
+        case .smv:
+            false
+        case .adpcm_ea_r3:
+            false
+        case .eia_608:
+            false
+        case .mscc:
+            false
+        case .argo:
+            false
+        case .png:
+            true
+        case .qpeg:
+            false
+        case .sol_dpcm:
+            false
+        case .flashsv2:
+            true
+        case .bethsoftvid:
+            false
+        case .binkvideo:
+            false
+        case .msp2:
+            false
+        case .adpcm_ea_r2:
+            false
+        case .adpcm_psx:
+            false
+        case .truespeech:
+            false
+        case .kgv1:
+            false
+        case .pcm_f16le:
+            false
+        case .adpcm_ima_ea_eacs:
+            false
+        case .subrip:
+            true
+        case .g729:
+            false
+        case .thp:
+            false
+        case .amv:
+            true
+        case .pcm_s32le:
+            true
+        case .tgq:
+            false
+        case .mv30:
+            false
+        case .sheervideo:
+            false
+        case .avs2:
+            false
+        case .msnsiren:
+            false
+        case .bin_data:
+            false
+        case .apng:
+            true
+        case .interplayvideo:
+            false
+        case .pcm_alaw:
+            true
         }
     }
 
     public var isIntraFrameOnly: Bool {
         switch self {
-        case .tscc:
+        case .hevc:
             false
-        case .speedhq:
-            true
-        case .speex:
-            true
-        case .xbin:
-            true
-        case .tiertexseqvideo:
-            false
-        case .h263:
-            false
-        case .idcin:
-            false
-        case .cdtoons:
-            false
-        case .huffyuv:
-            true
-        case .mpegh_3d_audio:
-            false
-        case .mdec:
-            true
-        case .qdmc:
-            true
-        case .ttf:
-            false
-        case .pcm_s8:
-            true
-        case .adpcm_sbpro_2:
-            true
-        case .text:
-            false
-        case .ylc:
-            true
-        case .exr:
-            true
-        case .sdx2_dpcm:
-            true
-        case .pcm_f16le:
-            true
-        case .pcm_s24le:
-            true
-        case .adpcm_aica:
-            true
-        case .tgq:
-            false
-        case .mp1:
-            true
-        case .adpcm_g726:
-            true
-        case .dss_sp:
-            true
-        case .loco:
-            true
-        case .h264:
-            false
-        case .smc:
-            false
-        case .cfhd:
-            false
-        case .mp3on4:
-            true
-        case .gdv:
-            false
-        case .adpcm_yamaha:
-            true
-        case .adpcm_ea_r2:
-            true
-        case .amr_nb:
-            true
-        case .sga:
-            false
-        case .tscc2:
-            false
-        case .iff_ilbm:
-            false
-        case .adpcm_sbpro_3:
-            true
-        case .pcm_f32le:
-            true
-        case .realtext:
-            false
-        case .photocd:
-            false
-        case .adpcm_ima_acorn:
-            true
-        case .bmp:
-            true
-        case .cpia:
-            false
-        case .qpeg:
-            false
-        case .smackvideo:
-            false
-        case .musepack7:
-            true
-        case .a64_multi5:
-            true
-        case .alac:
-            true
-        case .mscc:
-            true
-        case .adpcm_ima_dk3:
-            true
-        case .cscd:
-            false
-        case .cmv:
-            false
-        case .wmav1:
-            true
-        case .adpcm_ima_apc:
-            true
-        case .h261:
-            false
-        case .wmalossless:
-            true
-        case .adpcm_ima_rad:
-            true
-        case .adpcm_argo:
-            true
-        case .dxtory:
-            true
-        case .dvb_teletext:
-            false
-        case .subviewer:
-            false
-        case .c93:
-            false
-        case .kmvc:
-            false
-        case .amv:
-            true
-        case .pcm_u24be:
-            true
-        case .vbn:
-            false
-        case .srt:
-            false
-        case .prores:
-            true
-        case .smv:
-            true
-        case .adpcm_ima_ea_eacs:
-            true
-        case .bin_data:
-            false
-        case .yop:
-            false
-        case .pcm_sga:
-            true
-        case .v410:
-            true
-        case .avrn:
-            false
-        case .adpcm_ima_amv:
-            true
-        case .adpcm_dtk:
-            true
-        case .adpcm_4xm:
-            true
-        case .gsm:
-            true
-        case .interplay_dpcm:
-            true
-        case .mvdv:
-            false
-        case .mszh:
-            true
-        case .hcom:
-            true
-        case .ilbc:
-            true
-        case .adpcm_agm:
-            true
-        case .dvb_subtitle:
-            false
-        case .dsicinvideo:
-            false
-        case .subviewer1:
-            false
-        case .dds:
-            true
-        case .rpza:
-            false
-        case .adpcm_ima_smjpeg:
-            true
-        case .mp3adu:
-            true
-        case .wcmv:
-            false
-        case .hnm4video:
-            false
-        case .pam:
-            true
-        case .cllc:
-            true
-        case .vp5:
-            false
-        case .hap:
-            true
-        case .sonicls:
-            true
-        case .mp2:
-            true
-        case .rv20:
-            false
-        case .qdm2:
-            true
-        case .wmv3image:
-            false
-        case .amr_wb:
-            true
-        case .nuv:
-            false
-        case .m101:
-            true
-        case .otf:
-            false
-        case .hq_hqa:
-            true
-        case .dnxhd:
-            true
-        case .anm:
-            false
-        case .smvjpeg:
-            true
-        case .hdmv_text_subtitle:
-            false
-        case .bfi:
-            false
-        case .avc:
-            true
-        case .imc:
-            true
-        case .adpcm_thp_le:
-            true
-        case .pcm_bluray:
-            true
-        case .dxv:
-            true
-        case .sol_dpcm:
-            true
-        case .ttml:
-            false
-        case .wmavoice:
-            true
-        case .xsub:
-            false
-        case .mace3:
-            true
-        case .aptx_hd:
-            true
-        case .ssa:
-            false
-        case .eia_608:
-            false
-        case .codec2:
-            true
-        case .mvc1:
-            true
-        case .pgm:
-            true
-        case .kgv1:
-            false
-        case .h263i:
-            false
-        case .pcx:
-            true
-        case .dpx:
-            true
-        case .dvaudio:
-            true
-        case .pcm_s16le_planar:
-            true
-        case .dirac:
-            false
-        case .pcm_s24daud:
-            true
-        case .cdxl:
-            true
-        case .ptx:
-            true
-        case .utvideo:
-            true
-        case .pictor:
-            true
-        case .fmvc:
-            false
-        case .arbc:
-            false
-        case .adpcm_ms:
-            true
-        case .adpcm_afc:
-            true
-        case .metasound:
-            true
-        case .msnsiren:
-            true
-        case .truemotion2rt:
-            true
-        case .jpegxl:
+        case .siren:
             true
         case ._012v:
             true
-        case .xan_dpcm:
-            true
-        case .pcm_f24le:
-            true
-        case .nellymoser:
-            true
-        case .scpr:
+        case .dirac:
             false
-        case .bmv_video:
-            false
-        case .frwu:
-            true
-        case .adpcm_vima:
-            true
-        case .mmvideo:
-            false
-        case .r10k:
-            true
-        case .alias_pix:
-            true
-        case .avs2:
-            false
-        case .pcm_s32le:
-            true
-        case .aptx:
-            true
-        case .pcm_u16le:
-            true
-        case .pcm_s32be:
-            true
-        case .simbiosis_imx:
-            false
-        case .adpcm_ima_ssi:
-            true
-        case .adpcm_swf:
-            true
-        case .derf_dpcm:
-            true
-        case .msvideo1:
-            false
-        case .pcm_s8_planar:
-            true
-        case .daala:
-            false
-        case .s302m:
-            true
-        case .targa_y216:
-            true
-        case .wmav2:
-            true
-        case .eac3:
-            true
-        case .truemotion1:
-            false
-        case ._8bps:
-            true
-        case .cinepak:
-            false
-        case .mad:
-            false
-        case .pcm_s32le_planar:
-            true
-        case .bintext:
-            true
-        case .fraps:
-            true
-        case .dfa:
-            false
-        case .mjpeg:
-            true
-        case .pcm_u32be:
-            true
-        case .gem:
-            false
-        case .vp6f:
-            false
-        case .hevc:
-            false
-        case .cljr:
-            true
-        case .indeo5:
-            false
-        case .flic:
-            false
-        case .sonic:
-            true
-        case .ra_144:
-            true
-        case .vmnc:
-            false
-        case .pcm_u8:
-            true
-        case .xan_wc3:
-            false
-        case .wmv1:
-            false
-        case .mss2:
-            true
-        case .theora:
-            false
-        case .wmapro:
-            true
-        case .h263p:
-            false
-        case .sipr:
-            true
-        case .truespeech:
-            true
-        case .xan_wc4:
-            false
-        case .gremlin_dpcm:
-            true
-        case .lscr:
-            false
-        case .dvd_subtitle:
-            false
-        case .brender_pix:
-            true
-        case .yuv4:
-            true
-        case ._4xm:
-            false
-        case .mvha:
-            true
-        case .v210x:
-            true
-        case .svg:
-            false
-        case .tak:
-            false
-        case .arib_caption:
-            false
-        case .jpeg2000:
-            true
-        case .adpcm_mtaf:
-            true
-        case .adpcm_ima_wav:
-            true
-        case .tta:
-            true
-        case .qtrle:
-            false
-        case .wmv2:
-            false
-        case .jv:
-            true
-        case .pcm_s16le:
-            true
-        case .mxpeg:
-            false
-        case .pcm_u24le:
-            true
-        case .flac:
-            true
-        case .ass:
-            false
-        case .ipu:
-            true
-        case .tiff:
-            true
-        case .binkaudio_rdft:
-            true
-        case .musepack8:
-            true
-        case .wnv1:
-            true
-        case .sgirle:
-            true
-        case .snow:
-            false
-        case .msrle:
-            false
-        case .vorbis:
-            true
-        case .agm:
-            false
-        case .roq:
-            false
-        case .atrac3al:
-            true
-        case .pgx:
-            true
-        case .wmv3:
-            false
-        case .rl2:
-            true
-        case .mpl2:
-            false
-        case .aac_latm:
-            true
-        case .dts:
-            true
-        case .xpm:
-            true
-        case .adpcm_ea_maxis_xa:
-            true
-        case .sheervideo:
-            true
-        case .adpcm_adx:
-            true
-        case .adpcm_ea_r1:
-            true
-        case .screenpresso:
-            false
-        case .westwood_snd1:
-            true
-        case .interplayacm:
-            true
-        case .adpcm_ima_alp:
-            true
-        case .r210:
-            true
-        case .thp:
-            true
-        case .wrapped_avframe:
-            false
-        case .notchlc:
-            true
-        case .zlib:
-            true
-        case .wavpack:
-            true
-        case .cri:
-            true
-        case .atrac1:
-            true
-        case .imm4:
-            false
-        case .psd:
-            true
-        case .stl:
-            false
-        case .indeo2:
-            false
-        case .rv10:
-            false
-        case .mlp:
-            false
-        case .sunrast:
-            true
-        case .ffvhuff:
-            true
-        case ._8svx_exp:
-            true
-        case .mts2:
-            false
-        case .xbm:
-            true
-        case .celt:
-            true
-        case .vp6a:
-            false
-        case .mjpegb:
-            true
-        case .magicyuv:
-            true
-        case .v210:
-            true
-        case .indeo4:
-            false
-        case .targa:
-            true
-        case .dsicinaudio:
-            true
-        case .mpeg1video:
-            false
-        case .timed_id3:
-            false
-        case .twinvq:
-            true
-        case .dsd_lsbf_planar:
-            true
-        case .zerocodec:
-            false
-        case .wavesynth:
-            true
-        case .ra_288:
-            true
-        case .microdvd:
-            false
-        case .png:
-            false
-        case .binkaudio_dct:
-            true
-        case .shorten:
-            true
-        case .opus:
-            true
-        case .cavs:
-            false
-        case .dsd_msbf:
-            true
-        case .xface:
-            true
-        case .sbc:
-            true
-        case .vplayer:
-            false
-        case .pixlet:
-            true
-        case .smackaudio:
-            true
-        case .avui:
-            true
-        case .binkvideo:
-            false
-        case .pbm:
-            true
-        case ._8svx_fib:
-            true
-        case .dsd_lsbf:
-            true
-        case .tqi:
-            false
-        case .adpcm_ima_dat4:
-            true
-        case .dvvideo:
-            true
-        case .sanm:
-            false
-        case .ppm:
-            true
-        case .truemotion2:
-            false
-        case .qdraw:
-            true
-        case .pcm_u32le:
-            true
-        case .pcm_mulaw:
-            true
-        case .sgi:
-            true
-        case .atrac9:
-            true
-        case .flv1:
-            false
-        case .a64_multi:
-            true
-        case .asv2:
-            true
-        case .apng:
-            false
-        case .g729:
-            true
-        case .vp8:
-            false
-        case .pcm_f64be:
-            true
-        case .aasc:
-            false
-        case .aac:
-            true
-        case .evrc:
-            true
-        case .dolby_e:
-            true
-        case .vp7:
-            false
-        case .escape124:
-            false
-        case .motionpixels:
-            false
-        case .clearvideo:
-            false
-        case .pcm_f32be:
-            true
-        case .aura2:
-            true
-        case .pcm_vidc:
-            true
-        case .lagarith:
-            true
-        case .phm:
-            true
-        case .mvc2:
-            true
-        case .txd:
-            true
-        case .adpcm_sbpro_4:
-            true
-        case .webp:
-            true
-        case .hqx:
-            true
-        case .pcm_s24be:
-            true
-        case .cyuv:
-            true
-        case .mpegts:
-            false
-        case .vvc:
-            false
-        case .qcelp:
-            true
-        case .rscc:
-            false
-        case .ljpeg:
-            true
-        case .vixl:
-            true
-        case .pcm_lxf:
-            true
-        case .adpcm_ima_cunning:
-            true
-        case .vp9:
-            false
-        case .adpcm_ea:
-            true
-        case .xma1:
-            true
-        case .tmv:
-            true
-        case .pcm_s16be_planar:
-            true
-        case .truehd:
-            false
-        case .aura:
-            true
-        case .fits:
-            true
-        case .pcm_s24le_planar:
-            true
-        case .adpcm_ima_iss:
-            true
-        case .gsm_ms:
-            true
-        case .adpcm_ct:
-            true
-        case .pcm_s16be:
-            true
-        case .adpcm_zork:
-            true
-        case .adpcm_psx:
-            true
-        case .mobiclip:
-            false
-        case .adpcm_ima_mtf:
-            true
-        case .gif:
-            false
-        case .flashsv2:
-            false
-        case .epg:
-            false
-        case .pcm_dvd:
-            true
-        case .fastaudio:
-            true
-        case .scte_35:
-            false
-        case .msmpeg4v1:
-            false
-        case .av1:
-            false
-        case .v408:
-            true
-        case .asv1:
-            true
-        case .y41p:
-            true
-        case .ws_vqa:
-            false
-        case .avs3:
-            false
-        case .iac:
-            true
-        case .mp4als:
-            true
-        case .pcm_s64le:
-            true
-        case .mwsc:
-            false
-        case .qoi:
-            true
-        case .g723_1:
-            true
-        case .adpcm_g722:
-            true
-        case .ffv1:
-            false
-        case .adpcm_xa:
-            true
         case .imm5:
             false
+        case .imm4:
+            false
+        case .mpegh_3d_audio:
+            false
+        case .r210:
+            true
         case .vp3:
-            false
-        case .flashsv:
-            false
-        case .tgv:
-            false
-        case .v308:
-            true
-        case .subrip:
-            false
-        case .adpcm_ea_r3:
-            true
-        case .pcm_u16be:
-            true
-        case .adpcm_ea_xas:
-            true
-        case .vble:
-            true
-        case .paf_video:
-            false
-        case .msp2:
-            true
-        case .adpcm_g726le:
-            true
-        case .vcr1:
-            true
-        case .prosumer:
-            true
-        case .svq3:
-            false
-        case .ayuv:
-            true
-        case .sp5x:
-            true
-        case .jacosub:
-            false
-        case .ape:
-            true
-        case .msa1:
-            false
-        case .bitpacked:
-            true
-        case .rawvideo:
-            true
-        case .hca:
-            true
-        case .adpcm_ima_ea_sead:
-            true
-        case .g2m:
-            false
-        case .dxa:
-            false
-        case .dst:
-            true
-        case .bethsoftvid:
-            false
-        case .pjs:
-            false
-        case .vb:
-            false
-        case .webvtt:
-            false
-        case .pcm_alaw:
-            true
-        case .comfortnoise:
-            true
-        case .mpeg4:
-            false
-        case .rv40:
-            false
-        case .interplayvideo:
-            false
-        case .mimic:
-            false
-        case .aic:
-            true
-        case .mss1:
-            false
-        case .roq_dpcm:
-            true
-        case .pcm_s64be:
-            true
-        case .vp6:
-            false
-        case .mp3:
-            true
-        case .vmdaudio:
-            true
-        case .bmv_audio:
-            true
-        case .pcm_f64le:
-            true
-        case .cdgraphics:
-            false
-        case .adpcm_ima_dk4:
-            true
-        case .mv30:
-            false
-        case .adpcm_ima_qt:
-            true
-        case .mov_text:
-            false
-        case .msmpeg4v3:
-            false
-        case .adpcm_ima_moflex:
-            true
-        case .argo:
-            false
-        case .mace6:
-            true
-        case .dsd_msbf_planar:
-            true
-        case .hdmv_pgs_subtitle:
-            false
-        case .adpcm_thp:
-            true
-        case .rasc:
-            false
-        case .rv30:
-            false
-        case .ac3:
-            true
-        case .ralf:
-            true
-        case .zmbv:
-            false
-        case .avrp:
-            true
-        case .svq1:
-            false
-        case .vc1:
-            false
-        case .vp4:
-            false
-        case .xwd:
-            true
-        case .adpcm_ima_ws:
-            true
-        case .tdsc:
-            false
-        case .dfpwm:
-            false
-        case .dvd_nav_packet:
             false
         case .cook:
             true
-        case .adpcm_ima_apm:
+        case .v210:
             true
-        case .atrac3:
+        case .prosumer:
             true
-        case .siren:
+        case .sonicls:
             true
-        case .hymt:
+        case .adpcm_sbpro_4:
             true
-        case .atrac3pal:
+        case .qdm2:
             true
-        case ._4gv:
+        case .xbm:
             true
-        case .escape130:
+        case .v210x:
+            true
+        case .fic:
             false
-        case .vc1image:
+        case .msmpeg4v3:
             false
-        case .pfm:
-            true
-        case .atrac3p:
-            true
-        case .idf:
-            true
-        case .ansi:
+        case .rpza:
             false
-        case .ulti:
+        case .roq_dpcm:
+            true
+        case .ac3:
+            true
+        case .vbn:
             false
-        case .adpcm_ima_oki:
+        case .fastaudio:
             true
-        case .paf_audio:
+        case .celt:
             true
-        case .mpeg2video:
+        case .adpcm_dtk:
+            true
+        case .ayuv:
+            true
+        case .wavpack:
+            true
+        case .mwsc:
             false
-        case .jpegls:
+        case .xwd:
             true
-        case .srgc:
+        case .avui:
             true
-        case .pgmyuv:
+        case .pgx:
+            true
+        case .pcm_f32be:
             true
         case .avs:
             false
+        case .avs3:
+            false
+        case .truemotion2:
+            false
+        case .asv2:
+            true
+        case .adpcm_aica:
+            true
+        case .rawvideo:
+            true
+        case .sdx2_dpcm:
+            true
+        case .qoi:
+            true
+        case .mace3:
+            true
+        case .mov_text:
+            false
+        case .vp9:
+            false
+        case .avrp:
+            true
+        case .hca:
+            true
+        case .ffv1:
+            false
+        case .mjpegb:
+            true
+        case .sp5x:
+            true
+        case .dsicinvideo:
+            false
+        case .alac:
+            true
+        case .indeo5:
+            false
+        case .tak:
+            false
+        case .notchlc:
+            true
+        case .mobiclip:
+            false
+        case .pjs:
+            false
+        case .pcm_s24daud:
+            true
+        case .dsd_msbf_planar:
+            true
+        case .simbiosis_imx:
+            false
+        case .comfortnoise:
+            true
+        case .jacosub:
+            false
+        case .vmnc:
+            false
+        case .xpm:
+            true
+        case .qcelp:
+            true
+        case .text:
+            false
+        case .adpcm_sbpro_2:
+            true
+        case .mp3adu:
+            true
+        case .musepack8:
+            true
+        case .yuv4:
+            true
+        case .atrac1:
+            true
+        case .vp5:
+            false
+        case .pcm_u24le:
+            true
+        case .tqi:
+            false
+        case ._8svx_fib:
+            true
+        case .qdraw:
+            true
+        case .tgv:
+            false
+        case .av1:
+            false
+        case .m101:
+            true
+        case .adpcm_ima_apc:
+            true
+        case .flic:
+            false
+        case .mdec:
+            true
+        case .agm:
+            false
+        case .adpcm_ima_ea_sead:
+            true
         case .xma2:
             true
-        case .msmpeg4v2:
+        case .pcm_s16be_planar:
+            true
+        case .cfhd:
             false
-        case .indeo3:
+        case .pcm_f64le:
+            true
+        case .smc:
+            false
+        case .adpcm_ima_iss:
+            true
+        case .epg:
+            false
+        case .sga:
+            false
+        case ._4xm:
+            false
+        case .opus:
+            true
+        case .hymt:
+            true
+        case .tdsc:
+            false
+        case .roq:
+            false
+        case .ra_288:
+            true
+        case .gif:
+            false
+        case .msrle:
+            false
+        case .dts:
+            true
+        case .cmv:
+            false
+        case .adpcm_g726:
+            true
+        case .bmp:
+            true
+        case .adpcm_ima_dk4:
+            true
+        case .iff_ilbm:
+            false
+        case .dvvideo:
+            true
+        case .derf_dpcm:
+            true
+        case .adpcm_ima_ws:
+            true
+        case .adpcm_ima_amv:
+            true
+        case .y41p:
+            true
+        case .r10k:
+            true
+        case .adpcm_4xm:
+            true
+        case .snow:
+            false
+        case .xsub:
+            false
+        case .vb:
+            false
+        case .alias_pix:
+            true
+        case .sanm:
+            false
+        case .wmalossless:
+            true
+        case .dss_sp:
+            true
+        case .svg:
+            false
+        case .h264:
+            false
+        case .scpr:
+            false
+        case .mxpeg:
+            false
+        case .daala:
+            false
+        case .ttf:
+            false
+        case .pictor:
+            true
+        case .ptx:
+            true
+        case .vp6:
+            false
+        case .smvjpeg:
+            true
+        case .flashsv:
+            false
+        case .bitpacked:
+            true
+        case .phm:
+            true
+        case .xma1:
+            true
+        case .sipr:
+            true
+        case .iac:
+            true
+        case .hdmv_text_subtitle:
+            false
+        case .mad:
+            false
+        case .avc:
+            true
+        case .cllc:
+            true
+        case .pcm_f64be:
+            true
+        case .h263p:
+            false
+        case .exr:
+            true
+        case .cpia:
+            false
+        case .hq_hqa:
+            true
+        case .ilbc:
+            true
+        case .vp4:
+            false
+        case .pcm_u16le:
+            true
+        case .prores:
+            true
+        case .escape130:
+            false
+        case .cscd:
+            false
+        case .tiertexseqvideo:
+            false
+        case .webp:
+            true
+        case .wmv3:
+            false
+        case .adpcm_thp:
+            true
+        case .ass:
+            false
+        case .adpcm_argo:
+            true
+        case .ansi:
+            false
+        case .flac:
+            true
+        case .smackaudio:
+            true
+        case .msmpeg4v1:
             false
         case .klv:
             false
+        case .xface:
+            true
+        case .dxv:
+            true
+        case .truehd:
+            false
+        case .pcx:
+            true
+        case .pam:
+            true
+        case .atrac3:
+            true
+        case .adpcm_ima_acorn:
+            true
+        case .atrac9:
+            true
+        case .escape124:
+            false
+        case .adpcm_ea:
+            true
+        case .utvideo:
+            true
+        case .dpx:
+            true
+        case .adpcm_sbpro_3:
+            true
+        case .v408:
+            true
+        case .mlp:
+            false
+        case .wmapro:
+            true
+        case .xan_wc4:
+            false
+        case .twinvq:
+            true
+        case .adpcm_ima_alp:
+            true
+        case .loco:
+            true
+        case .brender_pix:
+            true
+        case .cdxl:
+            true
+        case .truemotion1:
+            false
+        case .adpcm_vima:
+            true
+        case .pcm_lxf:
+            true
+        case .motionpixels:
+            false
+        case .s302m:
+            true
+        case .wmv3image:
+            false
+        case .ra_144:
+            true
+        case .jpegls:
+            true
+        case .bfi:
+            false
+        case .mpl2:
+            false
+        case .pcm_bluray:
+            true
+        case .adpcm_ct:
+            true
+        case .vble:
+            true
+        case .pbm:
+            true
+        case .pcm_s64be:
+            true
+        case .frwu:
+            true
+        case .adpcm_ima_moflex:
+            true
+        case .mss1:
+            false
+        case .idf:
+            true
+        case .bmv_audio:
+            true
+        case .pcm_s32le_planar:
+            true
+        case ._8svx_exp:
+            true
+        case .pcm_s32be:
+            true
+        case .aptx_hd:
+            true
+        case .pcm_u32le:
+            true
+        case .srt:
+            false
+        case .codec2:
+            true
+        case .timed_id3:
+            false
+        case .vorbis:
+            true
+        case .atrac3pal:
+            true
+        case .xbin:
+            true
+        case .microdvd:
+            false
+        case .scte_35:
+            false
+        case .g723_1:
+            true
+        case .huffyuv:
+            true
+        case .aura2:
+            true
+        case .dxa:
+            false
+        case .pcm_u24be:
+            true
+        case .vp7:
+            false
+        case .gdv:
+            false
+        case .qtrle:
+            false
+        case .g2m:
+            false
+        case .pcm_s16be:
+            true
+        case .arbc:
+            false
+        case .theora:
+            false
+        case .wmavoice:
+            true
+        case .vmdaudio:
+            true
+        case .msa1:
+            false
+        case .pcm_mulaw:
+            true
+        case .adpcm_agm:
+            true
+        case .rv10:
+            false
+        case .rv20:
+            false
+        case .zerocodec:
+            false
+        case .clearvideo:
+            false
+        case .pcm_s24be:
+            true
+        case .pcm_s8:
+            true
+        case .mpeg1video:
+            false
+        case .subviewer1:
+            false
+        case .tta:
+            true
+        case .sunrast:
+            true
+        case .kmvc:
+            false
+        case .lagarith:
+            true
+        case .webvtt:
+            false
+        case .msvideo1:
+            false
+        case .adpcm_ima_apm:
+            true
+        case .xan_wc3:
+            false
+        case .ssa:
+            false
+        case .anm:
+            false
+        case .fits:
+            true
+        case .aic:
+            true
+        case .adpcm_ima_qt:
+            true
+        case .rv30:
+            false
+        case .indeo2:
+            false
+        case .dfpwm:
+            false
+        case .ttml:
+            false
+        case .wmav1:
+            true
+        case .metasound:
+            true
+        case .svq3:
+            false
+        case .mss2:
+            true
+        case .adpcm_g726le:
+            true
+        case .adpcm_yamaha:
+            true
+        case .adpcm_mtaf:
+            true
+        case .dxtory:
+            true
+        case .adpcm_ima_dat4:
+            true
+        case .dvaudio:
+            true
+        case .jpeg2000:
+            true
+        case .screenpresso:
+            false
+        case .binkaudio_dct:
+            true
+        case .hap:
+            true
+        case .mpeg4:
+            false
+        case .yop:
+            false
+        case .pcm_f24le:
+            true
+        case .sgirle:
+            true
+        case .ape:
+            true
+        case .adpcm_ea_xas:
+            true
+        case .aasc:
+            false
+        case .pcm_u16be:
+            true
+        case .ppm:
+            true
+        case .wavesynth:
+            true
+        case .pcm_s24le:
+            true
+        case .adpcm_ms:
+            true
+        case .c93:
+            false
+        case .msmpeg4v2:
+            false
+        case .tscc2:
+            false
+        case .idcin:
+            false
+        case .ulti:
+            false
+        case .dvd_nav_packet:
+            false
+        case .adpcm_ima_smjpeg:
+            true
+        case .vp8:
+            false
+        case .cdgraphics:
+            false
+        case .adpcm_ea_maxis_xa:
+            true
+        case .zlib:
+            true
+        case .adpcm_ima_wav:
+            true
+        case .ljpeg:
+            true
+        case .smackvideo:
+            false
+        case .vp6f:
+            false
+        case .adpcm_ima_ssi:
+            true
+        case .xan_dpcm:
+            true
+        case .pcm_u8:
+            true
+        case .gem:
+            false
+        case .indeo4:
+            false
+        case .dvd_subtitle:
+            false
+        case .mp4als:
+            true
+        case .mp3:
+            true
+        case .eac3:
+            true
+        case .evrc:
+            true
+        case .sonic:
+            true
+        case .dvb_teletext:
+            false
+        case .truemotion2rt:
+            true
+        case .shorten:
+            true
+        case .bmv_video:
+            false
+        case .aura:
+            true
+        case .dnxhd:
+            true
+        case .sbc:
+            true
+        case .ws_vqa:
+            false
+        case .rscc:
+            false
+        case .wnv1:
+            true
+        case .h263:
+            false
+        case .speedhq:
+            true
+        case .lscr:
+            false
+        case .dst:
+            true
+        case .pgmyuv:
+            true
+        case .a64_multi5:
+            true
+        case .targa_y216:
+            true
+        case .vc1:
+            false
+        case .adpcm_thp_le:
+            true
+        case .cdtoons:
+            false
+        case .westwood_snd1:
+            true
+        case .qdmc:
+            true
+        case .photocd:
+            false
+        case .pcm_s64le:
+            true
+        case .cljr:
+            true
+        case .dsd_lsbf_planar:
+            true
+        case .indeo3:
+            false
+        case .interplayacm:
+            true
+        case .mmvideo:
+            false
+        case .adpcm_xa:
+            true
+        case .magicyuv:
+            true
+        case .cavs:
+            false
+        case .binkaudio_rdft:
+            true
+        case .ipu:
+            true
+        case .cri:
+            true
+        case .rv40:
+            false
+        case .h263i:
+            false
+        case .vvc:
+            false
+        case .wmav2:
+            true
+        case .mpegts:
+            false
+        case .ffvhuff:
+            true
+        case .tmv:
+            true
+        case .atrac3al:
+            true
+        case .a64_multi:
+            true
+        case .h261:
+            false
+        case .adpcm_ima_mtf:
+            true
+        case .dsicinaudio:
+            true
+        case .rasc:
+            false
+        case .mvc1:
+            true
+        case .rl2:
+            true
+        case .fmvc:
+            false
+        case .wmv2:
+            false
+        case .avrn:
+            false
+        case .ylc:
+            true
+        case .pcm_u32be:
+            true
+        case .vc1image:
+            false
+        case .gsm_ms:
+            true
+        case .mjpeg:
+            true
+        case .stl:
+            false
+        case .pfm:
+            true
+        case .aac:
+            true
+        case .srgc:
+            true
+        case .tscc:
+            false
+        case .pcm_s8_planar:
+            true
+        case .dsd_msbf:
+            true
+        case .psd:
+            true
+        case .dolby_e:
+            true
+        case .adpcm_swf:
+            true
+        case .fraps:
+            true
+        case .dds:
+            true
+        case .nuv:
+            false
+        case .mszh:
+            true
+        case .aac_latm:
+            true
+        case .v308:
+            true
+        case .txd:
+            true
+        case .dsd_lsbf:
+            true
+        case .atrac3p:
+            true
+        case .mpeg2video:
+            false
+        case .targa:
+            true
+        case .mimic:
+            false
+        case .pcm_sga:
+            true
+        case .wrapped_avframe:
+            false
+        case .adpcm_ima_oki:
+            true
+        case .pcm_vidc:
+            true
+        case .cyuv:
+            true
+        case .mp1:
+            true
+        case .mp3on4:
+            true
+        case .otf:
+            false
+        case .mvdv:
+            false
+        case .flv1:
+            false
+        case .amr_nb:
+            true
+        case .asv1:
+            true
         case .sami:
             false
-        case .fic:
+        case .musepack7:
+            true
+        case .adpcm_zork:
+            true
+        case .gsm:
+            true
+        case ._8bps:
+            true
+        case .adpcm_afc:
+            true
+        case .pixlet:
+            true
+        case .vcr1:
+            true
+        case .mvc2:
+            true
+        case .cinepak:
+            false
+        case .nellymoser:
+            true
+        case .sgi:
+            true
+        case .hdmv_pgs_subtitle:
+            false
+        case .pcm_s16le:
+            true
+        case .hnm4video:
+            false
+        case .pgm:
+            true
+        case .wcmv:
+            false
+        case .adpcm_ea_r1:
+            true
+        case .jpegxl:
+            true
+        case .pcm_f32le:
+            true
+        case .mvha:
+            true
+        case .bintext:
+            true
+        case .jv:
+            true
+        case .pcm_dvd:
+            true
+        case .adpcm_ima_cunning:
+            true
+        case .hqx:
+            true
+        case .dvb_subtitle:
+            false
+        case .hcom:
+            true
+        case .realtext:
+            false
+        case .ralf:
+            true
+        case .paf_video:
+            false
+        case .adpcm_ima_dk3:
+            true
+        case .tiff:
+            true
+        case .adpcm_adx:
+            true
+        case .adpcm_g722:
+            true
+        case .interplay_dpcm:
+            true
+        case .amr_wb:
+            true
+        case .mace6:
+            true
+        case .mp2:
+            true
+        case .adpcm_ima_rad:
+            true
+        case .aptx:
+            true
+        case .paf_audio:
+            true
+        case .vp6a:
             false
         case .vmdvideo:
             false
+        case .vplayer:
+            false
+        case .mts2:
+            false
+        case .dfa:
+            false
+        case .imc:
+            true
+        case .speex:
+            true
+        case .pcm_s16le_planar:
+            true
+        case .arib_caption:
+            false
+        case .zmbv:
+            false
+        case .svq1:
+            false
+        case .wmv1:
+            false
+        case .v410:
+            true
+        case ._4gv:
+            true
+        case .pcm_s24le_planar:
+            true
+        case .vixl:
+            true
+        case .subviewer:
+            false
+        case .gremlin_dpcm:
+            true
+        case .smv:
+            true
+        case .adpcm_ea_r3:
+            true
+        case .eia_608:
+            false
+        case .mscc:
+            true
+        case .argo:
+            false
+        case .png:
+            false
+        case .qpeg:
+            false
+        case .sol_dpcm:
+            true
+        case .flashsv2:
+            false
+        case .bethsoftvid:
+            false
+        case .binkvideo:
+            false
+        case .msp2:
+            true
+        case .adpcm_ea_r2:
+            true
+        case .adpcm_psx:
+            true
+        case .truespeech:
+            true
+        case .kgv1:
+            false
+        case .pcm_f16le:
+            true
+        case .adpcm_ima_ea_eacs:
+            true
+        case .subrip:
+            false
+        case .g729:
+            true
+        case .thp:
+            true
+        case .amv:
+            true
+        case .pcm_s32le:
+            true
+        case .tgq:
+            false
+        case .mv30:
+            false
+        case .sheervideo:
+            true
+        case .avs2:
+            false
+        case .msnsiren:
+            true
+        case .bin_data:
+            false
+        case .apng:
+            false
+        case .interplayvideo:
+            false
+        case .pcm_alaw:
+            true
         }
     }
 
     public var isLossy: Bool {
         switch self {
-        case .tscc:
-            false
-        case .speedhq:
-            true
-        case .speex:
-            true
-        case .xbin:
-            false
-        case .tiertexseqvideo:
-            true
-        case .h263:
-            true
-        case .idcin:
-            true
-        case .cdtoons:
-            false
-        case .huffyuv:
-            false
-        case .mpegh_3d_audio:
-            true
-        case .mdec:
-            true
-        case .qdmc:
-            true
-        case .ttf:
-            false
-        case .pcm_s8:
-            false
-        case .adpcm_sbpro_2:
-            true
-        case .text:
-            false
-        case .ylc:
-            false
-        case .exr:
-            true
-        case .sdx2_dpcm:
-            true
-        case .pcm_f16le:
-            false
-        case .pcm_s24le:
-            false
-        case .adpcm_aica:
-            true
-        case .tgq:
-            true
-        case .mp1:
-            true
-        case .adpcm_g726:
-            true
-        case .dss_sp:
-            true
-        case .loco:
-            false
-        case .h264:
-            true
-        case .smc:
-            true
-        case .cfhd:
-            true
-        case .mp3on4:
-            true
-        case .gdv:
-            true
-        case .adpcm_yamaha:
-            true
-        case .adpcm_ea_r2:
-            true
-        case .amr_nb:
-            true
-        case .sga:
-            true
-        case .tscc2:
-            true
-        case .iff_ilbm:
-            true
-        case .adpcm_sbpro_3:
-            true
-        case .pcm_f32le:
-            false
-        case .realtext:
-            false
-        case .photocd:
-            true
-        case .adpcm_ima_acorn:
-            true
-        case .bmp:
-            false
-        case .cpia:
-            false
-        case .qpeg:
-            true
-        case .smackvideo:
-            true
-        case .musepack7:
-            true
-        case .a64_multi5:
-            true
-        case .alac:
-            false
-        case .mscc:
-            false
-        case .adpcm_ima_dk3:
-            true
-        case .cscd:
-            false
-        case .cmv:
-            true
-        case .wmav1:
-            true
-        case .adpcm_ima_apc:
-            true
-        case .h261:
-            true
-        case .wmalossless:
-            false
-        case .adpcm_ima_rad:
-            true
-        case .adpcm_argo:
-            true
-        case .dxtory:
-            false
-        case .dvb_teletext:
-            false
-        case .subviewer:
-            false
-        case .c93:
-            true
-        case .kmvc:
-            true
-        case .amv:
-            true
-        case .pcm_u24be:
-            false
-        case .vbn:
-            true
-        case .srt:
-            false
-        case .prores:
-            true
-        case .smv:
-            true
-        case .adpcm_ima_ea_eacs:
-            true
-        case .bin_data:
-            false
-        case .yop:
-            true
-        case .pcm_sga:
-            false
-        case .v410:
-            false
-        case .avrn:
-            false
-        case .adpcm_ima_amv:
-            true
-        case .adpcm_dtk:
-            true
-        case .adpcm_4xm:
-            true
-        case .gsm:
-            true
-        case .interplay_dpcm:
-            true
-        case .mvdv:
-            true
-        case .mszh:
-            false
-        case .hcom:
-            true
-        case .ilbc:
-            true
-        case .adpcm_agm:
-            true
-        case .dvb_subtitle:
-            false
-        case .dsicinvideo:
-            true
-        case .subviewer1:
-            false
-        case .dds:
-            true
-        case .rpza:
-            true
-        case .adpcm_ima_smjpeg:
-            true
-        case .mp3adu:
-            true
-        case .wcmv:
-            false
-        case .hnm4video:
-            true
-        case .pam:
-            false
-        case .cllc:
-            false
-        case .vp5:
-            true
-        case .hap:
-            true
-        case .sonicls:
-            false
-        case .mp2:
-            true
-        case .rv20:
-            true
-        case .qdm2:
-            true
-        case .wmv3image:
-            true
-        case .amr_wb:
-            true
-        case .nuv:
-            true
-        case .m101:
-            false
-        case .otf:
-            false
-        case .hq_hqa:
-            true
-        case .dnxhd:
-            true
-        case .anm:
-            true
-        case .smvjpeg:
-            true
-        case .hdmv_text_subtitle:
-            false
-        case .bfi:
-            true
-        case .avc:
-            true
-        case .imc:
-            true
-        case .adpcm_thp_le:
-            true
-        case .pcm_bluray:
-            false
-        case .dxv:
-            true
-        case .sol_dpcm:
-            true
-        case .ttml:
-            false
-        case .wmavoice:
-            true
-        case .xsub:
-            false
-        case .mace3:
-            true
-        case .aptx_hd:
-            true
-        case .ssa:
-            false
-        case .eia_608:
-            false
-        case .codec2:
-            true
-        case .mvc1:
-            true
-        case .pgm:
-            false
-        case .kgv1:
-            true
-        case .h263i:
-            true
-        case .pcx:
-            false
-        case .dpx:
-            false
-        case .dvaudio:
-            true
-        case .pcm_s16le_planar:
-            false
-        case .dirac:
-            true
-        case .pcm_s24daud:
-            false
-        case .cdxl:
-            true
-        case .ptx:
-            true
-        case .utvideo:
-            false
-        case .pictor:
-            true
-        case .fmvc:
-            false
-        case .arbc:
-            true
-        case .adpcm_ms:
-            true
-        case .adpcm_afc:
-            true
-        case .metasound:
-            true
-        case .msnsiren:
-            true
-        case .truemotion2rt:
-            true
-        case .jpegxl:
-            true
-        case ._012v:
-            false
-        case .xan_dpcm:
-            true
-        case .pcm_f24le:
-            false
-        case .nellymoser:
-            true
-        case .scpr:
-            true
-        case .bmv_video:
-            false
-        case .frwu:
-            false
-        case .adpcm_vima:
-            true
-        case .mmvideo:
-            true
-        case .r10k:
-            false
-        case .alias_pix:
-            false
-        case .avs2:
-            true
-        case .pcm_s32le:
-            false
-        case .aptx:
-            true
-        case .pcm_u16le:
-            false
-        case .pcm_s32be:
-            false
-        case .simbiosis_imx:
-            true
-        case .adpcm_ima_ssi:
-            true
-        case .adpcm_swf:
-            true
-        case .derf_dpcm:
-            true
-        case .msvideo1:
-            true
-        case .pcm_s8_planar:
-            false
-        case .daala:
-            true
-        case .s302m:
-            false
-        case .targa_y216:
-            false
-        case .wmav2:
-            true
-        case .eac3:
-            true
-        case .truemotion1:
-            true
-        case ._8bps:
-            false
-        case .cinepak:
-            true
-        case .mad:
-            true
-        case .pcm_s32le_planar:
-            false
-        case .bintext:
-            false
-        case .fraps:
-            false
-        case .dfa:
-            true
-        case .mjpeg:
-            true
-        case .pcm_u32be:
-            false
-        case .gem:
-            true
-        case .vp6f:
-            true
         case .hevc:
-            true
-        case .cljr:
-            true
-        case .indeo5:
-            true
-        case .flic:
-            false
-        case .sonic:
-            false
-        case .ra_144:
-            true
-        case .vmnc:
-            false
-        case .pcm_u8:
-            false
-        case .xan_wc3:
-            true
-        case .wmv1:
-            true
-        case .mss2:
-            true
-        case .theora:
-            true
-        case .wmapro:
-            true
-        case .h263p:
-            true
-        case .sipr:
-            true
-        case .truespeech:
-            true
-        case .xan_wc4:
-            true
-        case .gremlin_dpcm:
-            true
-        case .lscr:
-            true
-        case .dvd_subtitle:
-            false
-        case .brender_pix:
-            false
-        case .yuv4:
-            false
-        case ._4xm:
-            true
-        case .mvha:
-            true
-        case .v210x:
-            false
-        case .svg:
-            false
-        case .tak:
-            false
-        case .arib_caption:
-            false
-        case .jpeg2000:
-            true
-        case .adpcm_mtaf:
-            true
-        case .adpcm_ima_wav:
-            true
-        case .tta:
-            false
-        case .qtrle:
-            false
-        case .wmv2:
-            true
-        case .jv:
-            true
-        case .pcm_s16le:
-            false
-        case .mxpeg:
-            true
-        case .pcm_u24le:
-            false
-        case .flac:
-            false
-        case .ass:
-            false
-        case .ipu:
-            true
-        case .tiff:
-            false
-        case .binkaudio_rdft:
-            true
-        case .musepack8:
-            true
-        case .wnv1:
-            true
-        case .sgirle:
-            false
-        case .snow:
-            true
-        case .msrle:
-            false
-        case .vorbis:
-            true
-        case .agm:
-            true
-        case .roq:
-            true
-        case .atrac3al:
-            false
-        case .pgx:
-            false
-        case .wmv3:
-            true
-        case .rl2:
-            true
-        case .mpl2:
-            false
-        case .aac_latm:
-            true
-        case .dts:
-            true
-        case .xpm:
-            false
-        case .adpcm_ea_maxis_xa:
-            true
-        case .sheervideo:
-            false
-        case .adpcm_adx:
-            true
-        case .adpcm_ea_r1:
-            true
-        case .screenpresso:
-            false
-        case .westwood_snd1:
-            true
-        case .interplayacm:
-            true
-        case .adpcm_ima_alp:
-            true
-        case .r210:
-            false
-        case .thp:
-            true
-        case .wrapped_avframe:
-            false
-        case .notchlc:
-            true
-        case .zlib:
-            false
-        case .wavpack:
-            true
-        case .cri:
-            true
-        case .atrac1:
-            true
-        case .imm4:
-            true
-        case .psd:
-            false
-        case .stl:
-            false
-        case .indeo2:
-            true
-        case .rv10:
-            true
-        case .mlp:
-            false
-        case .sunrast:
-            false
-        case .ffvhuff:
-            false
-        case ._8svx_exp:
-            true
-        case .mts2:
-            true
-        case .xbm:
-            false
-        case .celt:
-            true
-        case .vp6a:
-            true
-        case .mjpegb:
-            true
-        case .magicyuv:
-            false
-        case .v210:
-            false
-        case .indeo4:
-            true
-        case .targa:
-            false
-        case .dsicinaudio:
-            true
-        case .mpeg1video:
-            true
-        case .timed_id3:
-            false
-        case .twinvq:
-            true
-        case .dsd_lsbf_planar:
-            true
-        case .zerocodec:
-            false
-        case .wavesynth:
-            false
-        case .ra_288:
-            true
-        case .microdvd:
-            false
-        case .png:
-            false
-        case .binkaudio_dct:
-            true
-        case .shorten:
-            false
-        case .opus:
-            true
-        case .cavs:
-            true
-        case .dsd_msbf:
-            true
-        case .xface:
-            true
-        case .sbc:
-            true
-        case .vplayer:
-            false
-        case .pixlet:
-            true
-        case .smackaudio:
-            true
-        case .avui:
-            false
-        case .binkvideo:
-            true
-        case .pbm:
-            false
-        case ._8svx_fib:
-            true
-        case .dsd_lsbf:
-            true
-        case .tqi:
-            true
-        case .adpcm_ima_dat4:
-            true
-        case .dvvideo:
-            true
-        case .sanm:
-            true
-        case .ppm:
-            false
-        case .truemotion2:
-            true
-        case .qdraw:
-            false
-        case .pcm_u32le:
-            false
-        case .pcm_mulaw:
-            true
-        case .sgi:
-            false
-        case .atrac9:
-            true
-        case .flv1:
-            true
-        case .a64_multi:
-            true
-        case .asv2:
-            true
-        case .apng:
-            false
-        case .g729:
-            true
-        case .vp8:
-            true
-        case .pcm_f64be:
-            false
-        case .aasc:
-            false
-        case .aac:
-            true
-        case .evrc:
-            true
-        case .dolby_e:
-            true
-        case .vp7:
-            true
-        case .escape124:
-            true
-        case .motionpixels:
-            true
-        case .clearvideo:
-            true
-        case .pcm_f32be:
-            false
-        case .aura2:
-            true
-        case .pcm_vidc:
-            true
-        case .lagarith:
-            false
-        case .phm:
-            false
-        case .mvc2:
-            true
-        case .txd:
-            true
-        case .adpcm_sbpro_4:
-            true
-        case .webp:
-            true
-        case .hqx:
-            true
-        case .pcm_s24be:
-            false
-        case .cyuv:
-            true
-        case .mpegts:
-            false
-        case .vvc:
-            true
-        case .qcelp:
-            true
-        case .rscc:
-            false
-        case .ljpeg:
-            false
-        case .vixl:
-            true
-        case .pcm_lxf:
-            false
-        case .adpcm_ima_cunning:
-            true
-        case .vp9:
-            true
-        case .adpcm_ea:
-            true
-        case .xma1:
-            true
-        case .tmv:
-            true
-        case .pcm_s16be_planar:
-            false
-        case .truehd:
-            false
-        case .aura:
-            true
-        case .fits:
-            false
-        case .pcm_s24le_planar:
-            false
-        case .adpcm_ima_iss:
-            true
-        case .gsm_ms:
-            true
-        case .adpcm_ct:
-            true
-        case .pcm_s16be:
-            false
-        case .adpcm_zork:
-            true
-        case .adpcm_psx:
-            true
-        case .mobiclip:
-            true
-        case .adpcm_ima_mtf:
-            true
-        case .gif:
-            false
-        case .flashsv2:
-            true
-        case .epg:
-            false
-        case .pcm_dvd:
-            false
-        case .fastaudio:
-            true
-        case .scte_35:
-            false
-        case .msmpeg4v1:
-            true
-        case .av1:
-            true
-        case .v408:
-            false
-        case .asv1:
-            true
-        case .y41p:
-            false
-        case .ws_vqa:
-            true
-        case .avs3:
-            true
-        case .iac:
-            true
-        case .mp4als:
-            false
-        case .pcm_s64le:
-            false
-        case .mwsc:
-            false
-        case .qoi:
-            false
-        case .g723_1:
-            true
-        case .adpcm_g722:
-            true
-        case .ffv1:
-            false
-        case .adpcm_xa:
-            true
-        case .imm5:
-            true
-        case .vp3:
-            true
-        case .flashsv:
-            false
-        case .tgv:
-            true
-        case .v308:
-            false
-        case .subrip:
-            false
-        case .adpcm_ea_r3:
-            true
-        case .pcm_u16be:
-            false
-        case .adpcm_ea_xas:
-            true
-        case .vble:
-            false
-        case .paf_video:
-            true
-        case .msp2:
-            false
-        case .adpcm_g726le:
-            true
-        case .vcr1:
-            true
-        case .prosumer:
-            true
-        case .svq3:
-            true
-        case .ayuv:
-            false
-        case .sp5x:
-            true
-        case .jacosub:
-            false
-        case .ape:
-            false
-        case .msa1:
-            true
-        case .bitpacked:
-            false
-        case .rawvideo:
-            false
-        case .hca:
-            true
-        case .adpcm_ima_ea_sead:
-            true
-        case .g2m:
-            true
-        case .dxa:
-            false
-        case .dst:
-            false
-        case .bethsoftvid:
-            true
-        case .pjs:
-            false
-        case .vb:
-            true
-        case .webvtt:
-            false
-        case .pcm_alaw:
-            true
-        case .comfortnoise:
-            true
-        case .mpeg4:
-            true
-        case .rv40:
-            true
-        case .interplayvideo:
-            true
-        case .mimic:
-            true
-        case .aic:
-            true
-        case .mss1:
-            true
-        case .roq_dpcm:
-            true
-        case .pcm_s64be:
-            false
-        case .vp6:
-            true
-        case .mp3:
-            true
-        case .vmdaudio:
-            true
-        case .bmv_audio:
-            true
-        case .pcm_f64le:
-            false
-        case .cdgraphics:
-            true
-        case .adpcm_ima_dk4:
-            true
-        case .mv30:
-            true
-        case .adpcm_ima_qt:
-            true
-        case .mov_text:
-            false
-        case .msmpeg4v3:
-            true
-        case .adpcm_ima_moflex:
-            true
-        case .argo:
-            true
-        case .mace6:
-            true
-        case .dsd_msbf_planar:
-            true
-        case .hdmv_pgs_subtitle:
-            false
-        case .adpcm_thp:
-            true
-        case .rasc:
-            true
-        case .rv30:
-            true
-        case .ac3:
-            true
-        case .ralf:
-            false
-        case .zmbv:
-            false
-        case .avrp:
-            false
-        case .svq1:
-            true
-        case .vc1:
-            true
-        case .vp4:
-            true
-        case .xwd:
-            false
-        case .adpcm_ima_ws:
-            true
-        case .tdsc:
-            true
-        case .dfpwm:
-            true
-        case .dvd_nav_packet:
-            false
-        case .cook:
-            true
-        case .adpcm_ima_apm:
-            true
-        case .atrac3:
             true
         case .siren:
             true
-        case .hymt:
+        case ._012v:
             false
-        case .atrac3pal:
+        case .dirac:
+            true
+        case .imm5:
+            true
+        case .imm4:
+            true
+        case .mpegh_3d_audio:
+            true
+        case .r210:
             false
-        case ._4gv:
+        case .vp3:
             true
-        case .escape130:
+        case .cook:
             true
-        case .vc1image:
-            true
-        case .pfm:
+        case .v210:
             false
-        case .atrac3p:
+        case .prosumer:
             true
-        case .idf:
+        case .sonicls:
             false
-        case .ansi:
+        case .adpcm_sbpro_4:
             true
-        case .ulti:
+        case .qdm2:
             true
-        case .adpcm_ima_oki:
-            true
-        case .paf_audio:
-            true
-        case .mpeg2video:
-            true
-        case .jpegls:
-            true
-        case .srgc:
+        case .xbm:
             false
-        case .pgmyuv:
-            false
-        case .avs:
-            true
-        case .xma2:
-            true
-        case .msmpeg4v2:
-            true
-        case .indeo3:
-            true
-        case .klv:
-            false
-        case .sami:
+        case .v210x:
             false
         case .fic:
             true
+        case .msmpeg4v3:
+            true
+        case .rpza:
+            true
+        case .roq_dpcm:
+            true
+        case .ac3:
+            true
+        case .vbn:
+            true
+        case .fastaudio:
+            true
+        case .celt:
+            true
+        case .adpcm_dtk:
+            true
+        case .ayuv:
+            false
+        case .wavpack:
+            true
+        case .mwsc:
+            false
+        case .xwd:
+            false
+        case .avui:
+            false
+        case .pgx:
+            false
+        case .pcm_f32be:
+            false
+        case .avs:
+            true
+        case .avs3:
+            true
+        case .truemotion2:
+            true
+        case .asv2:
+            true
+        case .adpcm_aica:
+            true
+        case .rawvideo:
+            false
+        case .sdx2_dpcm:
+            true
+        case .qoi:
+            false
+        case .mace3:
+            true
+        case .mov_text:
+            false
+        case .vp9:
+            true
+        case .avrp:
+            false
+        case .hca:
+            true
+        case .ffv1:
+            false
+        case .mjpegb:
+            true
+        case .sp5x:
+            true
+        case .dsicinvideo:
+            true
+        case .alac:
+            false
+        case .indeo5:
+            true
+        case .tak:
+            false
+        case .notchlc:
+            true
+        case .mobiclip:
+            true
+        case .pjs:
+            false
+        case .pcm_s24daud:
+            false
+        case .dsd_msbf_planar:
+            true
+        case .simbiosis_imx:
+            true
+        case .comfortnoise:
+            true
+        case .jacosub:
+            false
+        case .vmnc:
+            false
+        case .xpm:
+            false
+        case .qcelp:
+            true
+        case .text:
+            false
+        case .adpcm_sbpro_2:
+            true
+        case .mp3adu:
+            true
+        case .musepack8:
+            true
+        case .yuv4:
+            false
+        case .atrac1:
+            true
+        case .vp5:
+            true
+        case .pcm_u24le:
+            false
+        case .tqi:
+            true
+        case ._8svx_fib:
+            true
+        case .qdraw:
+            false
+        case .tgv:
+            true
+        case .av1:
+            true
+        case .m101:
+            false
+        case .adpcm_ima_apc:
+            true
+        case .flic:
+            false
+        case .mdec:
+            true
+        case .agm:
+            true
+        case .adpcm_ima_ea_sead:
+            true
+        case .xma2:
+            true
+        case .pcm_s16be_planar:
+            false
+        case .cfhd:
+            true
+        case .pcm_f64le:
+            false
+        case .smc:
+            true
+        case .adpcm_ima_iss:
+            true
+        case .epg:
+            false
+        case .sga:
+            true
+        case ._4xm:
+            true
+        case .opus:
+            true
+        case .hymt:
+            false
+        case .tdsc:
+            true
+        case .roq:
+            true
+        case .ra_288:
+            true
+        case .gif:
+            false
+        case .msrle:
+            false
+        case .dts:
+            true
+        case .cmv:
+            true
+        case .adpcm_g726:
+            true
+        case .bmp:
+            false
+        case .adpcm_ima_dk4:
+            true
+        case .iff_ilbm:
+            true
+        case .dvvideo:
+            true
+        case .derf_dpcm:
+            true
+        case .adpcm_ima_ws:
+            true
+        case .adpcm_ima_amv:
+            true
+        case .y41p:
+            false
+        case .r10k:
+            false
+        case .adpcm_4xm:
+            true
+        case .snow:
+            true
+        case .xsub:
+            false
+        case .vb:
+            true
+        case .alias_pix:
+            false
+        case .sanm:
+            true
+        case .wmalossless:
+            false
+        case .dss_sp:
+            true
+        case .svg:
+            false
+        case .h264:
+            true
+        case .scpr:
+            true
+        case .mxpeg:
+            true
+        case .daala:
+            true
+        case .ttf:
+            false
+        case .pictor:
+            true
+        case .ptx:
+            true
+        case .vp6:
+            true
+        case .smvjpeg:
+            true
+        case .flashsv:
+            false
+        case .bitpacked:
+            false
+        case .phm:
+            false
+        case .xma1:
+            true
+        case .sipr:
+            true
+        case .iac:
+            true
+        case .hdmv_text_subtitle:
+            false
+        case .mad:
+            true
+        case .avc:
+            true
+        case .cllc:
+            false
+        case .pcm_f64be:
+            false
+        case .h263p:
+            true
+        case .exr:
+            true
+        case .cpia:
+            false
+        case .hq_hqa:
+            true
+        case .ilbc:
+            true
+        case .vp4:
+            true
+        case .pcm_u16le:
+            false
+        case .prores:
+            true
+        case .escape130:
+            true
+        case .cscd:
+            false
+        case .tiertexseqvideo:
+            true
+        case .webp:
+            true
+        case .wmv3:
+            true
+        case .adpcm_thp:
+            true
+        case .ass:
+            false
+        case .adpcm_argo:
+            true
+        case .ansi:
+            true
+        case .flac:
+            false
+        case .smackaudio:
+            true
+        case .msmpeg4v1:
+            true
+        case .klv:
+            false
+        case .xface:
+            true
+        case .dxv:
+            true
+        case .truehd:
+            false
+        case .pcx:
+            false
+        case .pam:
+            false
+        case .atrac3:
+            true
+        case .adpcm_ima_acorn:
+            true
+        case .atrac9:
+            true
+        case .escape124:
+            true
+        case .adpcm_ea:
+            true
+        case .utvideo:
+            false
+        case .dpx:
+            false
+        case .adpcm_sbpro_3:
+            true
+        case .v408:
+            false
+        case .mlp:
+            false
+        case .wmapro:
+            true
+        case .xan_wc4:
+            true
+        case .twinvq:
+            true
+        case .adpcm_ima_alp:
+            true
+        case .loco:
+            false
+        case .brender_pix:
+            false
+        case .cdxl:
+            true
+        case .truemotion1:
+            true
+        case .adpcm_vima:
+            true
+        case .pcm_lxf:
+            false
+        case .motionpixels:
+            true
+        case .s302m:
+            false
+        case .wmv3image:
+            true
+        case .ra_144:
+            true
+        case .jpegls:
+            true
+        case .bfi:
+            true
+        case .mpl2:
+            false
+        case .pcm_bluray:
+            false
+        case .adpcm_ct:
+            true
+        case .vble:
+            false
+        case .pbm:
+            false
+        case .pcm_s64be:
+            false
+        case .frwu:
+            false
+        case .adpcm_ima_moflex:
+            true
+        case .mss1:
+            true
+        case .idf:
+            false
+        case .bmv_audio:
+            true
+        case .pcm_s32le_planar:
+            false
+        case ._8svx_exp:
+            true
+        case .pcm_s32be:
+            false
+        case .aptx_hd:
+            true
+        case .pcm_u32le:
+            false
+        case .srt:
+            false
+        case .codec2:
+            true
+        case .timed_id3:
+            false
+        case .vorbis:
+            true
+        case .atrac3pal:
+            false
+        case .xbin:
+            false
+        case .microdvd:
+            false
+        case .scte_35:
+            false
+        case .g723_1:
+            true
+        case .huffyuv:
+            false
+        case .aura2:
+            true
+        case .dxa:
+            false
+        case .pcm_u24be:
+            false
+        case .vp7:
+            true
+        case .gdv:
+            true
+        case .qtrle:
+            false
+        case .g2m:
+            true
+        case .pcm_s16be:
+            false
+        case .arbc:
+            true
+        case .theora:
+            true
+        case .wmavoice:
+            true
+        case .vmdaudio:
+            true
+        case .msa1:
+            true
+        case .pcm_mulaw:
+            true
+        case .adpcm_agm:
+            true
+        case .rv10:
+            true
+        case .rv20:
+            true
+        case .zerocodec:
+            false
+        case .clearvideo:
+            true
+        case .pcm_s24be:
+            false
+        case .pcm_s8:
+            false
+        case .mpeg1video:
+            true
+        case .subviewer1:
+            false
+        case .tta:
+            false
+        case .sunrast:
+            false
+        case .kmvc:
+            true
+        case .lagarith:
+            false
+        case .webvtt:
+            false
+        case .msvideo1:
+            true
+        case .adpcm_ima_apm:
+            true
+        case .xan_wc3:
+            true
+        case .ssa:
+            false
+        case .anm:
+            true
+        case .fits:
+            false
+        case .aic:
+            true
+        case .adpcm_ima_qt:
+            true
+        case .rv30:
+            true
+        case .indeo2:
+            true
+        case .dfpwm:
+            true
+        case .ttml:
+            false
+        case .wmav1:
+            true
+        case .metasound:
+            true
+        case .svq3:
+            true
+        case .mss2:
+            true
+        case .adpcm_g726le:
+            true
+        case .adpcm_yamaha:
+            true
+        case .adpcm_mtaf:
+            true
+        case .dxtory:
+            false
+        case .adpcm_ima_dat4:
+            true
+        case .dvaudio:
+            true
+        case .jpeg2000:
+            true
+        case .screenpresso:
+            false
+        case .binkaudio_dct:
+            true
+        case .hap:
+            true
+        case .mpeg4:
+            true
+        case .yop:
+            true
+        case .pcm_f24le:
+            false
+        case .sgirle:
+            false
+        case .ape:
+            false
+        case .adpcm_ea_xas:
+            true
+        case .aasc:
+            false
+        case .pcm_u16be:
+            false
+        case .ppm:
+            false
+        case .wavesynth:
+            false
+        case .pcm_s24le:
+            false
+        case .adpcm_ms:
+            true
+        case .c93:
+            true
+        case .msmpeg4v2:
+            true
+        case .tscc2:
+            true
+        case .idcin:
+            true
+        case .ulti:
+            true
+        case .dvd_nav_packet:
+            false
+        case .adpcm_ima_smjpeg:
+            true
+        case .vp8:
+            true
+        case .cdgraphics:
+            true
+        case .adpcm_ea_maxis_xa:
+            true
+        case .zlib:
+            false
+        case .adpcm_ima_wav:
+            true
+        case .ljpeg:
+            false
+        case .smackvideo:
+            true
+        case .vp6f:
+            true
+        case .adpcm_ima_ssi:
+            true
+        case .xan_dpcm:
+            true
+        case .pcm_u8:
+            false
+        case .gem:
+            true
+        case .indeo4:
+            true
+        case .dvd_subtitle:
+            false
+        case .mp4als:
+            false
+        case .mp3:
+            true
+        case .eac3:
+            true
+        case .evrc:
+            true
+        case .sonic:
+            false
+        case .dvb_teletext:
+            false
+        case .truemotion2rt:
+            true
+        case .shorten:
+            false
+        case .bmv_video:
+            false
+        case .aura:
+            true
+        case .dnxhd:
+            true
+        case .sbc:
+            true
+        case .ws_vqa:
+            true
+        case .rscc:
+            false
+        case .wnv1:
+            true
+        case .h263:
+            true
+        case .speedhq:
+            true
+        case .lscr:
+            true
+        case .dst:
+            false
+        case .pgmyuv:
+            false
+        case .a64_multi5:
+            true
+        case .targa_y216:
+            false
+        case .vc1:
+            true
+        case .adpcm_thp_le:
+            true
+        case .cdtoons:
+            false
+        case .westwood_snd1:
+            true
+        case .qdmc:
+            true
+        case .photocd:
+            true
+        case .pcm_s64le:
+            false
+        case .cljr:
+            true
+        case .dsd_lsbf_planar:
+            true
+        case .indeo3:
+            true
+        case .interplayacm:
+            true
+        case .mmvideo:
+            true
+        case .adpcm_xa:
+            true
+        case .magicyuv:
+            false
+        case .cavs:
+            true
+        case .binkaudio_rdft:
+            true
+        case .ipu:
+            true
+        case .cri:
+            true
+        case .rv40:
+            true
+        case .h263i:
+            true
+        case .vvc:
+            true
+        case .wmav2:
+            true
+        case .mpegts:
+            false
+        case .ffvhuff:
+            false
+        case .tmv:
+            true
+        case .atrac3al:
+            false
+        case .a64_multi:
+            true
+        case .h261:
+            true
+        case .adpcm_ima_mtf:
+            true
+        case .dsicinaudio:
+            true
+        case .rasc:
+            true
+        case .mvc1:
+            true
+        case .rl2:
+            true
+        case .fmvc:
+            false
+        case .wmv2:
+            true
+        case .avrn:
+            false
+        case .ylc:
+            false
+        case .pcm_u32be:
+            false
+        case .vc1image:
+            true
+        case .gsm_ms:
+            true
+        case .mjpeg:
+            true
+        case .stl:
+            false
+        case .pfm:
+            false
+        case .aac:
+            true
+        case .srgc:
+            false
+        case .tscc:
+            false
+        case .pcm_s8_planar:
+            false
+        case .dsd_msbf:
+            true
+        case .psd:
+            false
+        case .dolby_e:
+            true
+        case .adpcm_swf:
+            true
+        case .fraps:
+            false
+        case .dds:
+            true
+        case .nuv:
+            true
+        case .mszh:
+            false
+        case .aac_latm:
+            true
+        case .v308:
+            false
+        case .txd:
+            true
+        case .dsd_lsbf:
+            true
+        case .atrac3p:
+            true
+        case .mpeg2video:
+            true
+        case .targa:
+            false
+        case .mimic:
+            true
+        case .pcm_sga:
+            false
+        case .wrapped_avframe:
+            false
+        case .adpcm_ima_oki:
+            true
+        case .pcm_vidc:
+            true
+        case .cyuv:
+            true
+        case .mp1:
+            true
+        case .mp3on4:
+            true
+        case .otf:
+            false
+        case .mvdv:
+            true
+        case .flv1:
+            true
+        case .amr_nb:
+            true
+        case .asv1:
+            true
+        case .sami:
+            false
+        case .musepack7:
+            true
+        case .adpcm_zork:
+            true
+        case .gsm:
+            true
+        case ._8bps:
+            false
+        case .adpcm_afc:
+            true
+        case .pixlet:
+            true
+        case .vcr1:
+            true
+        case .mvc2:
+            true
+        case .cinepak:
+            true
+        case .nellymoser:
+            true
+        case .sgi:
+            false
+        case .hdmv_pgs_subtitle:
+            false
+        case .pcm_s16le:
+            false
+        case .hnm4video:
+            true
+        case .pgm:
+            false
+        case .wcmv:
+            false
+        case .adpcm_ea_r1:
+            true
+        case .jpegxl:
+            true
+        case .pcm_f32le:
+            false
+        case .mvha:
+            true
+        case .bintext:
+            false
+        case .jv:
+            true
+        case .pcm_dvd:
+            false
+        case .adpcm_ima_cunning:
+            true
+        case .hqx:
+            true
+        case .dvb_subtitle:
+            false
+        case .hcom:
+            true
+        case .realtext:
+            false
+        case .ralf:
+            false
+        case .paf_video:
+            true
+        case .adpcm_ima_dk3:
+            true
+        case .tiff:
+            false
+        case .adpcm_adx:
+            true
+        case .adpcm_g722:
+            true
+        case .interplay_dpcm:
+            true
+        case .amr_wb:
+            true
+        case .mace6:
+            true
+        case .mp2:
+            true
+        case .adpcm_ima_rad:
+            true
+        case .aptx:
+            true
+        case .paf_audio:
+            true
+        case .vp6a:
+            true
         case .vmdvideo:
+            true
+        case .vplayer:
+            false
+        case .mts2:
+            true
+        case .dfa:
+            true
+        case .imc:
+            true
+        case .speex:
+            true
+        case .pcm_s16le_planar:
+            false
+        case .arib_caption:
+            false
+        case .zmbv:
+            false
+        case .svq1:
+            true
+        case .wmv1:
+            true
+        case .v410:
+            false
+        case ._4gv:
+            true
+        case .pcm_s24le_planar:
+            false
+        case .vixl:
+            true
+        case .subviewer:
+            false
+        case .gremlin_dpcm:
+            true
+        case .smv:
+            true
+        case .adpcm_ea_r3:
+            true
+        case .eia_608:
+            false
+        case .mscc:
+            false
+        case .argo:
+            true
+        case .png:
+            false
+        case .qpeg:
+            true
+        case .sol_dpcm:
+            true
+        case .flashsv2:
+            true
+        case .bethsoftvid:
+            true
+        case .binkvideo:
+            true
+        case .msp2:
+            false
+        case .adpcm_ea_r2:
+            true
+        case .adpcm_psx:
+            true
+        case .truespeech:
+            true
+        case .kgv1:
+            true
+        case .pcm_f16le:
+            false
+        case .adpcm_ima_ea_eacs:
+            true
+        case .subrip:
+            false
+        case .g729:
+            true
+        case .thp:
+            true
+        case .amv:
+            true
+        case .pcm_s32le:
+            false
+        case .tgq:
+            true
+        case .mv30:
+            true
+        case .sheervideo:
+            false
+        case .avs2:
+            true
+        case .msnsiren:
+            true
+        case .bin_data:
+            false
+        case .apng:
+            false
+        case .interplayvideo:
+            true
+        case .pcm_alaw:
             true
         }
     }
 
     public var isLossless: Bool {
         switch self {
-        case .tscc:
-            false
-        case .speedhq:
-            false
-        case .speex:
-            false
-        case .xbin:
-            false
-        case .tiertexseqvideo:
-            false
-        case .h263:
-            false
-        case .idcin:
-            false
-        case .cdtoons:
-            false
-        case .huffyuv:
-            false
-        case .mpegh_3d_audio:
-            false
-        case .mdec:
-            false
-        case .qdmc:
-            false
-        case .ttf:
-            false
-        case .pcm_s8:
-            false
-        case .adpcm_sbpro_2:
-            false
-        case .text:
-            false
-        case .ylc:
-            false
-        case .exr:
-            false
-        case .sdx2_dpcm:
-            false
-        case .pcm_f16le:
-            false
-        case .pcm_s24le:
-            false
-        case .adpcm_aica:
-            false
-        case .tgq:
-            false
-        case .mp1:
-            false
-        case .adpcm_g726:
-            false
-        case .dss_sp:
-            false
-        case .loco:
-            false
-        case .h264:
-            false
-        case .smc:
-            false
-        case .cfhd:
-            false
-        case .mp3on4:
-            false
-        case .gdv:
-            false
-        case .adpcm_yamaha:
-            false
-        case .adpcm_ea_r2:
-            false
-        case .amr_nb:
-            false
-        case .sga:
-            false
-        case .tscc2:
-            false
-        case .iff_ilbm:
-            false
-        case .adpcm_sbpro_3:
-            false
-        case .pcm_f32le:
-            false
-        case .realtext:
-            false
-        case .photocd:
-            false
-        case .adpcm_ima_acorn:
-            false
-        case .bmp:
-            false
-        case .cpia:
-            false
-        case .qpeg:
-            false
-        case .smackvideo:
-            false
-        case .musepack7:
-            false
-        case .a64_multi5:
-            false
-        case .alac:
-            false
-        case .mscc:
-            false
-        case .adpcm_ima_dk3:
-            false
-        case .cscd:
-            false
-        case .cmv:
-            false
-        case .wmav1:
-            false
-        case .adpcm_ima_apc:
-            false
-        case .h261:
-            false
-        case .wmalossless:
-            false
-        case .adpcm_ima_rad:
-            false
-        case .adpcm_argo:
-            false
-        case .dxtory:
-            false
-        case .dvb_teletext:
-            false
-        case .subviewer:
-            false
-        case .c93:
-            false
-        case .kmvc:
-            false
-        case .amv:
-            false
-        case .pcm_u24be:
-            false
-        case .vbn:
-            false
-        case .srt:
-            false
-        case .prores:
-            false
-        case .smv:
-            false
-        case .adpcm_ima_ea_eacs:
-            false
-        case .bin_data:
-            false
-        case .yop:
-            false
-        case .pcm_sga:
-            false
-        case .v410:
-            false
-        case .avrn:
-            false
-        case .adpcm_ima_amv:
-            false
-        case .adpcm_dtk:
-            false
-        case .adpcm_4xm:
-            false
-        case .gsm:
-            false
-        case .interplay_dpcm:
-            false
-        case .mvdv:
-            false
-        case .mszh:
-            false
-        case .hcom:
-            false
-        case .ilbc:
-            false
-        case .adpcm_agm:
-            false
-        case .dvb_subtitle:
-            false
-        case .dsicinvideo:
-            false
-        case .subviewer1:
-            false
-        case .dds:
-            false
-        case .rpza:
-            false
-        case .adpcm_ima_smjpeg:
-            false
-        case .mp3adu:
-            false
-        case .wcmv:
-            false
-        case .hnm4video:
-            false
-        case .pam:
-            false
-        case .cllc:
-            false
-        case .vp5:
-            false
-        case .hap:
-            false
-        case .sonicls:
-            false
-        case .mp2:
-            false
-        case .rv20:
-            false
-        case .qdm2:
-            false
-        case .wmv3image:
-            false
-        case .amr_wb:
-            false
-        case .nuv:
-            false
-        case .m101:
-            false
-        case .otf:
-            false
-        case .hq_hqa:
-            false
-        case .dnxhd:
-            false
-        case .anm:
-            false
-        case .smvjpeg:
-            false
-        case .hdmv_text_subtitle:
-            false
-        case .bfi:
-            false
-        case .avc:
-            false
-        case .imc:
-            false
-        case .adpcm_thp_le:
-            false
-        case .pcm_bluray:
-            false
-        case .dxv:
-            false
-        case .sol_dpcm:
-            false
-        case .ttml:
-            false
-        case .wmavoice:
-            false
-        case .xsub:
-            false
-        case .mace3:
-            false
-        case .aptx_hd:
-            false
-        case .ssa:
-            false
-        case .eia_608:
-            false
-        case .codec2:
-            false
-        case .mvc1:
-            false
-        case .pgm:
-            false
-        case .kgv1:
-            false
-        case .h263i:
-            false
-        case .pcx:
-            false
-        case .dpx:
-            false
-        case .dvaudio:
-            false
-        case .pcm_s16le_planar:
-            false
-        case .dirac:
-            false
-        case .pcm_s24daud:
-            false
-        case .cdxl:
-            false
-        case .ptx:
-            false
-        case .utvideo:
-            false
-        case .pictor:
-            false
-        case .fmvc:
-            false
-        case .arbc:
-            false
-        case .adpcm_ms:
-            false
-        case .adpcm_afc:
-            false
-        case .metasound:
-            false
-        case .msnsiren:
-            false
-        case .truemotion2rt:
-            false
-        case .jpegxl:
-            false
-        case ._012v:
-            false
-        case .xan_dpcm:
-            false
-        case .pcm_f24le:
-            false
-        case .nellymoser:
-            false
-        case .scpr:
-            false
-        case .bmv_video:
-            false
-        case .frwu:
-            false
-        case .adpcm_vima:
-            false
-        case .mmvideo:
-            false
-        case .r10k:
-            false
-        case .alias_pix:
-            false
-        case .avs2:
-            false
-        case .pcm_s32le:
-            false
-        case .aptx:
-            false
-        case .pcm_u16le:
-            false
-        case .pcm_s32be:
-            false
-        case .simbiosis_imx:
-            false
-        case .adpcm_ima_ssi:
-            false
-        case .adpcm_swf:
-            false
-        case .derf_dpcm:
-            false
-        case .msvideo1:
-            false
-        case .pcm_s8_planar:
-            false
-        case .daala:
-            false
-        case .s302m:
-            false
-        case .targa_y216:
-            false
-        case .wmav2:
-            false
-        case .eac3:
-            false
-        case .truemotion1:
-            false
-        case ._8bps:
-            false
-        case .cinepak:
-            false
-        case .mad:
-            false
-        case .pcm_s32le_planar:
-            false
-        case .bintext:
-            false
-        case .fraps:
-            false
-        case .dfa:
-            false
-        case .mjpeg:
-            false
-        case .pcm_u32be:
-            false
-        case .gem:
-            false
-        case .vp6f:
-            false
         case .hevc:
-            false
-        case .cljr:
-            false
-        case .indeo5:
-            false
-        case .flic:
-            false
-        case .sonic:
-            false
-        case .ra_144:
-            false
-        case .vmnc:
-            false
-        case .pcm_u8:
-            false
-        case .xan_wc3:
-            false
-        case .wmv1:
-            false
-        case .mss2:
-            false
-        case .theora:
-            false
-        case .wmapro:
-            false
-        case .h263p:
-            false
-        case .sipr:
-            false
-        case .truespeech:
-            false
-        case .xan_wc4:
-            false
-        case .gremlin_dpcm:
-            false
-        case .lscr:
-            false
-        case .dvd_subtitle:
-            false
-        case .brender_pix:
-            false
-        case .yuv4:
-            false
-        case ._4xm:
-            false
-        case .mvha:
-            false
-        case .v210x:
-            false
-        case .svg:
-            false
-        case .tak:
-            false
-        case .arib_caption:
-            false
-        case .jpeg2000:
-            false
-        case .adpcm_mtaf:
-            false
-        case .adpcm_ima_wav:
-            false
-        case .tta:
-            false
-        case .qtrle:
-            false
-        case .wmv2:
-            false
-        case .jv:
-            false
-        case .pcm_s16le:
-            false
-        case .mxpeg:
-            false
-        case .pcm_u24le:
-            false
-        case .flac:
-            false
-        case .ass:
-            false
-        case .ipu:
-            false
-        case .tiff:
-            false
-        case .binkaudio_rdft:
-            false
-        case .musepack8:
-            false
-        case .wnv1:
-            false
-        case .sgirle:
-            false
-        case .snow:
-            false
-        case .msrle:
-            false
-        case .vorbis:
-            false
-        case .agm:
-            false
-        case .roq:
-            false
-        case .atrac3al:
-            false
-        case .pgx:
-            false
-        case .wmv3:
-            false
-        case .rl2:
-            false
-        case .mpl2:
-            false
-        case .aac_latm:
-            false
-        case .dts:
-            false
-        case .xpm:
-            false
-        case .adpcm_ea_maxis_xa:
-            false
-        case .sheervideo:
-            false
-        case .adpcm_adx:
-            false
-        case .adpcm_ea_r1:
-            false
-        case .screenpresso:
-            false
-        case .westwood_snd1:
-            false
-        case .interplayacm:
-            false
-        case .adpcm_ima_alp:
-            false
-        case .r210:
-            false
-        case .thp:
-            false
-        case .wrapped_avframe:
-            false
-        case .notchlc:
-            false
-        case .zlib:
-            false
-        case .wavpack:
-            false
-        case .cri:
-            false
-        case .atrac1:
-            false
-        case .imm4:
-            false
-        case .psd:
-            false
-        case .stl:
-            false
-        case .indeo2:
-            false
-        case .rv10:
-            false
-        case .mlp:
-            false
-        case .sunrast:
-            false
-        case .ffvhuff:
-            false
-        case ._8svx_exp:
-            false
-        case .mts2:
-            false
-        case .xbm:
-            false
-        case .celt:
-            false
-        case .vp6a:
-            false
-        case .mjpegb:
-            false
-        case .magicyuv:
-            false
-        case .v210:
-            false
-        case .indeo4:
-            false
-        case .targa:
-            false
-        case .dsicinaudio:
-            false
-        case .mpeg1video:
-            false
-        case .timed_id3:
-            false
-        case .twinvq:
-            false
-        case .dsd_lsbf_planar:
-            false
-        case .zerocodec:
-            false
-        case .wavesynth:
-            false
-        case .ra_288:
-            false
-        case .microdvd:
-            false
-        case .png:
-            false
-        case .binkaudio_dct:
-            false
-        case .shorten:
-            false
-        case .opus:
-            false
-        case .cavs:
-            false
-        case .dsd_msbf:
-            false
-        case .xface:
-            false
-        case .sbc:
-            false
-        case .vplayer:
-            false
-        case .pixlet:
-            false
-        case .smackaudio:
-            false
-        case .avui:
-            false
-        case .binkvideo:
-            false
-        case .pbm:
-            false
-        case ._8svx_fib:
-            false
-        case .dsd_lsbf:
-            false
-        case .tqi:
-            false
-        case .adpcm_ima_dat4:
-            false
-        case .dvvideo:
-            false
-        case .sanm:
-            false
-        case .ppm:
-            false
-        case .truemotion2:
-            false
-        case .qdraw:
-            false
-        case .pcm_u32le:
-            false
-        case .pcm_mulaw:
-            false
-        case .sgi:
-            false
-        case .atrac9:
-            false
-        case .flv1:
-            false
-        case .a64_multi:
-            false
-        case .asv2:
-            false
-        case .apng:
-            false
-        case .g729:
-            false
-        case .vp8:
-            false
-        case .pcm_f64be:
-            false
-        case .aasc:
-            false
-        case .aac:
-            false
-        case .evrc:
-            false
-        case .dolby_e:
-            false
-        case .vp7:
-            false
-        case .escape124:
-            false
-        case .motionpixels:
-            false
-        case .clearvideo:
-            false
-        case .pcm_f32be:
-            false
-        case .aura2:
-            false
-        case .pcm_vidc:
-            false
-        case .lagarith:
-            false
-        case .phm:
-            false
-        case .mvc2:
-            false
-        case .txd:
-            false
-        case .adpcm_sbpro_4:
-            false
-        case .webp:
-            false
-        case .hqx:
-            false
-        case .pcm_s24be:
-            false
-        case .cyuv:
-            false
-        case .mpegts:
-            false
-        case .vvc:
-            false
-        case .qcelp:
-            false
-        case .rscc:
-            false
-        case .ljpeg:
-            false
-        case .vixl:
-            false
-        case .pcm_lxf:
-            false
-        case .adpcm_ima_cunning:
-            false
-        case .vp9:
-            false
-        case .adpcm_ea:
-            false
-        case .xma1:
-            false
-        case .tmv:
-            false
-        case .pcm_s16be_planar:
-            false
-        case .truehd:
-            false
-        case .aura:
-            false
-        case .fits:
-            false
-        case .pcm_s24le_planar:
-            false
-        case .adpcm_ima_iss:
-            false
-        case .gsm_ms:
-            false
-        case .adpcm_ct:
-            false
-        case .pcm_s16be:
-            false
-        case .adpcm_zork:
-            false
-        case .adpcm_psx:
-            false
-        case .mobiclip:
-            false
-        case .adpcm_ima_mtf:
-            false
-        case .gif:
-            false
-        case .flashsv2:
-            false
-        case .epg:
-            false
-        case .pcm_dvd:
-            false
-        case .fastaudio:
-            false
-        case .scte_35:
-            false
-        case .msmpeg4v1:
-            false
-        case .av1:
-            false
-        case .v408:
-            false
-        case .asv1:
-            false
-        case .y41p:
-            false
-        case .ws_vqa:
-            false
-        case .avs3:
-            false
-        case .iac:
-            false
-        case .mp4als:
-            false
-        case .pcm_s64le:
-            false
-        case .mwsc:
-            false
-        case .qoi:
-            false
-        case .g723_1:
-            false
-        case .adpcm_g722:
-            false
-        case .ffv1:
-            false
-        case .adpcm_xa:
-            false
-        case .imm5:
-            false
-        case .vp3:
-            false
-        case .flashsv:
-            false
-        case .tgv:
-            false
-        case .v308:
-            false
-        case .subrip:
-            false
-        case .adpcm_ea_r3:
-            false
-        case .pcm_u16be:
-            false
-        case .adpcm_ea_xas:
-            false
-        case .vble:
-            false
-        case .paf_video:
-            false
-        case .msp2:
-            false
-        case .adpcm_g726le:
-            false
-        case .vcr1:
-            false
-        case .prosumer:
-            false
-        case .svq3:
-            false
-        case .ayuv:
-            false
-        case .sp5x:
-            false
-        case .jacosub:
-            false
-        case .ape:
-            false
-        case .msa1:
-            false
-        case .bitpacked:
-            false
-        case .rawvideo:
-            false
-        case .hca:
-            false
-        case .adpcm_ima_ea_sead:
-            false
-        case .g2m:
-            false
-        case .dxa:
-            false
-        case .dst:
-            false
-        case .bethsoftvid:
-            false
-        case .pjs:
-            false
-        case .vb:
-            false
-        case .webvtt:
-            false
-        case .pcm_alaw:
-            false
-        case .comfortnoise:
-            false
-        case .mpeg4:
-            false
-        case .rv40:
-            false
-        case .interplayvideo:
-            false
-        case .mimic:
-            false
-        case .aic:
-            false
-        case .mss1:
-            false
-        case .roq_dpcm:
-            false
-        case .pcm_s64be:
-            false
-        case .vp6:
-            false
-        case .mp3:
-            false
-        case .vmdaudio:
-            false
-        case .bmv_audio:
-            false
-        case .pcm_f64le:
-            false
-        case .cdgraphics:
-            false
-        case .adpcm_ima_dk4:
-            false
-        case .mv30:
-            false
-        case .adpcm_ima_qt:
-            false
-        case .mov_text:
-            false
-        case .msmpeg4v3:
-            false
-        case .adpcm_ima_moflex:
-            false
-        case .argo:
-            false
-        case .mace6:
-            false
-        case .dsd_msbf_planar:
-            false
-        case .hdmv_pgs_subtitle:
-            false
-        case .adpcm_thp:
-            false
-        case .rasc:
-            false
-        case .rv30:
-            false
-        case .ac3:
-            false
-        case .ralf:
-            false
-        case .zmbv:
-            false
-        case .avrp:
-            false
-        case .svq1:
-            false
-        case .vc1:
-            false
-        case .vp4:
-            false
-        case .xwd:
-            false
-        case .adpcm_ima_ws:
-            false
-        case .tdsc:
-            false
-        case .dfpwm:
-            false
-        case .dvd_nav_packet:
-            false
-        case .cook:
-            false
-        case .adpcm_ima_apm:
-            false
-        case .atrac3:
             false
         case .siren:
             false
-        case .hymt:
+        case ._012v:
             false
-        case .atrac3pal:
+        case .dirac:
             false
-        case ._4gv:
+        case .imm5:
             false
-        case .escape130:
+        case .imm4:
             false
-        case .vc1image:
+        case .mpegh_3d_audio:
             false
-        case .pfm:
+        case .r210:
             false
-        case .atrac3p:
+        case .vp3:
             false
-        case .idf:
+        case .cook:
             false
-        case .ansi:
+        case .v210:
             false
-        case .ulti:
+        case .prosumer:
             false
-        case .adpcm_ima_oki:
+        case .sonicls:
             false
-        case .paf_audio:
+        case .adpcm_sbpro_4:
             false
-        case .mpeg2video:
+        case .qdm2:
             false
-        case .jpegls:
+        case .xbm:
             false
-        case .srgc:
-            false
-        case .pgmyuv:
-            false
-        case .avs:
-            false
-        case .xma2:
-            false
-        case .msmpeg4v2:
-            false
-        case .indeo3:
-            false
-        case .klv:
-            false
-        case .sami:
+        case .v210x:
             false
         case .fic:
             false
+        case .msmpeg4v3:
+            false
+        case .rpza:
+            false
+        case .roq_dpcm:
+            false
+        case .ac3:
+            false
+        case .vbn:
+            false
+        case .fastaudio:
+            false
+        case .celt:
+            false
+        case .adpcm_dtk:
+            false
+        case .ayuv:
+            false
+        case .wavpack:
+            false
+        case .mwsc:
+            false
+        case .xwd:
+            false
+        case .avui:
+            false
+        case .pgx:
+            false
+        case .pcm_f32be:
+            false
+        case .avs:
+            false
+        case .avs3:
+            false
+        case .truemotion2:
+            false
+        case .asv2:
+            false
+        case .adpcm_aica:
+            false
+        case .rawvideo:
+            false
+        case .sdx2_dpcm:
+            false
+        case .qoi:
+            false
+        case .mace3:
+            false
+        case .mov_text:
+            false
+        case .vp9:
+            false
+        case .avrp:
+            false
+        case .hca:
+            false
+        case .ffv1:
+            false
+        case .mjpegb:
+            false
+        case .sp5x:
+            false
+        case .dsicinvideo:
+            false
+        case .alac:
+            false
+        case .indeo5:
+            false
+        case .tak:
+            false
+        case .notchlc:
+            false
+        case .mobiclip:
+            false
+        case .pjs:
+            false
+        case .pcm_s24daud:
+            false
+        case .dsd_msbf_planar:
+            false
+        case .simbiosis_imx:
+            false
+        case .comfortnoise:
+            false
+        case .jacosub:
+            false
+        case .vmnc:
+            false
+        case .xpm:
+            false
+        case .qcelp:
+            false
+        case .text:
+            false
+        case .adpcm_sbpro_2:
+            false
+        case .mp3adu:
+            false
+        case .musepack8:
+            false
+        case .yuv4:
+            false
+        case .atrac1:
+            false
+        case .vp5:
+            false
+        case .pcm_u24le:
+            false
+        case .tqi:
+            false
+        case ._8svx_fib:
+            false
+        case .qdraw:
+            false
+        case .tgv:
+            false
+        case .av1:
+            false
+        case .m101:
+            false
+        case .adpcm_ima_apc:
+            false
+        case .flic:
+            false
+        case .mdec:
+            false
+        case .agm:
+            false
+        case .adpcm_ima_ea_sead:
+            false
+        case .xma2:
+            false
+        case .pcm_s16be_planar:
+            false
+        case .cfhd:
+            false
+        case .pcm_f64le:
+            false
+        case .smc:
+            false
+        case .adpcm_ima_iss:
+            false
+        case .epg:
+            false
+        case .sga:
+            false
+        case ._4xm:
+            false
+        case .opus:
+            false
+        case .hymt:
+            false
+        case .tdsc:
+            false
+        case .roq:
+            false
+        case .ra_288:
+            false
+        case .gif:
+            false
+        case .msrle:
+            false
+        case .dts:
+            false
+        case .cmv:
+            false
+        case .adpcm_g726:
+            false
+        case .bmp:
+            false
+        case .adpcm_ima_dk4:
+            false
+        case .iff_ilbm:
+            false
+        case .dvvideo:
+            false
+        case .derf_dpcm:
+            false
+        case .adpcm_ima_ws:
+            false
+        case .adpcm_ima_amv:
+            false
+        case .y41p:
+            false
+        case .r10k:
+            false
+        case .adpcm_4xm:
+            false
+        case .snow:
+            false
+        case .xsub:
+            false
+        case .vb:
+            false
+        case .alias_pix:
+            false
+        case .sanm:
+            false
+        case .wmalossless:
+            false
+        case .dss_sp:
+            false
+        case .svg:
+            false
+        case .h264:
+            false
+        case .scpr:
+            false
+        case .mxpeg:
+            false
+        case .daala:
+            false
+        case .ttf:
+            false
+        case .pictor:
+            false
+        case .ptx:
+            false
+        case .vp6:
+            false
+        case .smvjpeg:
+            false
+        case .flashsv:
+            false
+        case .bitpacked:
+            false
+        case .phm:
+            false
+        case .xma1:
+            false
+        case .sipr:
+            false
+        case .iac:
+            false
+        case .hdmv_text_subtitle:
+            false
+        case .mad:
+            false
+        case .avc:
+            false
+        case .cllc:
+            false
+        case .pcm_f64be:
+            false
+        case .h263p:
+            false
+        case .exr:
+            false
+        case .cpia:
+            false
+        case .hq_hqa:
+            false
+        case .ilbc:
+            false
+        case .vp4:
+            false
+        case .pcm_u16le:
+            false
+        case .prores:
+            false
+        case .escape130:
+            false
+        case .cscd:
+            false
+        case .tiertexseqvideo:
+            false
+        case .webp:
+            false
+        case .wmv3:
+            false
+        case .adpcm_thp:
+            false
+        case .ass:
+            false
+        case .adpcm_argo:
+            false
+        case .ansi:
+            false
+        case .flac:
+            false
+        case .smackaudio:
+            false
+        case .msmpeg4v1:
+            false
+        case .klv:
+            false
+        case .xface:
+            false
+        case .dxv:
+            false
+        case .truehd:
+            false
+        case .pcx:
+            false
+        case .pam:
+            false
+        case .atrac3:
+            false
+        case .adpcm_ima_acorn:
+            false
+        case .atrac9:
+            false
+        case .escape124:
+            false
+        case .adpcm_ea:
+            false
+        case .utvideo:
+            false
+        case .dpx:
+            false
+        case .adpcm_sbpro_3:
+            false
+        case .v408:
+            false
+        case .mlp:
+            false
+        case .wmapro:
+            false
+        case .xan_wc4:
+            false
+        case .twinvq:
+            false
+        case .adpcm_ima_alp:
+            false
+        case .loco:
+            false
+        case .brender_pix:
+            false
+        case .cdxl:
+            false
+        case .truemotion1:
+            false
+        case .adpcm_vima:
+            false
+        case .pcm_lxf:
+            false
+        case .motionpixels:
+            false
+        case .s302m:
+            false
+        case .wmv3image:
+            false
+        case .ra_144:
+            false
+        case .jpegls:
+            false
+        case .bfi:
+            false
+        case .mpl2:
+            false
+        case .pcm_bluray:
+            false
+        case .adpcm_ct:
+            false
+        case .vble:
+            false
+        case .pbm:
+            false
+        case .pcm_s64be:
+            false
+        case .frwu:
+            false
+        case .adpcm_ima_moflex:
+            false
+        case .mss1:
+            false
+        case .idf:
+            false
+        case .bmv_audio:
+            false
+        case .pcm_s32le_planar:
+            false
+        case ._8svx_exp:
+            false
+        case .pcm_s32be:
+            false
+        case .aptx_hd:
+            false
+        case .pcm_u32le:
+            false
+        case .srt:
+            false
+        case .codec2:
+            false
+        case .timed_id3:
+            false
+        case .vorbis:
+            false
+        case .atrac3pal:
+            false
+        case .xbin:
+            false
+        case .microdvd:
+            false
+        case .scte_35:
+            false
+        case .g723_1:
+            false
+        case .huffyuv:
+            false
+        case .aura2:
+            false
+        case .dxa:
+            false
+        case .pcm_u24be:
+            false
+        case .vp7:
+            false
+        case .gdv:
+            false
+        case .qtrle:
+            false
+        case .g2m:
+            false
+        case .pcm_s16be:
+            false
+        case .arbc:
+            false
+        case .theora:
+            false
+        case .wmavoice:
+            false
+        case .vmdaudio:
+            false
+        case .msa1:
+            false
+        case .pcm_mulaw:
+            false
+        case .adpcm_agm:
+            false
+        case .rv10:
+            false
+        case .rv20:
+            false
+        case .zerocodec:
+            false
+        case .clearvideo:
+            false
+        case .pcm_s24be:
+            false
+        case .pcm_s8:
+            false
+        case .mpeg1video:
+            false
+        case .subviewer1:
+            false
+        case .tta:
+            false
+        case .sunrast:
+            false
+        case .kmvc:
+            false
+        case .lagarith:
+            false
+        case .webvtt:
+            false
+        case .msvideo1:
+            false
+        case .adpcm_ima_apm:
+            false
+        case .xan_wc3:
+            false
+        case .ssa:
+            false
+        case .anm:
+            false
+        case .fits:
+            false
+        case .aic:
+            false
+        case .adpcm_ima_qt:
+            false
+        case .rv30:
+            false
+        case .indeo2:
+            false
+        case .dfpwm:
+            false
+        case .ttml:
+            false
+        case .wmav1:
+            false
+        case .metasound:
+            false
+        case .svq3:
+            false
+        case .mss2:
+            false
+        case .adpcm_g726le:
+            false
+        case .adpcm_yamaha:
+            false
+        case .adpcm_mtaf:
+            false
+        case .dxtory:
+            false
+        case .adpcm_ima_dat4:
+            false
+        case .dvaudio:
+            false
+        case .jpeg2000:
+            false
+        case .screenpresso:
+            false
+        case .binkaudio_dct:
+            false
+        case .hap:
+            false
+        case .mpeg4:
+            false
+        case .yop:
+            false
+        case .pcm_f24le:
+            false
+        case .sgirle:
+            false
+        case .ape:
+            false
+        case .adpcm_ea_xas:
+            false
+        case .aasc:
+            false
+        case .pcm_u16be:
+            false
+        case .ppm:
+            false
+        case .wavesynth:
+            false
+        case .pcm_s24le:
+            false
+        case .adpcm_ms:
+            false
+        case .c93:
+            false
+        case .msmpeg4v2:
+            false
+        case .tscc2:
+            false
+        case .idcin:
+            false
+        case .ulti:
+            false
+        case .dvd_nav_packet:
+            false
+        case .adpcm_ima_smjpeg:
+            false
+        case .vp8:
+            false
+        case .cdgraphics:
+            false
+        case .adpcm_ea_maxis_xa:
+            false
+        case .zlib:
+            false
+        case .adpcm_ima_wav:
+            false
+        case .ljpeg:
+            false
+        case .smackvideo:
+            false
+        case .vp6f:
+            false
+        case .adpcm_ima_ssi:
+            false
+        case .xan_dpcm:
+            false
+        case .pcm_u8:
+            false
+        case .gem:
+            false
+        case .indeo4:
+            false
+        case .dvd_subtitle:
+            false
+        case .mp4als:
+            false
+        case .mp3:
+            false
+        case .eac3:
+            false
+        case .evrc:
+            false
+        case .sonic:
+            false
+        case .dvb_teletext:
+            false
+        case .truemotion2rt:
+            false
+        case .shorten:
+            false
+        case .bmv_video:
+            false
+        case .aura:
+            false
+        case .dnxhd:
+            false
+        case .sbc:
+            false
+        case .ws_vqa:
+            false
+        case .rscc:
+            false
+        case .wnv1:
+            false
+        case .h263:
+            false
+        case .speedhq:
+            false
+        case .lscr:
+            false
+        case .dst:
+            false
+        case .pgmyuv:
+            false
+        case .a64_multi5:
+            false
+        case .targa_y216:
+            false
+        case .vc1:
+            false
+        case .adpcm_thp_le:
+            false
+        case .cdtoons:
+            false
+        case .westwood_snd1:
+            false
+        case .qdmc:
+            false
+        case .photocd:
+            false
+        case .pcm_s64le:
+            false
+        case .cljr:
+            false
+        case .dsd_lsbf_planar:
+            false
+        case .indeo3:
+            false
+        case .interplayacm:
+            false
+        case .mmvideo:
+            false
+        case .adpcm_xa:
+            false
+        case .magicyuv:
+            false
+        case .cavs:
+            false
+        case .binkaudio_rdft:
+            false
+        case .ipu:
+            false
+        case .cri:
+            false
+        case .rv40:
+            false
+        case .h263i:
+            false
+        case .vvc:
+            false
+        case .wmav2:
+            false
+        case .mpegts:
+            false
+        case .ffvhuff:
+            false
+        case .tmv:
+            false
+        case .atrac3al:
+            false
+        case .a64_multi:
+            false
+        case .h261:
+            false
+        case .adpcm_ima_mtf:
+            false
+        case .dsicinaudio:
+            false
+        case .rasc:
+            false
+        case .mvc1:
+            false
+        case .rl2:
+            false
+        case .fmvc:
+            false
+        case .wmv2:
+            false
+        case .avrn:
+            false
+        case .ylc:
+            false
+        case .pcm_u32be:
+            false
+        case .vc1image:
+            false
+        case .gsm_ms:
+            false
+        case .mjpeg:
+            false
+        case .stl:
+            false
+        case .pfm:
+            false
+        case .aac:
+            false
+        case .srgc:
+            false
+        case .tscc:
+            false
+        case .pcm_s8_planar:
+            false
+        case .dsd_msbf:
+            false
+        case .psd:
+            false
+        case .dolby_e:
+            false
+        case .adpcm_swf:
+            false
+        case .fraps:
+            false
+        case .dds:
+            false
+        case .nuv:
+            false
+        case .mszh:
+            false
+        case .aac_latm:
+            false
+        case .v308:
+            false
+        case .txd:
+            false
+        case .dsd_lsbf:
+            false
+        case .atrac3p:
+            false
+        case .mpeg2video:
+            false
+        case .targa:
+            false
+        case .mimic:
+            false
+        case .pcm_sga:
+            false
+        case .wrapped_avframe:
+            false
+        case .adpcm_ima_oki:
+            false
+        case .pcm_vidc:
+            false
+        case .cyuv:
+            false
+        case .mp1:
+            false
+        case .mp3on4:
+            false
+        case .otf:
+            false
+        case .mvdv:
+            false
+        case .flv1:
+            false
+        case .amr_nb:
+            false
+        case .asv1:
+            false
+        case .sami:
+            false
+        case .musepack7:
+            false
+        case .adpcm_zork:
+            false
+        case .gsm:
+            false
+        case ._8bps:
+            false
+        case .adpcm_afc:
+            false
+        case .pixlet:
+            false
+        case .vcr1:
+            false
+        case .mvc2:
+            false
+        case .cinepak:
+            false
+        case .nellymoser:
+            false
+        case .sgi:
+            false
+        case .hdmv_pgs_subtitle:
+            false
+        case .pcm_s16le:
+            false
+        case .hnm4video:
+            false
+        case .pgm:
+            false
+        case .wcmv:
+            false
+        case .adpcm_ea_r1:
+            false
+        case .jpegxl:
+            false
+        case .pcm_f32le:
+            false
+        case .mvha:
+            false
+        case .bintext:
+            false
+        case .jv:
+            false
+        case .pcm_dvd:
+            false
+        case .adpcm_ima_cunning:
+            false
+        case .hqx:
+            false
+        case .dvb_subtitle:
+            false
+        case .hcom:
+            false
+        case .realtext:
+            false
+        case .ralf:
+            false
+        case .paf_video:
+            false
+        case .adpcm_ima_dk3:
+            false
+        case .tiff:
+            false
+        case .adpcm_adx:
+            false
+        case .adpcm_g722:
+            false
+        case .interplay_dpcm:
+            false
+        case .amr_wb:
+            false
+        case .mace6:
+            false
+        case .mp2:
+            false
+        case .adpcm_ima_rad:
+            false
+        case .aptx:
+            false
+        case .paf_audio:
+            false
+        case .vp6a:
+            false
         case .vmdvideo:
+            false
+        case .vplayer:
+            false
+        case .mts2:
+            false
+        case .dfa:
+            false
+        case .imc:
+            false
+        case .speex:
+            false
+        case .pcm_s16le_planar:
+            false
+        case .arib_caption:
+            false
+        case .zmbv:
+            false
+        case .svq1:
+            false
+        case .wmv1:
+            false
+        case .v410:
+            false
+        case ._4gv:
+            false
+        case .pcm_s24le_planar:
+            false
+        case .vixl:
+            false
+        case .subviewer:
+            false
+        case .gremlin_dpcm:
+            false
+        case .smv:
+            false
+        case .adpcm_ea_r3:
+            false
+        case .eia_608:
+            false
+        case .mscc:
+            false
+        case .argo:
+            false
+        case .png:
+            false
+        case .qpeg:
+            false
+        case .sol_dpcm:
+            false
+        case .flashsv2:
+            false
+        case .bethsoftvid:
+            false
+        case .binkvideo:
+            false
+        case .msp2:
+            false
+        case .adpcm_ea_r2:
+            false
+        case .adpcm_psx:
+            false
+        case .truespeech:
+            false
+        case .kgv1:
+            false
+        case .pcm_f16le:
+            false
+        case .adpcm_ima_ea_eacs:
+            false
+        case .subrip:
+            false
+        case .g729:
+            false
+        case .thp:
+            false
+        case .amv:
+            false
+        case .pcm_s32le:
+            false
+        case .tgq:
+            false
+        case .mv30:
+            false
+        case .sheervideo:
+            false
+        case .avs2:
+            false
+        case .msnsiren:
+            false
+        case .bin_data:
+            false
+        case .apng:
+            false
+        case .interplayvideo:
+            false
+        case .pcm_alaw:
             false
         }
     }
 
     public var description: String {
         switch self {
-        case .tscc:
-            "TechSmith Screen Capture Codec (decoders: camtasia )"
-        case .speedhq:
-            "NewTek SpeedHQ"
-        case .speex:
-            "Speex (decoders: speex libspeex ) (encoders: libspeex )"
-        case .xbin:
-            "eXtended BINary text"
-        case .tiertexseqvideo:
-            "Tiertex Limited SEQ video"
-        case .h263:
-            "H.263 / H.263-1996, H.263+ / H.263-1998 / H.263 version 2"
-        case .idcin:
-            "id Quake II CIN video (decoders: idcinvideo )"
-        case .cdtoons:
-            "CDToons video"
-        case .huffyuv:
-            "HuffYUV"
-        case .mpegh_3d_audio:
-            "MPEG-H 3D Audio"
-        case .mdec:
-            "Sony PlayStation MDEC (Motion DECoder)"
-        case .qdmc:
-            "QDesign Music (decoders: qdmc qdmc_at )"
-        case .ttf:
-            "TrueType font"
-        case .pcm_s8:
-            "PCM signed 8-bit"
-        case .adpcm_sbpro_2:
-            "ADPCM Sound Blaster Pro 2-bit"
-        case .text:
-            "raw UTF-8 text"
-        case .ylc:
-            "YUY2 Lossless Codec"
-        case .exr:
-            "OpenEXR image"
-        case .sdx2_dpcm:
-            "DPCM Squareroot-Delta-Exact"
-        case .pcm_f16le:
-            "PCM 16.8 floating point little-endian"
-        case .pcm_s24le:
-            "PCM signed 24-bit little-endian"
-        case .adpcm_aica:
-            "ADPCM Yamaha AICA"
-        case .tgq:
-            "Electronic Arts TGQ video (decoders: eatgq )"
-        case .mp1:
-            "MP1 (MPEG audio layer 1) (decoders: mp1 mp1float mp1_at )"
-        case .adpcm_g726:
-            "G.726 ADPCM (decoders: g726 ) (encoders: g726 )"
-        case .dss_sp:
-            "Digital Speech Standard - Standard Play mode (DSS SP)"
-        case .loco:
-            "LOCO"
-        case .h264:
-            "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (decoders: h264 libopenh264 ) (encoders: libx264 libx264rgb libopenh264 h264_videotoolbox )"
-        case .smc:
-            "QuickTime Graphics (SMC)"
-        case .cfhd:
-            "GoPro CineForm HD"
-        case .mp3on4:
-            "MP3onMP4 (decoders: mp3on4float mp3on4 )"
-        case .gdv:
-            "Gremlin Digital Video"
-        case .adpcm_yamaha:
-            "ADPCM Yamaha"
-        case .adpcm_ea_r2:
-            "ADPCM Electronic Arts R2"
-        case .amr_nb:
-            "AMR-NB (Adaptive Multi-Rate NarrowBand) (decoders: amrnb amr_nb_at libopencore_amrnb ) (encoders: libopencore_amrnb )"
-        case .sga:
-            "Digital Pictures SGA Video"
-        case .tscc2:
-            "TechSmith Screen Codec 2"
-        case .iff_ilbm:
-            "IFF ACBM/ANIM/DEEP/ILBM/PBM/RGB8/RGBN (decoders: iff )"
-        case .adpcm_sbpro_3:
-            "ADPCM Sound Blaster Pro 2.6-bit"
-        case .pcm_f32le:
-            "PCM 32-bit floating point little-endian"
-        case .realtext:
-            "RealText subtitle"
-        case .photocd:
-            "Kodak Photo CD"
-        case .adpcm_ima_acorn:
-            "ADPCM IMA Acorn Replay"
-        case .bmp:
-            "BMP (Windows and OS/2 bitmap)"
-        case .cpia:
-            "CPiA video format"
-        case .qpeg:
-            "Q-team QPEG"
-        case .smackvideo:
-            "Smacker video (decoders: smackvid )"
-        case .musepack7:
-            "Musepack SV7 (decoders: mpc7 )"
-        case .a64_multi5:
-            "Multicolor charset for Commodore 64, extended with 5th color (colram) (encoders: a64multi5 )"
-        case .alac:
-            "ALAC (Apple Lossless Audio Codec) (decoders: alac alac_at ) (encoders: alac alac_at )"
-        case .mscc:
-            "Mandsoft Screen Capture Codec"
-        case .adpcm_ima_dk3:
-            "ADPCM IMA Duck DK3"
-        case .cscd:
-            "CamStudio (decoders: camstudio )"
-        case .cmv:
-            "Electronic Arts CMV video (decoders: eacmv )"
-        case .wmav1:
-            "Windows Media Audio 1"
-        case .adpcm_ima_apc:
-            "ADPCM IMA CRYO APC"
-        case .h261:
-            "H.261"
-        case .wmalossless:
-            "Windows Media Audio Lossless"
-        case .adpcm_ima_rad:
-            "ADPCM IMA Radical"
-        case .adpcm_argo:
-            "ADPCM Argonaut Games"
-        case .dxtory:
-            "Dxtory"
-        case .dvb_teletext:
-            "DVB teletext (decoders: libzvbi_teletextdec )"
-        case .subviewer:
-            "SubViewer subtitle"
-        case .c93:
-            "Interplay C93"
-        case .kmvc:
-            "Karl Morton's video codec"
-        case .amv:
-            "AMV Video"
-        case .pcm_u24be:
-            "PCM unsigned 24-bit big-endian"
-        case .vbn:
-            "Vizrt Binary Image"
-        case .srt:
-            "SubRip subtitle with embedded timing"
-        case .prores:
-            "Apple ProRes (iCodec Pro) (encoders: prores prores_aw prores_ks prores_videotoolbox )"
-        case .smv:
-            "SMV (Selectable Mode Vocoder)"
-        case .adpcm_ima_ea_eacs:
-            "ADPCM IMA Electronic Arts EACS"
-        case .bin_data:
-            "binary data"
-        case .yop:
-            "Psygnosis YOP Video"
-        case .pcm_sga:
-            "PCM SGA"
-        case .v410:
-            "Uncompressed 4:4:4 10-bit"
-        case .avrn:
-            "Avid AVI Codec"
-        case .adpcm_ima_amv:
-            "ADPCM IMA AMV"
-        case .adpcm_dtk:
-            "ADPCM Nintendo Gamecube DTK"
-        case .adpcm_4xm:
-            "ADPCM 4X Movie"
-        case .gsm:
-            "GSM (decoders: gsm libgsm ) (encoders: libgsm )"
-        case .interplay_dpcm:
-            "DPCM Interplay"
-        case .mvdv:
-            "MidiVid VQ"
-        case .mszh:
-            "LCL (LossLess Codec Library) MSZH"
-        case .hcom:
-            "HCOM Audio"
-        case .ilbc:
-            "iLBC (Internet Low Bitrate Codec) (decoders: ilbc ilbc_at ) (encoders: ilbc_at )"
-        case .adpcm_agm:
-            "ADPCM AmuseGraphics Movie AGM"
-        case .dvb_subtitle:
-            "DVB subtitles (decoders: dvbsub ) (encoders: dvbsub )"
-        case .dsicinvideo:
-            "Delphine Software International CIN video"
-        case .subviewer1:
-            "SubViewer v1 subtitle"
-        case .dds:
-            "DirectDraw Surface image decoder"
-        case .rpza:
-            "QuickTime video (RPZA)"
-        case .adpcm_ima_smjpeg:
-            "ADPCM IMA Loki SDL MJPEG"
-        case .mp3adu:
-            "ADU (Application Data Unit) MP3 (MPEG audio layer 3) (decoders: mp3adufloat mp3adu )"
-        case .wcmv:
-            "WinCAM Motion Video"
-        case .hnm4video:
-            "HNM 4 video"
-        case .pam:
-            "PAM (Portable AnyMap) image"
-        case .cllc:
-            "Canopus Lossless Codec"
-        case .vp5:
-            "On2 VP5"
-        case .hap:
-            "Vidvox Hap"
-        case .sonicls:
-            "Sonic lossless"
-        case .mp2:
-            "MP2 (MPEG audio layer 2) (decoders: mp2 mp2float mp2_at ) (encoders: mp2 mp2fixed libtwolame )"
-        case .rv20:
-            "RealVideo 2.0"
-        case .qdm2:
-            "QDesign Music Codec 2 (decoders: qdm2 qdm2_at )"
-        case .wmv3image:
-            "Windows Media Video 9 Image"
-        case .amr_wb:
-            "AMR-WB (Adaptive Multi-Rate WideBand) (decoders: amrwb libopencore_amrwb ) (encoders: libvo_amrwbenc )"
-        case .nuv:
-            "NuppelVideo/RTJPEG"
-        case .m101:
-            "Matrox Uncompressed SD"
-        case .otf:
-            "OpenType font"
-        case .hq_hqa:
-            "Canopus HQ/HQA"
-        case .dnxhd:
-            "VC3/DNxHD"
-        case .anm:
-            "Deluxe Paint Animation"
-        case .smvjpeg:
-            "Sigmatel Motion Video"
-        case .hdmv_text_subtitle:
-            "HDMV Text subtitle"
-        case .bfi:
-            "Brute Force & Ignorance"
-        case .avc:
-            "On2 Audio for Video Codec (decoders: on2avc )"
-        case .imc:
-            "IMC (Intel Music Coder)"
-        case .adpcm_thp_le:
-            "ADPCM Nintendo THP (Little-Endian)"
-        case .pcm_bluray:
-            "PCM signed 16|20|24-bit big-endian for Blu-ray media"
-        case .dxv:
-            "Resolume DXV"
-        case .sol_dpcm:
-            "DPCM Sol"
-        case .ttml:
-            "Timed Text Markup Language"
-        case .wmavoice:
-            "Windows Media Audio Voice"
-        case .xsub:
-            "XSUB"
-        case .mace3:
-            "MACE (Macintosh Audio Compression/Expansion) 3:1"
-        case .aptx_hd:
-            "aptX HD (Audio Processing Technology for Bluetooth)"
-        case .ssa:
-            "SSA (SubStation Alpha) subtitle"
-        case .eia_608:
-            "EIA-608 closed captions (decoders: cc_dec )"
-        case .codec2:
-            "codec2 (very low bitrate speech codec)"
-        case .mvc1:
-            "Silicon Graphics Motion Video Compressor 1"
-        case .pgm:
-            "PGM (Portable GrayMap) image"
-        case .kgv1:
-            "Kega Game Video"
-        case .h263i:
-            "Intel H.263"
-        case .pcx:
-            "PC Paintbrush PCX image"
-        case .dpx:
-            "DPX (Digital Picture Exchange) image"
-        case .dvaudio:
-            "DV audio"
-        case .pcm_s16le_planar:
-            "PCM signed 16-bit little-endian planar"
-        case .dirac:
-            "Dirac (encoders: vc2 )"
-        case .pcm_s24daud:
-            "PCM D-Cinema audio signed 24-bit"
-        case .cdxl:
-            "Commodore CDXL video"
-        case .ptx:
-            "V.Flash PTX image"
-        case .utvideo:
-            "Ut Video"
-        case .pictor:
-            "Pictor/PC Paint"
-        case .fmvc:
-            "FM Screen Capture Codec"
-        case .arbc:
-            "Gryphon's Anim Compressor"
-        case .adpcm_ms:
-            "ADPCM Microsoft"
-        case .adpcm_afc:
-            "ADPCM Nintendo Gamecube AFC"
-        case .metasound:
-            "Voxware MetaSound"
-        case .msnsiren:
-            "MSN Siren"
-        case .truemotion2rt:
-            "Duck TrueMotion 2.0 Real Time"
-        case .jpegxl:
-            "JPEG XL"
-        case ._012v:
-            "Uncompressed 4:2:2 10-bit"
-        case .xan_dpcm:
-            "DPCM Xan"
-        case .pcm_f24le:
-            "PCM 24.0 floating point little-endian"
-        case .nellymoser:
-            "Nellymoser Asao"
-        case .scpr:
-            "ScreenPressor"
-        case .bmv_video:
-            "Discworld II BMV video"
-        case .frwu:
-            "Forward Uncompressed"
-        case .adpcm_vima:
-            "LucasArts VIMA audio"
-        case .mmvideo:
-            "American Laser Games MM Video"
-        case .r10k:
-            "AJA Kona 10-bit RGB Codec"
-        case .alias_pix:
-            "Alias/Wavefront PIX image"
-        case .avs2:
-            "AVS2-P2/IEEE1857.4"
-        case .pcm_s32le:
-            "PCM signed 32-bit little-endian"
-        case .aptx:
-            "aptX (Audio Processing Technology for Bluetooth)"
-        case .pcm_u16le:
-            "PCM unsigned 16-bit little-endian"
-        case .pcm_s32be:
-            "PCM signed 32-bit big-endian"
-        case .simbiosis_imx:
-            "Simbiosis Interactive IMX Video"
-        case .adpcm_ima_ssi:
-            "ADPCM IMA Simon & Schuster Interactive"
-        case .adpcm_swf:
-            "ADPCM Shockwave Flash"
-        case .derf_dpcm:
-            "DPCM Xilam DERF"
-        case .msvideo1:
-            "Microsoft Video 1"
-        case .pcm_s8_planar:
-            "PCM signed 8-bit planar"
-        case .daala:
-            "Daala"
-        case .s302m:
-            "SMPTE 302M"
-        case .targa_y216:
-            "Pinnacle TARGA CineWave YUV16"
-        case .wmav2:
-            "Windows Media Audio 2"
-        case .eac3:
-            "ATSC A/52B (AC-3, E-AC-3) (decoders: eac3 eac3_at )"
-        case .truemotion1:
-            "Duck TrueMotion 1.0"
-        case ._8bps:
-            "QuickTime 8BPS video"
-        case .cinepak:
-            "Cinepak"
-        case .mad:
-            "Electronic Arts Madcow Video (decoders: eamad )"
-        case .pcm_s32le_planar:
-            "PCM signed 32-bit little-endian planar"
-        case .bintext:
-            "Binary text"
-        case .fraps:
-            "Fraps"
-        case .dfa:
-            "Chronomaster DFA"
-        case .mjpeg:
-            "Motion JPEG"
-        case .pcm_u32be:
-            "PCM unsigned 32-bit big-endian"
-        case .gem:
-            "GEM Raster image"
-        case .vp6f:
-            "On2 VP6 (Flash version)"
         case .hevc:
             "H.265 / HEVC (High Efficiency Video Coding) (encoders: libx265 hevc_videotoolbox )"
-        case .cljr:
-            "Cirrus Logic AccuPak"
-        case .indeo5:
-            "Intel Indeo Video Interactive 5"
-        case .flic:
-            "Autodesk Animator Flic video"
-        case .sonic:
-            "Sonic"
-        case .ra_144:
-            "RealAudio 1.0 (14.4K) (decoders: real_144 ) (encoders: real_144 )"
-        case .vmnc:
-            "VMware Screen Codec / VMware Video"
-        case .pcm_u8:
-            "PCM unsigned 8-bit"
-        case .xan_wc3:
-            "Wing Commander III / Xan"
-        case .wmv1:
-            "Windows Media Video 7"
-        case .mss2:
-            "MS Windows Media Video V9 Screen"
-        case .theora:
-            "Theora (encoders: libtheora )"
-        case .wmapro:
-            "Windows Media Audio 9 Professional"
-        case .h263p:
-            "H.263+ / H.263-1998 / H.263 version 2"
-        case .sipr:
-            "RealAudio SIPR / ACELP.NET"
-        case .truespeech:
-            "DSP Group TrueSpeech"
-        case .xan_wc4:
-            "Wing Commander IV / Xxan"
-        case .gremlin_dpcm:
-            "DPCM Gremlin"
-        case .lscr:
-            "LEAD Screen Capture"
-        case .dvd_subtitle:
-            "DVD subtitles (decoders: dvdsub ) (encoders: dvdsub )"
-        case .brender_pix:
-            "BRender PIX image"
-        case .yuv4:
-            "Uncompressed packed 4:2:0"
-        case ._4xm:
-            "4X Movie"
-        case .mvha:
-            "MidiVid Archive Codec"
-        case .v210x:
-            "Uncompressed 4:2:2 10-bit"
-        case .svg:
-            "Scalable Vector Graphics"
-        case .tak:
-            "TAK (Tom's lossless Audio Kompressor)"
-        case .arib_caption:
-            "ARIB STD-B24 caption"
-        case .jpeg2000:
-            "JPEG 2000 (decoders: jpeg2000 libopenjpeg ) (encoders: jpeg2000 libopenjpeg )"
-        case .adpcm_mtaf:
-            "ADPCM MTAF"
-        case .adpcm_ima_wav:
-            "ADPCM IMA WAV"
-        case .tta:
-            "TTA (True Audio)"
-        case .qtrle:
-            "QuickTime Animation (RLE) video"
-        case .wmv2:
-            "Windows Media Video 8"
-        case .jv:
-            "Bitmap Brothers JV video"
-        case .pcm_s16le:
-            "PCM signed 16-bit little-endian"
-        case .mxpeg:
-            "Mobotix MxPEG video"
-        case .pcm_u24le:
-            "PCM unsigned 24-bit little-endian"
-        case .flac:
-            "FLAC (Free Lossless Audio Codec)"
-        case .ass:
-            "ASS (Advanced SSA) subtitle (decoders: ssa ass ) (encoders: ssa ass )"
-        case .ipu:
-            "IPU Video"
-        case .tiff:
-            "TIFF image"
-        case .binkaudio_rdft:
-            "Bink Audio (RDFT)"
-        case .musepack8:
-            "Musepack SV8 (decoders: mpc8 )"
-        case .wnv1:
-            "Winnov WNV1"
-        case .sgirle:
-            "SGI RLE 8-bit"
-        case .snow:
-            "Snow"
-        case .msrle:
-            "Microsoft RLE"
-        case .vorbis:
-            "Vorbis (decoders: vorbis libvorbis ) (encoders: vorbis libvorbis )"
-        case .agm:
-            "Amuse Graphics Movie"
-        case .roq:
-            "id RoQ video (decoders: roqvideo ) (encoders: roqvideo )"
-        case .atrac3al:
-            "ATRAC3 AL (Adaptive TRansform Acoustic Coding 3 Advanced Lossless)"
-        case .pgx:
-            "PGX (JPEG2000 Test Format)"
-        case .wmv3:
-            "Windows Media Video 9"
-        case .rl2:
-            "RL2 video"
-        case .mpl2:
-            "MPL2 subtitle"
-        case .aac_latm:
-            "AAC LATM (Advanced Audio Coding LATM syntax)"
-        case .dts:
-            "DCA (DTS Coherent Acoustics) (decoders: dca ) (encoders: dca )"
-        case .xpm:
-            "XPM (X PixMap) image"
-        case .adpcm_ea_maxis_xa:
-            "ADPCM Electronic Arts Maxis CDROM XA"
-        case .sheervideo:
-            "BitJazz SheerVideo"
-        case .adpcm_adx:
-            "SEGA CRI ADX ADPCM"
-        case .adpcm_ea_r1:
-            "ADPCM Electronic Arts R1"
-        case .screenpresso:
-            "Screenpresso"
-        case .westwood_snd1:
-            "Westwood Audio (SND1) (decoders: ws_snd1 )"
-        case .interplayacm:
-            "Interplay ACM"
-        case .adpcm_ima_alp:
-            "ADPCM IMA High Voltage Software ALP"
-        case .r210:
-            "Uncompressed RGB 10-bit"
-        case .thp:
-            "Nintendo Gamecube THP video"
-        case .wrapped_avframe:
-            "AVFrame to AVPacket passthrough"
-        case .notchlc:
-            "NotchLC"
-        case .zlib:
-            "LCL (LossLess Codec Library) ZLIB"
-        case .wavpack:
-            "WavPack"
-        case .cri:
-            "Cintel RAW"
-        case .atrac1:
-            "ATRAC1 (Adaptive TRansform Acoustic Coding)"
-        case .imm4:
-            "Infinity IMM4"
-        case .psd:
-            "Photoshop PSD file"
-        case .stl:
-            "Spruce subtitle format"
-        case .indeo2:
-            "Intel Indeo 2"
-        case .rv10:
-            "RealVideo 1.0"
-        case .mlp:
-            "MLP (Meridian Lossless Packing)"
-        case .sunrast:
-            "Sun Rasterfile image"
-        case .ffvhuff:
-            "Huffyuv FFmpeg variant"
-        case ._8svx_exp:
-            "8SVX exponential"
-        case .mts2:
-            "MS Expression Encoder Screen"
-        case .xbm:
-            "XBM (X BitMap) image"
-        case .celt:
-            "Constrained Energy Lapped Transform (CELT)"
-        case .vp6a:
-            "On2 VP6 (Flash version, with alpha channel)"
-        case .mjpegb:
-            "Apple MJPEG-B"
-        case .magicyuv:
-            "MagicYUV video"
-        case .v210:
-            "Uncompressed 4:2:2 10-bit"
-        case .indeo4:
-            "Intel Indeo Video Interactive 4"
-        case .targa:
-            "Truevision Targa image"
-        case .dsicinaudio:
-            "Delphine Software International CIN audio"
-        case .mpeg1video:
-            "MPEG-1 video"
-        case .timed_id3:
-            "timed ID3 metadata"
-        case .twinvq:
-            "VQF TwinVQ"
-        case .dsd_lsbf_planar:
-            "DSD (Direct Stream Digital), least significant bit first, planar"
-        case .zerocodec:
-            "ZeroCodec Lossless Video"
-        case .wavesynth:
-            "Wave synthesis pseudo-codec"
-        case .ra_288:
-            "RealAudio 2.0 (28.8K) (decoders: real_288 )"
-        case .microdvd:
-            "MicroDVD subtitle"
-        case .png:
-            "PNG (Portable Network Graphics) image"
-        case .binkaudio_dct:
-            "Bink Audio (DCT)"
-        case .shorten:
-            "Shorten"
-        case .opus:
-            "Opus (Opus Interactive Audio Codec) (decoders: opus libopus ) (encoders: opus libopus )"
-        case .cavs:
-            "Chinese AVS (Audio Video Standard) (AVS1-P2, JiZhun profile) (encoders: libxavs )"
-        case .dsd_msbf:
-            "DSD (Direct Stream Digital), most significant bit first"
-        case .xface:
-            "X-face image"
-        case .sbc:
-            "SBC (low-complexity subband codec)"
-        case .vplayer:
-            "VPlayer subtitle"
-        case .pixlet:
-            "Apple Pixlet"
-        case .smackaudio:
-            "Smacker audio (decoders: smackaud )"
-        case .avui:
-            "Avid Meridien Uncompressed"
-        case .binkvideo:
-            "Bink video"
-        case .pbm:
-            "PBM (Portable BitMap) image"
-        case ._8svx_fib:
-            "8SVX fibonacci"
-        case .dsd_lsbf:
-            "DSD (Direct Stream Digital), least significant bit first"
-        case .tqi:
-            "Electronic Arts TQI video (decoders: eatqi )"
-        case .adpcm_ima_dat4:
-            "ADPCM IMA Eurocom DAT4"
-        case .dvvideo:
-            "DV (Digital Video)"
-        case .sanm:
-            "LucasArts SANM/SMUSH video"
-        case .ppm:
-            "PPM (Portable PixelMap) image"
-        case .truemotion2:
-            "Duck TrueMotion 2.0"
-        case .qdraw:
-            "Apple QuickDraw"
-        case .pcm_u32le:
-            "PCM unsigned 32-bit little-endian"
-        case .pcm_mulaw:
-            "PCM mu-law / G.711 mu-law (decoders: pcm_mulaw pcm_mulaw_at ) (encoders: pcm_mulaw pcm_mulaw_at )"
-        case .sgi:
-            "SGI image"
-        case .atrac9:
-            "ATRAC9 (Adaptive TRansform Acoustic Coding 9)"
-        case .flv1:
-            "FLV / Sorenson Spark / Sorenson H.263 (Flash Video) (decoders: flv ) (encoders: flv )"
-        case .a64_multi:
-            "Multicolor charset for Commodore 64 (encoders: a64multi )"
-        case .asv2:
-            "ASUS V2"
-        case .apng:
-            "APNG (Animated Portable Network Graphics) image"
-        case .g729:
-            "G.729"
-        case .vp8:
-            "On2 VP8 (decoders: vp8 libvpx ) (encoders: libvpx )"
-        case .pcm_f64be:
-            "PCM 64-bit floating point big-endian"
-        case .aasc:
-            "Autodesk RLE"
-        case .aac:
-            "AAC (Advanced Audio Coding) (decoders: aac aac_fixed aac_at ) (encoders: aac aac_at )"
-        case .evrc:
-            "EVRC (Enhanced Variable Rate Codec)"
-        case .dolby_e:
-            "Dolby E"
-        case .vp7:
-            "On2 VP7"
-        case .escape124:
-            "Escape 124"
-        case .motionpixels:
-            "Motion Pixels video"
-        case .clearvideo:
-            "Iterated Systems ClearVideo"
-        case .pcm_f32be:
-            "PCM 32-bit floating point big-endian"
-        case .aura2:
-            "Auravision Aura 2"
-        case .pcm_vidc:
-            "PCM Archimedes VIDC"
-        case .lagarith:
-            "Lagarith lossless"
-        case .phm:
-            "PHM (Portable HalfFloatMap) image"
-        case .mvc2:
-            "Silicon Graphics Motion Video Compressor 2"
-        case .txd:
-            "Renderware TXD (TeXture Dictionary) image"
-        case .adpcm_sbpro_4:
-            "ADPCM Sound Blaster Pro 4-bit"
-        case .webp:
-            "WebP (encoders: libwebp_anim libwebp )"
-        case .hqx:
-            "Canopus HQX"
-        case .pcm_s24be:
-            "PCM signed 24-bit big-endian"
-        case .cyuv:
-            "Creative YUV (CYUV)"
-        case .mpegts:
-            "raw MPEG-TS stream"
-        case .vvc:
-            "H.266 / VVC (Versatile Video Coding)"
-        case .qcelp:
-            "QCELP / PureVoice"
-        case .rscc:
-            "innoHeim/Rsupport Screen Capture Codec"
-        case .ljpeg:
-            "Lossless JPEG"
-        case .vixl:
-            "Miro VideoXL (decoders: xl )"
-        case .pcm_lxf:
-            "PCM signed 20-bit little-endian planar"
-        case .adpcm_ima_cunning:
-            "ADPCM IMA Cunning Developments"
-        case .vp9:
-            "Google VP9 (decoders: vp9 libvpx-vp9 ) (encoders: libvpx-vp9 )"
-        case .adpcm_ea:
-            "ADPCM Electronic Arts"
-        case .xma1:
-            "Xbox Media Audio 1"
-        case .tmv:
-            "8088flex TMV"
-        case .pcm_s16be_planar:
-            "PCM signed 16-bit big-endian planar"
-        case .truehd:
-            "TrueHD"
-        case .aura:
-            "Auravision AURA"
-        case .fits:
-            "FITS (Flexible Image Transport System)"
-        case .pcm_s24le_planar:
-            "PCM signed 24-bit little-endian planar"
-        case .adpcm_ima_iss:
-            "ADPCM IMA Funcom ISS"
-        case .gsm_ms:
-            "GSM Microsoft variant (decoders: gsm_ms gsm_ms_at libgsm_ms ) (encoders: libgsm_ms )"
-        case .adpcm_ct:
-            "ADPCM Creative Technology"
-        case .pcm_s16be:
-            "PCM signed 16-bit big-endian"
-        case .adpcm_zork:
-            "ADPCM Zork"
-        case .adpcm_psx:
-            "ADPCM Playstation"
-        case .mobiclip:
-            "MobiClip Video"
-        case .adpcm_ima_mtf:
-            "ADPCM IMA Capcom's MT Framework"
-        case .gif:
-            "CompuServe GIF (Graphics Interchange Format)"
-        case .flashsv2:
-            "Flash Screen Video v2"
-        case .epg:
-            "Electronic Program Guide"
-        case .pcm_dvd:
-            "PCM signed 20|24-bit big-endian"
-        case .fastaudio:
-            "MobiClip FastAudio"
-        case .scte_35:
-            "SCTE 35 Message Queue"
-        case .msmpeg4v1:
-            "MPEG-4 part 2 Microsoft variant version 1"
-        case .av1:
-            "Alliance for Open Media AV1 (decoders: libdav1d libaom-av1 av1 ) (encoders: libaom-av1 )"
-        case .v408:
-            "Uncompressed packed QT 4:4:4:4"
-        case .asv1:
-            "ASUS V1"
-        case .y41p:
-            "Uncompressed YUV 4:1:1 12-bit"
-        case .ws_vqa:
-            "Westwood Studios VQA (Vector Quantized Animation) video (decoders: vqavideo )"
-        case .avs3:
-            "AVS3-P2/IEEE1857.10"
-        case .iac:
-            "IAC (Indeo Audio Coder)"
-        case .mp4als:
-            "MPEG-4 Audio Lossless Coding (ALS) (decoders: als )"
-        case .pcm_s64le:
-            "PCM signed 64-bit little-endian"
-        case .mwsc:
-            "MatchWare Screen Capture Codec"
-        case .qoi:
-            "QOI (Quite OK Image)"
-        case .g723_1:
-            "G.723.1"
-        case .adpcm_g722:
-            "G.722 ADPCM (decoders: g722 ) (encoders: g722 )"
-        case .ffv1:
-            "FFmpeg video codec #1"
-        case .adpcm_xa:
-            "ADPCM CDROM XA"
-        case .imm5:
-            "Infinity IMM5"
-        case .vp3:
-            "On2 VP3"
-        case .flashsv:
-            "Flash Screen Video v1"
-        case .tgv:
-            "Electronic Arts TGV video (decoders: eatgv )"
-        case .v308:
-            "Uncompressed packed 4:4:4"
-        case .subrip:
-            "SubRip subtitle (decoders: srt subrip ) (encoders: srt subrip )"
-        case .adpcm_ea_r3:
-            "ADPCM Electronic Arts R3"
-        case .pcm_u16be:
-            "PCM unsigned 16-bit big-endian"
-        case .adpcm_ea_xas:
-            "ADPCM Electronic Arts XAS"
-        case .vble:
-            "VBLE Lossless Codec"
-        case .paf_video:
-            "Amazing Studio Packed Animation File Video"
-        case .msp2:
-            "Microsoft Paint (MSP) version 2"
-        case .adpcm_g726le:
-            "G.726 ADPCM little-endian (decoders: g726le ) (encoders: g726le )"
-        case .vcr1:
-            "ATI VCR1"
-        case .prosumer:
-            "Brooktree ProSumer Video"
-        case .svq3:
-            "Sorenson Vector Quantizer 3 / Sorenson Video 3 / SVQ3"
-        case .ayuv:
-            "Uncompressed packed MS 4:4:4:4"
-        case .sp5x:
-            "Sunplus JPEG (SP5X)"
-        case .jacosub:
-            "JACOsub subtitle"
-        case .ape:
-            "Monkey's Audio"
-        case .msa1:
-            "MS ATC Screen"
-        case .bitpacked:
-            "Bitpacked"
-        case .rawvideo:
-            "raw video"
-        case .hca:
-            "CRI HCA"
-        case .adpcm_ima_ea_sead:
-            "ADPCM IMA Electronic Arts SEAD"
-        case .g2m:
-            "Go2Meeting"
-        case .dxa:
-            "Feeble Files/ScummVM DXA"
-        case .dst:
-            "DST (Direct Stream Transfer)"
-        case .bethsoftvid:
-            "Bethesda VID video"
-        case .pjs:
-            "PJS (Phoenix Japanimation Society) subtitle"
-        case .vb:
-            "Beam Software VB"
-        case .webvtt:
-            "WebVTT subtitle"
-        case .pcm_alaw:
-            "PCM A-law / G.711 A-law (decoders: pcm_alaw pcm_alaw_at ) (encoders: pcm_alaw pcm_alaw_at )"
-        case .comfortnoise:
-            "RFC 3389 Comfort Noise"
-        case .mpeg4:
-            "MPEG-4 part 2 (encoders: mpeg4 libxvid )"
-        case .rv40:
-            "RealVideo 4.0"
-        case .interplayvideo:
-            "Interplay MVE video"
-        case .mimic:
-            "Mimic"
-        case .aic:
-            "Apple Intermediate Codec"
-        case .mss1:
-            "MS Screen 1"
-        case .roq_dpcm:
-            "DPCM id RoQ"
-        case .pcm_s64be:
-            "PCM signed 64-bit big-endian"
-        case .vp6:
-            "On2 VP6"
-        case .mp3:
-            "MP3 (MPEG audio layer 3) (decoders: mp3float mp3 mp3_at ) (encoders: libmp3lame libshine )"
-        case .vmdaudio:
-            "Sierra VMD audio"
-        case .bmv_audio:
-            "Discworld II BMV audio"
-        case .pcm_f64le:
-            "PCM 64-bit floating point little-endian"
-        case .cdgraphics:
-            "CD Graphics video"
-        case .adpcm_ima_dk4:
-            "ADPCM IMA Duck DK4"
-        case .mv30:
-            "MidiVid 3.0"
-        case .adpcm_ima_qt:
-            "ADPCM IMA QuickTime (decoders: adpcm_ima_qt adpcm_ima_qt_at )"
-        case .mov_text:
-            "MOV text"
-        case .msmpeg4v3:
-            "MPEG-4 part 2 Microsoft variant version 3 (decoders: msmpeg4 ) (encoders: msmpeg4 )"
-        case .adpcm_ima_moflex:
-            "ADPCM IMA MobiClip MOFLEX"
-        case .argo:
-            "Argonaut Games Video"
-        case .mace6:
-            "MACE (Macintosh Audio Compression/Expansion) 6:1"
-        case .dsd_msbf_planar:
-            "DSD (Direct Stream Digital), most significant bit first, planar"
-        case .hdmv_pgs_subtitle:
-            "HDMV Presentation Graphic Stream subtitles (decoders: pgssub )"
-        case .adpcm_thp:
-            "ADPCM Nintendo THP"
-        case .rasc:
-            "RemotelyAnywhere Screen Capture"
-        case .rv30:
-            "RealVideo 3.0"
-        case .ac3:
-            "ATSC A/52A (AC-3) (decoders: ac3 ac3_fixed ac3_at ) (encoders: ac3 ac3_fixed )"
-        case .ralf:
-            "RealAudio Lossless"
-        case .zmbv:
-            "Zip Motion Blocks Video"
-        case .avrp:
-            "Avid 1:1 10-bit RGB Packer"
-        case .svq1:
-            "Sorenson Vector Quantizer 1 / Sorenson Video 1 / SVQ1"
-        case .vc1:
-            "SMPTE VC-1"
-        case .vp4:
-            "On2 VP4"
-        case .xwd:
-            "XWD (X Window Dump) image"
-        case .adpcm_ima_ws:
-            "ADPCM IMA Westwood"
-        case .tdsc:
-            "TDSC"
-        case .dfpwm:
-            "DFPWM (Dynamic Filter Pulse Width Modulation)"
-        case .dvd_nav_packet:
-            "DVD Nav packet"
-        case .cook:
-            "Cook / Cooker / Gecko (RealAudio G2)"
-        case .adpcm_ima_apm:
-            "ADPCM IMA Ubisoft APM"
-        case .atrac3:
-            "ATRAC3 (Adaptive TRansform Acoustic Coding 3)"
         case .siren:
             "Siren"
-        case .hymt:
-            "HuffYUV MT"
-        case .atrac3pal:
-            "ATRAC3+ AL (Adaptive TRansform Acoustic Coding 3+ Advanced Lossless) (decoders: atrac3plusal )"
-        case ._4gv:
-            "4GV (Fourth Generation Vocoder)"
-        case .escape130:
-            "Escape 130"
-        case .vc1image:
-            "Windows Media Video 9 Image v2"
-        case .pfm:
-            "PFM (Portable FloatMap) image"
-        case .atrac3p:
-            "ATRAC3+ (Adaptive TRansform Acoustic Coding 3+) (decoders: atrac3plus )"
-        case .idf:
-            "iCEDraw text"
-        case .ansi:
-            "ASCII/ANSI art"
-        case .ulti:
-            "IBM UltiMotion (decoders: ultimotion )"
-        case .adpcm_ima_oki:
-            "ADPCM IMA Dialogic OKI"
-        case .paf_audio:
-            "Amazing Studio Packed Animation File Audio"
-        case .mpeg2video:
-            "MPEG-2 video (decoders: mpeg2video mpegvideo )"
-        case .jpegls:
-            "JPEG-LS"
-        case .srgc:
-            "Screen Recorder Gold Codec"
-        case .pgmyuv:
-            "PGMYUV (Portable GrayMap YUV) image"
-        case .avs:
-            "AVS (Audio Video Standard) video"
-        case .xma2:
-            "Xbox Media Audio 2"
-        case .msmpeg4v2:
-            "MPEG-4 part 2 Microsoft variant version 2"
-        case .indeo3:
-            "Intel Indeo 3"
-        case .klv:
-            "SMPTE 336M Key-Length-Value (KLV) metadata"
-        case .sami:
-            "SAMI subtitle"
+        case ._012v:
+            "Uncompressed 4:2:2 10-bit"
+        case .dirac:
+            "Dirac (encoders: vc2 )"
+        case .imm5:
+            "Infinity IMM5"
+        case .imm4:
+            "Infinity IMM4"
+        case .mpegh_3d_audio:
+            "MPEG-H 3D Audio"
+        case .r210:
+            "Uncompressed RGB 10-bit"
+        case .vp3:
+            "On2 VP3"
+        case .cook:
+            "Cook / Cooker / Gecko (RealAudio G2)"
+        case .v210:
+            "Uncompressed 4:2:2 10-bit"
+        case .prosumer:
+            "Brooktree ProSumer Video"
+        case .sonicls:
+            "Sonic lossless"
+        case .adpcm_sbpro_4:
+            "ADPCM Sound Blaster Pro 4-bit"
+        case .qdm2:
+            "QDesign Music Codec 2 (decoders: qdm2 qdm2_at )"
+        case .xbm:
+            "XBM (X BitMap) image"
+        case .v210x:
+            "Uncompressed 4:2:2 10-bit"
         case .fic:
             "Mirillis FIC"
+        case .msmpeg4v3:
+            "MPEG-4 part 2 Microsoft variant version 3 (decoders: msmpeg4 ) (encoders: msmpeg4 )"
+        case .rpza:
+            "QuickTime video (RPZA)"
+        case .roq_dpcm:
+            "DPCM id RoQ"
+        case .ac3:
+            "ATSC A/52A (AC-3) (decoders: ac3 ac3_fixed ac3_at ) (encoders: ac3 ac3_fixed )"
+        case .vbn:
+            "Vizrt Binary Image"
+        case .fastaudio:
+            "MobiClip FastAudio"
+        case .celt:
+            "Constrained Energy Lapped Transform (CELT)"
+        case .adpcm_dtk:
+            "ADPCM Nintendo Gamecube DTK"
+        case .ayuv:
+            "Uncompressed packed MS 4:4:4:4"
+        case .wavpack:
+            "WavPack"
+        case .mwsc:
+            "MatchWare Screen Capture Codec"
+        case .xwd:
+            "XWD (X Window Dump) image"
+        case .avui:
+            "Avid Meridien Uncompressed"
+        case .pgx:
+            "PGX (JPEG2000 Test Format)"
+        case .pcm_f32be:
+            "PCM 32-bit floating point big-endian"
+        case .avs:
+            "AVS (Audio Video Standard) video"
+        case .avs3:
+            "AVS3-P2/IEEE1857.10"
+        case .truemotion2:
+            "Duck TrueMotion 2.0"
+        case .asv2:
+            "ASUS V2"
+        case .adpcm_aica:
+            "ADPCM Yamaha AICA"
+        case .rawvideo:
+            "raw video"
+        case .sdx2_dpcm:
+            "DPCM Squareroot-Delta-Exact"
+        case .qoi:
+            "QOI (Quite OK Image)"
+        case .mace3:
+            "MACE (Macintosh Audio Compression/Expansion) 3:1"
+        case .mov_text:
+            "MOV text"
+        case .vp9:
+            "Google VP9 (decoders: vp9 libvpx-vp9 ) (encoders: libvpx-vp9 )"
+        case .avrp:
+            "Avid 1:1 10-bit RGB Packer"
+        case .hca:
+            "CRI HCA"
+        case .ffv1:
+            "FFmpeg video codec #1"
+        case .mjpegb:
+            "Apple MJPEG-B"
+        case .sp5x:
+            "Sunplus JPEG (SP5X)"
+        case .dsicinvideo:
+            "Delphine Software International CIN video"
+        case .alac:
+            "ALAC (Apple Lossless Audio Codec) (decoders: alac alac_at ) (encoders: alac alac_at )"
+        case .indeo5:
+            "Intel Indeo Video Interactive 5"
+        case .tak:
+            "TAK (Tom's lossless Audio Kompressor)"
+        case .notchlc:
+            "NotchLC"
+        case .mobiclip:
+            "MobiClip Video"
+        case .pjs:
+            "PJS (Phoenix Japanimation Society) subtitle"
+        case .pcm_s24daud:
+            "PCM D-Cinema audio signed 24-bit"
+        case .dsd_msbf_planar:
+            "DSD (Direct Stream Digital), most significant bit first, planar"
+        case .simbiosis_imx:
+            "Simbiosis Interactive IMX Video"
+        case .comfortnoise:
+            "RFC 3389 Comfort Noise"
+        case .jacosub:
+            "JACOsub subtitle"
+        case .vmnc:
+            "VMware Screen Codec / VMware Video"
+        case .xpm:
+            "XPM (X PixMap) image"
+        case .qcelp:
+            "QCELP / PureVoice"
+        case .text:
+            "raw UTF-8 text"
+        case .adpcm_sbpro_2:
+            "ADPCM Sound Blaster Pro 2-bit"
+        case .mp3adu:
+            "ADU (Application Data Unit) MP3 (MPEG audio layer 3) (decoders: mp3adufloat mp3adu )"
+        case .musepack8:
+            "Musepack SV8 (decoders: mpc8 )"
+        case .yuv4:
+            "Uncompressed packed 4:2:0"
+        case .atrac1:
+            "ATRAC1 (Adaptive TRansform Acoustic Coding)"
+        case .vp5:
+            "On2 VP5"
+        case .pcm_u24le:
+            "PCM unsigned 24-bit little-endian"
+        case .tqi:
+            "Electronic Arts TQI video (decoders: eatqi )"
+        case ._8svx_fib:
+            "8SVX fibonacci"
+        case .qdraw:
+            "Apple QuickDraw"
+        case .tgv:
+            "Electronic Arts TGV video (decoders: eatgv )"
+        case .av1:
+            "Alliance for Open Media AV1 (decoders: libdav1d libaom-av1 av1 ) (encoders: libaom-av1 )"
+        case .m101:
+            "Matrox Uncompressed SD"
+        case .adpcm_ima_apc:
+            "ADPCM IMA CRYO APC"
+        case .flic:
+            "Autodesk Animator Flic video"
+        case .mdec:
+            "Sony PlayStation MDEC (Motion DECoder)"
+        case .agm:
+            "Amuse Graphics Movie"
+        case .adpcm_ima_ea_sead:
+            "ADPCM IMA Electronic Arts SEAD"
+        case .xma2:
+            "Xbox Media Audio 2"
+        case .pcm_s16be_planar:
+            "PCM signed 16-bit big-endian planar"
+        case .cfhd:
+            "GoPro CineForm HD"
+        case .pcm_f64le:
+            "PCM 64-bit floating point little-endian"
+        case .smc:
+            "QuickTime Graphics (SMC)"
+        case .adpcm_ima_iss:
+            "ADPCM IMA Funcom ISS"
+        case .epg:
+            "Electronic Program Guide"
+        case .sga:
+            "Digital Pictures SGA Video"
+        case ._4xm:
+            "4X Movie"
+        case .opus:
+            "Opus (Opus Interactive Audio Codec) (decoders: opus libopus ) (encoders: opus libopus )"
+        case .hymt:
+            "HuffYUV MT"
+        case .tdsc:
+            "TDSC"
+        case .roq:
+            "id RoQ video (decoders: roqvideo ) (encoders: roqvideo )"
+        case .ra_288:
+            "RealAudio 2.0 (28.8K) (decoders: real_288 )"
+        case .gif:
+            "CompuServe GIF (Graphics Interchange Format)"
+        case .msrle:
+            "Microsoft RLE"
+        case .dts:
+            "DCA (DTS Coherent Acoustics) (decoders: dca ) (encoders: dca )"
+        case .cmv:
+            "Electronic Arts CMV video (decoders: eacmv )"
+        case .adpcm_g726:
+            "G.726 ADPCM (decoders: g726 ) (encoders: g726 )"
+        case .bmp:
+            "BMP (Windows and OS/2 bitmap)"
+        case .adpcm_ima_dk4:
+            "ADPCM IMA Duck DK4"
+        case .iff_ilbm:
+            "IFF ACBM/ANIM/DEEP/ILBM/PBM/RGB8/RGBN (decoders: iff )"
+        case .dvvideo:
+            "DV (Digital Video)"
+        case .derf_dpcm:
+            "DPCM Xilam DERF"
+        case .adpcm_ima_ws:
+            "ADPCM IMA Westwood"
+        case .adpcm_ima_amv:
+            "ADPCM IMA AMV"
+        case .y41p:
+            "Uncompressed YUV 4:1:1 12-bit"
+        case .r10k:
+            "AJA Kona 10-bit RGB Codec"
+        case .adpcm_4xm:
+            "ADPCM 4X Movie"
+        case .snow:
+            "Snow"
+        case .xsub:
+            "XSUB"
+        case .vb:
+            "Beam Software VB"
+        case .alias_pix:
+            "Alias/Wavefront PIX image"
+        case .sanm:
+            "LucasArts SANM/SMUSH video"
+        case .wmalossless:
+            "Windows Media Audio Lossless"
+        case .dss_sp:
+            "Digital Speech Standard - Standard Play mode (DSS SP)"
+        case .svg:
+            "Scalable Vector Graphics"
+        case .h264:
+            "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (decoders: h264 libopenh264 ) (encoders: libx264 libx264rgb libopenh264 h264_videotoolbox )"
+        case .scpr:
+            "ScreenPressor"
+        case .mxpeg:
+            "Mobotix MxPEG video"
+        case .daala:
+            "Daala"
+        case .ttf:
+            "TrueType font"
+        case .pictor:
+            "Pictor/PC Paint"
+        case .ptx:
+            "V.Flash PTX image"
+        case .vp6:
+            "On2 VP6"
+        case .smvjpeg:
+            "Sigmatel Motion Video"
+        case .flashsv:
+            "Flash Screen Video v1"
+        case .bitpacked:
+            "Bitpacked"
+        case .phm:
+            "PHM (Portable HalfFloatMap) image"
+        case .xma1:
+            "Xbox Media Audio 1"
+        case .sipr:
+            "RealAudio SIPR / ACELP.NET"
+        case .iac:
+            "IAC (Indeo Audio Coder)"
+        case .hdmv_text_subtitle:
+            "HDMV Text subtitle"
+        case .mad:
+            "Electronic Arts Madcow Video (decoders: eamad )"
+        case .avc:
+            "On2 Audio for Video Codec (decoders: on2avc )"
+        case .cllc:
+            "Canopus Lossless Codec"
+        case .pcm_f64be:
+            "PCM 64-bit floating point big-endian"
+        case .h263p:
+            "H.263+ / H.263-1998 / H.263 version 2"
+        case .exr:
+            "OpenEXR image"
+        case .cpia:
+            "CPiA video format"
+        case .hq_hqa:
+            "Canopus HQ/HQA"
+        case .ilbc:
+            "iLBC (Internet Low Bitrate Codec) (decoders: ilbc ilbc_at ) (encoders: ilbc_at )"
+        case .vp4:
+            "On2 VP4"
+        case .pcm_u16le:
+            "PCM unsigned 16-bit little-endian"
+        case .prores:
+            "Apple ProRes (iCodec Pro) (encoders: prores prores_aw prores_ks prores_videotoolbox )"
+        case .escape130:
+            "Escape 130"
+        case .cscd:
+            "CamStudio (decoders: camstudio )"
+        case .tiertexseqvideo:
+            "Tiertex Limited SEQ video"
+        case .webp:
+            "WebP (encoders: libwebp_anim libwebp )"
+        case .wmv3:
+            "Windows Media Video 9"
+        case .adpcm_thp:
+            "ADPCM Nintendo THP"
+        case .ass:
+            "ASS (Advanced SSA) subtitle (decoders: ssa ass ) (encoders: ssa ass )"
+        case .adpcm_argo:
+            "ADPCM Argonaut Games"
+        case .ansi:
+            "ASCII/ANSI art"
+        case .flac:
+            "FLAC (Free Lossless Audio Codec)"
+        case .smackaudio:
+            "Smacker audio (decoders: smackaud )"
+        case .msmpeg4v1:
+            "MPEG-4 part 2 Microsoft variant version 1"
+        case .klv:
+            "SMPTE 336M Key-Length-Value (KLV) metadata"
+        case .xface:
+            "X-face image"
+        case .dxv:
+            "Resolume DXV"
+        case .truehd:
+            "TrueHD"
+        case .pcx:
+            "PC Paintbrush PCX image"
+        case .pam:
+            "PAM (Portable AnyMap) image"
+        case .atrac3:
+            "ATRAC3 (Adaptive TRansform Acoustic Coding 3)"
+        case .adpcm_ima_acorn:
+            "ADPCM IMA Acorn Replay"
+        case .atrac9:
+            "ATRAC9 (Adaptive TRansform Acoustic Coding 9)"
+        case .escape124:
+            "Escape 124"
+        case .adpcm_ea:
+            "ADPCM Electronic Arts"
+        case .utvideo:
+            "Ut Video"
+        case .dpx:
+            "DPX (Digital Picture Exchange) image"
+        case .adpcm_sbpro_3:
+            "ADPCM Sound Blaster Pro 2.6-bit"
+        case .v408:
+            "Uncompressed packed QT 4:4:4:4"
+        case .mlp:
+            "MLP (Meridian Lossless Packing)"
+        case .wmapro:
+            "Windows Media Audio 9 Professional"
+        case .xan_wc4:
+            "Wing Commander IV / Xxan"
+        case .twinvq:
+            "VQF TwinVQ"
+        case .adpcm_ima_alp:
+            "ADPCM IMA High Voltage Software ALP"
+        case .loco:
+            "LOCO"
+        case .brender_pix:
+            "BRender PIX image"
+        case .cdxl:
+            "Commodore CDXL video"
+        case .truemotion1:
+            "Duck TrueMotion 1.0"
+        case .adpcm_vima:
+            "LucasArts VIMA audio"
+        case .pcm_lxf:
+            "PCM signed 20-bit little-endian planar"
+        case .motionpixels:
+            "Motion Pixels video"
+        case .s302m:
+            "SMPTE 302M"
+        case .wmv3image:
+            "Windows Media Video 9 Image"
+        case .ra_144:
+            "RealAudio 1.0 (14.4K) (decoders: real_144 ) (encoders: real_144 )"
+        case .jpegls:
+            "JPEG-LS"
+        case .bfi:
+            "Brute Force & Ignorance"
+        case .mpl2:
+            "MPL2 subtitle"
+        case .pcm_bluray:
+            "PCM signed 16|20|24-bit big-endian for Blu-ray media"
+        case .adpcm_ct:
+            "ADPCM Creative Technology"
+        case .vble:
+            "VBLE Lossless Codec"
+        case .pbm:
+            "PBM (Portable BitMap) image"
+        case .pcm_s64be:
+            "PCM signed 64-bit big-endian"
+        case .frwu:
+            "Forward Uncompressed"
+        case .adpcm_ima_moflex:
+            "ADPCM IMA MobiClip MOFLEX"
+        case .mss1:
+            "MS Screen 1"
+        case .idf:
+            "iCEDraw text"
+        case .bmv_audio:
+            "Discworld II BMV audio"
+        case .pcm_s32le_planar:
+            "PCM signed 32-bit little-endian planar"
+        case ._8svx_exp:
+            "8SVX exponential"
+        case .pcm_s32be:
+            "PCM signed 32-bit big-endian"
+        case .aptx_hd:
+            "aptX HD (Audio Processing Technology for Bluetooth)"
+        case .pcm_u32le:
+            "PCM unsigned 32-bit little-endian"
+        case .srt:
+            "SubRip subtitle with embedded timing"
+        case .codec2:
+            "codec2 (very low bitrate speech codec)"
+        case .timed_id3:
+            "timed ID3 metadata"
+        case .vorbis:
+            "Vorbis (decoders: vorbis libvorbis ) (encoders: vorbis libvorbis )"
+        case .atrac3pal:
+            "ATRAC3+ AL (Adaptive TRansform Acoustic Coding 3+ Advanced Lossless) (decoders: atrac3plusal )"
+        case .xbin:
+            "eXtended BINary text"
+        case .microdvd:
+            "MicroDVD subtitle"
+        case .scte_35:
+            "SCTE 35 Message Queue"
+        case .g723_1:
+            "G.723.1"
+        case .huffyuv:
+            "HuffYUV"
+        case .aura2:
+            "Auravision Aura 2"
+        case .dxa:
+            "Feeble Files/ScummVM DXA"
+        case .pcm_u24be:
+            "PCM unsigned 24-bit big-endian"
+        case .vp7:
+            "On2 VP7"
+        case .gdv:
+            "Gremlin Digital Video"
+        case .qtrle:
+            "QuickTime Animation (RLE) video"
+        case .g2m:
+            "Go2Meeting"
+        case .pcm_s16be:
+            "PCM signed 16-bit big-endian"
+        case .arbc:
+            "Gryphon's Anim Compressor"
+        case .theora:
+            "Theora (encoders: libtheora )"
+        case .wmavoice:
+            "Windows Media Audio Voice"
+        case .vmdaudio:
+            "Sierra VMD audio"
+        case .msa1:
+            "MS ATC Screen"
+        case .pcm_mulaw:
+            "PCM mu-law / G.711 mu-law (decoders: pcm_mulaw pcm_mulaw_at ) (encoders: pcm_mulaw pcm_mulaw_at )"
+        case .adpcm_agm:
+            "ADPCM AmuseGraphics Movie AGM"
+        case .rv10:
+            "RealVideo 1.0"
+        case .rv20:
+            "RealVideo 2.0"
+        case .zerocodec:
+            "ZeroCodec Lossless Video"
+        case .clearvideo:
+            "Iterated Systems ClearVideo"
+        case .pcm_s24be:
+            "PCM signed 24-bit big-endian"
+        case .pcm_s8:
+            "PCM signed 8-bit"
+        case .mpeg1video:
+            "MPEG-1 video"
+        case .subviewer1:
+            "SubViewer v1 subtitle"
+        case .tta:
+            "TTA (True Audio)"
+        case .sunrast:
+            "Sun Rasterfile image"
+        case .kmvc:
+            "Karl Morton's video codec"
+        case .lagarith:
+            "Lagarith lossless"
+        case .webvtt:
+            "WebVTT subtitle"
+        case .msvideo1:
+            "Microsoft Video 1"
+        case .adpcm_ima_apm:
+            "ADPCM IMA Ubisoft APM"
+        case .xan_wc3:
+            "Wing Commander III / Xan"
+        case .ssa:
+            "SSA (SubStation Alpha) subtitle"
+        case .anm:
+            "Deluxe Paint Animation"
+        case .fits:
+            "FITS (Flexible Image Transport System)"
+        case .aic:
+            "Apple Intermediate Codec"
+        case .adpcm_ima_qt:
+            "ADPCM IMA QuickTime (decoders: adpcm_ima_qt adpcm_ima_qt_at )"
+        case .rv30:
+            "RealVideo 3.0"
+        case .indeo2:
+            "Intel Indeo 2"
+        case .dfpwm:
+            "DFPWM (Dynamic Filter Pulse Width Modulation)"
+        case .ttml:
+            "Timed Text Markup Language"
+        case .wmav1:
+            "Windows Media Audio 1"
+        case .metasound:
+            "Voxware MetaSound"
+        case .svq3:
+            "Sorenson Vector Quantizer 3 / Sorenson Video 3 / SVQ3"
+        case .mss2:
+            "MS Windows Media Video V9 Screen"
+        case .adpcm_g726le:
+            "G.726 ADPCM little-endian (decoders: g726le ) (encoders: g726le )"
+        case .adpcm_yamaha:
+            "ADPCM Yamaha"
+        case .adpcm_mtaf:
+            "ADPCM MTAF"
+        case .dxtory:
+            "Dxtory"
+        case .adpcm_ima_dat4:
+            "ADPCM IMA Eurocom DAT4"
+        case .dvaudio:
+            "DV audio"
+        case .jpeg2000:
+            "JPEG 2000 (decoders: jpeg2000 libopenjpeg ) (encoders: jpeg2000 libopenjpeg )"
+        case .screenpresso:
+            "Screenpresso"
+        case .binkaudio_dct:
+            "Bink Audio (DCT)"
+        case .hap:
+            "Vidvox Hap"
+        case .mpeg4:
+            "MPEG-4 part 2 (encoders: mpeg4 libxvid )"
+        case .yop:
+            "Psygnosis YOP Video"
+        case .pcm_f24le:
+            "PCM 24.0 floating point little-endian"
+        case .sgirle:
+            "SGI RLE 8-bit"
+        case .ape:
+            "Monkey's Audio"
+        case .adpcm_ea_xas:
+            "ADPCM Electronic Arts XAS"
+        case .aasc:
+            "Autodesk RLE"
+        case .pcm_u16be:
+            "PCM unsigned 16-bit big-endian"
+        case .ppm:
+            "PPM (Portable PixelMap) image"
+        case .wavesynth:
+            "Wave synthesis pseudo-codec"
+        case .pcm_s24le:
+            "PCM signed 24-bit little-endian"
+        case .adpcm_ms:
+            "ADPCM Microsoft"
+        case .c93:
+            "Interplay C93"
+        case .msmpeg4v2:
+            "MPEG-4 part 2 Microsoft variant version 2"
+        case .tscc2:
+            "TechSmith Screen Codec 2"
+        case .idcin:
+            "id Quake II CIN video (decoders: idcinvideo )"
+        case .ulti:
+            "IBM UltiMotion (decoders: ultimotion )"
+        case .dvd_nav_packet:
+            "DVD Nav packet"
+        case .adpcm_ima_smjpeg:
+            "ADPCM IMA Loki SDL MJPEG"
+        case .vp8:
+            "On2 VP8 (decoders: vp8 libvpx ) (encoders: libvpx )"
+        case .cdgraphics:
+            "CD Graphics video"
+        case .adpcm_ea_maxis_xa:
+            "ADPCM Electronic Arts Maxis CDROM XA"
+        case .zlib:
+            "LCL (LossLess Codec Library) ZLIB"
+        case .adpcm_ima_wav:
+            "ADPCM IMA WAV"
+        case .ljpeg:
+            "Lossless JPEG"
+        case .smackvideo:
+            "Smacker video (decoders: smackvid )"
+        case .vp6f:
+            "On2 VP6 (Flash version)"
+        case .adpcm_ima_ssi:
+            "ADPCM IMA Simon & Schuster Interactive"
+        case .xan_dpcm:
+            "DPCM Xan"
+        case .pcm_u8:
+            "PCM unsigned 8-bit"
+        case .gem:
+            "GEM Raster image"
+        case .indeo4:
+            "Intel Indeo Video Interactive 4"
+        case .dvd_subtitle:
+            "DVD subtitles (decoders: dvdsub ) (encoders: dvdsub )"
+        case .mp4als:
+            "MPEG-4 Audio Lossless Coding (ALS) (decoders: als )"
+        case .mp3:
+            "MP3 (MPEG audio layer 3) (decoders: mp3float mp3 mp3_at ) (encoders: libmp3lame libshine )"
+        case .eac3:
+            "ATSC A/52B (AC-3, E-AC-3) (decoders: eac3 eac3_at )"
+        case .evrc:
+            "EVRC (Enhanced Variable Rate Codec)"
+        case .sonic:
+            "Sonic"
+        case .dvb_teletext:
+            "DVB teletext (decoders: libzvbi_teletextdec )"
+        case .truemotion2rt:
+            "Duck TrueMotion 2.0 Real Time"
+        case .shorten:
+            "Shorten"
+        case .bmv_video:
+            "Discworld II BMV video"
+        case .aura:
+            "Auravision AURA"
+        case .dnxhd:
+            "VC3/DNxHD"
+        case .sbc:
+            "SBC (low-complexity subband codec)"
+        case .ws_vqa:
+            "Westwood Studios VQA (Vector Quantized Animation) video (decoders: vqavideo )"
+        case .rscc:
+            "innoHeim/Rsupport Screen Capture Codec"
+        case .wnv1:
+            "Winnov WNV1"
+        case .h263:
+            "H.263 / H.263-1996, H.263+ / H.263-1998 / H.263 version 2"
+        case .speedhq:
+            "NewTek SpeedHQ"
+        case .lscr:
+            "LEAD Screen Capture"
+        case .dst:
+            "DST (Direct Stream Transfer)"
+        case .pgmyuv:
+            "PGMYUV (Portable GrayMap YUV) image"
+        case .a64_multi5:
+            "Multicolor charset for Commodore 64, extended with 5th color (colram) (encoders: a64multi5 )"
+        case .targa_y216:
+            "Pinnacle TARGA CineWave YUV16"
+        case .vc1:
+            "SMPTE VC-1"
+        case .adpcm_thp_le:
+            "ADPCM Nintendo THP (Little-Endian)"
+        case .cdtoons:
+            "CDToons video"
+        case .westwood_snd1:
+            "Westwood Audio (SND1) (decoders: ws_snd1 )"
+        case .qdmc:
+            "QDesign Music (decoders: qdmc qdmc_at )"
+        case .photocd:
+            "Kodak Photo CD"
+        case .pcm_s64le:
+            "PCM signed 64-bit little-endian"
+        case .cljr:
+            "Cirrus Logic AccuPak"
+        case .dsd_lsbf_planar:
+            "DSD (Direct Stream Digital), least significant bit first, planar"
+        case .indeo3:
+            "Intel Indeo 3"
+        case .interplayacm:
+            "Interplay ACM"
+        case .mmvideo:
+            "American Laser Games MM Video"
+        case .adpcm_xa:
+            "ADPCM CDROM XA"
+        case .magicyuv:
+            "MagicYUV video"
+        case .cavs:
+            "Chinese AVS (Audio Video Standard) (AVS1-P2, JiZhun profile) (encoders: libxavs )"
+        case .binkaudio_rdft:
+            "Bink Audio (RDFT)"
+        case .ipu:
+            "IPU Video"
+        case .cri:
+            "Cintel RAW"
+        case .rv40:
+            "RealVideo 4.0"
+        case .h263i:
+            "Intel H.263"
+        case .vvc:
+            "H.266 / VVC (Versatile Video Coding)"
+        case .wmav2:
+            "Windows Media Audio 2"
+        case .mpegts:
+            "raw MPEG-TS stream"
+        case .ffvhuff:
+            "Huffyuv FFmpeg variant"
+        case .tmv:
+            "8088flex TMV"
+        case .atrac3al:
+            "ATRAC3 AL (Adaptive TRansform Acoustic Coding 3 Advanced Lossless)"
+        case .a64_multi:
+            "Multicolor charset for Commodore 64 (encoders: a64multi )"
+        case .h261:
+            "H.261"
+        case .adpcm_ima_mtf:
+            "ADPCM IMA Capcom's MT Framework"
+        case .dsicinaudio:
+            "Delphine Software International CIN audio"
+        case .rasc:
+            "RemotelyAnywhere Screen Capture"
+        case .mvc1:
+            "Silicon Graphics Motion Video Compressor 1"
+        case .rl2:
+            "RL2 video"
+        case .fmvc:
+            "FM Screen Capture Codec"
+        case .wmv2:
+            "Windows Media Video 8"
+        case .avrn:
+            "Avid AVI Codec"
+        case .ylc:
+            "YUY2 Lossless Codec"
+        case .pcm_u32be:
+            "PCM unsigned 32-bit big-endian"
+        case .vc1image:
+            "Windows Media Video 9 Image v2"
+        case .gsm_ms:
+            "GSM Microsoft variant (decoders: gsm_ms gsm_ms_at libgsm_ms ) (encoders: libgsm_ms )"
+        case .mjpeg:
+            "Motion JPEG"
+        case .stl:
+            "Spruce subtitle format"
+        case .pfm:
+            "PFM (Portable FloatMap) image"
+        case .aac:
+            "AAC (Advanced Audio Coding) (decoders: aac aac_fixed aac_at ) (encoders: aac aac_at )"
+        case .srgc:
+            "Screen Recorder Gold Codec"
+        case .tscc:
+            "TechSmith Screen Capture Codec (decoders: camtasia )"
+        case .pcm_s8_planar:
+            "PCM signed 8-bit planar"
+        case .dsd_msbf:
+            "DSD (Direct Stream Digital), most significant bit first"
+        case .psd:
+            "Photoshop PSD file"
+        case .dolby_e:
+            "Dolby E"
+        case .adpcm_swf:
+            "ADPCM Shockwave Flash"
+        case .fraps:
+            "Fraps"
+        case .dds:
+            "DirectDraw Surface image decoder"
+        case .nuv:
+            "NuppelVideo/RTJPEG"
+        case .mszh:
+            "LCL (LossLess Codec Library) MSZH"
+        case .aac_latm:
+            "AAC LATM (Advanced Audio Coding LATM syntax)"
+        case .v308:
+            "Uncompressed packed 4:4:4"
+        case .txd:
+            "Renderware TXD (TeXture Dictionary) image"
+        case .dsd_lsbf:
+            "DSD (Direct Stream Digital), least significant bit first"
+        case .atrac3p:
+            "ATRAC3+ (Adaptive TRansform Acoustic Coding 3+) (decoders: atrac3plus )"
+        case .mpeg2video:
+            "MPEG-2 video (decoders: mpeg2video mpegvideo )"
+        case .targa:
+            "Truevision Targa image"
+        case .mimic:
+            "Mimic"
+        case .pcm_sga:
+            "PCM SGA"
+        case .wrapped_avframe:
+            "AVFrame to AVPacket passthrough"
+        case .adpcm_ima_oki:
+            "ADPCM IMA Dialogic OKI"
+        case .pcm_vidc:
+            "PCM Archimedes VIDC"
+        case .cyuv:
+            "Creative YUV (CYUV)"
+        case .mp1:
+            "MP1 (MPEG audio layer 1) (decoders: mp1 mp1float mp1_at )"
+        case .mp3on4:
+            "MP3onMP4 (decoders: mp3on4float mp3on4 )"
+        case .otf:
+            "OpenType font"
+        case .mvdv:
+            "MidiVid VQ"
+        case .flv1:
+            "FLV / Sorenson Spark / Sorenson H.263 (Flash Video) (decoders: flv ) (encoders: flv )"
+        case .amr_nb:
+            "AMR-NB (Adaptive Multi-Rate NarrowBand) (decoders: amrnb amr_nb_at libopencore_amrnb ) (encoders: libopencore_amrnb )"
+        case .asv1:
+            "ASUS V1"
+        case .sami:
+            "SAMI subtitle"
+        case .musepack7:
+            "Musepack SV7 (decoders: mpc7 )"
+        case .adpcm_zork:
+            "ADPCM Zork"
+        case .gsm:
+            "GSM (decoders: gsm libgsm ) (encoders: libgsm )"
+        case ._8bps:
+            "QuickTime 8BPS video"
+        case .adpcm_afc:
+            "ADPCM Nintendo Gamecube AFC"
+        case .pixlet:
+            "Apple Pixlet"
+        case .vcr1:
+            "ATI VCR1"
+        case .mvc2:
+            "Silicon Graphics Motion Video Compressor 2"
+        case .cinepak:
+            "Cinepak"
+        case .nellymoser:
+            "Nellymoser Asao"
+        case .sgi:
+            "SGI image"
+        case .hdmv_pgs_subtitle:
+            "HDMV Presentation Graphic Stream subtitles (decoders: pgssub )"
+        case .pcm_s16le:
+            "PCM signed 16-bit little-endian"
+        case .hnm4video:
+            "HNM 4 video"
+        case .pgm:
+            "PGM (Portable GrayMap) image"
+        case .wcmv:
+            "WinCAM Motion Video"
+        case .adpcm_ea_r1:
+            "ADPCM Electronic Arts R1"
+        case .jpegxl:
+            "JPEG XL"
+        case .pcm_f32le:
+            "PCM 32-bit floating point little-endian"
+        case .mvha:
+            "MidiVid Archive Codec"
+        case .bintext:
+            "Binary text"
+        case .jv:
+            "Bitmap Brothers JV video"
+        case .pcm_dvd:
+            "PCM signed 20|24-bit big-endian"
+        case .adpcm_ima_cunning:
+            "ADPCM IMA Cunning Developments"
+        case .hqx:
+            "Canopus HQX"
+        case .dvb_subtitle:
+            "DVB subtitles (decoders: dvbsub ) (encoders: dvbsub )"
+        case .hcom:
+            "HCOM Audio"
+        case .realtext:
+            "RealText subtitle"
+        case .ralf:
+            "RealAudio Lossless"
+        case .paf_video:
+            "Amazing Studio Packed Animation File Video"
+        case .adpcm_ima_dk3:
+            "ADPCM IMA Duck DK3"
+        case .tiff:
+            "TIFF image"
+        case .adpcm_adx:
+            "SEGA CRI ADX ADPCM"
+        case .adpcm_g722:
+            "G.722 ADPCM (decoders: g722 ) (encoders: g722 )"
+        case .interplay_dpcm:
+            "DPCM Interplay"
+        case .amr_wb:
+            "AMR-WB (Adaptive Multi-Rate WideBand) (decoders: amrwb libopencore_amrwb ) (encoders: libvo_amrwbenc )"
+        case .mace6:
+            "MACE (Macintosh Audio Compression/Expansion) 6:1"
+        case .mp2:
+            "MP2 (MPEG audio layer 2) (decoders: mp2 mp2float mp2_at ) (encoders: mp2 mp2fixed libtwolame )"
+        case .adpcm_ima_rad:
+            "ADPCM IMA Radical"
+        case .aptx:
+            "aptX (Audio Processing Technology for Bluetooth)"
+        case .paf_audio:
+            "Amazing Studio Packed Animation File Audio"
+        case .vp6a:
+            "On2 VP6 (Flash version, with alpha channel)"
         case .vmdvideo:
             "Sierra VMD video"
+        case .vplayer:
+            "VPlayer subtitle"
+        case .mts2:
+            "MS Expression Encoder Screen"
+        case .dfa:
+            "Chronomaster DFA"
+        case .imc:
+            "IMC (Intel Music Coder)"
+        case .speex:
+            "Speex (decoders: speex libspeex ) (encoders: libspeex )"
+        case .pcm_s16le_planar:
+            "PCM signed 16-bit little-endian planar"
+        case .arib_caption:
+            "ARIB STD-B24 caption"
+        case .zmbv:
+            "Zip Motion Blocks Video"
+        case .svq1:
+            "Sorenson Vector Quantizer 1 / Sorenson Video 1 / SVQ1"
+        case .wmv1:
+            "Windows Media Video 7"
+        case .v410:
+            "Uncompressed 4:4:4 10-bit"
+        case ._4gv:
+            "4GV (Fourth Generation Vocoder)"
+        case .pcm_s24le_planar:
+            "PCM signed 24-bit little-endian planar"
+        case .vixl:
+            "Miro VideoXL (decoders: xl )"
+        case .subviewer:
+            "SubViewer subtitle"
+        case .gremlin_dpcm:
+            "DPCM Gremlin"
+        case .smv:
+            "SMV (Selectable Mode Vocoder)"
+        case .adpcm_ea_r3:
+            "ADPCM Electronic Arts R3"
+        case .eia_608:
+            "EIA-608 closed captions (decoders: cc_dec )"
+        case .mscc:
+            "Mandsoft Screen Capture Codec"
+        case .argo:
+            "Argonaut Games Video"
+        case .png:
+            "PNG (Portable Network Graphics) image"
+        case .qpeg:
+            "Q-team QPEG"
+        case .sol_dpcm:
+            "DPCM Sol"
+        case .flashsv2:
+            "Flash Screen Video v2"
+        case .bethsoftvid:
+            "Bethesda VID video"
+        case .binkvideo:
+            "Bink video"
+        case .msp2:
+            "Microsoft Paint (MSP) version 2"
+        case .adpcm_ea_r2:
+            "ADPCM Electronic Arts R2"
+        case .adpcm_psx:
+            "ADPCM Playstation"
+        case .truespeech:
+            "DSP Group TrueSpeech"
+        case .kgv1:
+            "Kega Game Video"
+        case .pcm_f16le:
+            "PCM 16.8 floating point little-endian"
+        case .adpcm_ima_ea_eacs:
+            "ADPCM IMA Electronic Arts EACS"
+        case .subrip:
+            "SubRip subtitle (decoders: srt subrip ) (encoders: srt subrip )"
+        case .g729:
+            "G.729"
+        case .thp:
+            "Nintendo Gamecube THP video"
+        case .amv:
+            "AMV Video"
+        case .pcm_s32le:
+            "PCM signed 32-bit little-endian"
+        case .tgq:
+            "Electronic Arts TGQ video (decoders: eatgq )"
+        case .mv30:
+            "MidiVid 3.0"
+        case .sheervideo:
+            "BitJazz SheerVideo"
+        case .avs2:
+            "AVS2-P2/IEEE1857.4"
+        case .msnsiren:
+            "MSN Siren"
+        case .bin_data:
+            "binary data"
+        case .apng:
+            "APNG (Animated Portable Network Graphics) image"
+        case .interplayvideo:
+            "Interplay MVE video"
+        case .pcm_alaw:
+            "PCM A-law / G.711 A-law (decoders: pcm_alaw pcm_alaw_at ) (encoders: pcm_alaw pcm_alaw_at )"
         }
     }
 
     public var type: CodecType {
         switch self {
-        case .tscc:
+        case .hevc:
             .video
-        case .speedhq:
-            .video
-        case .speex:
+        case .siren:
             .audio
-        case .xbin:
+        case ._012v:
             .video
-        case .tiertexseqvideo:
+        case .dirac:
             .video
-        case .h263:
+        case .imm5:
             .video
-        case .idcin:
-            .video
-        case .cdtoons:
-            .video
-        case .huffyuv:
+        case .imm4:
             .video
         case .mpegh_3d_audio:
             .audio
-        case .mdec:
-            .video
-        case .qdmc:
-            .audio
-        case .ttf:
-            .data
-        case .pcm_s8:
-            .audio
-        case .adpcm_sbpro_2:
-            .audio
-        case .text:
-            .subtitle
-        case .ylc:
-            .video
-        case .exr:
-            .video
-        case .sdx2_dpcm:
-            .audio
-        case .pcm_f16le:
-            .audio
-        case .pcm_s24le:
-            .audio
-        case .adpcm_aica:
-            .audio
-        case .tgq:
-            .video
-        case .mp1:
-            .audio
-        case .adpcm_g726:
-            .audio
-        case .dss_sp:
-            .audio
-        case .loco:
-            .video
-        case .h264:
-            .video
-        case .smc:
-            .video
-        case .cfhd:
-            .video
-        case .mp3on4:
-            .audio
-        case .gdv:
-            .video
-        case .adpcm_yamaha:
-            .audio
-        case .adpcm_ea_r2:
-            .audio
-        case .amr_nb:
-            .audio
-        case .sga:
-            .video
-        case .tscc2:
-            .video
-        case .iff_ilbm:
-            .video
-        case .adpcm_sbpro_3:
-            .audio
-        case .pcm_f32le:
-            .audio
-        case .realtext:
-            .subtitle
-        case .photocd:
-            .video
-        case .adpcm_ima_acorn:
-            .audio
-        case .bmp:
-            .video
-        case .cpia:
-            .video
-        case .qpeg:
-            .video
-        case .smackvideo:
-            .video
-        case .musepack7:
-            .audio
-        case .a64_multi5:
-            .video
-        case .alac:
-            .audio
-        case .mscc:
-            .video
-        case .adpcm_ima_dk3:
-            .audio
-        case .cscd:
-            .video
-        case .cmv:
-            .video
-        case .wmav1:
-            .audio
-        case .adpcm_ima_apc:
-            .audio
-        case .h261:
-            .video
-        case .wmalossless:
-            .audio
-        case .adpcm_ima_rad:
-            .audio
-        case .adpcm_argo:
-            .audio
-        case .dxtory:
-            .video
-        case .dvb_teletext:
-            .subtitle
-        case .subviewer:
-            .subtitle
-        case .c93:
-            .video
-        case .kmvc:
-            .video
-        case .amv:
-            .video
-        case .pcm_u24be:
-            .audio
-        case .vbn:
-            .video
-        case .srt:
-            .subtitle
-        case .prores:
-            .video
-        case .smv:
-            .audio
-        case .adpcm_ima_ea_eacs:
-            .audio
-        case .bin_data:
-            .data
-        case .yop:
-            .video
-        case .pcm_sga:
-            .audio
-        case .v410:
-            .video
-        case .avrn:
-            .video
-        case .adpcm_ima_amv:
-            .audio
-        case .adpcm_dtk:
-            .audio
-        case .adpcm_4xm:
-            .audio
-        case .gsm:
-            .audio
-        case .interplay_dpcm:
-            .audio
-        case .mvdv:
-            .video
-        case .mszh:
-            .video
-        case .hcom:
-            .audio
-        case .ilbc:
-            .audio
-        case .adpcm_agm:
-            .audio
-        case .dvb_subtitle:
-            .subtitle
-        case .dsicinvideo:
-            .video
-        case .subviewer1:
-            .subtitle
-        case .dds:
-            .video
-        case .rpza:
-            .video
-        case .adpcm_ima_smjpeg:
-            .audio
-        case .mp3adu:
-            .audio
-        case .wcmv:
-            .video
-        case .hnm4video:
-            .video
-        case .pam:
-            .video
-        case .cllc:
-            .video
-        case .vp5:
-            .video
-        case .hap:
-            .video
-        case .sonicls:
-            .audio
-        case .mp2:
-            .audio
-        case .rv20:
-            .video
-        case .qdm2:
-            .audio
-        case .wmv3image:
-            .video
-        case .amr_wb:
-            .audio
-        case .nuv:
-            .video
-        case .m101:
-            .video
-        case .otf:
-            .data
-        case .hq_hqa:
-            .video
-        case .dnxhd:
-            .video
-        case .anm:
-            .video
-        case .smvjpeg:
-            .video
-        case .hdmv_text_subtitle:
-            .subtitle
-        case .bfi:
-            .video
-        case .avc:
-            .audio
-        case .imc:
-            .audio
-        case .adpcm_thp_le:
-            .audio
-        case .pcm_bluray:
-            .audio
-        case .dxv:
-            .video
-        case .sol_dpcm:
-            .audio
-        case .ttml:
-            .subtitle
-        case .wmavoice:
-            .audio
-        case .xsub:
-            .subtitle
-        case .mace3:
-            .audio
-        case .aptx_hd:
-            .audio
-        case .ssa:
-            .subtitle
-        case .eia_608:
-            .subtitle
-        case .codec2:
-            .audio
-        case .mvc1:
-            .video
-        case .pgm:
-            .video
-        case .kgv1:
-            .video
-        case .h263i:
-            .video
-        case .pcx:
-            .video
-        case .dpx:
-            .video
-        case .dvaudio:
-            .audio
-        case .pcm_s16le_planar:
-            .audio
-        case .dirac:
-            .video
-        case .pcm_s24daud:
-            .audio
-        case .cdxl:
-            .video
-        case .ptx:
-            .video
-        case .utvideo:
-            .video
-        case .pictor:
-            .video
-        case .fmvc:
-            .video
-        case .arbc:
-            .video
-        case .adpcm_ms:
-            .audio
-        case .adpcm_afc:
-            .audio
-        case .metasound:
-            .audio
-        case .msnsiren:
-            .audio
-        case .truemotion2rt:
-            .video
-        case .jpegxl:
-            .video
-        case ._012v:
-            .video
-        case .xan_dpcm:
-            .audio
-        case .pcm_f24le:
-            .audio
-        case .nellymoser:
-            .audio
-        case .scpr:
-            .video
-        case .bmv_video:
-            .video
-        case .frwu:
-            .video
-        case .adpcm_vima:
-            .audio
-        case .mmvideo:
-            .video
-        case .r10k:
-            .video
-        case .alias_pix:
-            .video
-        case .avs2:
-            .video
-        case .pcm_s32le:
-            .audio
-        case .aptx:
-            .audio
-        case .pcm_u16le:
-            .audio
-        case .pcm_s32be:
-            .audio
-        case .simbiosis_imx:
-            .video
-        case .adpcm_ima_ssi:
-            .audio
-        case .adpcm_swf:
-            .audio
-        case .derf_dpcm:
-            .audio
-        case .msvideo1:
-            .video
-        case .pcm_s8_planar:
-            .audio
-        case .daala:
-            .video
-        case .s302m:
-            .audio
-        case .targa_y216:
-            .video
-        case .wmav2:
-            .audio
-        case .eac3:
-            .audio
-        case .truemotion1:
-            .video
-        case ._8bps:
-            .video
-        case .cinepak:
-            .video
-        case .mad:
-            .video
-        case .pcm_s32le_planar:
-            .audio
-        case .bintext:
-            .video
-        case .fraps:
-            .video
-        case .dfa:
-            .video
-        case .mjpeg:
-            .video
-        case .pcm_u32be:
-            .audio
-        case .gem:
-            .video
-        case .vp6f:
-            .video
-        case .hevc:
-            .video
-        case .cljr:
-            .video
-        case .indeo5:
-            .video
-        case .flic:
-            .video
-        case .sonic:
-            .audio
-        case .ra_144:
-            .audio
-        case .vmnc:
-            .video
-        case .pcm_u8:
-            .audio
-        case .xan_wc3:
-            .video
-        case .wmv1:
-            .video
-        case .mss2:
-            .video
-        case .theora:
-            .video
-        case .wmapro:
-            .audio
-        case .h263p:
-            .video
-        case .sipr:
-            .audio
-        case .truespeech:
-            .audio
-        case .xan_wc4:
-            .video
-        case .gremlin_dpcm:
-            .audio
-        case .lscr:
-            .video
-        case .dvd_subtitle:
-            .subtitle
-        case .brender_pix:
-            .video
-        case .yuv4:
-            .video
-        case ._4xm:
-            .video
-        case .mvha:
-            .video
-        case .v210x:
-            .video
-        case .svg:
-            .video
-        case .tak:
-            .audio
-        case .arib_caption:
-            .subtitle
-        case .jpeg2000:
-            .video
-        case .adpcm_mtaf:
-            .audio
-        case .adpcm_ima_wav:
-            .audio
-        case .tta:
-            .audio
-        case .qtrle:
-            .video
-        case .wmv2:
-            .video
-        case .jv:
-            .video
-        case .pcm_s16le:
-            .audio
-        case .mxpeg:
-            .video
-        case .pcm_u24le:
-            .audio
-        case .flac:
-            .audio
-        case .ass:
-            .subtitle
-        case .ipu:
-            .video
-        case .tiff:
-            .video
-        case .binkaudio_rdft:
-            .audio
-        case .musepack8:
-            .audio
-        case .wnv1:
-            .video
-        case .sgirle:
-            .video
-        case .snow:
-            .video
-        case .msrle:
-            .video
-        case .vorbis:
-            .audio
-        case .agm:
-            .video
-        case .roq:
-            .video
-        case .atrac3al:
-            .audio
-        case .pgx:
-            .video
-        case .wmv3:
-            .video
-        case .rl2:
-            .video
-        case .mpl2:
-            .subtitle
-        case .aac_latm:
-            .audio
-        case .dts:
-            .audio
-        case .xpm:
-            .video
-        case .adpcm_ea_maxis_xa:
-            .audio
-        case .sheervideo:
-            .video
-        case .adpcm_adx:
-            .audio
-        case .adpcm_ea_r1:
-            .audio
-        case .screenpresso:
-            .video
-        case .westwood_snd1:
-            .audio
-        case .interplayacm:
-            .audio
-        case .adpcm_ima_alp:
-            .audio
         case .r210:
-            .video
-        case .thp:
-            .video
-        case .wrapped_avframe:
-            .video
-        case .notchlc:
-            .video
-        case .zlib:
-            .video
-        case .wavpack:
-            .audio
-        case .cri:
-            .video
-        case .atrac1:
-            .audio
-        case .imm4:
-            .video
-        case .psd:
-            .video
-        case .stl:
-            .subtitle
-        case .indeo2:
-            .video
-        case .rv10:
-            .video
-        case .mlp:
-            .audio
-        case .sunrast:
-            .video
-        case .ffvhuff:
-            .video
-        case ._8svx_exp:
-            .audio
-        case .mts2:
-            .video
-        case .xbm:
-            .video
-        case .celt:
-            .audio
-        case .vp6a:
-            .video
-        case .mjpegb:
-            .video
-        case .magicyuv:
-            .video
-        case .v210:
-            .video
-        case .indeo4:
-            .video
-        case .targa:
-            .video
-        case .dsicinaudio:
-            .audio
-        case .mpeg1video:
-            .video
-        case .timed_id3:
-            .data
-        case .twinvq:
-            .audio
-        case .dsd_lsbf_planar:
-            .audio
-        case .zerocodec:
-            .video
-        case .wavesynth:
-            .audio
-        case .ra_288:
-            .audio
-        case .microdvd:
-            .subtitle
-        case .png:
-            .video
-        case .binkaudio_dct:
-            .audio
-        case .shorten:
-            .audio
-        case .opus:
-            .audio
-        case .cavs:
-            .video
-        case .dsd_msbf:
-            .audio
-        case .xface:
-            .video
-        case .sbc:
-            .audio
-        case .vplayer:
-            .subtitle
-        case .pixlet:
-            .video
-        case .smackaudio:
-            .audio
-        case .avui:
-            .video
-        case .binkvideo:
-            .video
-        case .pbm:
-            .video
-        case ._8svx_fib:
-            .audio
-        case .dsd_lsbf:
-            .audio
-        case .tqi:
-            .video
-        case .adpcm_ima_dat4:
-            .audio
-        case .dvvideo:
-            .video
-        case .sanm:
-            .video
-        case .ppm:
-            .video
-        case .truemotion2:
-            .video
-        case .qdraw:
-            .video
-        case .pcm_u32le:
-            .audio
-        case .pcm_mulaw:
-            .audio
-        case .sgi:
-            .video
-        case .atrac9:
-            .audio
-        case .flv1:
-            .video
-        case .a64_multi:
-            .video
-        case .asv2:
-            .video
-        case .apng:
-            .video
-        case .g729:
-            .audio
-        case .vp8:
-            .video
-        case .pcm_f64be:
-            .audio
-        case .aasc:
-            .video
-        case .aac:
-            .audio
-        case .evrc:
-            .audio
-        case .dolby_e:
-            .audio
-        case .vp7:
-            .video
-        case .escape124:
-            .video
-        case .motionpixels:
-            .video
-        case .clearvideo:
-            .video
-        case .pcm_f32be:
-            .audio
-        case .aura2:
-            .video
-        case .pcm_vidc:
-            .audio
-        case .lagarith:
-            .video
-        case .phm:
-            .video
-        case .mvc2:
-            .video
-        case .txd:
-            .video
-        case .adpcm_sbpro_4:
-            .audio
-        case .webp:
-            .video
-        case .hqx:
-            .video
-        case .pcm_s24be:
-            .audio
-        case .cyuv:
-            .video
-        case .mpegts:
-            .data
-        case .vvc:
-            .video
-        case .qcelp:
-            .audio
-        case .rscc:
-            .video
-        case .ljpeg:
-            .video
-        case .vixl:
-            .video
-        case .pcm_lxf:
-            .audio
-        case .adpcm_ima_cunning:
-            .audio
-        case .vp9:
-            .video
-        case .adpcm_ea:
-            .audio
-        case .xma1:
-            .audio
-        case .tmv:
-            .video
-        case .pcm_s16be_planar:
-            .audio
-        case .truehd:
-            .audio
-        case .aura:
-            .video
-        case .fits:
-            .video
-        case .pcm_s24le_planar:
-            .audio
-        case .adpcm_ima_iss:
-            .audio
-        case .gsm_ms:
-            .audio
-        case .adpcm_ct:
-            .audio
-        case .pcm_s16be:
-            .audio
-        case .adpcm_zork:
-            .audio
-        case .adpcm_psx:
-            .audio
-        case .mobiclip:
-            .video
-        case .adpcm_ima_mtf:
-            .audio
-        case .gif:
-            .video
-        case .flashsv2:
-            .video
-        case .epg:
-            .data
-        case .pcm_dvd:
-            .audio
-        case .fastaudio:
-            .audio
-        case .scte_35:
-            .data
-        case .msmpeg4v1:
-            .video
-        case .av1:
-            .video
-        case .v408:
-            .video
-        case .asv1:
-            .video
-        case .y41p:
-            .video
-        case .ws_vqa:
-            .video
-        case .avs3:
-            .video
-        case .iac:
-            .audio
-        case .mp4als:
-            .audio
-        case .pcm_s64le:
-            .audio
-        case .mwsc:
-            .video
-        case .qoi:
-            .video
-        case .g723_1:
-            .audio
-        case .adpcm_g722:
-            .audio
-        case .ffv1:
-            .video
-        case .adpcm_xa:
-            .audio
-        case .imm5:
             .video
         case .vp3:
             .video
-        case .flashsv:
-            .video
-        case .tgv:
-            .video
-        case .v308:
-            .video
-        case .subrip:
-            .subtitle
-        case .adpcm_ea_r3:
+        case .cook:
             .audio
-        case .pcm_u16be:
-            .audio
-        case .adpcm_ea_xas:
-            .audio
-        case .vble:
-            .video
-        case .paf_video:
-            .video
-        case .msp2:
-            .video
-        case .adpcm_g726le:
-            .audio
-        case .vcr1:
+        case .v210:
             .video
         case .prosumer:
             .video
-        case .svq3:
-            .video
-        case .ayuv:
-            .video
-        case .sp5x:
-            .video
-        case .jacosub:
-            .subtitle
-        case .ape:
+        case .sonicls:
             .audio
-        case .msa1:
-            .video
-        case .bitpacked:
-            .video
-        case .rawvideo:
-            .video
-        case .hca:
+        case .adpcm_sbpro_4:
             .audio
-        case .adpcm_ima_ea_sead:
+        case .qdm2:
             .audio
-        case .g2m:
+        case .xbm:
             .video
-        case .dxa:
+        case .v210x:
             .video
-        case .dst:
-            .audio
-        case .bethsoftvid:
+        case .fic:
             .video
-        case .pjs:
-            .subtitle
-        case .vb:
+        case .msmpeg4v3:
             .video
-        case .webvtt:
-            .subtitle
-        case .pcm_alaw:
-            .audio
-        case .comfortnoise:
-            .audio
-        case .mpeg4:
-            .video
-        case .rv40:
-            .video
-        case .interplayvideo:
-            .video
-        case .mimic:
-            .video
-        case .aic:
-            .video
-        case .mss1:
+        case .rpza:
             .video
         case .roq_dpcm:
             .audio
-        case .pcm_s64be:
-            .audio
-        case .vp6:
-            .video
-        case .mp3:
-            .audio
-        case .vmdaudio:
-            .audio
-        case .bmv_audio:
-            .audio
-        case .pcm_f64le:
-            .audio
-        case .cdgraphics:
-            .video
-        case .adpcm_ima_dk4:
-            .audio
-        case .mv30:
-            .video
-        case .adpcm_ima_qt:
-            .audio
-        case .mov_text:
-            .subtitle
-        case .msmpeg4v3:
-            .video
-        case .adpcm_ima_moflex:
-            .audio
-        case .argo:
-            .video
-        case .mace6:
-            .audio
-        case .dsd_msbf_planar:
-            .audio
-        case .hdmv_pgs_subtitle:
-            .subtitle
-        case .adpcm_thp:
-            .audio
-        case .rasc:
-            .video
-        case .rv30:
-            .video
         case .ac3:
             .audio
-        case .ralf:
+        case .vbn:
+            .video
+        case .fastaudio:
             .audio
-        case .zmbv:
+        case .celt:
+            .audio
+        case .adpcm_dtk:
+            .audio
+        case .ayuv:
             .video
-        case .avrp:
-            .video
-        case .svq1:
-            .video
-        case .vc1:
-            .video
-        case .vp4:
+        case .wavpack:
+            .audio
+        case .mwsc:
             .video
         case .xwd:
             .video
-        case .adpcm_ima_ws:
-            .audio
-        case .tdsc:
+        case .avui:
             .video
-        case .dfpwm:
+        case .pgx:
+            .video
+        case .pcm_f32be:
             .audio
-        case .dvd_nav_packet:
+        case .avs:
+            .video
+        case .avs3:
+            .video
+        case .truemotion2:
+            .video
+        case .asv2:
+            .video
+        case .adpcm_aica:
+            .audio
+        case .rawvideo:
+            .video
+        case .sdx2_dpcm:
+            .audio
+        case .qoi:
+            .video
+        case .mace3:
+            .audio
+        case .mov_text:
+            .subtitle
+        case .vp9:
+            .video
+        case .avrp:
+            .video
+        case .hca:
+            .audio
+        case .ffv1:
+            .video
+        case .mjpegb:
+            .video
+        case .sp5x:
+            .video
+        case .dsicinvideo:
+            .video
+        case .alac:
+            .audio
+        case .indeo5:
+            .video
+        case .tak:
+            .audio
+        case .notchlc:
+            .video
+        case .mobiclip:
+            .video
+        case .pjs:
+            .subtitle
+        case .pcm_s24daud:
+            .audio
+        case .dsd_msbf_planar:
+            .audio
+        case .simbiosis_imx:
+            .video
+        case .comfortnoise:
+            .audio
+        case .jacosub:
+            .subtitle
+        case .vmnc:
+            .video
+        case .xpm:
+            .video
+        case .qcelp:
+            .audio
+        case .text:
+            .subtitle
+        case .adpcm_sbpro_2:
+            .audio
+        case .mp3adu:
+            .audio
+        case .musepack8:
+            .audio
+        case .yuv4:
+            .video
+        case .atrac1:
+            .audio
+        case .vp5:
+            .video
+        case .pcm_u24le:
+            .audio
+        case .tqi:
+            .video
+        case ._8svx_fib:
+            .audio
+        case .qdraw:
+            .video
+        case .tgv:
+            .video
+        case .av1:
+            .video
+        case .m101:
+            .video
+        case .adpcm_ima_apc:
+            .audio
+        case .flic:
+            .video
+        case .mdec:
+            .video
+        case .agm:
+            .video
+        case .adpcm_ima_ea_sead:
+            .audio
+        case .xma2:
+            .audio
+        case .pcm_s16be_planar:
+            .audio
+        case .cfhd:
+            .video
+        case .pcm_f64le:
+            .audio
+        case .smc:
+            .video
+        case .adpcm_ima_iss:
+            .audio
+        case .epg:
             .data
-        case .cook:
-            .audio
-        case .adpcm_ima_apm:
-            .audio
-        case .atrac3:
-            .audio
-        case .siren:
+        case .sga:
+            .video
+        case ._4xm:
+            .video
+        case .opus:
             .audio
         case .hymt:
             .video
-        case .atrac3pal:
+        case .tdsc:
+            .video
+        case .roq:
+            .video
+        case .ra_288:
             .audio
-        case ._4gv:
+        case .gif:
+            .video
+        case .msrle:
+            .video
+        case .dts:
             .audio
+        case .cmv:
+            .video
+        case .adpcm_g726:
+            .audio
+        case .bmp:
+            .video
+        case .adpcm_ima_dk4:
+            .audio
+        case .iff_ilbm:
+            .video
+        case .dvvideo:
+            .video
+        case .derf_dpcm:
+            .audio
+        case .adpcm_ima_ws:
+            .audio
+        case .adpcm_ima_amv:
+            .audio
+        case .y41p:
+            .video
+        case .r10k:
+            .video
+        case .adpcm_4xm:
+            .audio
+        case .snow:
+            .video
+        case .xsub:
+            .subtitle
+        case .vb:
+            .video
+        case .alias_pix:
+            .video
+        case .sanm:
+            .video
+        case .wmalossless:
+            .audio
+        case .dss_sp:
+            .audio
+        case .svg:
+            .video
+        case .h264:
+            .video
+        case .scpr:
+            .video
+        case .mxpeg:
+            .video
+        case .daala:
+            .video
+        case .ttf:
+            .data
+        case .pictor:
+            .video
+        case .ptx:
+            .video
+        case .vp6:
+            .video
+        case .smvjpeg:
+            .video
+        case .flashsv:
+            .video
+        case .bitpacked:
+            .video
+        case .phm:
+            .video
+        case .xma1:
+            .audio
+        case .sipr:
+            .audio
+        case .iac:
+            .audio
+        case .hdmv_text_subtitle:
+            .subtitle
+        case .mad:
+            .video
+        case .avc:
+            .audio
+        case .cllc:
+            .video
+        case .pcm_f64be:
+            .audio
+        case .h263p:
+            .video
+        case .exr:
+            .video
+        case .cpia:
+            .video
+        case .hq_hqa:
+            .video
+        case .ilbc:
+            .audio
+        case .vp4:
+            .video
+        case .pcm_u16le:
+            .audio
+        case .prores:
+            .video
         case .escape130:
             .video
-        case .vc1image:
+        case .cscd:
             .video
-        case .pfm:
+        case .tiertexseqvideo:
             .video
-        case .atrac3p:
+        case .webp:
+            .video
+        case .wmv3:
+            .video
+        case .adpcm_thp:
             .audio
-        case .idf:
-            .video
+        case .ass:
+            .subtitle
+        case .adpcm_argo:
+            .audio
         case .ansi:
             .video
-        case .ulti:
-            .video
-        case .adpcm_ima_oki:
+        case .flac:
             .audio
-        case .paf_audio:
+        case .smackaudio:
             .audio
-        case .mpeg2video:
-            .video
-        case .jpegls:
-            .video
-        case .srgc:
-            .video
-        case .pgmyuv:
-            .video
-        case .avs:
-            .video
-        case .xma2:
-            .audio
-        case .msmpeg4v2:
-            .video
-        case .indeo3:
+        case .msmpeg4v1:
             .video
         case .klv:
             .data
+        case .xface:
+            .video
+        case .dxv:
+            .video
+        case .truehd:
+            .audio
+        case .pcx:
+            .video
+        case .pam:
+            .video
+        case .atrac3:
+            .audio
+        case .adpcm_ima_acorn:
+            .audio
+        case .atrac9:
+            .audio
+        case .escape124:
+            .video
+        case .adpcm_ea:
+            .audio
+        case .utvideo:
+            .video
+        case .dpx:
+            .video
+        case .adpcm_sbpro_3:
+            .audio
+        case .v408:
+            .video
+        case .mlp:
+            .audio
+        case .wmapro:
+            .audio
+        case .xan_wc4:
+            .video
+        case .twinvq:
+            .audio
+        case .adpcm_ima_alp:
+            .audio
+        case .loco:
+            .video
+        case .brender_pix:
+            .video
+        case .cdxl:
+            .video
+        case .truemotion1:
+            .video
+        case .adpcm_vima:
+            .audio
+        case .pcm_lxf:
+            .audio
+        case .motionpixels:
+            .video
+        case .s302m:
+            .audio
+        case .wmv3image:
+            .video
+        case .ra_144:
+            .audio
+        case .jpegls:
+            .video
+        case .bfi:
+            .video
+        case .mpl2:
+            .subtitle
+        case .pcm_bluray:
+            .audio
+        case .adpcm_ct:
+            .audio
+        case .vble:
+            .video
+        case .pbm:
+            .video
+        case .pcm_s64be:
+            .audio
+        case .frwu:
+            .video
+        case .adpcm_ima_moflex:
+            .audio
+        case .mss1:
+            .video
+        case .idf:
+            .video
+        case .bmv_audio:
+            .audio
+        case .pcm_s32le_planar:
+            .audio
+        case ._8svx_exp:
+            .audio
+        case .pcm_s32be:
+            .audio
+        case .aptx_hd:
+            .audio
+        case .pcm_u32le:
+            .audio
+        case .srt:
+            .subtitle
+        case .codec2:
+            .audio
+        case .timed_id3:
+            .data
+        case .vorbis:
+            .audio
+        case .atrac3pal:
+            .audio
+        case .xbin:
+            .video
+        case .microdvd:
+            .subtitle
+        case .scte_35:
+            .data
+        case .g723_1:
+            .audio
+        case .huffyuv:
+            .video
+        case .aura2:
+            .video
+        case .dxa:
+            .video
+        case .pcm_u24be:
+            .audio
+        case .vp7:
+            .video
+        case .gdv:
+            .video
+        case .qtrle:
+            .video
+        case .g2m:
+            .video
+        case .pcm_s16be:
+            .audio
+        case .arbc:
+            .video
+        case .theora:
+            .video
+        case .wmavoice:
+            .audio
+        case .vmdaudio:
+            .audio
+        case .msa1:
+            .video
+        case .pcm_mulaw:
+            .audio
+        case .adpcm_agm:
+            .audio
+        case .rv10:
+            .video
+        case .rv20:
+            .video
+        case .zerocodec:
+            .video
+        case .clearvideo:
+            .video
+        case .pcm_s24be:
+            .audio
+        case .pcm_s8:
+            .audio
+        case .mpeg1video:
+            .video
+        case .subviewer1:
+            .subtitle
+        case .tta:
+            .audio
+        case .sunrast:
+            .video
+        case .kmvc:
+            .video
+        case .lagarith:
+            .video
+        case .webvtt:
+            .subtitle
+        case .msvideo1:
+            .video
+        case .adpcm_ima_apm:
+            .audio
+        case .xan_wc3:
+            .video
+        case .ssa:
+            .subtitle
+        case .anm:
+            .video
+        case .fits:
+            .video
+        case .aic:
+            .video
+        case .adpcm_ima_qt:
+            .audio
+        case .rv30:
+            .video
+        case .indeo2:
+            .video
+        case .dfpwm:
+            .audio
+        case .ttml:
+            .subtitle
+        case .wmav1:
+            .audio
+        case .metasound:
+            .audio
+        case .svq3:
+            .video
+        case .mss2:
+            .video
+        case .adpcm_g726le:
+            .audio
+        case .adpcm_yamaha:
+            .audio
+        case .adpcm_mtaf:
+            .audio
+        case .dxtory:
+            .video
+        case .adpcm_ima_dat4:
+            .audio
+        case .dvaudio:
+            .audio
+        case .jpeg2000:
+            .video
+        case .screenpresso:
+            .video
+        case .binkaudio_dct:
+            .audio
+        case .hap:
+            .video
+        case .mpeg4:
+            .video
+        case .yop:
+            .video
+        case .pcm_f24le:
+            .audio
+        case .sgirle:
+            .video
+        case .ape:
+            .audio
+        case .adpcm_ea_xas:
+            .audio
+        case .aasc:
+            .video
+        case .pcm_u16be:
+            .audio
+        case .ppm:
+            .video
+        case .wavesynth:
+            .audio
+        case .pcm_s24le:
+            .audio
+        case .adpcm_ms:
+            .audio
+        case .c93:
+            .video
+        case .msmpeg4v2:
+            .video
+        case .tscc2:
+            .video
+        case .idcin:
+            .video
+        case .ulti:
+            .video
+        case .dvd_nav_packet:
+            .data
+        case .adpcm_ima_smjpeg:
+            .audio
+        case .vp8:
+            .video
+        case .cdgraphics:
+            .video
+        case .adpcm_ea_maxis_xa:
+            .audio
+        case .zlib:
+            .video
+        case .adpcm_ima_wav:
+            .audio
+        case .ljpeg:
+            .video
+        case .smackvideo:
+            .video
+        case .vp6f:
+            .video
+        case .adpcm_ima_ssi:
+            .audio
+        case .xan_dpcm:
+            .audio
+        case .pcm_u8:
+            .audio
+        case .gem:
+            .video
+        case .indeo4:
+            .video
+        case .dvd_subtitle:
+            .subtitle
+        case .mp4als:
+            .audio
+        case .mp3:
+            .audio
+        case .eac3:
+            .audio
+        case .evrc:
+            .audio
+        case .sonic:
+            .audio
+        case .dvb_teletext:
+            .subtitle
+        case .truemotion2rt:
+            .video
+        case .shorten:
+            .audio
+        case .bmv_video:
+            .video
+        case .aura:
+            .video
+        case .dnxhd:
+            .video
+        case .sbc:
+            .audio
+        case .ws_vqa:
+            .video
+        case .rscc:
+            .video
+        case .wnv1:
+            .video
+        case .h263:
+            .video
+        case .speedhq:
+            .video
+        case .lscr:
+            .video
+        case .dst:
+            .audio
+        case .pgmyuv:
+            .video
+        case .a64_multi5:
+            .video
+        case .targa_y216:
+            .video
+        case .vc1:
+            .video
+        case .adpcm_thp_le:
+            .audio
+        case .cdtoons:
+            .video
+        case .westwood_snd1:
+            .audio
+        case .qdmc:
+            .audio
+        case .photocd:
+            .video
+        case .pcm_s64le:
+            .audio
+        case .cljr:
+            .video
+        case .dsd_lsbf_planar:
+            .audio
+        case .indeo3:
+            .video
+        case .interplayacm:
+            .audio
+        case .mmvideo:
+            .video
+        case .adpcm_xa:
+            .audio
+        case .magicyuv:
+            .video
+        case .cavs:
+            .video
+        case .binkaudio_rdft:
+            .audio
+        case .ipu:
+            .video
+        case .cri:
+            .video
+        case .rv40:
+            .video
+        case .h263i:
+            .video
+        case .vvc:
+            .video
+        case .wmav2:
+            .audio
+        case .mpegts:
+            .data
+        case .ffvhuff:
+            .video
+        case .tmv:
+            .video
+        case .atrac3al:
+            .audio
+        case .a64_multi:
+            .video
+        case .h261:
+            .video
+        case .adpcm_ima_mtf:
+            .audio
+        case .dsicinaudio:
+            .audio
+        case .rasc:
+            .video
+        case .mvc1:
+            .video
+        case .rl2:
+            .video
+        case .fmvc:
+            .video
+        case .wmv2:
+            .video
+        case .avrn:
+            .video
+        case .ylc:
+            .video
+        case .pcm_u32be:
+            .audio
+        case .vc1image:
+            .video
+        case .gsm_ms:
+            .audio
+        case .mjpeg:
+            .video
+        case .stl:
+            .subtitle
+        case .pfm:
+            .video
+        case .aac:
+            .audio
+        case .srgc:
+            .video
+        case .tscc:
+            .video
+        case .pcm_s8_planar:
+            .audio
+        case .dsd_msbf:
+            .audio
+        case .psd:
+            .video
+        case .dolby_e:
+            .audio
+        case .adpcm_swf:
+            .audio
+        case .fraps:
+            .video
+        case .dds:
+            .video
+        case .nuv:
+            .video
+        case .mszh:
+            .video
+        case .aac_latm:
+            .audio
+        case .v308:
+            .video
+        case .txd:
+            .video
+        case .dsd_lsbf:
+            .audio
+        case .atrac3p:
+            .audio
+        case .mpeg2video:
+            .video
+        case .targa:
+            .video
+        case .mimic:
+            .video
+        case .pcm_sga:
+            .audio
+        case .wrapped_avframe:
+            .video
+        case .adpcm_ima_oki:
+            .audio
+        case .pcm_vidc:
+            .audio
+        case .cyuv:
+            .video
+        case .mp1:
+            .audio
+        case .mp3on4:
+            .audio
+        case .otf:
+            .data
+        case .mvdv:
+            .video
+        case .flv1:
+            .video
+        case .amr_nb:
+            .audio
+        case .asv1:
+            .video
         case .sami:
             .subtitle
-        case .fic:
+        case .musepack7:
+            .audio
+        case .adpcm_zork:
+            .audio
+        case .gsm:
+            .audio
+        case ._8bps:
+            .video
+        case .adpcm_afc:
+            .audio
+        case .pixlet:
+            .video
+        case .vcr1:
+            .video
+        case .mvc2:
+            .video
+        case .cinepak:
+            .video
+        case .nellymoser:
+            .audio
+        case .sgi:
+            .video
+        case .hdmv_pgs_subtitle:
+            .subtitle
+        case .pcm_s16le:
+            .audio
+        case .hnm4video:
+            .video
+        case .pgm:
+            .video
+        case .wcmv:
+            .video
+        case .adpcm_ea_r1:
+            .audio
+        case .jpegxl:
+            .video
+        case .pcm_f32le:
+            .audio
+        case .mvha:
+            .video
+        case .bintext:
+            .video
+        case .jv:
+            .video
+        case .pcm_dvd:
+            .audio
+        case .adpcm_ima_cunning:
+            .audio
+        case .hqx:
+            .video
+        case .dvb_subtitle:
+            .subtitle
+        case .hcom:
+            .audio
+        case .realtext:
+            .subtitle
+        case .ralf:
+            .audio
+        case .paf_video:
+            .video
+        case .adpcm_ima_dk3:
+            .audio
+        case .tiff:
+            .video
+        case .adpcm_adx:
+            .audio
+        case .adpcm_g722:
+            .audio
+        case .interplay_dpcm:
+            .audio
+        case .amr_wb:
+            .audio
+        case .mace6:
+            .audio
+        case .mp2:
+            .audio
+        case .adpcm_ima_rad:
+            .audio
+        case .aptx:
+            .audio
+        case .paf_audio:
+            .audio
+        case .vp6a:
             .video
         case .vmdvideo:
             .video
+        case .vplayer:
+            .subtitle
+        case .mts2:
+            .video
+        case .dfa:
+            .video
+        case .imc:
+            .audio
+        case .speex:
+            .audio
+        case .pcm_s16le_planar:
+            .audio
+        case .arib_caption:
+            .subtitle
+        case .zmbv:
+            .video
+        case .svq1:
+            .video
+        case .wmv1:
+            .video
+        case .v410:
+            .video
+        case ._4gv:
+            .audio
+        case .pcm_s24le_planar:
+            .audio
+        case .vixl:
+            .video
+        case .subviewer:
+            .subtitle
+        case .gremlin_dpcm:
+            .audio
+        case .smv:
+            .audio
+        case .adpcm_ea_r3:
+            .audio
+        case .eia_608:
+            .subtitle
+        case .mscc:
+            .video
+        case .argo:
+            .video
+        case .png:
+            .video
+        case .qpeg:
+            .video
+        case .sol_dpcm:
+            .audio
+        case .flashsv2:
+            .video
+        case .bethsoftvid:
+            .video
+        case .binkvideo:
+            .video
+        case .msp2:
+            .video
+        case .adpcm_ea_r2:
+            .audio
+        case .adpcm_psx:
+            .audio
+        case .truespeech:
+            .audio
+        case .kgv1:
+            .video
+        case .pcm_f16le:
+            .audio
+        case .adpcm_ima_ea_eacs:
+            .audio
+        case .subrip:
+            .subtitle
+        case .g729:
+            .audio
+        case .thp:
+            .video
+        case .amv:
+            .video
+        case .pcm_s32le:
+            .audio
+        case .tgq:
+            .video
+        case .mv30:
+            .video
+        case .sheervideo:
+            .video
+        case .avs2:
+            .video
+        case .msnsiren:
+            .audio
+        case .bin_data:
+            .data
+        case .apng:
+            .video
+        case .interplayvideo:
+            .video
+        case .pcm_alaw:
+            .audio
         }
     }
 
+    public static var encodableDecodableVideoCodecs: [FFmpegCodec] {
+        self.allCases
+          .filter { $0.canDecode }
+          .filter { $0.canEncode }
+          .filter { $0.type == .video }
+    }
 }
 
 public enum CodecType: Codable {

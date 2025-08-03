@@ -197,5 +197,11 @@ print OUT "    }\n\n";
 
 
 
+print OUT "    public static var inputOutputPixelFormats: [FFmpegPixelFormat] {\n";
+print OUT "        self.allCases\n";
+print OUT '          .filter { $0.canInput }'."\n";
+print OUT '          .filter { $0.canOutput }'."\n";
+print OUT "    }\n";
+
 
 print OUT "}\n";
