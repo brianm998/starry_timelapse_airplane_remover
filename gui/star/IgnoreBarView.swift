@@ -15,6 +15,8 @@ public struct IgnoreBarView: View {
               .frame(width: viewModel.frameWidth,
                      height: viewModel.ignoreLowerPixels)
               .offset(y: viewModel.frameHeight/2 - viewModel.ignoreLowerPixels/2)
+              .cursor(.disappearingItem)
+              .onTapGesture { viewModel.showIgnoreLowerBar = false }
 
             // draw an X
             Path { path in
@@ -35,6 +37,8 @@ public struct IgnoreBarView: View {
             }
               .stroke(.white, lineWidth: viewModel.lineWidth*2)
               .opacity(0.4)
+              .cursor(.disappearingItem)
+              .onTapGesture { viewModel.showIgnoreLowerBar = false }
 
             // arrow on the right
             Image(systemName: "chevron.left")
@@ -80,6 +84,8 @@ public struct IgnoreBarView: View {
                   .foregroundColor(.red)
                   .font(.system(size: viewModel.frameHeight/12))
                   .offset(y: viewModel.frameHeight/2 - viewModel.ignoreLowerPixels/2)
+                  .cursor(.disappearingItem)
+                  .onTapGesture { viewModel.showIgnoreLowerBar = false }
             }
         }        
     }
