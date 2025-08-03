@@ -1,5 +1,6 @@
 import SwiftUI
 import StarCore
+import logging
 
 struct LeftPanel: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
@@ -23,6 +24,11 @@ struct LeftPanel: View {
             ScrollView() {
                 VStack(alignment: .leading) {
 
+                    self.processingButtons
+
+                    Spacer()
+                      .frame(maxHeight: 10)
+                    
                     self.processingStateView
 
                     Spacer()
@@ -53,6 +59,63 @@ struct LeftPanel: View {
         
     }
 
+    var processingButtons: some View {
+        VStack(alignment: .leading) {
+            let unprocessed = viewModel.frameStateMap[.unprocessed]?.count ?? 0
+
+            Button() {
+                viewModel.processFrames(from: 0)
+                 /*
+                  XXX show a UI here which allows the user to choose:
+
+                  - the number of neigbhors
+                  - the pixel threshold
+                  - now many to process at once
+                  - processessing level (mild, strong, etc)
+
+                  with a description of what each one means
+                 */
+            } label: {
+                Text("Process \(unprocessed) frames")
+            }
+              .disabled(unprocessed == 0 || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo)
+
+            let userModified = viewModel.frameStateMap[.userModified]?.count ?? 0
+            
+            Button() {
+                viewModel.renderAllFrames()
+            } label: {
+                Text("Update \(userModified) frames")
+            }
+              .disabled(userModified == 0 || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo)
+
+            let complete = viewModel.frameStateMap[.complete]?.count ?? 0
+
+            Button() {
+                Log.d("render video")
+                viewModel.isRenderingVideo = true
+                /*
+
+                 need to keep track of ffmpeg parameters when we load a video
+                 (get rid of script to render)
+
+                 default ffmpeg parameters to prores high quailty in config
+
+                 have ui that allows users to change codec and frame rate, etc.
+
+                 show render progress in UI somehow
+                 
+                 */
+
+                viewModel.isRenderingVideo = false
+                
+            } label: {
+                Text("render video from \(viewModel.frames.count) frames")
+            }
+              .disabled(complete != viewModel.frames.count || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo)
+        }
+    }
+        
     var processingStateView: some View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .leading) {

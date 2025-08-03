@@ -97,7 +97,7 @@ struct BottomRightView: View {
                     }
                 }
 
-                if viewModel.isProcessingAllFrames {
+                if viewModel.isProcessingFrames {
                     ProgressView()
                     Text("processing \(viewModel.frames.count - viewModel.numberOfFramesProcessed) more frames")
                       .foregroundColor(.white)
@@ -183,7 +183,7 @@ struct BottomRightView: View {
                 if viewModel.videoPlaying {
                     Text("")
                 } else {
-                    if viewModel.isProcessingAllFrames {
+                    if viewModel.isProcessingFrames {
                         ProgressView()
                         Text("processing \(viewModel.frames.count - viewModel.numberOfFramesProcessed) more frames")
                           .foregroundColor(.white)

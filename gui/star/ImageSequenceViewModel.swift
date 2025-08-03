@@ -1,4 +1,3 @@
-
 import Foundation
 import SwiftUI
 import Cocoa
@@ -183,9 +182,11 @@ public final class ImageSequenceViewModel {
     }
     var renderingCurrentFrame = false
 
-    var isProcessingAllFrames = false
+    var isProcessingFrames = false
     var numberOfFramesProcessed = 0
 
+    var isRenderingVideo = false
+    
     var showIgnoreLowerBar = false
     
     var ignoreLowerPixels: CGFloat = 0
@@ -864,8 +865,8 @@ public final class ImageSequenceViewModel {
 
     func processFrames(from startIndex: Int? = nil, to endIndex: Int? = nil) {
         Log.d("processing frames from \(startIndex) to \(endIndex)")
-        //if isProcessingAllFrames { return }
-        //isProcessingAllFrames = true
+        //if isProcessingFrames { return }
+        isProcessingFrames = true
 
         Log.d("processAllFrames start from \(startIndex) to \(endIndex)")
         
@@ -875,9 +876,9 @@ public final class ImageSequenceViewModel {
 
             await finalProcessor?.processFrames(from: startIndex, to: endIndex)
 
-//            await MainActor.run {
-//                self.isProcessingAllFrames = false
-//            }
+            await MainActor.run {
+                self.isProcessingFrames = false
+            }
         }
     }
 
@@ -1182,6 +1183,45 @@ public final class ImageSequenceViewModel {
             self.transition(until: self.fastAdvancementType,
                             from: self.currentFrameView,
                             forwards: true)
+        }
+    }
+
+    func renderAllFrames() {
+        //  let foobar = viewModel
+        self.renderingAllFrames = true
+        let frameSaveQueue = self.frameSaveQueue
+        Task {
+            try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+                //                await withLimitedTaskGroup(of: Void.self) { taskGroup in
+                /// does this break things when saving thousands of frames at once?
+
+                let counter = CountActor()
+                for frameView in self.frames {
+                    if let frame = frameView.frame {
+                        if await frame.processingState() == .userModified {
+                            taskGroup.addTask() {
+                                await counter.increase()
+                                try await frameSaveQueue.saveNow(frame: frame) {
+                                    await self.refresh(frame: frame)
+                                    /*
+                                     if frame.frameIndex == self.currentIndex {
+                                     refreshCurrentFrame()
+                                     }
+                                     */
+                                    await counter.decrease()
+                                    if !(await counter.isMoreThanZero()) {
+                                        await MainActor.run {
+                                            self.renderingAllFrames = false
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                try await taskGroup.waitForAll()
+            }
         }
     }
 }
