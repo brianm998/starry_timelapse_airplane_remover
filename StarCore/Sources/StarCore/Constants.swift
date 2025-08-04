@@ -27,9 +27,30 @@ public actor Constants {        // XXX rename this
 
     // anything smaller than this is dust, adjusted for place on screen
     private var smallTrashMax: Int = 30
+
+    private var frameRate: FrameRate = .fps_24
+    private var codec: FFmpegCodec = .prores
+    private var pixelFormat: FFmpegPixelFormat = .yuv444p10le
+    private var muxer: FFmpegMuxer = .mov
     
     public init(detectionType: DetectionType) {
         self.detectionType = detectionType
+    }
+
+    public func set(frameRate: FrameRate) {
+        self.frameRate = frameRate
+    }
+
+    public func set(codec: FFmpegCodec) {
+        self.codec = codec
+    }
+
+    public func set(pixelFormat: FFmpegPixelFormat) {
+        self.pixelFormat = pixelFormat
+    }
+
+    public func set(muxer: FFmpegMuxer) {
+        self.muxer = muxer
     }
 
     public func getDetectionType() -> DetectionType { detectionType }

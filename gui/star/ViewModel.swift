@@ -186,13 +186,17 @@ public final class ViewModel {
         // just opened handled in InitialView where we know the full path
     }
 
-    func startup(withNewImageSequence imageSequenceDirname: String) async throws {
+    func startup(withNewImageSequence imageSequenceDirname: String,
+                 and videoInfo: VideoInfo? = nil) async throws
+    {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = imageSequenceDirname
 
         // XXX check to see if we should create previews here
         
-        let imageSequenceViewModel = try await ImageSequenceViewModel(withNewImageSequence: imageSequenceDirname) { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
+        let imageSequenceViewModel =
+          try await ImageSequenceViewModel(withNewImageSequence: imageSequenceDirname, and: videoInfo)
+        { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
             Task { @MainActor in
                 self.amountLoaded = amountLoaded
                 self.numberLoaded = numberLoaded
@@ -220,7 +224,7 @@ public final class ViewModel {
         isLoadingImageSequence = true
 
         isExtractingImageSequence = true
-        let (outputDir, reencodeScript) = try await Task.detached() {
+        let (outputDir, videoInfo) = try await Task.detached() {
             try await decodeVideo(named: path) { currentFrame, totalFrames in
                 Task { @MainActor in
                     self.numberExtracted = currentFrame
@@ -231,10 +235,9 @@ public final class ViewModel {
 
         isExtractingImageSequence = false
         
-        Log.d("reencodeScript \(reencodeScript)")
         Log.d("outputDir \(outputDir)")
 
-        try await startup(withNewImageSequence: outputDir)
+        try await startup(withNewImageSequence: outputDir, and: videoInfo)
     }
 }
 

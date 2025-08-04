@@ -3,16 +3,96 @@ import SwiftUI
 import StarCore
 import logging
 
+/*
+ TODO:
+ - expose the input video params in the config
+ - record changes in video params in this view and record them in user prefs
+ - show audio checked by default only if present 
+ - notice when settings are the same as original video and say so
+ - if there are initiail video settings, say when it's different (have button to revert)
+ - add cancel button (keep track of task)
+ - allow changing filename
+ - show video resolution / aspect ratio
+ - reveal in finder doesn't work very well
+ 
+ */
+
+// view that renders the video from the frames in the ImageSequenceViewModel
 struct RenderVideoSheetView: View {
-    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    let viewModel: ImageSequenceViewModel
+
+    init(isVisible: Binding<Bool>,
+         viewModel: ImageSequenceViewModel)
+    {
+        _isVisible = isVisible
+        self.viewModel = viewModel
+        if let config = viewModel.config {
+            if let frameRate = config.config().frameRate {
+                self.frameRate = frameRate
+                self.frameRateString = String(format: "%g", frameRate.rawValue)
+            } else {
+                self.frameRate = viewModel.frameRate
+                self.frameRateString = String(format: "%g", viewModel.frameRate.rawValue)
+            }
+            
+            if let codec = config.config().codec {
+                self.codec = codec
+            } else {
+                self.codec = viewModel.codec
+            }
+            if let pixelFormat = config.config().pixelFormat {
+                self.pixelFormat = pixelFormat
+            } else {
+                self.pixelFormat = viewModel.pixelFormat
+            }
+            if let muxer = config.config().muxer {
+                self.muxer = muxer
+                self.videoFilename = "\(config.config().basename).\(muxer.rawValue)"
+            } else {
+                self.muxer = viewModel.muxer
+                self.videoFilename = "\(config.config().basename).\(viewModel.muxer.rawValue)"
+            }
+        } else {
+            self.videoFilename = "star-output-video.\(viewModel.muxer.rawValue)"
+            self.frameRate = viewModel.frameRate
+            self.frameRateString = String(format: "%g", viewModel.frameRate.rawValue)
+            self.codec = viewModel.codec
+            self.pixelFormat = viewModel.pixelFormat
+            self.muxer = viewModel.muxer
+        }
+    }
     
     @Binding var isVisible: Bool
 
-    @State private var frameRateString = "24"
-    @State private var frameRate: FrameRate = .fps_24
-    @State private var codec: FFmpegCodec = .prores
-    @State private var pixelFormat: FFmpegPixelFormat = .yuv444p10le
-    @State private var muxer: FFmpegMuxer = .mov
+    @State private var frameRateString: String
+    @State private var frameRate: FrameRate {
+        didSet {
+            // set in user prefs and the view model if it changes
+            Task { await constants.set(frameRate: frameRate) }
+            viewModel.frameRate = frameRate
+        }
+    }
+    @State private var codec: FFmpegCodec {
+        didSet {
+            // set in user prefs and the view model if it changes
+            Task { await constants.set(codec: codec) }
+            viewModel.codec = codec
+        }
+    }
+    @State private var pixelFormat: FFmpegPixelFormat {
+        didSet {
+            // set in user prefs and the view model if it changes
+            Task { await constants.set(pixelFormat: pixelFormat) }
+            viewModel.pixelFormat = pixelFormat
+        }
+    }
+    @State private var muxer: FFmpegMuxer {
+        didSet {
+            // set in user prefs and the view model if it changes
+            Task { await constants.set(muxer: muxer) }
+            viewModel.muxer = muxer
+        }
+    }
 
     @State private var isRendering = false
     @State private var renderingError: Error? = nil
@@ -34,15 +114,11 @@ struct RenderVideoSheetView: View {
         } else {
             self.renderChoiceView
               .onAppear {
-                  if let config = viewModel.config {
-                      videoFilename = "\(config.config().basename).\(muxer.rawValue)"
-                  } else {
-                      videoFilename = "star-output-video.\(muxer.rawValue)"
-                  }
               }
         }
     }
 
+    // shown when the video is rendering with a progress bar
     private var renderingView: some View {
         HStack {
             Space(width: 20)
@@ -64,6 +140,7 @@ struct RenderVideoSheetView: View {
         }
     }
     
+    // shown if ffmpeg errors out
     private var renderingErrorView: some View {
         HStack {
             Space(width: 20)
@@ -81,7 +158,8 @@ struct RenderVideoSheetView: View {
             Space(width: 20)
         }
     }
-    
+
+    // shown when the video render works with a button to reveal the video in finder
     private var renderingSuccessView: some View {
         HStack {
             Space(width: 20)
@@ -108,7 +186,7 @@ struct RenderVideoSheetView: View {
         }
     }
     
-    // the view shown initially
+    // the view shown initially, allows the user to choose settings and render a video
     private var renderChoiceView: some View {
         HStack {
             Space(width: 20)
@@ -150,6 +228,8 @@ struct RenderVideoSheetView: View {
                         Group { }
                     }
                     Text("frames per second")
+                    Text(" - Total Length: ")
+                    Text(self.totalLengthText)
                 }
                 .onChange(of: frameRate) {
                     switch frameRate {
@@ -264,7 +344,30 @@ struct RenderVideoSheetView: View {
         }
           .frame(minWidth: 300)
     }
+
+    private var totalLengthText: String {
+        formatTimeInterval(Double(viewModel.frames.count)/frameRate.rawValue)
+    }
 }
+
+func formatTimeInterval(_ interval: TimeInterval) -> String {
+    let totalSeconds = Int(interval)
+    let hours = totalSeconds / 3600
+    let minutes = (totalSeconds % 3600) / 60
+    let seconds = totalSeconds % 60
+
+    var components: [String] = []
+    if hours > 0 {
+        components.append("\(hours)h")
+    }
+    if minutes > 0 || hours > 0 { // include minutes if hours exists
+        components.append("\(minutes)m")
+    }
+    components.append("\(seconds)s")
+
+    return components.joined(separator: " ")
+}
+
 
 struct ProgressBarView: View {
     @Binding var progress: Double // Value between 0.0 and 1.0

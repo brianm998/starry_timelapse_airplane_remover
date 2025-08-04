@@ -200,6 +200,29 @@ public struct Config: Codable, Sendable, Transferable {
     // where the fade of the alpha on the border begins.
     // pixels closer than this are fully painted over
     public var outlierGroupPaintBorderInnerWallPixels: Double = defaultOutlierGroupPaintBorderInnerWallPixels
+
+    // the frame rate of the incoming and outgoing video
+    public var frameRate: FrameRate?
+
+    // the codec of the incoming and outgoing video
+    public var codec: FFmpegCodec?
+
+    // the pixelformat of the incoming and outgoing video
+    public var pixelFormat: FFmpegPixelFormat?
+
+    // the muxer (container) of the incoming and outgoing video
+    public var muxer: FFmpegMuxer?
+
+    // did the incoming video have an audio track?
+    public var hasAudio: Bool?
+
+    mutating public func set(videoInfo: VideoInfo) {
+        self.frameRate = videoInfo.frameRate
+        self.codec = videoInfo.codec
+        self.pixelFormat = videoInfo.pixelFormat
+        self.muxer = videoInfo.muxer
+        self.hasAudio = videoInfo.hasAudio
+    }
     
     // 0.0.2 added more detail group hough transormation analysis, based upon a data set
     // 0.0.3 included the data set analysis to include group size and fill, and to use histograms
@@ -251,7 +274,8 @@ public struct Config: Codable, Sendable, Transferable {
     //       lines better connected, fixed LinearBlobConnector
     //       use multiple aligned images to clean up really noisy frame sequences
     // 8.0.0 embed ffmpeg, ffprobe and align_image_stack in the app properly
-    //       allow starting directly with a video and having the image sequence extracted 
+    //       allow starting directly with a video and having the image sequence extracted
+    //       ability to render to video from gui
     
     public var starVersion = Config.latestVersion
 

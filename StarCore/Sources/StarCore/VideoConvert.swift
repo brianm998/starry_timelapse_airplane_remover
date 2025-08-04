@@ -4,16 +4,23 @@ import logging
 
 public typealias ProgressCallback = @Sendable (_ currentFrame: Int, _ totalFrames: Int) -> Void
 
-/// Process a video: extract frames and audio, and generate a reencode script
+public struct VideoInfo: Sendable {
+    public let frameRate: FrameRate
+    public let codec: FFmpegCodec
+    public let pixelFormat: FFmpegPixelFormat
+    public let muxer: FFmpegMuxer
+    public let hasAudio: Bool
+}
+
+/// Process a video: extract frames and audio and video information
 public func decodeVideo(
     named inputPath: String,
     progress: @escaping ProgressCallback
-) async throws -> (outputDirectory: String, reencodeScript: String) {
+) async throws -> (outputDirectory: String, videoInfo: VideoInfo) {
     let inputURL = URL(fileURLWithPath: inputPath)
     let fileName = inputURL.deletingPathExtension().lastPathComponent
     let fileExtension = inputURL.pathExtension
     let outputFolder = inputURL.deletingLastPathComponent().appendingPathComponent(fileName).path
-    let reencodeScriptDir = inputURL.deletingLastPathComponent().path
     let fileManager = FileManager.default
 
     try? fileManager.createDirectory(atPath: outputFolder, withIntermediateDirectories: true)
@@ -103,38 +110,40 @@ public func decodeVideo(
     try await ffmpegTask.value
     
     let frameRateRaw = try await frameRateTask.value
-    let frameRate = frameRateRaw.components(separatedBy: "/")[0]
 
-    let codec = try await codecTask.value
-
-    let pixFmt = try await pixFmtTask.value
-    
-    /*
-     XXX instead of generating a script here,
-     save the codec, pixel format, filename, frame rate and audio track presence in config
-     use that later as defaults in the RenderVideoSheetView UI
-     */
-    // Generate re-encode script
-    let reencodeScriptPath = "\(reencodeScriptDir)/reencode-\(fileName).sh"
-    var script = """
-    #!/bin/bash
-
-    set -e
-
-    PROCESSED_FILES_DIR=$1
-    
-    \(ffmpegPath) -framerate \(frameRate) -f image2 -i "$PROCESSED_FILES_DIR"/image_%04d.tiff \\
-      -c:v \(codec) -pix_fmt \(pixFmt)
-    """
-    if hasAudio {
-        script += " \\\n  -i audio.aac -c:a copy"
+    var frameRate: FrameRate = .fps_24
+    let strValue = frameRateRaw.components(separatedBy: "/")[0]
+    if let doubleValue = Double(strValue) {
+        frameRate = FrameRate(rawValue: doubleValue)
     }
-    script += " \\\n  \(fileName)_reencoded.\(fileExtension)\n"
 
-    try script.write(toFile: reencodeScriptPath, atomically: true, encoding: .utf8)
-    try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: reencodeScriptPath)
+    var codec: FFmpegCodec = .prores
+    if let value = FFmpegCodec(rawValue: try await codecTask.value) {
+        codec = value
+    }
 
-    return (outputFolder, reencodeScriptPath)
+    var pixFmt: FFmpegPixelFormat = .yuv444p10le
+    let stringValue = try await pixFmtTask.value
+    if let value = FFmpegPixelFormat(rawValue: stringValue) {
+        pixFmt = value
+    }
+
+    var muxer: FFmpegMuxer = .mov
+    if let ext = inputPath.components(separatedBy: ".").last,
+       let value = FFmpegMuxer(rawValue: ext)
+    {
+        muxer = value
+    }
+    
+    let videoInfo = VideoInfo(
+      frameRate: frameRate,
+      codec: codec,
+      pixelFormat: pixFmt,
+      muxer: muxer,
+      hasAudio: hasAudio
+    )
+    
+    return (outputFolder, videoInfo)
 }
 
 public func runFFmpegWithProgress(

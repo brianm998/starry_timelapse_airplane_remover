@@ -175,7 +175,8 @@ struct BottomRightView: View {
                                        number_of_frames: $viewModel.number_of_frames)
               }
               .sheet(isPresented: $viewModel.renderVideoSheetShowing) {
-                  RenderVideoSheetView(isVisible: $viewModel.renderVideoSheetShowing)
+                  RenderVideoSheetView(isVisible: $viewModel.renderVideoSheetShowing,
+                                       viewModel: viewModel)
               }
             } else {
                 Spacer()

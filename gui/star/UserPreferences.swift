@@ -51,7 +51,47 @@ struct UserPreferences: Codable, Sendable {
             recentlyOpenedSequencelist[$0]! > recentlyOpenedSequencelist[$1]!
         }
     }
-    
+
+    // the frame rate of the incoming and outgoing video
+    var frameRate: FrameRate? {
+        didSet {
+            self.save()
+            if let frameRate  {
+                Task { await constants.set(frameRate: frameRate) }
+            }
+        }
+    }
+
+    // the codec of the incoming and outgoing video
+    var codec: FFmpegCodec? {
+        didSet {
+            self.save()
+            if let codec  {
+                Task { await constants.set(codec: codec) }
+            }
+        }
+    }
+
+    // the pixelformat of the incoming and outgoing video
+    var pixelFormat: FFmpegPixelFormat? {
+        didSet {
+            self.save()
+            if let pixelFormat  {
+                Task { await constants.set(pixelFormat: pixelFormat) }
+            }
+        }
+    }
+
+    // the muxer (container) of the incoming and outgoing video
+    var muxer: FFmpegMuxer? {
+        didSet {
+            self.save()
+            if let muxer  {
+                Task { await constants.set(muxer: muxer) }
+            }
+        }
+    }
+
     mutating func justOpened(filename: String) {
         self.recentlyOpenedSequencelist[filename] = Date().timeIntervalSince1970
     }

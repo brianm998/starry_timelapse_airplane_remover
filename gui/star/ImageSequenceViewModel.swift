@@ -96,11 +96,31 @@ public final class ImageSequenceViewModel {
                 self.detectionType = detectionType
             }
             if let concurrentFrames = userPreferences.concurrentFrames {
-                numberOfFramesToProcessConcurrently = concurrentFrames
+                self.numberOfFramesToProcessConcurrently = concurrentFrames
             }
+            if let frameRate = userPreferences.frameRate {
+                self.frameRate = frameRate
+            }
+            if let codec = userPreferences.codec {
+                self.codec = codec
+            }
+            if let pixelFormat = userPreferences.pixelFormat {
+                self.pixelFormat = pixelFormat
+            }
+            if let muxer = userPreferences.muxer {
+                self.muxer = muxer
+            }
+
         }
     }
 
+    // use these if nothing is in the config
+    var frameRate: FrameRate = .fps_24
+    var codec: FFmpegCodec = .prores
+    var pixelFormat: FFmpegPixelFormat = .yuv444p10le
+    var muxer: FFmpegMuxer = .mov
+    var hasAudio = false
+    
     var eraser: NighttimeAirplaneRemover?
 
     var noImageExplainationText: String = "Loading..."
@@ -294,6 +314,7 @@ public final class ImageSequenceViewModel {
     }
     
     convenience init(withNewImageSequence imageSequenceDirname: String,
+                     and videoInfo: VideoInfo? = nil,
                      closure: @Sendable @escaping (Int, Double, Int, Double) -> Void) async throws
     {
         let shouldWriteOutlierGroupFiles = true // XXX see what happens
@@ -336,6 +357,10 @@ public final class ImageSequenceViewModel {
                             writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
                             writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
 
+        if let videoInfo {
+            config.set(videoInfo: videoInfo)
+        }
+        
         config.ignoreLowerPixels = 200
         
         let configFilename = "\(config.basename)-config.json"
@@ -351,6 +376,14 @@ public final class ImageSequenceViewModel {
         self.shouldShowInitialInstructions = true
         self.showIgnoreLowerBar = true
         self.frameViewMode = .original
+        if let videoInfo {
+            self.frameRate = videoInfo.frameRate
+            self.codec = videoInfo.codec
+            self.pixelFormat = videoInfo.pixelFormat
+            self.muxer = videoInfo.muxer
+            self.hasAudio = videoInfo.hasAudio
+        }
+        
     }
 
     init(with configManager: ConfigManager, closure: @Sendable @escaping (Int, Double, Int, Double) -> Void) async throws {

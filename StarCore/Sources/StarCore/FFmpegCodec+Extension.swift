@@ -2,7 +2,7 @@ import Foundation
 
 public extension FFmpegCodec {
 
-    public static var availableVideoCodecs: [FFmpegCodec] {
+    static var availableVideoCodecs: [FFmpegCodec] {
 
         let start: [FFmpegCodec] = [
           .h264,
