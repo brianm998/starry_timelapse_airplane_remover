@@ -5,8 +5,8 @@ import logging
 
 /*
  TODO:
- / expose the input video params in the config
- / record changes in video params in this view and record them in user prefs
+ * expose the input video params in the config
+ * record changes in video params in this view and record them in user prefs
  - show audio checked by default only if present 
  - notice when settings are the same as original video and say so
  - if there are initial video settings, say when it's different (have button to revert)
@@ -19,6 +19,8 @@ import logging
 
 // view that renders the video from the frames in the ImageSequenceViewModel
 struct RenderVideoSheetView: View {
+
+    @Binding var isVisible: Bool
     let viewModel: ImageSequenceViewModel
 
     init(isVisible: Binding<Bool>,
@@ -28,42 +30,53 @@ struct RenderVideoSheetView: View {
         self.viewModel = viewModel
         if let config = viewModel.config {
             if let frameRate = config.config().frameRate {
-                self.frameRate = frameRate
-                self.frameRateString = String(format: "%g", frameRate.rawValue)
+                _frameRate = State(initialValue: frameRate)
+                _frameRateString = State(initialValue: String(format: "%g", frameRate.rawValue))
             } else {
-                self.frameRate = viewModel.frameRate
-                self.frameRateString = String(format: "%g", viewModel.frameRate.rawValue)
+                _frameRate = State(initialValue: viewModel.frameRate)
+                _frameRateString = State(initialValue: String(format: "%g", viewModel.frameRate.rawValue))
             }
             
             if let codec = config.config().codec {
-                self.codec = codec
+                _codec = State(initialValue: codec)
             } else {
-                self.codec = viewModel.codec
+                _codec = State(initialValue: viewModel.codec)
             }
             if let pixelFormat = config.config().pixelFormat {
-                self.pixelFormat = pixelFormat
+                _pixelFormat = State(initialValue: pixelFormat)
             } else {
-                self.pixelFormat = viewModel.pixelFormat
+                _pixelFormat = State(initialValue: viewModel.pixelFormat)
             }
+
+            // XXX check to see if pixelformat is in codex, if not, use a different one
+            
             if let muxer = config.config().muxer {
-                self.muxer = muxer
-                self.videoFilename = "\(config.config().basename).\(muxer.rawValue)"
+                _muxer = State(initialValue: muxer)
+                _videoFilename = State(initialValue: "\(config.config().basename).\(muxer.rawValue)")
             } else {
-                self.muxer = viewModel.muxer
-                self.videoFilename = "\(config.config().basename).\(viewModel.muxer.rawValue)"
+                _muxer = State(initialValue: viewModel.muxer)
+                _videoFilename = State(initialValue: "\(config.config().basename).\(viewModel.muxer.rawValue)")
             }
         } else {
-            self.videoFilename = "star-output-video.\(viewModel.muxer.rawValue)"
-            self.frameRate = viewModel.frameRate
-            self.frameRateString = String(format: "%g", viewModel.frameRate.rawValue)
-            self.codec = viewModel.codec
-            self.pixelFormat = viewModel.pixelFormat
-            self.muxer = viewModel.muxer
+            _videoFilename = State(initialValue: "star-output-video.\(viewModel.muxer.rawValue)")
+            _frameRate = State(initialValue: viewModel.frameRate)
+            _frameRateString = State(initialValue: String(format: "%g", viewModel.frameRate.rawValue))
+            _codec = State(initialValue: viewModel.codec)
+            _pixelFormat = State(initialValue: viewModel.pixelFormat)
+            _muxer = State(initialValue: viewModel.muxer)
+        }
+
+        // note this in the UI
+        if !self.codec.pixelFormats.contains(self.pixelFormat) {
+            _pixelFormat = State(initialValue: codec.pixelFormats[0])
+        }
+
+        // note this in the UI
+        if !self.codec.supportedMuxers.contains(self.muxer) {
+            _muxer = State(initialValue: codec.supportedMuxers[0])
         }
     }
     
-    @Binding var isVisible: Bool
-
     @State private var frameRateString: String
     @State private var frameRate: FrameRate 
     @State private var codec: FFmpegCodec 
@@ -74,7 +87,7 @@ struct RenderVideoSheetView: View {
     @State private var renderingError: Error? = nil
     @State private var renderSuccess = false
 
-    @State private var videoFilename: String? = nil
+    @State private var videoFilename: String
 
     @State private var encodingProgress: Double = 0
     @State private var encodingFrameNumber = 0
@@ -100,13 +113,8 @@ struct RenderVideoSheetView: View {
             Space(width: 20)
             VStack {
                 Space(height: 20)
-                if let videoFilename {
-                    Text("Rendering \(videoFilename)")
-                      .font(.title)
-                } else {
-                    Text("Rendering..")
-                      .font(.title)
-                }
+                Text("Rendering \(videoFilename)")
+                  .font(.title)
                 Text("frame \(encodingFrameNumber) of \(totalFrames)")
                 ProgressBarView(progress: $encodingProgress, barColor: .green)
                 Space(height: 20)
@@ -141,17 +149,10 @@ struct RenderVideoSheetView: View {
             Space(width: 20)
             VStack {
                 Space(height: 20)
-                if let videoFilename {
-                    Text("Successfully Rendered \(videoFilename)")
-                      .font(.title)
-                } else {
-                    Text("Successfully Rendered")
-                      .font(.title)
-                }
-                if let videoFilename {
-                    Button("Reveal In Finder") {
-                        revealInFinder(path: videoFilename)
-                    }
+                Text("Successfully Rendered \(videoFilename)")
+                  .font(.title)
+                Button("Reveal In Finder") {
+                    revealInFinder(path: videoFilename)
                 }
                 Button("Dismiss") {
                     self.isVisible = false
@@ -171,7 +172,7 @@ struct RenderVideoSheetView: View {
                   .frame(minWidth: 300)
                 Text("Render video from \(viewModel.frames.count) frames")
                   .font(.title)
-
+                
                 HStack {
                     Picker("Frame Rate", selection: $frameRate) {
                         ForEach(FrameRate.allCases, id: \.self) { frameRate in
@@ -199,7 +200,7 @@ struct RenderVideoSheetView: View {
                                   //self.frameRateString = String(format: "%g", newValue)
                               }
                           }
-
+                        
                     default:
                         Group { }
                     }
@@ -208,7 +209,7 @@ struct RenderVideoSheetView: View {
                     Text(self.totalLengthText)
                 }
                   .onChange(of: frameRate) {
-                      Task { await constants.set(frameRate: frameRate) }
+                      viewModel.userPreferences.frameRate = frameRate
                       viewModel.frameRate = frameRate
                       
                       switch frameRate {
@@ -219,11 +220,11 @@ struct RenderVideoSheetView: View {
                           break
                       }
                   }
-
+                
                 Text(frameRate.description)
                   .lineLimit(nil)
                   .fixedSize(horizontal: false, vertical: true)
-
+                
                 Divider()
                 
                 Picker("Codec", selection: $codec) {
@@ -232,9 +233,9 @@ struct RenderVideoSheetView: View {
                     }
                 }
                   .onChange(of: codec) {
-                      Task { await constants.set(codec: codec) }
+                      viewModel.userPreferences.codec = codec
                       viewModel.codec = codec
-
+                      
                       pixelFormat = codec.pixelFormats[0]
                       muxer = codec.supportedMuxers[0]
                   }
@@ -251,7 +252,7 @@ struct RenderVideoSheetView: View {
                     }
                 }
                   .onChange(of: pixelFormat) {
-                      Task { await constants.set(pixelFormat: pixelFormat) }
+                      viewModel.userPreferences.pixelFormat = pixelFormat
                       viewModel.pixelFormat = pixelFormat
                   }
 
@@ -268,7 +269,7 @@ struct RenderVideoSheetView: View {
                 }
                   .onChange(of: muxer) {
                       // set in user prefs and the view model if it changes
-                      Task { await constants.set(muxer: muxer) }
+                      viewModel.userPreferences.muxer = muxer
                       viewModel.muxer = muxer
                       
                       if let config = viewModel.config {
@@ -284,9 +285,7 @@ struct RenderVideoSheetView: View {
                 
                 Divider()
 
-                if let videoFilename {
-                    Text(videoFilename)
-                }
+                Text(videoFilename)
                 
                 HStack {
                     Spacer()
@@ -294,34 +293,32 @@ struct RenderVideoSheetView: View {
                         self.isVisible = false
                     }
                     Button("Render") {
-                        if let videoFilename {
-                            self.isRendering = true
-                            viewModel.renderVideo(named: videoFilename,
-                                                  frameRate: frameRate,
-                                                  codec: codec,
-                                                  pixelFormat: pixelFormat,
-                                                  muxer: muxer)
-                            { currentFrame, totalFrames in
-                                let progress = Double(currentFrame)/Double(totalFrames)
-                                Task { @MainActor in
-                                    self.encodingProgress = progress
-                                    self.encodingFrameNumber = currentFrame
-                                    self.totalFrames = totalFrames
-                                }
-                            } completion: {
-                                // success
-                                //self.isVisible = false
-                                Task { @MainActor in 
-                                    self.isRendering = false
-                                    self.renderSuccess  = true
-                                }
-                            } errorCallback: { error in
-                                // error
-                                //self.isVisible = false
-                                Task { @MainActor in 
-                                    self.isRendering = false
-                                    self.renderingError = error
-                                }
+                        self.isRendering = true
+                        viewModel.renderVideo(named: videoFilename,
+                                              frameRate: frameRate,
+                                              codec: codec,
+                                              pixelFormat: pixelFormat,
+                                              muxer: muxer)
+                        { currentFrame, totalFrames in
+                            let progress = Double(currentFrame)/Double(totalFrames)
+                            Task { @MainActor in
+                                self.encodingProgress = progress
+                                self.encodingFrameNumber = currentFrame
+                                self.totalFrames = totalFrames
+                            }
+                        } completion: {
+                            // success
+                            //self.isVisible = false
+                            Task { @MainActor in 
+                                self.isRendering = false
+                                self.renderSuccess  = true
+                            }
+                        } errorCallback: { error in
+                            // error
+                            //self.isVisible = false
+                            Task { @MainActor in 
+                                self.isRendering = false
+                                self.renderingError = error
                             }
                         }
                     }
