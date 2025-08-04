@@ -5,11 +5,11 @@ import logging
 
 /*
  TODO:
- - expose the input video params in the config
- - record changes in video params in this view and record them in user prefs
+ / expose the input video params in the config
+ / record changes in video params in this view and record them in user prefs
  - show audio checked by default only if present 
  - notice when settings are the same as original video and say so
- - if there are initiail video settings, say when it's different (have button to revert)
+ - if there are initial video settings, say when it's different (have button to revert)
  - add cancel button (keep track of task)
  - allow changing filename
  - show video resolution / aspect ratio
@@ -65,34 +65,10 @@ struct RenderVideoSheetView: View {
     @Binding var isVisible: Bool
 
     @State private var frameRateString: String
-    @State private var frameRate: FrameRate {
-        didSet {
-            // set in user prefs and the view model if it changes
-            Task { await constants.set(frameRate: frameRate) }
-            viewModel.frameRate = frameRate
-        }
-    }
-    @State private var codec: FFmpegCodec {
-        didSet {
-            // set in user prefs and the view model if it changes
-            Task { await constants.set(codec: codec) }
-            viewModel.codec = codec
-        }
-    }
-    @State private var pixelFormat: FFmpegPixelFormat {
-        didSet {
-            // set in user prefs and the view model if it changes
-            Task { await constants.set(pixelFormat: pixelFormat) }
-            viewModel.pixelFormat = pixelFormat
-        }
-    }
-    @State private var muxer: FFmpegMuxer {
-        didSet {
-            // set in user prefs and the view model if it changes
-            Task { await constants.set(muxer: muxer) }
-            viewModel.muxer = muxer
-        }
-    }
+    @State private var frameRate: FrameRate 
+    @State private var codec: FFmpegCodec 
+    @State private var pixelFormat: FFmpegPixelFormat
+    @State private var muxer: FFmpegMuxer
 
     @State private var isRendering = false
     @State private var renderingError: Error? = nil
@@ -231,15 +207,18 @@ struct RenderVideoSheetView: View {
                     Text(" - Total Length: ")
                     Text(self.totalLengthText)
                 }
-                .onChange(of: frameRate) {
-                    switch frameRate {
-                    case .custom(let customFrameRate):
-                        self.frameRateString = String(format: "%g", customFrameRate)
-
-                    default:
-                        break
-                    }
-                }
+                  .onChange(of: frameRate) {
+                      Task { await constants.set(frameRate: frameRate) }
+                      viewModel.frameRate = frameRate
+                      
+                      switch frameRate {
+                      case .custom(let customFrameRate):
+                          self.frameRateString = String(format: "%g", customFrameRate)
+                          
+                      default:
+                          break
+                      }
+                  }
 
                 Text(frameRate.description)
                   .lineLimit(nil)
@@ -253,6 +232,9 @@ struct RenderVideoSheetView: View {
                     }
                 }
                   .onChange(of: codec) {
+                      Task { await constants.set(codec: codec) }
+                      viewModel.codec = codec
+
                       pixelFormat = codec.pixelFormats[0]
                       muxer = codec.supportedMuxers[0]
                   }
@@ -268,7 +250,10 @@ struct RenderVideoSheetView: View {
                         Text(pixelFormat.rawValue)
                     }
                 }
-
+                  .onChange(of: pixelFormat) {
+                      Task { await constants.set(pixelFormat: pixelFormat) }
+                      viewModel.pixelFormat = pixelFormat
+                  }
 
                 Text("\(pixelFormat.numberOfComponents) components per pixel")
                 Text("\(pixelFormat.bitsPerPixel) bits per pixel")
@@ -282,6 +267,10 @@ struct RenderVideoSheetView: View {
                     }
                 }
                   .onChange(of: muxer) {
+                      // set in user prefs and the view model if it changes
+                      Task { await constants.set(muxer: muxer) }
+                      viewModel.muxer = muxer
+                      
                       if let config = viewModel.config {
                           self.videoFilename = "\(config.config().basename).\(muxer.rawValue)"
                       } else {
