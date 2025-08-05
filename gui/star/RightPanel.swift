@@ -454,7 +454,7 @@ struct EditableNumberOfNeighborFrames: View {
           value: $viewModel.numberOfNeighborFrames,
           minValue: 1,
           maxValue: viewModel.imageSequenceSize,
-          fullTextProvider: { "process with \($0) neighbor frames" },
+          fullTextProvider: { "align with \($0) neighbor frames" },
           prefixText: "process with",
           suffixTextProvider: { _ in "neighbor frames" },
           focusedField: focusedField,
