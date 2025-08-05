@@ -945,8 +945,8 @@ public final class ImageSequenceViewModel {
             if numberOfAlignedImages != numPrevAlignedImages {
                 // this does delete the alignment and subtraction images, because the next
                 // run should use a different number of alignment images
-                try await frameToClear.removeStarAlignedImages()
-                try await frameToClear.removeNnumberOfAlignedImagesForThisFrameFile()
+                await frameToClear.removeStarAlignedImages()
+                try await frameToClear.removeNumberOfAlignedImagesForThisFrameFile()
             }
             
             Task { @MainActor in
@@ -1279,6 +1279,12 @@ public final class ImageSequenceViewModel {
         }
         let outputPath = config.config().outputPath
         let basename = config.config().basename
+
+        /*
+         # this is what the timelapse render daemon uses:
+         
+         my $ffmpeg_cmd = "ffmpeg -y -r $frame_rate -i $image_sequence_full_dirname/$config->{image_name_prefix}%05d$image_type -aspect $aspect_ratio $filter_str -c:v $output_codec -pix_fmt $pix_fmt_str -threads 0 -profile:v 1 -movflags +write_colr -an -color_range $color_range -color_primaries bt709 -colorspace bt709 -color_trc bt709 -timecode 00:00:00:00 ";
+ */
         
         /*videoRenderTask = */Task.detached {
             do {
