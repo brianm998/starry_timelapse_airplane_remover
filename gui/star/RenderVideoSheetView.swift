@@ -5,16 +5,15 @@ import logging
 
 /*
  TODO:
- * expose the input video params in the config
- * record changes in video params in this view and record them in user prefs
- - show audio checked by default only if present 
- - notice when settings are the same as original video and say so
+ - deal with audio, show audio, checked by default only if present 
+ - also notice when the pixelformat or muxer doesn't match the codec and we had to change it
  - if there are initial video settings, say when it's different (have button to revert)
  - add cancel button (keep track of task)
- - allow changing filename
  - show video resolution / aspect ratio
- - reveal in finder doesn't work very well
- 
+ - include timecode in rendered video so frame numbers show up
+ - allow changing filename
+ - notice if output video file already exists, and ask if ok to overwrite
+ - add 'always overwrite' checkbox to ui and user prefs
  */
 
 // view that renders the video from the frames in the ImageSequenceViewModel
@@ -48,7 +47,6 @@ struct RenderVideoSheetView: View {
                 _pixelFormat = State(initialValue: viewModel.pixelFormat)
             }
 
-            // XXX check to see if pixelformat is in codex, if not, use a different one
             
             if let muxer = config.config().muxer {
                 _muxer = State(initialValue: muxer)
@@ -65,6 +63,9 @@ struct RenderVideoSheetView: View {
             _pixelFormat = State(initialValue: viewModel.pixelFormat)
             _muxer = State(initialValue: viewModel.muxer)
         }
+
+        // check to see if pixelformat and muxer are in the list for this codex,
+        // and if not, use different ones that are.
 
         // note this in the UI
         if !self.codec.pixelFormats.contains(self.pixelFormat) {
@@ -102,8 +103,6 @@ struct RenderVideoSheetView: View {
             self.renderingSuccessView
         } else {
             self.renderChoiceView
-              .onAppear {
-              }
         }
     }
 
@@ -152,7 +151,9 @@ struct RenderVideoSheetView: View {
                 Text("Successfully Rendered \(videoFilename)")
                   .font(.title)
                 Button("Reveal In Finder") {
-                    revealInFinder(path: videoFilename)
+                    if let configManager = viewModel.config {
+                        revealInFinder(path: "\(configManager.config().outputPath)/\(videoFilename)")
+                    }
                 }
                 Button("Dismiss") {
                     self.isVisible = false

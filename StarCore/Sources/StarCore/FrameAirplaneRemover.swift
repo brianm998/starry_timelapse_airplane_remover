@@ -395,20 +395,24 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                                            atSize: .original)
         {
             // check for number of aligned images, and re-do if it's different
-            if let numberAligned = self.readNnumberOfAlignedImagesForThisFrame(),
-               numberOfAlignedFrames == numberAligned
-            {
-                // we have both an existing aligned frame, and a saved number of aligned
-                // images used to calculate that frame that matches the expected number,
-                // so we can just return the aligned frame we found.
-                return alignedFrame
+            if let numberAligned = self.readNumberOfAlignedImagesForThisFrame() {
+                if numberOfAlignedFrames == numberAligned {
+                    // we have both an existing aligned frame, and a saved number of aligned
+                    // images used to calculate that frame that matches the expected number,
+                    // so we can just return the aligned frame we found.
+                    return alignedFrame
+                } else {
+                    Log.i("redoing aligned images because numberOfAlignedFrames \(numberOfAlignedFrames) != numberAligned \(numberAligned)")
+                }
+            } else {
+                Log.i("redoing aligned images because we were unable to read the number of aligned images for this frame")
             }
-
+            
             // we didn't meet the above requirements, so re-do star alignment for this frame,
             // getting rid of any existing files first
             removeStarAlignedImages()
             removeSubtractionImages()
-            try removeNnumberOfAlignedImagesForThisFrameFile()
+            try removeNumberOfAlignedImagesForThisFrameFile()
         }
 
         // with no saved aligned frame, first load or create the set of aligned frames
@@ -542,7 +546,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
-    public func readNnumberOfAlignedImagesForThisFrame() -> Int? {
+    public func readNumberOfAlignedImagesForThisFrame() -> Int? {
         if let dirname = imageAccessor.dirForImage(ofType: .aligned,
                                                    atSize: .original)
         {
@@ -553,7 +557,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return nil
     }
     
-    public func removeNnumberOfAlignedImagesForThisFrameFile() throws {
+    public func removeNumberOfAlignedImagesForThisFrameFile() throws {
         // get rid of any existing .txt files
         if let dirname = imageAccessor.dirForImage(ofType: .aligned,
                                                    atSize: .original)

@@ -941,7 +941,7 @@ public final class ImageSequenceViewModel {
             
             await frameToClear.setNumberOfAlignmentImages(numberOfAlignedImages)
 
-            let numPrevAlignedImages = await frameToClear.readNnumberOfAlignedImagesForThisFrame()
+            let numPrevAlignedImages = await frameToClear.readNumberOfAlignedImagesForThisFrame()
             if numberOfAlignedImages != numPrevAlignedImages {
                 // this does delete the alignment and subtraction images, because the next
                 // run should use a different number of alignment images
