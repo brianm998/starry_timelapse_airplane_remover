@@ -26,6 +26,9 @@ struct LeftPanel: View {
 
                     self.processingButtons
 
+                    ProcessingProgressBarView()
+                      .frame(maxWidth: .none)
+                    
                     Spacer()
                       .frame(maxHeight: 10)
                     
@@ -59,12 +62,28 @@ struct LeftPanel: View {
         
     }
 
+    var processButtonDisabled: Bool {
+        let unprocessed = viewModel.frameStateMap[.unprocessed]?.count ?? 0
+        return unprocessed == 0 || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo
+    }
+
+    var updateButtonDisabled: Bool {
+        let userModified = viewModel.frameStateMap[.userModified]?.count ?? 0
+        return userModified == 0 || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo
+    }
+
+    var renderButtonDisabled: Bool {
+        let complete = viewModel.frameStateMap[.complete]?.count ?? 0
+        return complete != viewModel.frames.count || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo
+    }
+    
     var processingButtons: some View {
         VStack(alignment: .leading) {
             let unprocessed = viewModel.frameStateMap[.unprocessed]?.count ?? 0
 
             Button() {
-                viewModel.processFrames(from: 0)
+                viewModel.showProcessingOptionsSheet = true
+                //viewModel.processFrames(from: 0)
                  /*
                   XXX show a UI here which allows the user to choose:
 
@@ -78,16 +97,28 @@ struct LeftPanel: View {
             } label: {
                 Text("Process \(unprocessed) frames")
             }
-              .disabled(unprocessed == 0 || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo)
-
+              .disabled(processButtonDisabled)
+              .if(!processButtonDisabled) { view in
+                  view
+                    .buttonStyle(.borderedProminent)
+                    .tint(.blue)
+              }
+            
+            
             let userModified = viewModel.frameStateMap[.userModified]?.count ?? 0
             
             Button() {
+                // XXX this has no max number of pfocesses :(
                 viewModel.renderAllFrames()
             } label: {
                 Text("Update \(userModified) frames")
             }
-              .disabled(userModified == 0 || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo)
+              .disabled(updateButtonDisabled)
+              .if(!updateButtonDisabled) { view in
+                  view
+                    .buttonStyle(.borderedProminent)
+                    .tint(.blue)
+              }
 
             let complete = viewModel.frameStateMap[.complete]?.count ?? 0
 
@@ -112,7 +143,12 @@ struct LeftPanel: View {
             } label: {
                 Text("render video from \(viewModel.frames.count) frames")
             }
-              .disabled(complete != viewModel.frames.count || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo)
+              .disabled(renderButtonDisabled)
+              .if(!renderButtonDisabled) { view in
+                  view
+                    .buttonStyle(.borderedProminent)
+                    .tint(.blue)
+              }
         }
     }
         
@@ -231,6 +267,61 @@ struct LeftPanel: View {
           .background(Color(white: 0.22))
           .frame(maxHeight: .infinity, alignment: .bottomTrailing)
         
+    }
+}
+
+
+extension View {
+    @ViewBuilder func `if`<Content: View>(
+        _ condition: Bool,
+        transform: (Self) -> Content
+    ) -> some View {
+        if condition {
+            transform(self)
+        } else {
+            self
+        }
+    }
+}
+
+struct ProcessingProgressBarView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    
+    let unprocessedColor: Color = .gray
+    let processingColor: Color = .yellow
+    let completeColor: Color = .green
+
+    var body: some View {
+        return GeometryReader { geometry in
+            let totalWidth = geometry.size.width
+            let totalFrames = max(1, viewModel.frames.count)
+            
+            let unprocessed = CGFloat(viewModel.frameStateMap[.unprocessed]?.count ?? 0)
+            let processing = CGFloat(viewModel.numberOfFramesProcessingNow)
+            let complete = CGFloat(viewModel.frameStateMap[.complete]?.count ?? 0)
+
+            
+            let unprocessedWidth = totalWidth * (unprocessed / CGFloat(totalFrames))
+            let processingWidth = totalWidth * (processing / CGFloat(totalFrames))
+            let completeWidth = totalWidth * (complete / CGFloat(totalFrames))
+
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(unprocessedColor)
+                    .frame(width: unprocessedWidth)
+
+                Rectangle()
+                    .fill(processingColor)
+                    .frame(width: processingWidth)
+
+                Rectangle()
+                    .fill(completeColor)
+                    .frame(width: completeWidth)
+            }
+            .cornerRadius(4)
+            .frame(height: 10)
+        }
+        .frame(height: 10)
     }
 }
 
