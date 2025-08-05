@@ -16,6 +16,10 @@ You should have received a copy of the GNU General Public License along with sta
 // load and process all blobs for a frame, using a defined sequence of steps
 public class StrongerBlobProcessor: AbstractBlobProcessor {
 
+    override public var description: String {
+        "The Stronger Blob Processor is the last resort before using the Excessive Blob Processor."
+    }
+    
     override public init() {
         super.init()
         self.steps = [

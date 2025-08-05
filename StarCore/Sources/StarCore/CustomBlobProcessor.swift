@@ -26,6 +26,10 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
 
     private var shouldDisable: [Bool]?
     
+    override public var description: String {
+        "The Custom Blob Processor allows the user to first copy an existing blob processing step, and then modify all of the parameters that are used to determine how it works."
+    }
+    
     public func copySteps(from other: AbstractBlobProcessor) {
         self.steps = other.steps
     }

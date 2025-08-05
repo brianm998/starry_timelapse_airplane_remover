@@ -14,6 +14,9 @@ import logging
  - allow changing filename
  - notice if output video file already exists, and ask if ok to overwrite
  - add 'always overwrite' checkbox to ui and user prefs
+ - not all codec/pixel format/muxer combos work, some codecs have no success :(
+   (need a better default muxer)
+ - record good/bad combos of codec, pixel format and container
  */
 
 // view that renders the video from the frames in the ImageSequenceViewModel

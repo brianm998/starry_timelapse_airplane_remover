@@ -41,6 +41,8 @@ public class AbstractBlobProcessor {
     internal weak var frame: FrameAirplaneRemover?
     public var steps: [BlobProcessingType] = []
 
+    public var description: String { fatalError("subclasses need to override the description method") }
+    
     internal func shouldRunStep(atIndex index: Int) -> Bool { true }
     
     // runs each step in sequence and returns the result

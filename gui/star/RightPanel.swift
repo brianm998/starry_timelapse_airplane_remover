@@ -20,16 +20,6 @@ struct RightPanel: View {
     let foobar = 134.0/255.0 // XXX make a custom color from these
     let foobar2 = 138.0/255.0
 
-    enum FocusedField: Hashable {
-        case trashLevel
-        case smallTrashMax
-        case minimumClassificationSize
-        case numberOfFramesToProcess
-        case numberOfFramesToProcessConcurrently
-        case numberOfNeighborFrames
-        case pixelThreshold
-    }
-
     @FocusState private var focusedField: FocusedField?
     
     var body: some View {
@@ -218,11 +208,23 @@ struct RightPanel: View {
 
                             let frameView = viewModel.currentFrameView
 
-                            EditablePixelThresholdView(focusedField: $focusedField)
+                            EditablePixelThresholdView(
+                              focusedField: $focusedField,
+                              textColor: .white,
+                              alwaysOpen: false
+                            )
                             
-                            EditableNumberOfNeighborFrames(focusedField: $focusedField)
+                            EditableNumberOfNeighborFrames(
+                              focusedField: $focusedField,
+                              textColor: .white,
+                              alwaysOpen: false
+                            )
 
-                            EditableNumberOfFramesToProcessConcurrentlyView(focusedField: $focusedField)
+                            EditableNumberOfFramesToProcessConcurrentlyView(
+                              focusedField: $focusedField,
+                              textColor: .white,
+                              alwaysOpen: false
+                            )
 
                             Toggle("reprocess fully", isOn: $viewModel.reprocessFrames)
                               .foregroundColor(.white)
@@ -255,7 +257,11 @@ struct RightPanel: View {
                                           viewModel.renderingCurrentFrame)
 
 
-                            EditableNumberOfFramesToProcessView(focusedField: $focusedField)
+                            EditableNumberOfFramesToProcessView(
+                              focusedField: $focusedField,
+                              textColor: .white,
+                              alwaysOpen: false
+                            )
 
                             Picker("", selection: $viewModel.detectionType) {
                                 ForEach(DetectionType.allCases, id: \.self) { value in
@@ -343,8 +349,8 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
     /// Suffix (after the TextField) during editing
     let suffixTextProvider: (Value) -> String
     /// Focus state binding and the specific field case
-    let focusedField: FocusState<RightPanel.FocusedField?>.Binding
-    let focusField: RightPanel.FocusedField
+    let focusedField: FocusState<FocusedField?>.Binding
+    let focusField: FocusedField
     /// Extra action upon commit
     let commitAction: (Value) -> Void
 
@@ -358,8 +364,8 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
          fullTextProvider: @escaping (Value) -> String,
          prefixText: String? = nil,
          suffixTextProvider: @escaping (Value) -> String,
-         focusedField: FocusState<RightPanel.FocusedField?>.Binding,
-         focusField: RightPanel.FocusedField,
+         focusedField: FocusState<FocusedField?>.Binding,
+         focusField: FocusedField,
          commitAction: @escaping (Value) -> Void = { _ in })
     {
         self._value = value
@@ -425,8 +431,10 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
 // "Pixel Threshold"
 struct EditablePixelThresholdView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-    let focusedField: FocusState<RightPanel.FocusedField?>.Binding
-
+    let focusedField: FocusState<FocusedField?>.Binding
+    let textColor: Color
+    let alwaysOpen: Bool
+    
     var body: some View {
         @Bindable var viewModel = viewModel
         return EditableNumberView(
@@ -436,8 +444,10 @@ struct EditablePixelThresholdView: View {
           fullTextProvider: { "Pixel threshold: \($0)" },
           prefixText: "Pixel threshold: ",
           suffixTextProvider: { _ in "" },
+          textColor: textColor,
           focusedField: focusedField,
-          focusField: .pixelThreshold
+          focusField: .pixelThreshold,
+          alwaysOpen: alwaysOpen            
           // no extra commit side‐effects here
         )
     }
@@ -446,7 +456,9 @@ struct EditablePixelThresholdView: View {
 // “Number of Neighbor Frames”
 struct EditableNumberOfNeighborFrames: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-    let focusedField: FocusState<RightPanel.FocusedField?>.Binding
+    let focusedField: FocusState<FocusedField?>.Binding
+    let textColor: Color
+    let alwaysOpen: Bool
 
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -457,8 +469,10 @@ struct EditableNumberOfNeighborFrames: View {
           fullTextProvider: { "align with \($0) neighbor frames" },
           prefixText: "process with",
           suffixTextProvider: { _ in "neighbor frames" },
+          textColor: textColor,
           focusedField: focusedField,
-          focusField: .numberOfNeighborFrames
+          focusField: .numberOfNeighborFrames,
+          alwaysOpen: alwaysOpen
           // no extra commit side‐effects here
         )
     }
@@ -467,7 +481,9 @@ struct EditableNumberOfNeighborFrames: View {
 // “Number of Frames To Process Concurrently”
 struct EditableNumberOfFramesToProcessConcurrentlyView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-    let focusedField: FocusState<RightPanel.FocusedField?>.Binding
+    let focusedField: FocusState<FocusedField?>.Binding
+    let textColor: Color
+    let alwaysOpen: Bool
 
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -478,8 +494,10 @@ struct EditableNumberOfFramesToProcessConcurrentlyView: View {
             fullTextProvider: { "process \($0) frames at once" },
             prefixText: "process",
             suffixTextProvider: { _ in "frames at once" },
+            textColor: textColor,
             focusedField: focusedField,
             focusField: .numberOfFramesToProcessConcurrently,
+            alwaysOpen: alwaysOpen,
             commitAction: { newVal in
                 // persist to prefs & global
                 viewModel.userPreferences.concurrentFrames = newVal
@@ -492,7 +510,9 @@ struct EditableNumberOfFramesToProcessConcurrentlyView: View {
 // “Number of Frames To Process”
 struct EditableNumberOfFramesToProcessView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-    let focusedField: FocusState<RightPanel.FocusedField?>.Binding
+    let focusedField: FocusState<FocusedField?>.Binding
+    let textColor: Color
+    let alwaysOpen: Bool
 
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -503,8 +523,10 @@ struct EditableNumberOfFramesToProcessView: View {
             fullTextProvider: { "\($0) frames as" },
             // no prefix, so TextField is first
             suffixTextProvider: { $0 == 1 ? "frame as" : "frames as" },
+            textColor: textColor,
             focusedField: focusedField,
-            focusField: .numberOfFramesToProcess
+            focusField: .numberOfFramesToProcess,
+            alwaysOpen: alwaysOpen            
             // no extra commit side‐effects here
         )
     }

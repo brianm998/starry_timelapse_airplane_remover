@@ -239,6 +239,8 @@ public final class ImageSequenceViewModel {
 
     var renderVideoSheetShowing = false
 
+    var showProcessingOptionsSheet = false
+
     var showAllFrameViewModes = false
 
     var showAllFrameProcessingStates = false

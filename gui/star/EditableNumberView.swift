@@ -17,14 +17,17 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
     let prefixText: String?
     /// Suffix (after the TextField) during editing
     let suffixTextProvider: (Value) -> String
+    /// Color for text
+    let textColor: Color
     /// Focus state binding and the specific field case
-    let focusedField: FocusState<RightPanel.FocusedField?>.Binding
-    let focusField: RightPanel.FocusedField
+    let focusedField: FocusState<FocusedField?>.Binding
+    let focusField: FocusedField
+    let alwaysOpen: Bool
     /// Extra action upon commit
     let commitAction: (Value) -> Void
-
-    @State private var isEditing = false
-    @State private var editText = ""
+    
+    @State private var isEditing: Bool 
+    @State private var editText: String
 
     init(value: Binding<Value>,
          minValue: Value = .zero,
@@ -33,8 +36,10 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
          fullTextProvider: @escaping (Value) -> String,
          prefixText: String? = nil,
          suffixTextProvider: @escaping (Value) -> String,
-         focusedField: FocusState<RightPanel.FocusedField?>.Binding,
-         focusField: RightPanel.FocusedField,
+         textColor: Color,
+         focusedField: FocusState<FocusedField?>.Binding,
+         focusField: FocusedField,
+         alwaysOpen: Bool = false,
          commitAction: @escaping (Value) -> Void = { _ in })
     {
         self._value = value
@@ -44,19 +49,27 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
         self.fullTextProvider = fullTextProvider
         self.prefixText = prefixText
         self.suffixTextProvider = suffixTextProvider
+        self.textColor = textColor
         self.focusedField = focusedField
         self.focusField = focusField
+        self.alwaysOpen = alwaysOpen
         self.commitAction = commitAction
+        _isEditing = State(initialValue: alwaysOpen)
+        if alwaysOpen {
+            _editText = State(initialValue: String(value.wrappedValue))
+        } else {
+            _editText = State(initialValue: "")
+        }
     }
 
     var body: some View {
         let currentString = String(value)
 
-        if isEditing {
+        if isEditing || alwaysOpen {
             HStack {
                 if let prefix = prefixText {
                     Text(prefix)
-                        .foregroundColor(.white)
+                        .foregroundColor(textColor)
                 }
 
                 TextField(currentString, text: $editText)
@@ -71,16 +84,18 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
                       if focusedField.wrappedValue != focusField {
                           // Lost focus: cancel editing and revert
                           isEditing = false
-                          editText = ""
+                          if !alwaysOpen {
+                              editText = ""
+                          }
                       }
                   }
 
                 Text(suffixTextProvider(value))
-                  .foregroundColor(.white)
+                  .foregroundColor(textColor)
             }
         } else {
             Text(fullTextProvider(value))
-              .foregroundColor(.white)
+              .foregroundColor(textColor)
               .cursor(.iBeam)
               .onTapGesture {
                   // Begin editing
@@ -106,6 +121,8 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
         }
         // Exit editing mode in all cases (commit or revert)
         isEditing = false
-        editText = ""
+        if !alwaysOpen {
+            editText = ""
+        }
     }
 }

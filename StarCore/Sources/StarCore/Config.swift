@@ -156,7 +156,8 @@ public struct Config: Codable, Sendable, Transferable {
     // align this many total neighbor frames for both
     // creating the subtraction image and calculating pixel values during removal
     public var numberAlignedNeighborFrames = 8 // total
-    
+
+    // this can stay this way more easily now that star supports video import to .tiff directly
     public var supportedImageFileTypes = [".tif", ".tiff"] // XXX move this out
 
     // XXX use this to try to avoid running out of memory somehow

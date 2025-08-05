@@ -16,6 +16,10 @@ You should have received a copy of the GNU General Public License along with sta
 // load and process all blobs for a frame, using a defined sequence of steps
 public class StrongBlobProcessor: AbstractBlobProcessor {
 
+    override public var description: String {
+        "The Strong Blob Processor gets more airplane signal than the Mild processor, but is not as harsha as the Stronger processor."
+    }
+    
     override public init() {
         super.init()
         

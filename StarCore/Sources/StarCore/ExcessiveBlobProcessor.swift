@@ -16,6 +16,10 @@ You should have received a copy of the GNU General Public License along with sta
 // load and process all blobs for a frame, using a defined sequence of steps
 public class ExcessiveBlobProcessor: AbstractBlobProcessor {
 
+    override public var description: String {
+        "The Excessive Blob Processor is the slowest and can dig almost any bad signal you want to remove.  Besides being slow, it also will throw up the most false positives.  Best used with the shovel tool on smaller areas of a frame."
+    }
+    
     override public init() {
         super.init()
         self.steps = [
