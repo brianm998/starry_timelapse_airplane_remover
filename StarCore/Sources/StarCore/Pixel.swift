@@ -138,7 +138,7 @@ public struct Pixel {
         UInt64(self.green)
     }
 }
-
+/*
 extension Array where Element == Pixel {
     /// Returns the “good” pixels whose intensity is ≤ mean + K·σ.
     func goodPixels(with thresholdFactor: Double = 3.0) -> [Pixel] {
@@ -166,3 +166,4 @@ extension Array where Element == Pixel {
             .map { pixel, _ in pixel }
     }
 }
+*/

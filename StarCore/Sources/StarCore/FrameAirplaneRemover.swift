@@ -422,89 +422,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         self.set(state: .creatingAlignedFrame)
         
         if let firstImage = alignedImages.values.first {
-            // XXX we assume all image have the same resolution, bit depth, etc :(
-            
-            let pixelThreshold = self.pixelThreshold
 
-            /*
-             
-             Use a task group to run each row in a separate task,
-             returning a [UInt16] array for the row, memmove'ing it back into goodPixelArr
-
-             XXX make this faster by accessing image arrays directly?
-             */
-            
-            let goodPixelArr = await withTaskGroup(of: (Int, [UInt16]).self) { taskGroup in
-                
-                // image buffer for calculated alignment image
-                var goodPixelArr = [UInt16](repeating: 0, count: width*height*firstImage.componentsPerPixel)
-                for y in 0..<height {
-                    taskGroup.addTask() {
-
-                        var goodPixelRow = [UInt16](repeating: 0, count: self.width*firstImage.componentsPerPixel)
-                        
-                        for x in 0..<self.width {
-                            var pixels: [Pixel] = []
-                            for image in alignedImages.values {
-                                pixels.append(image.readPixel(atX: x, andY: y))
-                            }
-                            let goodPixels = pixels.goodPixels(with: pixelThreshold)
-                            if goodPixels.count > 0 {
-                                let pixel = Pixel(merging: goodPixels)
-                                
-                                let offset = x * firstImage.componentsPerPixel
-                                
-                                goodPixelRow[offset] = pixel.red
-                                if firstImage.componentsPerPixel >= 2 {
-                                    goodPixelRow[offset+1] = pixel.green
-                                }
-                                if firstImage.componentsPerPixel >= 3 {
-                                    goodPixelRow[offset+2] = pixel.blue
-                                }
-                                // i.e. take the alpha into acount
-                                if firstImage.componentsPerPixel == 4 {
-                                    goodPixelRow[offset+3] = pixel.alpha
-                                }
-                                
-                            } else {
-                                Log.w("frame \(self.frameIndex) no good pixels at [\(x), \(y)] :(")
-                            }
-                        }
-                        return (y, goodPixelRow)
-                    }
-                }
-
-                // memmove the results here
-                for await (y, goodPixelRow) in taskGroup {
-                    let index = (y * width*firstImage.componentsPerPixel)
-                    let numBytes = goodPixelRow.count*2
-                    // memmove goodPixelRow into goodPixelArr at index
-
-                    goodPixelRow.withUnsafeBufferPointer { sourcePtr in
-                        if let baseAddress = sourcePtr.baseAddress {
-                            memmove(&goodPixelArr[index],
-                                    baseAddress,
-                                    numBytes)
-                        } else {
-                            Log.w("cannot memmove")
-                        }
-                    }
-                }
-
-                return goodPixelArr
-            }
-
-            let goodPixelImage = PixelatedImage(width: width,
-                                                height: height,
-                                                imageData: .init(from: goodPixelArr),
-                                                bitsPerPixel: firstImage.bitsPerPixel,
-                                                bytesPerRow: firstImage.bytesPerRow,
-                                                bitsPerComponent: firstImage.bitsPerComponent,
-                                                bytesPerPixel: firstImage.bytesPerPixel,
-                                                bitmapInfo: firstImage.bitmapInfo,
-                                                componentsPerPixel: firstImage.componentsPerPixel,
-                                                colorSpace: firstImage.colorSpace,
-                                                ciFormat: firstImage.ciFormat)
+            let goodPixelImage = try await buildAlignedFrame(
+              alignedImages: Array(alignedImages.values),
+              width: width,
+              height: height,
+              thresholdFactor: pixelThreshold
+            )
             
             try await imageAccessor.save(goodPixelImage,
                                          frameIndex: frameIndex,
@@ -2381,4 +2305,162 @@ func readInteger(fromFile path: String) -> Int? {
     // Trim whitespace/newlines and convert to Int
     let trimmed = contents.trimmingCharacters(in: .whitespacesAndNewlines)
     return Int(trimmed)
+}
+
+
+
+// Convenience: grab 16-bit backing store if present.
+private extension PixelatedImage {
+    var u16: [UInt16]? {
+        if case .sixteenBit(let arr) = imageData { return arr }
+        return nil
+    }
+}
+
+/// Builds the “good pixel” aligned image without instantiating `Pixel` per sample.
+func buildAlignedFrame(
+    alignedImages: [PixelatedImage],
+    width: Int,
+    height: Int,
+    thresholdFactor k: Double
+) async throws -> PixelatedImage {
+    guard let first = alignedImages.first else { throw "no images" }
+
+    let comps = first.componentsPerPixel
+    precondition(comps == 3 || comps == 4, "only RGB16/RGBA16 supported")
+
+    let planes: [[UInt16]] = alignedImages.map { img in
+        guard case .sixteenBit(let arr) = img.imageData else {
+            fatalError("only 16-bit supported here")
+        }
+        return arr        // value type; copy-on-write; we won't mutate
+    }
+    
+    let nFrames = planes.count
+    let rowStride = width * comps
+    
+    let out: [UInt16] = await withTaskGroup(of: (Int, [UInt16]).self) { group in
+        // spawn one task per row
+        for y in 0..<height {
+            group.addTask { @Sendable [y, width, comps, rowStride, nFrames, k, planes] in
+                var row = [UInt16](repeating: 0, count: rowStride)
+                var intensities = [Double](repeating: 0, count: nFrames)
+                
+                for x in 0..<width {
+                    let rowIdx = x * comps
+                    let idx = y * rowStride + x * comps
+                    
+                    // 1) collect intensities and mean
+                    var sum = 0.0
+                    if comps == 3 {
+                        for i in 0..<nFrames {
+                            let p = planes[i]
+                            let r = Double(p[idx + 0])
+                            let g = Double(p[idx + 1])
+                            let b = Double(p[idx + 2])
+                            let I = r + g + b
+                            intensities[i] = I
+                            sum += I
+                        }
+                    } else { // comps == 4
+                        for i in 0..<nFrames {
+                            let p = planes[i]
+                            let r = Double(p[idx + 0])
+                            let g = Double(p[idx + 1])
+                            let b = Double(p[idx + 2])
+                            let I = r + g + b
+                            intensities[i] = I
+                            sum += I
+                        }
+                    }
+                    
+                    let n = Double(nFrames)
+                    let mean = sum / n
+                    
+                    // 2) std dev
+                    var varSum = 0.0
+                    for v in intensities {
+                        let d = v - mean
+                        varSum += d * d
+                    }
+                    let std = sqrt(varSum / n)
+                    let threshold = mean + k * std
+                    
+                    // 3) merge “good” frames
+                    var accR = 0.0, accG = 0.0, accB = 0.0, accA = 0.0
+                    var countGood = 0.0
+                    
+                    if comps == 3 {
+                        for i in 0..<nFrames where intensities[i] <= threshold {
+                            let p = planes[i]
+                            accR += Double(p[idx + 0])
+                            accG += Double(p[idx + 1])
+                            accB += Double(p[idx + 2])
+                            countGood += 1.0
+                        }
+                        if countGood > 0 {
+                            row[rowIdx + 0] = UInt16(accR / countGood)
+                            row[rowIdx + 1] = UInt16(accG / countGood)
+                            row[rowIdx + 2] = UInt16(accB / countGood)
+                        }
+                    } else { // RGBA
+                        for i in 0..<nFrames where intensities[i] <= threshold {
+                            let p = planes[i]
+                            let a = Double(p[idx + 3])
+                            let w = a / 65535.0
+                            accR += Double(p[idx + 0]) * w
+                            accG += Double(p[idx + 1]) * w
+                            accB += Double(p[idx + 2]) * w
+                            accA += a
+                            countGood += 1.0
+                        }
+                        if countGood > 0 {
+                            row[rowIdx + 0] = UInt16(accR / countGood)
+                            row[rowIdx + 1] = UInt16(accG / countGood)
+                            row[rowIdx + 2] = UInt16(accB / countGood)
+                            row[rowIdx + 3] = UInt16(accA / countGood)
+                        }
+                    }
+                }
+                
+                return (y, row)
+            }
+        }
+        
+        var out = [UInt16](repeating: 0, count: width * height * comps)
+        
+        // memmove the results here
+        for await (y, goodPixelRow) in group {
+            let index = (y * width*first.componentsPerPixel)
+            let numBytes = goodPixelRow.count*2
+            // memmove goodPixelRow into goodPixelArr at index
+            
+            goodPixelRow.withUnsafeBufferPointer { sourcePtr in
+                if let baseAddress = sourcePtr.baseAddress {
+                    memmove(&out[index],
+                            baseAddress,
+                            numBytes)
+                } else {
+                    Log.w("cannot memmove")
+                }
+            }
+        }
+        
+        return out
+    }
+    
+    // Build the output image
+    return PixelatedImage(
+        width: width,
+        height: height,
+        imageData: .sixteenBit(out),
+        bitsPerPixel: first.bitsPerPixel,
+        bytesPerRow: first.bytesPerRow,
+        bitsPerComponent: first.bitsPerComponent,
+        bytesPerPixel: first.bytesPerPixel,
+        bitmapInfo: first.bitmapInfo,
+        componentsPerPixel: comps,
+        colorSpace: first.colorSpace,
+        ciFormat: first.ciFormat
+    )
 }
