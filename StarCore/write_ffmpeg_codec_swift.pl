@@ -13,7 +13,7 @@ my $codecs = {};
 while(<FH>) { 
   $started = 1 if(/^\s*-------\s*$/);
   if($started && /^\s*([D.])([E.])([VASDT.])([I.])([L.])([S.])\s+(\w+)\s+(.*)$/) {
-      
+
     my ($decoding,
 	$encoding,
 	$codec_type,
@@ -22,6 +22,17 @@ while(<FH>) {
 	$lossless,
 	$name,
 	$description) = ($1 ne '.', $2 ne '.', $3, $4 ne '.', $5 ne '.', $6, $7, $8);
+
+    my $encoders;
+
+    if ($description =~ /\(encoders: ([^\)]+)\s+\)/) {
+      # decode which encoders this codec supports
+      my @list = split / /, $1;
+      $encoders = \@list;
+    } else {
+      # no listed encoders, assume just one with the same name as codec
+      $encoders = [$name];
+    }
 
     if ($name =~ /^\s*\d/) {
 	$codecs->{$name} = {name => "_".$name,
@@ -32,6 +43,7 @@ while(<FH>) {
 			    intra_frame_only => $intra_frame_only,
 			    lossy => $lossy,
 			    lossless => $lossless,
+			    encoders => $encoders,
 			    description => $description};
     } else {
 	$codecs->{$name} = {decoding => $decoding,
@@ -40,6 +52,7 @@ while(<FH>) {
 			    intra_frame_only => $intra_frame_only,
 			    lossy => $lossy,
 			    lossless => $lossless,
+			    encoders => $encoders,
 			    name => $name,
 			    description => $description};
     }
@@ -193,49 +206,68 @@ foreach my $name (keys %$codecs) {
 print OUT "        }\n";
 print OUT "    }\n\n";
 
-my $extra_info = {};
-
-foreach my $name (keys %$codecs) {
-  my $real_name = $name;
-  $real_name = $codecs->{$name}{name} if (exists $codecs->{$name}{real_name});
-  open (FH, "../external_binaries/bin/ffmpeg -h encoder=$real_name 2>/dev/null |") || die "cannot read pix fmts: $!\n";
-  my $supported_line = "[";
-  my $supported_formats = {};
-  my $short_description = undef;
-  while(<FH>) {
-    if(/Supported pixel formats:\s+(.*)/) {
-
-      my @supported_formats = split /\s+/, $1;
-      foreach my $format (@supported_formats) {
-	if ($format =~ /^\s*\d/) {
-	  $supported_formats->{"._$format"} = 1
-	} else {
-	  $supported_formats->{".$format"} = 1
-	}
-      }
-    } elsif(/Encoder[^\]]+\[([^\]]+)\]:/) {
-      $short_description = $1;
-    }
-  }
-  close FH;
-  $supported_line .= join(", ", keys %$supported_formats);
-  $supported_line .= "]";
-  $extra_info->{$name}{supported_line} = $supported_line;
-  if(defined $short_description) {
-    $extra_info->{$name}{description} = $short_description;
-  }
-}
-
-print OUT "    public var pixelFormats: [FFmpegPixelFormat] {\n";
+print OUT "    public var encoders: [FFmpegEncoder] {\n";
 print OUT "        switch self {\n";
 foreach my $name (keys %$codecs) {
-  my $real_name = $name;
-  $real_name = $codecs->{$name}{name} if (exists $codecs->{$name}{real_name});
-  print OUT "        case .$real_name:\n";
-  print OUT "            $extra_info->{$name}{supported_line}\n";
+  if (exists $codecs->{$name}{real_name}) {
+    print OUT "        case .$codecs->{$name}{name}:\n";
+  } else {
+    print OUT "        case .$name:\n";
+  }
+  my @list = join ", ", map {
+    if (/-/) {
+      s/-/_/g;
+      ".$_";
+    } elsif(/^\s*\d/) {
+       "._$_";
+    } else {
+       ".$_";
+    }
+  } @{$codecs->{$name}{encoders}};
+  print OUT "            [@list]\n";
 }
 print OUT "        }\n";
 print OUT "    }\n\n";
+
+my $extra_info = {};
+
+my $encoders = {};
+
+foreach my $name (keys %$codecs) {
+  my $real_name = $name;
+  $real_name = $codecs->{$name}{name} if (exists $codecs->{$name}{real_name});
+
+
+  ## XXX this needs to separate by encoder
+  foreach my $encoder (@{$codecs->{$name}{encoders}}) {
+
+    open (FH, "../external_binaries/bin/ffmpeg -h encoder=$encoder 2>/dev/null |") || die "cannot read pix fmts: $!\n";
+    my $supported_line = "[";
+    my $supported_formats = {};
+    my $short_description = undef;
+    while (<FH>) {
+      #print("ENCODER: $_\n");
+      if (/Supported pixel formats:\s+(.*)/) {
+
+	my @supported_formats = split /\s+/, $1;
+	foreach my $format (@supported_formats) {
+	  if ($format =~ /^\s*\d/) {
+	    $supported_formats->{"._$format"} = 1
+	  } else {
+	    $supported_formats->{".$format"} = 1
+	  }
+	}
+      } elsif (/Encoder[^\]]+\[([^\]]+)\]:/) {
+	$short_description = $1;
+      }
+    }
+    close FH;
+    $supported_line .= join(", ", keys %$supported_formats);
+    $supported_line .= "]";
+    $encoders->{$encoder}{supported_line} = $supported_line;
+    $encoders->{$encoder}{description} = $short_description;
+  }
+}
 
 print OUT "    public var name: String? {\n";
 print OUT "        switch self {\n";
@@ -252,7 +284,8 @@ foreach my $name (keys %$codecs) {
   }
 }
 print OUT "        }\n";
-print OUT "    }\n\n";
+print OUT "    }\n";
+print OUT "}\n\n";
 
 print OUT "public enum CodecType: Codable {\n";
 print OUT "    case video\n";
@@ -261,4 +294,59 @@ print OUT "    case subtitle\n";
 print OUT "    case data\n";
 print OUT "    case attachment\n";
 print OUT "    case none\n";
+print OUT "}\n\n";
+
+print OUT "public enum FFmpegEncoder: String, CaseIterable, Codable, Sendable {\n";
+
+foreach my $name (keys %$encoders) {
+  if ($name =~ /-/) {
+    my $updated_name = $name;
+    $updated_name =~ s/-/_/;
+    print OUT "    case $updated_name = \"$name\"\n";
+  } elsif ($name =~ /^\s*\d/) {
+    print OUT "    case _$name = \"$name\"\n";
+  } else {
+    print OUT "    case $name\n";
+  }
+}
+
+
+print OUT "    public var pixelFormats: [FFmpegPixelFormat] {\n";
+print OUT "        switch self {\n";
+foreach my $name (keys %$encoders) {
+  if ($name =~ /-/) {
+    my $updated_name = $name;
+    $updated_name =~ s/-/_/;
+    print OUT "        case .$updated_name:\n";
+  } elsif ($name =~ /^\s*\d/) {
+    print OUT "        case ._$name:\n";
+  } else {
+    print OUT "        case .$name:\n";
+  }
+  print OUT "            $encoders->{$name}{supported_line}\n";
+}
+print OUT "        }\n";
+print OUT "    }\n\n";
+
+
+print OUT "    public var description: String {\n";
+print OUT "        switch self {\n";
+foreach my $name (keys %$encoders) {
+  if ($name =~ /-/) {
+    my $updated_name = $name;
+    $updated_name =~ s/-/_/;
+    print OUT "        case .$updated_name:\n";
+  } elsif ($name =~ /^\s*\d/) {
+    print OUT "        case ._$name:\n";
+  } else {
+    print OUT "        case .$name:\n";
+  }
+  my $description = $encoders->{$name}{description};
+  $description =~ s/\"/\\\"/g;
+  print OUT "            return \"$description\"\n";
+}
+print OUT "        }\n";
+print OUT "    }\n\n";
+
+
 print OUT "}\n";

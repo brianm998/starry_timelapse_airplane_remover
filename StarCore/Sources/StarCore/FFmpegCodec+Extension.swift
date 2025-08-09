@@ -21,7 +21,7 @@ public extension FFmpegCodec {
         return all
           .filter { $0.canDecode }
           .filter { $0.canEncode }
-          .filter { $0.pixelFormats.count > 0 }
+//          .filter { $0.pixelFormats.count > 0 }
           .filter { $0.type == .video }
     }
 

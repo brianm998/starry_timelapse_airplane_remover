@@ -40,6 +40,9 @@ public func decodeVideo(
         )
     }
     let totalFramesStr = try await totalFramesTask.value
+
+    // XXX report counting frames here
+    
     let totalFrames = Int(totalFramesStr.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
 
     let ffmpegTask = Task {
@@ -213,50 +216,5 @@ final class StderrCollector: @unchecked Sendable {
 
     func collectedData() -> Data {
         queue.sync { data }
-    }
-}
-
-
-public func OLD_runFFmpegWithProgress(
-  arguments: [String],
-  totalFrames: Int?,
-  ffmpegPath: String = ToolPaths.ffmpeg,
-  progress: @escaping ProgressCallback
-) throws {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: ffmpegPath)
-    process.arguments = arguments
-
-    let pipe = Pipe()
-    process.standardError = pipe
-    process.standardOutput = nil
-
-    pipe.fileHandleForReading.readabilityHandler = { handle in
-        let data = handle.availableData
-        guard let line = String(data: data, encoding: .utf8) else { return }
-
-        // Match "frame=   123"
-        if let range = line.range(of: #"frame=\s*\d+"#, options: .regularExpression) {
-            let numberStr = line[range]
-              .replacingOccurrences(of: "frame=", with: "")
-              .trimmingCharacters(in: .whitespaces)
-            if let frameNum = Int(numberStr) {
-                progress(frameNum, totalFrames ?? 0)
-            }
-        }
-    }
-
-    try process.run()
-    process.waitUntilExit()
-    pipe.fileHandleForReading.readabilityHandler = nil
-
-    if process.terminationStatus != 0 {
-        throw NSError(
-          domain: "ffmpeg",
-          code: Int(process.terminationStatus),
-          userInfo: [
-            NSLocalizedDescriptionKey: "ffmpeg exited with code \(process.terminationStatus)"
-          ]
-        )
     }
 }
