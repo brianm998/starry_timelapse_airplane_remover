@@ -27,15 +27,14 @@ struct LeftPanel: View {
                     self.processingButtons
 
                     ProcessingProgressBarView()
-                      .frame(maxWidth: .none)
+                      .frame(maxWidth: 200, alignment: .leading)
+                     //.frame(maxWidth: .none)
                     
-                    Spacer()
-                      .frame(maxHeight: 10)
+                    Space(height: 10)
                     
                     self.processingStateView
 
-                    Spacer()
-                      .frame(maxHeight: 10)
+                    Space(height: 10)
                     
                     self.frameModeView
                     
@@ -57,7 +56,7 @@ struct LeftPanel: View {
               .cursor(.resizeLeft)
         }
           .padding(10)
-          .background(Color(white: 0.22))
+          .background(Color(white: 0.22).zIndex(0))
           .frame(maxHeight: .infinity, alignment: .bottom)
         
     }
@@ -230,8 +229,8 @@ struct LeftPanel: View {
                           .foregroundColor(/*isEnabled ? .white : */ .gray)
                           .padding(4)
                     }
-                } else {
-                    Group { }
+//                } else {
+//                    Group { }
                 }
             }
               .background(Color(red: foobar, green: foobar, blue: foobar2))
@@ -270,7 +269,6 @@ struct LeftPanel: View {
     }
 }
 
-
 extension View {
     @ViewBuilder func `if`<Content: View>(
         _ condition: Bool,
@@ -307,16 +305,17 @@ struct ProcessingProgressBarView: View {
 
             HStack(spacing: 0) {
                 Rectangle()
-                    .fill(unprocessedColor)
-                    .frame(width: unprocessedWidth)
+                    .fill(completeColor)
+                    .frame(width: completeWidth)
 
                 Rectangle()
                     .fill(processingColor)
                     .frame(width: processingWidth)
 
                 Rectangle()
-                    .fill(completeColor)
-                    .frame(width: completeWidth)
+                    .fill(unprocessedColor)
+                    .frame(width: unprocessedWidth)
+
             }
             .cornerRadius(4)
             .frame(height: 10)
