@@ -208,6 +208,9 @@ public struct Config: Codable, Sendable, Transferable {
     // the codec of the incoming and outgoing video
     public var codec: FFmpegCodec?
 
+    // the encoder to use to encode the resulting video
+    public var encoder: FFmpegEncoder?
+
     // the pixelformat of the incoming and outgoing video
     public var pixelFormat: FFmpegPixelFormat?
 
@@ -220,6 +223,7 @@ public struct Config: Codable, Sendable, Transferable {
     mutating public func set(videoInfo: VideoInfo) {
         self.frameRate = videoInfo.frameRate
         self.codec = videoInfo.codec
+        self.encoder = videoInfo.encoder
         self.pixelFormat = videoInfo.pixelFormat
         self.muxer = videoInfo.muxer
         self.hasAudio = videoInfo.hasAudio

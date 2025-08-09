@@ -30,6 +30,7 @@ public actor Constants {        // XXX rename this
 
     private var frameRate: FrameRate = .fps_24
     private var codec: FFmpegCodec = .prores
+    private var encoder: FFmpegEncoder = .prores
     private var pixelFormat: FFmpegPixelFormat = .yuv444p10le
     private var muxer: FFmpegMuxer = .mov
     
@@ -43,6 +44,10 @@ public actor Constants {        // XXX rename this
 
     public func set(codec: FFmpegCodec) {
         self.codec = codec
+    }
+
+    public func set(encoder: FFmpegEncoder) {
+        self.encoder = encoder
     }
 
     public func set(pixelFormat: FFmpegPixelFormat) {

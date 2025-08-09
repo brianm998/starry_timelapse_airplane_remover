@@ -72,6 +72,16 @@ struct UserPreferences: Codable, Sendable {
         }
     }
 
+    // the encoder to use when encoding the outgoing video
+    var encoder: FFmpegEncoder? {
+        didSet {
+            self.save()
+            if let encoder  {
+                Task { await constants.set(encoder: encoder) }
+            }
+        }
+    }
+
     // the pixelformat of the incoming and outgoing video
     var pixelFormat: FFmpegPixelFormat? {
         didSet {

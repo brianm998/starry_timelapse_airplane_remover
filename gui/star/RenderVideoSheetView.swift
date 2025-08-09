@@ -44,6 +44,11 @@ struct RenderVideoSheetView: View {
             } else {
                 _codec = State(initialValue: viewModel.codec)
             }
+            if let encoder = config.config().encoder {
+                _encoder = State(initialValue: encoder)
+            } else {
+                _encoder = State(initialValue: viewModel.encoder)
+            }
             if let pixelFormat = config.config().pixelFormat {
                 _pixelFormat = State(initialValue: pixelFormat)
             } else {
@@ -63,6 +68,7 @@ struct RenderVideoSheetView: View {
             _frameRate = State(initialValue: viewModel.frameRate)
             _frameRateString = State(initialValue: String(format: "%g", viewModel.frameRate.rawValue))
             _codec = State(initialValue: viewModel.codec)
+            _encoder = State(initialValue: viewModel.encoder)
             _pixelFormat = State(initialValue: viewModel.pixelFormat)
             _muxer = State(initialValue: viewModel.muxer)
         }
@@ -71,8 +77,9 @@ struct RenderVideoSheetView: View {
         // and if not, use different ones that are.
 
         // note this in the UI
-        if !self.codec.pixelFormats.contains(self.pixelFormat) {
-            _pixelFormat = State(initialValue: codec.pixelFormats[0])
+        if !self.encoder.pixelFormats.contains(self.pixelFormat) {
+            Log.w("pixel format \(self.pixelFormat) not applicable for encoder \(self.encoder)")
+            _pixelFormat = State(initialValue: encoder.pixelFormats[0])
         }
 
         // note this in the UI
@@ -84,6 +91,7 @@ struct RenderVideoSheetView: View {
     @State private var frameRateString: String
     @State private var frameRate: FrameRate 
     @State private var codec: FFmpegCodec 
+    @State private var encoder: FFmpegEncoder
     @State private var pixelFormat: FFmpegPixelFormat
     @State private var muxer: FFmpegMuxer
 
@@ -233,14 +241,13 @@ struct RenderVideoSheetView: View {
                 
                 Picker("Codec", selection: $codec) {
                     ForEach(FFmpegCodec.availableVideoCodecs, id: \.self) { codec in
-                        Text(codec.name ?? "Not Named")
+                        Text(codec.description ?? "Not Named")
                     }
                 }
                   .onChange(of: codec) {
                       viewModel.userPreferences.codec = codec
                       viewModel.codec = codec
-                      
-                      pixelFormat = codec.pixelFormats[0]
+                      pixelFormat = codec.encoders[0].pixelFormats[0]
                       muxer = codec.supportedMuxers[0]
                   }
 
@@ -250,8 +257,25 @@ struct RenderVideoSheetView: View {
                 
                 Divider()
                 
+                Picker("Encoder", selection: $encoder) {
+                    ForEach(codec.encoders, id: \.self) { encoder in
+                        Text(encoder.description)
+                    }
+                }
+                  .onChange(of: encoder) {
+                      viewModel.userPreferences.encoder = encoder
+                      viewModel.encoder = encoder
+                      pixelFormat = encoder.pixelFormats[0]
+                  }
+
+                Text(encoder.description)
+                  .lineLimit(nil)
+                  .fixedSize(horizontal: false, vertical: true)
+                
+                Divider()
+                
                 Picker("Pixel Format", selection: $pixelFormat) {
-                    ForEach(codec.pixelFormats, id: \.self) { pixelFormat in
+                    ForEach(encoder.pixelFormats, id: \.self) { pixelFormat in
                         Text(pixelFormat.rawValue)
                     }
                 }
@@ -300,7 +324,7 @@ struct RenderVideoSheetView: View {
                         self.isRendering = true
                         viewModel.renderVideo(named: videoFilename,
                                               frameRate: frameRate,
-                                              codec: codec,
+                                              encoder: encoder,
                                               pixelFormat: pixelFormat,
                                               muxer: muxer)
                         { currentFrame, totalFrames in

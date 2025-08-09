@@ -21,10 +21,23 @@ public extension FFmpegCodec {
         return all
           .filter { $0.canDecode }
           .filter { $0.canEncode }
-//          .filter { $0.pixelFormats.count > 0 }
+          .filter { $0.pixelFormatCount > 0 }
           .filter { $0.type == .video }
     }
 
+    func encoder(for pixelFormat: FFmpegPixelFormat) -> FFmpegEncoder? {
+        for encoder in self.encoders {
+            for format in encoder.pixelFormats {
+                if format == pixelFormat { return encoder }
+            }
+        }
+        return nil
+    }
+    
+    var pixelFormatCount: Int {
+        self.encoders.map { $0.pixelFormats.count }.reduce(0, +)
+    }
+    
     // online guesses :(
     var supportedMuxers: [FFmpegMuxer] {
         switch self {

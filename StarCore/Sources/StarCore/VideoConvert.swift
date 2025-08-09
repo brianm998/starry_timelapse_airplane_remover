@@ -7,6 +7,7 @@ public typealias ProgressCallback = @Sendable (_ currentFrame: Int, _ totalFrame
 public struct VideoInfo: Sendable {
     public let frameRate: FrameRate
     public let codec: FFmpegCodec
+    public let encoder: FFmpegEncoder?
     public let pixelFormat: FFmpegPixelFormat
     public let muxer: FFmpegMuxer
     public let hasAudio: Bool
@@ -137,10 +138,11 @@ public func decodeVideo(
     {
         muxer = value
     }
-    
+
     let videoInfo = VideoInfo(
       frameRate: frameRate,
       codec: codec,
+      encoder: codec.encoder(for: pixFmt),
       pixelFormat: pixFmt,
       muxer: muxer,
       hasAudio: hasAudio

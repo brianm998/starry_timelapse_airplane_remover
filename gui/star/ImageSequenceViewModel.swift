@@ -104,6 +104,9 @@ public final class ImageSequenceViewModel {
             if let codec = userPreferences.codec {
                 self.codec = codec
             }
+            if let encoder = userPreferences.encoder {
+                self.encoder = encoder
+            }
             if let pixelFormat = userPreferences.pixelFormat {
                 self.pixelFormat = pixelFormat
             }
@@ -117,6 +120,7 @@ public final class ImageSequenceViewModel {
     // use these if nothing is in the config
     var frameRate: FrameRate = .fps_24
     var codec: FFmpegCodec = .prores
+    var encoder: FFmpegEncoder = .prores
     var pixelFormat: FFmpegPixelFormat = .yuv444p10le
     var muxer: FFmpegMuxer = .mov
     var hasAudio = false
@@ -382,6 +386,9 @@ public final class ImageSequenceViewModel {
         if let videoInfo {
             self.frameRate = videoInfo.frameRate
             self.codec = videoInfo.codec
+            if let encoder = videoInfo.encoder {
+                self.encoder = encoder
+            }
             self.pixelFormat = videoInfo.pixelFormat
             self.muxer = videoInfo.muxer
             self.hasAudio = videoInfo.hasAudio
@@ -1272,7 +1279,7 @@ public final class ImageSequenceViewModel {
     
     func renderVideo(named filename: String,
                      frameRate: FrameRate,
-                     codec: FFmpegCodec,
+                     encoder: FFmpegEncoder,
                      pixelFormat: FFmpegPixelFormat,
                      muxer: FFmpegMuxer,
                      progress: @escaping ProgressCallback,
@@ -1301,7 +1308,7 @@ public final class ImageSequenceViewModel {
                     "-framerate", rawFrameRate,       // frame rate
                     "-pattern_type", "glob", "-i",    // input image glob
                     "\(outputPath)/\(basename)/*.tiff", // input images
-                    "-c:v", codec.rawValue,           // codec
+                    "-c:v", encoder.rawValue,         // encoder
                     "-pix_fmt", pixelFormat.rawValue, // pixel format
                     "-f", muxer.rawValue,             // muxer
                     "\(outputPath)/\(filename)"       // output filename
