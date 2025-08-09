@@ -73,9 +73,14 @@ struct RenderVideoSheetView: View {
             _muxer = State(initialValue: viewModel.muxer)
         }
 
-        // check to see if pixelformat and muxer are in the list for this codex,
+        // check to see if encoder, pixelformat and muxer are in the list for this codex,
         // and if not, use different ones that are.
 
+        if !self.codec.encoders.contains(self.encoder) {
+            Log.d("encoder \(self.encoder) not applicibale for codec \(self.codec)")
+            _encoder = State(initialValue: self.codec.encoders[0])
+        }
+        
         // note this in the UI
         if !self.encoder.pixelFormats.contains(self.pixelFormat) {
             Log.w("pixel format \(self.pixelFormat) not applicable for encoder \(self.encoder)")
@@ -247,19 +252,16 @@ struct RenderVideoSheetView: View {
                   .onChange(of: codec) {
                       viewModel.userPreferences.codec = codec
                       viewModel.codec = codec
-                      pixelFormat = codec.encoders[0].pixelFormats[0]
+                      encoder = codec.encoders[0]
+                      viewModel.userPreferences.encoder = encoder
+                      viewModel.encoder = encoder
+                      pixelFormat = encoder.pixelFormats[0]
                       muxer = codec.supportedMuxers[0]
                   }
 
-                Text(codec.description)
-                  .lineLimit(nil)
-                  .fixedSize(horizontal: false, vertical: true)
-                
-                Divider()
-                
                 Picker("Encoder", selection: $encoder) {
                     ForEach(codec.encoders, id: \.self) { encoder in
-                        Text(encoder.description)
+                        Text("\(encoder.rawValue) [\(encoder.description)]")
                     }
                 }
                   .onChange(of: encoder) {
@@ -267,12 +269,6 @@ struct RenderVideoSheetView: View {
                       viewModel.encoder = encoder
                       pixelFormat = encoder.pixelFormats[0]
                   }
-
-                Text(encoder.description)
-                  .lineLimit(nil)
-                  .fixedSize(horizontal: false, vertical: true)
-                
-                Divider()
                 
                 Picker("Pixel Format", selection: $pixelFormat) {
                     ForEach(encoder.pixelFormats, id: \.self) { pixelFormat in

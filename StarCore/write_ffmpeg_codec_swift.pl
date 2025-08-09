@@ -34,6 +34,9 @@ while(<FH>) {
       $encoders = [$name];
     }
 
+    $description =~ s/\([^)]+\)//g;
+    $description =~ s/\s+$//g;
+
     if ($name =~ /^\s*\d/) {
 	$codecs->{$name} = {name => "_".$name,
 			    real_name => $name,
