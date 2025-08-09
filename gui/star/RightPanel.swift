@@ -463,7 +463,7 @@ struct EditableNumberOfNeighborFrames: View {
     var body: some View {
         @Bindable var viewModel = viewModel
         return EditableNumberView(
-          value: $viewModel.numberOfNeighborFrames,
+          value: $viewModel.numberOfAlignedNeighborFrames,
           minValue: 1,
           maxValue: viewModel.imageSequenceSize,
           fullTextProvider: { "align with \($0) neighbor frames" },

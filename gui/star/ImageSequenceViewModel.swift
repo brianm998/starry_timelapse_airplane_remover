@@ -266,6 +266,7 @@ public final class ImageSequenceViewModel {
     var numberOfFramesToProcessConcurrently: Int
 
     var numberOfNeighborFrames: Int
+    var numberOfAlignedNeighborFrames: Int
 
     // the threshold used by used in goodPixels(thresholdFactor: )
     var pixelThreshold: Double = 1.2
@@ -396,6 +397,8 @@ public final class ImageSequenceViewModel {
         let config = configManager.config()
 
         self.config = configManager
+        
+        self.numberOfAlignedNeighborFrames = config.numberAlignedNeighborFrames
 
         self.numberOfNeighborFrames = config.numberFinalProcessingNeighborsNeeded
         
