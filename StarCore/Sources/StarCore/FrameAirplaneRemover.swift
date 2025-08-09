@@ -1448,57 +1448,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                          with: alignedImage.readPixel(atX: x, andY: y))
     }
 
-    // it kind of works, but not really that great.
-    // this tries to use fancy logic to ignore bad pixel values
-    internal func updatePixelDOH(x: Int, y: Int,
-                                 alpha: Double,
-                                 toData data: inout [UInt16],
-                                 image: PixelatedImage,
-                                 from alignedImages: [Int:PixelatedImage])
-    {
-        var newPixels: [Pixel] = []
-
-        for image in alignedImages.values {
-        //    let overwritingPixel = image.readPixel(atX: x, andY: y)
-   //         if image.componentsPerPixel == 4, // has alpha channel
-   //            overwritingPixel.alpha != 0xFFFF   // alpha is not fully opaque
-  //          {
-  //              // ignore transparent pixels
-  //              continue
- //           }
-            
-            newPixels.append(image.readPixel(atX: x, andY: y))
-        }
-
-        // threshold factor 4 is loose
-        // threshold factor 3 is regular
-        // threshold factor 2.5 is tight
-
-        // 1.0 misses a few :(
-
-        // 2.0 w/ 16 neighbors is almost there, has a small dark ring around the brightest
-        // 2.0 w/ 8 neighbors misses a few, a less dark
-        // 1.2 w/ 8 neighbors is same as VVV
-        // 0.8 w/ 16 neighbors kills all the baddies, but still has a bit of dark
-        // 0.5 is really tight
-        let goodPixels = newPixels.goodPixels(with: self.pixelThreshold) 
-/*
-        if newPixels.count != goodPixels.count {
-            Log.i("frame \(frameIndex) dropped \(newPixels.count - goodPixels.count) pixels out of \(newPixels.count)")
-        } else {
-            Log.i("frame \(frameIndex) kept all \(goodPixels.count) pixels")
-        }
-  */      
-        if goodPixels.count > 0 {
-            self.updatePixel(x: x, y: y,
-                             alpha: alpha,
-                             toData: &data,
-                             image: image,
-                             with: Pixel(merging: goodPixels))
-        } else {
-            Log.w("no good pixels found :(")
-        }
-    }
 
     // remove a selected outlier pixel with data from pixels from adjecent frames
     // this just sums them all, ignoring any potential bad signal, hoping to drown it out
