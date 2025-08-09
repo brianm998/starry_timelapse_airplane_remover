@@ -1231,8 +1231,9 @@ public final class ImageSequenceViewModel {
         self.renderingAllFrames = true
         let frameSaveQueue = self.frameSaveQueue
         Task {
+            let semaphore = AsyncSemaphore(value: self.numberOfFramesToProcessConcurrently)
             try await withThrowingTaskGroup(of: Void.self) { taskGroup in
-                //                await withLimitedTaskGroup(of: Void.self) { taskGroup in
+            //try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
                 /// does this break things when saving thousands of frames at once?
 
                 let counter = CountActor()
@@ -1240,6 +1241,7 @@ public final class ImageSequenceViewModel {
                     if let frame = frameView.frame {
                         if await frame.processingState() == .userModified {
                             taskGroup.addTask() {
+                                await semaphore.wait()
                                 await counter.increase()
                                 try await frameSaveQueue.saveNow(frame: frame) {
                                     await self.refresh(frame: frame)
@@ -1254,6 +1256,7 @@ public final class ImageSequenceViewModel {
                                             self.renderingAllFrames = false
                                         }
                                     }
+                                    semaphore.signal()
                                 }
                             }
                         }
