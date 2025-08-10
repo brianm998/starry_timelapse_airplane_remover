@@ -23,7 +23,9 @@ struct ContentView: View {
                       .navigationTitle(imageSequenceViewModel.windowTitle)
                 }
             } else {
-                InitialView()
+                CursorView(cursor: viewModel.cursor) {
+                    InitialView()
+                }
             }
             // these may show on top
             if viewModel.showInfoDialog { InfoDialogView() }

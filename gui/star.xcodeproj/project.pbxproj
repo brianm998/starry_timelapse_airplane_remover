@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		D3058E1B2AC0745C00C58F1D /* MultiSelectSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */; };
+		D30CDB102E48E76000B4FB7B /* 11_30_2024-fx3-airplanes.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = D30CDB0D2E48E76000B4FB7B /* 11_30_2024-fx3-airplanes.mp4 */; };
+		D30CDB112E48E76000B4FB7B /* 11_30_2024-fx3-no-airplanes.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = D30CDB0E2E48E76000B4FB7B /* 11_30_2024-fx3-no-airplanes.mp4 */; };
 		D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBC299736730001CD0C /* ViewModel.swift */; };
 		D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */; };
 		D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBE299736730001CD0C /* OutlierGroupView.swift */; };
@@ -122,6 +124,8 @@
 
 /* Begin PBXFileReference section */
 		D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MultiSelectSheetView.swift; sourceTree = "<group>"; };
+		D30CDB0D2E48E76000B4FB7B /* 11_30_2024-fx3-airplanes.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "11_30_2024-fx3-airplanes.mp4"; sourceTree = "<group>"; };
+		D30CDB0E2E48E76000B4FB7B /* 11_30_2024-fx3-no-airplanes.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "11_30_2024-fx3-no-airplanes.mp4"; sourceTree = "<group>"; };
 		D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libStarDecisionTrees.a; path = ../../StarDecisionTrees/lib/release/libStarDecisionTrees.a; sourceTree = "<group>"; };
 		D31F9FBC299736730001CD0C /* ViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewModel.swift; sourceTree = "<group>"; };
 		D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameSaveQueue.swift; sourceTree = "<group>"; };
@@ -239,9 +243,19 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		D30CDB0F2E48E76000B4FB7B /* videos */ = {
+			isa = PBXGroup;
+			children = (
+				D30CDB0D2E48E76000B4FB7B /* 11_30_2024-fx3-airplanes.mp4 */,
+				D30CDB0E2E48E76000B4FB7B /* 11_30_2024-fx3-no-airplanes.mp4 */,
+			);
+			path = videos;
+			sourceTree = "<group>";
+		};
 		D386FA04298B617300878B56 = {
 			isa = PBXGroup;
 			children = (
+				D30CDB0F2E48E76000B4FB7B /* videos */,
 				D3E67DF42E3E5DE300A97C28 /* external_binaries */,
 				D392EB142E0C48D60020E16A /* Assets.xcassets */,
 				D386FA0F298B617300878B56 /* star */,
@@ -502,6 +516,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				D386FA18298B617400878B56 /* Preview Assets.xcassets in Resources */,
+				D30CDB102E48E76000B4FB7B /* 11_30_2024-fx3-airplanes.mp4 in Resources */,
+				D30CDB112E48E76000B4FB7B /* 11_30_2024-fx3-no-airplanes.mp4 in Resources */,
 				D386FA15298B617400878B56 /* Assets.xcassets in Resources */,
 				D392EB152E0C48D60020E16A /* Assets.xcassets in Resources */,
 				D366BB3A2AF84766004C9125 /* Info.plist in Resources */,

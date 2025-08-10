@@ -7,6 +7,9 @@ struct InitialView: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
 
     @State private var previously_opened_sheet_showing_item: String = ""
+
+    @State private var url1: URL? = nil
+    @State private var url2: URL? = nil
     
     var body: some View {
         VStack {
@@ -43,6 +46,12 @@ struct InitialView: View {
             .font(.title)
               .foregroundColor(.white)
 
+            if let url1,
+               let url2
+            {
+                SplitRevealVideoView(leftURL: url1, rightURL: url2)
+            }
+
             Spacer()
               .frame(maxHeight: 200)
 
@@ -56,6 +65,7 @@ struct InitialView: View {
                                 Text("Load Video").font(.largeTitle)
                             }.buttonStyle(ShrinkingButton())
                               .help("Load a video to process.  Make sure lots of free space is available next to the video for intermediate files.")
+                            
                         }
                         Space(width: 20)
                         HStack {
@@ -127,6 +137,16 @@ struct InitialView: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
           .background(viewModel.backgroundColor)
           .onAppear {
+              Task.detached {
+                  let _url1 = Bundle.main.url(forResource: "11_30_2024-fx3-airplanes",
+                                              withExtension: "mp4")
+                  let _url2 = Bundle.main.url(forResource: "11_30_2024-fx3-no-airplanes",
+                                              withExtension: "mp4")
+                  Task { @MainActor in
+                      self.url1 = _url1
+                      self.url2 = _url2
+                  }
+              }
               if viewModel.userPreferences.sortedSequenceList.count > 0 {
                   previously_opened_sheet_showing_item = viewModel.userPreferences.sortedSequenceList[0]
               }
@@ -325,6 +345,321 @@ struct InitialView: View {
                 await MainActor.run {
                     self.handle(error: "\(error)")
                 }
+            }
+        }
+    }
+}
+
+
+
+
+
+import SwiftUI
+@preconcurrency import AVFoundation
+import AppKit
+
+struct SplitRevealVideoView: View {
+    let leftURL: URL
+    let rightURL: URL
+
+    @StateObject private var vm: VM
+    @State private var dragFraction: CGFloat = 0.5 // 0..1
+
+    init(leftURL: URL, rightURL: URL) {
+        self.leftURL = leftURL
+        self.rightURL = rightURL
+        _vm = StateObject(wrappedValue: VM(left: leftURL, right: rightURL))
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let fitted = fitSize(container: geo.size, aspectRatio: vm.aspectRatio)
+
+            ZStack {
+                // Left video (visible on left side up to dragFraction)
+                VideoLayerRepresentable(player: vm.playerLeft,
+                                        revealFraction: dragFraction,
+                                        maskSide: .left)
+                    .frame(width: fitted.width, height: fitted.height)
+
+                // Right video (visible on right side after dragFraction)
+                VideoLayerRepresentable(player: vm.playerRight,
+                                        revealFraction: dragFraction,
+                                        maskSide: .right)
+                    .frame(width: fitted.width, height: fitted.height)
+
+                // Divider handle
+                handle(in: fitted)
+                  .position(x: fitted.width * dragFraction,
+                            y: fitted.height / 2)
+            }
+              .frame(width: fitted.width, height: fitted.height)
+              .position(x: geo.size.width / 2, y: geo.size.height / 2)
+            // global drag gesture across the fitted area
+
+              .cursor(.resizeLeftRight)
+
+              .gesture(
+                DragGesture(minimumDistance: 0)
+                  .onChanged { value in
+                      // Calculate horizontal offset between container and fitted rect
+                      let originX = (geo.size.width - fitted.width) / 2
+                      // Convert global gesture location to local coordinate inside fitted video frame
+                      let localX = value.location.x - originX
+                      // Clamp between 0 and fitted.width
+                      let clampedX = min(max(0, localX), fitted.width)
+
+                      // For debugging:
+                      // print("Global X: \(value.location.x), originX: \(originX), localX: \(localX), clampedX: \(clampedX)")
+
+                      dragFraction = clampedX / fitted.width
+                  }
+              )
+              .contentShape(Rectangle()) // Make gesture active only inside visible video frame
+
+            
+            .onAppear {
+                vm.prepareAndPlay()
+            }
+            .onDisappear {
+                vm.pause()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func handle(in size: CGSize) -> some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.95))
+            .frame(width: 4, height: size.height)
+            .cornerRadius(2)
+            .shadow(radius: 2)
+            .opacity(0.333)
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(Color.black.opacity(0.25), lineWidth: 0.5)
+            )
+    }
+
+    /// Fit the video inside 'container' while preserving aspect ratio.
+    private func fitSize(container: CGSize, aspectRatio: CGFloat) -> CGSize {
+        guard container.width > 0 && container.height > 0 else { return .zero }
+        let containerAspect = container.width / container.height
+        if containerAspect > aspectRatio {
+            // container wider -> fit by height
+            let h = container.height
+            return CGSize(width: h * aspectRatio, height: h)
+        } else {
+            // container taller -> fit by width
+            let w = container.width
+            return CGSize(width: w, height: w / aspectRatio)
+        }
+    }
+
+    // MARK: - ViewModel
+    /// Main-thread-only ObservableObject that manages players and aspect ratio.
+    @MainActor
+    final class VM: ObservableObject {
+        let playerLeft = AVPlayer()
+        let playerRight = AVPlayer()
+        @Published var aspectRatio: CGFloat = 16.0 / 9.0
+
+        private let leftURL: URL
+        private let rightURL: URL
+
+        init(left: URL, right: URL) {
+            self.leftURL = left
+            self.rightURL = right
+            loadAspectRatio()
+
+            [playerLeft, playerRight].forEach { player in
+                NotificationCenter.default.addObserver(
+                  forName: .AVPlayerItemDidPlayToEndTime,
+                  object: player.currentItem,
+                  queue: .main
+                ) { _ in
+                    player.seek(to: .zero)
+                    player.play()
+                }
+            }
+        }
+
+        private func loadAspectRatio() {
+            // Perform work off the main thread to avoid blocking UI
+            DispatchQueue.global(qos: .background).async { [leftURL] in
+                let asset = AVAsset(url: leftURL)
+                // try to read first video track synchronously (may be available)
+                let tracks = asset.tracks(withMediaType: .video)
+                if let track = tracks.first {
+                    let size = track.naturalSize.applying(track.preferredTransform)
+                    let w = abs(size.width)
+                    let h = abs(size.height)
+                    if w > 0, h > 0 {
+                        DispatchQueue.main.async {
+                            self.aspectRatio = CGFloat(w / h)
+                        }
+                        return
+                    }
+                }
+                // Fallback: try the async KVO path if above didn't yield
+                asset.loadValuesAsynchronously(forKeys: ["tracks"]) {
+                    var err: NSError?
+                    let status = asset.statusOfValue(forKey: "tracks", error: &err)
+                    if status == .loaded {
+                        if let track = asset.tracks(withMediaType: .video).first {
+                            let size = track.naturalSize.applying(track.preferredTransform)
+                            let w = abs(size.width)
+                            let h = abs(size.height)
+                            if w > 0, h > 0 {
+                                DispatchQueue.main.async {
+                                    self.aspectRatio = CGFloat(w / h)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        func prepareAndPlay() {
+            let itemL = AVPlayerItem(asset: AVAsset(url: leftURL))
+            let itemR = AVPlayerItem(asset: AVAsset(url: rightURL))
+            playerLeft.replaceCurrentItem(with: itemL)
+            playerRight.replaceCurrentItem(with: itemR)
+
+            // seek both to zero with zero tolerance then play simultaneously
+            let group = DispatchGroup()
+            group.enter()
+            playerLeft.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { _ in group.leave() }
+            group.enter()
+            playerRight.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { _ in group.leave() }
+
+            group.notify(queue: .main) {
+                self.playerLeft.play()
+                self.playerRight.play()
+            }
+        }
+
+        func pause() {
+            playerLeft.pause()
+            playerRight.pause()
+        }
+    }
+}
+
+// Mark VM sendable for interaction with @Sendable contexts.
+// We used @MainActor above and the class is only mutated on main, so this is safe.
+extension SplitRevealVideoView.VM: @unchecked Sendable { }
+
+// MARK: - Video layer representable
+
+import SwiftUI
+import AVFoundation
+import AppKit
+
+private enum MaskSide { case left, right, none }
+
+private struct VideoLayerRepresentable: NSViewRepresentable {
+    let player: AVPlayer
+    var revealFraction: CGFloat // 0..1
+    var maskSide: MaskSide
+
+    func makeNSView(context: Context) -> PlayerContainerView {
+        let view = PlayerContainerView()
+        view.player = player
+        view.revealFraction = revealFraction
+        view.maskSide = maskSide
+        return view
+    }
+
+    func updateNSView(_ nsView: PlayerContainerView, context: Context) {
+        nsView.player = player
+        nsView.revealFraction = revealFraction
+        nsView.maskSide = maskSide
+    }
+
+    // Custom NSView subclass that manages AVPlayerLayer and mask in layout()
+    class PlayerContainerView: NSView {
+        var playerLayer: AVPlayerLayer?
+        var maskLayer: CALayer?
+
+        var player: AVPlayer? {
+            didSet {
+                if oldValue !== player {
+                    playerLayer?.removeFromSuperlayer()
+                    playerLayer = nil
+                    maskLayer = nil
+
+                    if let player = player {
+                        let pl = AVPlayerLayer(player: player)
+                        pl.videoGravity = .resizeAspect
+                        pl.masksToBounds = true
+                        layer?.addSublayer(pl)
+                        playerLayer = pl
+
+                        let mask = CALayer()
+                        mask.backgroundColor = NSColor.black.cgColor
+                        pl.mask = mask
+                        maskLayer = mask
+                    }
+                    needsLayout = true
+                }
+            }
+        }
+
+        var revealFraction: CGFloat = 1.0 {
+            didSet {
+                if revealFraction != oldValue {
+                    needsLayout = true
+                }
+            }
+        }
+
+        var maskSide: MaskSide = .none {
+            didSet {
+                if maskSide != oldValue {
+                    needsLayout = true
+                }
+            }
+        }
+
+        override init(frame frameRect: NSRect) {
+            super.init(frame: frameRect)
+            wantsLayer = true
+            layer = CALayer()
+            layer?.masksToBounds = true
+        }
+
+        required init?(coder: NSCoder) {
+            super.init(coder: coder)
+            wantsLayer = true
+            layer = CALayer()
+            layer?.masksToBounds = true
+        }
+
+        override func layout() {
+            super.layout()
+            guard let playerLayer = playerLayer, let maskLayer = maskLayer else { return }
+            playerLayer.frame = bounds
+
+            let width = bounds.width
+            let height = bounds.height
+            let clamped = min(max(0.0, revealFraction), 1.0)
+
+            switch maskSide {
+            case .left:
+                maskLayer.frame = CGRect(x: 0, y: 0, width: width * clamped, height: height)
+            case .right:
+                let x = width * clamped
+                maskLayer.frame = CGRect(x: x, y: 0, width: width - x, height: height)
+            case .none:
+                maskLayer.frame = bounds
+            }
+
+            if maskLayer.frame.width <= 0 || maskLayer.frame.height <= 0 {
+                playerLayer.mask = nil
+            } else {
+                playerLayer.mask = maskLayer
             }
         }
     }

@@ -88,8 +88,8 @@ struct RenderVideoSheetView: View {
         }
 
         // note this in the UI
-        if !self.codec.supportedMuxers.contains(self.muxer) {
-            _muxer = State(initialValue: codec.supportedMuxers[0])
+        if !self.encoder.supportedMuxers.contains(self.muxer) {
+            _muxer = State(initialValue: encoder.supportedMuxers[0])
         }
     }
     
@@ -256,7 +256,7 @@ struct RenderVideoSheetView: View {
                       viewModel.userPreferences.encoder = encoder
                       viewModel.encoder = encoder
                       pixelFormat = encoder.pixelFormats[0]
-                      muxer = codec.supportedMuxers[0]
+                      muxer = encoder.supportedMuxers[0]
                   }
 
                 Picker("Encoder", selection: $encoder) {
@@ -287,7 +287,7 @@ struct RenderVideoSheetView: View {
                 Divider()
 
                 Picker("Container", selection: $muxer) {
-                    ForEach(codec.supportedMuxers, id: \.self) { muxer in
+                    ForEach(encoder.supportedMuxers, id: \.self) { muxer in
                         Text(muxer.rawValue)
                     }
                 }
@@ -295,15 +295,17 @@ struct RenderVideoSheetView: View {
                       // set in user prefs and the view model if it changes
                       viewModel.userPreferences.muxer = muxer
                       viewModel.muxer = muxer
+
+                      let ext = muxer.defaultFileExtension ?? muxer.rawValue
                       
                       if let config = viewModel.config {
-                          self.videoFilename = "\(config.config().basename).\(muxer.rawValue)"
+                          self.videoFilename = "\(config.config().basename).\(ext)"
                       } else {
-                          self.videoFilename = "star-output-video.\(muxer.rawValue)"
+                          self.videoFilename = "star-output-video.\(ext)"
                       }
                   }
 
-                Text(muxer.description)
+                Text("\(muxer.description) - (.\(muxer.defaultFileExtension ?? muxer.rawValue))")
                   .lineLimit(nil)
                   .fixedSize(horizontal: false, vertical: true)
                 

@@ -21,6 +21,21 @@ struct LeftPanel: View {
     var openView: some View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .trailing) {
+
+            // XXX testing for why sometimes this view doesn't get events
+            // XXX testing for why sometimes this view doesn't get events
+            // XXX testing for why sometimes this view doesn't get events
+            Button() {
+                Log.i("FUCK YES IT DOES")
+            } label: {
+                Text("Does this shit still work?")
+            }
+              .buttonStyle(PlainButtonStyle())
+              .cursor(.extractTrashPointing)
+            // XXX testing for why sometimes this view doesn't get events
+            // XXX testing for why sometimes this view doesn't get events
+            // XXX testing for why sometimes this view doesn't get events
+            
             ScrollView() {
                 VStack(alignment: .leading) {
 
@@ -42,7 +57,7 @@ struct LeftPanel: View {
                 //                          .frame(maxWidth: 200)
             }
               .defaultScrollAnchor(.bottom)
-              .frame(maxHeight: .infinity, alignment: .bottom)
+           //   .frame(maxHeight: .infinity, alignment: .bottom)
             
             Spacer()
             
@@ -97,9 +112,8 @@ struct LeftPanel: View {
                 Text("Process \(unprocessed) frames")
             }
               .disabled(processButtonDisabled)
-              .if(!processButtonDisabled) { view in
-                  view
-                    .buttonStyle(.borderedProminent)
+              .if(!processButtonDisabled) { 
+                  $0.buttonStyle(.borderedProminent)
                     .tint(.blue)
               }
             
@@ -107,7 +121,7 @@ struct LeftPanel: View {
             let userModified = viewModel.frameStateMap[.userModified]?.count ?? 0
             
             Button() {
-                // XXX this has no max number of pfocesses :(
+                // XXX this has no max number of processes :(
                 viewModel.renderAllFrames()
             } label: {
                 Text("Update \(userModified) frames")
@@ -269,7 +283,7 @@ struct LeftPanel: View {
     }
 }
 
-extension View {
+extension View {                // XXX move this
     @ViewBuilder func `if`<Content: View>(
         _ condition: Bool,
         transform: (Self) -> Content
