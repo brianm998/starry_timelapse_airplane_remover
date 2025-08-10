@@ -12,130 +12,24 @@ struct InitialView: View {
     @State private var url2: URL? = nil
     
     var body: some View {
-        VStack {
-            Spacer()
-              .frame(maxHeight: 20)
-            Text("Welcome to The Star,")
-              .font(.largeTitle)
-              .foregroundColor(.white)
-            Spacer()
-              .frame(maxHeight: 10)
-            Text("The Starry Timelapse Airplane Remover")
-                .font(.largeTitle)
-                .foregroundColor(.white)
-            Spacer()
-              .frame(maxHeight: 200)
 
-            Button() {
-                viewModel.showInfoDialog = true
-            } label: {
-                Text("Learn about Star").font(.largeTitle)
-            }
-              .buttonStyle(ShrinkingButton())
-              .help("Tell me how to us this software") 
-            Spacer()
-              .frame(maxHeight: 100)
-
-            Text("Drop a video, an image sequence or an existing config file anywhere here")
-              .font(.title)
-              .foregroundColor(.white)
-            Text("or")
-              .font(.title)
-              .foregroundColor(.white)
-            Text("Choose an option below to get started")
-            .font(.title)
-              .foregroundColor(.white)
+        ZStack {
 
             if let url1,
                let url2
             {
                 SplitRevealVideoView(leftURL: url1, rightURL: url2)
+                  .background(.black)
+            } else {
+                Color.black
+                  .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
-            Spacer()
-              .frame(maxHeight: 200)
-
-            HStack {
-                Spacer()
-                Grid {
-                    GridRow {
-                        HStack {
-                            Spacer()
-                            Button(action: self.loadVideoToProcess) {
-                                Text("Load Video").font(.largeTitle)
-                            }.buttonStyle(ShrinkingButton())
-                              .help("Load a video to process.  Make sure lots of free space is available next to the video for intermediate files.")
-                            
-                        }
-                        Space(width: 20)
-                        HStack {
-                            Text("Start processing a video file.  Any kind of video file can be opened.  The individual frames will be extrated for processing.")
-                              .font(.title)
-                              .foregroundColor(.white)
-                            Spacer()
-                        } 
-                    }
-                    GridRow {
-                        HStack {
-                            Spacer()
-                            Button(action: self.loadImageSequence) {
-                                Text("Load Image Sequence").font(.largeTitle)
-                            }.buttonStyle(ShrinkingButton())
-                              .help("Load an image sequence yet to be processed by star")
-                        }
-                        Space(width: 20)
-                        HStack {
-                            Text("Start processing an images sequence which has not already been renedred into a video.  Star only supports 16 bit tiff files for each frame.")
-                              .font(.title)
-                              .foregroundColor(.white)
-                            Spacer()
-                        }
-                    }
-                    GridRow {
-                        HStack {
-                            Spacer()
-                            Button(action: self.loadConfig) {
-                                Text("Load Config").font(.largeTitle)
-                            }.buttonStyle(ShrinkingButton())
-                              .help("Load a json config file from a previous run of star")
-                        }
-                        Space(width: 20)
-                        HStack {
-                            Text("Load a star config file for a video or image sequence which has been loaded before.")
-                              .font(.title)
-                              .foregroundColor(.white)
-                            Spacer()
-                        }
-                    }
-                    if viewModel.userPreferences.recentlyOpenedSequencelist.count > 0 {
-                        GridRow {
-                            HStack {
-                                Spacer()
-                                Button(action: self.loadRecent) {
-                                    Text("Open Recent").font(.largeTitle)
-                                }.buttonStyle(ShrinkingButton())
-                                  .help("open a recently processed sequence")
-                            }
-                            Space(width: 0)
-                            HStack {
-                                Picker("\u{27F6}", selection: $previously_opened_sheet_showing_item) {
-                                    let array = viewModel.userPreferences.sortedSequenceList
-                                    ForEach(array, id: \.self) { option in
-                                        Text(option)
-                                    }
-                                }//.frame(maxWidth: 500)
-                                  .pickerStyle(.menu)
-                                Spacer()
-                            }
-                        }
-                    }
-                }
-                Spacer()
+            GeometryReader { geo in
+                self.mainView
+                  .frame(width: geo.size.width, height: geo.size.height)
             }
-            Spacer()
         }
-          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-          .background(viewModel.backgroundColor)
           .onAppear {
               Task.detached {
                   let _url1 = Bundle.main.url(forResource: "11_30_2024-fx3-airplanes",
@@ -151,17 +45,78 @@ struct InitialView: View {
                   previously_opened_sheet_showing_item = viewModel.userPreferences.sortedSequenceList[0]
               }
           }
-                    //              // this works great for config files, but not for directories
-            //              .dropDestination(for: Config.self) { items, _ in
-            //                  if items.count > 0 {
-            //                      let config = items[0]
-            //                  }
-            //                  return true
-            //              }
-          .onDrop(of: [.fileURL], isTargeted: nil) { providers, _ in
-              handleDrop(providers: providers)
-          }
+    }
 
+    private var mainView: some View {
+        VStack {
+            Spacer()
+            Text("Welcome to The Star")
+              .font(.largeTitle)
+              .foregroundColor(.white)
+            Spacer()
+            Text("The Starry Timelapse Airplane Remover")
+              .font(.largeTitle)
+              .foregroundColor(.white)
+            Spacer()
+
+            Text("Drag the bar around to see more or less of the processed video on the right, and the unprocessed video on the left.")
+              .font(.title)
+              .foregroundColor(.white)
+
+            Spacer()
+            
+            Button() {
+                viewModel.showInfoDialog = true
+            } label: {
+                Text("Learn about Star").font(.largeTitle)
+            }
+              .buttonStyle(ShrinkingButton(.clear))
+              .help("Tell me how to us this software") 
+            Spacer()
+
+            FinderStyleDropZone() { providers in
+                handleDrop(providers: providers)
+            }
+              .frame(maxWidth: 1200, maxHeight: 800)
+
+            Spacer()
+            
+            HStack {
+
+                Spacer()
+                Button(action: self.loadVideoToProcess) {
+                    Text("Load Video").font(.largeTitle)
+                }.buttonStyle(ShrinkingButton(.clear))
+                  .help("Load a video to process.  Make sure lots of free space is available next to the video for intermediate files.")
+                
+                Spacer()
+                Button(action: self.loadImageSequence) {
+                    Text("Load Image Sequence").font(.largeTitle)
+                }.buttonStyle(ShrinkingButton(.clear))
+                  .help("Load an image sequence yet to be processed by star")
+                Spacer()
+                Button(action: self.loadConfig) {
+                    Text("Load Config").font(.largeTitle)
+                }.buttonStyle(ShrinkingButton(.clear))
+                  .help("Load a json config file from a previous run of star")
+                if viewModel.userPreferences.recentlyOpenedSequencelist.count > 0 {
+
+                    Button(action: self.loadRecent) {
+                        Text("Open Recent").font(.largeTitle)
+                    }.buttonStyle(ShrinkingButton(.clear))
+                      .help("open a recently processed sequence")
+                    Picker("\u{27F6}", selection: $previously_opened_sheet_showing_item) {
+                        let array = viewModel.userPreferences.sortedSequenceList
+                        ForEach(array, id: \.self) { option in
+                            Text(option)
+                        }
+                    }//.frame(maxWidth: 500)
+                      .pickerStyle(.menu)
+                }
+                Spacer()
+            }
+        }
+          .background(.clear)
     }
 
     func handleDrop(providers: [NSItemProvider]) -> Bool {
@@ -363,7 +318,7 @@ struct SplitRevealVideoView: View {
     let rightURL: URL
 
     @StateObject private var vm: VM
-    @State private var dragFraction: CGFloat = 0.5 // 0..1
+    @State private var dragFraction: CGFloat = 0.25 // 0..1
 
     init(leftURL: URL, rightURL: URL) {
         self.leftURL = leftURL
@@ -373,49 +328,35 @@ struct SplitRevealVideoView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let fitted = fitSize(container: geo.size, aspectRatio: vm.aspectRatio)
-
             ZStack {
                 // Left video (visible on left side up to dragFraction)
                 VideoLayerRepresentable(player: vm.playerLeft,
                                         revealFraction: dragFraction,
                                         maskSide: .left)
-                    .frame(width: fitted.width, height: fitted.height)
 
                 // Right video (visible on right side after dragFraction)
                 VideoLayerRepresentable(player: vm.playerRight,
                                         revealFraction: dragFraction,
                                         maskSide: .right)
-                    .frame(width: fitted.width, height: fitted.height)
 
                 // Divider handle
-                handle(in: fitted)
-                  .position(x: fitted.width * dragFraction,
-                            y: fitted.height / 2)
+
+                handle(in: geo.size)
+                  .position(x: geo.size.width * dragFraction,
+                            y: geo.size.height / 2)
             }
-              .frame(width: fitted.width, height: fitted.height)
-              .position(x: geo.size.width / 2, y: geo.size.height / 2)
+              .frame(width: geo.size.width, height: geo.size.height)
+//              .position(x: geo.size.width / 2, y: geo.size.height / 2)
             // global drag gesture across the fitted area
 
               .cursor(.resizeLeftRight)
-
               .gesture(
                 DragGesture(minimumDistance: 0)
                   .onChanged { value in
-                      // Calculate horizontal offset between container and fitted rect
-                      let originX = (geo.size.width - fitted.width) / 2
-                      // Convert global gesture location to local coordinate inside fitted video frame
-                      let localX = value.location.x - originX
-                      // Clamp between 0 and fitted.width
-                      let clampedX = min(max(0, localX), fitted.width)
-
-                      // For debugging:
-                      // print("Global X: \(value.location.x), originX: \(originX), localX: \(localX), clampedX: \(clampedX)")
-
-                      dragFraction = clampedX / fitted.width
+                      let clampedX = min(max(0, value.location.x), geo.size.width)
+                      dragFraction = clampedX / geo.size.width
                   }
-              )
-              .contentShape(Rectangle()) // Make gesture active only inside visible video frame
+              )         .contentShape(Rectangle()) // Make gesture active only inside visible video frame
 
             
             .onAppear {
@@ -425,6 +366,7 @@ struct SplitRevealVideoView: View {
                 vm.pause()
             }
         }
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
@@ -592,7 +534,7 @@ private struct VideoLayerRepresentable: NSViewRepresentable {
 
                     if let player = player {
                         let pl = AVPlayerLayer(player: player)
-                        pl.videoGravity = .resizeAspect
+                        pl.videoGravity = .resizeAspectFill
                         pl.masksToBounds = true
                         layer?.addSublayer(pl)
                         playerLayer = pl
@@ -662,5 +604,48 @@ private struct VideoLayerRepresentable: NSViewRepresentable {
                 playerLayer.mask = maskLayer
             }
         }
+    }
+}
+
+
+
+import SwiftUI
+
+struct FinderStyleDropZone: View {
+    @State private var isTargeted = false
+    var onDropAction: ([NSItemProvider]) -> Void
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [5]))
+                .foregroundColor(isTargeted ? Color.accentColor : .white/*Color.secondary*/)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(isTargeted ? Color.accentColor.opacity(0.15) : Color.clear)
+                )
+                .shadow(color: isTargeted ? Color.accentColor.opacity(0.7) : Color.clear,
+                        radius: isTargeted ? 8 : 0)
+                .animation(.easeInOut(duration: 0.15), value: isTargeted)
+
+            VStack(spacing: 6) {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 32))
+                    .foregroundColor(.white)
+                Text("Drop a video, an image sequence or an existing config file here")
+                  .foregroundColor(.white)
+                    .font(.headline)
+            }
+        }
+        .frame(minWidth: 280, minHeight: 150)
+        .padding()
+        .onDrop(of: ["public.file-url"], isTargeted: $isTargeted) { providers in
+            handleDrop(providers)
+            return true
+        }
+    }
+
+    private func handleDrop(_ providers: [NSItemProvider]) {
+        onDropAction(providers)
     }
 }
