@@ -4,19 +4,17 @@ public extension FFmpegCodec {
 
     static var availableVideoCodecs: [FFmpegCodec] {
 
+        // stick these at the top
         let start: [FFmpegCodec] = [
           .h264,
           .hevc,
-          .mpeg4,
           .prores,
           .dnxhd,
-          .av1,
-          .rawvideo,
-          .gif
         ]
 
         let all = start + self.allCases
           .filter { !start.contains($0) }
+          .sorted { $0.description.lowercased() < $1.description.lowercased() }
 
         return all
           .filter { $0.canDecode }
@@ -37,38 +35,14 @@ public extension FFmpegCodec {
     var pixelFormatCount: Int {
         self.encoders.map { $0.pixelFormats.count }.reduce(0, +)
     }
-    
-    // online guesses :(
-    var supportedMuxers: [FFmpegMuxer] {
-        switch self {
-        case .h264:
-            return [.mp4, .mov, .avi]
-        case .hevc:
-            return [.mp4, .mov]
-        case .mpeg4:
-            return [.avi, .mp4, .mov]
-        case .vp8:
-            return [.webm]
-        case .vp9:
-            return [.webm]
-        case .av1:
-            return [.webm]
-        case .prores:
-            return [.mov]
-        case .dnxhd:
-            return [.mov]
-        case .cfhd:
-            return [.mov]
-        case .ffv1:
-            return [.avi]
-        case .huffyuv, .loco, .utvideo:
-            return [.avi]
-        case .rawvideo:
-            return [.avi, .mov]
-        case .gif:
-            return [.gif]
-        default:
-            return [.mov] // safe fallback?
+}
+
+public extension FFmpegEncoder {
+    public var supportedMuxers: [FFmpegMuxer] {
+        var ret: [FFmpegMuxer] = []
+        for muxer in FFmpegMuxer.allCases {
+            if muxer.supportedEncoders.contains(self) { ret.append(muxer) }
         }
+        return ret
     }
 }
