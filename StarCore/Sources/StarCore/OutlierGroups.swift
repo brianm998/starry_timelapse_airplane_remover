@@ -154,13 +154,21 @@ public actor OutlierGroups {
         for (id, group) in members {
             for pixel in group.pixelSet {
                 let index = pixel.y*width+pixel.x
-                outlierImageData[index] = id
+                if index >= 0,
+                   index < outlierImageData.count
+                {
+                    outlierImageData[index] = id
+                }
             }
         }
         for (id, group) in trash {
             for pixel in group.pixelSet {
                 let index = pixel.y*width+pixel.x
-                outlierImageData[index] = id
+                if index >= 0,
+                   index < outlierImageData.count
+                {
+                    outlierImageData[index] = id
+                }
             }
         }
     }
