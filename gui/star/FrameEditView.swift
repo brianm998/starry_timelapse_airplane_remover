@@ -239,6 +239,7 @@ struct FrameEditView: View {
                                                                    includingTrash: viewModel.shouldShowTrash) { group, isInTrash in // XXX isInTrash not presented in UI
                                   let new_row = await OutlierGroupTableRow(group)
                                   await _outlierGroupTableRows.append(new_row)
+                                  return false
                               }
                               var elements = await _outlierGroupTableRows.getElements()
                               elements.sort { $0.size > $1.size }

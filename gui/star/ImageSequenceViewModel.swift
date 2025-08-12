@@ -1042,13 +1042,14 @@ public final class ImageSequenceViewModel {
     
     func render(frame: FrameAirplaneRemover,
                 now saveNow: Bool = false,
+                ever saveEver: Bool = true,
                 closure: (@Sendable () async -> Void)? = nil) async throws
     {
         if saveNow {
             try await self.frameSaveQueue.saveNow(frame: frame) {
                 await closure?()
             }
-        } else {
+        } else if saveEver {
             await self.frameSaveQueue.readyToSave(frame: frame) {
                 await closure?()
             }

@@ -204,15 +204,18 @@ public actor OutlierGroup: CustomStringConvertible,
     public func set(removeObserver: OutlierRemovalObserver) {
         self.removeObserver = removeObserver
     }
-    
-    public func shouldRemove(_ shouldRemove: RemoveReason, markAsChanged: Bool = true) async {
+
+    // returns true if this new shouldRemove was different from before
+    public func shouldRemove(_ shouldRemove: RemoveReason) async -> Bool {
         //Log.d("\(self) should remove \(shouldRemove) self.frame \(self.frame)")
+
+        let didChange = _shouldRemove?.willRemove ?? false != shouldRemove.willRemove
+        
         self._shouldRemove = shouldRemove
 
-        // XXX update frame that it's different
-        if markAsChanged { await self.frame?.markAsChanged() }
-
         await removeObserver?.set(shouldRemove: shouldRemove)
+
+        return didChange
     }
 
     // has to be optional so we can read OuterlierGroups as codable

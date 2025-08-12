@@ -966,23 +966,27 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
     
     public func foreachOutlierGroup(includingTrash: Bool,
-                                    _ closure: @Sendable (OutlierGroup, Bool) async -> Void) async
+                                    _ closure: @Sendable (OutlierGroup, Bool) async -> Bool) async -> Bool
     {
+        var didChange = false
         if let outlierGroups {
             for (_, group) in await outlierGroups.getMembers() {
-                await closure(group, false)
+                if await closure(group, false) { didChange = true }
             }
             for (_, group) in await outlierGroups.getTrash() {
-                await closure(group, true)
+                if await closure(group, true) { didChange = true }
             }
-        } 
+        }
+        return didChange
     }
 
+    // returns true if any outlier group was changed
     public func foreachOutlierGroupMulti(includingTrash: Bool,
-                                         _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Void) async
+                                         _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Bool) async -> Bool
     {
+        var didChange = false
         if let outlierGroups {
-            await Task.detached(priority: .userInitiated) {
+            didChange = await Task.detached(priority: .userInitiated) {
 
                 let outliers = await Array(outlierGroups.getMembers().values)
                 var trash: [OutlierGroup] = []
@@ -990,19 +994,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 if includingTrash {
                     trash = await Array(outlierGroups.getTrash().values)
                 }
-                await foreachOutlier(in: outliers, with: trash, closure)
+                return await foreachOutlier(in: outliers, with: trash, closure)
             }.value
-        } 
+        }
+        return didChange
     }
 
     public func outlierGroup(named outlierName: UInt16) async -> OutlierGroup? {
         await outlierGroups?.getMembers()[outlierName]
     }
 
+    // returns true if anything changed 
     public func foreachOutlierGroupMulti(between startLocation: CGPoint,
                                          and endLocation: CGPoint,
                                          includingTrash: Bool, 
-                                         _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Void) async
+                                         _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Bool) async -> Bool
     {
         // first get bounding box from start and end location
         var minX: CGFloat = CGFLOAT_MAX
@@ -1023,12 +1029,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let gestureBounds = BoundingBox(min: Coord(x: Int(minX), y: Int(minY)),
                                         max: Coord(x: Int(maxX), y: Int(maxY)))
         
-        await foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
+        return await foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
+            var didChange = false
             if gestureBounds.contains(other: group.bounds) {
                 // check to make sure this outlier's bounding box is fully contained
                 // otherwise don't change removal status
-                await closure(group, isInTrash)
+                if await closure(group, isInTrash) { didChange = true }
             }
+            return didChange
         }
     }
 
@@ -1577,7 +1585,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if let classifier = await currentClassifier.get(for: .all) {
             await foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
                 if let minimumSize,
-                   group.size < minimumSize { return }
+                   group.size < minimumSize { return false }
                 
                 var apply = true
                 if !overwrite,
@@ -1590,14 +1598,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         break
                     }
                 }
+                var didChange = false
                 if apply {
                     Log.d("applying decision tree")
                     if isInTrash {
                         await self.outlierGroups?.promoteFromTrash(group)
-                        await self.markAsChanged()
+                        didChange = true
                     }
-                    await group.shouldRemove(.fromClassifier(await classifier.classification(of: group)))
+                    if await group.shouldRemove(.fromClassifier(await classifier.classification(of: group))) { didChange = true }
                 }
+                return didChange
             }
         } else {
             Log.w("no classifier")
@@ -1607,6 +1617,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func clearOutlierGroupValueCaches(includingTrash: Bool) async {
         await foreachOutlierGroupMulti(includingTrash: includingTrash) { group, _ in
             await group.clearFeatureValueCache()
+            return false
         }
     }
 
@@ -1642,54 +1653,69 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
     
     public func userSelectAllOutliers(toShouldRemove shouldRemove: Bool,
-                                      includingTrash: Bool) async
+                                      includingTrash: Bool) async -> Bool
     {
-        await Task.detached(priority: .userInitiated) {
+        let didChange = await Task.detached(priority: .userInitiated) {
             await self.foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
+                var didChange = false
                 if isInTrash {
                     await self.outlierGroups?.promoteFromTrash(group)
+                    didChange = true
                 }
-                await group.shouldRemove(.userSelected(shouldRemove))
+                if await group.shouldRemove(.userSelected(shouldRemove)) { didChange = true }
+                return didChange
             }
-            // 
         }.value
         Task { @MainActor in
-            await self.markAsChanged()
+            if didChange {
+                await self.markAsChanged() // only mark as changed if we have changed something
+            }
             await self.updateCombineSubjects()
         }
+        return didChange
     }
 
     public func userSelectUndecidedOutliers(toShouldRemove shouldRemove: Bool,
-                                            includingTrash: Bool) async
+                                            includingTrash: Bool) async -> Bool
     {
-        await Task.detached(priority: .userInitiated) {
+        let didChange = await Task.detached(priority: .userInitiated) {
             await self.foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
+                var didChange = false
                 if await group.shouldRemove() == nil {
                     if isInTrash {
                         await self.outlierGroups?.promoteFromTrash(group)
+                        didChange = true
                     }
-                    await group.shouldRemove(.userSelected(shouldRemove))
+                    if await group.shouldRemove(.userSelected(shouldRemove)) { didChange = true }
                 }
+                return didChange
             }
         }.value
         Task { @MainActor in
-            await self.markAsChanged()
+            if didChange {
+                await self.markAsChanged()
+            }
             await self.updateCombineSubjects()
         }
+        return didChange
     }
 
     public func userSelectAllOutliers(toShouldRemove shouldRemove: Bool,
-                                      overlapping group: OutlierGroup) async
+                                      overlapping group: OutlierGroup) async -> Bool
     {
-        guard let outlierGroups else { return }
+        guard let outlierGroups else { return false }
 
+        var didChange = false
         for group in await outlierGroups.groups(overlapping: group) {
-            await group.shouldRemove(.userSelected(shouldRemove))
+            if await group.shouldRemove(.userSelected(shouldRemove)) { didChange = true }
         }
         Task { @MainActor in
-            await self.markAsChanged()
+            if didChange {
+                await self.markAsChanged()
+            }
             await self.updateCombineSubjects()
         }
+        return didChange
     }
     
     public func userSelectAllOutliers(toShouldRemove shouldRemove: Bool,
@@ -1697,17 +1723,23 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                       and endLocation: CGPoint,
                                       includingTrash: Bool) async
     {
-        await foreachOutlierGroupMulti(between: startLocation,
-                                       and: endLocation,
-                                       includingTrash: includingTrash) { group, isInTrash in
+        let didChange = await foreachOutlierGroupMulti(
+          between: startLocation,
+          and: endLocation,
+          includingTrash: includingTrash)
+        { group, isInTrash in
+            var didChange = false
             if isInTrash {
                 await self.outlierGroups?.promoteFromTrash(group)
-                await self.markAsChanged()
+                didChange = true
             }
-            await group.shouldRemove(.userSelected(shouldRemove))
+            if await group.shouldRemove(.userSelected(shouldRemove)) { didChange = true }
+            return didChange
         }
         Task { @MainActor in
-            await self.markAsChanged()
+            if didChange {
+                await self.markAsChanged()
+            }
             await self.updateCombineSubjects()
         }
     }
@@ -1914,8 +1946,7 @@ fileprivate class OutlierClassifier {
                                     // XXX we need to grab the feature data from the FrameDataHarvester
                                     //let featureData = await group.featureData(dataHarvester: dataHarvester)
                                     let classification = await classifier.classification(of: group)
-                                    await group.shouldRemove(.fromClassifier(classification),
-                                                            markAsChanged: false)
+                                    await group.shouldRemove(.fromClassifier(classification))
                                 }
                             }
                         }
@@ -1933,8 +1964,7 @@ fileprivate class OutlierClassifier {
                                         // only apply classifier when no other classification is otherwise present
                                         //let featureData = await group.featureData(dataHarvester: dataHarvester)
                                         let classification = await classifier.classification(of: group)
-                                        await group.shouldRemove(.fromClassifier(classification),
-                                                                markAsChanged: false)
+                                        await group.shouldRemove(.fromClassifier(classification))
                                         await outlierGroups.promoteFromTrash(group)
                                         await frame.markAsChanged()
                                     }
@@ -1966,8 +1996,7 @@ fileprivate class OutlierClassifier {
                                     // only apply classifier when no other classification is otherwise present
                                     //let featureData = await group.featureData(dataHarvester: dataHarvester)
                                     let classification = await classifier.classification(of: group)
-                                    await group.shouldRemove(.fromClassifier(classification),
-                                                            markAsChanged: false)
+                                    await group.shouldRemove(.fromClassifier(classification))
                                 }
                             }
                         }
@@ -2097,11 +2126,12 @@ fileprivate class OutlierClassifier {
     }
 }
 
+// closure returns true if an outlier was changed
 fileprivate func foreachOutlier(in outliers: [OutlierGroup],
                                 with trash: [OutlierGroup],
-                                _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Void) async {
-    await withTaskGroup(of: Void.self) { taskGroup in
-
+                                _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Bool) async -> Bool {
+    return await withTaskGroup(of: Bool.self) { taskGroup in
+        var didChange = false         // did anything change?
         // max number of concurrent tasks (for each outliers and trash)
         let max = 10            // XXX hardcoded constant
 
@@ -2111,22 +2141,27 @@ fileprivate func foreachOutlier(in outliers: [OutlierGroup],
         if outliers.count > 0 {
             for chunk in outliers.chunks(of: outlierChunkSize) {
                 taskGroup.addTask() {
+                    var didChange = false
                     for group in chunk {
-                        await closure(group, false)
+                        if await closure(group, true) { didChange = true }
                     }
+                    return didChange
                 }
             }
         }
         if trash.count > 0 {
             for chunk in trash.chunks(of: trashChunkSize) {
                 taskGroup.addTask() {
+                    var didChange = false
                     for group in chunk {
-                        await closure(group, true)
+                        if await closure(group, true) { didChange = true }
                     }
+                    return didChange
                 }
             }
         }
-        await taskGroup.waitForAll()
+        for await (result) in taskGroup { if result { didChange = true } }
+        return didChange
     }
 }
 

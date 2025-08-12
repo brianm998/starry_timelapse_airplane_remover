@@ -163,7 +163,7 @@ struct MultiSelectSheetView: View {
                                                            startIndex: 0,
                                                            endIndex: currentIndex)
                         case .keepOverlaps:
-                            self.updateOverlappersInFrames(shouldRemove: true,
+                            self.updateOverlappersInFrames(shouldRemove: false,
                                                            startIndex: 0,
                                                            endIndex: currentIndex)
                         }
@@ -310,7 +310,7 @@ struct MultiSelectSheetView: View {
                             await frame.writeOutliersRemoveReasons()
 
                             Task {
-                                try? await viewModel.render(frame: frame, now: false)
+                                try? await viewModel.render(frame: frame, now: false, ever: false)
                             }
                             
                             await MainActor.run {
