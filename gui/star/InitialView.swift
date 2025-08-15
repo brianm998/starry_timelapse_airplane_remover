@@ -464,19 +464,30 @@ struct SplitRevealVideoView: View {
         }
 
         func prepareAndPlay() {
-            let itemL = AVPlayerItem(asset: AVAsset(url: leftURL))
-            let itemR = AVPlayerItem(asset: AVAsset(url: rightURL))
+            let assetL = AVAsset(url: leftURL)
+            let assetR = AVAsset(url: rightURL)
+            let itemL = AVPlayerItem(asset: assetL)
+            let itemR = AVPlayerItem(asset: assetR)
+
             playerLeft.replaceCurrentItem(with: itemL)
             playerRight.replaceCurrentItem(with: itemR)
 
-            // seek both to zero with zero tolerance then play simultaneously
+            // Use the same master clock for both players
+            let masterClock = CMClockGetHostTimeClock()
+            playerLeft.masterClock = masterClock
+            playerRight.masterClock = masterClock
+
+            // Seek both exactly to zero before starting
+            let zeroTime = CMTime(seconds: 0, preferredTimescale: 600)
             let group = DispatchGroup()
+
             group.enter()
-            playerLeft.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { _ in group.leave() }
+            playerLeft.seek(to: zeroTime, toleranceBefore: .zero, toleranceAfter: .zero) { _ in group.leave() }
             group.enter()
-            playerRight.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { _ in group.leave() }
+            playerRight.seek(to: zeroTime, toleranceBefore: .zero, toleranceAfter: .zero) { _ in group.leave() }
 
             group.notify(queue: .main) {
+                // Start them together
                 self.playerLeft.play()
                 self.playerRight.play()
             }
