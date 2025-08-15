@@ -319,6 +319,10 @@ struct SplitRevealVideoView: View {
 
     @StateObject private var vm: VM
     @State private var dragFraction: CGFloat = 0.25 // 0..1
+    @State private var autoAnimating = true // controls pendulum motion
+
+    private let minFraction: CGFloat = 0.25
+    private let maxFraction: CGFloat = 0.35
 
     init(leftURL: URL, rightURL: URL) {
         self.leftURL = leftURL
@@ -353,22 +357,36 @@ struct SplitRevealVideoView: View {
               .gesture(
                 DragGesture(minimumDistance: 0)
                   .onChanged { value in
+
+                      if autoAnimating {
+                          autoAnimating = false // stop pendulum as soon as user interacts
+                      }
+                      
                       let clampedX = min(max(0, value.location.x), geo.size.width)
                       dragFraction = clampedX / geo.size.width
                   }
               )         .contentShape(Rectangle()) // Make gesture active only inside visible video frame
-
-            
-            .onAppear {
-                vm.prepareAndPlay()
-            }
-            .onDisappear {
-                vm.pause()
-            }
+              .onAppear {
+                  vm.prepareAndPlay()
+                  startPendulum()
+              }
+              .onDisappear {
+                  vm.pause()
+              }
         }
           .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private func startPendulum() {
+        guard autoAnimating else { return }
+
+        // Start from current value, move to opposite bound
+        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+            dragFraction = (dragFraction == minFraction) ? maxFraction : minFraction
+        }
+    }
+
+    
     @ViewBuilder
     private func handle(in size: CGSize) -> some View {
         Rectangle()
@@ -620,43 +638,3 @@ private struct VideoLayerRepresentable: NSViewRepresentable {
 
 
 
-import SwiftUI
-
-struct FinderStyleDropZone: View {
-    @State private var isTargeted = false
-    var onDropAction: ([NSItemProvider]) -> Void
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [5]))
-                .foregroundColor(isTargeted ? Color.accentColor : .white/*Color.secondary*/)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(isTargeted ? Color.accentColor.opacity(0.15) : Color.clear)
-                )
-                .shadow(color: isTargeted ? Color.accentColor.opacity(0.7) : Color.clear,
-                        radius: isTargeted ? 8 : 0)
-                .animation(.easeInOut(duration: 0.15), value: isTargeted)
-
-            VStack(spacing: 6) {
-                Image(systemName: "doc.on.doc")
-                    .font(.system(size: 32))
-                    .foregroundColor(.white)
-                Text("Drop a video, an image sequence or an existing config file here")
-                  .foregroundColor(.white)
-                    .font(.headline)
-            }
-        }
-        .frame(minWidth: 280, minHeight: 150)
-        .padding()
-        .onDrop(of: ["public.file-url"], isTargeted: $isTargeted) { providers in
-            handleDrop(providers)
-            return true
-        }
-    }
-
-    private func handleDrop(_ providers: [NSItemProvider]) {
-        onDropAction(providers)
-    }
-}

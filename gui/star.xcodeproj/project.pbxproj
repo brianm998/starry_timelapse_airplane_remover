@@ -39,6 +39,7 @@
 		D35309452D0DE4F200C4AFFF /* BlobProcessingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35309442D0DE4F200C4AFFF /* BlobProcessingView.swift */; };
 		D35618732D24CCF80001814D /* OutlierWindowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35618722D24CCF80001814D /* OutlierWindowViewModel.swift */; };
 		D35618742D24CCF80001814D /* OutlierWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35618712D24CCF80001814D /* OutlierWindowView.swift */; };
+		D35A28462E4FC8AE007121E6 /* FinderStyleDropZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35A28452E4FC8AE007121E6 /* FinderStyleDropZone.swift */; };
 		D3636C522CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3636C512CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift */; };
 		D3636C562CE087B000514D39 /* ReProcessCurrentFrameButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3636C552CE087B000514D39 /* ReProcessCurrentFrameButton.swift */; };
 		D364FD7F2C1F4357006FB43A /* libStarDecisionTrees.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */; };
@@ -156,6 +157,7 @@
 		D35309442D0DE4F200C4AFFF /* BlobProcessingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobProcessingView.swift; sourceTree = "<group>"; };
 		D35618712D24CCF80001814D /* OutlierWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutlierWindowView.swift; sourceTree = "<group>"; };
 		D35618722D24CCF80001814D /* OutlierWindowViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutlierWindowViewModel.swift; sourceTree = "<group>"; };
+		D35A28452E4FC8AE007121E6 /* FinderStyleDropZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderStyleDropZone.swift; sourceTree = "<group>"; };
 		D3636C512CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindOutliersOnCurrentFrameButton.swift; sourceTree = "<group>"; };
 		D3636C552CE087B000514D39 /* ReProcessCurrentFrameButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReProcessCurrentFrameButton.swift; sourceTree = "<group>"; };
 		D366BB392AF84766004C9125 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = SOURCE_ROOT; };
@@ -279,6 +281,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D35A28452E4FC8AE007121E6 /* FinderStyleDropZone.swift */,
 				D3E6804C2E424B2300A97C28 /* ProcessingOptionsView.swift */,
 				D3E6804A2E424B0700A97C28 /* FocusedField.swift */,
 				D3E680482E3FB75600A97C28 /* RenderVideoSheetView.swift */,
@@ -602,6 +605,7 @@
 				D33FFC1E2A2D39BA00F38194 /* ProgressBars.swift in Sources */,
 				D3FBFA272CEAC0FF00A23FC6 /* InfoDialogView.swift in Sources */,
 				D392EB1B2E104D410020E16A /* ChangeToolButton.swift in Sources */,
+				D35A28462E4FC8AE007121E6 /* FinderStyleDropZone.swift in Sources */,
 				D33FFC202A2D3BCD00F38194 /* FrameViewModel.swift in Sources */,
 				D33FFC242A2D48F300F38194 /* FrameEditView.swift in Sources */,
 				D32F6DAE2A4D1C0100704870 /* RenderAllFramesButton.swift in Sources */,
