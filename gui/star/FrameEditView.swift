@@ -28,8 +28,17 @@ struct FrameEditView: View {
             let full_max: CGFloat = self.viewModel.showFullResolution ? 3 : 0.66 // XXX hardcoded constants that should be in the gui
             let max = min < full_max ? full_max : min
 
-            self.imageView
-              .zoomable(min: min, max: max, currentScale: $currentZoomScale)
+            ZoomableView(size: CGSize(width: viewModel.frameWidth+outlierArrowLength*2,
+                                      height: viewModel.frameHeight+outlierArrowLength*2),
+                         min: min,
+                         max: max,
+                         showsIndicators: true,
+                         currentScale: $currentZoomScale)
+            {
+
+                self.imageView
+            }
+             // .zoomable(min: min, max: max, currentScale: $currentZoomScale)
               .onChange(of: geometry.size) {
                   currentZoomScale = min // XXX
               }

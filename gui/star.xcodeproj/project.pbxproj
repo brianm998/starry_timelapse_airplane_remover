@@ -12,6 +12,7 @@
 		D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBC299736730001CD0C /* ViewModel.swift */; };
 		D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */; };
 		D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBE299736730001CD0C /* OutlierGroupView.swift */; };
+		D326F57C2E510DC1008E71A2 /* OldZoomableModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = D326F57B2E510DC1008E71A2 /* OldZoomableModifier.swift */; };
 		D32F6DAA2A4D17CF00704870 /* ScrubSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DA92A4D17CF00704870 /* ScrubSliderView.swift */; };
 		D32F6DAC2A4D1A6E00704870 /* BottomControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DAB2A4D1A6E00704870 /* BottomControls.swift */; };
 		D32F6DAE2A4D1C0100704870 /* RenderAllFramesButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DAD2A4D1C0100704870 /* RenderAllFramesButton.swift */; };
@@ -130,6 +131,7 @@
 		D31F9FBC299736730001CD0C /* ViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewModel.swift; sourceTree = "<group>"; };
 		D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameSaveQueue.swift; sourceTree = "<group>"; };
 		D31F9FBE299736730001CD0C /* OutlierGroupView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupView.swift; sourceTree = "<group>"; };
+		D326F57B2E510DC1008E71A2 /* OldZoomableModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OldZoomableModifier.swift; sourceTree = "<group>"; };
 		D32F6DA92A4D17CF00704870 /* ScrubSliderView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ScrubSliderView.swift; sourceTree = "<group>"; };
 		D32F6DAB2A4D1A6E00704870 /* BottomControls.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BottomControls.swift; sourceTree = "<group>"; };
 		D32F6DAD2A4D1C0100704870 /* RenderAllFramesButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RenderAllFramesButton.swift; sourceTree = "<group>"; };
@@ -256,6 +258,7 @@
 		D35A284A2E50E176007121E6 /* Zoomable */ = {
 			isa = PBXGroup;
 			children = (
+				D326F57B2E510DC1008E71A2 /* OldZoomableModifier.swift */,
 				D35A28482E50E176007121E6 /* ZoomableModifier.swift */,
 				D35A28492E50E176007121E6 /* ZoomableView.swift */,
 			);
@@ -586,6 +589,7 @@
 				D3636C562CE087B000514D39 /* ReProcessCurrentFrameButton.swift in Sources */,
 				D3A0D3AE2CF383DF00FD2E9E /* ExpandUpButton.swift in Sources */,
 				D3FF93DF2C75745C00A98088 /* MultiChoiceSheetView.swift in Sources */,
+				D326F57C2E510DC1008E71A2 /* OldZoomableModifier.swift in Sources */,
 				D3636C522CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift in Sources */,
 				D3058E1B2AC0745C00C58F1D /* MultiSelectSheetView.swift in Sources */,
 				D35309452D0DE4F200C4AFFF /* BlobProcessingView.swift in Sources */,
