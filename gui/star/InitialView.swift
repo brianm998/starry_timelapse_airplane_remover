@@ -15,10 +15,10 @@ struct InitialView: View {
 
         ZStack {
 
-            if let url1,
+            if// let url1,
                let url2
             {
-                SplitRevealVideoView(leftURL: url1, rightURL: url2)
+                SplitRevealVideoView(/*leftURL: url1, */rightURL: url2)
                   .background(.black)
             } else {
                 Color.black
@@ -32,12 +32,13 @@ struct InitialView: View {
         }
           .onAppear {
               Task.detached {
+                  /*
                   let _url1 = Bundle.main.url(forResource: "11_30_2024-fx3-airplanes",
-                                              withExtension: "mp4")
+                                              withExtension: "mp4")*/
                   let _url2 = Bundle.main.url(forResource: "11_30_2024-fx3-no-airplanes",
                                               withExtension: "mp4")
                   Task { @MainActor in
-                      self.url1 = _url1
+                      //self.url1 = _url1
                       self.url2 = _url2
                   }
               }
@@ -314,7 +315,7 @@ import SwiftUI
 import AppKit
 
 struct SplitRevealVideoView: View {
-    let leftURL: URL
+//    let leftURL: URL
     let rightURL: URL
 
     @StateObject private var vm: VM
@@ -324,20 +325,21 @@ struct SplitRevealVideoView: View {
     private let minFraction: CGFloat = 0.25
     private let maxFraction: CGFloat = 0.35
 
-    init(leftURL: URL, rightURL: URL) {
-        self.leftURL = leftURL
+    init(/*leftURL: URL, */rightURL: URL) {
+//        self.leftURL = leftURL
         self.rightURL = rightURL
-        _vm = StateObject(wrappedValue: VM(left: leftURL, right: rightURL))
+        _vm = StateObject(wrappedValue: VM(/*left: leftURL, */right: rightURL))
     }
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
+                /*
                 // Left video (visible on left side up to dragFraction)
                 VideoLayerRepresentable(player: vm.playerLeft,
                                         revealFraction: dragFraction,
                                         maskSide: .left)
-
+*/
                 // Right video (visible on right side after dragFraction)
                 VideoLayerRepresentable(player: vm.playerRight,
                                         revealFraction: 1/*dragFraction*/,
@@ -423,19 +425,19 @@ struct SplitRevealVideoView: View {
     /// Main-thread-only ObservableObject that manages players and aspect ratio.
     @MainActor
     final class VM: ObservableObject {
-        let playerLeft = AVPlayer()
+//        let playerLeft = AVPlayer()
         let playerRight = AVPlayer()
         @Published var aspectRatio: CGFloat = 16.0 / 9.0
 
-        private let leftURL: URL
+//        private let leftURL: URL
         private let rightURL: URL
 
-        init(left: URL, right: URL) {
-            self.leftURL = left
+        init(/*left: URL, */right: URL) {
+            //self.leftURL = left
             self.rightURL = right
             loadAspectRatio()
 
-            [playerLeft, playerRight].forEach { player in
+            [/*playerLeft, */playerRight].forEach { player in
                 NotificationCenter.default.addObserver(
                   forName: .AVPlayerItemDidPlayToEndTime,
                   object: player.currentItem,
@@ -449,8 +451,8 @@ struct SplitRevealVideoView: View {
 
         private func loadAspectRatio() {
             // Perform work off the main thread to avoid blocking UI
-            DispatchQueue.global(qos: .background).async { [leftURL] in
-                let asset = AVAsset(url: leftURL)
+            DispatchQueue.global(qos: .background).async { [rightURL] in
+                let asset = AVAsset(url: rightURL)
                 // try to read first video track synchronously (may be available)
                 let tracks = asset.tracks(withMediaType: .video)
                 if let track = tracks.first {
@@ -485,37 +487,37 @@ struct SplitRevealVideoView: View {
         }
 
         func prepareAndPlay() {
-            let assetL = AVAsset(url: leftURL)
+//            let assetL = AVAsset(url: leftURL)
             let assetR = AVAsset(url: rightURL)
-            let itemL = AVPlayerItem(asset: assetL)
+//            let itemL = AVPlayerItem(asset: assetL)
             let itemR = AVPlayerItem(asset: assetR)
 
-            playerLeft.replaceCurrentItem(with: itemL)
+  //          playerLeft.replaceCurrentItem(with: itemL)
             playerRight.replaceCurrentItem(with: itemR)
 
             // Use the same master clock for both players
             let masterClock = CMClockGetHostTimeClock()
-            playerLeft.masterClock = masterClock
+//            playerLeft.masterClock = masterClock
             playerRight.masterClock = masterClock
 
             // Seek both exactly to zero before starting
             let zeroTime = CMTime(seconds: 0, preferredTimescale: 600)
             let group = DispatchGroup()
 
-            group.enter()
-            playerLeft.seek(to: zeroTime, toleranceBefore: .zero, toleranceAfter: .zero) { _ in group.leave() }
+//            group.enter()
+//            playerLeft.seek(to: zeroTime, toleranceBefore: .zero, toleranceAfter: .zero) { _ in group.leave() }
             group.enter()
             playerRight.seek(to: zeroTime, toleranceBefore: .zero, toleranceAfter: .zero) { _ in group.leave() }
 
             group.notify(queue: .main) {
                 // Start them together
-                self.playerLeft.play()
+//                self.playerLeft.play()
                 self.playerRight.play()
             }
         }
 
         func pause() {
-            playerLeft.pause()
+//            playerLeft.pause()
             playerRight.pause()
         }
     }
