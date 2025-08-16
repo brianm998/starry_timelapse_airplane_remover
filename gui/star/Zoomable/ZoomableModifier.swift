@@ -24,122 +24,158 @@
 //
 
 import SwiftUI
+import logging
 
 public struct ZoomableModifier: ViewModifier {
-    
-    private enum ZoomState {
-        case inactive
-        case active(scale: CGFloat)
-        
-        var scale: CGFloat {
-            switch self {
-            case .active(let scale):
-                return scale
-            default: return 1.0
-            }
-        }
-    }
-    
-    private var contentSize: CGSize
-    private var min: CGFloat = 1.0
-    private var max: CGFloat = 3.0
-    private var showsIndicators: Bool = false
-    
-    @GestureState private var zoomState = ZoomState.inactive
+
+    private var min: CGFloat
+    private var max: CGFloat
+
+    @GestureState private var gestureScale: CGFloat = 1.0
+    @GestureState private var dragDelta: CGSize = .zero
+
     @Binding private var currentScale: CGFloat
-    @State private var tapXLocation: CGFloat
-    @State private var tapYLocation: CGFloat
-    
-    /**
-     Initializes an `ZoomableModifier`
-     - parameter contentSize : The content size of the views.
-     - parameter min : The minimum value that can be zoom out.
-     - parameter max : The maximum value that can be zoom in.
-     - parameter showsIndicators : A value that indicates whether the scroll view displays the scrollable component of the content offset, in a way that’s suitable for the platform.
-     */
-    public init(contentSize: CGSize,
-                min: CGFloat = 1.0,
+    @State private var offset: CGSize = .zero
+
+    public init(min: CGFloat = 1.0,
                 max: CGFloat = 3.0,
-                showsIndicators: Bool = false,
-                currentScale: Binding<CGFloat>)
-    {
-        _currentScale = currentScale
-        self.contentSize = contentSize
+                currentScale: Binding<CGFloat>) {
         self.min = min
         self.max = max
-        self.showsIndicators = showsIndicators
-        self.tapXLocation = contentSize.width/2
-        self.tapYLocation = contentSize.height/2
+        _currentScale = currentScale
     }
-    
-    var scale: CGFloat {
-        return currentScale * zoomState.scale
+
+    private var totalScale: CGFloat {
+        Swift.max(min, Swift.min(max, currentScale * gestureScale))
     }
-    
-    public var zoomGesture: some Gesture {
-        MagnificationGesture()
-            .updating($zoomState) { value, state, transaction in
-                state = .active(scale: value)
+
+    public func body(content: Content) -> some View {
+        GeometryReader { geo in
+            let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
+
+            // Canvas centers the content at rest and provides a clipping rect
+            ZStack {
+
+                content
+                  .scaleEffect(totalScale, anchor: .center)
+                  .offset(x: offset.width + dragDelta.width,
+                          y: offset.height + dragDelta.height)
+                  .compositingGroup() // ensure transform happens before clipping
+
+//                TwoFingerDragOverlay(offset: $offset)                 
+//                  .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .onEnded { value in
-                var new = self.currentScale * value
-                if new <= min { new = min }
-                if new >= max { new = max }
-                self.currentScale = new
-            }
-    }
-    
-    public func doubleTapGesture(_ scroller: ScrollViewProxy) -> some Gesture {
-        if #available(macOS 13, *) {
-            return SpatialTapGesture(count: 2).onEnded { event in
-                tapXLocation = event.location.x / currentScale
-                tapYLocation = event.location.y / currentScale
-                print("FRICKING event location \(event.location) contentSize \(contentSize) currentScale \(currentScale) tap [\(tapXLocation), \(tapYLocation)]")
-                if scale <= min { currentScale = max } else
-                if scale >= max { currentScale = min } else {
-                    currentScale = ((max - min) * 0.5 + min) < scale ? max : min
-                }
-                // XXX this doesn't work :(
-//                scroller.scrollTo(42, anchor: .center)
-            }
-        } else {
-            return TapGesture(count: 2).onEnded { 
-                if scale <= min { currentScale = max } else
-                if scale >= max { currentScale = min } else {
-                    currentScale = ((max - min) * 0.5 + min) < scale ? max : min
-                }
-            }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .center)
+            .contentShape(Rectangle()) // full area is hittable for gestures
+            .clipped(antialiased: true) // keep within bounds
+            .simultaneousGesture(magnificationGesture())
+            .simultaneousGesture(doubleTapGesture(in: geo, center: center))
+            .animation(.easeInOut, value: totalScale)
+            .animation(.easeInOut, value: offset)
         }
     }
 
-    // https://stackoverflow.com/questions/70175558/swiftui-scrollviewreader-scrollto-not-correct-working/70177677#70177677
-    private func setUnitPoint(_ index:Int) -> UnitPoint {
-        switch true {
-        case index % 10 < 2 && index / 10 < 2:
-             return .topLeading
-         case index % 10 >= 7 && index / 10 < 7:
-            return .topTrailing
-        case index % 10 < 2 && index / 10 >= 7:
-            return .bottomLeading
-        case index % 10 >= 2 && index / 10 >= 7:
-            return .bottomTrailing
-        default:
-            return .center
-        }
+    // MARK: Gestures
+
+    private func magnificationGesture() -> some Gesture {
+        MagnificationGesture()
+            .updating($gestureScale) { value, state, _ in
+                state = value
+            }
+            .onEnded { value in
+                let new = currentScale * value
+                currentScale = Swift.max(min, Swift.min(max, new))
+                // macOS MagnificationGesture has no pinch location; zooms around view center.
+            }
     }
-    
-    public func body(content: Content) -> some View {
-        ScrollView([.horizontal, .vertical], showsIndicators: showsIndicators) {
-            ScrollViewReader { scroller in
-                content
-//                  .id(42)
-                  .frame(width: contentSize.width * scale, height: contentSize.height * scale, alignment: .center)
-                  .scaleEffect(scale, anchor: .center)
-                  //.gesture(doubleTapGesture) // disable zoom because it conflicts with other select gesture
-                  .gesture(doubleTapGesture(scroller)) // disable zoom because it conflicts with other select gesture
+
+    private var dragGesture: some Gesture {
+        DragGesture()
+          .updating($dragDelta) { value, state, _ in
+              Log.d("FUCK")
+                state = value.translation
+            }
+            .onEnded { value in
+                offset.width += value.translation.width
+                offset.height += value.translation.height
+            }
+    }
+
+    /// Double-tap zoom that keeps the tapped point fixed (anchor: .center math).
+    private func doubleTapGesture(in geo: GeometryProxy, center: CGPoint) -> some Gesture {
+        if #available(macOS 13, iOS 16, *) {
+            return SpatialTapGesture(count: 2).onEnded { value in
+                let p = value.location         // local (container) coords
+                let s = totalScale
+                let target = (abs(s - min) < 0.001) ? max : min
+                let ratio = target / Swift.max(s, 0.0001)
+
+                // With anchor .center, keep p fixed:
+                // newOffset = (p - center) - (p - center - offset) * (s'/s)
+                let rel = CGPoint(x: p.x - center.x, y: p.y - center.y)
+                let newOffset = CGSize(
+                    width: rel.x - (rel.x - offset.width) * ratio,
+                    height: rel.y - (rel.y - offset.height) * ratio
+                )
+
+                withAnimation(.easeInOut) {
+                    currentScale = target
+                    offset = target == min ? .zero : newOffset
+                }
+            }
+        } else {
+            return TapGesture(count: 2).onEnded {
+                withAnimation(.easeInOut) {
+                    if totalScale > min {
+                        currentScale = min
+                        offset = .zero
+                    } else {
+                        currentScale = max
+                    }
+                }
             }
         }
-        //.gesture(ExclusiveGesture(zoomGesture, doubleTapGesture))
-        .animation(.easeInOut, value: scale)
+    }
+}
+
+// MARK: - Convenience
+
+public extension View {
+    func zoomable(min: CGFloat = 1.0,
+                  max: CGFloat = 3.0,
+                  currentScale: Binding<CGFloat>) -> some View {
+        modifier(ZoomableModifier(min: min, max: max, currentScale: currentScale))
+    }
+}
+
+
+
+struct TwoFingerDragOverlay: NSViewRepresentable {
+    @Binding var offset: CGSize
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        let recognizer = NSPanGestureRecognizer(target: context.coordinator,
+                                                 action: #selector(Coordinator.pan(_:)))
+        recognizer.allowedTouchTypes = [.direct] // trackpad
+        view.addGestureRecognizer(recognizer)
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(offset: $offset) }
+
+    class Coordinator: NSObject {
+        @Binding var offset: CGSize
+        init(offset: Binding<CGSize>) { _offset = offset }
+
+      @MainActor @objc func pan(_ sender: NSPanGestureRecognizer) {
+          if sender.numberOfTouchesRequired != 2 { return } // only two fingers
+            let translation = sender.translation(in: sender.view)
+            offset.width += translation.x
+            offset.height += translation.y
+            sender.setTranslation(.zero, in: sender.view)
+        }
     }
 }

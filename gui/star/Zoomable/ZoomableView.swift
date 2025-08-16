@@ -62,10 +62,10 @@ public struct ZoomableView<Content>: View where Content: View {
             .frame(width: size.width, height: size.height, alignment: .center)
             .contentShape(Rectangle())
             .modifier(ZoomableModifier(
-                        contentSize: self.size,
+                        //contentSize: self.size,
                         min: min,
                         max: max,
-                        showsIndicators: showsIndicators,
+                       // showsIndicators: showsIndicators,
                         currentScale: $currentScale
                       )
             )
