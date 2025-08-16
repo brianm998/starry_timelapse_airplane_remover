@@ -340,19 +340,21 @@ struct SplitRevealVideoView: View {
 
                 // Right video (visible on right side after dragFraction)
                 VideoLayerRepresentable(player: vm.playerRight,
-                                        revealFraction: dragFraction,
+                                        revealFraction: 1/*dragFraction*/,
                                         maskSide: .right)
 
                 // Divider handle
-
+/*
                 handle(in: geo.size)
                   .position(x: geo.size.width * dragFraction,
-                            y: geo.size.height / 2)
+                  y: geo.size.height / 2)
+                  
+ */
             }
               .frame(width: geo.size.width, height: geo.size.height)
 //              .position(x: geo.size.width / 2, y: geo.size.height / 2)
             // global drag gesture across the fitted area
-
+/*
               .cursor(.resizeLeftRight)
               .gesture(
                 DragGesture(minimumDistance: 0)
@@ -365,10 +367,11 @@ struct SplitRevealVideoView: View {
                       let clampedX = min(max(0, value.location.x), geo.size.width)
                       dragFraction = clampedX / geo.size.width
                   }
-              )         .contentShape(Rectangle()) // Make gesture active only inside visible video frame
+                  )         .contentShape(Rectangle()) // Make gesture active only inside visible video frame
+ */
               .onAppear {
                   vm.prepareAndPlay()
-                  startPendulum()
+//                  startPendulum()
               }
               .onDisappear {
                   vm.pause()

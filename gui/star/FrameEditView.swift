@@ -1,6 +1,5 @@
 import SwiftUI
 import StarCore
-import Zoomable
 import logging
 
 // the view for when the user wants to edit what outlier groups are painted and not
@@ -17,6 +16,8 @@ struct FrameEditView: View {
     @Environment(ViewModel.self) var topViewModel: ViewModel
     @Environment(\.openWindow) private var openWindow
 
+    @State private var currentZoomScale: CGFloat = 1
+    
     var body: some View {
         // wrap the frame view with a zoomable view
         GeometryReader { geometry in
@@ -31,11 +32,15 @@ struct FrameEditView: View {
                                       height: viewModel.frameHeight+outlierArrowLength*2),
                          min: min,
                          max: max,
-                         showsIndicators: true)
+                         showsIndicators: true,
+                         currentScale: $currentZoomScale)
             {
                 // the currently visible frame
                 self.imageView
             }
+              .onChange(of: geometry.size) {
+                  currentZoomScale = min // XXX
+              }
               .onChange(of: viewModel.selectionMode) {
                   topViewModel.refreshCursor()
               }
@@ -62,8 +67,7 @@ struct FrameEditView: View {
                   }
             }
         }
-    }
-    
+    }    
     var imageView: some View {
         ZStack() {
             // the main image shown

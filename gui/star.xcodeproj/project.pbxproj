@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		D3058E1B2AC0745C00C58F1D /* MultiSelectSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */; };
-		D30CDB102E48E76000B4FB7B /* 11_30_2024-fx3-airplanes.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = D30CDB0D2E48E76000B4FB7B /* 11_30_2024-fx3-airplanes.mp4 */; };
 		D30CDB112E48E76000B4FB7B /* 11_30_2024-fx3-no-airplanes.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = D30CDB0E2E48E76000B4FB7B /* 11_30_2024-fx3-no-airplanes.mp4 */; };
 		D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBC299736730001CD0C /* ViewModel.swift */; };
 		D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */; };
@@ -40,6 +39,8 @@
 		D35618732D24CCF80001814D /* OutlierWindowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35618722D24CCF80001814D /* OutlierWindowViewModel.swift */; };
 		D35618742D24CCF80001814D /* OutlierWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35618712D24CCF80001814D /* OutlierWindowView.swift */; };
 		D35A28462E4FC8AE007121E6 /* FinderStyleDropZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35A28452E4FC8AE007121E6 /* FinderStyleDropZone.swift */; };
+		D35A284B2E50E176007121E6 /* ZoomableModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35A28482E50E176007121E6 /* ZoomableModifier.swift */; };
+		D35A284C2E50E176007121E6 /* ZoomableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35A28492E50E176007121E6 /* ZoomableView.swift */; };
 		D3636C522CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3636C512CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift */; };
 		D3636C562CE087B000514D39 /* ReProcessCurrentFrameButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3636C552CE087B000514D39 /* ReProcessCurrentFrameButton.swift */; };
 		D364FD7F2C1F4357006FB43A /* libStarDecisionTrees.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */; };
@@ -64,7 +65,6 @@
 		D3B29C9E2B2FE23F00754C10 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29C9D2B2FE23F00754C10 /* StarCore */; };
 		D3B29CA42B2FE31800754C10 /* KHTSwift in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CA32B2FE31800754C10 /* KHTSwift */; };
 		D3B29CB12B2FE5BE00754C10 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CB02B2FE5BE00754C10 /* StarCore */; };
-		D3B29CB42B2FE5D900754C10 /* Zoomable in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CB32B2FE5D900754C10 /* Zoomable */; };
 		D3B3730A2D50857400B56342 /* ProcessRemainingFramesButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B373092D50857400B56342 /* ProcessRemainingFramesButton.swift */; };
 		D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */; };
 		D3CD86792CF5815100D2D53F /* InitialInstructionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3CD86782CF5815100D2D53F /* InitialInstructionsView.swift */; };
@@ -125,7 +125,6 @@
 
 /* Begin PBXFileReference section */
 		D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MultiSelectSheetView.swift; sourceTree = "<group>"; };
-		D30CDB0D2E48E76000B4FB7B /* 11_30_2024-fx3-airplanes.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "11_30_2024-fx3-airplanes.mp4"; sourceTree = "<group>"; };
 		D30CDB0E2E48E76000B4FB7B /* 11_30_2024-fx3-no-airplanes.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "11_30_2024-fx3-no-airplanes.mp4"; sourceTree = "<group>"; };
 		D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libStarDecisionTrees.a; path = ../../StarDecisionTrees/lib/release/libStarDecisionTrees.a; sourceTree = "<group>"; };
 		D31F9FBC299736730001CD0C /* ViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewModel.swift; sourceTree = "<group>"; };
@@ -158,6 +157,8 @@
 		D35618712D24CCF80001814D /* OutlierWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutlierWindowView.swift; sourceTree = "<group>"; };
 		D35618722D24CCF80001814D /* OutlierWindowViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutlierWindowViewModel.swift; sourceTree = "<group>"; };
 		D35A28452E4FC8AE007121E6 /* FinderStyleDropZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderStyleDropZone.swift; sourceTree = "<group>"; };
+		D35A28482E50E176007121E6 /* ZoomableModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableModifier.swift; sourceTree = "<group>"; };
+		D35A28492E50E176007121E6 /* ZoomableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableView.swift; sourceTree = "<group>"; };
 		D3636C512CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindOutliersOnCurrentFrameButton.swift; sourceTree = "<group>"; };
 		D3636C552CE087B000514D39 /* ReProcessCurrentFrameButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReProcessCurrentFrameButton.swift; sourceTree = "<group>"; };
 		D366BB392AF84766004C9125 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = SOURCE_ROOT; };
@@ -217,7 +218,6 @@
 				D3B29C9E2B2FE23F00754C10 /* StarCore in Frameworks */,
 				D3B29CB12B2FE5BE00754C10 /* StarCore in Frameworks */,
 				D3B29CA42B2FE31800754C10 /* KHTSwift in Frameworks */,
-				D3B29CB42B2FE5D900754C10 /* Zoomable in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -248,10 +248,18 @@
 		D30CDB0F2E48E76000B4FB7B /* videos */ = {
 			isa = PBXGroup;
 			children = (
-				D30CDB0D2E48E76000B4FB7B /* 11_30_2024-fx3-airplanes.mp4 */,
 				D30CDB0E2E48E76000B4FB7B /* 11_30_2024-fx3-no-airplanes.mp4 */,
 			);
 			path = videos;
+			sourceTree = "<group>";
+		};
+		D35A284A2E50E176007121E6 /* Zoomable */ = {
+			isa = PBXGroup;
+			children = (
+				D35A28482E50E176007121E6 /* ZoomableModifier.swift */,
+				D35A28492E50E176007121E6 /* ZoomableView.swift */,
+			);
+			path = Zoomable;
 			sourceTree = "<group>";
 		};
 		D386FA04298B617300878B56 = {
@@ -281,6 +289,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D35A284A2E50E176007121E6 /* Zoomable */,
 				D35A28452E4FC8AE007121E6 /* FinderStyleDropZone.swift */,
 				D3E6804C2E424B2300A97C28 /* ProcessingOptionsView.swift */,
 				D3E6804A2E424B0700A97C28 /* FocusedField.swift */,
@@ -424,7 +433,6 @@
 				D3B29C9D2B2FE23F00754C10 /* StarCore */,
 				D3B29CA32B2FE31800754C10 /* KHTSwift */,
 				D3B29CB02B2FE5BE00754C10 /* StarCore */,
-				D3B29CB32B2FE5D900754C10 /* Zoomable */,
 			);
 			productName = Star;
 			productReference = D386FA0D298B617300878B56 /* Star.app */;
@@ -500,7 +508,6 @@
 			mainGroup = D386FA04298B617300878B56;
 			packageReferences = (
 				D3B29CAF2B2FE5BE00754C10 /* XCLocalSwiftPackageReference "../StarCore" */,
-				D3B29CB22B2FE5D900754C10 /* XCRemoteSwiftPackageReference "Zoomable" */,
 			);
 			productRefGroup = D386FA0E298B617300878B56 /* Products */;
 			projectDirPath = "";
@@ -519,7 +526,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				D386FA18298B617400878B56 /* Preview Assets.xcassets in Resources */,
-				D30CDB102E48E76000B4FB7B /* 11_30_2024-fx3-airplanes.mp4 in Resources */,
 				D30CDB112E48E76000B4FB7B /* 11_30_2024-fx3-no-airplanes.mp4 in Resources */,
 				D386FA15298B617400878B56 /* Assets.xcassets in Resources */,
 				D392EB152E0C48D60020E16A /* Assets.xcassets in Resources */,
@@ -627,6 +633,8 @@
 				D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */,
 				D3A0D3B02CF3AEB800FD2E9E /* FinalGUIProcessor.swift in Sources */,
 				D3CD86792CF5815100D2D53F /* InitialInstructionsView.swift in Sources */,
+				D35A284B2E50E176007121E6 /* ZoomableModifier.swift in Sources */,
+				D35A284C2E50E176007121E6 /* ZoomableView.swift in Sources */,
 				D32F6DBA2A4E6FCE00704870 /* BottomRightView.swift in Sources */,
 				D3E680492E3FB75600A97C28 /* RenderVideoSheetView.swift in Sources */,
 				D33FFC162A2CFF4700F38194 /* LoadAllOutliersButton.swift in Sources */,
@@ -1019,14 +1027,6 @@
 				kind = branch;
 			};
 		};
-		D3B29CB22B2FE5D900754C10 /* XCRemoteSwiftPackageReference "Zoomable" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "git@github.com:brianm998/Zoomable.git";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1056,11 +1056,6 @@
 		D3B29CB02B2FE5BE00754C10 /* StarCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = StarCore;
-		};
-		D3B29CB32B2FE5D900754C10 /* Zoomable */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = D3B29CB22B2FE5D900754C10 /* XCRemoteSwiftPackageReference "Zoomable" */;
-			productName = Zoomable;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -2,7 +2,6 @@ import Foundation
 import SwiftUI
 import Cocoa
 import StarCore
-import Zoomable
 import Semaphore
 import logging
 
