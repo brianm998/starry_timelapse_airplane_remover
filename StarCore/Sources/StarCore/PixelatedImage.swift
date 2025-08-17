@@ -491,6 +491,7 @@ public final class PixelatedImage: Sendable {
 
     // write out the given image data as a 16 bit tiff file to the given filename
     // used when modifying the invariant original image data, and saying the edits to a file
+    // uses BackBits image compression
     // XXX make this async
     func writeTIFFEncoding(ofData imageData: Data,
                            toFilename imageFilename: String) throws
@@ -507,7 +508,8 @@ public final class PixelatedImage: Sendable {
 
         let context = CIContext()
         let fileURL = NSURL(fileURLWithPath: imageFilename, isDirectory: false) as URL
-        let options: [CIImageRepresentationOption: CGFloat] = [:]
+
+        let options: [CIImageRepresentationOption: Any] = [:]
         
         try context.writeTIFFRepresentation(
           of: CIImage(cgImage: newImage),
@@ -519,6 +521,8 @@ public final class PixelatedImage: Sendable {
         Log.i("image written to \(imageFilename)")
     }
 
+    
+    
     // linearly merges all images together
     public func mergeWith(_ otherImages: [PixelatedImage]) throws -> PixelatedImage {
         Log.d("mergeWith \(otherImages.count) other images")
