@@ -16,7 +16,8 @@ struct FrameEditView: View {
     @Environment(ViewModel.self) var topViewModel: ViewModel
     @Environment(\.openWindow) private var openWindow
 
-    @State private var currentZoomScale: CGFloat = 1
+    // this one is optional, but it's passed as non-optional below
+    @State private var currentZoomScale: CGFloat? = nil
     
     var body: some View {
         // wrap the frame view with a zoomable view
@@ -28,44 +29,60 @@ struct FrameEditView: View {
             let full_max: CGFloat = self.viewModel.showFullResolution ? 3 : 0.66 // XXX hardcoded constants that should be in the gui
             let max = min < full_max ? full_max : min
 
-            ZoomableView(size: CGSize(width: viewModel.frameWidth+outlierArrowLength*2,
-                                      height: viewModel.frameHeight+outlierArrowLength*2),
-                         min: min,
-                         max: max,
-                         showsIndicators: true,
-                         currentScale: $currentZoomScale)
-            {
-
-                self.imageView
-            }
-             // .zoomable(min: min, max: max, currentScale: $currentZoomScale)
-              .onChange(of: geometry.size) {
-                  currentZoomScale = min // XXX
-              }
-              .onChange(of: viewModel.selectionMode) {
-                  topViewModel.refreshCursor()
-              }
-              .onChange(of: viewModel.currentIndex) { oldValue, _ in
-                  // add any changes the user may have made to the save queue
-                  if oldValue >= 0,
-                     oldValue < self.viewModel.frames.count
-                  {
-                      let frameView = self.viewModel.frames[oldValue]
-                      Task {
-                          if let frameToSave = frameView.frame,
-                             await frameToSave.hasChanges()
+            Group {
+                if let scale = currentZoomScale {
+                    ZoomableView(
+                      size: CGSize(
+                        width: viewModel.frameWidth+outlierArrowLength*2,
+                        height: viewModel.frameHeight+outlierArrowLength*2
+                      ),
+                      min: min,
+                      max: max,
+                      showsIndicators: true,
+                      currentScale: Binding( // pass the optional currentZoomState
+                        get: { scale },      // as not optional
+                        set: { currentZoomScale = $0 }
+                      )
+                    ) {
+                        self.imageView
+                    }
+                    // .zoomable(min: min, max: max, currentScale: $currentZoomScale)
+                      .onChange(of: geometry.size) {
+                          withAnimation(.none) {
+                              currentZoomScale = min // make it full size
+                          }
+                      }
+                      .onChange(of: viewModel.selectionMode) {
+                          topViewModel.refreshCursor()
+                      }
+                      .onChange(of: viewModel.currentIndex) { oldValue, _ in
+                          // add any changes the user may have made to the save queue
+                          if oldValue >= 0,
+                             oldValue < self.viewModel.frames.count
                           {
-                              await MainActor.run {
-                                  self.viewModel.saveToFile(frame: frameToSave) {
-                                      Log.d("saving frame \(frameToSave.frameIndex)")
-                                      // await MainActor.run {
-                                      await self.viewModel.refresh(frame: frameToSave)
-                                      // }
+                              let frameView = self.viewModel.frames[oldValue]
+                              Task {
+                                  if let frameToSave = frameView.frame,
+                                     await frameToSave.hasChanges()
+                                  {
+                                      await MainActor.run {
+                                          self.viewModel.saveToFile(frame: frameToSave) {
+                                              Log.d("saving frame \(frameToSave.frameIndex)")
+                                              // await MainActor.run {
+                                              await self.viewModel.refresh(frame: frameToSave)
+                                              // }
+                                          }
+                                      }
                                   }
                               }
                           }
                       }
-                  }
+                } else {
+                    Color.clear // placeholder for until we know the geometry
+                      .onAppear {
+                          currentZoomScale = min
+                      }
+                }
             }
         }
     }    
