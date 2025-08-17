@@ -127,11 +127,11 @@ struct BottomRightView: View {
                     if let _ = frameView.outlierViews {
                         
                         if let numPositive = frameView.frameObserver.numberOfPositiveOutliers {
-                            Text("\(numPositive) will paint")
+                            Text("\(numPositive) will remove")
                               .foregroundColor(numPositive == 0 ? .white : .red)
                         }
                         if let numNegative = frameView.frameObserver.numberOfNegativeOutliers {
-                            Text("\(numNegative) will not paint")
+                            Text("\(numNegative) will keep")
                               .foregroundColor(numNegative == 0 ? .white : .green)
                         }
                         if let numUndecided = frameView.frameObserver.numberOfUndecidedOutliers,

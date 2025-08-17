@@ -185,7 +185,7 @@ struct OutlierGroupTable: View {
                                      KeyPathComparator<OutlierGroupTableRow>,
                                      Image,
                                      Text> {
-        TableColumn("paint",
+        TableColumn("remove",
                     value: \OutlierGroupTableRow.willRemoveType) { (row: OutlierGroupTableRow) in
             image(for: row.willRemoveType)
         }.width(min: 10, ideal: 20, max: 80)
