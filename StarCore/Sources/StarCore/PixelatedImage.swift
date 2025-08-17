@@ -902,26 +902,11 @@ public final class PixelatedImage: Sendable {
             }
         }
 
-        // Step 4: Apply threshold → binary image
-        switch self.imageData {
-        case .eightBit:
-            let out = intensities.map { $0 > UInt(threshold) ? UInt8.max : 0 }
-            return PixelatedImage(width: width,
-                                  height: height,
-                                  grayscale8BitImageData: out)
-
-        case .sixteenBit:
-            let out = intensities.map { $0 > UInt(threshold) ? UInt16.max : 0 }
-            return PixelatedImage(width: width,
-                                  height: height,
-                                  grayscale16BitImageData: out)
-
-        case .thirtyTwoBit:
-            let out = intensities.map { $0 > UInt(threshold) ? UInt32.max : 0 }
-            return PixelatedImage(width: width,
-                                  height: height,
-                                  grayscale32BitImageData: out)
-        }
+        // Step 4: Apply threshold → binary 8 bit image
+        let out = intensities.map { $0 > UInt(threshold) ? UInt8.max : 0 }
+        return PixelatedImage(width: width,
+                              height: height,
+                              grayscale8BitImageData: out)
     }
 
 

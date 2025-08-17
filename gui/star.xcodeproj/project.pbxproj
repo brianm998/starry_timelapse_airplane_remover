@@ -8,11 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		D3058E1B2AC0745C00C58F1D /* MultiSelectSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */; };
-		D30CDB112E48E76000B4FB7B /* 11_30_2024-fx3-no-airplanes.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = D30CDB0E2E48E76000B4FB7B /* 11_30_2024-fx3-no-airplanes.mp4 */; };
 		D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBC299736730001CD0C /* ViewModel.swift */; };
 		D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */; };
 		D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBE299736730001CD0C /* OutlierGroupView.swift */; };
 		D326F57C2E510DC1008E71A2 /* OldZoomableModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = D326F57B2E510DC1008E71A2 /* OldZoomableModifier.swift */; };
+		D326F57E2E5274F3008E71A2 /* 11_30_2024-fx3-aurora-topaz-star.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = D326F57D2E5274F3008E71A2 /* 11_30_2024-fx3-aurora-topaz-star.mp4 */; };
 		D32F6DAA2A4D17CF00704870 /* ScrubSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DA92A4D17CF00704870 /* ScrubSliderView.swift */; };
 		D32F6DAC2A4D1A6E00704870 /* BottomControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DAB2A4D1A6E00704870 /* BottomControls.swift */; };
 		D32F6DAE2A4D1C0100704870 /* RenderAllFramesButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DAD2A4D1C0100704870 /* RenderAllFramesButton.swift */; };
@@ -126,12 +126,12 @@
 
 /* Begin PBXFileReference section */
 		D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MultiSelectSheetView.swift; sourceTree = "<group>"; };
-		D30CDB0E2E48E76000B4FB7B /* 11_30_2024-fx3-no-airplanes.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "11_30_2024-fx3-no-airplanes.mp4"; sourceTree = "<group>"; };
 		D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libStarDecisionTrees.a; path = ../../StarDecisionTrees/lib/release/libStarDecisionTrees.a; sourceTree = "<group>"; };
 		D31F9FBC299736730001CD0C /* ViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewModel.swift; sourceTree = "<group>"; };
 		D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameSaveQueue.swift; sourceTree = "<group>"; };
 		D31F9FBE299736730001CD0C /* OutlierGroupView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupView.swift; sourceTree = "<group>"; };
 		D326F57B2E510DC1008E71A2 /* OldZoomableModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OldZoomableModifier.swift; sourceTree = "<group>"; };
+		D326F57D2E5274F3008E71A2 /* 11_30_2024-fx3-aurora-topaz-star.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "11_30_2024-fx3-aurora-topaz-star.mp4"; sourceTree = "<group>"; };
 		D32F6DA92A4D17CF00704870 /* ScrubSliderView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ScrubSliderView.swift; sourceTree = "<group>"; };
 		D32F6DAB2A4D1A6E00704870 /* BottomControls.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BottomControls.swift; sourceTree = "<group>"; };
 		D32F6DAD2A4D1C0100704870 /* RenderAllFramesButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RenderAllFramesButton.swift; sourceTree = "<group>"; };
@@ -250,7 +250,7 @@
 		D30CDB0F2E48E76000B4FB7B /* videos */ = {
 			isa = PBXGroup;
 			children = (
-				D30CDB0E2E48E76000B4FB7B /* 11_30_2024-fx3-no-airplanes.mp4 */,
+				D326F57D2E5274F3008E71A2 /* 11_30_2024-fx3-aurora-topaz-star.mp4 */,
 			);
 			path = videos;
 			sourceTree = "<group>";
@@ -529,10 +529,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				D386FA18298B617400878B56 /* Preview Assets.xcassets in Resources */,
-				D30CDB112E48E76000B4FB7B /* 11_30_2024-fx3-no-airplanes.mp4 in Resources */,
 				D386FA15298B617400878B56 /* Assets.xcassets in Resources */,
 				D392EB152E0C48D60020E16A /* Assets.xcassets in Resources */,
 				D366BB3A2AF84766004C9125 /* Info.plist in Resources */,
+				D326F57E2E5274F3008E71A2 /* 11_30_2024-fx3-aurora-topaz-star.mp4 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

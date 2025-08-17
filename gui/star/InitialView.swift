@@ -32,10 +32,16 @@ struct InitialView: View {
         }
           .onAppear {
               Task.detached {
+/*
+11_30_2024-fx3-aurora-topaz-star.mp4
+11_30_2024-fx3-aurora-topaz.mp4
+11_30_2024-fx3-aurora.mp4
+11_30_2024-fx3.mp4
+*/
                   /*
                   let _url1 = Bundle.main.url(forResource: "11_30_2024-fx3-airplanes",
                                               withExtension: "mp4")*/
-                  let _url2 = Bundle.main.url(forResource: "11_30_2024-fx3-no-airplanes",
+                  let _url2 = Bundle.main.url(forResource: "11_30_2024-fx3-aurora-topaz-star",
                                               withExtension: "mp4")
                   Task { @MainActor in
                       //self.url1 = _url1
