@@ -25,6 +25,7 @@ struct LeftPanel: View {
             // XXX testing for why sometimes this view doesn't get events
             // XXX testing for why sometimes this view doesn't get events
             // XXX testing for why sometimes this view doesn't get events
+            /*
             Button() {
                 Log.i("FUCK YES IT DOES")
             } label: {
@@ -32,6 +33,7 @@ struct LeftPanel: View {
             }
               .buttonStyle(PlainButtonStyle())
               .cursor(.extractTrashPointing)
+             */
             // XXX testing for why sometimes this view doesn't get events
             // XXX testing for why sometimes this view doesn't get events
             // XXX testing for why sometimes this view doesn't get events

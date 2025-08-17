@@ -287,7 +287,7 @@ public struct Config: Codable, Sendable, Transferable {
     public static let latestVersion = "8.0.0"
     
     public var basename: String {
-        let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)-\(self.detectionType.rawValue)"
+        let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)"
         return _basename.replacingOccurrences(of: ".", with: "_")
     }
 
