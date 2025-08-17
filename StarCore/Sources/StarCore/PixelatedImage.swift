@@ -830,6 +830,101 @@ public final class PixelatedImage: Sendable {
     var imageMatrixElement: ImageMatrixElement {
         ImageMatrixElement(x: 0, y: 0, image: self)
     }
+
+    /// Returns a binary (black/white) image using Otsu's thresholding.
+    /// - Ignores alpha channel, but combines RGB channels into grayscale.
+    public var binaryOtsuImage: PixelatedImage {
+        // Step 1: Build grayscale intensities (average of RGB, ignoring alpha if present)
+        let (intensities, maxValue): ([UInt], UInt) = {
+            switch self.imageData {
+            case .eightBit(let arr):
+                let comps = componentsPerPixel
+                let vals = stride(from: 0, to: arr.count, by: comps).map { i -> UInt in
+                    let rgb = arr[i ..< i + comps].prefix(3) // drop alpha if present
+                    return UInt(rgb.reduce(0) { $0 + UInt($1) }) / UInt(rgb.count)
+                }
+                return (vals, UInt(UInt8.max))
+
+            case .sixteenBit(let arr):
+                let comps = componentsPerPixel
+                let vals = stride(from: 0, to: arr.count, by: comps).map { i -> UInt in
+                    let rgb = arr[i ..< i + comps].prefix(3)
+                    return UInt(rgb.reduce(0) { $0 + UInt($1) }) / UInt(rgb.count)
+                }
+                return (vals, UInt(UInt16.max))
+
+            case .thirtyTwoBit(let arr):
+                let comps = componentsPerPixel
+                let vals = stride(from: 0, to: arr.count, by: comps).map { i -> UInt in
+                    let rgb = arr[i ..< i + comps].prefix(3)
+                    return UInt(rgb.reduce(0) { $0 + UInt($1) }) / UInt(rgb.count)
+                }
+                return (vals, UInt(UInt32.max))
+            }
+        }()
+
+        // Step 2: Build histogram
+        var histogram = [UInt](repeating: 0, count: Int(maxValue) + 1)
+        for intensity in intensities {
+            histogram[Int(intensity)] += 1
+        }
+
+        let totalPixels = intensities.count
+        let total: Double = Double(totalPixels)
+
+        // Step 3: Compute Otsu threshold
+        var sumAll: Double = 0
+        for i in 0..<histogram.count {
+            sumAll += Double(i) * Double(histogram[i])
+        }
+
+        var sumB: Double = 0
+        var weightB: Double = 0
+        var maxVariance: Double = -1
+        var threshold: Int = 0
+
+        for t in 0..<histogram.count {
+            weightB += Double(histogram[t])
+            if weightB == 0 { continue }
+            let weightF = total - weightB
+            if weightF == 0 { break }
+
+            sumB += Double(t) * Double(histogram[t])
+
+            let meanB = sumB / weightB
+            let meanF = (sumAll - sumB) / weightF
+
+            let betweenVar = weightB * weightF * pow(meanB - meanF, 2)
+
+            if betweenVar > maxVariance {
+                maxVariance = betweenVar
+                threshold = t
+            }
+        }
+
+        // Step 4: Apply threshold → binary image
+        switch self.imageData {
+        case .eightBit:
+            let out = intensities.map { $0 > UInt(threshold) ? UInt8.max : 0 }
+            return PixelatedImage(width: width,
+                                  height: height,
+                                  grayscale8BitImageData: out)
+
+        case .sixteenBit:
+            let out = intensities.map { $0 > UInt(threshold) ? UInt16.max : 0 }
+            return PixelatedImage(width: width,
+                                  height: height,
+                                  grayscale16BitImageData: out)
+
+        case .thirtyTwoBit:
+            let out = intensities.map { $0 > UInt(threshold) ? UInt32.max : 0 }
+            return PixelatedImage(width: width,
+                                  height: height,
+                                  grayscale32BitImageData: out)
+        }
+    }
+
+
 }
 
 fileprivate func isImage(_ image: PixelatedImage,
