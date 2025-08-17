@@ -719,111 +719,132 @@ public final class PixelatedImage: Sendable {
         return brighterCount/dimmerCount
     }
 
-    // splits image into a matrix of chunked elements of a max size
+    /// Splits the image into rectangular tiles of up to `maxWidth` × `maxHeight`,
+    /// with optional overlap. Preserves grayscale, RGB, RGBA and bit depth.
     public func splitIntoMatrix(maxWidth: Int,
                                 maxHeight: Int,
                                 overlapPercent: Double = 0) -> [ImageMatrixElement]
     {
-        // XXX only works on grayscale
-        // XXX add a check for this
+        precondition(maxWidth > 0 && maxHeight > 0, "Tile dimensions must be > 0")
+        precondition(overlapPercent >= 0 && overlapPercent < 100, "Overlap must be between 0 and <100")
 
-        // move x and y by overlapPercent of maxWidth and maxHeight every time
+        let comps = componentsPerPixel
+        precondition(comps == 1 || comps == 3 || comps == 4,
+                     "Only grayscale (1), RGB (3), RGBA (4) supported")
 
-        // keep the overlap between 0...90 percent
-        var realOverlap = overlapPercent
-        if overlapPercent < 0 { realOverlap = 0 } 
-        if overlapPercent >= 90 { realOverlap = 90 } // at least 10 percent move
+        // stride between tiles, reduced by overlap
+        let strideX = Int(Double(maxWidth) * (1.0 - overlapPercent / 100.0))
+        let strideY = Int(Double(maxHeight) * (1.0 - overlapPercent / 100.0))
+        let stepX = max(1, strideX)
+        let stepY = max(1, strideY)
 
-        // how far apart the starting point for each matrix element is from neighbors
-        let xAdjust = Int(Double(maxWidth)*(100-realOverlap)/100)
-        let yAdjust = Int(Double(maxHeight)*(100-realOverlap)/100)
+        var elements: [ImageMatrixElement] = []
 
-        Log.i("matrix xAdjust \(xAdjust) yAdjust \(yAdjust)")
+        func makeTiles<T>(_ arr: [T],
+                          wrap: ([T], Int, Int, Int, Int) -> ImageMatrixElement)
+        {
+            var y = 0
+            while y < height {
+                var x = 0
+                while x < width {
+                    let tw = min(maxWidth, width - x)
+                    let th = min(maxHeight, height - y)
 
-        // starting point for each matrix element
-        var xOffset = 0
-        var yOffset = 0
-        
-        var matrix: [ImageMatrixElement] = []
-        while xOffset < width {
-            yOffset = 0
-            while yOffset < height {
-                //Log.i("matrix xOffset \(xOffset) yOffset \(yOffset)")
-                var matrixWidth = maxWidth
-                if xOffset + matrixWidth > width {
-                    matrixWidth = width - xOffset
-                }
-                var matrixHeight = maxHeight
-                if yOffset + matrixHeight > height {
-                    matrixHeight = height - yOffset
-                }
-                if matrixWidth > 0,
-                   matrixHeight > 0
-                {
-                    switch imageData {
-                    case .thirtyTwoBit(let arr):
-                        //fatalError("THIS MIGHT BE BROKEN")
-                        var matrixImageData = [UInt32](repeating: 0, count: matrixWidth*matrixHeight)
-                        for y in 0..<matrixHeight {
-                            arr.withUnsafeBufferPointer { sourcePtr in
-                                if let baseAddress = sourcePtr.baseAddress {
-                                    memmove(&matrixImageData[y*matrixWidth],
-                                            baseAddress + (y+yOffset)*width+xOffset,
-                                            matrixWidth*4)
-                                } else {
-                                    Log.w("cannot memmove")
-                                }
-                            }
-                        }
+                    var sub: [T] = []
+                    sub.reserveCapacity(tw * th * comps)
 
-                        let matrixImage = PixelatedImage(width: matrixWidth,
-                                                         height: matrixHeight,
-                                                         grayscale32BitImageData: matrixImageData)
+                    for row in 0..<th {
+                        let srcY = y + row
+                        let srcBase = (srcY * width + x) * comps
+                        let slice = arr[srcBase ..< srcBase + tw * comps]
+                        sub.append(contentsOf: slice)
+                    }
 
-                        let element = ImageMatrixElement(x: xOffset,
-                                                         y: yOffset,
-                                                         image: matrixImage)
-                        
-                        //Log.i("matrix element [\(xOffset), \(yOffset)] image width \(matrixWidth) matrix height \(matrixHeight)")
-                        matrix.append(element)
-                        
-                    case .sixteenBit(let arr):
-                        var matrixImageData = [UInt16](repeating: 0, count: matrixWidth*matrixHeight)
-                        for y in 0..<matrixHeight {
-                            arr.withUnsafeBufferPointer { sourcePtr in
-                                if let baseAddress = sourcePtr.baseAddress {
-                                    memmove(&matrixImageData[y*matrixWidth],
-                                            baseAddress + (y+yOffset)*width+xOffset,
-                                            matrixWidth*2)
-                                } else {
-                                    Log.w("cannot memmove")
-                                }
-                            }
-                        }
+                    elements.append(wrap(sub, tw, th, x, y))
 
-                        let matrixImage = PixelatedImage(width: matrixWidth,
-                                                         height: matrixHeight,
-                                                         grayscale16BitImageData: matrixImageData)
-
-                        let element = ImageMatrixElement(x: xOffset,
-                                                         y: yOffset,
-                                                         image: matrixImage)
-                        
-                        //Log.i("matrix element [\(xOffset), \(yOffset)] image width \(matrixWidth) matrix height \(matrixHeight)")
-                        matrix.append(element)
-
-                    case .eightBit(_):
-                        Log.e("eight bit not yet implemented")
-                        break       // XXX do this too
-                        
+                    // advance to next X
+                    x += stepX
+                    if x + maxWidth > width && x < width {
+                        // clamp last tile so it touches right edge
+                        x = width - maxWidth
                     }
                 }
-                yOffset += yAdjust
+
+                // advance to next Y
+                y += stepY
+                if y + maxHeight > height && y < height {
+                    // clamp last tile so it touches bottom edge
+                    y = height - maxHeight
+                }
             }
-            xOffset += xAdjust
         }
-        Log.i("matrix  has \(matrix.count) rows")
-        return matrix
+
+        switch imageData {
+        case .eightBit(let arr):
+            makeTiles(arr) { sub, tw, th, x, y in
+                ImageMatrixElement(
+                    x: x,
+                    y: y,
+                    image: PixelatedImage(
+                      width: tw,
+                      height: th,
+                      imageData: .eightBit(sub),
+                      bitsPerPixel: self.bitsPerPixel,
+                      bytesPerRow: self.bytesPerPixel*tw,
+                      bitsPerComponent: self.bitsPerComponent,
+                      bytesPerPixel: self.bytesPerPixel,
+                      bitmapInfo: self.bitmapInfo,
+                      componentsPerPixel: self.componentsPerPixel,
+                      colorSpace: self.colorSpace,
+                      ciFormat: self.ciFormat
+                    )
+                )
+            }
+
+        case .sixteenBit(let arr):
+            makeTiles(arr) { sub, tw, th, x, y in
+                ImageMatrixElement(
+                    x: x,
+                    y: y,
+                    image: PixelatedImage(
+                      width: tw,
+                      height: th,
+                      imageData: .sixteenBit(sub),
+                      bitsPerPixel: self.bitsPerPixel,
+                      bytesPerRow: self.bytesPerPixel*tw,
+                      bitsPerComponent: self.bitsPerComponent,
+                      bytesPerPixel: self.bytesPerPixel,
+                      bitmapInfo: self.bitmapInfo,
+                      componentsPerPixel: self.componentsPerPixel,
+                      colorSpace: self.colorSpace,
+                      ciFormat: self.ciFormat
+                    )
+                )
+            }
+
+        case .thirtyTwoBit(let arr):
+            makeTiles(arr) { sub, tw, th, x, y in
+                ImageMatrixElement(
+                    x: x,
+                    y: y,
+                    image: PixelatedImage(
+                      width: tw,
+                      height: th,
+                      imageData: .thirtyTwoBit(sub),
+                      bitsPerPixel: self.bitsPerPixel,
+                      bytesPerRow: self.bytesPerPixel*tw,
+                      bitsPerComponent: self.bitsPerComponent,
+                      bytesPerPixel: self.bytesPerPixel,
+                      bitmapInfo: self.bitmapInfo,
+                      componentsPerPixel: self.componentsPerPixel,
+                      colorSpace: self.colorSpace,
+                      ciFormat: self.ciFormat
+                    )
+                )
+            }
+        }
+
+        return elements
     }
 
     // an element of the whole image, for testing
@@ -1127,3 +1148,5 @@ func averageBuffersSwift(
   }
   return result
 }
+
+
