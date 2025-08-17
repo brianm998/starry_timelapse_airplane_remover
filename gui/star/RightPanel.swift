@@ -203,6 +203,23 @@ struct RightPanel: View {
                             Slider(value: $viewModel.frameOpacity, in : 0...1)
                               .frame(maxWidth: 140, alignment: .bottom)
 
+
+                            HStack {
+                                Text("Zoom")
+                                  .foregroundColor(.white)
+                                Spacer()
+                                // Editable max zoom here
+                                EditableMaxZoomView(
+                                  focusedField: $focusedField,
+                                  textColor: .white,
+                                  alwaysOpen: false
+                                )
+                            }
+                              .frame(maxWidth: 140)
+                            Slider(value: $viewModel.currentZoomScale,
+                                   in: viewModel.minZoomScale...viewModel.maxZoomScale)
+                              .frame(maxWidth: 140, alignment: .bottom)
+                            
                             Toggle("show full resolution", isOn: $viewModel.showFullResolution)
                               .foregroundColor(.white)
 
@@ -427,6 +444,42 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
 }
  */
 
+struct EditableMaxZoomView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    let focusedField: FocusState<FocusedField?>.Binding
+    let textColor: Color
+    let alwaysOpen: Bool
+    @State private var zoomDouble: Double = 1
+    
+    var body: some View {
+        @Bindable var viewModel = viewModel
+        return EditableNumberView(
+          value: $zoomDouble,
+          minValue: Double(viewModel.minZoomScale),
+          maxValue: 10,
+          fullTextProvider: { "Max: \($0)" },
+          prefixText: "Max: ",
+          suffixTextProvider: { _ in "" },
+          textColor: textColor,
+          focusedField: focusedField,
+          focusField: .maxZoomLevel,
+          alwaysOpen: alwaysOpen            
+          // no extra commit side‐effects here
+        )
+          .onAppear {
+              zoomDouble = Double(viewModel.maxZoomScale)
+          }
+          .onChange(of: zoomDouble) {
+              viewModel.maxZoomScale = CGFloat(zoomDouble)
+              if viewModel.currentZoomScale > viewModel.maxZoomScale {
+                  viewModel.currentZoomScale = viewModel.maxZoomScale
+              }
+          }
+          .onChange(of: viewModel.maxZoomScale) {
+              zoomDouble = Double(viewModel.maxZoomScale)
+          }
+    }
+}
 
 // "Pixel Threshold"
 struct EditablePixelThresholdView: View {

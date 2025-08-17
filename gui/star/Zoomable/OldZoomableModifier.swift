@@ -1,3 +1,4 @@
+
 //
 //  ZoomableModifier.swift
 //  ZoomableView
@@ -75,7 +76,7 @@ public struct OldZoomableModifier: ViewModifier {
     var scale: CGFloat {
         return currentScale * zoomState.scale
     }
-    
+
     public var zoomGesture: some Gesture {
         MagnificationGesture()
             .updating($zoomState) { value, state, transaction in
@@ -132,14 +133,13 @@ public struct OldZoomableModifier: ViewModifier {
         ScrollView([.horizontal, .vertical], showsIndicators: showsIndicators) {
             ScrollViewReader { scroller in
                 content
-//                  .id(42)
                   .frame(width: contentSize.width * scale, height: contentSize.height * scale, alignment: .center)
                   .scaleEffect(scale, anchor: .center)
                   //.gesture(doubleTapGesture) // disable zoom because it conflicts with other select gesture
-                  .gesture(doubleTapGesture(scroller)) // disable zoom because it conflicts with other select gesture
+                  .simultaneousGesture(doubleTapGesture(scroller)) // disable zoom because it conflicts with other select gesture
             }
         }
-        //.gesture(ExclusiveGesture(zoomGesture, doubleTapGesture))
+        .simultaneousGesture(zoomGesture)
         .animation(.easeInOut, value: scale)
     }
 }

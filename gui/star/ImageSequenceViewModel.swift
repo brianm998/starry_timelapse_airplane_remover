@@ -116,6 +116,12 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    // how far zoomed in the edit view is.
+    // 1 is pixel to pixel, less than one is smaller.
+    var currentZoomScale: CGFloat = 1
+    var minZoomScale: CGFloat = 0.1
+    var maxZoomScale: CGFloat = 1
+
     // use these if nothing is in the config
     var frameRate: FrameRate = .fps_24
     var codec: FFmpegCodec = .prores

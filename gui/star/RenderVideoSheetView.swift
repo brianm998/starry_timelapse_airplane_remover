@@ -246,7 +246,7 @@ struct RenderVideoSheetView: View {
                 
                 Picker("Codec", selection: $codec) {
                     ForEach(FFmpegCodec.availableVideoCodecs, id: \.self) { codec in
-                        Text(codec.description ?? "Not Named")
+                        Text(codec.description)
                     }
                 }
                   .onChange(of: codec) {

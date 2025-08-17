@@ -26,7 +26,7 @@ struct FrameEditView: View {
             let outlierArrowLength = self.viewModel.frameWidth/self.viewModel.outlierArrowLength
             
             let min = (geometry.size.height/(viewModel.frameHeight+outlierArrowLength*2))
-            let full_max: CGFloat = self.viewModel.showFullResolution ? 3 : 0.66 // XXX hardcoded constants that should be in the gui
+            let full_max = viewModel.maxZoomScale
             let max = min < full_max ? full_max : min
 
             Group {
@@ -47,10 +47,21 @@ struct FrameEditView: View {
                         self.imageView
                     }
                     // .zoomable(min: min, max: max, currentScale: $currentZoomScale)
+                      .onAppear {
+                          viewModel.minZoomScale = min
+                      }
                       .onChange(of: geometry.size) {
                           withAnimation(.none) {
                               currentZoomScale = min // make it full size
                           }
+                      }
+                      .onChange(of: currentZoomScale) {
+                          if let currentZoomScale {
+                              viewModel.currentZoomScale = currentZoomScale
+                          }
+                      }
+                      .onChange(of: viewModel.currentZoomScale) {
+                          currentZoomScale = viewModel.currentZoomScale
                       }
                       .onChange(of: viewModel.selectionMode) {
                           topViewModel.refreshCursor()

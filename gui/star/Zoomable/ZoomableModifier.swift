@@ -76,7 +76,7 @@ public struct ZoomableModifier: ViewModifier {
     }
 
     // MARK: Gestures
-
+ 
     private func magnificationGesture() -> some Gesture {
         MagnificationGesture()
             .updating($gestureScale) { value, state, _ in
