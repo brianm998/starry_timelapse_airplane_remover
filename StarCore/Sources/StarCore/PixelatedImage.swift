@@ -27,6 +27,7 @@ import CoreGraphics
 import KHTSwift
 import logging
 import Cocoa
+import kht_bridge
 
 fileprivate let doingMemoryTesting = false
 
@@ -1223,3 +1224,20 @@ func averageBuffersSwift(
 }
 
 
+extension PixelatedImage {
+    // digs into opencv2 to remove a lot of connected components 
+    public func connectedComponentFiltered(keepLargest n: Int = 2) -> PixelatedImage? {
+        guard let nsImg = self.nsImage else { return nil }
+        let filtered = PixelatedImageBridge.filterConnectedComponents(nsImg, keepLargest: n)
+        return PixelatedImage(filtered.cgImage(forProposedRect: nil, context: nil, hints: nil)!)
+    }
+}
+
+extension PixelatedImage {
+    // should get rid of all but the ground
+    public var groundOnly: PixelatedImage? {
+        guard let nsImg = self.nsImage else { return self }
+        let filtered = PixelatedImageBridge.groundOnly(from: nsImg)
+        return PixelatedImage(filtered.cgImage(forProposedRect: nil, context: nil, hints: nil)!)
+    }
+}
