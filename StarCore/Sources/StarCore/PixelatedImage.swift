@@ -316,7 +316,9 @@ public final class PixelatedImage: Sendable {
             return nil
         }
     }
+}
 
+extension PixelatedImage {
     func readPixel(atX x: Int, andY y: Int) -> Pixel {
         switch imageData {
         case .thirtyTwoBit(_):
@@ -740,7 +742,7 @@ public final class PixelatedImage: Sendable {
 
         var elements: [ImageMatrixElement] = []
 
-        func makeTiles<T>(_ arr: [T],
+         func makeTiles<T>(_ arr: [T],
                           wrap: ([T], Int, Int, Int, Int) -> ImageMatrixElement)
         {
             var y = 0
@@ -932,6 +934,77 @@ public final class PixelatedImage: Sendable {
 
 
 }
+
+public extension PixelatedImage {
+    func bottomCrop(by numberOfPixels: Int) -> PixelatedImage {
+        // Clamp the number of pixels to the image height
+        let cropHeight = min(numberOfPixels, self.height)
+        let startRow = self.height - cropHeight
+        
+        switch self.imageData {
+        case .eightBit(let arr):
+            let bytesPerRow = self.bytesPerPixel * self.width
+            let startIndex = startRow * bytesPerRow
+            let endIndex = startIndex + cropHeight * bytesPerRow
+            let croppedData = Array(arr[startIndex..<endIndex])
+            
+            return PixelatedImage(
+              width: self.width,
+              height: cropHeight,
+              imageData: .eightBit(croppedData),
+              bitsPerPixel: self.bitsPerPixel,
+              bytesPerRow: self.bytesPerPixel,
+              bitsPerComponent: self.bitsPerComponent,
+              bytesPerPixel: self.bytesPerPixel,
+              bitmapInfo: self.bitmapInfo,
+              componentsPerPixel: self.componentsPerPixel,
+              colorSpace: self.colorSpace,
+              ciFormat: self.ciFormat
+            )
+            
+        case .sixteenBit(let arr):
+            let pixelsPerRow = self.width * self.componentsPerPixel
+            let startIndex = startRow * pixelsPerRow
+            let endIndex = startIndex + cropHeight * pixelsPerRow
+            let croppedData = Array(arr[startIndex..<endIndex])
+            
+            return PixelatedImage(
+              width: self.width,
+              height: cropHeight,
+              imageData: .sixteenBit(croppedData),
+              bitsPerPixel: self.bitsPerPixel,
+              bytesPerRow: self.bytesPerPixel,
+              bitsPerComponent: self.bitsPerComponent,
+              bytesPerPixel: self.bytesPerPixel,
+              bitmapInfo: self.bitmapInfo,
+              componentsPerPixel: self.componentsPerPixel,
+              colorSpace: self.colorSpace,
+              ciFormat: self.ciFormat
+            )
+            
+        case .thirtyTwoBit(let arr):
+            let pixelsPerRow = self.width * self.componentsPerPixel
+            let startIndex = startRow * pixelsPerRow
+            let endIndex = startIndex + cropHeight * pixelsPerRow
+            let croppedData = Array(arr[startIndex..<endIndex])
+            
+            return PixelatedImage(
+              width: self.width,
+              height: cropHeight,
+              imageData: .thirtyTwoBit(croppedData),
+              bitsPerPixel: self.bitsPerPixel,
+              bytesPerRow: self.bytesPerPixel,
+              bitsPerComponent: self.bitsPerComponent,
+              bytesPerPixel: self.bytesPerPixel,
+              bitmapInfo: self.bitmapInfo,
+              componentsPerPixel: self.componentsPerPixel,
+              colorSpace: self.colorSpace,
+              ciFormat: self.ciFormat
+            )
+        }
+    }
+}
+
 
 fileprivate func isImage(_ image: PixelatedImage,
                          brighterAt at: (Int, Int),
