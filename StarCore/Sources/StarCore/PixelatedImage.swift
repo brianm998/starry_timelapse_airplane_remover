@@ -1234,10 +1234,163 @@ extension PixelatedImage {
 }
 
 extension PixelatedImage {
-    // should get rid of all but the ground
+    // should get rid of all but the ground, designed to run after Otsu classification and
+    // connected component filtering
     public var groundOnly: PixelatedImage? {
         guard let nsImg = self.nsImage else { return self }
         let filtered = PixelatedImageBridge.groundOnly(from: nsImg)
         return PixelatedImage(filtered.cgImage(forProposedRect: nil, context: nil, hints: nil)!)
+    }
+}
+
+
+extension PixelatedImage {
+    // horizon detection logic
+    // tries to compute a binary ground mask, where the ground is zero (black) 
+    public var computedGroundMask: PixelatedImage? {
+        /*
+         horizon detection alg:
+
+         * split frame image into bottom half, discarding top half
+         * split bottom half into 1000 pixel wide segments
+         * apply otsu binary classifier to each of them
+         * apply connected component filtering (use opencv2?)
+         * apply ground only filtering
+         * end up with binary set of earth or sky pixels
+         * re-combine them all into one
+         * assume the top half of the image is sky
+
+         */        
+
+        // determine the new height 
+        let halfHeight = self.height/2 // XXX hardcoded param
+
+        // crop out the top part
+        let bottomCrop = self.bottomCrop(by: halfHeight)
+
+        // split into an array of smaller images
+        let matrix = bottomCrop.splitIntoMatrix(maxWidth: 1000, // XXX hardcoded param
+                                                maxHeight: bottomCrop.height,
+                                                overlapPercent: 0)
+
+        // updated elements go here
+        var newElements: [ImageMatrixElement] = []
+
+        for (index, element) in matrix.enumerated() {
+            // calculate Otsu classification for this image element
+            let otsu = element.image.binaryOtsuImage
+
+            // apply connect component filtering and ground only logic
+            if let filtered = otsu.connectedComponentFiltered(keepLargest: 2),
+               let groundOnly = filtered.groundOnly
+            {
+                newElements.append(
+                  ImageMatrixElement(
+                    x: element.x,
+                    y: element.y,
+                    image: groundOnly
+                  )
+                )
+
+            }
+        }
+        if newElements.count == matrix.count {
+            return PixelatedImage(from: newElements)
+        } else {
+            return nil
+        }
+    }
+}
+
+extension PixelatedImage {
+    // reassemble an image from matrix elements
+    public convenience init(from matrixElements: [ImageMatrixElement]) {
+        precondition(!matrixElements.isEmpty, "Matrix must contain at least one element")
+
+        // Determine overall dimensions
+        let maxX = matrixElements.map { $0.x + $0.width }.max() ?? 0
+        let maxY = matrixElements.map { $0.y + $0.height }.max() ?? 0
+        let width = maxX
+        let height = maxY
+
+        // Assume all tiles share the same pixel format
+        let first = matrixElements[0].image
+
+        let comps = first.componentsPerPixel
+        let totalCount = width * height * comps
+
+        switch first.imageData {
+        case .eightBit:
+            var buffer = [UInt8](repeating: 0, count: totalCount)
+            for elem in matrixElements {
+                guard case .eightBit(let subdata) = elem.image.imageData else { continue }
+                for row in 0..<elem.height {
+                    let destY = elem.y + row
+                    let destBase = (destY * width + elem.x) * comps
+                    let srcBase = row * elem.width * comps
+                    let slice = subdata[srcBase ..< srcBase + elem.width * comps]
+                    buffer.replaceSubrange(destBase ..< destBase + elem.width * comps, with: slice)
+                }
+            }
+            self.init(width: width,
+                      height: height,
+                      imageData: .eightBit(buffer),
+                      bitsPerPixel: first.bitsPerPixel,
+                      bytesPerRow: width * first.bytesPerPixel,
+                      bitsPerComponent: first.bitsPerComponent,
+                      bytesPerPixel: first.bytesPerPixel,
+                      bitmapInfo: first.bitmapInfo,
+                      componentsPerPixel: comps,
+                      colorSpace: first.colorSpace,
+                      ciFormat: first.ciFormat)
+
+        case .sixteenBit:
+            var buffer = [UInt16](repeating: 0, count: totalCount)
+            for elem in matrixElements {
+                guard case .sixteenBit(let subdata) = elem.image.imageData else { continue }
+                for row in 0..<elem.height {
+                    let destY = elem.y + row
+                    let destBase = (destY * width + elem.x) * comps
+                    let srcBase = row * elem.width * comps
+                    let slice = subdata[srcBase ..< srcBase + elem.width * comps]
+                    buffer.replaceSubrange(destBase ..< destBase + elem.width * comps, with: slice)
+                }
+            }
+            self.init(width: width,
+                      height: height,
+                      imageData: .sixteenBit(buffer),
+                      bitsPerPixel: first.bitsPerPixel,
+                      bytesPerRow: width * first.bytesPerPixel,
+                      bitsPerComponent: first.bitsPerComponent,
+                      bytesPerPixel: first.bytesPerPixel,
+                      bitmapInfo: first.bitmapInfo,
+                      componentsPerPixel: comps,
+                      colorSpace: first.colorSpace,
+                      ciFormat: first.ciFormat)
+
+        case .thirtyTwoBit:
+            var buffer = [UInt32](repeating: 0, count: totalCount)
+            for elem in matrixElements {
+                guard case .thirtyTwoBit(let subdata) = elem.image.imageData else { continue }
+                for row in 0..<elem.height {
+                    let destY = elem.y + row
+                    let destBase = (destY * width + elem.x) * comps
+                    let srcBase = row * elem.width * comps
+                    let slice = subdata[srcBase ..< srcBase + elem.width * comps]
+                    buffer.replaceSubrange(destBase ..< destBase + elem.width * comps, with: slice)
+                }
+            }
+            self.init(width: width,
+                      height: height,
+                      imageData: .thirtyTwoBit(buffer),
+                      bitsPerPixel: first.bitsPerPixel,
+                      bytesPerRow: width * first.bytesPerPixel,
+                      bitsPerComponent: first.bitsPerComponent,
+                      bytesPerPixel: first.bytesPerPixel,
+                      bitmapInfo: first.bitmapInfo,
+                      componentsPerPixel: comps,
+                      colorSpace: first.colorSpace,
+                      ciFormat: first.ciFormat)
+        }
     }
 }
