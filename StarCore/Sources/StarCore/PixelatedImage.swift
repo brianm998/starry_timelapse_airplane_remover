@@ -1266,7 +1266,7 @@ extension PixelatedImage {
 extension PixelatedImage {
     // horizon detection logic
     // tries to compute a binary ground mask, where the ground is zero (black) 
-    public var computedGroundMask: PixelatedImage? {
+    public var horizonMask: PixelatedImage? {
         /*
          horizon detection alg:
          * split frame image into bottom half, discarding top half
