@@ -1261,80 +1261,62 @@ extension PixelatedImage {
         return PixelatedImage(filtered.cgImage(forProposedRect: nil, context: nil, hints: nil)!)
     }
 }
+
+
 extension PixelatedImage {
-    // horizon detection logic (async)
-    // tries to compute a binary ground mask, where the ground is zero (black)
-    public var horizonMask: PixelatedImage? {
-        get async {
-            /*
-             horizon detection alg:
+    // horizon detection logic
+    // tries to compute a binary ground mask, where the ground is zero (black) 
+    public var computedGroundMask: PixelatedImage? {
+        /*
+         horizon detection alg:
+         * split frame image into bottom half, discarding top half
+         * split bottom half into 1000 pixel wide segments
+         * apply otsu binary classifier to each of them
+         * apply connected component filtering (use opencv2?)
+         * apply ground only filtering
+         * end up with binary set of earth or sky pixels
+         * re-combine them all into one
+         * assume the top half of the image is sky
 
-             * split frame image into bottom half, discarding top half
-             * split bottom half into 1000 pixel wide segments
-             * apply otsu binary classifier to each of them
-             * apply connected component filtering (use opencv2)
-             * apply ground only filtering
-             * end up with binary set of earth or sky pixels
-             * re-combine them all into one
-             * assume the top half of the image is sky
-             */
+         */        
 
-            let halfHeight = self.height / 2 // XXX hardcoded param
+        // determine the new height 
+        let halfHeight = self.height/2 // XXX hardcoded param
 
-            // crop out the top part
-            let bottomCrop = self.bottomCrop(by: halfHeight)
+        // crop out the top part
+        let bottomCrop = self.bottomCrop(by: halfHeight)
 
-            // split into an array of smaller images
-            let matrix = bottomCrop.splitIntoMatrix(
-                maxWidth: 1000,                 // XXX hardcoded param
-                maxHeight: bottomCrop.height,
-                overlapPercent: 0
-            )
+        // split into an array of smaller images
+        let matrix = bottomCrop.splitIntoMatrix(maxWidth: 1000, // XXX hardcoded param
+                                                maxHeight: bottomCrop.height,
+                                                overlapPercent: 0)
 
-            var newElements: [ImageMatrixElement] = []
+        // updated elements go here
+        var newElements: [ImageMatrixElement] = []
 
-            // run processing in parallel
-            await withTaskGroup(of: ImageMatrixElement?.self) { group in
-                for (index, element) in matrix.enumerated() {
-                    group.addTask {
-                        // XXX XXX XXX 
-                        // XXX XXX XXX 
-                        // XXX XXX XXX 
-                        try? element.image.writeTIFFEncoding(toFilename: "/tmp/\(index)_split.tiff")
-                        // XXX XXX XXX 
-                        // XXX XXX XXX 
-                        // XXX XXX XXX 
-                        
-                        // calculate Otsu classification for this image element
-                        let otsu = element.image.binaryOtsuImage
+        for (index, element) in matrix.enumerated() {
+            // calculate Otsu classification for this image element
+            let otsu = element.image.binaryOtsuImage
 
-                        // apply connected component filtering and ground only logic
-                        if let filtered = otsu.connectedComponentFiltered(keepLargest: 2),
-                           let groundOnly = filtered.groundOnly {
-                            return ImageMatrixElement(
-                                x: element.x,
-                                y: element.y,
-                                image: groundOnly
-                            )
-                        }
-                        return nil
-                    }
-                }
+            // apply connect component filtering and ground only logic
+            if let filtered = otsu.connectedComponentFiltered(keepLargest: 2),
+               let groundOnly = filtered.groundOnly
+            {
+                newElements.append(
+                  ImageMatrixElement(
+                    x: element.x,
+                    y: element.y,
+                    image: groundOnly
+                  )
+                )
 
-                // collect results
-                for await result in group {
-                    if let element = result {
-                        newElements.append(element)
-                    }
-                }
             }
-
-            if newElements.count == matrix.count {
-                return PixelatedImage(from: newElements)
-                    .addSky(height: halfHeight)
-            } else {
-                return nil
-            }
+        }
+        if newElements.count == matrix.count {
+            return PixelatedImage(from: newElements)
+              .addSky(height: halfHeight)
+        } else {
+            return nil
         }
     }
 }
