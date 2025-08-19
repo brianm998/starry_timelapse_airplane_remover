@@ -33,6 +33,7 @@ public enum FrameProcessingState: Int,
     public var id: Self { self }
     
     case unprocessed
+    case horizonDetection
     case starAlignment    
     case creatingAlignedFrame    
     case subtractingNeighbor
@@ -72,6 +73,8 @@ public enum FrameProcessingState: Int,
         switch self {
         case .unprocessed:
             return "unprocessed"
+        case .horizonDetection:
+            return "finding horizon"
         case .starAlignment:
             return "aligning stars"
         case .creatingAlignedFrame:
@@ -141,6 +144,8 @@ public enum FrameProcessingState: Int,
         switch self {
         case .unprocessed:
             return false
+        case .horizonDetection:
+            return false
         case .starAlignment:
             return false
         case .creatingAlignedFrame:
@@ -204,6 +209,8 @@ public enum FrameProcessingState: Int,
         switch self {
         case .unprocessed:
             return "unprocessed"
+        case .horizonDetection:
+            return "horizon"
         case .starAlignment:
             return "align"
         case .creatingAlignedFrame:
@@ -266,6 +273,8 @@ public enum FrameProcessingState: Int,
         switch self {
         case .unprocessed:
             return .red
+        case .horizonDetection:
+            return .blue
         case .starAlignment:
             return .yellow
         case .creatingAlignedFrame:

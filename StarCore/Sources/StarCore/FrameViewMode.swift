@@ -16,6 +16,7 @@ public enum FrameViewMode: String,
     public var id: Self { self }
 
     case original               // source frame with no changes
+    case horizon                // computed horizon mask
     case aligned                // aligned neighbor frame
     case subtraction            // the result of subtracting an aligned neighbor frame
     case blobs                  // blobs detected from the subtraction frame
@@ -31,38 +32,42 @@ public enum FrameViewMode: String,
     public var shortName: String {
         switch self {
         case .original:
-            return "original"
+            "original"
         case .subtraction:
-            return "subtracted"
+            "subtracted"
         case .blobs:
-            return "blob"
+            "blob"
         case .removeMask:
-            return "rmask"
+            "rmask"
         case .validation:
-            return "valid"
+            "valid"
         case .processed:
-            return "processed"
+            "processed"
         case .aligned:
-            return "aligned"
+            "aligned"
+        case .horizon:
+            "horizon"
         }
     }
 
     public var longName: String {
         switch self {
         case .original:
-            return "original frame"
+            "original frame"
         case .subtraction:
-            return "subtracted frame"
+            "subtracted frame"
         case .blobs:
-            return "initially detected blobs"
+            "initially detected blobs"
         case .removeMask:
-            return "computed removal mask"
+            "computed removal mask"
         case .validation:
-            return "validation data"
+            "validation data"
         case .processed:
-            return "processed frame"
+            "processed frame"
         case .aligned:
-            return "aligned frame"
+            "aligned frame"
+        case .horizon:
+            "horizon mask"
         }
     }
 }

@@ -351,6 +351,16 @@ public struct Config: Codable, Sendable, Transferable {
             case .thumbnail:
                 return nil
             }
+        case .horizon:
+            switch size {
+            case .original:
+                return "\(self.outputPath)/\(self.imageSequenceDirname)-horizon"
+
+            case .preview:
+                return "\(self.outputPath)/\(self.imageSequenceDirname)-horizon-previews"
+            case .thumbnail:
+                return nil
+            }
         case .subtraction:
             switch size {
             case .original:
@@ -403,6 +413,7 @@ public struct Config: Codable, Sendable, Transferable {
         var ret: [String] = []
         
         if let dir = self.dirForImage(ofType: .aligned) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .horizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .subtraction) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .validation) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .processed) { ret.append(dir) }
@@ -410,6 +421,7 @@ public struct Config: Codable, Sendable, Transferable {
         if self.writeFramePreviewFiles {
             if let dir = self.dirForImage(ofType: .original, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .aligned, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .horizon, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .subtraction, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .validation, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .blobs, atSize: .preview) { ret.append(dir) }
@@ -421,6 +433,7 @@ public struct Config: Codable, Sendable, Transferable {
         if self.writeFrameProcessedPreviewFiles {
             if let dir = self.dirForImage(ofType: .processed, atSize: .preview) { ret.append(dir) }
         }
+        Log.d("FUCKING dirs to make: \(ret)")
         return ret
     }
 }

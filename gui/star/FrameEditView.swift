@@ -49,6 +49,9 @@ struct FrameEditView: View {
                     // .zoomable(min: min, max: max, currentScale: $currentZoomScale)
                       .onAppear {
                           viewModel.minZoomScale = min
+                          if viewModel.maxZoomScale < min {
+                              viewModel.maxZoomScale = min
+                          }
                       }
                       .onChange(of: geometry.size) {
                           withAnimation(.none) {

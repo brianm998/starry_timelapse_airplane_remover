@@ -383,6 +383,48 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public var numberOfAlignedFrames: Int { alignmentFrames.count }
     
 
+    private func loadOrCreateHorizonMask() async throws -> PixelatedImage {
+        Log.d("frame \(frameIndex) trying to load horizon mask")
+        // load if possible
+        do {
+            if let horizonMask = try await imageAccessor.load(frameIndex: frameIndex,
+                                                              type: .horizon,
+                                                              atSize: .original)
+            {
+                Log.d("frame \(frameIndex) successfully loaded horizon mask")
+                return horizonMask
+            }
+        } catch {
+            Log.i("frame \(frameIndex) unable to load horizon mask: \(error)")
+        }
+        Log.d("frame \(frameIndex) trying to create horizon mask")
+
+        self.set(state: .horizonDetection)
+        // if not, create 
+        if let original = try await imageAccessor.load(frameIndex: frameIndex,
+                                                       type: .original,
+                                                       atSize: .original),
+           let horizonMask = await original.horizonMask
+        {
+        Log.d("frame \(frameIndex) horizon mask created")
+            try await imageAccessor.save(horizonMask,
+                                         frameIndex: frameIndex,
+                                         as: .horizon,
+                                         atSize: .original,
+                                         overwrite: true)
+
+            try await imageAccessor.save(horizonMask,
+                                         frameIndex: frameIndex,
+                                         as: .horizon,
+                                         atSize: .preview,
+                                         overwrite: true)
+
+            return horizonMask
+        } else {
+            throw "cannot create horizon mask"
+        }
+    }
+    
     // load or create a star aligned image for this frame
     // this image is a composite of numberOfAlignedFrames neighbor images
     // which have been all star-aligned with the frame at frameIndex.
@@ -745,6 +787,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                               overwrite: false)
         }
 
+        let _ = try await loadOrCreateHorizonMask()
+        // XXX this is here for testing now
+        // XXX use it for proper pixel removal when loaded
+        
         let alignedImage = try await loadOrCreateStarAlignedImage()
 
         let format = image.imageData // make a copy
@@ -857,6 +903,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("shovel frame \(frameIndex) finding outliers within bounds \(bounds)")
         mkdir(await self.outliersDirname)
 
+
+        let _ = try await loadOrCreateHorizonMask()
+        // XXX this is here for testing now
+        // XXX pass this to the blob detector later
+
+        
         let blobProcessor = await constants.getDetectionType().blobProcessor
         
         let newBlobMap = try await blobProcessor.process(frame: self, within: bounds)
@@ -939,8 +991,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
             } else if !loadOnly {
+                // XXX make this shit happen here for no better reason :)
+                let _ = try await loadOrCreateHorizonMask()
+        
                 // potentially recalculate the alignment image if necessary
                 let _ = try await self.loadOrCreateStarAlignedImage()
+
                 
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
                 Log.d("frame \(frameIndex) calculating outliers")

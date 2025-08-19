@@ -722,11 +722,122 @@ extension PixelatedImage {
         return brighterCount/dimmerCount
     }
 
-    /// Splits the image into rectangular tiles of up to `maxWidth` × `maxHeight`,
-    /// with optional overlap. Preserves grayscale, RGB, RGBA and bit depth.
+
+    // splits image into a matrix of chunked elements of a max size
     public func splitIntoMatrix(maxWidth: Int,
                                 maxHeight: Int,
                                 overlapPercent: Double = 0) -> [ImageMatrixElement]
+    {
+        // XXX only works on grayscale
+        // XXX add a check for this
+
+        // move x and y by overlapPercent of maxWidth and maxHeight every time
+
+        // keep the overlap between 0...90 percent
+        var realOverlap = overlapPercent
+        if overlapPercent < 0 { realOverlap = 0 } 
+        if overlapPercent >= 90 { realOverlap = 90 } // at least 10 percent move
+
+        // how far apart the starting point for each matrix element is from neighbors
+        let xAdjust = Int(Double(maxWidth)*(100-realOverlap)/100)
+        let yAdjust = Int(Double(maxHeight)*(100-realOverlap)/100)
+
+        Log.i("matrix xAdjust \(xAdjust) yAdjust \(yAdjust)")
+
+        // starting point for each matrix element
+        var xOffset = 0
+        var yOffset = 0
+        
+        var matrix: [ImageMatrixElement] = []
+        while xOffset < width {
+            yOffset = 0
+            while yOffset < height {
+                //Log.i("matrix xOffset \(xOffset) yOffset \(yOffset)")
+                var matrixWidth = maxWidth
+                if xOffset + matrixWidth > width {
+                    matrixWidth = width - xOffset
+                }
+                var matrixHeight = maxHeight
+                if yOffset + matrixHeight > height {
+                    matrixHeight = height - yOffset
+                }
+                if matrixWidth > 0,
+                   matrixHeight > 0
+                {
+                    switch imageData {
+                    case .thirtyTwoBit(let arr):
+                        //fatalError("THIS MIGHT BE BROKEN")
+                        var matrixImageData = [UInt32](repeating: 0, count: matrixWidth*matrixHeight)
+                        for y in 0..<matrixHeight {
+                            arr.withUnsafeBufferPointer { sourcePtr in
+                                if let baseAddress = sourcePtr.baseAddress {
+                                    memmove(&matrixImageData[y*matrixWidth],
+                                            baseAddress + (y+yOffset)*width+xOffset,
+                                            matrixWidth*4)
+                                } else {
+                                    Log.w("cannot memmove")
+                                }
+                            }
+                        }
+
+                        let matrixImage = PixelatedImage(width: matrixWidth,
+                                                         height: matrixHeight,
+                                                         grayscale32BitImageData: matrixImageData)
+
+                        let element = ImageMatrixElement(x: xOffset,
+                                                         y: yOffset,
+                                                         image: matrixImage)
+                        
+                        //Log.i("matrix element [\(xOffset), \(yOffset)] image width \(matrixWidth) matrix height \(matrixHeight)")
+                        matrix.append(element)
+                        
+                    case .sixteenBit(let arr):
+                        var matrixImageData = [UInt16](repeating: 0, count: matrixWidth*matrixHeight)
+                        for y in 0..<matrixHeight {
+                            arr.withUnsafeBufferPointer { sourcePtr in
+                                if let baseAddress = sourcePtr.baseAddress {
+                                    memmove(&matrixImageData[y*matrixWidth],
+                                            baseAddress + (y+yOffset)*width+xOffset,
+                                            matrixWidth*2)
+                                } else {
+                                    Log.w("cannot memmove")
+                                }
+                            }
+                        }
+
+                        let matrixImage = PixelatedImage(width: matrixWidth,
+                                                         height: matrixHeight,
+                                                         grayscale16BitImageData: matrixImageData)
+
+                        let element = ImageMatrixElement(x: xOffset,
+                                                         y: yOffset,
+                                                         image: matrixImage)
+                        
+                        //Log.i("matrix element [\(xOffset), \(yOffset)] image width \(matrixWidth) matrix height \(matrixHeight)")
+                        matrix.append(element)
+
+                    case .eightBit(_):
+                        Log.e("eight bit not yet implemented")
+                        break       // XXX do this too
+                        
+                    }
+                }
+                yOffset += yAdjust
+            }
+            xOffset += xAdjust
+        }
+        Log.i("matrix  has \(matrix.count) rows")
+        return matrix
+    }
+    
+    /// Splits the image into rectangular tiles of up to `maxWidth` × `maxHeight`,
+    /// with optional overlap. Preserves grayscale, RGB, RGBA and bit depth.
+    /// XXX very similar to splitIntoMatrix, but handles ARGB.
+    /// seems to have some kind of memory leak when used outside of horizon detection,
+    /// so the old grayscale only splitIntoMatrix remains.
+    public func splitIntoMatrixARGB(maxWidth: Int,
+                                    maxHeight: Int,
+                                    overlapPercent: Double = 0) -> [ImageMatrixElement]
     {
         precondition(maxWidth > 0 && maxHeight > 0, "Tile dimensions must be > 0")
         precondition(overlapPercent >= 0 && overlapPercent < 100, "Overlap must be between 0 and <100")
@@ -1245,7 +1356,7 @@ extension PixelatedImage {
 extension PixelatedImage {
     // horizon detection logic (async)
     // tries to compute a binary ground mask, where the ground is zero (black)
-    public var computedGroundMask: PixelatedImage? {
+    public var horizonMask: PixelatedImage? {
         get async {
             /*
              horizon detection alg:
@@ -1266,7 +1377,7 @@ extension PixelatedImage {
             let bottomCrop = self.bottomCrop(by: halfHeight)
 
             // split into an array of smaller images
-            let matrix = bottomCrop.splitIntoMatrix(
+            let matrix = bottomCrop.splitIntoMatrixARGB(
                 maxWidth: 1000,                 // XXX hardcoded param
                 maxHeight: bottomCrop.height,
                 overlapPercent: 0

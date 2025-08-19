@@ -179,6 +179,8 @@ public struct ImageAccessor: Sendable {
                                                                 andSize: size)
                         }
                     }
+                } else {
+                    Log.w("no filename for type \(imageType) at size \(size)")
                 }
             } catch let error as NSError {
                 if error.code == -1001 {
@@ -309,6 +311,8 @@ public struct ImageAccessor: Sendable {
             case .original:
                 switch type {
                 case .subtraction:
+                    return (dir, baseFileName)
+                case .horizon:
                     return (dir, baseFileName)
                 case .aligned:
                     return (dir, baseFileName)
