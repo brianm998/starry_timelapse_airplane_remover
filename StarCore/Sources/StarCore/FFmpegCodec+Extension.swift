@@ -38,7 +38,7 @@ public extension FFmpegCodec {
 }
 
 public extension FFmpegEncoder {
-    public var supportedMuxers: [FFmpegMuxer] {
+    var supportedMuxers: [FFmpegMuxer] {
         var ret: [FFmpegMuxer] = []
         for muxer in FFmpegMuxer.allCases {
             if muxer.supportedEncoders.contains(self) { ret.append(muxer) }
