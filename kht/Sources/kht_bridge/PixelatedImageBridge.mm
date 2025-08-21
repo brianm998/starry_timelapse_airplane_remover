@@ -4,6 +4,33 @@
 
 @implementation PixelatedImageBridge
 
+/// Helper: safely wrap a cv::Mat into an NSImage
++ (NSImage *)imageFromMat:(const cv::Mat&)mat {
+    // Ensure continuous memory
+    cv::Mat owned = mat.isContinuous() ? mat : mat.clone();
+
+    NSBitmapImageRep *outRep = [[NSBitmapImageRep alloc]
+        initWithBitmapDataPlanes:nil
+                      pixelsWide:owned.cols
+                      pixelsHigh:owned.rows
+                   bitsPerSample:8
+                 samplesPerPixel:1
+                        hasAlpha:NO
+                        isPlanar:NO
+                  colorSpaceName:NSCalibratedWhiteColorSpace
+                     bytesPerRow:owned.step
+                    bitsPerPixel:8];
+
+    // Copy data into Cocoa’s buffer
+    memcpy([outRep bitmapData],
+           owned.data,
+           owned.total() * owned.elemSize());
+
+    NSImage *outImage = [[NSImage alloc] initWithSize:NSMakeSize(owned.cols, owned.rows)];
+    [outImage addRepresentation:outRep];
+    return outImage;
+}
+
 + (NSImage *)filterConnectedComponents:(NSImage *)image keepLargest:(NSInteger)n {
     // Convert NSImage -> cv::Mat (grayscale binary)
     CGImageRef cgRef = [image CGImageForProposedRect:nil context:nil hints:nil];
@@ -43,22 +70,7 @@
         }
     }
 
-    // Convert back to NSImage
-    NSData *data = [NSData dataWithBytes:filtered.data length:filtered.total()];
-    NSBitmapImageRep *outRep = [[NSBitmapImageRep alloc]
-        initWithBitmapDataPlanes:(unsigned char **)&filtered.data
-                      pixelsWide:filtered.cols
-                      pixelsHigh:filtered.rows
-                   bitsPerSample:8
-                 samplesPerPixel:1
-                        hasAlpha:NO
-                        isPlanar:NO
-                  colorSpaceName:NSCalibratedWhiteColorSpace
-                     bytesPerRow:filtered.step
-                    bitsPerPixel:8];
-    NSImage *outImage = [[NSImage alloc] initWithSize:NSMakeSize(filtered.cols, filtered.rows)];
-    [outImage addRepresentation:outRep];
-    return outImage;
+    return [self imageFromMat:filtered];
 }
 
 // PixelatedImageBridge.mm
@@ -107,21 +119,7 @@
     cv::Mat finalMask;
     cv::bitwise_not(groundMask, finalMask);
 
-    // Convert back to NSImage
-    NSBitmapImageRep *outRep = [[NSBitmapImageRep alloc]
-        initWithBitmapDataPlanes:(unsigned char **)&finalMask.data
-                      pixelsWide:finalMask.cols
-                      pixelsHigh:finalMask.rows
-                   bitsPerSample:8
-                 samplesPerPixel:1
-                        hasAlpha:NO
-                        isPlanar:NO
-                  colorSpaceName:NSCalibratedWhiteColorSpace
-                     bytesPerRow:finalMask.step
-                    bitsPerPixel:8];
-    NSImage *outImage = [[NSImage alloc] initWithSize:NSMakeSize(finalMask.cols, finalMask.rows)];
-    [outImage addRepresentation:outRep];
-    return outImage;
+    return [self imageFromMat:finalMask];
 }
 
 @end
