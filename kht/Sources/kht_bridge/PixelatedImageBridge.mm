@@ -41,9 +41,12 @@
                 (void *)rep.bitmapData,
                 rep.bytesPerRow);
 
+    // make copy for safer concurrency
+    cv::Mat owned = mat.clone();
+    
     // Connected components
     cv::Mat labels, stats, centroids;
-    int nLabels = cv::connectedComponentsWithStats(mat, labels, stats, centroids, 8, CV_32S);
+    int nLabels = cv::connectedComponentsWithStats(owned, labels, stats, centroids, 8, CV_32S);
 
     // Collect areas
     std::vector<std::pair<int,int>> areas;
@@ -52,7 +55,7 @@
         areas.emplace_back(area, i);
     }
     std::sort(areas.begin(), areas.end(), std::greater<>());
-
+    
     // Keep only largest N
     std::set<int> keep;
     for (int i = 0; i < std::min<int>(n, areas.size()); i++) {
@@ -60,7 +63,7 @@
     }
 
     // Build output mask
-    cv::Mat filtered = cv::Mat::zeros(mat.size(), CV_8UC1);
+    cv::Mat filtered = cv::Mat::zeros(owned.size(), CV_8UC1);
     for (int y = 0; y < labels.rows; y++) {
         for (int x = 0; x < labels.cols; x++) {
             int lbl = labels.at<int>(y, x);
@@ -84,9 +87,12 @@
                 (void *)rep.bitmapData,
                 rep.bytesPerRow);
 
+    // make copy for safer concurrency
+    cv::Mat owned = mat.clone();
+    
     // Ensure binary (Otsu output should already be 0/255)
     cv::Mat bin;
-    cv::threshold(mat, bin, 127, 255, cv::THRESH_BINARY);
+    cv::threshold(owned, bin, 127, 255, cv::THRESH_BINARY);
 
     // Invert so ground = white (255)
     cv::Mat inv;
