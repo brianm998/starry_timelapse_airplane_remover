@@ -220,6 +220,15 @@ public struct Config: Codable, Sendable, Transferable {
     // did the incoming video have an audio track?
     public var hasAudio: Bool?
 
+    // what percentage of the bottom of the screen to analyze for horizion
+    // the horizon should be in this area
+    public var horizonBottomPercentage: Double = 50
+
+    // the max size of each strip used to calculate the horizon image.
+    // smaller strips can help reduce noise especially around the edges of the frame
+    // too small and the horizon can get calculated wrong
+    public var horizonStripWidth: Int = 400
+
     mutating public func set(videoInfo: VideoInfo) {
         self.frameRate = videoInfo.frameRate
         self.codec = videoInfo.codec

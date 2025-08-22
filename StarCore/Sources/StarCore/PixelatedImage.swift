@@ -1266,7 +1266,9 @@ extension PixelatedImage {
 extension PixelatedImage {
     // horizon detection logic
     // tries to compute a binary ground mask, where the ground is zero (black) 
-    public var horizonMask: PixelatedImage? {
+    public func horizonMask(at frameIndex: Int,
+                            bottomPercentage: Double = 50,
+                            stripWidth: Int = 400) async -> PixelatedImage? {
         /*
          horizon detection alg:
          * split frame image into bottom half, discarding top half
@@ -1281,42 +1283,52 @@ extension PixelatedImage {
          */        
 
         // determine the new height 
-        let halfHeight = self.height/2 // XXX hardcoded param
+        let halfHeight = Int(Double(self.height)*bottomPercentage/100)
 
         // crop out the top part
         let bottomCrop = self.bottomCrop(by: halfHeight)
 
         // split into an array of smaller images
-        let matrix = bottomCrop.splitIntoMatrix(maxWidth: 1000, // XXX hardcoded param
+        let matrix = bottomCrop.splitIntoMatrix(maxWidth: stripWidth,
                                                 maxHeight: bottomCrop.height,
                                                 overlapPercent: 0)
 
         // updated elements go here
         var newElements: [ImageMatrixElement] = []
 
-        for (index, element) in matrix.enumerated() {
-            // calculate Otsu classification for this image element
-            let otsu = element.image.binaryOtsuImage
+        Log.d("frame \(frameIndex) has \(newElements.count) matrix elements for horizon removal")
 
-            // apply connect component filtering and ground only logic
-            if let filtered = otsu.connectedComponentFiltered(keepLargest: 2),
-               let groundOnly = filtered.groundOnly
-            {
-                newElements.append(
-                  ImageMatrixElement(
-                    x: element.x,
-                    y: element.y,
-                    image: groundOnly
-                  )
-                )
 
+        return await withTaskGroup(of: Optional<ImageMatrixElement>.self) { taskGroup in
+            for (index, element) in matrix.enumerated() {
+                taskGroup.addTask {
+                    // calculate Otsu classification for this image element
+                    let otsu = element.image.binaryOtsuImage
+
+                    // apply connect component filtering and ground only logic
+                    if let filtered = otsu.connectedComponentFiltered(keepLargest: 2),
+                       let groundOnly = filtered.groundOnly
+                    {
+                        return ImageMatrixElement(
+                          x: element.x,
+                          y: element.y,
+                          image: groundOnly
+                        )
+                    } else {
+                        return nil
+                    }
+                }
             }
-        }
-        if newElements.count == matrix.count {
-            return PixelatedImage(from: newElements)
-              .addSky(height: halfHeight)
-        } else {
-            return nil
+            for await result in taskGroup {
+                if let result { newElements.append(result) }
+            }
+            
+            if newElements.count == matrix.count {
+                return PixelatedImage(from: newElements)
+                  .addSky(height: halfHeight)
+            } else {
+                return nil
+            }
         }
     }
 }

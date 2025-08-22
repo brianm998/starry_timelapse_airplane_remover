@@ -401,12 +401,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         self.set(state: .horizonDetection)
         // if not, create 
+        let config = await configManager.config()
         if let original = try await imageAccessor.load(frameIndex: frameIndex,
                                                        type: .original,
                                                        atSize: .original),
-           let horizonMask = await original.horizonMask
+           let horizonMask = await original.horizonMask(
+             at: frameIndex,
+              bottomPercentage: config.horizonBottomPercentage,
+              stripWidth: config.horizonStripWidth
+           )
         {
-        Log.d("frame \(frameIndex) horizon mask created")
+            Log.d("frame \(frameIndex) horizon mask created")
             try await imageAccessor.save(horizonMask,
                                          frameIndex: frameIndex,
                                          as: .horizon,
