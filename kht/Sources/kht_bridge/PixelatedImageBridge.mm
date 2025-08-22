@@ -1,6 +1,7 @@
 // PixelatedImageBridge.mm
 #import <opencv2/opencv.hpp>
 #import "PixelatedImageBridge.h"
+#import "HorizonResult.h"
 
 @implementation PixelatedImageBridge
 
@@ -76,8 +77,8 @@
     return [self imageFromMat:filtered];
 }
 
-// PixelatedImageBridge.mm
-+ (NSImage *)groundOnlyFrom:(NSImage *)image {
+// this is the last step in horizon detection, so it gives a HorizonResult  
++ (HorizonResult *)groundOnlyFrom:(NSImage *)image {
     // Convert NSImage → cv::Mat grayscale binary
     CGImageRef cgRef = [image CGImageForProposedRect:nil context:nil hints:nil];
     NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithCGImage:cgRef];
@@ -125,7 +126,33 @@
     cv::Mat finalMask;
     cv::bitwise_not(groundMask, finalMask);
 
-    return [self imageFromMat:finalMask];
+
+    // find highest black pixel
+
+    // Find coordinates of black pixels (ground)
+    std::vector<cv::Point> blackPoints;
+    cv::findNonZero(finalMask == 0, blackPoints);
+
+    int highestBlackY = INT_MAX;
+
+    // find highest black pixel
+    for (const auto& p : blackPoints) {
+      highestBlackY = std::min(highestBlackY, p.y); // topmost black pixel
+    }
+
+    // find lowest white pixel
+
+    std::vector<cv::Point> whitePoints;
+    cv::findNonZero(finalMask == 255, whitePoints);
+
+    int lowestWhiteY = INT_MIN;
+    for (const auto& p : whitePoints) {
+      lowestWhiteY = std::max(lowestWhiteY, p.y); // lowest white pixel
+    }
+
+    return [[HorizonResult alloc] initWithImage: [self imageFromMat:finalMask]
+				  highestBlackY: highestBlackY
+				   lowestWhiteY: lowestWhiteY];
 }
 
 @end

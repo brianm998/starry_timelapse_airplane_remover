@@ -1124,18 +1124,24 @@ public class ImageMatrixElement: @unchecked Sendable, Hashable, CustomStringConv
     public let y: Int
     public let width: Int
     public let height: Int
+    public let highestBlackY: Int?
+    public let lowestWhiteY: Int?
     
     public let image: PixelatedImage
     
     public init(x: Int,
                 y: Int,
-                image: PixelatedImage)
+                image: PixelatedImage,
+                highestBlackY: Int? = nil,
+                lowestWhiteY: Int? = nil)
     {
         self.x = x
         self.y = y
         self.image = image
         self.width = Int(image.width)
         self.height = Int(image.height)
+        self.highestBlackY = highestBlackY
+        self.lowestWhiteY = lowestWhiteY
     }
 
     public var sortablePixels: [SortablePixel] {
@@ -1176,6 +1182,24 @@ public class ImageMatrixElement: @unchecked Sendable, Hashable, CustomStringConv
     
     public var description: String { "MatrixElement: [\(x), \(y)] -> [\(width), \(height)]" }
 }
+
+extension Array where Element == ImageMatrixElement {
+    /// Returns the combined horizon extents across all elements in the array
+    func combinedHorizonExtents() -> (highestBlackY: Int?, lowestWhiteY: Int?) {
+        // Collect only non-nil values
+        let allHighestBlackY = self.compactMap { $0.highestBlackY }
+        let allLowestWhiteY  = self.compactMap { $0.lowestWhiteY }
+        
+        // Highest horizon = largest highestBlackY
+        let globalHighestBlackY = allHighestBlackY.max()
+        
+        // Lowest horizon = smallest lowestWhiteY
+        let globalLowestWhiteY = allLowestWhiteY.min()
+        
+        return (globalHighestBlackY, globalLowestWhiteY)
+    }
+}
+
 
 
 import Accelerate
@@ -1252,13 +1276,29 @@ extension PixelatedImage {
     }
 }
 
+public struct HorizonMask: Sendable { // XXX move thix
+    public let image: PixelatedImage
+    public let highestBlackY: Int
+    public let lowestWhiteY: Int
+}
+
 extension PixelatedImage {
     // should get rid of all but the ground, designed to run after Otsu classification and
-    // connected component filtering
-    public var groundOnly: PixelatedImage? {
-        guard let nsImg = self.nsImage else { return self }
-        let filtered = PixelatedImageBridge.groundOnly(from: nsImg)
-        return PixelatedImage(filtered.cgImage(forProposedRect: nil, context: nil, hints: nil)!)
+    // connected component filtering.  Returns HorizonMask, including the Y bounds of the horizon
+    public var groundOnly: HorizonMask? {
+        guard let nsImg = self.nsImage else { return nil }
+        let horizonResult = PixelatedImageBridge.groundOnly(from: nsImg)
+        if let image = horizonResult.image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+           let pixelatedImage = PixelatedImage(image)
+        {
+            return HorizonMask(
+              image: pixelatedImage,
+              highestBlackY: horizonResult.highestBlackY,
+              lowestWhiteY: horizonResult.lowestWhiteY
+            )
+        } else {
+            return nil
+        }
     }
 }
 
@@ -1268,7 +1308,7 @@ extension PixelatedImage {
     // tries to compute a binary ground mask, where the ground is zero (black) 
     public func horizonMask(at frameIndex: Int,
                             bottomPercentage: Double = 50,
-                            stripWidth: Int = 400) async -> PixelatedImage? {
+                            stripWidth: Int = 400) async -> HorizonMask? {
         /*
          horizon detection alg:
          * split frame image into bottom half, discarding top half
@@ -1309,10 +1349,13 @@ extension PixelatedImage {
                     if let filtered = otsu.connectedComponentFiltered(keepLargest: 2),
                        let groundOnly = filtered.groundOnly
                     {
+                        // deal with groundOnly highestBlackY lowestWhiteY
                         return ImageMatrixElement(
                           x: element.x,
                           y: element.y,
-                          image: groundOnly
+                          image: groundOnly.image,
+                          highestBlackY: groundOnly.highestBlackY,
+                          lowestWhiteY: groundOnly.lowestWhiteY
                         )
                     } else {
                         return nil
@@ -1324,8 +1367,16 @@ extension PixelatedImage {
             }
             
             if newElements.count == matrix.count {
-                return PixelatedImage(from: newElements)
-                  .addSky(height: halfHeight)
+                let (highestBlackY, lowestWhiteY) = newElements.combinedHorizonExtents()
+
+                let image = PixelatedImage(from: newElements)
+                    .addSky(height: halfHeight)
+                
+                return HorizonMask(
+                  image: image,
+                  highestBlackY: highestBlackY ?? 0,
+                  lowestWhiteY: lowestWhiteY ?? image.height
+                )
             } else {
                 return nil
             }

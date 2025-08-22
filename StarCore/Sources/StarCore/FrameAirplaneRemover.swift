@@ -1,6 +1,7 @@
 import Foundation
 import CoreGraphics
 import KHTSwift
+import kht_bridge
 import logging
 import Cocoa
 import Combine
@@ -383,16 +384,23 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public var numberOfAlignedFrames: Int { alignmentFrames.count }
     
 
-    private func loadOrCreateHorizonMask() async throws -> PixelatedImage {
+    private func loadOrCreateHorizonMask() async throws -> HorizonMask {
         Log.d("frame \(frameIndex) trying to load horizon mask")
         // load if possible
         do {
-            if let horizonMask = try await imageAccessor.load(frameIndex: frameIndex,
+            if let horizonMaskImage = try await imageAccessor.load(frameIndex: frameIndex,
                                                               type: .horizon,
-                                                              atSize: .original)
+                                                              atSize: .original),
+               let nsImage = horizonMaskImage.nsImage
             {
                 Log.d("frame \(frameIndex) successfully loaded horizon mask")
-                return horizonMask
+                
+                let result = HorizonHelper.horizonExtents(from: nsImage)
+                return HorizonMask(
+                  image: horizonMaskImage,
+                  highestBlackY: result.highestBlackY,
+                  lowestWhiteY: result.lowestWhiteY
+                )
             }
         } catch {
             Log.i("frame \(frameIndex) unable to load horizon mask: \(error)")
@@ -402,23 +410,25 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         self.set(state: .horizonDetection)
         // if not, create 
         let config = await configManager.config()
+        // load originalimage
         if let original = try await imageAccessor.load(frameIndex: frameIndex,
                                                        type: .original,
                                                        atSize: .original),
+           // calculate horizon mask from original image
            let horizonMask = await original.horizonMask(
              at: frameIndex,
-              bottomPercentage: config.horizonBottomPercentage,
-              stripWidth: config.horizonStripWidth
+             bottomPercentage: config.horizonBottomPercentage ?? 50,
+             stripWidth: config.horizonStripWidth ?? 400
            )
         {
             Log.d("frame \(frameIndex) horizon mask created")
-            try await imageAccessor.save(horizonMask,
+            try await imageAccessor.save(horizonMask.image,
                                          frameIndex: frameIndex,
                                          as: .horizon,
                                          atSize: .original,
                                          overwrite: true)
 
-            try await imageAccessor.save(horizonMask,
+            try await imageAccessor.save(horizonMask.image,
                                          frameIndex: frameIndex,
                                          as: .horizon,
                                          atSize: .preview,

@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #import "PixelatedImageBridge.h"
+#import "HorizonResult.h"
 
 @interface KHTBridgeLine : NSObject
 @property (nonatomic) double theta;
