@@ -24,26 +24,37 @@ struct InitialInstructionsView: View {
 
                         Spacer()
                           .frame(maxHeight: 10)
-                        
-                      // this copy could be better, more consise and to the point
+
                         Text("""
-                               Before processing a new image sequence, it is a good idea to set a bottom area to not process.
-                               This can speed up proccessing, ignoring the ground in the video.
-                               You are now seeing the edit frame mode, where you can adjust the red area at the bottom of the frame.
-                               Drag on the orange top or arrows on the side of it to adjust what part of the frame is processed.
-                               If this image sequence was shot on a moving tripod head, then it's a good idea to scrub through the video ('s' on keyboard)
-                               and make sure that none of the sky area ends up in the red box.
+                               Does this image sequence include the horizon?
+                               Or is it pointing only at the sky?
+                               If there is no ground in your image at all, turn off horizon detection below.
+                               Horizion detection is used to distinguish between ground and sky so that when replacing pixels close to the horizon we can ensure a better match.
                                """)
                           .font(.title2)
                           .foregroundColor(.white)
+
+                        Toggle("Horizon Detection Enabled",
+                               isOn: $viewModel.horizonDetectionEnabled)
+                          .foregroundColor(.white)
+
+                        
                        // expand this text, and add some buttons?
                        // add don't show again, put in preferenes
                         Button() {
                             viewModel.shouldShowInitialInstructions = false
+                            if viewModel.horizonDetectionEnabled {
+                                viewModel.showIgnoreLowerBar = false
+                                viewModel.processHorizonForAllFrames()
+                            }
                         } label: {
-                            Text("Close")
+                            if viewModel.horizonDetectionEnabled {
+                                Text("Run Horizon Detection")
+                            } else {
+                                Text("Close")
+                            }
                         }
-                          .buttonStyle(ShrinkingButton())
+                          .buttonStyle(ShrinkingButton(.clear))
                     }
                       .padding(20)
                       .background(.gray)

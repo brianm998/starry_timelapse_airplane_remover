@@ -384,7 +384,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public var numberOfAlignedFrames: Int { alignmentFrames.count }
     
 
-    private func loadOrCreateHorizonMask() async throws -> HorizonMask {
+    public func loadOrCreateHorizonMask() async throws -> HorizonMask {
         Log.d("frame \(frameIndex) trying to load horizon mask")
         // load if possible
         do {
@@ -802,7 +802,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                               overwrite: false)
         }
 
-        let _ = try await loadOrCreateHorizonMask()
+        //let _ = try await loadOrCreateHorizonMask()
         // XXX this is here for testing now
         // XXX use it for proper pixel removal when loaded
         
@@ -919,7 +919,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         mkdir(await self.outliersDirname)
 
 
-        let _ = try await loadOrCreateHorizonMask()
+        //let _ = try await loadOrCreateHorizonMask()
         // XXX this is here for testing now
         // XXX pass this to the blob detector later
 

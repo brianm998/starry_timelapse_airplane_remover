@@ -80,17 +80,17 @@ struct LeftPanel: View {
 
     var processButtonDisabled: Bool {
         let unprocessed = viewModel.frameStateMap[.unprocessed]?.count ?? 0
-        return unprocessed == 0 || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo
+        return unprocessed == 0 || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo || viewModel.isFindingAllHorizons
     }
 
     var updateButtonDisabled: Bool {
         let userModified = viewModel.frameStateMap[.userModified]?.count ?? 0
-        return userModified == 0 || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo
+        return userModified == 0 || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo || viewModel.isFindingAllHorizons
     }
 
     var renderButtonDisabled: Bool {
         let complete = viewModel.frameStateMap[.complete]?.count ?? 0
-        return complete != viewModel.frames.count || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo
+        return complete != viewModel.frames.count || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo || viewModel.isFindingAllHorizons
     }
     
     var processingButtons: some View {

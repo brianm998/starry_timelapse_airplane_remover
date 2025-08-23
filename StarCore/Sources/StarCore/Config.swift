@@ -220,6 +220,10 @@ public struct Config: Codable, Sendable, Transferable {
     // did the incoming video have an audio track?
     public var hasAudio: Bool?
 
+    // do horizon processing or not.
+    // if not set, defaults to true
+    public var horizonDetectionEnabled: Bool?
+
     // what percentage of the bottom of the screen to analyze for horizion
     // the horizon should be in this area
     public var horizonBottomPercentage: Double?
@@ -229,6 +233,10 @@ public struct Config: Codable, Sendable, Transferable {
     // too small and the horizon can get calculated wrong
     public var horizonStripWidth: Int?
 
+    // the vertical bounds of the horizon over the entire image sequence, if known
+    public var horizonMinY: Int?
+    public var horizonMaxY: Int?
+    
     mutating public func set(videoInfo: VideoInfo) {
         self.frameRate = videoInfo.frameRate
         self.codec = videoInfo.codec
@@ -287,13 +295,13 @@ public struct Config: Codable, Sendable, Transferable {
     //       debug logging view
     //       lines better connected, fixed LinearBlobConnector
     //       use multiple aligned images to clean up really noisy frame sequences
-    // 8.0.0 embed ffmpeg, ffprobe and align_image_stack in the app properly
+    // 0.8.0 embed ffmpeg, ffprobe and align_image_stack in the app properly
     //       allow starting directly with a video and having the image sequence extracted
     //       ability to render to video from gui
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "8.0.0"
+    public static let latestVersion = "0.8.0"
     
     public var basename: String {
         let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)"
@@ -363,10 +371,10 @@ public struct Config: Codable, Sendable, Transferable {
         case .horizon:
             switch size {
             case .original:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-horizon"
+                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-horizon"
 
             case .preview:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-horizon-previews"
+                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-horizon-previews"
             case .thumbnail:
                 return nil
             }

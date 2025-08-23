@@ -212,6 +212,7 @@ public final class ImageSequenceViewModel {
     var renderingCurrentFrame = false
 
     var isProcessingFrames = false
+    var isFindingAllHorizons = false
     var numberOfFramesProcessed = 0
 
     var isRenderingVideo = false
@@ -277,6 +278,16 @@ public final class ImageSequenceViewModel {
     var numberOfNeighborFrames: Int
     var numberOfAlignedNeighborFrames: Int
 
+    var horizonDetectionEnabled: Bool {
+        didSet {
+            if let config {
+                var realConfig = config.config()
+                realConfig.horizonDetectionEnabled = horizonDetectionEnabled
+                config.update(realConfig)
+            }
+        }
+    }
+    
     // the threshold used by used in goodPixels(thresholdFactor: )
     var pixelThreshold: Double = 1.2
     
@@ -413,6 +424,8 @@ public final class ImageSequenceViewModel {
         self.numberOfAlignedNeighborFrames = config.numberAlignedNeighborFrames
 
         self.numberOfNeighborFrames = config.numberFinalProcessingNeighborsNeeded
+
+        self.horizonDetectionEnabled = config.horizonDetectionEnabled ?? true
         
         self.numberOfFramesToProcessConcurrently = await Task { await maxFramesProcessing.getValue() }.value
         
@@ -1327,6 +1340,35 @@ public final class ImageSequenceViewModel {
                 errorCallback(error)
             }
         }
+    }
+
+    func processHorizonForAllFrames() {
+        if isFindingAllHorizons { return }
+        isFindingAllHorizons = true
+        Log.w("UNIMPLEMENTED")
+
+        Task.detached(priority: .medium) { [self] in
+
+            for frameViewModel in await self.frames {
+                if let frame = await frameViewModel.frame {
+                    let horizonMask = try await frame.loadOrCreateHorizonMask()
+                }
+            }
+            
+            await MainActor.run {
+                self.isFindingAllHorizons = false
+                // XXX maybe show a dialog here to tell new users what to do next
+            }
+        }
+        /*
+         * set a boolean saying we are processing horizon for all frames
+         * disbable left panel buttons until that is done
+         - actually process them all
+         * change FrameAirplaneRemover to not load horizon unless it really needs it
+         - add number of horizon images to process at once to this view
+         - set showIgnoreLowerBar = true after getting the right value for it
+         * make sure we show that action is happening in the GUI somewhere
+         */
     }
 }
 
