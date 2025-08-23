@@ -126,7 +126,8 @@ struct FrameEditView: View {
                           y: drag_y_offset - CGFloat(viewModel.frameHeight/2) + height/2)
             }
         }
-          .highPriorityGesture(self.selectionDragGesture)
+        //.highPriorityGesture(self.selectionDragGesture)
+          .gesture(self.selectionDragGesture)
           .cursor(self.currentCrosshairCursor)
     }
 
