@@ -34,6 +34,7 @@ public enum FrameProcessingState: Int,
     
     case unprocessed
     case horizonDetection
+    case horizonDetected
     case starAlignment    
     case creatingAlignedFrame    
     case subtractingNeighbor
@@ -75,6 +76,8 @@ public enum FrameProcessingState: Int,
             return "unprocessed"
         case .horizonDetection:
             return "finding horizon"
+        case .horizonDetected:
+            return "horizon found"
         case .starAlignment:
             return "aligning stars"
         case .creatingAlignedFrame:
@@ -146,6 +149,8 @@ public enum FrameProcessingState: Int,
             return false
         case .horizonDetection:
             return false
+        case .horizonDetected:
+            return false
         case .starAlignment:
             return false
         case .creatingAlignedFrame:
@@ -211,6 +216,8 @@ public enum FrameProcessingState: Int,
             return "unprocessed"
         case .horizonDetection:
             return "horizon"
+        case .horizonDetected:
+            return "horizon"
         case .starAlignment:
             return "align"
         case .creatingAlignedFrame:
@@ -275,6 +282,8 @@ public enum FrameProcessingState: Int,
             return .red
         case .horizonDetection:
             return .blue
+        case .horizonDetected:
+            return .green
         case .starAlignment:
             return .yellow
         case .creatingAlignedFrame:

@@ -147,10 +147,11 @@ extension PixelatedImage {
          */        
 
         // determine the new height 
-        let halfHeight = Int(Double(self.height)*bottomPercentage/100)
+        let bottomHeight = Int(Double(self.height)*bottomPercentage/100)
+        let topHeight = Int(Double(self.height)*(100-bottomPercentage)/100)
 
         // crop out the top part
-        let bottomCrop = self.bottomCrop(by: halfHeight)
+        let bottomCrop = self.bottomCrop(by: bottomHeight)
 
         // split into an array of smaller images
         let matrix = bottomCrop.splitIntoMatrix(maxWidth: stripWidth,
@@ -194,12 +195,18 @@ extension PixelatedImage {
                 let (horizonTopY, horizonBottomY) = newElements.combinedHorizonExtents()
 
                 let image = PixelatedImage(from: newElements)
-                    .addSky(height: halfHeight)
+                    .addSky(height: topHeight)
+
+                var _horizonTopY: Int = image.height
+                if let horizonTopY { _horizonTopY = horizonTopY + topHeight }
+
+                var _horizonBottomY: Int = 0
+                if let horizonBottomY { _horizonBottomY = horizonBottomY + topHeight }
                 
                 return HorizonMask(
                   image: image,
-                  horizonTopY: horizonTopY ?? 0,
-                  horizonBottomY: horizonBottomY ?? image.height
+                  horizonTopY: _horizonTopY,
+                  horizonBottomY: _horizonBottomY
                 )
             } else {
                 return nil
@@ -214,5 +221,111 @@ extension PixelatedImage {
         guard let nsImg = self.nsImage else { return nil }
         let filtered = PixelatedImageBridge.filterConnectedComponents(nsImg, keepLargest: n)
         return PixelatedImage(filtered.cgImage(forProposedRect: nil, context: nil, hints: nil)!)
+    }
+}
+
+extension PixelatedImage {
+    /// Returns a new image with `height` rows of white pixels
+    /// added to the top of the current image.
+    func addSky(height: Int) -> PixelatedImage {
+        guard height > 0 else { return self }
+
+        let newHeight = self.height + height
+        let comps = self.componentsPerPixel
+        let rowBytes = width * comps
+
+        switch imageData {
+        case .eightBit(let buffer):
+            let maxValue: UInt8 = .max
+            var newBuffer = [UInt8](repeating: 0, count: width * newHeight * comps)
+
+            // Fill top sky rows with white
+            for y in 0..<height {
+                let destBase = y * rowBytes
+                for x in 0..<width * comps {
+                    newBuffer[destBase + x] = maxValue
+                }
+            }
+
+            // Copy existing image data below sky
+            for row in 0..<self.height {
+                let srcBase = row * rowBytes
+                let destBase = (row + height) * rowBytes
+                newBuffer.replaceSubrange(destBase..<destBase + rowBytes,
+                                          with: buffer[srcBase..<srcBase + rowBytes])
+            }
+
+            return PixelatedImage(width: width,
+                                  height: newHeight,
+                                  imageData: .eightBit(newBuffer),
+                                  bitsPerPixel: bitsPerPixel,
+                                  bytesPerRow: width * bytesPerPixel,
+                                  bitsPerComponent: bitsPerComponent,
+                                  bytesPerPixel: bytesPerPixel,
+                                  bitmapInfo: bitmapInfo,
+                                  componentsPerPixel: comps,
+                                  colorSpace: colorSpace,
+                                  ciFormat: ciFormat)
+
+        case .sixteenBit(let buffer):
+            let maxValue: UInt16 = .max
+            var newBuffer = [UInt16](repeating: 0, count: width * newHeight * comps)
+
+            for y in 0..<height {
+                let destBase = y * rowBytes
+                for x in 0..<width * comps {
+                    newBuffer[destBase + x] = maxValue
+                }
+            }
+
+            for row in 0..<self.height {
+                let srcBase = row * rowBytes
+                let destBase = (row + height) * rowBytes
+                newBuffer.replaceSubrange(destBase..<destBase + rowBytes,
+                                          with: buffer[srcBase..<srcBase + rowBytes])
+            }
+
+            return PixelatedImage(width: width,
+                                  height: newHeight,
+                                  imageData: .sixteenBit(newBuffer),
+                                  bitsPerPixel: bitsPerPixel,
+                                  bytesPerRow: width * bytesPerPixel,
+                                  bitsPerComponent: bitsPerComponent,
+                                  bytesPerPixel: bytesPerPixel,
+                                  bitmapInfo: bitmapInfo,
+                                  componentsPerPixel: comps,
+                                  colorSpace: colorSpace,
+                                  ciFormat: ciFormat)
+
+        case .thirtyTwoBit(let buffer):
+            let maxValue: UInt32 = .max
+            var newBuffer = [UInt32](repeating: 0, count: width * newHeight * comps)
+
+            for y in 0..<height {
+                let destBase = y * rowBytes
+                for x in 0..<width * comps {
+                    newBuffer[destBase + x] = maxValue
+                }
+            }
+
+            for row in 0..<self.height {
+                let srcBase = row * rowBytes
+                let destBase = (row + height) * rowBytes
+                newBuffer.replaceSubrange(destBase..<destBase + rowBytes,
+                                          with: buffer[srcBase..<srcBase + rowBytes])
+            }
+
+            return PixelatedImage(width: width,
+                                  height: newHeight,
+                                  imageData: .thirtyTwoBit(newBuffer),
+                                  bitsPerPixel: bitsPerPixel,
+                                  bytesPerRow: width * bytesPerPixel,
+                                  bitsPerComponent: bitsPerComponent,
+                                  bytesPerPixel: bytesPerPixel,
+                                  bitmapInfo: bitmapInfo,
+                                  componentsPerPixel: comps,
+                                  colorSpace: colorSpace,
+                                  ciFormat: ciFormat)
+        }
     }
 }

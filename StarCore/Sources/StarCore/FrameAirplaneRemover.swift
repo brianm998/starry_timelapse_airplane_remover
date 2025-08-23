@@ -434,6 +434,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                          atSize: .preview,
                                          overwrite: true)
 
+            self.set(state: .horizonDetected)
             return horizonMask
         } else {
             throw "cannot create horizon mask"

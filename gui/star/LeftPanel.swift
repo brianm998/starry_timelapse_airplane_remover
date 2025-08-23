@@ -80,7 +80,7 @@ struct LeftPanel: View {
 
     var processButtonDisabled: Bool {
         let unprocessed = viewModel.frameStateMap[.unprocessed]?.count ?? 0
-        let horizon = viewModel.frameStateMap[.horizonDetection]?.count ?? 0
+        let horizon = viewModel.frameStateMap[.horizonDetected]?.count ?? 0
 
         return (unprocessed == 0 && horizon != viewModel.frames.count) || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo || viewModel.isFindingAllHorizons
     }
@@ -98,7 +98,7 @@ struct LeftPanel: View {
     var processingButtons: some View {
         VStack(alignment: .leading) {
             let unprocessed = viewModel.frameStateMap[.unprocessed]?.count ?? 0
-            let horizonCount = viewModel.frameStateMap[.horizonDetection]?.count ?? 0
+            let horizonCount = viewModel.frameStateMap[.horizonDetected]?.count ?? 0
 
             Button() {
                 viewModel.showProcessingOptionsSheet = true

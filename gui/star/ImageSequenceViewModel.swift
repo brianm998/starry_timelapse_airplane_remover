@@ -1391,9 +1391,9 @@ public final class ImageSequenceViewModel {
                 Log.i("got horizon stats \(horizonStats)")
                 await MainActor.run {
                     self.showIgnoreLowerBar = false
-                    self.ignoreLowerPixels = frameHeight-CGFloat(horizonStats.highestTopY)
-                    Log.i("ignoreLowerPixels \(ignoreLowerPixels)")
                     if let config {
+                        self.ignoreLowerPixels = frameHeight - CGFloat(horizonStats.highestTopY)
+                            Log.i("ignoreLowerPixels \(ignoreLowerPixels)")
                         var realConfig = config.config()
                         realConfig.ignoreLowerPixels = Int(ignoreLowerPixels)
                         config.update(realConfig)
