@@ -6,13 +6,13 @@ NS_ASSUME_NONNULL_BEGIN
 @interface HorizonResult : NSObject
 
 @property (nonatomic, strong) NSImage *image;
-@property (nonatomic, assign) NSInteger highestBlackY;
-@property (nonatomic, assign) NSInteger lowestWhiteY;
+@property (nonatomic, assign) NSInteger horizonTopY;
+@property (nonatomic, assign) NSInteger horizonBottomY;
 
 /// Convenience initializer
 - (instancetype)initWithImage:(NSImage *)image
-                highestBlackY:(NSInteger)highestBlackY
-                 lowestWhiteY:(NSInteger)lowestWhiteY;
+		  horizonTopY:(NSInteger)horizonTopY
+	       horizonBottomY:(NSInteger)horizonBottomY;
 
 @end
 

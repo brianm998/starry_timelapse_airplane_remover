@@ -1349,6 +1349,8 @@ public final class ImageSequenceViewModel {
 
         Task.detached(priority: .medium) { [self] in
 
+            //await withTaskGroup(of: Void.self) { taskGroup in
+            
             for frameViewModel in await self.frames {
                 if let frame = await frameViewModel.frame {
                     let horizonMask = try await frame.loadOrCreateHorizonMask()

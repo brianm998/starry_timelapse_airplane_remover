@@ -1124,24 +1124,24 @@ public class ImageMatrixElement: @unchecked Sendable, Hashable, CustomStringConv
     public let y: Int
     public let width: Int
     public let height: Int
-    public let highestBlackY: Int?
-    public let lowestWhiteY: Int?
+    public let horizonTopY: Int?
+    public let horizonBottomY: Int?
     
     public let image: PixelatedImage
     
     public init(x: Int,
                 y: Int,
                 image: PixelatedImage,
-                highestBlackY: Int? = nil,
-                lowestWhiteY: Int? = nil)
+                horizonTopY: Int? = nil,
+                horizonBottomY: Int? = nil)
     {
         self.x = x
         self.y = y
         self.image = image
         self.width = Int(image.width)
         self.height = Int(image.height)
-        self.highestBlackY = highestBlackY
-        self.lowestWhiteY = lowestWhiteY
+        self.horizonTopY = horizonTopY
+        self.horizonBottomY = horizonBottomY
     }
 
     public var sortablePixels: [SortablePixel] {
@@ -1185,15 +1185,15 @@ public class ImageMatrixElement: @unchecked Sendable, Hashable, CustomStringConv
 
 extension Array where Element == ImageMatrixElement {
     /// Returns the combined horizon extents across all elements in the array
-    func combinedHorizonExtents() -> (highestBlackY: Int?, lowestWhiteY: Int?) {
+    func combinedHorizonExtents() -> (horizonTopY: Int?, horizonBottomY: Int?) {
         // Collect only non-nil values
-        let allHighestBlackY = self.compactMap { $0.highestBlackY }
-        let allLowestWhiteY  = self.compactMap { $0.lowestWhiteY }
+        let allHighestBlackY = self.compactMap { $0.horizonTopY }
+        let allLowestWhiteY  = self.compactMap { $0.horizonBottomY }
         
-        // Highest horizon = largest highestBlackY
+        // Highest horizon = largest horizonTopY
         let globalHighestBlackY = allHighestBlackY.max()
         
-        // Lowest horizon = smallest lowestWhiteY
+        // Lowest horizon = smallest horizonBottomY
         let globalLowestWhiteY = allLowestWhiteY.min()
         
         return (globalHighestBlackY, globalLowestWhiteY)
@@ -1276,10 +1276,10 @@ extension PixelatedImage {
     }
 }
 
-public struct HorizonMask: Sendable { // XXX move thix
+public struct HorizonMask: Sendable { // XXX move this
     public let image: PixelatedImage
-    public let highestBlackY: Int
-    public let lowestWhiteY: Int
+    public let horizonTopY: Int
+    public let horizonBottomY: Int
 }
 
 extension PixelatedImage {
@@ -1293,8 +1293,8 @@ extension PixelatedImage {
         {
             return HorizonMask(
               image: pixelatedImage,
-              highestBlackY: horizonResult.highestBlackY,
-              lowestWhiteY: horizonResult.lowestWhiteY
+              horizonTopY: horizonResult.horizonTopY,
+              horizonBottomY: horizonResult.horizonBottomY
             )
         } else {
             return nil
@@ -1349,13 +1349,13 @@ extension PixelatedImage {
                     if let filtered = otsu.connectedComponentFiltered(keepLargest: 2),
                        let groundOnly = filtered.groundOnly
                     {
-                        // deal with groundOnly highestBlackY lowestWhiteY
+                        // deal with groundOnly horizonTopY horizonBottomY
                         return ImageMatrixElement(
                           x: element.x,
                           y: element.y,
                           image: groundOnly.image,
-                          highestBlackY: groundOnly.highestBlackY,
-                          lowestWhiteY: groundOnly.lowestWhiteY
+                          horizonTopY: groundOnly.horizonTopY,
+                          horizonBottomY: groundOnly.horizonBottomY
                         )
                     } else {
                         return nil
@@ -1367,15 +1367,15 @@ extension PixelatedImage {
             }
             
             if newElements.count == matrix.count {
-                let (highestBlackY, lowestWhiteY) = newElements.combinedHorizonExtents()
+                let (horizonTopY, horizonBottomY) = newElements.combinedHorizonExtents()
 
                 let image = PixelatedImage(from: newElements)
                     .addSky(height: halfHeight)
                 
                 return HorizonMask(
                   image: image,
-                  highestBlackY: highestBlackY ?? 0,
-                  lowestWhiteY: lowestWhiteY ?? image.height
+                  horizonTopY: horizonTopY ?? 0,
+                  horizonBottomY: horizonBottomY ?? image.height
                 )
             } else {
                 return nil

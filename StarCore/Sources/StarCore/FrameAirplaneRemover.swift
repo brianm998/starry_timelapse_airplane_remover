@@ -398,8 +398,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 let result = HorizonHelper.horizonExtents(from: nsImage)
                 return HorizonMask(
                   image: horizonMaskImage,
-                  highestBlackY: result.highestBlackY,
-                  lowestWhiteY: result.lowestWhiteY
+                  horizonTopY: result.horizonTopY,
+                  horizonBottomY: result.horizonBottomY
                 )
             }
         } catch {

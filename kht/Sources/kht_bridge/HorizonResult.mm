@@ -4,13 +4,13 @@
 @implementation HorizonResult
 
 - (instancetype)initWithImage:(NSImage *)image
-                highestBlackY:(NSInteger)highestBlackY
-                 lowestWhiteY:(NSInteger)lowestWhiteY {
-    self = [super init];
+		  horizonTopY:(NSInteger)horizonTopY
+	       horizonBottomY:(NSInteger)horizonBottomY {
+  self = [super init];
     if (self) {
         _image = image;
-        _highestBlackY = highestBlackY;
-        _lowestWhiteY = lowestWhiteY;
+        _horizonTopY = horizonTopY;
+        _horizonBottomY = horizonBottomY;
     }
     return self;
 }
@@ -33,25 +33,25 @@
     cv::threshold(gray, binary, 128, 255, cv::THRESH_BINARY);
 
     // --- Find horizon extents ---
-    int highestBlackY = -1;
+    int horizonTopY = -1;
     for (int y = 0; y < binary.rows; y++) {
         if (cv::countNonZero(binary.row(y) == 0) > 0) {
-            highestBlackY = y;
+            horizonTopY = y;
             break;
         }
     }
 
-    int lowestWhiteY = -1;
+    int horizonBottomY = -1;
     for (int y = binary.rows - 1; y >= 0; y--) {
         if (cv::countNonZero(binary.row(y) == 255) > 0) {
-            lowestWhiteY = y;
+            horizonBottomY = y;
             break;
         }
     }
-
+    
     HorizonResult *result = [[HorizonResult alloc] initWithImage:image
-                                                   highestBlackY:highestBlackY
-                                                    lowestWhiteY:lowestWhiteY];
+						     horizonTopY:horizonTopY
+						  horizonBottomY:horizonBottomY];
     return result;
 }
 

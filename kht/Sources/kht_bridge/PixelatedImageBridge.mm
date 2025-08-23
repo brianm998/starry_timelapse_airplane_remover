@@ -133,11 +133,11 @@
     std::vector<cv::Point> blackPoints;
     cv::findNonZero(finalMask == 0, blackPoints);
 
-    int highestBlackY = INT_MAX;
+    int horizonTopY = INT_MAX;
 
     // find highest black pixel
     for (const auto& p : blackPoints) {
-      highestBlackY = std::min(highestBlackY, p.y); // topmost black pixel
+      horizonTopY = std::min(horizonTopY, p.y); // topmost black pixel
     }
 
     // find lowest white pixel
@@ -145,14 +145,14 @@
     std::vector<cv::Point> whitePoints;
     cv::findNonZero(finalMask == 255, whitePoints);
 
-    int lowestWhiteY = INT_MIN;
+    int horizonBottomY = INT_MIN;
     for (const auto& p : whitePoints) {
-      lowestWhiteY = std::max(lowestWhiteY, p.y); // lowest white pixel
+      horizonBottomY = std::max(horizonBottomY, p.y); // lowest white pixel
     }
-
+    
     return [[HorizonResult alloc] initWithImage: [self imageFromMat:finalMask]
-				  highestBlackY: highestBlackY
-				   lowestWhiteY: lowestWhiteY];
+				    horizonTopY: horizonTopY
+				 horizonBottomY: horizonBottomY];
 }
 
 @end
