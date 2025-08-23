@@ -236,6 +236,9 @@ public struct Config: Codable, Sendable, Transferable {
     // the vertical bounds of the horizon over the entire image sequence, if known
     public var horizonMinY: Int?
     public var horizonMaxY: Int?
+
+    // max number of frames to concurrently horizon calculations on
+    public var maxConcurrentHorizonCalculations: Int? 
     
     mutating public func set(videoInfo: VideoInfo) {
         self.frameRate = videoInfo.frameRate

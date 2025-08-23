@@ -2,6 +2,15 @@ import SwiftUI
 
 struct InitialInstructionsView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+
+    @State private var maxConcurrentHorizonCalculationsString = ""
+    @State private var maxConcurrentHorizonCalculations: Int = 20 {
+        didSet {
+            if let config = viewModel.config {
+                maxConcurrentHorizonCalculations
+            }
+        }
+    }
     
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -34,10 +43,30 @@ struct InitialInstructionsView: View {
                           .font(.title2)
                           .foregroundColor(.white)
 
-                        Toggle("Horizon Detection Enabled",
-                               isOn: $viewModel.horizonDetectionEnabled)
-                          .foregroundColor(.white)
+                        HStack {
+                            Toggle("Horizon Detection Enabled",
+                                   isOn: $viewModel.horizonDetectionEnabled)
+                              .foregroundColor(.white)
 
+                            Text("Process ")
+                              .foregroundColor(.white)
+                            TextField("\(maxConcurrentHorizonCalculations)",
+                                      text: $maxConcurrentHorizonCalculationsString)
+//                              .focused($focusedField, equals: .trashLevel)
+                              .frame(maxWidth: 60)
+                              .onSubmit {
+                                  let filtered = maxConcurrentHorizonCalculationsString.filter { "0123456789".contains($0) }
+                                  if let newValue = Int(filtered),
+                                     newValue >= 0
+                                  {
+                                      maxConcurrentHorizonCalculations = newValue
+                                      maxConcurrentHorizonCalculationsString = "\(newValue)"
+                                  }
+//                                  self.focusedField = nil
+                              }
+                            Text(" at once")
+                              .foregroundColor(.white)
+                        }
                         
                        // expand this text, and add some buttons?
                        // add don't show again, put in preferenes
@@ -68,6 +97,13 @@ struct InitialInstructionsView: View {
                   .frame(maxHeight: 200)
             }
               .frame(maxWidth: .infinity, maxHeight: .infinity)
+              .onAppear {
+                  if let config = viewModel.config {
+                      var newConfig = config.config()
+                      newConfig.maxConcurrentHorizonCalculations = maxConcurrentHorizonCalculations
+                      config.update(newConfig)
+                  }
+             }
         }
     }
 }

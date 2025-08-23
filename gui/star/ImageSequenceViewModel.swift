@@ -288,7 +288,7 @@ public final class ImageSequenceViewModel {
         }
     }
     
-    // the threshold used by used in goodPixels(thresholdFactor: )
+    // the threshold used in goodPixels(thresholdFactor: )
     var pixelThreshold: Double = 1.2
     
     // number of frames in the sequence we're processing
@@ -1345,15 +1345,59 @@ public final class ImageSequenceViewModel {
     func processHorizonForAllFrames() {
         if isFindingAllHorizons { return }
         isFindingAllHorizons = true
-        Log.w("UNIMPLEMENTED")
 
+        var max = 30
+
+        if let config,
+           let maximum = config.config().maxConcurrentHorizonCalculations
+        {
+            max = maximum
+        }
+        
+        
         Task.detached(priority: .medium) { [self] in
 
-            //await withTaskGroup(of: Void.self) { taskGroup in
+            // use a semaphore to not do too many at once
+
+            let semaphore = AsyncSemaphore(value: max)
             
-            for frameViewModel in await self.frames {
-                if let frame = await frameViewModel.frame {
-                    let horizonMask = try await frame.loadOrCreateHorizonMask()
+            let allBounds =
+              try await withThrowingTaskGroup(of: Optional<HorizonBounds>.self) { taskGroup in
+
+                  for frameViewModel in await self.frames {
+                      taskGroup.addTask {
+                          await semaphore.wait()
+                          if let frame = await frameViewModel.frame {
+                              let ret = try await frame.loadOrCreateHorizonMask().bounds
+                              semaphore.signal()
+                              return ret
+                          } else {
+                              semaphore.signal()
+                              return nil
+                          }
+                      }
+                  }
+
+                  var results: [HorizonBounds] = []
+                  
+                  for try await result in taskGroup {
+                      if let result { results.append(result) }
+                  }
+                  
+                  return results
+              }
+
+            if let horizonStats = allBounds.calculateStats() {
+                Log.i("got horizon stats \(horizonStats)")
+                await MainActor.run {
+                    self.showIgnoreLowerBar = false
+                    self.ignoreLowerPixels = frameHeight-CGFloat(horizonStats.highestTopY)
+                    Log.i("ignoreLowerPixels \(ignoreLowerPixels)")
+                    if let config {
+                        var realConfig = config.config()
+                        realConfig.ignoreLowerPixels = Int(ignoreLowerPixels)
+                        config.update(realConfig)
+                    }
                 }
             }
             
@@ -1365,10 +1409,10 @@ public final class ImageSequenceViewModel {
         /*
          * set a boolean saying we are processing horizon for all frames
          * disbable left panel buttons until that is done
-         - actually process them all
+         * actually process them all
          * change FrameAirplaneRemover to not load horizon unless it really needs it
          - add number of horizon images to process at once to this view
-         - set showIgnoreLowerBar = true after getting the right value for it
+         * set showIgnoreLowerBar = true after getting the right value for it
          * make sure we show that action is happening in the GUI somewhere
          */
     }
