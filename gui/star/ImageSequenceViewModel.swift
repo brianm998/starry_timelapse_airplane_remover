@@ -1390,7 +1390,7 @@ public final class ImageSequenceViewModel {
             if let horizonStats = allBounds.calculateStats() {
                 Log.i("got horizon stats \(horizonStats)")
                 await MainActor.run {
-                    self.showIgnoreLowerBar = false
+                    //self.showIgnoreLowerBar = false
                     if let config {
                         self.ignoreLowerPixels = frameHeight - CGFloat(horizonStats.highestTopY)
                             Log.i("ignoreLowerPixels \(ignoreLowerPixels)")

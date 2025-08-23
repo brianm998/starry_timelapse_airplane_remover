@@ -73,7 +73,7 @@ struct InitialInstructionsView: View {
                         Button() {
                             viewModel.shouldShowInitialInstructions = false
                             if viewModel.horizonDetectionEnabled {
-                                viewModel.showIgnoreLowerBar = false
+                                //viewModel.showIgnoreLowerBar = false
                                 viewModel.processHorizonForAllFrames()
                             }
                         } label: {

@@ -47,7 +47,7 @@ public struct IgnoreBarView: View {
               .frame(width: viewModel.arrowLength, height: viewModel.arrowHeight) 
               .offset(x: (viewModel.frameWidth+viewModel.arrowLength)/2,
                       y: viewModel.frameHeight/2 - viewModel.ignoreLowerPixels)
-              .gesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.arrowHeight/2))
+              .highPriorityGesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.arrowHeight/2))
               .cursor(.resizeUpDown)
 
             // arrow on the left
@@ -57,7 +57,7 @@ public struct IgnoreBarView: View {
               .frame(width: viewModel.arrowLength, height: viewModel.arrowHeight) 
               .offset(x: -(viewModel.frameWidth+viewModel.arrowLength)/2,
                       y: viewModel.frameHeight/2 - viewModel.ignoreLowerPixels)
-              .gesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.arrowHeight/2))
+              .highPriorityGesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.arrowHeight/2))
               .cursor(.resizeUpDown)
 
             // orange line at the top for gestures
@@ -75,7 +75,7 @@ public struct IgnoreBarView: View {
               .frame(width: viewModel.frameWidth,
                      height: viewModel.lineWidth*20)
               .offset(y: viewModel.frameHeight/2 + viewModel.lineWidth/2 - viewModel.ignoreLowerPixels)
-              .gesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.lineWidth*4))
+              .highPriorityGesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.lineWidth*4))
               .cursor(.resizeUpDown)
 
             // Text on the top
@@ -93,7 +93,7 @@ public struct IgnoreBarView: View {
     func ignoreLowerPixelsGesture(adjustment: CGFloat) -> some Gesture {
         DragGesture() 
           .onChanged { gesture in
-              //Log.d("gesture.location.y \(gesture.location.y) viewModel.frameHeight \(viewModel.frameHeight) viewModel.ignoreLowerPixels \(viewModel.ignoreLowerPixels)")
+              Log.d("gesture.location.y \(gesture.location.y) viewModel.frameHeight \(viewModel.frameHeight) viewModel.ignoreLowerPixels \(viewModel.ignoreLowerPixels)")
               let offset = viewModel.frameHeight/2 - gesture.location.y
               if viewModel.ignoreLowerPixels + offset > 0 {
                   viewModel.ignoreLowerPixels = offset + adjustment
