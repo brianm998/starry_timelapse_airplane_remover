@@ -465,12 +465,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         if let firstImage = alignedImages.values.first {
 
-            let goodPixelImage = try await buildAlignedFrame(
+            var goodPixelImage = try await buildAlignedFrame(
               alignedImages: Array(alignedImages.values),
               width: width,
               height: firstImage.height,
               thresholdFactor: pixelThreshold
             )
+
+            let config = await configManager.config()
+            
+            if let height = config.earthAlignedImageCropAmount {
+                Log.d("frame \(frameIndex) adding sky")
+                goodPixelImage = goodPixelImage.addSky(height: height)
+            } else {
+                Log.d("frame \(frameIndex) NOT adding sky")
+            }
             
             try await imageAccessor.save(goodPixelImage,
                                          frameIndex: frameIndex,
@@ -510,14 +519,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // go ahead and create these now, for use later
         let config = await configManager.config()
         if config.horizonDetectionEnabled ?? true {
-            Task {
+//            Task {
                 do {
                     let _ = try await loadOrCreateEarthAlignedImage()
                     Log.i("frame \(frameIndex) successfully created earth aligned image")
                 } catch {
                     Log.e("frame \(frameIndex) unable to create earth aligned image: \(error)")
                 }
-            }
+  //          }
         } else {
             Log.i("frame \(frameIndex) is not configured to create an earth aligned image")
         }
