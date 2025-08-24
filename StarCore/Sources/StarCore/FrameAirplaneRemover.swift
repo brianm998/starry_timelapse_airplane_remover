@@ -938,7 +938,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             let config = await configManager.config()
             var cropAmount = 0
             if let amount = config.earthAlignedImageCropAmount {
-                cropAmount = amount - 40 // XXX hardcoded extra to allow for some sky
+                cropAmount = amount
             }
 
             // crop the neighbor frames before alignment

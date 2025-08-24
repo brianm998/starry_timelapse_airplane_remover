@@ -1405,7 +1405,8 @@ public final class ImageSequenceViewModel {
                 
                 await MainActor.run {
                     // save the height of the portion of the frames that is sky
-                    self.earthAlignedImageCropAmount = horizonStats.highestTopY
+                    // account for 50 extra pixels of sky on top of the highest part
+                    self.earthAlignedImageCropAmount = horizonStats.highestTopY - 50
                     
                     //self.showIgnoreLowerBar = false
                     if let config {
