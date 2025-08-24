@@ -18,20 +18,78 @@
 @end
 
 
+// Converts NSImage to cv::Mat
+// If forceRGBA is YES, always returns CV_8UC4
+// Otherwise it returns whatever channel count the bitmap already has.
+static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
+    CGImageRef cgRef = [image CGImageForProposedRect:NULL context:nil hints:nil];
+    if (!cgRef) {
+        return cv::Mat(); // empty
+    }
+    
+    size_t width  = CGImageGetWidth(cgRef);
+    size_t height = CGImageGetHeight(cgRef);
+    
+    if (forceRGBA) {
+        // Always create 4-channel RGBA bitmap
+        CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+        CGContextRef context = CGBitmapContextCreate(NULL,
+                                                     width,
+                                                     height,
+                                                     8,                       // bits per component
+                                                     width * 4,               // bytes per row
+                                                     colorSpace,
+                                                     kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+        CGContextDrawImage(context, CGRectMake(0, 0, width, height), cgRef);
+        
+        unsigned char *data = (unsigned char *)CGBitmapContextGetData(context);
+        cv::Mat mat((int)height, (int)width, CV_8UC4, data);
+        
+        // Copy the data into a standalone cv::Mat (otherwise freed with CGContextRelease)
+        cv::Mat matCopy = mat.clone();
+        
+        CGContextRelease(context);
+        CGColorSpaceRelease(colorSpace);
+        
+        return matCopy;
+    } else {
+        // Let NSBitmapImageRep decide channel count
+        NSBitmapImageRep *bitmapRep = [[NSBitmapImageRep alloc] initWithCGImage:cgRef];
+        NSInteger samplesPerPixel = [bitmapRep samplesPerPixel];
+        NSInteger bitsPerSample   = [bitmapRep bitsPerSample];
+        
+        if (bitsPerSample != 8) {
+            return cv::Mat();
+        }
+        
+        int cvType;
+        if (samplesPerPixel == 4) cvType = CV_8UC4;
+        else if (samplesPerPixel == 3) cvType = CV_8UC3;
+        else if (samplesPerPixel == 1) cvType = CV_8UC1;
+        else return cv::Mat();
+        
+        cv::Mat mat((int)[bitmapRep pixelsHigh],
+                    (int)[bitmapRep pixelsWide],
+                    cvType,
+                    (void *)[bitmapRep bitmapData],
+                    [bitmapRep bytesPerRow]);
+        
+        return mat.clone(); // clone to own memory
+    }
+}
+
 @implementation HorizonHelper
 
 + (HorizonResult *)horizonExtentsFromImage:(NSImage *)image {
-    // Convert NSImage -> cv::Mat (example conversion, you may already have a helper for this)
-    CGImageRef cgRef = [image CGImageForProposedRect:NULL context:nil hints:nil];
-    NSBitmapImageRep *bitmapRep = [[NSBitmapImageRep alloc] initWithCGImage:cgRef];
-    NSInteger width  = [bitmapRep pixelsWide];
-    NSInteger height = [bitmapRep pixelsHigh];
-
-    cv::Mat mat((int)height, (int)width, CV_8UC4, (void *)[bitmapRep bitmapData], [bitmapRep bytesPerRow]);
+    cv::Mat mat = cvMatFromNSImage(image, YES);
+    if (mat.empty()) {
+        return nil;
+    }
+    
     cv::Mat gray, binary;
     cv::cvtColor(mat, gray, cv::COLOR_RGBA2GRAY);
     cv::threshold(gray, binary, 128, 255, cv::THRESH_BINARY);
-
+    
     // --- Find horizon extents ---
     int horizonTopY = -1;
     for (int y = 0; y < binary.rows; y++) {
@@ -40,7 +98,7 @@
             break;
         }
     }
-
+    
     int horizonBottomY = -1;
     for (int y = binary.rows - 1; y >= 0; y--) {
         if (cv::countNonZero(binary.row(y) == 255) > 0) {
@@ -50,9 +108,11 @@
     }
     
     HorizonResult *result = [[HorizonResult alloc] initWithImage:image
-						     horizonTopY:horizonTopY
-						  horizonBottomY:horizonBottomY];
+                                                    horizonTopY:horizonTopY
+                                                 horizonBottomY:horizonBottomY];
     return result;
 }
+
+
 
 @end
