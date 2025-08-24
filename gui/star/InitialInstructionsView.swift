@@ -7,7 +7,9 @@ struct InitialInstructionsView: View {
     @State private var maxConcurrentHorizonCalculations: Int = 20 {
         didSet {
             if let config = viewModel.config {
-                maxConcurrentHorizonCalculations
+                var newConfig = config.config()
+                newConfig.maxConcurrentHorizonCalculations = maxConcurrentHorizonCalculations
+                config.update(newConfig)
             }
         }
     }
@@ -71,9 +73,19 @@ struct InitialInstructionsView: View {
                        // expand this text, and add some buttons?
                        // add don't show again, put in preferenes
                         Button() {
+                            if let config = viewModel.config {
+                                // force the config to save itself now
+                                // otherwise the horizonDetectionEnabled may
+                                // still be nil
+                                var newConfig = config.config()
+                                newConfig.horizonDetectionEnabled = viewModel.horizonDetectionEnabled
+                                config.update(newConfig)
+                            }
+                            
+                            
                             viewModel.shouldShowInitialInstructions = false
                             if viewModel.horizonDetectionEnabled {
-                                //viewModel.showIgnoreLowerBar = false
+                                viewModel.showIgnoreLowerBar = false
                                 viewModel.processHorizonForAllFrames()
                             }
                         } label: {
