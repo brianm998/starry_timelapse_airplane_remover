@@ -341,7 +341,7 @@ extension Array where Element == ImageMatrixElement {
         Log.d("XXX allLowestWhiteY \(allLowestWhiteY)")
         
         // Highest horizon = largest horizonTopY
-        let globalHighestBlackY = allHighestBlackY.max()
+        let globalHighestBlackY = allHighestBlackY.min()
         
         // Lowest horizon = smallest horizonBottomY
         let globalLowestWhiteY = allLowestWhiteY.max()
