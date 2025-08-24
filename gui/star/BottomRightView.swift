@@ -107,7 +107,7 @@ struct BottomRightView: View {
                 if viewModel.isFindingAllHorizons {
                     ProgressView()
                       .foregroundColor(.white)
-                    Text("Detection Horizon on all frames")
+                    Text("Detecting Horizon on all frames")
                       .foregroundColor(.white)
                 }
 
