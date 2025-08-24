@@ -17,8 +17,9 @@ public enum FrameViewMode: String,
 
     case original               // source frame with no changes
     case horizon                // computed horizon mask
-    case aligned                // aligned neighbor frame
-    case subtraction            // the result of subtracting an aligned neighbor frame
+    case starAligned            // star aligned neighbor frame
+    case earthAligned           // earth aligned neighbor frame
+    case subtraction            // the result of subtracting a star aligned neighbor frame
     case blobs                  // blobs detected from the subtraction frame
     case validation             // an image of exactly what pixels have been identified as unwanted
     case removeMask              // the remove mask created from the validation image
@@ -43,8 +44,10 @@ public enum FrameViewMode: String,
             "valid"
         case .processed:
             "processed"
-        case .aligned:
-            "aligned"
+        case .starAligned:
+            "starAligned"
+        case .earthAligned:
+            "earthAligned"
         case .horizon:
             "horizon"
         }
@@ -64,8 +67,10 @@ public enum FrameViewMode: String,
             "validation data"
         case .processed:
             "processed frame"
-        case .aligned:
-            "aligned frame"
+        case .earthAligned:
+            "earth aligned frame"
+        case .starAligned:
+            "star aligned frame"
         case .horizon:
             "horizon mask"
         }

@@ -1183,24 +1183,6 @@ public class ImageMatrixElement: @unchecked Sendable, Hashable, CustomStringConv
     public var description: String { "MatrixElement: [\(x), \(y)] -> [\(width), \(height)]" }
 }
 
-extension Array where Element == ImageMatrixElement {
-    /// Returns the combined horizon extents across all elements in the array
-    func combinedHorizonExtents() -> (horizonTopY: Int?, horizonBottomY: Int?) {
-        // Collect only non-nil values
-        let allHighestBlackY = self.compactMap { $0.horizonTopY }
-        let allLowestWhiteY  = self.compactMap { $0.horizonBottomY }
-        
-        // Highest horizon = largest horizonTopY
-        let globalHighestBlackY = allHighestBlackY.max()
-        
-        // Lowest horizon = smallest horizonBottomY
-        let globalLowestWhiteY = allLowestWhiteY.min()
-        
-        return (globalHighestBlackY, globalLowestWhiteY)
-    }
-}
-
-
 
 import Accelerate
 

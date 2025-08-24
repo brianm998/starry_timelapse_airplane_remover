@@ -9,8 +9,8 @@ import kht_bridge
 
 public struct HorizonMask: Sendable {
     public let image: PixelatedImage
-    public let horizonTopY: Int
-    public let horizonBottomY: Int
+    public let horizonTopY: Int // this is the bottom 
+    public let horizonBottomY: Int // this is the top :( swap these names
 
     public var bounds: HorizonBounds {
         HorizonBounds(
@@ -27,8 +27,8 @@ public struct HorizonBounds: Sendable {
 
 
 public struct HorizonStats {
-    public let lowestBottomY: Int
-    public let highestTopY: Int
+    public let lowestBottomY: Int // this is the top of the horizon
+    public let highestTopY: Int // this is the bottom of the horizon
     public let avgTopY: Double
     public let avgBottomY: Double
     public let medianTopY: Double
@@ -115,6 +115,7 @@ extension PixelatedImage {
         if let image = horizonResult.image.cgImage(forProposedRect: nil, context: nil, hints: nil),
            let pixelatedImage = PixelatedImage(image)
         {
+            Log.d("XXX got horizonResult.horizonTopY \(horizonResult.horizonTopY) horizonResult.horizonBottomY \(horizonResult.horizonBottomY)")
             return HorizonMask(
               image: pixelatedImage,
               horizonTopY: horizonResult.horizonTopY,
@@ -329,3 +330,26 @@ extension PixelatedImage {
         }
     }
 }
+
+extension Array where Element == ImageMatrixElement {
+    /// Returns the combined horizon extents across all elements in the array
+    func combinedHorizonExtents() -> (horizonTopY: Int?, horizonBottomY: Int?) {
+        // Collect only non-nil values
+        let allHighestBlackY = self.compactMap { $0.horizonTopY }
+        let allLowestWhiteY  = self.compactMap { $0.horizonBottomY }
+        Log.d("XXX allHighestBlackY \(allHighestBlackY)")
+        Log.d("XXX allLowestWhiteY \(allLowestWhiteY)")
+        
+        // Highest horizon = largest horizonTopY
+        let globalHighestBlackY = allHighestBlackY.max()
+        
+        // Lowest horizon = smallest horizonBottomY
+        let globalLowestWhiteY = allLowestWhiteY.max()
+
+        Log.d("XXX (\(globalHighestBlackY), \(globalLowestWhiteY))")
+        
+        return (globalHighestBlackY, globalLowestWhiteY)
+    }
+}
+
+

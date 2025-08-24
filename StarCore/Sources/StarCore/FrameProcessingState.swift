@@ -36,7 +36,9 @@ public enum FrameProcessingState: Int,
     case horizonDetection
     case horizonDetected
     case starAlignment    
-    case creatingAlignedFrame    
+    case earthAlignment    
+    case creatingStarAlignedFrame
+    case creatingEarthAlignedFrame
     case subtractingNeighbor
     case assemblingPixels
     case sortingPixels
@@ -80,8 +82,12 @@ public enum FrameProcessingState: Int,
             return "horizon found"
         case .starAlignment:
             return "aligning stars"
-        case .creatingAlignedFrame:
-            return "creating aligned frame"
+        case .earthAlignment:
+            return "aligning earth"
+        case .creatingStarAlignedFrame:
+            return "creating star aligned frame"
+        case .creatingEarthAlignedFrame:
+            return "creating earth aligned frame"
         case .subtractingNeighbor:
             return "subtracting aligned stars"
         case .assemblingPixels:
@@ -153,7 +159,11 @@ public enum FrameProcessingState: Int,
             return false
         case .starAlignment:
             return false
-        case .creatingAlignedFrame:
+        case .earthAlignment:
+            return false
+        case .creatingStarAlignedFrame:
+            return false
+        case .creatingEarthAlignedFrame:
             return false
         case .subtractingNeighbor:
             return false
@@ -219,9 +229,13 @@ public enum FrameProcessingState: Int,
         case .horizonDetected:
             return "horizon"
         case .starAlignment:
-            return "align"
-        case .creatingAlignedFrame:
-            return "combine align"
+            return "star align"
+        case .earthAlignment:
+            return "earth align"
+        case .creatingStarAlignedFrame:
+            return "combine star align"
+        case .creatingEarthAlignedFrame:
+            return "combine earth align"
         case .subtractingNeighbor:
             return "subtract"
         case .assemblingPixels:
@@ -286,8 +300,12 @@ public enum FrameProcessingState: Int,
             return .green
         case .starAlignment:
             return .yellow
-        case .creatingAlignedFrame:
+        case .earthAlignment:
             return .cyan
+        case .creatingStarAlignedFrame:
+            return .cyan
+        case .creatingEarthAlignedFrame:
+            return .purple
         case .subtractingNeighbor:
             return .orange
         case .assemblingPixels:

@@ -440,21 +440,85 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             throw "cannot create horizon mask"
         }
     }
+
+    // load or create an earth aligned image for this frame
+    // which will have the top earthAlignedImageCropAmount of the frame removed
+    // and then aligned with neighbors 
+    private func loadOrCreateEarthAlignedImage() async throws -> PixelatedImage {
+        if let alignedFrame = try await imageAccessor.load(frameIndex: frameIndex,
+                                                           type: .earthAligned,
+                                                           atSize: .original)
+        {
+            return alignedFrame
+        }
+
+        // with no saved aligned frame, first load or create the set of aligned frames
+        // that we used to create the final aligned frame
+        let alignedImages = try await loadOrCreateEarthAlignedImages()
+        
+        self.set(state: .creatingEarthAlignedFrame)
+        
+        if let firstImage = alignedImages.values.first {
+
+            let goodPixelImage = try await buildAlignedFrame(
+              alignedImages: Array(alignedImages.values),
+              width: width,
+              height: firstImage.height,
+              thresholdFactor: pixelThreshold
+            )
+            
+            try await imageAccessor.save(goodPixelImage,
+                                         frameIndex: frameIndex,
+                                         as: .earthAligned,
+                                         atSize: .original,
+                                         overwrite: true)
+
+            try await imageAccessor.save(goodPixelImage,
+                                         frameIndex: frameIndex,
+                                         as: .earthAligned,
+                                         atSize: .preview,
+                                         overwrite: true)
+
+            // keep track of the number of alignment images used
+            // so we can make sure it's the same as the desired amount later
+            try self.write(numberOfAlignedImagesForThisFrame: alignedImages.count)
+
+            // if everything above here has worked,
+            // then we can delete all intermediate images we used to compute the goodPixelImage
+            removeEarthAlignedImages()
+
+            return goodPixelImage
+        }
+
+        throw "unable to align earth images"
+    }
     
     // load or create a star aligned image for this frame
     // this image is a composite of numberOfAlignedFrames neighbor images
     // which have been all star-aligned with the frame at frameIndex.
     // We then filter out pixels which are abberently brighter by self.pixelThreshold
     // than the average for that location in all aligned images
-    private func loadOrCreateStarAlignedImage() async throws  -> PixelatedImage {
+    private func loadOrCreateStarAlignedImage() async throws -> PixelatedImage {
+
+        // XXX XXX XXX TESTING XXX XXX XXX
+        // XXX XXX XXX TESTING XXX XXX XXX
+        // XXX XXX XXX TESTING XXX XXX XXX
+        Task {
+            let _ = try await loadOrCreateEarthAlignedImage()
+        }
+        // XXX XXX XXX TESTING XXX XXX XXX
+        // XXX XXX XXX TESTING XXX XXX XXX
+        // XXX XXX XXX TESTING XXX XXX XXX
+
+        
         // load or create the aligned frame
         if let alignedFrame = try await imageAccessor.load(frameIndex: frameIndex,
-                                                           type: .aligned,
+                                                           type: .starAligned,
                                                            atSize: .original)
         {
             // check for number of aligned images, and re-do if it's different
             if let numberAligned = self.readNumberOfAlignedImagesForThisFrame() {
-                if numberOfAlignedFrames == numberAligned {
+                if numberOfAlignedFrames == numberAligned || numberOfAlignedFrames > imageSequence?.filenames.count ?? 0 {
                     // we have both an existing aligned frame, and a saved number of aligned
                     // images used to calculate that frame that matches the expected number,
                     // so we can just return the aligned frame we found.
@@ -477,7 +541,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // that we used to create the final aligned frame
         let alignedImages = try await loadOrCreateStarAlignedImages()
 
-        self.set(state: .creatingAlignedFrame)
+        self.set(state: .creatingStarAlignedFrame)
         
         if let firstImage = alignedImages.values.first {
 
@@ -490,13 +554,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             
             try await imageAccessor.save(goodPixelImage,
                                          frameIndex: frameIndex,
-                                         as: .aligned,
+                                         as: .starAligned,
                                          atSize: .original,
                                          overwrite: true)
 
             try await imageAccessor.save(goodPixelImage,
                                          frameIndex: frameIndex,
-                                         as: .aligned,
+                                         as: .starAligned,
                                          atSize: .preview,
                                          overwrite: true)
 
@@ -517,7 +581,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     let numberOfAlignedImagesFilename = "number_of_aligned_images.txt"
     
     private func write(numberOfAlignedImagesForThisFrame: Int) throws {
-        if let dirname = imageAccessor.dirForImage(ofType: .aligned,
+        if let dirname = imageAccessor.dirForImage(ofType: .starAligned,
                                                    atSize: .original)
         {
             let dirname = "\(dirname)/\(frameIndex)"
@@ -529,7 +593,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
     
     public func readNumberOfAlignedImagesForThisFrame() -> Int? {
-        if let dirname = imageAccessor.dirForImage(ofType: .aligned,
+        if let dirname = imageAccessor.dirForImage(ofType: .starAligned,
                                                    atSize: .original)
         {
             let dirname = "\(dirname)/\(frameIndex)"
@@ -541,7 +605,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     
     public func removeNumberOfAlignedImagesForThisFrameFile() throws {
         // get rid of any existing .txt files
-        if let dirname = imageAccessor.dirForImage(ofType: .aligned,
+        if let dirname = imageAccessor.dirForImage(ofType: .starAligned,
                                                    atSize: .original)
         {
             let dirname = "\(dirname)/\(frameIndex)"
@@ -552,7 +616,19 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
     public func removeStarAlignedImages() {
         // get rid of any existing files
-        if let dirname = imageAccessor.dirForImage(ofType: .aligned,
+        if let dirname = imageAccessor.dirForImage(ofType: .starAligned,
+                                                   atSize: .original)
+        {
+            let dirname = "\(dirname)/\(frameIndex)"
+            StarCore.mkdir(dirname)
+            try? removeFiles(withSuffix: ".tiff", in: dirname)
+            try? removeFiles(withSuffix: ".tif", in: dirname)
+        }
+    }
+
+    public func removeEarthAlignedImages() {
+        // get rid of any existing files
+        if let dirname = imageAccessor.dirForImage(ofType: .earthAligned,
                                                    atSize: .original)
         {
             let dirname = "\(dirname)/\(frameIndex)"
@@ -591,6 +667,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return alignedImages
     }
     
+    private func loadOrCreateEarthAlignedImages() async throws  -> [Int:PixelatedImage] {
+        var alignedImages = try await loadEarthAlignedImages()
+
+        if numberOfAlignedFrames == alignedImages.count || numberOfAlignedFrames > imageSequence?.filenames.count ?? 0 {
+
+            Log.w("frame \(frameIndex) alignedImages.count != numberOfAlignedFrames (\(alignedImages.count) != \(numberOfAlignedFrames))")
+
+            removeEarthAlignedImages()
+            
+            // try creating the earth aligned images if we couldn't load them
+            alignedImages = try await createEarthAlignedImages()
+        }
+        return alignedImages
+    }
+    
     private var alignmentFrames: [Int] = []
     private let baseFilename: String
 
@@ -602,7 +693,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
         var ret: [Int:String] = [:]
         for alignmentFrame in alignmentFrames {
-            ret[alignmentFrame] = imageSequence.filenames[alignmentFrame]
+            if alignmentFrame < imageSequence.filenames.count {
+                ret[alignmentFrame] = imageSequence.filenames[alignmentFrame]
+            }
         }
         return ret
     }
@@ -643,14 +736,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         var alignedImages: [Int: PixelatedImage] = [:]
 
 
-        if let dirname = imageAccessor.dirForImage(ofType: .aligned,
+        if let dirname = imageAccessor.dirForImage(ofType: .starAligned,
                                                    atSize: .original)
         {
             let dirname = "\(dirname)/\(frameIndex)"
             
             for alignmentFrameIndex in alignmentFrames {
-                if alignmentFrameIndex != frameIndex {
-
+                if alignmentFrameIndex != frameIndex,
+                   alignmentFrameIndex < imageSequence.filenames.count
+                {
                     let origFullPath = imageSequence.filenames[alignmentFrameIndex]
 
                     if let origFilename = origFullPath.substringAfterLastSlash() {
@@ -667,12 +761,52 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
 
-        Log.d("loaded \(alignedImages.count) aligned images")
+        Log.d("loaded \(alignedImages.count) star aligned images")
         
         return alignedImages
     }
 
-    // creates aligned neighboring frames
+    private func loadEarthAlignedImages() async throws -> [Int: PixelatedImage] {
+        guard let imageSequence else {
+            let error = "cannot load earth aligned images with no image sequence"
+            Log.e(error)
+            throw error
+        }
+        var alignedImages: [Int: PixelatedImage] = [:]
+
+
+        if let dirname = imageAccessor.dirForImage(ofType: .earthAligned,
+                                                   atSize: .original)
+        {
+            let dirname = "\(dirname)/\(frameIndex)"
+            
+            for alignmentFrameIndex in alignmentFrames {
+                if alignmentFrameIndex != frameIndex {
+
+                    if alignmentFrameIndex < imageSequence.filenames.count {
+                        let origFullPath = imageSequence.filenames[alignmentFrameIndex]
+
+                        if let origFilename = origFullPath.substringAfterLastSlash() {
+                            
+                            let alignedFilename = "\(dirname)/\(origFilename)"
+
+                            if FileManager.default.fileExists(atPath: alignedFilename) {
+                                Log.d("file exists at \(alignedFilename)")
+                                let alignedFrame = try await imageSequence.getImage(withName: alignedFilename).image()
+                                alignedImages[alignmentFrameIndex] = alignedFrame
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Log.d("loaded \(alignedImages.count) earth aligned images")
+        
+        return alignedImages
+    }
+
+    // creates star aligned neighboring frames
     private func createStarAlignedImages() async throws -> [Int: PixelatedImage] {
         Log.d("frame \(frameIndex) starAlignedImages")
         guard let imageSequence else {
@@ -685,7 +819,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         // create the aligned images if not found
         Log.d("frame \(frameIndex) creating aligned frame")
-        if let dirname = imageAccessor.dirForImage(ofType: .aligned,
+        if let dirname = imageAccessor.dirForImage(ofType: .starAligned,
                                                    atSize: .original)
         {
             let dirname = "\(dirname)/\(frameIndex)"
@@ -702,6 +836,111 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             let alignedFilenames = try await StarAlignment.align(alignmentFilenames,
                                                                  to: baseFilename,
                                                                  inDir: dirname)
+
+            var ret: [Int:PixelatedImage] = [:]
+
+            for (index, alignedFilename) in alignedFilenames {
+
+                Log.d("frame \(frameIndex) alignedFilename \(String(describing: alignedFilename))")
+
+                Log.d("frame \(frameIndex) got aligned filename \(alignedFilename)")
+
+                if FileManager.default.fileExists(atPath: alignedFilename) {
+                    let alignedFrame = try await imageSequence.getImage(withName: alignedFilename).image()
+                    
+                    // XXX maybe not preview all aligned images anymore?
+                    /*
+                     try await imageAccessor.save(alignedFrame,
+                     frameIndex: frameIndex,
+                     as: .aligned,
+                     atSize: .preview,
+                     overwrite: false)
+                     */
+                    ret[index] = alignedFrame
+                } else {
+                    // XXX this isn't handled well
+                    Log.e("frame \(frameIndex) could not load aligned frame")
+                }
+            }
+
+
+            return ret
+        } else {
+            Log.w("frame \(frameIndex) no dirname for aligned original images")
+        }
+
+        return [:]
+    }
+    
+    // creates earth aligned neighboring frames
+    private func createEarthAlignedImages() async throws -> [Int: PixelatedImage] {
+        Log.d("frame \(frameIndex) earthAlignedImages")
+        guard let imageSequence else {
+            let error = "cannot align earth images without an image sequence"
+            Log.e(error)
+            throw error
+        }
+
+        Log.d("frame \(frameIndex) creating new images")
+        
+        // create the aligned images if not found
+        Log.d("frame \(frameIndex) creating aligned frame")
+        if let dirname = imageAccessor.dirForImage(ofType: .earthAligned,
+                                                   atSize: .original)
+        {
+            let croppedDirname = "\(dirname)/\(frameIndex)/cropped"
+            StarCore.mkdir(croppedDirname)
+            let dirname = "\(dirname)/\(frameIndex)"
+            StarCore.mkdir(dirname)
+            Log.d("frame \(frameIndex) creating aligned frame in \(dirname)")
+            self.set(state: .earthAlignment)
+
+            Log.d("frame \(frameIndex) alignedFilename start")
+
+
+            
+            /*
+             for earth alignment, we first need to load up all the aligned filenames
+             as PixelatedImages, then saved them with the sky cropped out.
+
+             and then pass those filenames to .align below
+             
+             and delete the filenames after successful alignment
+             
+             */
+
+            var croppedAlignmentFilenames: [Int:String] = [:]
+
+            let config = await configManager.config()
+            var cropAmount = 0
+            if let amount = config.earthAlignedImageCropAmount {
+                cropAmount = amount - 50 // XXX hardcoded extra to allow for some sky
+            }
+            
+            for (index, alignmentFilename) in alignmentFilenames {
+                // load the alignment frame and crop it
+                if let alignmentFrame = try await loadImageInt(filename: alignmentFilename) {
+                    // crop it
+                    let cropped = alignmentFrame.bottomCrop(by: height-cropAmount)
+
+                    let url = URL(fileURLWithPath: alignmentFilename)
+                    let filename = url.lastPathComponent
+                    let croppedFilename = "\(croppedDirname)/\(filename)"
+
+                    Log.d("writing croppedFilename \(croppedFilename)")
+                    
+                    try cropped.writeTIFFEncoding(toFilename: croppedFilename)
+
+                    croppedAlignmentFilenames[index] = croppedFilename
+                }
+            }
+            
+            let alignedFilenames =
+              try await StarAlignment.align(
+                croppedAlignmentFilenames,
+                to: baseFilename,
+                inDir: dirname
+              )
 
             var ret: [Int:PixelatedImage] = [:]
 
@@ -1008,7 +1247,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
             } else if !loadOnly {
                 // XXX make this shit happen here for no better reason :)
-                let _ = try await loadOrCreateHorizonMask()
+                //let _ = try await loadOrCreateHorizonMask()
         
                 // potentially recalculate the alignment image if necessary
                 let _ = try await self.loadOrCreateStarAlignedImage()
@@ -2520,3 +2759,4 @@ func buildAlignedFrame(
         ciFormat: first.ciFormat
     )
 }
+

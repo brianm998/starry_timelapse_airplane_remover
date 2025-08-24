@@ -314,7 +314,9 @@ public struct ImageAccessor: Sendable {
                     return (dir, baseFileName)
                 case .horizon:
                     return (dir, baseFileName)
-                case .aligned:
+                case .starAligned:
+                    return (dir, baseFileName)
+                case .earthAligned:
                     return (dir, baseFileName)
                 case .original:
                     return (dir, baseFileName)
@@ -364,7 +366,10 @@ public struct ImageAccessor: Sendable {
             case .original:
                 break           // don't delete the original images
 
-            case .aligned:
+            case .starAligned:
+                break     
+
+            case .earthAligned:
                 break     
 
             case .subtraction:

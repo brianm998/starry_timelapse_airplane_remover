@@ -17,6 +17,8 @@ You should have received a copy of the GNU General Public License along with sta
 
 /*
  This class alows using panotools via hugin to map the sky from one frame onto another
+
+ It also is now used for aligning the earth, with sky cropped images
  */
 public class StarAlignment {
     // align_image_stack is bundled with Star directly
@@ -27,10 +29,10 @@ public class StarAlignment {
                              to referenceImageName: String,
                              inDir outputDirname: String) async throws -> [Int:String]
     {
-        Log.d("star align 1 outputDirname \(outputDirname)")
+        Log.d("align 1 outputDirname \(outputDirname)")
         StarCore.mkdir(outputDirname)
         return try await starAlignmentMonitor.load() { 
-            Log.d("star align 2")
+            Log.d("align 2")
             return StarAlignment.alignInt(alignmentImageNames,
                                          to: referenceImageName,
                                          inDir: outputDirname)
@@ -41,7 +43,7 @@ public class StarAlignment {
                                  to referenceImageName: String,
                                  inDir outputDirname: String) -> [Int:String]
     {
-        Log.d("doing star alignment of referenceImageName \(referenceImageName) to alignmentImageNames \(alignmentImageNames) in outputDirname \(outputDirname)")
+        Log.d("doing alignment of referenceImageName \(referenceImageName) to alignmentImageNames \(alignmentImageNames) in outputDirname \(outputDirname)")
         
         let comps = referenceImageName.components(separatedBy: "/")
         let baseFile = comps[comps.count-1]
@@ -62,9 +64,10 @@ public class StarAlignment {
             try ObjC.catchException {
                 let args = ["--align-to-first",
                             "--use-given-order",
+                            "--gpu", // XXX testing this one XXX
                             "-a", baseName,
                             referenceImageName] + sortedFilenames
-                // first try to run hugin star alignment
+                // first try to run hugin alignment
 
                 try shellOut(to: ToolPaths.alignImageStack,
                              arguments: args,
@@ -142,7 +145,7 @@ public class StarAlignment {
             }
         }
 
-        Log.e("star alignment totally failed :(")
+        Log.e("alignment totally failed :(")
         
         // we were unsuccessful running the alignment and
         // also both ln and cp from the orig failed :(

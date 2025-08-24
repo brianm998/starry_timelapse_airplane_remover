@@ -365,13 +365,23 @@ public struct Config: Codable, Sendable, Transferable {
             case .thumbnail:
                 return "\(self.outputPath)/\(self.basename)-thumbnails"
             }
-        case .aligned:
+        case .starAligned:
             switch size {
             case .original:
                 return "\(self.outputPath)/\(self.imageSequenceDirname)-star-aligned"
 
             case .preview:
                 return "\(self.outputPath)/\(self.imageSequenceDirname)-star-aligned-previews"
+            case .thumbnail:
+                return nil
+            }
+        case .earthAligned:
+            switch size {
+            case .original:
+                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-earth-aligned"
+
+            case .preview:
+                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-earth-aligned-previews"
             case .thumbnail:
                 return nil
             }
@@ -436,7 +446,8 @@ public struct Config: Codable, Sendable, Transferable {
     public var allImageDirnames: [String] {
         var ret: [String] = []
         
-        if let dir = self.dirForImage(ofType: .aligned) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .starAligned) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .earthAligned) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .horizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .subtraction) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .validation) { ret.append(dir) }
@@ -444,7 +455,8 @@ public struct Config: Codable, Sendable, Transferable {
         
         if self.writeFramePreviewFiles {
             if let dir = self.dirForImage(ofType: .original, atSize: .preview) { ret.append(dir) }
-            if let dir = self.dirForImage(ofType: .aligned, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .starAligned, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .earthAligned, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .horizon, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .subtraction, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .validation, atSize: .preview) { ret.append(dir) }

@@ -998,10 +998,10 @@ public final class ImageSequenceViewModel {
             var existingImages: Set<FrameViewMode> = [.original]
             
             if frameToClear.imageAccessor.imageExists(frameIndex: frameToClear.frameIndex,
-                                                      ofType: .aligned,
+                                                      ofType: .starAligned,
                                                       atSize: .original)
             {
-                existingImages.insert(.aligned)
+                existingImages.insert(.starAligned)
             }
 
             if frameToClear.imageAccessor.imageExists(frameIndex: frameToClear.frameIndex,
@@ -1405,12 +1405,12 @@ public final class ImageSequenceViewModel {
                 
                 await MainActor.run {
                     // save the height of the portion of the frames that is sky
-                    self.earthAlignedImageCropAmount = horizonStats.lowestBottomY
+                    self.earthAlignedImageCropAmount = horizonStats.highestTopY
                     
                     //self.showIgnoreLowerBar = false
                     if let config {
-                        self.ignoreLowerPixels = frameHeight - CGFloat(horizonStats.highestTopY)
-                        Log.i("ignoreLowerPixels \(ignoreLowerPixels)")
+                        self.ignoreLowerPixels = frameHeight - CGFloat(horizonStats.lowestBottomY)
+                        Log.i("ignoreLowerPixels \(ignoreLowerPixels) = \(frameHeight) - \(horizonStats.lowestBottomY)")
                         var realConfig = config.config()
                         realConfig.ignoreLowerPixels = Int(ignoreLowerPixels)
                         config.update(realConfig)

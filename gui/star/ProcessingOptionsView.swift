@@ -18,6 +18,7 @@ struct ProcessingOptionsView: View {
             VStack {
                 Space(height: 20)
                 let unprocessed = viewModel.frameStateMap[.unprocessed]?.count ?? 0
+                let horizonCount = viewModel.frameStateMap[.horizonDetected]?.count ?? 0
 
                 Text("Image Sequence Processing Options")
                   .font(.title)
@@ -108,7 +109,7 @@ struct ProcessingOptionsView: View {
                         viewModel.processFrames(from: 0)
                         self.isVisible = false
                     } label: {
-                        Text("Process \(unprocessed) frames")
+                        Text("Process \(unprocessed + horizonCount) frames")
                     }
                       .buttonStyle(.borderedProminent)
                       .tint(.blue)
