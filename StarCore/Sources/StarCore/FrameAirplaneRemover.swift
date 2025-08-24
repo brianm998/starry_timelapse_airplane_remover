@@ -445,16 +445,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // which will have the top earthAlignedImageCropAmount of the frame removed
     // and then aligned with neighbors 
     private func loadOrCreateEarthAlignedImage() async throws -> PixelatedImage {
+        Log.d("frame \(frameIndex) loadOrCreateEarthAlignedImage")
         if let alignedFrame = try await imageAccessor.load(frameIndex: frameIndex,
                                                            type: .earthAligned,
                                                            atSize: .original)
         {
+            Log.d("frame \(frameIndex) returning saved earth aligned image")
             return alignedFrame
         }
-
+        
+        Log.d("frame \(frameIndex) no saved earth aligned image, computing one")
         // with no saved aligned frame, first load or create the set of aligned frames
         // that we used to create the final aligned frame
         let alignedImages = try await loadOrCreateEarthAlignedImages()
+
+        Log.d("frame \(frameIndex) alignedImages \(alignedImages)")
         
         self.set(state: .creatingEarthAlignedFrame)
         
@@ -488,6 +493,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             removeEarthAlignedImages()
 
             return goodPixelImage
+        } else {
+            Log.e("frame \(frameIndex) no aligned images")
         }
 
         throw "unable to align earth images"
@@ -672,9 +679,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
     
     private func loadOrCreateEarthAlignedImages() async throws  -> [Int:PixelatedImage] {
+        Log.d("frame \(frameIndex) loadOrCreateEarthAlignedImages")
+        
         var alignedImages = try await loadEarthAlignedImages()
 
-        if numberOfAlignedFrames == alignedImages.count || numberOfAlignedFrames > imageSequence?.filenames.count ?? 0 {
+        Log.d("frame \(frameIndex) got \(alignedImages.count) aligned images")
+        
+        if numberOfAlignedFrames != alignedImages.count || numberOfAlignedFrames > imageSequence?.filenames.count ?? 0 {
 
             Log.w("frame \(frameIndex) alignedImages.count != numberOfAlignedFrames (\(alignedImages.count) != \(numberOfAlignedFrames))")
 
@@ -917,9 +928,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             let config = await configManager.config()
             var cropAmount = 0
             if let amount = config.earthAlignedImageCropAmount {
-                cropAmount = amount - 50 // XXX hardcoded extra to allow for some sky
+                cropAmount = amount - 40 // XXX hardcoded extra to allow for some sky
             }
-            
+
+            // crop the neighbor frames before alignment
             for (index, alignmentFilename) in alignmentFilenames {
                 // load the alignment frame and crop it
                 if let alignmentFrame = try await loadImageInt(filename: alignmentFilename) {
@@ -937,11 +949,28 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     croppedAlignmentFilenames[index] = croppedFilename
                 }
             }
+
+            var croppedFilename = ""
+
+            // crop the base image
+            if let croppedBase = try await loadImageInt(filename: baseFilename) {
+                // crop it
+                let cropped = croppedBase.bottomCrop(by: height-cropAmount)
+                let url = URL(fileURLWithPath: baseFilename)
+                let filename = url.lastPathComponent
+                croppedFilename = "\(croppedDirname)/\(filename)"
+
+                Log.d("writing base cropped image to \(croppedFilename)")
+                    
+                try cropped.writeTIFFEncoding(toFilename: croppedFilename)
+            }
+
+            if croppedFilename.isEmpty { throw "frame \(frameIndex) unable to crop base image for alignment" }
             
             let alignedFilenames =
               try await StarAlignment.align(
                 croppedAlignmentFilenames,
-                to: baseFilename,
+                to: croppedFilename,
                 inDir: dirname
               )
 
