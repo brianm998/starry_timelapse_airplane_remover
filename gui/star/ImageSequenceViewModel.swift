@@ -288,6 +288,16 @@ public final class ImageSequenceViewModel {
         }
     }
     
+    var earthAlignedImageCropAmount: Int {
+        didSet {
+            if let config {
+                var realConfig = config.config()
+                realConfig.earthAlignedImageCropAmount = earthAlignedImageCropAmount
+                config.update(realConfig)
+            }
+        }
+    }
+    
     // the threshold used in goodPixels(thresholdFactor: )
     var pixelThreshold: Double = 1.2
     
@@ -426,6 +436,8 @@ public final class ImageSequenceViewModel {
         self.numberOfNeighborFrames = config.numberFinalProcessingNeighborsNeeded
 
         self.horizonDetectionEnabled = config.horizonDetectionEnabled ?? true
+
+        self.earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? 0
         
         self.numberOfFramesToProcessConcurrently = await Task { await maxFramesProcessing.getValue() }.value
         
@@ -1389,11 +1401,16 @@ public final class ImageSequenceViewModel {
 
             if let horizonStats = allBounds.calculateStats() {
                 Log.i("got horizon stats \(horizonStats)")
+
+                
                 await MainActor.run {
+                    // save the height of the portion of the frames that is sky
+                    self.earthAlignedImageCropAmount = horizonStats.lowestBottomY
+                    
                     //self.showIgnoreLowerBar = false
                     if let config {
                         self.ignoreLowerPixels = frameHeight - CGFloat(horizonStats.highestTopY)
-                            Log.i("ignoreLowerPixels \(ignoreLowerPixels)")
+                        Log.i("ignoreLowerPixels \(ignoreLowerPixels)")
                         var realConfig = config.config()
                         realConfig.ignoreLowerPixels = Int(ignoreLowerPixels)
                         config.update(realConfig)

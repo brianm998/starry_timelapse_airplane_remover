@@ -239,6 +239,10 @@ public struct Config: Codable, Sendable, Transferable {
 
     // max number of frames to concurrently horizon calculations on
     public var maxConcurrentHorizonCalculations: Int? 
+
+    // how many pixels do we crop off the top of the image when making
+    // earth aligned images with align_image_stack
+    public var earthAlignedImageCropAmount: Int?
     
     mutating public func set(videoInfo: VideoInfo) {
         self.frameRate = videoInfo.frameRate
