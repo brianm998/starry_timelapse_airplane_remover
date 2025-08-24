@@ -693,6 +693,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             
             // try creating the earth aligned images if we couldn't load them
             alignedImages = try await createEarthAlignedImages()
+            Log.d("frame \(frameIndex) created earth aligned images")
         }
         return alignedImages
     }
@@ -979,6 +980,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 Log.d("removing croppedAlignmentFilename \(croppedAlignmentFilename)")
                 try FileManager.default.removeItem(atPath: croppedAlignmentFilename)
             }
+
+            // remove the cropped base image too
+            try FileManager.default.removeItem(atPath: croppedFilename)
             
             var ret: [Int:PixelatedImage] = [:]
 
