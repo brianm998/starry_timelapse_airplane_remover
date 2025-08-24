@@ -500,16 +500,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // than the average for that location in all aligned images
     private func loadOrCreateStarAlignedImage() async throws -> PixelatedImage {
 
-        // XXX XXX XXX TESTING XXX XXX XXX
-        // XXX XXX XXX TESTING XXX XXX XXX
-        // XXX XXX XXX TESTING XXX XXX XXX
-        Task {
-            let _ = try await loadOrCreateEarthAlignedImage()
+        // go ahead and create these now, for use later
+        let config = await configManager.config()
+        if config.horizonDetectionEnabled ?? true {
+            Task {
+                do {
+                    let _ = try await loadOrCreateEarthAlignedImage()
+                    Log.i("frame \(frameIndex) successfully created earth aligned image")
+                } catch {
+                    Log.e("frame \(frameIndex) unable to create earth aligned image: \(error)")
+                }
+            }
+        } else {
+            Log.i("frame \(frameIndex) is not configured to create an earth aligned image")
         }
-        // XXX XXX XXX TESTING XXX XXX XXX
-        // XXX XXX XXX TESTING XXX XXX XXX
-        // XXX XXX XXX TESTING XXX XXX XXX
-
         
         // load or create the aligned frame
         if let alignedFrame = try await imageAccessor.load(frameIndex: frameIndex,
@@ -906,7 +910,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
              and then pass those filenames to .align below
              
              and delete the filenames after successful alignment
-             
              */
 
             var croppedAlignmentFilenames: [Int:String] = [:]
@@ -942,6 +945,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 inDir: dirname
               )
 
+            // remove the pre-alignment cropped neighbor images 
+            for croppedAlignmentFilename in croppedAlignmentFilenames.values {
+                Log.d("removing croppedAlignmentFilename \(croppedAlignmentFilename)")
+                try FileManager.default.removeItem(atPath: croppedAlignmentFilename)
+            }
+            
             var ret: [Int:PixelatedImage] = [:]
 
             for (index, alignedFilename) in alignedFilenames {
