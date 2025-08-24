@@ -1420,7 +1420,8 @@ public final class ImageSequenceViewModel {
             
             await MainActor.run {
                 self.isFindingAllHorizons = false
-                // XXX maybe show a dialog here to tell new users what to do next
+                // show a dialog to tell new users what to do next
+                self.showProcessingOptionsSheet = true
             }
         }
         /*
@@ -1428,7 +1429,7 @@ public final class ImageSequenceViewModel {
          * disbable left panel buttons until that is done
          * actually process them all
          * change FrameAirplaneRemover to not load horizon unless it really needs it
-         - add number of horizon images to process at once to this view
+         * add number of horizon images to process at once to this view
          * set showIgnoreLowerBar = true after getting the right value for it
          * make sure we show that action is happening in the GUI somewhere
          */
