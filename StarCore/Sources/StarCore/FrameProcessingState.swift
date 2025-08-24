@@ -35,10 +35,10 @@ public enum FrameProcessingState: Int,
     case unprocessed
     case horizonDetection
     case horizonDetected
-    case starAlignment    
     case earthAlignment    
-    case creatingStarAlignedFrame
     case creatingEarthAlignedFrame
+    case starAlignment    
+    case creatingStarAlignedFrame
     case subtractingNeighbor
     case assemblingPixels
     case sortingPixels
