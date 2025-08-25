@@ -124,34 +124,6 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
     [outImage addRepresentation:outRep];
     return outImage;
 }
-/*
-/// Helper: safely wrap a cv::Mat into an NSImage
-+ (NSImage *)imageFromMat:(const cv::Mat&)mat {
-    // Ensure continuous memory
-    cv::Mat owned = mat.isContinuous() ? mat : mat.clone();
-
-    NSBitmapImageRep *outRep = [[NSBitmapImageRep alloc]
-        initWithBitmapDataPlanes:nil
-                      pixelsWide:owned.cols
-                      pixelsHigh:owned.rows
-                   bitsPerSample:8
-                 samplesPerPixel:1
-                        hasAlpha:NO
-                        isPlanar:NO
-                  colorSpaceName:NSCalibratedWhiteColorSpace
-                     bytesPerRow:owned.step
-                    bitsPerPixel:8];
-
-    // Copy data into Cocoa’s buffer
-    memcpy([outRep bitmapData],
-           owned.data,
-           owned.total() * owned.elemSize());
-
-    NSImage *outImage = [[NSImage alloc] initWithSize:NSMakeSize(owned.cols, owned.rows)];
-    [outImage addRepresentation:outRep];
-    return outImage;
-}
-*/
 
 + (NSImage *)filterConnectedComponents:(NSImage *)image keepLargest:(NSInteger)n {
     // Convert NSImage -> cv::Mat (grayscale binary)
@@ -320,6 +292,56 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
     cv::Mat mat = cvMatFromNSImage(image, NO);
     cv::Mat maskMat = cvMatFromNSImage(mask, NO);
 
+    if (mat.empty() || maskMat.empty()) {
+        NSLog(@"brightenDarks: empty mat or mask");
+        return image;
+    }
+
+    // Ensure mask is single-channel grayscale same size as mat
+    if (maskMat.size() != mat.size()) {
+        cv::resize(maskMat, maskMat, mat.size(), 0, 0, cv::INTER_NEAREST);
+    }
+    cv::Mat maskGray;
+    if (maskMat.channels() == 4) {
+        cv::cvtColor(maskMat, maskGray, cv::COLOR_BGRA2GRAY);
+    } else if (maskMat.channels() == 3) {
+        cv::cvtColor(maskMat, maskGray, cv::COLOR_BGR2GRAY);
+    } else {
+        maskGray = maskMat;
+    }
+
+    // Make sure it's binary 8-bit (0 = dark, 255 = preserve original)
+    cv::Mat binMask;
+    cv::threshold(maskGray, binMask, 0, 255, cv::THRESH_BINARY);
+
+    // Invert: 255 where we brighten
+    cv::Mat invMask;
+    cv::bitwise_not(binMask, invMask);
+
+    // Prepare brightness delta
+    cv::Scalar delta(0,0,0,0);
+    if (mat.channels() == 1) delta = cv::Scalar(amount);
+    if (mat.channels() == 3) delta = cv::Scalar(amount, amount, amount);
+    if (mat.channels() == 4) delta = cv::Scalar(amount, amount, amount, 0);
+
+    // Start with the original image
+    cv::Mat result = mat.clone();
+
+    // Brighten only where mask == 0
+    cv::add(mat, delta, result, invMask);
+
+    return [PixelatedImageBridge imageFromMat:result];
+}
+
+
+/*
++(NSImage *)brightenDarks:(NSImage *)image
+                     mask:(NSImage *)mask
+                   amount:(double)amount
+{
+    cv::Mat mat = cvMatFromNSImage(image, NO);
+    cv::Mat maskMat = cvMatFromNSImage(mask, NO);
+
     // Ensure mask is single channel grayscale, same size as image
     if (maskMat.channels() > 1) {
         cv::cvtColor(maskMat, maskMat, cv::COLOR_BGR2GRAY);
@@ -354,7 +376,7 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
     
     return [PixelatedImageBridge imageFromMat:result];
 }
-
+*/
 
 +(double)maxBrightnessScaleForImage:(NSImage *)image
 			  maskImage:(NSImage *)mask
