@@ -12,6 +12,19 @@ NS_ASSUME_NONNULL_BEGIN
 
 // removes anything but the ground, and returns the Y boundaries of the horizon
 + (HorizonResult *)groundOnlyFrom:(NSImage *)image;
+
+/// Returns the processed NSImage along with horizon extents
++ (HorizonResult *)horizonExtentsFromImage:(NSImage *)image;
+
++(double)maxBrightnessScaleForImage:(NSImage *)image
+			  maskImage:(NSImage *)mask;
+
++(NSImage *)brightenDarks:(NSImage *)image
+		     mask:(NSImage *)mask
+		   amount:(double)amount;
+
+//+ (NSImage *)imageFromMat:(const cv::Mat&)mat;
 @end
+
 
 NS_ASSUME_NONNULL_END

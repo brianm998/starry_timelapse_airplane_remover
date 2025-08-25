@@ -16,12 +16,5 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
-/// Horizon helper class (Objective-C bridge to OpenCV)
-@interface HorizonHelper : NSObject
-
-/// Returns the processed NSImage along with horizon extents
-+ (HorizonResult *)horizonExtentsFromImage:(NSImage *)image;
-
-@end
 
 NS_ASSUME_NONNULL_END

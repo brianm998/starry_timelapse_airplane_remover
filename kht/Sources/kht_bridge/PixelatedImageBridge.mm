@@ -3,8 +3,128 @@
 #import "PixelatedImageBridge.h"
 #import "HorizonResult.h"
 
+// Converts NSImage to cv::Mat
+// If forceRGBA is YES, always returns CV_8UC4
+// Otherwise it returns whatever channel count the bitmap already has.
+
+static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
+    CGImageRef cgRef = [image CGImageForProposedRect:NULL context:nil hints:nil];
+    if (!cgRef) {
+        NSLog(@"!cgRef");
+        return cv::Mat();
+    }
+    
+    size_t width  = CGImageGetWidth(cgRef);
+    size_t height = CGImageGetHeight(cgRef);
+    
+    if (forceRGBA) {
+        // Always create 4-channel RGBA bitmap (8-bit per channel)
+        CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+        CGContextRef context = CGBitmapContextCreate(NULL,
+                                                     width,
+                                                     height,
+                                                     8,
+                                                     width * 4,
+                                                     colorSpace,
+                                                     kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+        CGContextDrawImage(context, CGRectMake(0, 0, width, height), cgRef);
+        
+        unsigned char *data = (unsigned char *)CGBitmapContextGetData(context);
+        cv::Mat mat((int)height, (int)width, CV_8UC4, data);
+        cv::Mat matCopy = mat.clone();
+        
+        CGContextRelease(context);
+        CGColorSpaceRelease(colorSpace);
+        
+        return matCopy;
+    } else {
+        // Use NSBitmapImageRep to preserve native depth
+        NSBitmapImageRep *bitmapRep = [[NSBitmapImageRep alloc] initWithCGImage:cgRef];
+        NSInteger samplesPerPixel = [bitmapRep samplesPerPixel];
+        NSInteger bitsPerSample   = [bitmapRep bitsPerSample];
+        
+        int cvType = -1;
+        if (bitsPerSample == 8) {
+            if (samplesPerPixel == 4) cvType = CV_8UC4;
+            else if (samplesPerPixel == 3) cvType = CV_8UC3;
+            else if (samplesPerPixel == 1) cvType = CV_8UC1;
+        } else if (bitsPerSample == 16) {
+            if (samplesPerPixel == 4) cvType = CV_16UC4;
+            else if (samplesPerPixel == 3) cvType = CV_16UC3;
+            else if (samplesPerPixel == 1) cvType = CV_16UC1;
+        }
+        
+        if (cvType == -1) {
+            NSLog(@"Unsupported bitsPerSample=%ld, samplesPerPixel=%ld",
+                  (long)bitsPerSample, (long)samplesPerPixel);
+            return cv::Mat();
+        }
+        
+        cv::Mat mat((int)[bitmapRep pixelsHigh],
+                    (int)[bitmapRep pixelsWide],
+                    cvType,
+                    (void *)[bitmapRep bitmapData],
+                    [bitmapRep bytesPerRow]);
+        
+        return mat.clone(); // clone to own memory
+    }
+}
+
 @implementation PixelatedImageBridge
 
++ (NSImage *)imageFromMat:(const cv::Mat&)mat {
+    if (mat.empty()) {
+        return nil;
+    }
+    
+    // Ensure continuous memory
+    cv::Mat owned = mat.isContinuous() ? mat : mat.clone();
+    
+    // Extract type info
+    int depth = owned.depth();     // CV_8U, CV_16U, etc.
+    int channels = owned.channels();
+    
+    NSInteger bitsPerSample;
+    switch (depth) {
+        case CV_8U:  bitsPerSample = 8;  break;
+        case CV_16U: bitsPerSample = 16; break;
+        default:
+            NSLog(@"Unsupported Mat depth: %d", depth);
+            return nil;
+    }
+    
+    BOOL hasAlpha = (channels == 4);
+    BOOL isGray   = (channels == 1);
+    
+    NSString *colorSpaceName;
+    if (isGray) {
+        colorSpaceName = NSCalibratedWhiteColorSpace;
+    } else {
+        colorSpaceName = NSCalibratedRGBColorSpace;
+    }
+    
+    NSBitmapImageRep *outRep = [[NSBitmapImageRep alloc]
+        initWithBitmapDataPlanes:nil
+                      pixelsWide:owned.cols
+                      pixelsHigh:owned.rows
+                   bitsPerSample:bitsPerSample
+                 samplesPerPixel:channels
+                        hasAlpha:hasAlpha
+                        isPlanar:NO
+                  colorSpaceName:colorSpaceName
+                     bytesPerRow:owned.step
+                    bitsPerPixel:bitsPerSample * channels];
+    
+    // Copy data into Cocoa’s buffer
+    memcpy([outRep bitmapData],
+           owned.data,
+           owned.total() * owned.elemSize());
+    
+    NSImage *outImage = [[NSImage alloc] initWithSize:NSMakeSize(owned.cols, owned.rows)];
+    [outImage addRepresentation:outRep];
+    return outImage;
+}
+/*
 /// Helper: safely wrap a cv::Mat into an NSImage
 + (NSImage *)imageFromMat:(const cv::Mat&)mat {
     // Ensure continuous memory
@@ -31,6 +151,7 @@
     [outImage addRepresentation:outRep];
     return outImage;
 }
+*/
 
 + (NSImage *)filterConnectedComponents:(NSImage *)image keepLargest:(NSInteger)n {
     // Convert NSImage -> cv::Mat (grayscale binary)
@@ -74,7 +195,9 @@
         }
     }
 
-    return [self imageFromMat:filtered];
+    NSImage * ret = [PixelatedImageBridge imageFromMat:filtered];
+    NSLog(@"XXX ret [%d, %d]", ret.size.width, ret.size.height);
+    return ret;
 }
 
 // this is the last step in horizon detection, so it gives a HorizonResult  
@@ -150,9 +273,141 @@
       horizonBottomY = std::max(horizonBottomY, p.y); // lowest white pixel
     }
     
-    return [[HorizonResult alloc] initWithImage: [self imageFromMat:finalMask]
-				    horizonTopY: horizonTopY
-				 horizonBottomY: horizonBottomY];
+    return [[HorizonResult alloc]
+	     initWithImage: [PixelatedImageBridge imageFromMat:finalMask]
+	       horizonTopY: horizonTopY
+	     horizonBottomY: horizonBottomY];
 }
 
+
++ (HorizonResult *)horizonExtentsFromImage:(NSImage *)image {
+    cv::Mat mat = cvMatFromNSImage(image, YES);
+    if (mat.empty()) {
+        return nil;
+    }
+    
+    cv::Mat gray, binary;
+    cv::cvtColor(mat, gray, cv::COLOR_RGBA2GRAY);
+    cv::threshold(gray, binary, 128, 255, cv::THRESH_BINARY);
+    
+    // --- Find horizon extents ---
+    int horizonTopY = -1;
+    for (int y = 0; y < binary.rows; y++) {
+        if (cv::countNonZero(binary.row(y) == 0) > 0) {
+            horizonTopY = y;
+            break;
+        }
+    }
+    
+    int horizonBottomY = -1;
+    for (int y = binary.rows - 1; y >= 0; y--) {
+        if (cv::countNonZero(binary.row(y) == 255) > 0) {
+            horizonBottomY = y;
+            break;
+        }
+    }
+    
+    HorizonResult *result = [[HorizonResult alloc] initWithImage:image
+                                                    horizonTopY:horizonTopY
+                                                 horizonBottomY:horizonBottomY];
+    return result;
+}
+
++(NSImage *)brightenDarks:(NSImage *)image
+                     mask:(NSImage *)mask
+                   amount:(double)amount
+{
+    cv::Mat mat = cvMatFromNSImage(image, NO);
+    cv::Mat maskMat = cvMatFromNSImage(mask, NO);
+
+    // Ensure mask is single channel grayscale, same size as image
+    if (maskMat.channels() > 1) {
+        cv::cvtColor(maskMat, maskMat, cv::COLOR_BGR2GRAY);
+    }
+
+
+    NSLog(@"Mat size: %d x %d, channels=%d, depth=%d",
+	  mat.cols, mat.rows, mat.channels(), mat.depth());
+    NSLog(@"Mask size: %d x %d, channels=%d, depth=%d",
+	  maskMat.cols, maskMat.rows, maskMat.channels(), maskMat.depth());
+    
+    if (maskMat.size() != mat.size()) {
+        cv::resize(maskMat, maskMat, mat.size());
+    }
+
+    // In OpenCV, mask=nonzero → apply. You want "ground only" = 0 → apply.
+    cv::Mat invertedMask;
+    cv::bitwise_not(maskMat, invertedMask);
+
+    // Guarantee mask type is CV_8UC1
+    CV_Assert(invertedMask.type() == CV_8UC1);
+
+    // Create a constant Mat of same type/size as input
+    cv::Mat delta(mat.size(), mat.type(), cv::Scalar(amount));
+
+    // Add delta only where mask==0
+    cv::Mat result;
+    cv::add(mat, delta, result, invertedMask);
+
+    NSLog(@"result size: %d x %d, channels=%d, depth=%d",
+	  result.cols, result.rows, result.channels(), result.depth());
+    
+    return [PixelatedImageBridge imageFromMat:result];
+}
+
+
++(double)maxBrightnessScaleForImage:(NSImage *)image
+			  maskImage:(NSImage *)mask
+{
+    cv::Mat mat = cvMatFromNSImage(image, NO);
+    cv::Mat maskMat = cvMatFromNSImage(mask, NO);
+
+    NSLog(@"image size %d x %d, mat size: %d x %d, channels=%d, depth=%d", image.size.width, image.size.height,
+	  mat.cols, mat.rows, mat.channels(), mat.depth());
+    NSLog(@"mask size: %d x %d, channels=%d, depth=%d",
+	  maskMat.cols, maskMat.rows, maskMat.channels(), maskMat.depth());
+    
+    CV_Assert(mat.size() == maskMat.size());
+    
+    // If your conversion gives 3/4 channels, force it to grayscale
+    if (maskMat.channels() > 1) {
+      cv::cvtColor(maskMat, maskMat, cv::COLOR_BGR2GRAY);
+    }
+
+    // maskMat is 0 for ground, 255 for sky → we want ground.
+    cv::Mat groundMask;
+    cv::bitwise_not(maskMat, groundMask);
+
+    // Just to be safe, enforce type
+    CV_Assert(groundMask.type() == CV_8UC1);
+
+    // Split into channels
+    std::vector<cv::Mat> chans;
+    cv::split(mat, chans);
+
+    // Track maximum across all channels in the ground region
+    double maxValOverall = 0.0;
+
+    for (auto &ch : chans) {
+      double minVal, maxVal;
+      cv::minMaxLoc(ch, &minVal, &maxVal, nullptr, nullptr, groundMask);
+      maxValOverall = std::max(maxValOverall, maxVal);
+    }
+
+    if (maxValOverall <= 0.0) {
+        return 1.0; // avoid divide-by-zero
+    }
+
+    // Figure out max representable value based on depth
+    double maxAllowed = 255.0;
+    switch (mat.depth()) {
+        case CV_8U:  maxAllowed = 255.0;   break;
+        case CV_16U: maxAllowed = 65535.0; break;
+        case CV_32F: maxAllowed = 1.0;     break;  // assuming normalized floats
+        default:     maxAllowed = 255.0;   break;  // fallback
+    }
+
+    return maxAllowed / maxValOverall;
+}
 @end
+

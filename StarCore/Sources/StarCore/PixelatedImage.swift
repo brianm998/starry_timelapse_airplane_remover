@@ -754,7 +754,6 @@ extension PixelatedImage {
         while xOffset < width {
             yOffset = 0
             while yOffset < height {
-                //Log.i("matrix xOffset \(xOffset) yOffset \(yOffset)")
                 var matrixWidth = maxWidth
                 if xOffset + matrixWidth > width {
                     matrixWidth = width - xOffset
@@ -763,6 +762,7 @@ extension PixelatedImage {
                 if yOffset + matrixHeight > height {
                     matrixHeight = height - yOffset
                 }
+                Log.i("matrix height \(matrixHeight)")
                 if matrixWidth > 0,
                    matrixHeight > 0
                 {
@@ -1343,3 +1343,25 @@ extension PixelatedImage {
 }
 
 
+extension PixelatedImage {
+    func maxBrightnessScale(in darksMask: PixelatedImage) -> Double? {
+        if let base = self.nsImage,
+           let mask = darksMask.nsImage
+        {
+          print("XXX FUCKING base [\(base.size.width), \(base.size.height)]")
+          return PixelatedImageBridge.maxBrightnessScale(for: base, maskImage: mask)
+        } else {
+            return nil
+        }
+    }
+
+    func brightenDarks(with darksMask: PixelatedImage, by amount: Double) -> PixelatedImage? {
+        if let base = self.nsImage,
+           let mask = darksMask.nsImage
+        {
+          return PixelatedImage(PixelatedImageBridge.brightenDarks(base, mask: mask, amount: amount).cgImage(forProposedRect: nil, context: nil, hints: nil)!)
+        } else {
+            return nil
+        }
+    }
+}

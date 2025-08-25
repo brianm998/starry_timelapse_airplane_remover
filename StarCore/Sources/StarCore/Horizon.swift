@@ -149,7 +149,10 @@ extension PixelatedImage {
 
         // determine the new height 
         let bottomHeight = Int(Double(self.height)*bottomPercentage/100)
-        let topHeight = Int(Double(self.height)*(100-bottomPercentage)/100)
+
+        // round up
+        let topHeight = Int(Double(Double(self.height)*(100-bottomPercentage)/100)
+                              .rounded(.toNearestOrAwayFromZero))
 
         // crop out the top part
         let bottomCrop = self.bottomCrop(by: bottomHeight)

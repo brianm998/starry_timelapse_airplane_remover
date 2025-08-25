@@ -395,7 +395,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             {
                 Log.d("frame \(frameIndex) successfully loaded horizon mask")
                 
-                let result = HorizonHelper.horizonExtents(from: nsImage)
+                let result = PixelatedImageBridge.horizonExtents(from: nsImage)
                 return HorizonMask(
                   image: horizonMaskImage,
                   horizonTopY: result.horizonTopY,
@@ -941,41 +941,78 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 cropAmount = amount
             }
 
-            // crop the neighbor frames before alignment
-            for (index, alignmentFilename) in alignmentFilenames {
-                // load the alignment frame and crop it
-                if let alignmentFrame = try await loadImageInt(filename: alignmentFilename) {
-                    // crop it
-                    let cropped = alignmentFrame.bottomCrop(by: height-cropAmount)
-
-                    let url = URL(fileURLWithPath: alignmentFilename)
-                    let filename = url.lastPathComponent
-                    let croppedFilename = "\(croppedDirname)/\(filename)"
-
-                    Log.d("writing croppedFilename \(croppedFilename)")
-                    
-                    try cropped.writeTIFFEncoding(toFilename: croppedFilename)
-
-                    croppedAlignmentFilenames[index] = croppedFilename
-                }
-            }
-
             var croppedFilename = ""
 
             // crop the base image
-            if let croppedBase = try await loadImageInt(filename: baseFilename) {
-                // crop it
-                let cropped = croppedBase.bottomCrop(by: height-cropAmount)
-                let url = URL(fileURLWithPath: baseFilename)
-                let filename = url.lastPathComponent
-                croppedFilename = "\(croppedDirname)/\(filename)"
-
-                Log.d("writing base cropped image to \(croppedFilename)")
-                    
-                try cropped.writeTIFFEncoding(toFilename: croppedFilename)
+            guard let croppedBase = try await loadImageInt(filename: baseFilename)else {
+                throw "unable to load base image for earth alignment"
             }
 
+            let horizonMask = try await loadOrCreateHorizonMask()
+
+            
+            
+            guard let scaleFactor = croppedBase.maxBrightnessScale(in: horizonMask.image) else { throw "cannot load scale factor" }
+
+            Log.i("frame \(frameIndex) got scaleFactor \(scaleFactor)")
+            
+            // brighten and crop it
+            /*guard*/ let cropped = croppedBase
+                    //.brightenDarks(with: horizonMask.image, by: scaleFactor)?
+                    .bottomCrop(by: height-cropAmount) 
+//            else {
+//                throw "unable to brighten darks on base image"
+//            }
+            let url = URL(fileURLWithPath: baseFilename)
+            let filename = url.lastPathComponent
+            croppedFilename = "\(croppedDirname)/\(filename)"
+
+            Log.d("writing base cropped image to \(croppedFilename)")
+            
+            try cropped.writeTIFFEncoding(toFilename: croppedFilename)
+
             if croppedFilename.isEmpty { throw "frame \(frameIndex) unable to crop base image for alignment" }
+
+            
+            // crop the neighbor frames before alignment
+            for (index, alignmentFilename) in alignmentFilenames {
+                // load the alignment frame and crop it
+                if let alignmentFrame = try await loadImageInt(filename: alignmentFilename),
+                   // XXX need to ask the neighboring frame for this, not the image accewwor, that way it can be created if missing
+                   let alignmentHorizon = try await imageAccessor.loadInt(
+                     frameIndex: index,
+                     type: .horizon,
+                     atSize: .original
+                   )
+                {
+                    /*
+
+                     here we need to:
+                     * load the horizon mask for this alignment layer
+                     * brighten the alignment frame with it before crop
+                     * calculate the brightness adjustment value from frameIndex
+                     
+                     */
+
+                    
+                    // crop it
+                    if let cropped = alignmentFrame
+                         .brightenDarks(with: alignmentHorizon, by: scaleFactor)?
+                         .bottomCrop(by: height-cropAmount)
+                    {
+                        let url = URL(fileURLWithPath: alignmentFilename)
+                        let filename = url.lastPathComponent
+                        let croppedFilename = "\(croppedDirname)/\(filename)"
+
+                        Log.d("writing croppedFilename \(croppedFilename)")
+                        
+                        try cropped.writeTIFFEncoding(toFilename: croppedFilename)
+
+                        croppedAlignmentFilenames[index] = croppedFilename
+                    }
+                }
+            }
+
             
             let alignedFilenames =
               try await StarAlignment.align(
