@@ -254,6 +254,30 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     func setNextFrame(_ frame: FrameAirplaneRemover) {
         nextFrame = frame
     }
+
+    func otherFrame(at otherFrameIndex: Int) async -> FrameAirplaneRemover? {
+        if otherFrameIndex == frameIndex {
+            return self
+        } else if otherFrameIndex < frameIndex {
+            if let previousFrame {
+                return await previousFrame.otherFrame(at: otherFrameIndex)
+            } else {
+                Log.w("run off end at otherFrameIndex \(otherFrameIndex)")
+                return nil
+            }
+        } else if otherFrameIndex > frameIndex {
+            if let nextFrame {
+                return await nextFrame.otherFrame(at: otherFrameIndex)
+            } else {
+                Log.w("run off end at otherFrameIndex \(otherFrameIndex)")
+                return nil
+            }
+        } else {
+            Log.e("HOW DID WE END UP HERE withotherFrameIndex \(otherFrameIndex) frameIndex \(frameIndex)?")
+            return nil
+        }
+    }
+    
     
     let fullyProcess: Bool
 
@@ -977,14 +1001,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // crop the neighbor frames before alignment
             for (index, alignmentFilename) in alignmentFilenames {
                 // load the alignment frame and crop it
-                if let alignmentFrame = try await loadImageInt(filename: alignmentFilename),
-                   // XXX need to ask the neighboring frame for this, not the image accewwor, that way it can be created if missing
-                   let alignmentHorizon = try await imageAccessor.loadInt(
-                     frameIndex: index,
-                     type: .horizon,
-                     atSize: .original
-                   )
+                if let alignmentFrameImage = try await loadImageInt(filename: alignmentFilename),
+                   let alignmentFrame = await self.otherFrame(at: index)
                 {
+                    let alignmentHorizon = try await alignmentFrame.loadOrCreateHorizonMask()
+
                     /*
 
                      here we need to:
@@ -996,8 +1017,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
                     
                     // crop it
-                    if let cropped = alignmentFrame
-                         .brightenDarks(with: alignmentHorizon, by: scaleFactor)?
+                    if let cropped = alignmentFrameImage
+                         .brightenDarks(with: alignmentHorizon.image, by: scaleFactor)?
                          .bottomCrop(by: height-cropAmount)
                     {
                         let url = URL(fileURLWithPath: alignmentFilename)
