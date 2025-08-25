@@ -106,10 +106,14 @@ public class StarAlignment {
             } else {
                 Log.e("\(error)")
             }
+
+            /*
             // if the alignment fails, simply hard link them together
             // assuming same volume :(
 
-            if let origFilename = sortedFilenames[0].substringAfterLastSlash() {
+            if sortedFilenames.count > 0,
+               let origFilename = sortedFilenames[0].substringAfterLastSlash()
+            {
             
                 let fakeAlignmentName = "\(outputDirname)/\(origFilename)"
                 
@@ -142,7 +146,10 @@ public class StarAlignment {
                         }
                     }
                 }
+            } else {
+                Log.w("Failed")
             }
+             */
         }
 
         Log.e("alignment totally failed :(")
