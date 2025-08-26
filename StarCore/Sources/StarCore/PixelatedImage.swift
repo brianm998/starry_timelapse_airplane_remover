@@ -1344,7 +1344,7 @@ extension PixelatedImage {
 
 
 extension PixelatedImage {
-    func maxBrightnessScale(in darksMask: PixelatedImage) -> Double? {
+    public func maxBrightnessScale(in darksMask: PixelatedImage) -> Double? {
         if let base = self.nsImage,
            let mask = darksMask.nsImage
         {
@@ -1355,7 +1355,7 @@ extension PixelatedImage {
         }
     }
 
-    func brightenDarks(with darksMask: PixelatedImage, by amount: Double) -> PixelatedImage? {
+    public func brightenDarks(with darksMask: PixelatedImage, by amount: Double) -> PixelatedImage? {
         if let base = self.nsImage,
            let mask = darksMask.nsImage
         {
