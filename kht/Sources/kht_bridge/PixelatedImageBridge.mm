@@ -284,55 +284,62 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
                                                  horizonBottomY:horizonBottomY];
     return result;
 }
-
 +(NSImage *)brightenDarks:(NSImage *)image
                      mask:(NSImage *)mask
                    amount:(double)amount
 {
     cv::Mat mat = cvMatFromNSImage(image, NO);
     cv::Mat maskMat = cvMatFromNSImage(mask, NO);
-
     if (mat.empty() || maskMat.empty()) {
         NSLog(@"brightenDarks: empty mat or mask");
         return image;
     }
 
-    // Ensure mask is single-channel grayscale same size as mat
+    // --- Build a proper binary 8-bit mask (255 = brighten, 0 = keep original) ---
     if (maskMat.size() != mat.size()) {
         cv::resize(maskMat, maskMat, mat.size(), 0, 0, cv::INTER_NEAREST);
     }
     cv::Mat maskGray;
-    if (maskMat.channels() == 4) {
-        cv::cvtColor(maskMat, maskGray, cv::COLOR_BGRA2GRAY);
-    } else if (maskMat.channels() == 3) {
-        cv::cvtColor(maskMat, maskGray, cv::COLOR_BGR2GRAY);
-    } else {
-        maskGray = maskMat;
-    }
+    if (maskMat.channels() == 4)      cv::cvtColor(maskMat, maskGray, cv::COLOR_BGRA2GRAY);
+    else if (maskMat.channels() == 3) cv::cvtColor(maskMat, maskGray, cv::COLOR_BGR2GRAY);
+    else                              maskGray = maskMat;
 
-    // Make sure it's binary 8-bit (0 = dark, 255 = preserve original)
     cv::Mat binMask;
-    cv::threshold(maskGray, binMask, 0, 255, cv::THRESH_BINARY);
+    cv::threshold(maskGray, binMask, 128, 255, cv::THRESH_BINARY);
+    CV_Assert(binMask.type() == CV_8UC1);
 
-    // Invert: 255 where we brighten
+    // Invert so 255 = brighten, 0 = leave alone
     cv::Mat invMask;
     cv::bitwise_not(binMask, invMask);
 
-    // Prepare brightness delta
-    cv::Scalar delta(0,0,0,0);
-    if (mat.channels() == 1) delta = cv::Scalar(amount);
-    if (mat.channels() == 3) delta = cv::Scalar(amount, amount, amount);
-    if (mat.channels() == 4) delta = cv::Scalar(amount, amount, amount, 0);
+    // --- Scale factor in fixed-point integer math ---
+    double scale = 1.0 + amount;
+    scale = std::max(0.0, scale);
 
-    // Start with the original image
+    // Fixed-point scale (Q15 style: multiply then shift)
+    int factor = (int)std::round(scale * 32768.0);  // 1.0 == 32768
+
+    // --- Result starts as original (bit-for-bit preserved) ---
     cv::Mat result = mat.clone();
 
-    // Brighten only where mask == 0
-    cv::add(mat, delta, result, invMask);
+    // Apply scaling only where invMask==255
+    for (int y = 0; y < mat.rows; y++) {
+        const uint16_t* src = mat.ptr<uint16_t>(y);
+        uint16_t* dst       = result.ptr<uint16_t>(y);
+        const uchar* m      = invMask.ptr<uchar>(y);
+
+        for (int x = 0; x < mat.cols * mat.channels(); x++) {
+            if (m[x / mat.channels()] == 255) {
+                // scale with saturation
+                uint32_t val = ((uint32_t)src[x] * factor) >> 15;
+                dst[x] = (val > 65535) ? 65535 : (uint16_t)val;
+            }
+        }
+    }
+    cv::imwrite("/tmp/result.png", result);
 
     return [PixelatedImageBridge imageFromMat:result];
 }
-
 
 /*
 +(NSImage *)brightenDarks:(NSImage *)image
@@ -341,43 +348,64 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
 {
     cv::Mat mat = cvMatFromNSImage(image, NO);
     cv::Mat maskMat = cvMatFromNSImage(mask, NO);
-
-    // Ensure mask is single channel grayscale, same size as image
-    if (maskMat.channels() > 1) {
-        cv::cvtColor(maskMat, maskMat, cv::COLOR_BGR2GRAY);
+    if (mat.empty() || maskMat.empty()) {
+        NSLog(@"brightenDarks: empty mat or mask");
+        return image;
     }
 
-
-    NSLog(@"Mat size: %d x %d, channels=%d, depth=%d",
-	  mat.cols, mat.rows, mat.channels(), mat.depth());
-    NSLog(@"Mask size: %d x %d, channels=%d, depth=%d",
-	  maskMat.cols, maskMat.rows, maskMat.channels(), maskMat.depth());
-    
+    // --- Build a proper binary 8-bit mask (255 = keep original, 0 = brighten) ---
     if (maskMat.size() != mat.size()) {
-        cv::resize(maskMat, maskMat, mat.size());
+        cv::resize(maskMat, maskMat, mat.size(), 0, 0, cv::INTER_NEAREST);
     }
+    cv::Mat maskGray;
+    if (maskMat.channels() == 4)      cv::cvtColor(maskMat, maskGray, cv::COLOR_BGRA2GRAY);
+    else if (maskMat.channels() == 3) cv::cvtColor(maskMat, maskGray, cv::COLOR_BGR2GRAY);
+    else                              maskGray = maskMat;
 
-    // In OpenCV, mask=nonzero → apply. You want "ground only" = 0 → apply.
-    cv::Mat invertedMask;
-    cv::bitwise_not(maskMat, invertedMask);
+    cv::Mat binMask;                               // CV_8UC1, 0/255
+    cv::threshold(maskGray, binMask, 128, 255, cv::THRESH_BINARY);
+    CV_Assert(binMask.type() == CV_8UC1);
 
-    // Guarantee mask type is CV_8UC1
-    CV_Assert(invertedMask.type() == CV_8UC1);
+    // Invert: 255 where we want to brighten
+    cv::Mat invMask;
+    cv::bitwise_not(binMask, invMask);
+    CV_Assert(invMask.type() == CV_8UC1);
 
-    // Create a constant Mat of same type/size as input
-    cv::Mat delta(mat.size(), mat.type(), cv::Scalar(amount));
-
-    // Add delta only where mask==0
-    cv::Mat result;
-    cv::add(mat, delta, result, invertedMask);
-
-    NSLog(@"result size: %d x %d, channels=%d, depth=%d",
-	  result.cols, result.rows, result.channels(), result.depth());
+    // XXX testing
+    // XXX testing
+    // XXX testing
+    //cv::imwrite("/tmp/binMask.png", binMask);
+    //cv::imwrite("/tmp/invMask.png", invMask);
+    // XXX testing
+    // XXX testing
+    // XXX testing
     
+    // --- Multiply (scale) only the dark region (mask==0) ---
+    // Do the math in float to preserve fraction, then convert back with saturation.
+    double scale = 1.0 + amount;               // e.g. amount=0.2 → +20%
+    scale = std::max(0.0, scale);              // avoid negative/NaN scales
+
+    cv::Mat mat32, bright32;
+    mat.convertTo(mat32, CV_32F);              // promote
+
+    // Per-channel scalar (don’t touch alpha)
+    cv::Scalar s(1,1,1,1);
+    if (mat.channels() == 1)      s = cv::Scalar(scale);
+    else if (mat.channels() == 3) s = cv::Scalar(scale, scale, scale);
+    else if (mat.channels() == 4) s = cv::Scalar(scale, scale, scale, 1.0);
+
+    cv::multiply(mat32, s, bright32);          // no mask arg in OpenCV2
+
+    cv::Mat brightened;
+    bright32.convertTo(brightened, mat.type()); // back to original depth (saturates)
+
+    // Compose: start from original, then overwrite only where invMask==255
+    cv::Mat result = mat.clone();
+    brightened.copyTo(result, invMask);
+
     return [PixelatedImageBridge imageFromMat:result];
 }
 */
-
 +(double)maxBrightnessScaleForImage:(NSImage *)image
 			  maskImage:(NSImage *)mask
 {
@@ -431,5 +459,6 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
 
     return maxAllowed / maxValOverall;
 }
+
 @end
 
