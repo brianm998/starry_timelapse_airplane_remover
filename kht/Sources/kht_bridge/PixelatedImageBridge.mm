@@ -94,11 +94,6 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
 
 @implementation PixelatedImageBridge
 
-+ (void)freeCvMat:(void *)matPtr {
-    cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
-    delete mat;
-}
-
 
 + (NSImage *)imageFromMat:(const cv::Mat&)mat {
     if (mat.empty()) {
@@ -312,12 +307,22 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
                                                  horizonBottomY:horizonBottomY];
     return result;
 }
-+(NSImage *)brightenDarks:(NSImage *)image
-                     mask:(NSImage *)mask
-                   amount:(double)amount
+
++(Mat)brightenDarks:(Mat)image
+	       mask:(Mat)mask
+	     amount:(double)amount
 {
-    cv::Mat mat = cvMatFromNSImage(image, NO);
-    cv::Mat maskMat = cvMatFromNSImage(mask, NO);
+    // reinterpret as pointer
+    cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
+    cv::Mat* maskPtr = reinterpret_cast<cv::Mat*>(mask);
+
+    // now work with references
+    cv::Mat& mat = *matPtr;
+    cv::Mat& maskMat = *maskPtr;
+
+  
+    //    cv::Mat mat = (cv::Mat)image
+    //    cv::Mat maskMat = (cv::Mat)mask
     if (mat.empty() || maskMat.empty()) {
         NSLog(@"brightenDarks: empty mat or mask");
         return image;
@@ -364,9 +369,18 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
             }
         }
     }
-    cv::imwrite("/tmp/result.png", result);
 
-    return [PixelatedImageBridge imageFromMat:result];
+    //cv::imwrite("/tmp/result.png", result);
+
+    // make a new result on the heap XXX CLEAR THIS LATER WITH freeMat:
+    cv::Mat* resultPtr = new cv::Mat(result.clone());
+
+
+    return resultPtr;
+}
+
++(void)freeMat:(Mat)mat {
+    delete reinterpret_cast<cv::Mat*>(mat);
 }
 
 /*
@@ -488,24 +502,48 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
     return maxAllowed / maxValOverall;
 }
 
-+ (cv::Mat)cvMatFromBuffer:(void *)bytes
-                     width:(int)w
-                    height:(int)h
-                  channels:(int)c
-            bitsPerChannel:(int)bits
-              bytesPerRow:(int)bpr
++ (Mat)cvMatFromBuffer:(void *)buffer
+                 width:(int)width
+                height:(int)height
+              channels:(int)channels
+	bitsPerChannel:(int)bitsPerChannel
+	   bytesPerRow:(int)bytesPerRow
 {
     int type = 0;
-    if (bits == 8)  type = CV_MAKETYPE(CV_8U, c);
-    if (bits == 16) type = CV_MAKETYPE(CV_16U, c);
-    if (bits == 32) type = CV_MAKETYPE(CV_32S, c);
+    switch (bitsPerChannel) {
+        case 8:  type = CV_8UC(channels); break;
+        case 16: type = CV_16UC(channels); break;
+        case 32: type = CV_32SC(channels); break;
+        default: return nullptr;
+    }
 
-    return cv::Mat(h, w, type, bytes, bpr);
+    cv::Mat *mat = new cv::Mat(height, width, type, buffer, bytesPerRow);
+    return (Mat)mat;
 }
 
-+ (NSData *)dataFromCvMat:(const cv::Mat&)mat {
-    size_t size = mat.total() * mat.elemSize();
-    return [NSData dataWithBytes:mat.data length:size];
++ (NSData *)dataFromCvMat:(Mat)matPtr {
+    cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
+    return [NSData dataWithBytes:mat->data length:mat->total() * mat->elemSize()];
+}
+
++ (int)matChannels:(Mat)matPtr {
+    cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
+    return mat->channels();
+}
+
++ (size_t)matElemSize:(Mat)matPtr {
+    cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
+    return mat->elemSize();
+}
+
++ (size_t)matStep:(Mat)matPtr {
+    cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
+    return mat->step;
+}
+
++ (void)freeCvMat:(Mat)matPtr {
+    cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
+    delete mat;
 }
 
 @end

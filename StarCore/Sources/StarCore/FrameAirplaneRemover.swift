@@ -1017,21 +1017,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
                     
                     // crop it
-                    if let cropped = alignmentFrameImage
-                         .brightenDarks(with: alignmentHorizon.image, by: scaleFactor)?
-                         .bottomCrop(by: height-cropAmount)
-                    {
-                        let url = URL(fileURLWithPath: alignmentFilename)
-                        let filename = url.lastPathComponent
-                        let croppedFilename = "\(croppedDirname)/\(filename)"
+                    let cropped = alignmentFrameImage
+                      .brightenDarks(with: alignmentHorizon.image, by: scaleFactor)
+                      .bottomCrop(by: height-cropAmount)
 
-                        Log.d("writing croppedFilename \(croppedFilename)")
-                        
-                        try cropped.writeTIFFEncoding(toFilename: croppedFilename)
+                    let url = URL(fileURLWithPath: alignmentFilename)
+                    let filename = url.lastPathComponent
+                    let croppedFilename = "\(croppedDirname)/\(filename)"
 
-                        croppedAlignmentFilenames[index] = croppedFilename
-                    }
+                    Log.d("writing croppedFilename \(croppedFilename)")
+                    
+                    try cropped.writeTIFFEncoding(toFilename: croppedFilename)
+
+                    croppedAlignmentFilenames[index] = croppedFilename
                 }
+
             }
 
             

@@ -499,6 +499,7 @@ extension PixelatedImage {
     func writeTIFFEncoding(ofData imageData: Data,
                            toFilename imageFilename: String) throws
     {
+        Log.d("writeTIFFEncoding of imageData \(imageData.count)")
         if FileManager.default.fileExists(atPath: imageFilename) {
             Log.i("overwriting already existing filename \(imageFilename)")
             try FileManager.default.removeItem(atPath: imageFilename)
@@ -1088,6 +1089,9 @@ public extension NSImage {
 extension ContiguousBytes {
     func objects<T>() -> [T] { withUnsafeBytes { .init($0.bindMemory(to: T.self)) } }
 
+    // convert Data to [UInt32]
+    public var uInt32Array: [UInt32] { objects() }
+
     // convert Data to [UInt16]
     public var uInt16Array: [UInt16] { objects() }
 
@@ -1355,30 +1359,37 @@ extension PixelatedImage {
         }
     }
 
-    public func brightenDarks(with darksMask: PixelatedImage, by amount: Double) -> PixelatedImage? {
-        if let base = self.nsImage,
-           let mask = darksMask.nsImage
-        {
-          return PixelatedImage(PixelatedImageBridge.brightenDarks(base, mask: mask, amount: amount).cgImage(forProposedRect: nil, context: nil, hints: nil)!)
-        } else {
-            return nil
-        }
+    public func brightenDarks(with darksMask: PixelatedImage, by amount: Double) -> PixelatedImage {
+        let baseMat = PixelatedImageBridge.cvMat(from: self)
+        let maskMat = PixelatedImageBridge.cvMat(from: darksMask)
+
+        let processedMat = PixelatedImageBridge.brightenDarks(
+          baseMat,
+          mask: maskMat,
+          amount: amount
+        )
+
+        return PixelatedImageBridge.pixelatedImage(from: baseMat/*processedMat*/,
+                                                   bitmapInfo: self.bitmapInfo,
+                                                   colorSpace: self.colorSpace,
+                                                   ciFormat: self.ciFormat)
     }
 }
 
-public typealias Mat = OpaquePointer // or use `AnyObject` bridging if you typedef cv::Mat*
+//public typealias Mat = OpaquePointer // or use `AnyObject` bridging if you typedef cv::Mat*
 
 extension PixelatedImageBridge {
-
     static func cvMat(from image: PixelatedImage) -> Mat {
-        let data = image.imageData.data
+        var data = image.imageData.data
         return data.withUnsafeMutableBytes { buf in
-            Self.cvMatFromBuffer(buf.baseAddress!,
-                                 width: Int32(image.width),
-                                 height: Int32(image.height),
-                                 channels: Int32(image.componentsPerPixel),
-                                 bitsPerChannel: Int32(image.bitsPerComponent),
-                                 bytesPerRow: Int32(image.bytesPerRow))
+            Self.cvMat(
+              fromBuffer: buf.baseAddress!,
+              width: Int32(image.width),
+              height: Int32(image.height),
+              channels: Int32(image.componentsPerPixel),
+              bitsPerChannel: Int32(image.bitsPerComponent),
+              bytesPerRow: Int32(image.bytesPerRow)
+            )
         }
     }
 
@@ -1386,37 +1397,43 @@ extension PixelatedImageBridge {
                                bitmapInfo: CGBitmapInfo,
                                colorSpace: CGColorSpace,
                                ciFormat: CIFormat) -> PixelatedImage {
-        let nsdata = Self.dataFromCvMat(mat)
+        let nsdata = Self.data(fromCvMat: mat)
         let bytes = [UInt8](nsdata)
 
-        // choose DataFormat by bit depth
+        let channels = Int(Self.matChannels(mat))
+        let bytesPerPixel = Int(Self.matElemSize(mat))
+        let step = Int(Self.matStep(mat))
+        let bitsPerComponent = bytesPerPixel / channels * 8
+
+
+        // PixelXDimension: 4240
+        // PixelYDimension: 2832
+        
+        Log.d("CRAPPY channels \(channels) bytesPerPixel \(bytesPerPixel) step \(step)")
+        
         let df: PixelatedImage.DataFormat
-        switch mat.depth() {
-        case CV_8U:  df = .eightBit(bytes)
-        case CV_16U: df = .sixteenBit(nsdata.uInt16Array)
-        case CV_32S: df = .thirtyTwoBit(nsdata.uInt32Array)
-        default: fatalError("Unsupported depth")
+        switch bitsPerComponent {
+        case 8: df = .eightBit(bytes)
+        case 16: df = .sixteenBit(nsdata.uInt16Array)
+        case 32: df = .thirtyTwoBit(nsdata.uInt32Array)
+        default: fatalError("Unsupported depth \(bitsPerComponent)")
         }
 
-        let bitsPerComponent: Int
-        switch mat.depth() {
-        case CV_8U:  bitsPerComponent = 8
-        case CV_16U: bitsPerComponent = 16
-        case CV_32S: bitsPerComponent = 32
-        default: fatalError()
-        }
+        let width = step/bytesPerPixel
+        let height = nsdata.count / (width*bytesPerPixel)
 
-        return PixelatedImage(width: mat.cols,
-                              height: mat.rows,
+        Log.d("FUCKING width \(width) height \(height)")
+        
+        return PixelatedImage(width: width,
+                              height: height, // calculate properly
                               imageData: df,
-                              bitsPerPixel: bitsPerComponent * mat.channels(),
-                              bytesPerRow: Int(mat.step),
-                              bitsPerComponent: bitsPerComponent,
-                              bytesPerPixel: mat.elemSize(),
+                              bitsPerPixel: bytesPerPixel*8,
+                              bytesPerRow: step,
+                              bitsPerComponent: bytesPerPixel/channels*8,
+                              bytesPerPixel: bytesPerPixel,
                               bitmapInfo: bitmapInfo,
-                              componentsPerPixel: mat.channels(),
+                              componentsPerPixel: channels,
                               colorSpace: colorSpace,
                               ciFormat: ciFormat)
     }
 }
-

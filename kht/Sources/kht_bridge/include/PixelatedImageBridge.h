@@ -7,6 +7,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+typedef void* Mat;
+
 @interface PixelatedImageBridge : NSObject
 
 /// Takes a binary 8-bit grayscale NSImage and keeps N largest connected components.
@@ -21,23 +23,25 @@ NS_ASSUME_NONNULL_BEGIN
 +(double)maxBrightnessScaleForImage:(NSImage *)image
 			  maskImage:(NSImage *)mask;
 
-+(NSImage *)brightenDarks:(NSImage *)image
-		     mask:(NSImage *)mask
-		   amount:(double)amount;
-
-
++(Mat)brightenDarks:(Mat)image
+	       mask:(Mat)mask
+	     amount:(double)amount;
 
 /// Create a cv::Mat wrapper around raw pixel buffer (no copy)
-+ (void*)cvMatFromBuffer:(void *)bytes
-                     width:(int)w
-                    height:(int)h
-                  channels:(int)c
-            bitsPerChannel:(int)bits
-              bytesPerRow:(int)bpr;
++ (Mat)cvMatFromBuffer:(void *)bytes
+		 width:(int)w
+		height:(int)h
+	      channels:(int)c
+	bitsPerChannel:(int)bits
+	   bytesPerRow:(int)bpr;
 
-/// Copy cv::Mat contents into a newly allocated NSData
-+ (NSData *)dataFromCvMat:(const void*)mat;
++ (int)matChannels:(Mat)mat;
++ (size_t)matElemSize:(Mat)mat;
++ (size_t)matStep:(Mat)mat;
 
++ (void)freeCvMat:(Mat)mat;
+
++ (NSData *)dataFromCvMat:(Mat)matPtr;
 
 @end
 
