@@ -3,22 +3,27 @@
 
 #import <Foundation/Foundation.h>
 
+#ifndef STAR_MAT_TYPEDEF
+#define STAR_MAT_TYPEDEF
+typedef void* Mat;
+#endif
+
 #import "HorizonResult.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
-typedef void* Mat;
 
 @interface PixelatedImageBridge : NSObject
 
-/// Takes a binary 8-bit grayscale NSImage and keeps N largest connected components.
+/// Takes an expected binary cv::Mat and makes it 8-bit grayscale,
+// then and keeps N largest connected components, returning a cv::Mat
 + (Mat)filterConnectedComponents:(Mat)image keepLargest:(NSInteger)n;
 
 // removes anything but the ground, and returns the Y boundaries of the horizon
-+ (HorizonResult *)groundOnlyFrom:(NSImage *)image;
++ (Mat)groundOnlyFrom:(Mat)image;
 
-/// Returns the processed NSImage along with horizon extents
-+ (HorizonResult *)horizonExtentsFromImage:(NSImage *)image;
+/// Returns the vertical horizon extents
++ (HorizonResult *)horizonExtentsFromImage:(Mat)image;
 
 +(double)maxBrightnessScaleForImage:(Mat)image
 			  maskImage:(Mat)mask;

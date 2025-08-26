@@ -197,23 +197,26 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
     // make a new result on the heap XXX CLEAR THIS LATER WITH freeCvMat:
     cv::Mat* resultPtr = new cv::Mat(filtered);
 
+    delete matPtr;
+    
     return resultPtr;
 }
 
-// XXX refactor this to not use NSImage, pass void * cv::Mat instead
-// this is the last step in horizon detection, so it gives a HorizonResult  
-+ (HorizonResult *)groundOnlyFrom:(NSImage *)image {
-    // Convert NSImage → cv::Mat grayscale binary
-    CGImageRef cgRef = [image CGImageForProposedRect:nil context:nil hints:nil];
-    NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithCGImage:cgRef];
-    cv::Mat mat((int)rep.pixelsHigh,
-                (int)rep.pixelsWide,
-                CV_8UC1,
-                (void *)rep.bitmapData,
-                rep.bytesPerRow);
+// this is the last step in horizon detection
++ (Mat)groundOnlyFrom:(Mat)image {
+    // reinterpret as pointer
+    cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
+
+    // now work with references
+    cv::Mat& mat = *matPtr;
 
     // make copy for safer concurrency
     cv::Mat owned = mat.clone();
+    
+    // If your conversion gives 3/4 channels, force it to grayscale
+    if (owned.channels() > 1) {
+      cv::cvtColor(owned, owned, cv::COLOR_BGR2GRAY);
+    }
     
     // Ensure binary (Otsu output should already be 0/255)
     cv::Mat bin;
@@ -273,17 +276,24 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
     for (const auto& p : whitePoints) {
       horizonBottomY = std::max(horizonBottomY, p.y); // lowest white pixel
     }
+
+    // make a new result on the heap XXX CLEAR THIS LATER WITH freeCvMat:
+    cv::Mat* resultPtr = new cv::Mat(finalMask.clone());
+
+    delete matPtr;
     
-    return [[HorizonResult alloc]
-	     initWithImage: [PixelatedImageBridge imageFromMat:finalMask]
-	       horizonTopY: horizonTopY
-	     horizonBottomY: horizonBottomY];
+    return resultPtr;
 }
 
 
 // XXX refactor this to use Mat instead of NSImage *
-+ (HorizonResult *)horizonExtentsFromImage:(NSImage *)image {
-    cv::Mat mat = cvMatFromNSImage(image, YES);
++ (HorizonResult *)horizonExtentsFromImage:(Mat)image {
+    // reinterpret as pointer
+    cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
+
+    // now work with references
+    cv::Mat& mat = *matPtr;
+
     if (mat.empty()) {
         return nil;
     }
@@ -308,11 +318,12 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
             break;
         }
     }
-    
-    HorizonResult *result = [[HorizonResult alloc] initWithImage:image
-                                                    horizonTopY:horizonTopY
-                                                 horizonBottomY:horizonBottomY];
-    return result;
+
+    delete matPtr;
+      
+    return [[HorizonResult alloc]
+	     initWithHorizonTopY: horizonTopY
+		  horizonBottomY: horizonBottomY];
 }
 
 +(Mat)brightenDarks:(Mat)image

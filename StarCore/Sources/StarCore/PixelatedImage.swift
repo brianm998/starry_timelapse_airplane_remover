@@ -1347,6 +1347,21 @@ extension PixelatedImage {
 }
 
 extension PixelatedImage {
+
+    public var horizonBounds: HorizonBounds {
+        // first convert images to cv::Mat
+        let baseMat = self.cvMat
+        
+        let bounds = PixelatedImageBridge.horizonExtents(fromImage: baseMat)
+
+        PixelatedImageBridge.freeCvMat(baseMat)
+        
+        return HorizonBounds(
+          topY: bounds.horizonTopY,
+          bottomY: bounds.horizonBottomY
+        )
+    }
+    
     public func maxBrightnessScale(in darksMask: PixelatedImage) -> Double {
         // first convert images to cv::Mat
         let baseMat = self.cvMat

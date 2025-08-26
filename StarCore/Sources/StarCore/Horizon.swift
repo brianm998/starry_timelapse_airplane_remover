@@ -109,21 +109,21 @@ public extension Array where Element == HorizonBounds {
 extension PixelatedImage {
     // should get rid of all but the ground, designed to run after Otsu classification and
     // connected component filtering.  Returns HorizonMask, including the Y bounds of the horizon
-    public var groundOnly: HorizonMask? {
-        guard let nsImg = self.nsImage else { return nil }
-        let horizonResult = PixelatedImageBridge.groundOnly(from: nsImg)
-        if let image = horizonResult.image.cgImage(forProposedRect: nil, context: nil, hints: nil),
-           let pixelatedImage = PixelatedImage(image)
-        {
-            Log.d("XXX got horizonResult.horizonTopY \(horizonResult.horizonTopY) horizonResult.horizonBottomY \(horizonResult.horizonBottomY)")
-            return HorizonMask(
-              image: pixelatedImage,
-              horizonTopY: horizonResult.horizonTopY,
-              horizonBottomY: horizonResult.horizonBottomY
-            )
-        } else {
-            return nil
-        }
+    public var groundOnly: PixelatedImage {
+
+        // first convert image to cv::Mat
+        let baseMat = self.cvMat
+        
+        let horizonResult = PixelatedImageBridge.groundOnly(from: baseMat)
+
+        // then convert back in to PixelatedImage
+        let ret = self.newImage(from: horizonResult)
+
+        // finally free the cv::Mat pointers
+        PixelatedImageBridge.freeCvMat(baseMat)
+        PixelatedImageBridge.freeCvMat(horizonResult)
+        
+        return ret
     }
 }
 
@@ -177,18 +177,17 @@ extension PixelatedImage {
                     // apply connect component filtering and ground only logic
                     let filtered = otsu.connectedComponentFiltered(keepLargest: 2)
                        
-                    if let groundOnly = filtered.groundOnly {
-                        // deal with groundOnly horizonTopY horizonBottomY
-                        return ImageMatrixElement(
-                          x: element.x,
-                          y: element.y,
-                          image: groundOnly.image,
-                          horizonTopY: groundOnly.horizonTopY,
-                          horizonBottomY: groundOnly.horizonBottomY
-                        )
-                    } else {
-                        return nil
-                    }
+                    let groundOnly = filtered.groundOnly
+                    
+                    let bounds = groundOnly.horizonBounds
+
+                    return ImageMatrixElement(
+                      x: element.x,
+                      y: element.y,
+                      image: groundOnly,
+                      horizonTopY: bounds.topY,
+                      horizonBottomY: bounds.bottomY
+                    )
                 }
             }
             for await result in taskGroup {

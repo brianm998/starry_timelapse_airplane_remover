@@ -418,12 +418,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                let nsImage = horizonMaskImage.nsImage
             {
                 Log.d("frame \(frameIndex) successfully loaded horizon mask")
-                
-                let result = PixelatedImageBridge.horizonExtents(from: nsImage)
+
+                let bounds = horizonMaskImage.horizonBounds
                 return HorizonMask(
                   image: horizonMaskImage,
-                  horizonTopY: result.horizonTopY,
-                  horizonBottomY: result.horizonBottomY
+                  horizonTopY: bounds.topY,
+                  horizonBottomY: bounds.bottomY
                 )
             }
         } catch {

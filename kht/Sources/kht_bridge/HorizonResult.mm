@@ -2,12 +2,11 @@
 
 @implementation HorizonResult
 
-- (instancetype)initWithImage:(NSImage *)image
-		  horizonTopY:(NSInteger)horizonTopY
-	       horizonBottomY:(NSInteger)horizonBottomY {
+- (instancetype)initWithHorizonTopY:(NSInteger)horizonTopY
+		     horizonBottomY:(NSInteger)horizonBottomY
+{
   self = [super init];
     if (self) {
-        _image = image;
         _horizonTopY = horizonTopY;
         _horizonBottomY = horizonBottomY;
     }
