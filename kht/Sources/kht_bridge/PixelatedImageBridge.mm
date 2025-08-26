@@ -197,7 +197,7 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
     // make a new result on the heap XXX CLEAR THIS LATER WITH freeCvMat:
     cv::Mat* resultPtr = new cv::Mat(filtered);
 
-    delete matPtr;
+    //delete matPtr;
     
     return resultPtr;
 }
@@ -280,13 +280,12 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
     // make a new result on the heap XXX CLEAR THIS LATER WITH freeCvMat:
     cv::Mat* resultPtr = new cv::Mat(finalMask.clone());
 
-    delete matPtr;
+    //delete matPtr;
     
     return resultPtr;
 }
 
 
-// XXX refactor this to use Mat instead of NSImage *
 + (HorizonResult *)horizonExtentsFromImage:(Mat)image {
     // reinterpret as pointer
     cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
@@ -297,9 +296,22 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
     if (mat.empty()) {
         return nil;
     }
-    
+
+
     cv::Mat gray, binary;
-    cv::cvtColor(mat, gray, cv::COLOR_RGBA2GRAY);
+    
+    // If not already grayscale, convert
+    if (mat.channels() == 3) {
+      cv::cvtColor(mat, gray, cv::COLOR_BGR2GRAY);
+    } else if (mat.channels() == 4) {
+      cv::cvtColor(mat, gray, cv::COLOR_BGRA2GRAY);
+    } else if (mat.channels() == 1) {
+      gray = mat; // already grayscale
+    } else {
+      NSLog(@"Unsupported channel count: %d", mat.channels());
+      return nil;
+    }
+
     cv::threshold(gray, binary, 128, 255, cv::THRESH_BINARY);
     
     // --- Find horizon extents ---
@@ -319,7 +331,7 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
         }
     }
 
-    delete matPtr;
+    //delete matPtr;
       
     return [[HorizonResult alloc]
 	     initWithHorizonTopY: horizonTopY
@@ -492,7 +504,8 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
 
 + (void)freeCvMat:(Mat)matPtr {
     cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
-    delete mat;
+    //delete mat;
+    // XXX deal with memory after it works XXX
 }
 
 @end

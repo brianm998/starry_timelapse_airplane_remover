@@ -49,6 +49,7 @@ NS_ASSUME_NONNULL_BEGIN
 // also make sure to free the Mat arguments passed in after creating them, they're in c++ world.
 + (void)freeCvMat:(Mat)mat;
 
+// used when turning a Mat back into a PixelatedImage
 + (NSData *)dataFromCvMat:(Mat)matPtr;
 
 @end

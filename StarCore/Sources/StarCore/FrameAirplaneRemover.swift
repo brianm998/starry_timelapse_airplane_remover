@@ -973,20 +973,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
 
             let horizonMask = try await loadOrCreateHorizonMask()
-
-            
             
             let scaleFactor = croppedBase.maxBrightnessScale(in: horizonMask.image) 
 
             Log.i("frame \(frameIndex) got scaleFactor \(scaleFactor)")
             
             // brighten and crop it
-            /*guard*/ let cropped = croppedBase
-                    //.brightenDarks(with: horizonMask.image, by: scaleFactor)?
-                    .bottomCrop(by: height-cropAmount) 
-//            else {
-//                throw "unable to brighten darks on base image"
-//            }
+            let cropped = croppedBase
+              .brightenDarks(with: horizonMask.image, by: scaleFactor)
+              .bottomCrop(by: height-cropAmount)
+
             let url = URL(fileURLWithPath: baseFilename)
             let filename = url.lastPathComponent
             croppedFilename = "\(croppedDirname)/\(filename)"
