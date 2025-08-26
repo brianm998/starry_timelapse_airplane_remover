@@ -175,9 +175,9 @@ extension PixelatedImage {
                     let otsu = element.image.binaryOtsuImage
 
                     // apply connect component filtering and ground only logic
-                    if let filtered = otsu.connectedComponentFiltered(keepLargest: 2),
-                       let groundOnly = filtered.groundOnly
-                    {
+                    let filtered = otsu.connectedComponentFiltered(keepLargest: 2)
+                       
+                    if let groundOnly = filtered.groundOnly {
                         // deal with groundOnly horizonTopY horizonBottomY
                         return ImageMatrixElement(
                           x: element.x,
@@ -221,10 +221,20 @@ extension PixelatedImage {
 
 extension PixelatedImage {
     // digs into opencv2 to remove a lot of connected components 
-    public func connectedComponentFiltered(keepLargest n: Int = 2) -> PixelatedImage? {
-        guard let nsImg = self.nsImage else { return nil }
-        let filtered = PixelatedImageBridge.filterConnectedComponents(nsImg, keepLargest: n)
-        return PixelatedImage(filtered.cgImage(forProposedRect: nil, context: nil, hints: nil)!)
+    public func connectedComponentFiltered(keepLargest n: Int = 2) -> PixelatedImage {
+
+        // first convert self to cv::Mat
+        let baseMat = self.cvMat
+        let filtered = PixelatedImageBridge.filterConnectedComponents(baseMat, keepLargest: n)
+
+        // then convert back in to PixelatedImage
+        let ret = self.newImage(from: filtered)
+        
+        // finally free the cv::Mat pointers
+        PixelatedImageBridge.freeCvMat(filtered)
+        PixelatedImageBridge.freeCvMat(baseMat)
+
+        return ret
     }
 }
 

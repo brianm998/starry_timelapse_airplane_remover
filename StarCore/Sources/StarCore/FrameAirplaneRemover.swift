@@ -976,7 +976,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             
             
-            guard let scaleFactor = croppedBase.maxBrightnessScale(in: horizonMask.image) else { throw "cannot load scale factor" }
+            let scaleFactor = croppedBase.maxBrightnessScale(in: horizonMask.image) 
 
             Log.i("frame \(frameIndex) got scaleFactor \(scaleFactor)")
             

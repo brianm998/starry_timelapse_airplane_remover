@@ -28,6 +28,7 @@
 // If forceRGBA is YES, always returns CV_8UC4
 // Otherwise it returns whatever channel count the bitmap already has.
 
+// XXX get rid of NSImage, replace with Mat
 static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
     CGImageRef cgRef = [image CGImageForProposedRect:NULL context:nil hints:nil];
     if (!cgRef) {
@@ -94,7 +95,7 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
 
 @implementation PixelatedImageBridge
 
-
+// XXX replace with just returning void * cv::Mat  
 + (NSImage *)imageFromMat:(const cv::Mat&)mat {
     if (mat.empty()) {
         return nil;
@@ -148,18 +149,21 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
     return outImage;
 }
 
-+ (NSImage *)filterConnectedComponents:(NSImage *)image keepLargest:(NSInteger)n {
-    // Convert NSImage -> cv::Mat (grayscale binary)
-    CGImageRef cgRef = [image CGImageForProposedRect:nil context:nil hints:nil];
-    NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithCGImage:cgRef];
-    cv::Mat mat((int)rep.pixelsHigh,
-                (int)rep.pixelsWide,
-                CV_8UC1,
-                (void *)rep.bitmapData,
-                rep.bytesPerRow);
++ (Mat)filterConnectedComponents:(Mat)image keepLargest:(NSInteger)n {
+
+    // reinterpret as pointer
+    cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
+
+    // now work with references
+    cv::Mat& mat = *matPtr;
 
     // make copy for safer concurrency
     cv::Mat owned = mat.clone();
+    
+    // If your conversion gives 3/4 channels, force it to grayscale
+    if (owned.channels() > 1) {
+      cv::cvtColor(owned, owned, cv::COLOR_BGR2GRAY);
+    }
     
     // Connected components
     cv::Mat labels, stats, centroids;
@@ -190,11 +194,13 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
         }
     }
 
-    NSImage * ret = [PixelatedImageBridge imageFromMat:filtered];
-    NSLog(@"XXX ret [%d, %d]", ret.size.width, ret.size.height);
-    return ret;
+    // make a new result on the heap XXX CLEAR THIS LATER WITH freeCvMat:
+    cv::Mat* resultPtr = new cv::Mat(filtered);
+
+    return resultPtr;
 }
 
+// XXX refactor this to not use NSImage, pass void * cv::Mat instead
 // this is the last step in horizon detection, so it gives a HorizonResult  
 + (HorizonResult *)groundOnlyFrom:(NSImage *)image {
     // Convert NSImage → cv::Mat grayscale binary
@@ -275,6 +281,7 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
 }
 
 
+// XXX refactor this to use Mat instead of NSImage *
 + (HorizonResult *)horizonExtentsFromImage:(NSImage *)image {
     cv::Mat mat = cvMatFromNSImage(image, YES);
     if (mat.empty()) {
@@ -372,92 +379,22 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
 
     //cv::imwrite("/tmp/result.png", result);
 
-    // make a new result on the heap XXX CLEAR THIS LATER WITH freeMat:
+    // make a new result on the heap XXX CLEAR THIS LATER WITH freeCvMat:
     cv::Mat* resultPtr = new cv::Mat(result.clone());
-
 
     return resultPtr;
 }
 
-+(void)freeMat:(Mat)mat {
-    delete reinterpret_cast<cv::Mat*>(mat);
-}
-
-/*
-+(NSImage *)brightenDarks:(NSImage *)image
-                     mask:(NSImage *)mask
-                   amount:(double)amount
++(double)maxBrightnessScaleForImage:(Mat)image
+			  maskImage:(Mat)mask
 {
-    cv::Mat mat = cvMatFromNSImage(image, NO);
-    cv::Mat maskMat = cvMatFromNSImage(mask, NO);
-    if (mat.empty() || maskMat.empty()) {
-        NSLog(@"brightenDarks: empty mat or mask");
-        return image;
-    }
+    // reinterpret as pointer
+    cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
+    cv::Mat* maskPtr = reinterpret_cast<cv::Mat*>(mask);
 
-    // --- Build a proper binary 8-bit mask (255 = keep original, 0 = brighten) ---
-    if (maskMat.size() != mat.size()) {
-        cv::resize(maskMat, maskMat, mat.size(), 0, 0, cv::INTER_NEAREST);
-    }
-    cv::Mat maskGray;
-    if (maskMat.channels() == 4)      cv::cvtColor(maskMat, maskGray, cv::COLOR_BGRA2GRAY);
-    else if (maskMat.channels() == 3) cv::cvtColor(maskMat, maskGray, cv::COLOR_BGR2GRAY);
-    else                              maskGray = maskMat;
-
-    cv::Mat binMask;                               // CV_8UC1, 0/255
-    cv::threshold(maskGray, binMask, 128, 255, cv::THRESH_BINARY);
-    CV_Assert(binMask.type() == CV_8UC1);
-
-    // Invert: 255 where we want to brighten
-    cv::Mat invMask;
-    cv::bitwise_not(binMask, invMask);
-    CV_Assert(invMask.type() == CV_8UC1);
-
-    // XXX testing
-    // XXX testing
-    // XXX testing
-    //cv::imwrite("/tmp/binMask.png", binMask);
-    //cv::imwrite("/tmp/invMask.png", invMask);
-    // XXX testing
-    // XXX testing
-    // XXX testing
-    
-    // --- Multiply (scale) only the dark region (mask==0) ---
-    // Do the math in float to preserve fraction, then convert back with saturation.
-    double scale = 1.0 + amount;               // e.g. amount=0.2 → +20%
-    scale = std::max(0.0, scale);              // avoid negative/NaN scales
-
-    cv::Mat mat32, bright32;
-    mat.convertTo(mat32, CV_32F);              // promote
-
-    // Per-channel scalar (don’t touch alpha)
-    cv::Scalar s(1,1,1,1);
-    if (mat.channels() == 1)      s = cv::Scalar(scale);
-    else if (mat.channels() == 3) s = cv::Scalar(scale, scale, scale);
-    else if (mat.channels() == 4) s = cv::Scalar(scale, scale, scale, 1.0);
-
-    cv::multiply(mat32, s, bright32);          // no mask arg in OpenCV2
-
-    cv::Mat brightened;
-    bright32.convertTo(brightened, mat.type()); // back to original depth (saturates)
-
-    // Compose: start from original, then overwrite only where invMask==255
-    cv::Mat result = mat.clone();
-    brightened.copyTo(result, invMask);
-
-    return [PixelatedImageBridge imageFromMat:result];
-}
-*/
-+(double)maxBrightnessScaleForImage:(NSImage *)image
-			  maskImage:(NSImage *)mask
-{
-    cv::Mat mat = cvMatFromNSImage(image, NO);
-    cv::Mat maskMat = cvMatFromNSImage(mask, NO);
-
-    NSLog(@"image size %d x %d, mat size: %d x %d, channels=%d, depth=%d", image.size.width, image.size.height,
-	  mat.cols, mat.rows, mat.channels(), mat.depth());
-    NSLog(@"mask size: %d x %d, channels=%d, depth=%d",
-	  maskMat.cols, maskMat.rows, maskMat.channels(), maskMat.depth());
+    // now work with references
+    cv::Mat& mat = *matPtr;
+    cv::Mat& maskMat = *maskPtr;
     
     CV_Assert(mat.size() == maskMat.size());
     
@@ -517,6 +454,7 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
         default: return nullptr;
     }
 
+    // free this with freeCvMat some time later
     cv::Mat *mat = new cv::Mat(height, width, type, buffer, bytesPerRow);
     return (Mat)mat;
 }

@@ -1346,39 +1346,68 @@ extension PixelatedImage {
     }
 }
 
-
 extension PixelatedImage {
-    public func maxBrightnessScale(in darksMask: PixelatedImage) -> Double? {
-        if let base = self.nsImage,
-           let mask = darksMask.nsImage
-        {
-          print("XXX FUCKING base [\(base.size.width), \(base.size.height)]")
-          return PixelatedImageBridge.maxBrightnessScale(for: base, maskImage: mask)
-        } else {
-            return nil
-        }
+    public func maxBrightnessScale(in darksMask: PixelatedImage) -> Double {
+        // first convert images to cv::Mat
+        let baseMat = self.cvMat
+        let maskMat = darksMask.cvMat
+
+        let ret = PixelatedImageBridge.maxBrightnessScale(
+          forImage: baseMat,
+          maskImage: maskMat
+        )
+        
+        // finally free the cv::Mat pointers
+        PixelatedImageBridge.freeCvMat(baseMat)
+        PixelatedImageBridge.freeCvMat(maskMat)
+
+        return ret
     }
 
     public func brightenDarks(with darksMask: PixelatedImage, by amount: Double) -> PixelatedImage {
-        let baseMat = PixelatedImageBridge.cvMat(from: self)
-        let maskMat = PixelatedImageBridge.cvMat(from: darksMask)
+        // first convert images to cv::Mat
+        let baseMat = self.cvMat
+        let maskMat = darksMask.cvMat
 
+        // then process in cv world
         let processedMat = PixelatedImageBridge.brightenDarks(
           baseMat,
           mask: maskMat,
           amount: amount
         )
 
-        return PixelatedImageBridge.pixelatedImage(from: baseMat/*processedMat*/,
-                                                   bitmapInfo: self.bitmapInfo,
-                                                   colorSpace: self.colorSpace,
-                                                   ciFormat: self.ciFormat)
+        // then convert back in to PixelatedImage
+        let ret = self.newImage(from: processedMat)
+
+        // finally free the cv::Mat pointers
+        PixelatedImageBridge.freeCvMat(baseMat)
+        PixelatedImageBridge.freeCvMat(maskMat)
+        PixelatedImageBridge.freeCvMat(processedMat)
+        
+        return ret
     }
 }
 
-//public typealias Mat = OpaquePointer // or use `AnyObject` bridging if you typedef cv::Mat*
+// simple swift wrappers over the ObjC -> OpenCV bridge
+extension PixelatedImage {
+    // convert any PixelatedImage directly into a cv::Mat for opencv2 processing
+    public var cvMat: Mat { PixelatedImageBridge.cvMat(from: self) }
 
+    // convert a mat back into a PixelatedImage, using an the self image
+    // for image bitmapInfo, colorSpace, and ciFormat
+    public func newImage(from mat: Mat) -> PixelatedImage {
+        PixelatedImageBridge.pixelatedImage(
+          from: mat,
+          bitmapInfo: self.bitmapInfo,
+          colorSpace: self.colorSpace,
+          ciFormat: self.ciFormat
+        )
+    }
+}
+    
+// swift extesion to objc code that bridges between cv::Mat and PixleatedImage
 extension PixelatedImageBridge {
+    
     static func cvMat(from image: PixelatedImage) -> Mat {
         var data = image.imageData.data
         return data.withUnsafeMutableBytes { buf in
@@ -1393,10 +1422,12 @@ extension PixelatedImageBridge {
         }
     }
 
-    static func pixelatedImage(from mat: Mat,
-                               bitmapInfo: CGBitmapInfo,
-                               colorSpace: CGColorSpace,
-                               ciFormat: CIFormat) -> PixelatedImage {
+    static func pixelatedImage(
+      from mat: Mat,
+      bitmapInfo: CGBitmapInfo,
+      colorSpace: CGColorSpace,
+      ciFormat: CIFormat) -> PixelatedImage
+    {
         let nsdata = Self.data(fromCvMat: mat)
         let bytes = [UInt8](nsdata)
 
@@ -1405,12 +1436,6 @@ extension PixelatedImageBridge {
         let step = Int(Self.matStep(mat))
         let bitsPerComponent = bytesPerPixel / channels * 8
 
-
-        // PixelXDimension: 4240
-        // PixelYDimension: 2832
-        
-        Log.d("CRAPPY channels \(channels) bytesPerPixel \(bytesPerPixel) step \(step)")
-        
         let df: PixelatedImage.DataFormat
         switch bitsPerComponent {
         case 8: df = .eightBit(bytes)
@@ -1422,10 +1447,8 @@ extension PixelatedImageBridge {
         let width = step/bytesPerPixel
         let height = nsdata.count / (width*bytesPerPixel)
 
-        Log.d("FUCKING width \(width) height \(height)")
-        
         return PixelatedImage(width: width,
-                              height: height, // calculate properly
+                              height: height,
                               imageData: df,
                               bitsPerPixel: bytesPerPixel*8,
                               bytesPerRow: step,
