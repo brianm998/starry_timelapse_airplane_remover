@@ -1,6 +1,27 @@
-// PixelatedImageBridge.mm
-#import <opencv2/opencv.hpp>
 #import "PixelatedImageBridge.h"
+
+//#ifdef NO
+//#undef NO
+//#endif
+
+#include <opencv2/core.hpp>
+#import <opencv2/imgproc.hpp>
+#import <opencv2/highgui.hpp>
+
+
+
+#include <memory>
+
+
+
+
+
+// PixelatedImageBridge.mm
+
+#import <opencv2/imgcodecs/macosx.h>
+
+#include <set>        // for std::set
+
 #import "HorizonResult.h"
 
 // Converts NSImage to cv::Mat
@@ -70,7 +91,14 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
     }
 }
 
+
 @implementation PixelatedImageBridge
+
++ (void)freeCvMat:(void *)matPtr {
+    cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
+    delete mat;
+}
+
 
 + (NSImage *)imageFromMat:(const cv::Mat&)mat {
     if (mat.empty()) {
@@ -460,5 +488,26 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
     return maxAllowed / maxValOverall;
 }
 
++ (cv::Mat)cvMatFromBuffer:(void *)bytes
+                     width:(int)w
+                    height:(int)h
+                  channels:(int)c
+            bitsPerChannel:(int)bits
+              bytesPerRow:(int)bpr
+{
+    int type = 0;
+    if (bits == 8)  type = CV_MAKETYPE(CV_8U, c);
+    if (bits == 16) type = CV_MAKETYPE(CV_16U, c);
+    if (bits == 32) type = CV_MAKETYPE(CV_32S, c);
+
+    return cv::Mat(h, w, type, bytes, bpr);
+}
+
++ (NSData *)dataFromCvMat:(const cv::Mat&)mat {
+    size_t size = mat.total() * mat.elemSize();
+    return [NSData dataWithBytes:mat.data length:size];
+}
+
 @end
+
 

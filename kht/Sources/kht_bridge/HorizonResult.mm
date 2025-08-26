@@ -1,4 +1,3 @@
-#import <opencv2/opencv.hpp>
 #import "HorizonResult.h"
 
 @implementation HorizonResult

@@ -1,9 +1,19 @@
+//#ifdef NO
+//#undef NO
+//#endif
+
+
+#import <opencv2/core.hpp>
+
+#import <opencv2/imgproc.hpp>
+#import <opencv2/highgui.hpp>
+#import <opencv2/imgcodecs/macosx.h>
+
 
 #import "../kht/include/kht.hpp"
 #import "include/KHTBridge.h"
-#include <opencv2/imgproc.hpp>
-#include <opencv2/highgui.hpp>
-#include <opencv2/imgcodecs/macosx.h>
+
+#import <Foundation/Foundation.h>
 #import <math.h>
 
 @implementation KHTBridgeLine

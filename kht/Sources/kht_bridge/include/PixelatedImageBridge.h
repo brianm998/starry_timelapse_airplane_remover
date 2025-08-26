@@ -1,6 +1,8 @@
 // PixelatedImageBridge.h
+#pragma once
+
 #import <Foundation/Foundation.h>
-#import <AppKit/AppKit.h>
+
 #import "HorizonResult.h"
 
 NS_ASSUME_NONNULL_BEGIN
@@ -23,7 +25,20 @@ NS_ASSUME_NONNULL_BEGIN
 		     mask:(NSImage *)mask
 		   amount:(double)amount;
 
-//+ (NSImage *)imageFromMat:(const cv::Mat&)mat;
+
+
+/// Create a cv::Mat wrapper around raw pixel buffer (no copy)
++ (void*)cvMatFromBuffer:(void *)bytes
+                     width:(int)w
+                    height:(int)h
+                  channels:(int)c
+            bitsPerChannel:(int)bits
+              bytesPerRow:(int)bpr;
+
+/// Copy cv::Mat contents into a newly allocated NSData
++ (NSData *)dataFromCvMat:(const void*)mat;
+
+
 @end
 
 

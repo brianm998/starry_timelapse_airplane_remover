@@ -1,4 +1,7 @@
+
+#pragma once
 #import <Foundation/Foundation.h>
+
 #import "PixelatedImageBridge.h"
 #import "HorizonResult.h"
 

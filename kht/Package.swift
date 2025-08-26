@@ -41,8 +41,10 @@ let package = Package(
       ),      
       .target(name: "kht_bridge", // Objective C
               dependencies: ["kht"],
-              cSettings: [ .unsafeFlags([ "-I", "../../opencv/include", // for the gui
-                                          "-I", "../opencv/include" ])] // for everything else
+              publicHeadersPath: "include",
+              cSettings: [
+                .headerSearchPath("../../opencv/include"),   // for headers
+              ] 
       ),   
       .target(name: "KHTSwift", // Swift
               dependencies: [
