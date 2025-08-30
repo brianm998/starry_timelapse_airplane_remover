@@ -81,6 +81,8 @@ public actor NighttimeAirplaneRemover {
             // grab image accessor data here
             
             let basename = removePath(fromString: imageFilename)
+              .sanitized
+            
             frameIndexToBaseNameMap[index] = basename
             
             let outputFilename = "\(outputDirname)/\(basename)"
@@ -114,7 +116,7 @@ public actor NighttimeAirplaneRemover {
         // XX VVV XX appears to be the root of the frameIndex starting at zero 
         for (index, imageFilename) in self.imageSequence.filenames.enumerated() {
             let filename = self.imageSequence.filenames[index]
-            let basename = removePath(fromString: filename)
+            let basename = removePath(fromString: filename).sanitized
             let outputFilename = "\(outputDirname)/\(basename)"
             Log.w("shouldProcess[\(index)] = \(shouldProcess[index])")
             if shouldProcess[index] {
@@ -398,3 +400,12 @@ public actor NighttimeAirplaneRemover {
 }
               
               
+extension String {
+    /// Returns a sanitized version of the string, replacing shell-unsafe characters with `_`.
+    var sanitized: String {
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/")
+        let ret = self.unicodeScalars.map { allowed.contains($0) ? Character($0) : "_" }.reduce("") { $0 + String($1) }
+        Log.d("FUCKING santizied \(self) = \(ret)")
+        return ret
+    }
+}

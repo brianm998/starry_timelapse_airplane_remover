@@ -1,5 +1,4 @@
 import Foundation
-import ShellOut
 import logging
 
 public typealias ProgressCallback = @Sendable (_ currentFrame: Int, _ totalFrames: Int) -> Void
@@ -13,6 +12,7 @@ public struct VideoInfo: Sendable {
     public let hasAudio: Bool
 }
 
+
 /// Process a video: extract frames and audio and video information
 public func decodeVideo(
     named inputPath: String,
@@ -21,7 +21,11 @@ public func decodeVideo(
     let inputURL = URL(fileURLWithPath: inputPath)
     let fileName = inputURL.deletingPathExtension().lastPathComponent
     let fileExtension = inputURL.pathExtension
-    let outputFolder = inputURL.deletingLastPathComponent().appendingPathComponent(fileName).path
+    let outputFolder = inputURL
+      .deletingLastPathComponent()
+      .appendingPathComponent(fileName)
+      .path
+      .sanitized
     let fileManager = FileManager.default
 
     try? fileManager.createDirectory(atPath: outputFolder, withIntermediateDirectories: true)
@@ -157,7 +161,7 @@ public func runFFmpegWithProgress(
   ffmpegPath: String = ToolPaths.ffmpeg,
   progress: @escaping ProgressCallback
 ) throws {
-    Log.d("starting ffmpeg run")
+    Log.d("starting ffmpeg run with arguments \(arguments)")
     let process = Process()
     process.executableURL = URL(fileURLWithPath: ffmpegPath)
     process.arguments = arguments

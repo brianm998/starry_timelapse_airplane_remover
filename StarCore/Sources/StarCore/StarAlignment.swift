@@ -1,5 +1,4 @@
 import Foundation
-import ShellOut
 import logging
 import kht_bridge
 
@@ -72,7 +71,7 @@ public class StarAlignment {
                 Log.d("alignment worked")
 
                 // the first output file is simply a copy of the reference frame, delete it
-                try shellOut(to: "rm",
+                try shellOut(to: "/bin/rm",
                              arguments: ["\(baseName)0000.tif"],
                              at: outputDirname)
                 Log.d("rm worked")
@@ -87,7 +86,7 @@ public class StarAlignment {
                         let indexStr = String(format: "%04d", index+1)
                         let frameIndex = sortedFrameIndices[index]
                         Log.d("about to mv \(baseName)\(indexStr).tif \(origFilename) ")
-                        try shellOut(to: "mv",
+                        try shellOut(to: "/bin/mv",
                                      arguments: ["\(baseName)\(indexStr).tif", "\(origFilename)"],
                                      at: outputDirname)
                         Log.d("mv \(baseName)\(indexStr).tif \(outputDirname)/\(origFilename) worked ")
@@ -98,8 +97,7 @@ public class StarAlignment {
             return outputFilenames
         } catch {
             if let error = error as? ShellOutError {
-                Log.e("STDERR: \(error.message)") // log STDERR
-                Log.e("STDOUT: \(error.output)")  // log STDOUT
+                Log.e("ERROR: \(error.description)")
             } else {
                 Log.e("\(error)")
             }
@@ -112,14 +110,13 @@ public class StarAlignment {
                 
                 do {
                     try ObjC.catchException {
-                        try shellOut(to: "ln", arguments: [sortedFilenames[0], fakeAlignmentName])
+                        try shellOut(to: "/bin/ln", arguments: [sortedFilenames[0], fakeAlignmentName])
                     }
                     return [sortedFrameIndices[0]:fakeAlignmentName]
                 } catch {
 
                     if let error = error as? ShellOutError {
-                        Log.e("STDERR: \(error.message)") // log STDERR
-                        Log.e("STDOUT: \(error.output)")  // log STDOUT
+                        Log.e("ERROR: \(error.description)") // log errors
                     } else {
                         Log.e("\(error)")
                     }
@@ -128,14 +125,12 @@ public class StarAlignment {
                     
                     do {
                         try ObjC.catchException {
-                            try shellOut(to: "cp", arguments: [sortedFilenames[0], fakeAlignmentName])
+                            try shellOut(to: "/bin/cp", arguments: [sortedFilenames[0], fakeAlignmentName])
                         }
                         return [sortedFrameIndices[0] : fakeAlignmentName]
                     } catch {
                         if let error = error as? ShellOutError {
-                            Log.e("STDERR: \(error.message)") // log STDERR
-                            Log.e("STDOUT: \(error.output)")  // log STDOUT
-
+                            Log.e("ERROR: \(error.description)") // log errors
                         }
                     }
                 }
@@ -164,3 +159,64 @@ func sortedKeys(from dict: [Int: String]) -> [Int] {
       .sorted { $0.key < $1.key }   // sort the (key, value) tuples by key
       .map { $0.key }
 }
+
+
+
+// shell out stuff
+
+func shellOut(
+  to executable: String,        // needs full path name
+  arguments args: [String],
+  at workingDirectory: String? = nil) throws -> String
+{
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: executable)
+    process.arguments = args
+    
+    // Set working directory if provided
+    if let workingDirectory = workingDirectory {
+        process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
+    }
+
+    let stdoutPipe = Pipe()
+    let stderrPipe = Pipe()
+    process.standardOutput = stdoutPipe
+    process.standardError = stderrPipe
+
+    try process.run()
+    process.waitUntilExit()
+
+    let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+    let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
+    let stderr = String(data: stderrData, encoding: .utf8) ?? ""
+
+    if process.terminationStatus != 0 {
+        throw ShellOutError(
+            exitCode: process.terminationStatus,
+            output: stdout,
+            errorOutput: stderr
+        )
+    }
+
+    return stdout
+}
+
+
+struct ShellOutError: Error, CustomStringConvertible {
+    let exitCode: Int32
+    let output: String
+    let errorOutput: String
+    
+    var description: String {
+        return """
+        ShellOutError: Exit code \(exitCode)
+        STDOUT:
+        \(output)
+        
+        STDERR:
+        \(errorOutput)
+        """
+    }
+}
+
