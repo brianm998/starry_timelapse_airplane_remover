@@ -1,5 +1,4 @@
 import Foundation
-import ShellOut
 import logging
 import KHTSwift
 import kht_bridge
@@ -40,7 +39,10 @@ public actor ProcessorUsageReporter {
         do {
             try ObjC.catchException {
                 // Failed to set posix_spawn_file_actions for fd -1 at index 0 with errno 9
-                let usageString = try shellOut(to: "top -R -F -n 0 -l 2 -s 0")
+                let usageString = try shellOut(
+                  to: "/usr/bin/top",
+                  arguments: ["-R -F -n 0 -l 2 -s 0"]
+                )
                 
                 let lines = usageString.split(whereSeparator: \.isNewline)
                 
