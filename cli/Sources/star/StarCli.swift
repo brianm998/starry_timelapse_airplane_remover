@@ -2,7 +2,6 @@ import ArgumentParser
 import CoreGraphics
 import Cocoa
 import StarCore
-import ShellOut
 import logging
 import StarDecisionTrees
 
