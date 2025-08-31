@@ -28,7 +28,7 @@ let package = Package(
                 .linkedFramework("OpenCL"),
                 .unsafeFlags([
                                // use old, slower linker for now to avoid so many linker warnings
-                               "-Xlinker", "-ld_classic",
+      //                         "-Xlinker", "-ld_classic",
                                
                                // link in pre compiled .a file for opencv2 
                                "-L../opencv/lib/",
