@@ -22,40 +22,33 @@ if [ -z ${ARCHS+x} ]; then export ARCHS=`uname -m`; fi
 export OPENCV_VERSION="4.12.0"
 
 # clean any prior build
-#rm -rf lib
-#rm -rf include
-#rm -rf opencv
-#rm -rf opencv2.framework
+rm -rf lib
+rm -rf include
+rm -rf opencv
+rm -rf opencv2.framework
 
 # output dirs
-#mkdir lib
-#mkdir include
+mkdir lib
+mkdir include
 
-#
-# XXX to get this to work, we need to
-# 
-# add
-# 
-# set(CMAKE_CXX_STANDARD 17) ## HACK HACK
-# 
-# to the top of CMakeLists.txt
-#
-#
-# and set 
-#
-#
-
-MACOSX_DEPLOYMENT_TARGET='14'
+# the default MACOSX deployment target is too low, so set it higher here for a successful compile
+export MACOSX_DEPLOYMENT_TARGET='14'
 
 # clone latest opencv
-#git clone https://github.com/opencv/opencv.git
+git clone https://github.com/opencv/opencv.git
 cd opencv
 
 # checkout release tag
-#git checkout $OPENCV_VERSION
+git checkout $OPENCV_VERSION
 
-# build opencv2 framework for osx, both x86 and arm
-time python3 platforms/osx/build_framework.py FRAMEWORK_BUILD --macos_archs ARCHS --without objc      --without dnn_tf      --without dnn      --without features2d      --without calib3d      --without flann      --without gapi      --without java      --without js      --without ml      --without objdetect      --without photo      --without python      --without stitching      --without ts      --without video      --without videoio      --without world      --build_only_specified_archs True 
+
+# this is the only reliable way to set the C++ standard to 17, which is required for this to compile
+sed -i '' '1i\
+set(CMAKE_CXX_STANDARD 17) ## HACK HACK
+' CMakeLists.txt
+
+# build opencv2 framework for osx and the given ARCHS
+time python3 platforms/osx/build_framework.py FRAMEWORK_BUILD --macos_archs "$ARCHS" --without objc --without dnn_tf --without dnn --without features2d --without calib3d --without flann --without gapi --without java --without js --without ml --without objdetect --without photo --without python --without stitching --without ts --without video --without videoio --without world --build_only_specified_archs True 
 
 if [ "$ARCHS" = "x86_64,arm64" ]; then 
     # if we are building more than one platform, package up the .a files for both as a universal binary
