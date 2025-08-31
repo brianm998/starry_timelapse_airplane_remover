@@ -1,6 +1,5 @@
 import Foundation
 import kht_bridge
-import ShellOut
 import CoreGraphics
 import logging
 import Cocoa

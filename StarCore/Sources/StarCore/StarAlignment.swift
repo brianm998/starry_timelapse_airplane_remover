@@ -1,5 +1,4 @@
 import Foundation
-import ShellOut
 import logging
 import kht_bridge
 
@@ -50,7 +49,7 @@ public class StarAlignment {
         let comps2 = baseFile.components(separatedBy: ".")
 
         let baseName = comps2[0]
-        //let baseExt = comps2[1]
+        //let baseExtb = comps2[1]
         
         Log.d("baseName \(baseName)")
 
@@ -75,7 +74,7 @@ public class StarAlignment {
                 Log.d("alignment worked")
 
                 // the first output file is simply a copy of the reference frame, delete it
-                try shellOut(to: "rm",
+                try shellOut(to: "/bin/rm",
                              arguments: ["\(baseName)0000.tif"],
                              at: outputDirname)
                 Log.d("rm worked")
@@ -90,7 +89,7 @@ public class StarAlignment {
                         let indexStr = String(format: "%04d", index+1)
                         let frameIndex = sortedFrameIndices[index]
                         Log.d("about to mv \(baseName)\(indexStr).tif \(origFilename) ")
-                        try shellOut(to: "mv",
+                        try shellOut(to: "/bin/mv",
                                      arguments: ["\(baseName)\(indexStr).tif", "\(origFilename)"],
                                      at: outputDirname)
                         Log.d("mv \(baseName)\(indexStr).tif \(outputDirname)/\(origFilename) worked ")
@@ -101,8 +100,7 @@ public class StarAlignment {
             return outputFilenames
         } catch {
             if let error = error as? ShellOutError {
-                Log.e("STDERR: \(error.message)") // log STDERR
-                Log.e("STDOUT: \(error.output)")  // log STDOUT
+                Log.e("ERROR: \(error.description)")
             } else {
                 Log.e("\(error)")
             }
@@ -119,14 +117,13 @@ public class StarAlignment {
                 
                 do {
                     try ObjC.catchException {
-                        try shellOut(to: "ln", arguments: [sortedFilenames[0], fakeAlignmentName])
+                        try shellOut(to: "/bin/ln", arguments: [sortedFilenames[0], fakeAlignmentName])
                     }
                     return [sortedFrameIndices[0]:fakeAlignmentName]
                 } catch {
 
                     if let error = error as? ShellOutError {
-                        Log.e("STDERR: \(error.message)") // log STDERR
-                        Log.e("STDOUT: \(error.output)")  // log STDOUT
+                        Log.e("ERROR: \(error.description)") // log errors
                     } else {
                         Log.e("\(error)")
                     }
@@ -135,14 +132,12 @@ public class StarAlignment {
                     
                     do {
                         try ObjC.catchException {
-                            try shellOut(to: "cp", arguments: [sortedFilenames[0], fakeAlignmentName])
+                            try shellOut(to: "/bin/cp", arguments: [sortedFilenames[0], fakeAlignmentName])
                         }
                         return [sortedFrameIndices[0] : fakeAlignmentName]
                     } catch {
                         if let error = error as? ShellOutError {
-                            Log.e("STDERR: \(error.message)") // log STDERR
-                            Log.e("STDOUT: \(error.output)")  // log STDOUT
-
+                            Log.e("ERROR: \(error.description)") // log errors
                         }
                     }
                 }
@@ -174,3 +169,5 @@ func sortedKeys(from dict: [Int: String]) -> [Int] {
       .sorted { $0.key < $1.key }   // sort the (key, value) tuples by key
       .map { $0.key }
 }
+
+

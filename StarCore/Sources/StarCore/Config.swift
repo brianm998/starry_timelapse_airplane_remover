@@ -308,10 +308,11 @@ public struct Config: Codable, Sendable, Transferable {
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.8.0"
+    public static let latestVersion = "0.8.2"
     
     public var basename: String {
         let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)"
+          .sanitized
         return _basename.replacingOccurrences(of: ".", with: "_")
     }
 

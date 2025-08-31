@@ -1,4 +1,5 @@
 {
+  "originHash" : "d975aab558fbcdc968aeb0bc884fafe60054c94def3caf1eab996406ab186a99",
   "pins" : [
     {
       "identity" : "semaphore",
@@ -7,15 +8,6 @@
       "state" : {
         "revision" : "f1c4a0acabeb591068dea6cffdd39660b86dec28",
         "version" : "0.0.8"
-      }
-    },
-    {
-      "identity" : "shellout",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/JohnSundell/ShellOut.git",
-      "state" : {
-        "revision" : "e1577acf2b6e90086d01a6d5e2b8efdaae033568",
-        "version" : "2.3.0"
       }
     },
     {
@@ -28,5 +20,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }

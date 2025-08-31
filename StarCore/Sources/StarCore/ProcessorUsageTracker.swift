@@ -1,5 +1,4 @@
 import Foundation
-import ShellOut
 import logging
 import KHTSwift
 import kht_bridge
@@ -41,7 +40,10 @@ public actor ProcessorUsageTracker {
         nonisolated(unsafe) var ret = ProcessorUsage.busy()
         do {
             try ObjC.catchException {
-                let usageString = try shellOut(to: "top -R -F -n 0 -l 2 -s 0")
+                let usageString = try shellOut(
+                  to: "/usr/bin/top",
+                  arguments: ["-R -F -n 0 -l 2 -s 0"]
+                )
 
                 let lines = usageString.split(whereSeparator: \.isNewline)
 
