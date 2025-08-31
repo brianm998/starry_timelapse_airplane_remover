@@ -1,8 +1,5 @@
 #import "PixelatedImageBridge.h"
 
-//#ifdef NO
-//#undef NO
-//#endif
 
 #include <opencv2/core.hpp>
 #import <opencv2/imgproc.hpp>
@@ -95,6 +92,7 @@ static cv::Mat cvMatFromNSImage(NSImage *image, BOOL forceRGBA) {
 
 @implementation PixelatedImageBridge
 
+// XXX Can this be removed now?
 // XXX replace with just returning void * cv::Mat  
 + (NSImage *)imageFromMat:(const cv::Mat&)mat {
     if (mat.empty()) {

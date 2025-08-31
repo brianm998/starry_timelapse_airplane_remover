@@ -327,17 +327,22 @@ public struct HoughLineFinder: Sendable {
     
     public var lineData: [LineInfo] {
         var ret: [LineInfo] = []
-        if let image = pixelImage.nsImage {
-            let lines = kernelHoughTransform(image: image, maxResults: args.maxLineConstant)
+        let mat = pixelImage.cvMat
 
-            for i in 0..<lines.count {
-                let originZeroLine = self.originZeroLine(from: lines[i])
+        let lines = kernelHoughTransform(
+          image: mat,
+          width: pixelImage.width,
+          height: pixelImage.height,
+          maxResults: args.maxLineConstant
+        )
 
-                ret.append(LineInfo(line: lines[i],
-                                    intensityScore: intensityScore(for: originZeroLine),
-                                    pixelScore: pixelScore(for: originZeroLine),
-                                    border: self.imageDataBorderSize))
-            }
+        for i in 0..<lines.count {
+            let originZeroLine = self.originZeroLine(from: lines[i])
+            
+            ret.append(LineInfo(line: lines[i],
+                                intensityScore: intensityScore(for: originZeroLine),
+                                pixelScore: pixelScore(for: originZeroLine),
+                                border: self.imageDataBorderSize))
         }
         return ret
     }
@@ -352,46 +357,47 @@ public struct HoughLineFinder: Sendable {
     
     public var line: LineInfo? {
         let pixelImage = self.pixelImage
-        
-        if let image = pixelImage.nsImage {
-            let lines = kernelHoughTransform(image: image, maxResults: args.maxLineConstant)
-//            for (index, line) in lines.enumerated() {
-//                Log.d("line \(index): \(line)")
-//            }
 
-            /*
-                - look at the first N lines
-                - calculate the average distance from the line for each of them.
-                - choose the best one
-             */
+        let lines = kernelHoughTransform(
+          image: pixelImage.cvMat,
+          width: pixelImage.width,
+          height: pixelImage.height,
+          maxResults: args.maxLineConstant
+        )
 
-            if lines.count > 0 {
-                var bestIntensityScore: Double = 0
-                var bestPixelScore: Double = 0
-                var bestLineIndex = 0
-                var max = lines.count
-                if max > args.maxLineConstant { max = args.maxLineConstant } 
+        /*
+         - look at the first N lines
+         - calculate the average distance from the line for each of them.
+         - choose the best one
+         */
+
+        if lines.count > 0 {
+            var bestIntensityScore: Double = 0
+            var bestPixelScore: Double = 0
+            var bestLineIndex = 0
+            var max = lines.count
+            if max > args.maxLineConstant { max = args.maxLineConstant } 
+            
+            for i in 0..<max {
+                let originZeroLine = self.originZeroLine(from: lines[i])
+
+                let intensityScore = intensityScore(for: originZeroLine)
+                let pixelScore = pixelScore(for: originZeroLine)
                 
-                for i in 0..<max {
-                    let originZeroLine = self.originZeroLine(from: lines[i])
-
-                    let intensityScore = intensityScore(for: originZeroLine)
-                    let pixelScore = pixelScore(for: originZeroLine)
-                    
-                    if intensityScore > bestIntensityScore {
-                        //Log.d("line \(i) is best theta \(lines[i].theta) avg median max \(avg) \(median) \(max)")
-                        bestIntensityScore = intensityScore
-                        bestPixelScore = pixelScore
-                        bestLineIndex = i
-                    }
+                if intensityScore > bestIntensityScore {
+                    //Log.d("line \(i) is best theta \(lines[i].theta) avg median max \(avg) \(median) \(max)")
+                    bestIntensityScore = intensityScore
+                    bestPixelScore = pixelScore
+                    bestLineIndex = i
                 }
-
-                return LineInfo(line: lines[bestLineIndex],
-                                intensityScore: bestIntensityScore,
-                                pixelScore: bestPixelScore,
-                                border: 0)                
             }
+
+            return LineInfo(line: lines[bestLineIndex],
+                            intensityScore: bestIntensityScore,
+                            pixelScore: bestPixelScore,
+                            border: 0)                
         }
+
         return nil
     }
 

@@ -2,6 +2,11 @@
 #pragma once
 #import <Foundation/Foundation.h>
 
+#ifndef STAR_MAT_TYPEDEF
+#define STAR_MAT_TYPEDEF
+typedef void* Mat;
+#endif
+
 #import "PixelatedImageBridge.h"
 #import "HorizonResult.h"
 
@@ -12,7 +17,7 @@
 @end
 
 @interface KHTBridge : NSObject
-+(NSArray *) translate:(NSImage*)image;
++(NSArray *) translate:(Mat)image;
 @end
 
 

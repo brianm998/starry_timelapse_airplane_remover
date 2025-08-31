@@ -23,15 +23,21 @@
 @implementation KHTBridge
 
 // XXX refactor this to not use NSImage *, but void* cv::Mat (Mat)
-+(NSArray *) translate:(NSImage*)image {
++(NSArray *) translate:(Mat)image {
   // return value for run_kht below
   kht::ListOfLines lineList = kht::ListOfLines(); // XXX dealocated?
 
-  cv::Mat im, eightBit, canny;
+  cv::Mat eightBit, canny;
 
-  // convert for processing
-  NSImageToMat(image, im);
+  // reinterpret as pointer
+  cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
 
+  // now work with references
+  cv::Mat& mat = *matPtr;
+
+  // make copy for safer concurrency
+  cv::Mat im = mat.clone();
+    
   std::int32_t height = im.rows, width = im.cols;
 
   // convert to eight bit

@@ -12,54 +12,40 @@ public let RADIANS_TO_DEGREES = 45 / atan(1.0)
 // we convert the coordinate system of the returned lines, and filter them a bit
 // these default parameter values need more documentation.  All but the last
 // four were taken from main.cpp from the kht implementation.
-public func kernelHoughTransform(image: NSImage,
+public func kernelHoughTransform(image: Mat,
+                                 width: Int,
+                                 height: Int,
                                  // never return more than this many lines
                                  // returns all if not given
                                  maxResults: Int? = nil) -> [Line]
 {
-    transformer.kernelHoughTransform(image: image,
-                                     maxResults: maxResults)
-}
+    var ret: [Line] = []
 
-/*
+    // first get a list of lines from the kernel based hough transform
+    if let lines = KHTBridge.translate(image) {
+        //Log.d("got \(lines.count) lines")
 
- Isolate the c++ code within an actor as it is not thread safe.
+        for line in lines {
+            if let line = line as? KHTBridgeLine {
+                if let maxResults,
+                   ret.count >= maxResults { return ret }
+                
+                // change how each line is represented
 
- Thankfully this kernel hough transform is fast, so isolating it doesn't slow us down much
- 
- */
-fileprivate let transformer = HoughTransformer()
-
-fileprivate final class HoughTransformer: Sendable {
-
-    public func kernelHoughTransform(image: NSImage,
-                                     maxResults: Int?) -> [Line]
-    {
-        var ret: [Line] = []
-
-        // first get a list of lines from the kernel based hough transform
-        if let lines = KHTBridge.translate(image) {
-            //Log.d("got \(lines.count) lines")
-
-            for line in lines {
-                if let line = line as? KHTBridgeLine {
-                    if let maxResults,
-                       ret.count >= maxResults { return ret }
-                    
-                    // change how each line is represented
-
-                    // convert kht polar central origin polar coord line
-                    // two a line polar coord origin at [0, 0]
-                    let newLine = line.leftCenterOriginLine(width: Int32(image.size.width),
-                                                            height: Int32(image.size.height))
-                    
-                    ret.append(newLine)
-                }
+                // convert kht polar central origin polar coord line
+                // two a line polar coord origin at [0, 0]
+                let newLine = line.leftCenterOriginLine(
+                  width: Int32(width),
+                  height: Int32(height)
+                )
+                
+                ret.append(newLine)
             }
         }
-        return ret
     }
+    return ret
 }
+
 
 extension KHTBridgeLine {
 
