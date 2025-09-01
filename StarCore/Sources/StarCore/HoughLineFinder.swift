@@ -12,6 +12,7 @@ You should have received a copy of the GNU General Public License along with sta
 
 import Foundation
 import KHTSwift
+import kht_bridge
 import logging
 
 fileprivate struct LineSplitResult {
@@ -336,6 +337,8 @@ public struct HoughLineFinder: Sendable {
           maxResults: args.maxLineConstant
         )
 
+        PixelatedImageBridge.freeCvMat(mat)
+
         for i in 0..<lines.count {
             let originZeroLine = self.originZeroLine(from: lines[i])
             
@@ -344,6 +347,7 @@ public struct HoughLineFinder: Sendable {
                                 pixelScore: pixelScore(for: originZeroLine),
                                 border: self.imageDataBorderSize))
         }
+        
         return ret
     }
     
@@ -358,12 +362,16 @@ public struct HoughLineFinder: Sendable {
     public var line: LineInfo? {
         let pixelImage = self.pixelImage
 
+        let mat = pixelImage.cvMat
+        
         let lines = kernelHoughTransform(
-          image: pixelImage.cvMat,
+          image: mat,
           width: pixelImage.width,
           height: pixelImage.height,
           maxResults: args.maxLineConstant
         )
+
+        PixelatedImageBridge.freeCvMat(mat)
 
         /*
          - look at the first N lines
