@@ -1115,8 +1115,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             //guard let self else { return }
             await self?.set(state: .loadingImages)
             return await (ia.loadInt(frameIndex: fi,
-                                                type: .original,
-                                                atSize: .original))
+                                     type: .original,
+                                     atSize: .original))
         }
 
         guard let image = image
@@ -1136,11 +1136,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                               overwrite: false)
         }
 
-        //let _ = try await loadOrCreateHorizonMask()
+        let _ = try await loadOrCreateHorizonMask()
         // XXX this is here for testing now
         // XXX use it for proper pixel removal when loaded
+
+        let earthAlignedImage = try await loadOrCreateEarthAlignedImage()
         
-        let alignedImage = try await loadOrCreateStarAlignedImage()
+        let starAlignedImage = try await loadOrCreateStarAlignedImage()
 
         let format = image.imageData // make a copy
 
@@ -1155,7 +1157,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             try await self.removeAirplanes(image: image,
                                            toData: &outputData,
-                                           alignedImage: alignedImage)
+                                           starAlignedImage: starAlignedImage)
 
             Log.d("frame \(self.frameIndex) writing output files")
             self.set(state: .writingOutputFile)
@@ -1700,7 +1702,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // actually remove outlier groups that have been selected as airplane tracks
     internal func removeAirplanes(image: PixelatedImage,
                                   toData data: inout [UInt16],
-                                  alignedImage: PixelatedImage) async throws
+                                  starAlignedImage: PixelatedImage) async throws
     {
         Log.i("frame \(frameIndex) removing airplane outlier groups")
 
@@ -1824,7 +1826,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                     alpha: alpha,
                                     toData: &data,
                                     image: image,
-                                    from: alignedImage)
+                                    from: starAlignedImage)
 
                         /*
 
@@ -1852,13 +1854,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                               alpha: Double,
                               toData data: inout [UInt16],
                               image: PixelatedImage,
-                              from alignedImage: PixelatedImage)
+                              from starAlignedImage: PixelatedImage)
     {
         self.updatePixel(x: x, y: y,
                          alpha: alpha,
                          toData: &data,
                          image: image,
-                         with: alignedImage.readPixel(atX: x, andY: y))
+                         with: starAlignedImage.readPixel(atX: x, andY: y))
     }
 
 
@@ -1869,11 +1871,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                  alpha: Double,
                                  toData data: inout [UInt16],
                                  image: PixelatedImage,
-                                 from alignedImages: [Int:PixelatedImage])
+                                 from starAlignedImages: [Int:PixelatedImage])
     {
         var newPixels: [Pixel] = []
 
-        for image in alignedImages.values {
+        for image in starAlignedImages.values {
             let overwritingPixel = image.readPixel(atX: x, andY: y)
             if image.componentsPerPixel == 4, // has alpha channel
                overwritingPixel.alpha != 0xFFFF   // alpha is not fully opaque
@@ -1898,13 +1900,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                   alpha: Double,
                                   toData data: inout [UInt16],
                                   image: PixelatedImage,
-                                  from alignedImages: [Int:PixelatedImage])
+                                  from starAlignedImages: [Int:PixelatedImage])
     {
 
         // XXX need much more complex logic here now
 
         // for now, just grab the first aligned frame
-        if let otherFrame = alignedImages.values.first {
+        if let otherFrame = starAlignedImages.values.first {
 
             /*
              next step is to compute a new overwriting pixel value from all aligned
@@ -2190,13 +2192,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         // load or create the aligned frame
 
-        let alignedImage = try await loadOrCreateStarAlignedImage()
+        let starAlignedImage = try await loadOrCreateStarAlignedImage()
 
         // subtract the aligned framek
         // result is image - alignedFrame
         // any pixel which is bright in image but not bright in alignedFrame
         // will be bright in the subtractionImage
-        let subtractionImage = image.subtract(alignedImage)
+        let subtractionImage = image.subtract(starAlignedImage)
 
         let config = await configManager.config()
         
