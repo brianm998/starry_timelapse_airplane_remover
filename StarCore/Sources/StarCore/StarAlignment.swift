@@ -63,20 +63,27 @@ public class StarAlignment {
             try ObjC.catchException {
                 let args = ["--align-to-first",
                             "--use-given-order",
-                            "--gpu", // XXX testing this one XXX
+                            "-g 10", // retangular grid size (10x10 grid)
+                            "-c 80", // number of control points per grid position
+//                            "-f 84", // horizontal field of view
+                            "--gpu",
                             "-a", baseName,
                             referenceImageName] + sortedFilenames
                 // first try to run hugin alignment
 
-                try shellOut(to: ToolPaths.alignImageStack,
-                             arguments: args,
-                             at: outputDirname)
+                _ = try shellOut(
+                  to: ToolPaths.alignImageStack,
+                  arguments: args,
+                  at: outputDirname
+                )
                 Log.d("alignment worked")
 
                 // the first output file is simply a copy of the reference frame, delete it
-                try shellOut(to: "/bin/rm",
-                             arguments: ["\(baseName)0000.tif"],
-                             at: outputDirname)
+                _ = try shellOut(
+                  to: "/bin/rm",
+                  arguments: ["\(baseName)0000.tif"],
+                  at: outputDirname
+                )
                 Log.d("rm worked")
 
 
@@ -89,9 +96,11 @@ public class StarAlignment {
                         let indexStr = String(format: "%04d", index+1)
                         let frameIndex = sortedFrameIndices[index]
                         Log.d("about to mv \(baseName)\(indexStr).tif \(origFilename) ")
-                        try shellOut(to: "/bin/mv",
-                                     arguments: ["\(baseName)\(indexStr).tif", "\(origFilename)"],
-                                     at: outputDirname)
+                        _ = try shellOut(
+                          to: "/bin/mv",
+                          arguments: ["\(baseName)\(indexStr).tif", "\(origFilename)"],
+                          at: outputDirname
+                        )
                         Log.d("mv \(baseName)\(indexStr).tif \(outputDirname)/\(origFilename) worked ")
                         outputFilenames[frameIndex] = "\(outputDirname)/\(origFilename)"
                     }

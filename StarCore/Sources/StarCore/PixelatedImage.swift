@@ -672,6 +672,93 @@ extension PixelatedImage {
         }
     }
 
+    // returns a 16 bit grayscale image that results from subtrating
+    // the given frame from this frame
+    public func apply(
+      mask: PixelatedImage,
+      closure: (UInt16, UInt16, UInt16, Bool) -> (UInt16, UInt16, UInt16)
+    ) -> PixelatedImage {
+        switch self.imageData {
+        case .eightBit(_):
+            fatalError("NOT SUPPORTED YET")
+        case .thirtyTwoBit(_):
+            fatalError("NOT SUPPORTED YET")
+        case .sixteenBit(let origImagePixels):
+            
+            switch mask.imageData {
+                
+            case .thirtyTwoBit(_):
+                fatalError("NOT SUPPORTED YET")
+            case .sixteenBit(_):
+                fatalError("NOT SUPPORTED YET")
+            case .eightBit(let maskPixels):
+                let numPixels = width*height
+                var outputData = [UInt16](repeating: 0, count: origImagePixels.count)
+                
+                for i in 0 ..< numPixels {
+                    let origOffset = i*self.componentsPerPixel
+                    let otherOffset = i*mask.componentsPerPixel
+                    
+                    // rgb values of the image we're modifying at this index
+                    let origRed   = origImagePixels[origOffset]
+                    let origGreen = origImagePixels[origOffset+1]
+                    let origBlue  = origImagePixels[origOffset+2]
+                    
+                    // rgb values of an adjecent image at this index
+                    let isInMask = maskPixels[otherOffset] != 0
+
+                    let (newRed, newGreen, newBlue) = closure(origRed, origGreen, origBlue, isInMask)
+                    
+                    outputData[origOffset] = newRed
+                    outputData[origOffset+1] = newGreen
+                    outputData[origOffset+2] = newBlue
+                }
+                
+                return PixelatedImage(
+                  width: width,
+                  height: height,
+                  imageData: DataFormat(from: outputData),
+                  bitsPerPixel: self.bitsPerPixel,
+                  bytesPerRow: self.bytesPerRow,
+                  bitsPerComponent: self.bitsPerComponent,
+                  bytesPerPixel: self.bytesPerPixel,
+                  bitmapInfo: self.bitmapInfo,
+                  componentsPerPixel: self.componentsPerPixel,
+                  colorSpace: self.colorSpace,
+                  ciFormat: self.ciFormat
+                )
+            }
+        }
+    }
+
+    public func flipSky(with mask: PixelatedImage) -> PixelatedImage {
+        self.apply(mask: mask) { r, g, b, inMask in
+            if inMask {
+                return (
+                  UInt16.max - r,
+                  UInt16.max - g,
+                  UInt16.max - b
+                )
+            } else {
+                return (r, g, b)
+            }
+        }
+    }
+    
+    public func flipGround(with mask: PixelatedImage) -> PixelatedImage {
+        self.apply(mask: mask) { r, g, b, inMask in
+            if inMask {
+                return (r, g, b)
+            } else {
+                return (
+                  UInt16.max - r,
+                  UInt16.max - g,
+                  UInt16.max - b
+                )
+            }
+        }
+    }
+    
     // used as a classification criteria
     // values below 0.1 are more likely to be airplanes,
     // a small number of airplanes give higher values
@@ -957,6 +1044,11 @@ extension PixelatedImage {
 }
 
 public extension PixelatedImage {
+
+    func bottomCrop(with borderAmount: Int, with mask: PixelatedImage) -> PixelatedImage {
+        // XXX fill this in
+    }
+    
     func bottomCrop(by numberOfPixels: Int) -> PixelatedImage {
         // Clamp the number of pixels to the image height
         let cropHeight = min(numberOfPixels, self.height)
