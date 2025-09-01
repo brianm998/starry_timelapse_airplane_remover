@@ -305,10 +305,14 @@ public struct Config: Codable, Sendable, Transferable {
     // 0.8.0 embed ffmpeg, ffprobe and align_image_stack in the app properly
     //       allow starting directly with a video and having the image sequence extracted
     //       ability to render to video from gui
+    // 0.8.1 fix bug with non-standard incoming filenames
+    // 0.9.0 add horizon detection
+    //       add ground alignment images
+    //       adjust pixel removal to use ground image when appropriate
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.8.2"
+    public static let latestVersion = "0.9.0"
     
     public var basename: String {
         let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)"
