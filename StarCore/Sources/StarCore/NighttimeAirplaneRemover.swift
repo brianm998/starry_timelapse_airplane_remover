@@ -405,7 +405,7 @@ extension String {
     var sanitized: String {
         let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/")
         let ret = self.unicodeScalars.map { allowed.contains($0) ? Character($0) : "_" }.reduce("") { $0 + String($1) }
-        Log.d("FUCKING santizied \(self) = \(ret)")
+//        Log.d("FUCKING santizied \(self) = \(ret)")
         return ret
     }
 }
