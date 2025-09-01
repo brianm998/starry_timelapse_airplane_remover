@@ -22,7 +22,6 @@
 
 @implementation KHTBridge
 
-// XXX refactor this to not use NSImage *, but void* cv::Mat (Mat)
 +(NSArray *) translate:(Mat)image {
   // return value for run_kht below
   kht::ListOfLines lineList = kht::ListOfLines(); // XXX dealocated?
