@@ -34,7 +34,7 @@ struct LoadAllOutliersButton: View {
                         if loadingType == .fromCurrentFrame,
                            await frameView.frameIndex < viewModel.currentIndex
                         {
-                            Log.d("skipping loading outliers for frame \(frameView.frameIndex)")
+                            //Log.d("skipping loading outliers for frame \(frameView.frameIndex)")
                             continue
                         }
 
