@@ -246,13 +246,14 @@
 }
 
 // shifts mask up by borderAmount pixels and crops the image with it
+// does this really work?
 + (Mat)maskRaisedBy:(Mat)image
 	       mask:(Mat)mask
 	     border:(int)borderAmount
 {
   @try {
     try {
-      LogWithLocation(@"maskRaisedBy started\n");
+      //LogWithLocation(@"maskRaisedBy started\n");
       cv::Mat& mat = *reinterpret_cast<cv::Mat*>(image);
       cv::Mat& maskMat = *reinterpret_cast<cv::Mat*>(mask);
 
@@ -266,7 +267,7 @@
       const int h = owned.rows;
       const int w = owned.cols;
 
-      LogWithLocation(@"Original size [%d, %d]\n", h, w);
+      //LogWithLocation(@"Original size [%d, %d]\n", h, w);
 
       // --- Step 1: create keep mask (zeros in ownedMask are keep) ---
       cv::Mat keepMask = (ownedMask == 0);  // 255 = keep, 0 = masked
@@ -276,7 +277,7 @@
       cv::findNonZero(keepMask, origNonZero);
       int origMaxY = 0;
       for (auto &p : origNonZero) if (p.y > origMaxY) origMaxY = p.y;
-      LogWithLocation(@"Original keep mask maxY: %d\n", origMaxY);
+      //LogWithLocation(@"Original keep mask maxY: %d\n", origMaxY);
 
       // --- Step 2: shift keep area upward by borderAmount ---
       cv::Mat dilatedMask = cv::Mat::zeros(keepMask.size(), keepMask.type());
@@ -295,7 +296,7 @@
       cv::findNonZero(dilatedMask, dilatedNonZero);
       int dilatedMaxY = 0;
       for (auto &p : dilatedNonZero) if (p.y > dilatedMaxY) dilatedMaxY = p.y;
-      LogWithLocation(@"Dilated keep mask maxY: %d\n", dilatedMaxY);
+      //LogWithLocation(@"Dilated keep mask maxY: %d\n", dilatedMaxY);
 
       // --- Step 3: apply mask to image ---
       cv::Mat masked = owned.clone();
@@ -316,9 +317,9 @@
         owned.rowRange(h - bottomRows, h).copyTo(masked.rowRange(h - bottomRows, h));
       }
 
-      LogWithLocation("Masked size [%d, %d]\n", masked.rows, masked.cols);
+      //LogWithLocation("Masked size [%d, %d]\n", masked.rows, masked.cols);
 
-      LogWithLocation("maskRaisedBy done\n");
+      //LogWithLocation("maskRaisedBy done\n");
 
       // --- Step 4: return full-size masked image ---
       return new cv::Mat(masked);
@@ -337,82 +338,45 @@
 {
   @try {
     try {
-      LogWithLocation("brighten darks starting\n");
 
-      // reinterpret as pointer
-      cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
-      cv::Mat* maskPtr = reinterpret_cast<cv::Mat*>(mask);
+      cv::Mat &mat = *reinterpret_cast<cv::Mat*>(image);
+      cv::Mat &maskMat = *reinterpret_cast<cv::Mat*>(mask);
 
-      // now work with references
-      cv::Mat& mat = *matPtr;
-      cv::Mat& maskMat = *maskPtr;
-
-      // make copies for safer concurrency
       cv::Mat owned = mat.clone();
       cv::Mat ownedMask = maskMat.clone();
-      
-      //    cv::Mat mat = (cv::Mat)image
-      //    cv::Mat maskMat = (cv::Mat)mask
-      if (owned.empty() || ownedMask.empty()) {
-        LogWithLocation(@"brightenDarks: empty mat or mask");
-        return image;
+      if (owned.empty() || ownedMask.empty()) return image;
+
+      if (ownedMask.size() != owned.size()) {
+	cv::resize(ownedMask, ownedMask, owned.size(), 0, 0, cv::INTER_NEAREST);
       }
 
-      // --- Build a proper binary 8-bit mask (255 = brighten, 0 = keep original) ---
-      if (ownedMask.size() != owned.size()) {
-        cv::resize(ownedMask, ownedMask, owned.size(), 0, 0, cv::INTER_NEAREST);
-      }
       cv::Mat maskGray;
-      if (ownedMask.channels() == 4)      cv::cvtColor(ownedMask, maskGray, cv::COLOR_BGRA2GRAY);
-      else if (ownedMask.channels() == 3) cv::cvtColor(ownedMask, maskGray, cv::COLOR_BGR2GRAY);
-      else                              maskGray = ownedMask;
+      if (ownedMask.channels() > 1)
+	cv::cvtColor(ownedMask, maskGray, cv::COLOR_BGR2GRAY);
+      else
+	maskGray = ownedMask;
 
       cv::Mat binMask;
       cv::threshold(maskGray, binMask, 128, 255, cv::THRESH_BINARY);
-      CV_Assert(binMask.type() == CV_8UC1);
 
-      // Invert so 255 = brighten, 0 = leave alone
-      cv::Mat invMask;
-      cv::bitwise_not(binMask, invMask);
+      double factor = 1.0 + amount;
+      factor = std::max(0.0001, factor); // prevent divide by zero
 
-      // --- Scale factor in fixed-point integer math ---
-      double scale = 1.0 + amount;
-
-      //LogWithLocation("bright scale %lf\n", scale);
-      scale = std::max(0.0, scale);
-
-      // Fixed-point scale (Q15 style: multiply then shift)
-      int factor = (int)std::round(scale/* * 32768.0*/);  // 1.0 == 32768
-      //int factor = (int)std::round(scale * 32768.0);  // 1.0 == 32768
-
-      // --- Result starts as original (bit-for-bit preserved) ---
       cv::Mat result = owned.clone();
-
-      // Apply scaling only where invMask==255
       for (int y = 0; y < owned.rows; y++) {
-        const uint16_t* src = owned.ptr<uint16_t>(y);
-        uint16_t* dst       = result.ptr<uint16_t>(y);
-        const uchar* m      = invMask.ptr<uchar>(y);
+	const uint16_t* src = owned.ptr<uint16_t>(y);
+	uint16_t* dst = result.ptr<uint16_t>(y);
+	const uchar* m = binMask.ptr<uchar>(y);
 
-        for (int x = 0; x < owned.cols * owned.channels(); x++) {
+	for (int x = 0; x < owned.cols * owned.channels(); x++) {
 	  if (m[x / owned.channels()] == 255) {
-	    // scale with saturation
-	    uint32_t val = (uint32_t)src[x] * factor;
-	    if (x%100 == 0) {
-	      //		Log.d("at x \(x), val \(val) factor \(factor) src[\(x)] \(src[x])")
-	    }
-	    dst[x] = (val > 65535) ? 65535 : (uint16_t)val;
+	    dst[x] = cv::saturate_cast<uint16_t>(src[x] / factor);
 	  }
-        }
+	}
       }
 
-      //cv::imwrite("/tmp/result.png", result);
-
-      // make a new result on the heap XXX CLEAR THIS LATER WITH freeCvMat:
-      cv::Mat* resultPtr = new cv::Mat(result.clone());
-      LogWithLocation("brighten darks returning\n");
-
-      return resultPtr;
+      return new cv::Mat(result.clone());
+      
     } catch (const cv::Exception &e) {
       LogWithLocation(@"OpenCV Exception: %s", e.what());
     }
@@ -430,79 +394,47 @@
 {
   @try {
     try {
-      LogWithLocation("darken darks start\n");
-      // reinterpret as pointer
-      cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
-      cv::Mat* maskPtr = reinterpret_cast<cv::Mat*>(mask);
 
-      // now work with references
-      cv::Mat& mat = *matPtr;
-      cv::Mat& maskMat = *maskPtr;
+      cv::Mat &mat = *reinterpret_cast<cv::Mat*>(image);
+      cv::Mat &maskMat = *reinterpret_cast<cv::Mat*>(mask);
 
-      // make copies for safer concurrency
       cv::Mat owned = mat.clone();
       cv::Mat ownedMask = maskMat.clone();
-      
-      if (owned.empty() || ownedMask.empty()) {
-        LogWithLocation(@"brightenDarks: empty mat or mask");
-        return image;
+      if (owned.empty() || ownedMask.empty()) return image;
+
+      // Ensure mask matches image size
+      if (ownedMask.size() != owned.size()) {
+	cv::resize(ownedMask, ownedMask, owned.size(), 0, 0, cv::INTER_NEAREST);
       }
 
-      // --- Build a proper binary 8-bit mask (255 = brighten, 0 = keep original) ---
-      if (ownedMask.size() != owned.size()) {
-        cv::resize(ownedMask, ownedMask, owned.size(), 0, 0, cv::INTER_NEAREST);
-      }
+      // Get binary mask: 255 = modify, 0 = keep
       cv::Mat maskGray;
-      if (ownedMask.channels() == 4)      cv::cvtColor(ownedMask, maskGray, cv::COLOR_BGRA2GRAY);
-      else if (ownedMask.channels() == 3) cv::cvtColor(ownedMask, maskGray, cv::COLOR_BGR2GRAY);
-      else                              maskGray = ownedMask;
+      if (ownedMask.channels() > 1)
+	cv::cvtColor(ownedMask, maskGray, cv::COLOR_BGR2GRAY);
+      else
+	maskGray = ownedMask;
 
       cv::Mat binMask;
       cv::threshold(maskGray, binMask, 128, 255, cv::THRESH_BINARY);
-      CV_Assert(binMask.type() == CV_8UC1);
 
-      // Invert so 255 = brighten, 0 = leave alone
-      cv::Mat invMask;
-      cv::bitwise_not(binMask, invMask);
+      double factor = 1.0 + amount;
+      factor = std::max(0.0, factor);
 
-      // --- Scale factor in fixed-point integer math ---
-      double scale = 1.0 + amount;
-      scale = std::max(0.0, scale);
-
-      //LogWithLocation("dark scale %lf\n", scale);
-    
-      // Fixed-point scale (Q15 style: multiply then shift)
-      int factor = (int)std::round(scale/* * 32768.0*/);  // 1.0 == 32768
-    
-      // --- Result starts as original (bit-for-bit preserved) ---
       cv::Mat result = owned.clone();
-
-      // Apply scaling only where invMask==255
       for (int y = 0; y < owned.rows; y++) {
-        const uint16_t* src = owned.ptr<uint16_t>(y);
-        uint16_t* dst       = result.ptr<uint16_t>(y);
-        const uchar* m      = invMask.ptr<uchar>(y);
+	const uint16_t* src = owned.ptr<uint16_t>(y);
+	uint16_t* dst = result.ptr<uint16_t>(y);
+	const uchar* m = binMask.ptr<uchar>(y);
 
-        for (int x = 0; x < owned.cols * owned.channels(); x++) {
+	for (int x = 0; x < owned.cols * owned.channels(); x++) {
 	  if (m[x / owned.channels()] == 255) {
-	    // scale with saturation
-	    uint32_t val = (uint32_t)src[x] / factor;
-	    if (x%10000 == 0) {
-	      //LogWithLocation("at x %d, val %d factor %d src[%d] %d\n", x, val, factor, x, src[x]);
-	    }
-		
-	    dst[x] = (val > 65535) ? 65535 : (uint16_t)val;
+	    dst[x] = cv::saturate_cast<uint16_t>(src[x] * factor);
 	  }
-        }
+	}
       }
 
-      //cv::imwrite("/tmp/result.png", result);
-
-      // make a new result on the heap XXX CLEAR THIS LATER WITH freeCvMat:
-      cv::Mat* resultPtr = new cv::Mat(result.clone());
-      //LogWithLocation("darken darks returning\n");
-
-      return resultPtr;
+      return new cv::Mat(result.clone());
+      
     } catch (const cv::Exception &e) {
       LogWithLocation(@"OpenCV Exception: %s", e.what());
     }
@@ -518,7 +450,7 @@
   @try {
     try {
 
-      LogWithLocation("maxBrightnessScaleForImage started\n");
+      //LogWithLocation("maxBrightnessScaleForImage started\n");
       // reinterpret as pointer
       cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
       cv::Mat* maskPtr = reinterpret_cast<cv::Mat*>(mask);
@@ -571,7 +503,7 @@
       default:     maxAllowed = 255.0;   break;  // fallback
       }
 
-      LogWithLocation("maxBrightnessScaleForImage done\n");
+      //LogWithLocation("maxBrightnessScaleForImage done\n");
       return maxAllowed / maxValOverall;
     } catch (const cv::Exception &e) {
       LogWithLocation(@"OpenCV Exception: %s", e.what());
