@@ -1043,11 +1043,9 @@ extension PixelatedImage {
 
 }
 
-public extension PixelatedImage {
 
-    func bottomCrop(with borderAmount: Int, with mask: PixelatedImage) -> PixelatedImage {
-        // XXX fill this in
-    }
+
+public extension PixelatedImage {
     
     func bottomCrop(by numberOfPixels: Int) -> PixelatedImage {
         // Clamp the number of pixels to the image height
@@ -1066,7 +1064,7 @@ public extension PixelatedImage {
               height: cropHeight,
               imageData: .eightBit(croppedData),
               bitsPerPixel: self.bitsPerPixel,
-              bytesPerRow: self.bytesPerPixel,
+              bytesPerRow: self.bytesPerRow,
               bitsPerComponent: self.bitsPerComponent,
               bytesPerPixel: self.bytesPerPixel,
               bitmapInfo: self.bitmapInfo,
@@ -1086,7 +1084,7 @@ public extension PixelatedImage {
               height: cropHeight,
               imageData: .sixteenBit(croppedData),
               bitsPerPixel: self.bitsPerPixel,
-              bytesPerRow: self.bytesPerPixel,
+              bytesPerRow: self.bytesPerRow,
               bitsPerComponent: self.bitsPerComponent,
               bytesPerPixel: self.bytesPerPixel,
               bitmapInfo: self.bitmapInfo,
@@ -1106,7 +1104,7 @@ public extension PixelatedImage {
               height: cropHeight,
               imageData: .thirtyTwoBit(croppedData),
               bitsPerPixel: self.bitsPerPixel,
-              bytesPerRow: self.bytesPerPixel,
+              bytesPerRow: self.bytesPerRow,
               bitsPerComponent: self.bitsPerComponent,
               bytesPerPixel: self.bytesPerPixel,
               bitmapInfo: self.bitmapInfo,
@@ -1453,6 +1451,73 @@ extension PixelatedImage {
           bottomY: bounds.horizonBottomY
         )
     }
+
+    // slow, but it works
+    public func maskRaisedBy(borderAmount: Int, mask: PixelatedImage) -> PixelatedImage {
+        switch self.imageData {
+        case .eightBit(_):
+            fatalError("NOT SUPPORTED YET")
+        case .thirtyTwoBit(_):
+            fatalError("NOT SUPPORTED YET")
+        case .sixteenBit(let origImagePixels):
+            
+            switch mask.imageData {
+                
+            case .thirtyTwoBit(_):
+                fatalError("NOT SUPPORTED YET")
+            case .sixteenBit(_):
+                fatalError("NOT SUPPORTED YET")
+            case .eightBit(let maskPixels):
+                let numPixels = width*height
+                var outputData = origImagePixels
+
+                for y in 0 ..< self.height {
+                    for x in 0 ..< self.width {
+                        let origOffset = (y*self.width+x)*self.componentsPerPixel
+
+                        if y+borderAmount < self.height {
+                            let otherOffset = ((y+borderAmount)*self.width+x)*mask.componentsPerPixel
+                            if maskPixels[otherOffset] != 0 {
+                                outputData[origOffset] = UInt16.max  
+                                outputData[origOffset+1] = UInt16.max  
+                                outputData[origOffset+2] = UInt16.max  
+                            }
+                        }
+                    }
+                }
+
+                return PixelatedImage(
+                  width: width,
+                  height: height,
+                  imageData: DataFormat(from: outputData),
+                  bitsPerPixel: self.bitsPerPixel,
+                  bytesPerRow: self.bytesPerRow,
+                  bitsPerComponent: self.bitsPerComponent,
+                  bytesPerPixel: self.bytesPerPixel,
+                  bitmapInfo: self.bitmapInfo,
+                  componentsPerPixel: self.componentsPerPixel,
+                  colorSpace: self.colorSpace,
+                  ciFormat: self.ciFormat
+                )
+            }
+        }
+    }
+
+    // a whole lot faster than the one above
+    public func maskRaisedBy_SOMETIMES_CRASHES(borderAmount: Int, mask: PixelatedImage) -> PixelatedImage {
+        let baseMat = self.cvMat
+        let maskMat = mask.cvMat
+
+        let processedMat = PixelatedImageBridge.maskRaised(
+          by: baseMat,
+          mask: maskMat,
+          border: Int32(borderAmount)
+        )
+        
+        // then convert back in to PixelatedImage
+        return self.newImage(from: processedMat)
+    }
+
     
     public func maxBrightnessScale(in darksMask: PixelatedImage) -> Double {
         // first convert images to cv::Mat
@@ -1473,11 +1538,37 @@ extension PixelatedImage {
 
     public func brightenDarks(with darksMask: PixelatedImage, by amount: Double) -> PixelatedImage {
         // first convert images to cv::Mat
+
+        
         let baseMat = self.cvMat
         let maskMat = darksMask.cvMat
 
         // then process in cv world
         let processedMat = PixelatedImageBridge.brightenDarks(
+          baseMat,
+          mask: maskMat,
+          amount: amount
+        )
+
+        // then convert back in to PixelatedImage
+        let ret = self.newImage(from: processedMat)
+
+        // finally free the cv::Mat pointers
+        PixelatedImageBridge.freeCvMat(baseMat)
+        PixelatedImageBridge.freeCvMat(maskMat)
+        PixelatedImageBridge.freeCvMat(processedMat)
+        
+        return ret
+    }
+
+    public func darkenDarks(with darksMask: PixelatedImage, by amount: Double) -> PixelatedImage {
+
+        // first convert images to cv::Mat
+        let baseMat = self.cvMat
+        let maskMat = darksMask.cvMat
+        
+        // then process in cv world
+        let processedMat = PixelatedImageBridge.darkenDarks(
           baseMat,
           mask: maskMat,
           amount: amount

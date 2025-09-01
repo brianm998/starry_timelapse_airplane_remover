@@ -278,7 +278,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
-    
     let fullyProcess: Bool
 
     // if this is false, just write out outlier data
@@ -481,7 +480,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(frameIndex) no saved earth aligned image, computing one")
         // with no saved aligned frame, first load or create the set of aligned frames
         // that we used to create the final aligned frame
-        let alignedImages = try await loadOrCreateEarthAlignedImages()
+        let (scaleFactor, alignedImages) = try await createEarthAlignedImages()
 
         Log.d("frame \(frameIndex) alignedImages \(alignedImages)")
         
@@ -496,22 +495,28 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               thresholdFactor: pixelThreshold
             )
 
+            let horizonMask = try await loadOrCreateHorizonMask()
+
+            let cropAmount = horizonMask.image.height - goodPixelImage.height
+            let croppedMask = horizonMask.image.bottomCrop(by: goodPixelImage.height)
+
+            try croppedMask.writeTIFFEncoding(toFilename: "/tmp/\(frameIndex)_cropped_mask.tiff")
+            try goodPixelImage.writeTIFFEncoding(toFilename: "/tmp/\(frameIndex)_good.tiff")
+            
+            var goodPixelImageDarkened = goodPixelImage
+              .darkenDarks(with: croppedMask, by: scaleFactor)
+
+            try goodPixelImageDarkened.writeTIFFEncoding(toFilename: "/tmp/\(frameIndex)_good_dark.tiff")
+            
             let config = await configManager.config()
-            
-            if let height = config.earthAlignedImageCropAmount {
-                Log.d("frame \(frameIndex) adding sky")
-                goodPixelImage = goodPixelImage.addSky(height: height)
-            } else {
-                Log.d("frame \(frameIndex) NOT adding sky")
-            }
-            
-            try await imageAccessor.save(goodPixelImage,
+
+            try await imageAccessor.save(goodPixelImageDarkened,
                                          frameIndex: frameIndex,
                                          as: .earthAligned,
                                          atSize: .original,
                                          overwrite: true)
 
-            try await imageAccessor.save(goodPixelImage,
+            try await imageAccessor.save(goodPixelImageDarkened,
                                          frameIndex: frameIndex,
                                          as: .earthAligned,
                                          atSize: .preview,
@@ -711,26 +716,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return alignedImages
     }
     
-    private func loadOrCreateEarthAlignedImages() async throws  -> [Int:PixelatedImage] {
-        Log.d("frame \(frameIndex) loadOrCreateEarthAlignedImages")
-        
-        var alignedImages = try await loadEarthAlignedImages()
-
-        Log.d("frame \(frameIndex) got \(alignedImages.count) aligned images")
-        
-        if numberOfAlignedFrames != alignedImages.count || numberOfAlignedFrames > imageSequence?.filenames.count ?? 0 {
-
-            Log.w("frame \(frameIndex) alignedImages.count != numberOfAlignedFrames (\(alignedImages.count) != \(numberOfAlignedFrames))")
-
-            removeEarthAlignedImages()
-            
-            // try creating the earth aligned images if we couldn't load them
-            alignedImages = try await createEarthAlignedImages()
-            Log.d("frame \(frameIndex) created earth aligned images")
-        }
-        return alignedImages
-    }
-    
     private var alignmentFrames: [Int] = []
     private let baseFilename: String
 
@@ -922,7 +907,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
     
     // creates earth aligned neighboring frames
-    private func createEarthAlignedImages() async throws -> [Int: PixelatedImage] {
+    // return brightness amount
+    private func createEarthAlignedImages() async throws -> (Double, [Int: PixelatedImage]) {
         Log.d("frame \(frameIndex) earthAlignedImages")
         guard let imageSequence else {
             let error = "cannot align earth images without an image sequence"
@@ -946,8 +932,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             Log.d("frame \(frameIndex) alignedFilename start")
 
-
-            
             /*
              for earth alignment, we first need to load up all the aligned filenames
              as PixelatedImages, then saved them with the sky cropped out.
@@ -977,11 +961,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             let scaleFactor = croppedBase.maxBrightnessScale(in: horizonMask.image) 
 
             Log.i("frame \(frameIndex) got scaleFactor \(scaleFactor)")
+
+            // XXX  make  this VVV a parameter
+            let borderAmount = 120    // add this much above the horizon
             
             // brighten and crop it
             let cropped = croppedBase
               .brightenDarks(with: horizonMask.image, by: scaleFactor)
-              .bottomCrop(by: height-cropAmount)
+              .maskRaisedBy(borderAmount: borderAmount, mask: horizonMask.image)
+              .bottomCrop(by: height-(cropAmount-borderAmount))
 
             let url = URL(fileURLWithPath: baseFilename)
             let filename = url.lastPathComponent
@@ -1015,7 +1003,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     // crop it
                     let cropped = alignmentFrameImage
                       .brightenDarks(with: alignmentHorizon.image, by: scaleFactor)
-                      .bottomCrop(by: height-cropAmount)
+                      .maskRaisedBy(borderAmount: borderAmount, mask: horizonMask.image)
+                      .bottomCrop(by: height-(cropAmount-borderAmount))
 
                     let url = URL(fileURLWithPath: alignmentFilename)
                     let filename = url.lastPathComponent
@@ -1074,12 +1063,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
 
 
-            return ret
+            return (scaleFactor, ret)
         } else {
             Log.w("frame \(frameIndex) no dirname for aligned original images")
         }
 
-        return [:]
+        return (1, [:])
     }
     
     public func setupOutliers() async throws {

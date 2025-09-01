@@ -32,6 +32,14 @@ NS_ASSUME_NONNULL_BEGIN
 	       mask:(Mat)mask
 	     amount:(double)amount;
 
++(Mat)darkenDarks:(Mat)image
+	       mask:(Mat)mask
+	     amount:(double)amount;
+
++(Mat)maskRaisedBy:(Mat)image
+              mask:(Mat)mask
+            border:(int)amount;
+
 /// Create a cv::Mat wrapper around raw pixel buffer (no copy)
 + (Mat)cvMatFromBuffer:(void *)bytes
 		 width:(int)w
