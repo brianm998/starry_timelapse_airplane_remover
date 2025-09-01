@@ -469,9 +469,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // and then aligned with neighbors 
     private func loadOrCreateEarthAlignedImage() async throws -> PixelatedImage {
         Log.d("frame \(frameIndex) loadOrCreateEarthAlignedImage")
-        if let alignedFrame = try await imageAccessor.load(frameIndex: frameIndex,
-                                                           type: .earthAligned,
-                                                           atSize: .original)
+        if let alignedFrame = try? await imageAccessor.load(frameIndex: frameIndex,
+                                                            type: .earthAligned,
+                                                            atSize: .original)
         {
             Log.d("frame \(frameIndex) returning saved earth aligned image")
             return alignedFrame
@@ -924,10 +924,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if let dirname = imageAccessor.dirForImage(ofType: .earthAligned,
                                                    atSize: .original)
         {
+            StarCore.mkdir(dirname)
             let croppedDirname = "\(dirname)/\(frameIndex)/cropped"
             StarCore.mkdir(croppedDirname)
             let dirname = "\(dirname)/\(frameIndex)"
-            StarCore.mkdir(dirname)
             Log.d("frame \(frameIndex) creating aligned frame in \(dirname)")
             self.set(state: .earthAlignment)
 
@@ -953,7 +953,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             var croppedFilename = ""
 
             // crop the base image
-            guard let croppedBase = try await loadImageInt(filename: baseFilename)else {
+            guard let croppedBase = try await loadImageInt(filename: baseFilename) else {
                 throw "unable to load base image for earth alignment"
             }
 
@@ -976,17 +976,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             let filename = url.lastPathComponent
             croppedFilename = "\(croppedDirname)/\(filename)"
 
-            Log.d("writing base cropped image to \(croppedFilename)")
+            Log.d("frame \(frameIndex) writing base cropped image to \(croppedFilename)")
             
             try cropped.writeTIFFEncoding(toFilename: croppedFilename)
 
             if croppedFilename.isEmpty { throw "frame \(frameIndex) unable to crop base image for alignment" }
-
             
             // crop the neighbor frames before alignment
             for (index, alignmentFilename) in alignmentFilenames {
                 // load the alignment frame and crop it
-                if let alignmentFrameImage = try await loadImageInt(filename: alignmentFilename),
+                if let alignmentFrameImage = try? await loadImageInt(filename: alignmentFilename),
                    let alignmentFrame = await self.otherFrame(at: index)
                 {
                     let alignmentHorizon = try await alignmentFrame.loadOrCreateHorizonMask()
