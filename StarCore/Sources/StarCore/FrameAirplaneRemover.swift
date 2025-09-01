@@ -500,13 +500,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             let cropAmount = horizonMask.image.height - goodPixelImage.height
             let croppedMask = horizonMask.image.bottomCrop(by: goodPixelImage.height)
 
-            try croppedMask.writeTIFFEncoding(toFilename: "/tmp/\(frameIndex)_cropped_mask.tiff")
-            try goodPixelImage.writeTIFFEncoding(toFilename: "/tmp/\(frameIndex)_good.tiff")
+            //try croppedMask.writeTIFFEncoding(toFilename: "/tmp/\(frameIndex)_cropped_mask.tiff")
+            //try goodPixelImage.writeTIFFEncoding(toFilename: "/tmp/\(frameIndex)_good.tiff")
             
             var goodPixelImageDarkened = goodPixelImage
               .darkenDarks(with: croppedMask, by: scaleFactor)
+              .addSky(height: self.height-goodPixelImage.height)
 
-            try goodPixelImageDarkened.writeTIFFEncoding(toFilename: "/tmp/\(frameIndex)_good_dark.tiff")
+            //try goodPixelImageDarkened.writeTIFFEncoding(toFilename: "/tmp/\(frameIndex)_good_dark.tiff")
             
             let config = await configManager.config()
 
