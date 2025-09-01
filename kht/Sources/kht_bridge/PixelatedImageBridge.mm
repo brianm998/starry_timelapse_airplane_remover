@@ -533,9 +533,12 @@
 
       LogWithLocation(@"width %d, height %d, channels %d, bitsPerChannel %d bytesPerRow %d\n",
 		      width, height, channels, bitsPerChannel, bytesPerRow);
-      
-      // free this with freeCvMat some time later
-      cv::Mat *mat = new cv::Mat(height, width, type, buffer, bytesPerRow);
+
+      // Create a temporary header referencing the provided buffer
+      cv::Mat tmp(height, width, type, buffer, bytesPerRow);
+
+      // Clone into an owning mat and heap-allocate that one (caller must free)
+      cv::Mat *mat = new cv::Mat(tmp.clone());
       return (Mat)mat;
     } catch (const cv::Exception &e) {
       LogWithLocation(@"OpenCV Exception: %s", e.what());
@@ -567,9 +570,9 @@
 }
 
 + (void)freeCvMat:(Mat)matPtr {
-    cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
-    //delete mat;
-    // XXX deal with memory after it works XXX
+  if (!matPtr) return;
+  cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
+  delete mat;
 }
 
 @end
