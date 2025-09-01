@@ -504,7 +504,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             //try goodPixelImage.writeTIFFEncoding(toFilename: "/tmp/\(frameIndex)_good.tiff")
             
             var goodPixelImageDarkened = goodPixelImage
-              .darkenDarks(with: croppedMask, by: scaleFactor)
+              //.darkenDarks(with: croppedMask, by: scaleFactor)
               .addSky(height: self.height-goodPixelImage.height)
 
             //try goodPixelImageDarkened.writeTIFFEncoding(toFilename: "/tmp/\(frameIndex)_good_dark.tiff")
@@ -958,16 +958,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             let horizonMask = try await loadOrCreateHorizonMask()
             
-            let scaleFactor = croppedBase.maxBrightnessScale(in: horizonMask.image) 
+            //let scaleFactor = croppedBase.maxBrightnessScale(in: horizonMask.image) 
 
-            Log.i("frame \(frameIndex) got scaleFactor \(scaleFactor)")
+           // Log.i("frame \(frameIndex) got scaleFactor \(scaleFactor)")
 
             // XXX  make  this VVV a parameter
             let borderAmount = 120    // add this much above the horizon
             
             // brighten and crop it
             let cropped = croppedBase
-              .brightenDarks(with: horizonMask.image, by: scaleFactor)
+              //.brightenDarks(with: horizonMask.image, by: scaleFactor)
               .maskRaisedBy(borderAmount: borderAmount, mask: horizonMask.image)
               .bottomCrop(by: height-(cropAmount-borderAmount))
 
@@ -1001,7 +1001,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     
                     // crop it
                     let cropped = alignmentFrameImage
-                      .brightenDarks(with: alignmentHorizon.image, by: scaleFactor)
+                      //.brightenDarks(with: alignmentHorizon.image, by: scaleFactor)
                       .maskRaisedBy(borderAmount: borderAmount, mask: horizonMask.image)
                       .bottomCrop(by: height-(cropAmount-borderAmount))
 
@@ -1062,7 +1062,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
 
 
-            return (scaleFactor, ret)
+            return (1/*scaleFactor*/, ret)
         } else {
             Log.w("frame \(frameIndex) no dirname for aligned original images")
         }
