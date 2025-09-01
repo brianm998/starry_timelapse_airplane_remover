@@ -1594,7 +1594,7 @@ extension PixelatedImage {
         // finally free the cv::Mat pointers
         PixelatedImageBridge.freeCvMat(baseMat)
         PixelatedImageBridge.freeCvMat(maskMat)
-        PixelatedImageBridge.freeCvMat(processedMat)
+        //PixelatedImageBridge.freeCvMat(processedMat)
         
         return ret
     }
@@ -1618,7 +1618,7 @@ extension PixelatedImage {
         // finally free the cv::Mat pointers
         PixelatedImageBridge.freeCvMat(baseMat)
         PixelatedImageBridge.freeCvMat(maskMat)
-        PixelatedImageBridge.freeCvMat(processedMat)
+        //PixelatedImageBridge.freeCvMat(processedMat)
         
         return ret
     }
@@ -1627,6 +1627,7 @@ extension PixelatedImage {
 // simple swift wrappers over the ObjC -> OpenCV bridge
 extension PixelatedImage {
     // convert any PixelatedImage directly into a cv::Mat for opencv2 processing
+    // need to be freed (c++ delete) after opencv2 is done by PixelatedImageBridge.freeCvMat(_)
     public var cvMat: Mat { PixelatedImageBridge.cvMat(from: self) }
 
     // convert a mat back into a PixelatedImage, using an the self image
