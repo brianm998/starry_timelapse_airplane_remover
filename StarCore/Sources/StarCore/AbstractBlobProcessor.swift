@@ -232,7 +232,7 @@ public class AbstractBlobProcessor {
         Log.d("frame \(frameIndex)")
         if subtractionImage == nil {        
             Log.d("frame \(frameIndex) creating subtraction image") 
-            let image = try await frame.subtractAlignedImageFromFrame()
+            let image = try await frame.loadOrCreateSubtractionImage()
             Log.d("frame \(frameIndex) created subtraction image") 
             subtractionImage = image
             switch image.imageData {

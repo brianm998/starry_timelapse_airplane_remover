@@ -2201,7 +2201,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     // returns a grayscale image pixel value array from subtracting the aligned frame
     // from the frame being processed.
-    internal func subtractAlignedImageFromFrame() async throws -> PixelatedImage {
+    internal func loadOrCreateSubtractionImage() async throws -> PixelatedImage {
         // first try to load the subtracted image directly from file
 
         let accessor = imageAccessor
@@ -2214,7 +2214,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         // if we don't have the subtracted image on file yet, make it
-        Log.d("frame \(frameIndex) subtractAlignedImageFromFrame")
+        Log.d("frame \(frameIndex) loadOrCreateSubtractionImage")
 
 
         // load the original
