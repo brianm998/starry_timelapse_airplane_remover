@@ -320,6 +320,44 @@ public final class PixelatedImage: Sendable {
 }
 
 extension PixelatedImage {
+    func isZero(atX x: Int, andY y: Int) -> Bool {
+        switch imageData {
+        case .thirtyTwoBit(_):
+            fatalError("not supported yet")
+            break
+            
+        case .sixteenBit(let arr):
+            let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
+            let red = arr[offset]
+
+            if red != 0 { return false }
+            if self.componentsPerPixel >= 2 {
+                let green = arr[offset+1]
+                if green != 0 { return false }
+            }
+            if self.componentsPerPixel >= 3 {
+                let blue = arr[offset+2]
+                if blue != 0 { return false }
+            }
+            return true
+
+        case .eightBit(let arr):
+            let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
+            let red = arr[offset]
+
+            if red != 0 { return false }
+            if self.componentsPerPixel >= 2 {
+                let green = arr[offset+1]
+                if green != 0 { return false }
+            }
+            if self.componentsPerPixel >= 3 {
+                let blue = arr[offset+2]
+                if blue != 0 { return false }
+            }
+            return true
+        }
+    }
+    
     func readPixel(atX x: Int, andY y: Int) -> Pixel {
         switch imageData {
         case .thirtyTwoBit(_):
