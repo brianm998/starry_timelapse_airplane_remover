@@ -1136,12 +1136,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                               overwrite: false)
         }
 
-        let _ = try await loadOrCreateHorizonMask()
-        // XXX this is here for testing now
-        // XXX use it for proper pixel removal when loaded
-
+        let horizonMask = try await loadOrCreateHorizonMask()
         let earthAlignedImage = try await loadOrCreateEarthAlignedImage()
-        
         let starAlignedImage = try await loadOrCreateStarAlignedImage()
 
         let format = image.imageData // make a copy
@@ -1153,11 +1149,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         case .eightBit(_):
             Log.e("8 bit not supported here now")
         case .sixteenBit(var outputData):
-            Log.d("frame \(self.frameIndex) removing over airplanes")
+            Log.d("frame \(self.frameIndex) removing airplanes")
 
             try await self.removeAirplanes(image: image,
                                            toData: &outputData,
-                                           starAlignedImage: starAlignedImage)
+                                           starAlignedImage: starAlignedImage,
+                                           earthAlignedImage: earthAlignedImage,
+                                           horizonMask: horizonMask)
 
             Log.d("frame \(self.frameIndex) writing output files")
             self.set(state: .writingOutputFile)
@@ -1700,10 +1698,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
      */
 
     // actually remove outlier groups that have been selected as airplane tracks
-    internal func removeAirplanes(image: PixelatedImage,
-                                  toData data: inout [UInt16],
-                                  starAlignedImage: PixelatedImage) async throws
-    {
+    internal func removeAirplanes(
+      image: PixelatedImage,
+      toData data: inout [UInt16],
+      starAlignedImage: PixelatedImage,
+      earthAlignedImage: PixelatedImage,
+      horizonMask: HorizonMask
+    ) async throws {
         Log.i("frame \(frameIndex) removing airplane outlier groups")
 
         // remove every outlier in the list with pixels from the adjecent frames
@@ -1822,12 +1823,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     if alpha > 0 {
                         if alpha > 1 { alpha = 1 }
 
-                        updatePixel(x: x, y: y,
-                                    alpha: alpha,
-                                    toData: &data,
-                                    image: image,
-                                    from: starAlignedImage)
-
+                        updatePixel(
+                          x: x,
+                          y: y,
+                          alpha: alpha,
+                          toData: &data,
+                          image: image,
+                          starAlignedImage: starAlignedImage,
+                          earthAlignedImage: earthAlignedImage,
+                          horizonMask: horizonMask
+                        )
                         /*
 
                          // test paint the expected alpha levels as colors
@@ -1850,91 +1855,86 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // remove a selected outlier pixel with data from pixels from adjecent frames
     // this uses a pre-computed image of all 'good' pixels merged from a number
     // of star-aligned neighbor frames
-    internal func updatePixel(x: Int, y: Int,
-                              alpha: Double,
-                              toData data: inout [UInt16],
-                              image: PixelatedImage,
-                              from starAlignedImage: PixelatedImage)
-    {
-        self.updatePixel(x: x, y: y,
-                         alpha: alpha,
-                         toData: &data,
-                         image: image,
-                         with: starAlignedImage.readPixel(atX: x, andY: y))
-    }
-
-
-    // remove a selected outlier pixel with data from pixels from adjecent frames
-    // this just sums them all, ignoring any potential bad signal, hoping to drown it out
-    // with lots of other frames
-    internal func updatePixelSum(x: Int, y: Int,
-                                 alpha: Double,
-                                 toData data: inout [UInt16],
-                                 image: PixelatedImage,
-                                 from starAlignedImages: [Int:PixelatedImage])
-    {
-        var newPixels: [Pixel] = []
-
-        for image in starAlignedImages.values {
-            let overwritingPixel = image.readPixel(atX: x, andY: y)
-            if image.componentsPerPixel == 4, // has alpha channel
-               overwritingPixel.alpha != 0xFFFF   // alpha is not fully opaque
-            {
-                // ignore transparent pixels
-                continue
-            }
-            
-            newPixels.append(image.readPixel(atX: x, andY: y))
-        }
-
+    internal func updatePixel(
+      x: Int, y: Int,
+      alpha: Double,
+      toData data: inout [UInt16],
+      image: PixelatedImage,
+      starAlignedImage: PixelatedImage,
+      earthAlignedImage: PixelatedImage,
+      horizonMask: HorizonMask
+    ) {
         
-        self.updatePixel(x: x, y: y,
-                         alpha: alpha,
-                         toData: &data,
-                         image: image,
-                         with: Pixel(merging: newPixels))
-    }
+        /*
 
-    // punts by just uses the first aligned image
-    internal func updatePixelPunt(x: Int, y: Int,
-                                  alpha: Double,
-                                  toData data: inout [UInt16],
-                                  image: PixelatedImage,
-                                  from starAlignedImages: [Int:PixelatedImage])
-    {
+         here we need logic to see exactly which aligned image to pull the new pixel from
+         should use the horizon mask to figure that out
+         some distance from the horizon mask upwards will still use the earth aligned image
+         
+         
+         */
 
-        // XXX need much more complex logic here now
-
-        // for now, just grab the first aligned frame
-        if let otherFrame = starAlignedImages.values.first {
-
-            /*
-             next step is to compute a new overwriting pixel value from all aligned
-             images, ignoring those which are marked as non zero on the removal mask
-             for the other frame
-
-             need to update processing to allow for the removal mask to be available here
-             */
-            
-            let overwritingPixel = otherFrame.readPixel(atX: x, andY: y)
-
-            if otherFrame.componentsPerPixel == 4, // has alpha channel
-               overwritingPixel.alpha != 0xFFFF   // alpha is not fully opaque
-            {
-                // ignore transparent pixels
-                return
-            }
-
+        // how far away from the horizon do we need to be to use the star aligned image
+        let padding: Int = 20   // XXX guess, make this a parameter
+        
+        if y < horizonMask.horizonTopY - padding {
+            // use star aligned image
             self.updatePixel(x: x, y: y,
                              alpha: alpha,
                              toData: &data,
                              image: image,
-                             with: overwritingPixel)
+                             with: starAlignedImage.readPixel(atX: x, andY: y))
+        } else if y > horizonMask.horizonBottomY {
+            // use earth aligned image
+            self.updatePixel(x: x, y: y,
+                             alpha: alpha,
+                             toData: &data,
+                             image: image,
+                             with: earthAlignedImage.readPixel(atX: x, andY: y))
         } else {
-            Log.e("FUCK")
-        }
-    }
+            // between the bounds of the horizon, do a more careful check to see where to get this pixel from
+            if horizonMask.image.isZero(atX: x, andY: y) {
+                // direct ground hit, use earth aligned image
+                self.updatePixel(x: x, y: y,
+                                 alpha: alpha,
+                                 toData: &data,
+                                 image: image,
+                                 with: earthAlignedImage.readPixel(atX: x, andY: y))
+            } else {
+                // horizon mask is not zero at x, y, we hit the sky, but how far?
 
+                var inSky = true
+                var max = padding
+                var computedY = y+1
+                // look down padding pixels in the y direction for ground
+                while(inSky && max > 0) {
+                    if horizonMask.image.isZero(atX: x, andY: computedY) {
+                        inSky = false
+                    } else {
+                        max -= 1
+                        computedY += 1
+                    }
+                }
+
+                if inSky {
+                    // didn't find any ground, use the star aligned image
+                    self.updatePixel(x: x, y: y,
+                                     alpha: alpha,
+                                     toData: &data,
+                                     image: image,
+                                     with: starAlignedImage.readPixel(atX: x, andY: y))
+                } else {
+                    // we found ground, use the earth aligned image                    
+                    self.updatePixel(x: x, y: y,
+                                     alpha: alpha,
+                                     toData: &data,
+                                     image: image,
+                                     with: earthAlignedImage.readPixel(atX: x, andY: y))
+                }
+            }
+        }
+        
+    }
 
     // remove a selected outlier pixel with data from pixels from adjecent frames
     internal func updatePixel(x: Int, y: Int,
