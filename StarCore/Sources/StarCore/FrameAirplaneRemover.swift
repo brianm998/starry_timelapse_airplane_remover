@@ -547,19 +547,18 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     private func loadOrCreateStarAlignedImage() async throws -> PixelatedImage {
 
         // go ahead and create these now, for use later
+        /*
         let config = await configManager.config()
         if config.horizonDetectionEnabled ?? true {
-//            Task {
-                do {
-                    let _ = try await loadOrCreateEarthAlignedImage()
-                    Log.i("frame \(frameIndex) successfully created earth aligned image")
-                } catch {
-                    Log.e("frame \(frameIndex) unable to create earth aligned image: \(error)")
-                }
-  //          }
+            do {
+                let _ = try await loadOrCreateEarthAlignedImage()
+                Log.i("frame \(frameIndex) successfully created earth aligned image")
+            } catch {
+                Log.e("frame \(frameIndex) unable to create earth aligned image: \(error)")
+            }
         } else {
             Log.i("frame \(frameIndex) is not configured to create an earth aligned image")
-        }
+        }*/
         
         // load or create the aligned frame
         if let alignedFrame = try await imageAccessor.load(frameIndex: frameIndex,
@@ -1136,10 +1135,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                               overwrite: false)
         }
 
-        let horizonMask = try await loadOrCreateHorizonMask()
-        let earthAlignedImage = try await loadOrCreateEarthAlignedImage()
         let starAlignedImage = try await loadOrCreateStarAlignedImage()
 
+        var horizonMask: HorizonMask? = nil
+        var earthAlignedImage: PixelatedImage? = nil
+        
+        if config.horizonDetectionEnabled ?? true {
+            // only load these if we really need them
+            horizonMask = try await loadOrCreateHorizonMask()
+            earthAlignedImage = try await loadOrCreateEarthAlignedImage()
+        }
+        
         let format = image.imageData // make a copy
 
         switch format {
@@ -1702,11 +1708,24 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
       image: PixelatedImage,
       toData data: inout [UInt16],
       starAlignedImage: PixelatedImage,
-      earthAlignedImage: PixelatedImage,
-      horizonMask: HorizonMask
+      earthAlignedImage: PixelatedImage?,
+      horizonMask: HorizonMask?
     ) async throws {
         Log.i("frame \(frameIndex) removing airplane outlier groups")
 
+        if let earthAlignedImage,
+           let horizonMask
+        {
+            guard(starAlignedImage.width == earthAlignedImage.width && 
+                  horizonMask.image.width == earthAlignedImage.width &&
+                  starAlignedImage.height == earthAlignedImage.height &&
+                  horizonMask.image.height == earthAlignedImage.height)
+            else {
+                Log.e("cannot remove airplanes with starAlignedImage.width \(starAlignedImage.width) earthAlignedImage.width \(earthAlignedImage.width) horizonMask.image.width \(horizonMask.image.width) starAlignedImage.height \(starAlignedImage.height) earthAlignedImage.height \(earthAlignedImage.height) horizonMask.image.height \(horizonMask.image.height)")
+                return
+            }
+        }
+        
         // remove every outlier in the list with pixels from the adjecent frames
         guard let outlierGroups = outlierGroups else {
             Log.e("cannot remove pixels without outlier groups")
@@ -1861,19 +1880,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
       toData data: inout [UInt16],
       image: PixelatedImage,
       starAlignedImage: PixelatedImage,
-      earthAlignedImage: PixelatedImage,
-      horizonMask: HorizonMask
+      earthAlignedImage: PixelatedImage?,
+      horizonMask: HorizonMask?
     ) {
+
+        guard let horizonMask,
+              let earthAlignedImage
+        else {
+            // use star aligned image because that's all we've been given
+            self.updatePixel(x: x, y: y,
+                             alpha: alpha,
+                             toData: &data,
+                             image: image,
+                             with: starAlignedImage.readPixel(atX: x, andY: y))
+            return
+        }
         
-        /*
-
-         here we need logic to see exactly which aligned image to pull the new pixel from
-         should use the horizon mask to figure that out
-         some distance from the horizon mask upwards will still use the earth aligned image
-         
-         
-         */
-
         // how far away from the horizon do we need to be to use the star aligned image
         let padding: Int = 20   // XXX guess, make this a parameter
         
