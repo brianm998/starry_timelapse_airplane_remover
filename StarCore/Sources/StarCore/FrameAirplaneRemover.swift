@@ -531,7 +531,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // then we can delete all intermediate images we used to compute the goodPixelImage
             removeEarthAlignedImages()
 
-            return goodPixelImage
+            return goodPixelImageDarkened
         } else {
             Log.e("frame \(frameIndex) no aligned images")
         }
@@ -1157,11 +1157,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         case .sixteenBit(var outputData):
             Log.d("frame \(self.frameIndex) removing airplanes")
 
-            try await self.removeAirplanes(image: image,
-                                           toData: &outputData,
-                                           starAlignedImage: starAlignedImage,
-                                           earthAlignedImage: earthAlignedImage,
-                                           horizonMask: horizonMask)
+            try await self.removeAirplanes(
+              image: image,
+              toData: &outputData,
+              starAlignedImage: starAlignedImage,
+              earthAlignedImage: earthAlignedImage,
+              horizonMask: horizonMask
+            )
 
             Log.d("frame \(self.frameIndex) writing output files")
             self.set(state: .writingOutputFile)
@@ -1171,16 +1173,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // write frame out as processed versions
             do {
                 Log.d("frame \(self.frameIndex) processed file")
-                try await imageAccessor.saveFinal(processedImage,
-                                                  frameIndex: frameIndex,
-                                                  as: .processed,
-                                                  atSize: .original,
-                                                  overwrite: true)
+                try await imageAccessor.saveFinal(
+                  processedImage,
+                  frameIndex: frameIndex,
+                  as: .processed,
+                  atSize: .original,
+                  overwrite: true
+                )
                 Log.d("frame \(self.frameIndex) writing processed preview")
-                try await imageAccessor.saveFinal(processedImage,
-                                                  frameIndex: frameIndex,
-                                                  as: .processed,
-                                                  atSize: .preview, overwrite: true)
+                try await imageAccessor.saveFinal(
+                  processedImage,
+                  frameIndex: frameIndex,
+                  as: .processed,
+                  atSize: .preview,
+                  overwrite: true
+                )
             } catch {
                 // XXX for some reason this error gets missed if we don't catch it here :(
                 Log.d("frame \(self.frameIndex) ERROR \(error)")
@@ -1190,17 +1197,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 Log.d("frame \(self.frameIndex) getting validating image")
                 let validationImage = await outlierGroups.validationImage()
                 Log.d("frame \(self.frameIndex) writing validated image")
-                try await imageAccessor.saveFinal(validationImage,
-                                                  frameIndex: frameIndex,
-                                                  as: .validation,
-                                                  atSize: .original,
-                                                  overwrite: false)
+                try await imageAccessor.saveFinal(
+                  validationImage,
+                  frameIndex: frameIndex,
+                  as: .validation,
+                  atSize: .original,
+                  overwrite: false
+                )
                 Log.d("frame \(self.frameIndex) writing validated preview")
-                try await imageAccessor.saveFinal(validationImage,
-                                                  frameIndex: frameIndex,
-                                                  as: .validation,
-                                                  atSize: .preview,
-                                                  overwrite: false)
+                try await imageAccessor.saveFinal(
+                  validationImage,
+                  frameIndex: frameIndex,
+                  as: .validation,
+                  atSize: .preview,
+                  overwrite: false
+                )
             }
             Log.d("frame \(self.frameIndex) done writing output files")
         }
@@ -1831,10 +1842,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         if shouldRemove {
+            Log.i("frame \(frameIndex) removing bad pixels")
             self.set(state: .assemblingProcessedFrame)
             
             // then actually remove each non zero alpha pixel,
-            // replacing it with one from another frame
+            // replacing it with one calculated from other frames
             for y in 0 ..< height {
                 if alphaYAxis[y] == 0 { continue }
                 for x in 0 ..< width {
@@ -1868,6 +1880,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     }
                 }
             }
+        } else {
+            Log.i("frame \(frameIndex) NOT removing bad pixels")
         }
     }
 
@@ -1887,6 +1901,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         guard let horizonMask,
               let earthAlignedImage
         else {
+            //Log.d("frame \(frameIndex) updating pixel [\(x), \(y)] as star aligned")
             // use star aligned image because that's all we've been given
             self.updatePixel(x: x, y: y,
                              alpha: alpha,
@@ -1901,6 +1916,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         if y < horizonMask.horizonTopY - padding {
             // use star aligned image
+            //Log.d("frame \(frameIndex) updating pixel [\(x), \(y)] as star aligned")
             self.updatePixel(x: x, y: y,
                              alpha: alpha,
                              toData: &data,
@@ -1908,52 +1924,54 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                              with: starAlignedImage.readPixel(atX: x, andY: y))
         } else if y > horizonMask.horizonBottomY {
             // use earth aligned image
+            //Log.d("frame \(frameIndex) updating pixel [\(x), \(y)] as earth aligned")
+            self.updatePixel(x: x, y: y,
+                             alpha: alpha,
+                             toData: &data,
+                             image: image,
+                             with: earthAlignedImage.readPixel(atX: x, andY: y))
+        } else if horizonMask.image.isZero(atX: x, andY: y) {
+            // between the bounds of the horizon, do a more careful check to see where to get this pixel from
+            // direct ground hit, use earth aligned image
+            //Log.d("frame \(frameIndex) updating pixel [\(x), \(y)] as earth aligned")
             self.updatePixel(x: x, y: y,
                              alpha: alpha,
                              toData: &data,
                              image: image,
                              with: earthAlignedImage.readPixel(atX: x, andY: y))
         } else {
-            // between the bounds of the horizon, do a more careful check to see where to get this pixel from
-            if horizonMask.image.isZero(atX: x, andY: y) {
-                // direct ground hit, use earth aligned image
+            // horizon mask is not zero at x, y, we hit the sky, but how far?
+            var inSky = true
+            var max = padding
+            var computedY = y+1
+            // look down padding pixels in the y direction for ground
+            while(inSky && max > 0 && computedY  < horizonMask.image.height) {
+                if horizonMask.image.isZero(atX: x, andY: computedY) {
+                    inSky = false
+                } else {
+                    max -= 1
+                    computedY += 1
+                }
+            }
+
+            if inSky {
+                // didn't find any ground, use the star aligned image
+                //Log.d("frame \(frameIndex) updating pixel [\(x), \(y)] as star aligned")
+                self.updatePixel(x: x, y: y,
+                                 alpha: alpha,
+                                 toData: &data,
+                                 image: image,
+                                 with: starAlignedImage.readPixel(atX: x, andY: y))
+            } else {
+                // we found ground, use the earth aligned image                    
+                //Log.d("frame \(frameIndex) updating pixel [\(x), \(y)] as earth aligned")
                 self.updatePixel(x: x, y: y,
                                  alpha: alpha,
                                  toData: &data,
                                  image: image,
                                  with: earthAlignedImage.readPixel(atX: x, andY: y))
-            } else {
-                // horizon mask is not zero at x, y, we hit the sky, but how far?
-
-                var inSky = true
-                var max = padding
-                var computedY = y+1
-                // look down padding pixels in the y direction for ground
-                while(inSky && max > 0) {
-                    if horizonMask.image.isZero(atX: x, andY: computedY) {
-                        inSky = false
-                    } else {
-                        max -= 1
-                        computedY += 1
-                    }
-                }
-
-                if inSky {
-                    // didn't find any ground, use the star aligned image
-                    self.updatePixel(x: x, y: y,
-                                     alpha: alpha,
-                                     toData: &data,
-                                     image: image,
-                                     with: starAlignedImage.readPixel(atX: x, andY: y))
-                } else {
-                    // we found ground, use the earth aligned image                    
-                    self.updatePixel(x: x, y: y,
-                                     alpha: alpha,
-                                     toData: &data,
-                                     image: image,
-                                     with: earthAlignedImage.readPixel(atX: x, andY: y))
-                }
             }
+            
         }
         
     }
