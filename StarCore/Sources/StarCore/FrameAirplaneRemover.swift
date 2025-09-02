@@ -2234,13 +2234,33 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         let starAlignedImage = try await loadOrCreateStarAlignedImage()
 
-        // subtract the aligned framek
-        // result is image - alignedFrame
-        // any pixel which is bright in image but not bright in alignedFrame
-        // will be bright in the subtractionImage
-        let subtractionImage = image.subtract(starAlignedImage)
-
         let config = await configManager.config()
+
+        var subtractionImage: PixelatedImage! = nil
+
+        // subtract the aligned frame
+        // result is image - alignedFrame
+        // any pixel which is bright in image but not bright in alignedFrames
+        // will be bright in the subtractionImage
+        
+        if config.horizonDetectionEnabled ?? true {
+            // we care about the horizon, so make a composite
+            // of the earth and star aligned images, and subtract
+            // that from the image instead of just the star aligned image
+
+            let horizonMask = try await loadOrCreateHorizonMask()
+            let earthAlignedImage = try await loadOrCreateEarthAlignedImage()
+
+            let combinedImage = starAlignedImage.apply(mask: horizonMask.image,
+                                                       with: earthAlignedImage)
+            
+            subtractionImage = image.subtract(combinedImage)
+            
+        } else {
+            // with no horizon to worry about, just subtract the star aligned image
+            subtractionImage = image.subtract(starAlignedImage)
+        }
+
         
         if config.writeOutlierGroupFiles {
             // write out image of outlier amounts
@@ -2249,12 +2269,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                         frameIndex: frameIndex,
                                         as: .subtraction,
                                         atSize: .original,
-                                        overwrite: false)
+                                        overwrite: true)
                 try await accessor.save(subtractionImage,
                                         frameIndex: frameIndex,
                                         as: .subtraction,
                                         atSize: .preview,
-                                        overwrite: false)
+                                        overwrite: true)
             } catch {
                 Log.e("frame \(frameIndex) can't write subtraction image: \(error)")
             }
