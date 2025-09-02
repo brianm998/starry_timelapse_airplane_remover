@@ -63,8 +63,8 @@ public class StarAlignment {
             try ObjC.catchException {
                 let args = ["--align-to-first",
                             "--use-given-order",
-                            "-g 10", // retangular grid size (10x10 grid)
-                            "-c 80", // number of control points per grid position
+                            "-g 6", // retangular grid size (10x10 grid)
+                            "-c 40", // number of control points per grid position
 //                            "-f 84", // horizontal field of view
                             "--gpu",
                             "-a", baseName,
