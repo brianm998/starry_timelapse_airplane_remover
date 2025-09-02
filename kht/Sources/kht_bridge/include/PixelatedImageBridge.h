@@ -15,6 +15,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface PixelatedImageBridge : NSObject
 
+// combines two images with a mask
+// non zero mask pixels get image1
+//     zero mask pixels get image2
++ (Mat)combineImage:(Mat)image1
+               mask:(Mat)mask
+         background:(Mat)image2;
+
 /// Takes an expected binary cv::Mat and makes it 8-bit grayscale,
 // then and keeps N largest connected components, returning a cv::Mat
 + (Mat)filterConnectedComponents:(Mat)image keepLargest:(NSInteger)n;

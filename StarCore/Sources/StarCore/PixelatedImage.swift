@@ -1622,6 +1622,30 @@ extension PixelatedImage {
         
         return ret
     }
+
+    public func apply(
+      mask: PixelatedImage,
+      with background: PixelatedImage
+    ) -> PixelatedImage {
+        let selfMat = self.cvMat
+        let backgroundMat = background.cvMat
+        let maskMat = mask.cvMat
+            
+        let combinedMat =
+          PixelatedImageBridge.combineImage(
+            selfMat,
+            mask: maskMat,
+            background: backgroundMat
+          )
+
+        let combinedImage = self.newImage(from: combinedMat)
+        
+        PixelatedImageBridge.freeCvMat(selfMat)
+        PixelatedImageBridge.freeCvMat(backgroundMat)
+        PixelatedImageBridge.freeCvMat(maskMat)
+
+        return combinedImage
+    }
 }
 
 // simple swift wrappers over the ObjC -> OpenCV bridge

@@ -23,6 +23,52 @@
 
 @implementation PixelatedImageBridge
 
++ (Mat)combineImage:(Mat)image1
+               mask:(Mat)mask
+         background:(Mat)image2
+{
+    @try {
+      try {
+	// Reinterpret the opaque Mat pointers back to cv::Mat references
+	cv::Mat& mat1 = *reinterpret_cast<cv::Mat*>(image1);
+	cv::Mat& matMask = *reinterpret_cast<cv::Mat*>(mask);
+	cv::Mat& mat2 = *reinterpret_cast<cv::Mat*>(image2);
+
+	// Safety check: ensure sizes match
+	if (mat1.size() != mat2.size() || mat1.size() != matMask.size()) {
+	  NSLog(@"combineWithMask: Input Mats must have the same size.");
+	  return reinterpret_cast<Mat>(new cv::Mat()); // Return empty Mat
+	}
+
+	// Prepare output Mat
+	cv::Mat result;
+	result.create(mat1.size(), mat1.type());
+
+	// Combine images using mask
+	// Non-zero in mask -> mat1; zero in mask -> mat2
+	mat1.copyTo(result, matMask);         // Fill masked region with mat1
+	cv::bitwise_not(matMask, matMask);     // Invert mask to copy from mat2
+	mat2.copyTo(result, matMask);         // Fill other region with mat2
+
+
+	// make a new result on the heap XXX CLEAR THIS LATER WITH freeCvMat:
+	cv::Mat* resultPtr = new cv::Mat(result);
+	
+	//delete matPtr;
+	LogWithLocation(@"filterConnectedComponents done\n");
+    
+	return resultPtr;
+      } catch (const cv::Exception &e) {
+	LogWithLocation(@"OpenCV Exception: %s", e.what());
+      }
+    } @catch (NSException *exception) {
+      LogWithLocation(@"Objective-C Exception: %@", exception);
+    }
+    return nil;
+    
+}
+
+
 + (Mat)filterConnectedComponents:(Mat)image keepLargest:(NSInteger)n {
     @try {
       try {
