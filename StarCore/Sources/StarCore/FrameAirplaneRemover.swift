@@ -467,7 +467,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // load or create an earth aligned image for this frame
     // which will have the top earthAlignedImageCropAmount of the frame removed
     // and then aligned with neighbors 
-    private func loadOrCreateEarthAlignedImage() async throws -> PixelatedImage {
+    private func loadOrCreateEarthAlignedImage_WITH_HUGIN() async throws -> PixelatedImage {
         Log.d("frame \(frameIndex) loadOrCreateEarthAlignedImage")
         if let alignedFrame = try? await imageAccessor.load(frameIndex: frameIndex,
                                                             type: .earthAligned,
@@ -538,13 +538,135 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         throw "unable to align earth images"
     }
+
+    // uses opencv2 for SIFT fast, accurate image alignment (needs work for earth still)
+    private func loadOrCreateEarthAlignedImage() async throws -> PixelatedImage {
+        try await loadOrCreateAlignedImage(of: .earthAligned)
+    }
     
+    // uses opencv2 for SIFT fast, accurate image alignment
+    private func loadOrCreateStarAlignedImage() async throws -> PixelatedImage {
+        try await loadOrCreateAlignedImage(of: .starAligned)
+    }
+
+    private func loadOrCreateAlignedImage(of type: FrameViewMode) async throws -> PixelatedImage {
+
+        var isEarth = false
+        
+        switch type {
+        case .starAligned:
+            isEarth = false
+        case .earthAligned:
+            isEarth = true
+        default:
+            throw "unable to loadOrCreateAlignedImage of type \(type)"
+        }
+
+        // load or create the aligned frame
+        if let alignedFrame = try await imageAccessor.load(frameIndex: frameIndex,
+                                                           type: type,
+                                                           atSize: .original)
+        {
+            // check for number of aligned images, and re-do if it's different
+            if let numberAligned = self.readNumberOfAlignedImagesForThisFrame() {
+                if numberOfAlignedFrames == numberAligned || numberOfAlignedFrames > imageSequence?.filenames.count ?? 0 {
+                    // we have both an existing aligned frame, and a saved number of aligned
+                    // images used to calculate that frame that matches the expected number,
+                    // so we can just return the aligned frame we found.
+                    return alignedFrame
+                } else {
+                    Log.i("redoing aligned images because numberOfAlignedFrames \(numberOfAlignedFrames) != numberAligned \(numberAligned)")
+                }
+            } else {
+                Log.i("redoing aligned images because we were unable to read the number of aligned images for this frame")
+            }
+            
+            // we didn't meet the above requirements, so re-do star alignment for this frame,
+            // getting rid of any existing files first
+            removeStarAlignedImages()
+            removeSubtractionImages()
+            try removeNumberOfAlignedImagesForThisFrameFile()
+        }
+
+        // with no saved aligned frame, first load or create the set of aligned frames
+        // that we used to create the final aligned frame
+        self.set(state: .creatingStarAlignedFrame)
+
+        guard let originalFrame = try await imageAccessor.load(frameIndex: frameIndex,
+                                                               type: .original,
+                                                               atSize: .original)
+        else {
+            throw "frame \(frameIndex) unable to load original frame for star alignment"
+        }
+        
+        let neighborImages = try await withThrowingTaskGroup(of: PixelatedImage?.self) { group in
+            for filename in alignmentFilenames.values {
+                group.addTask {
+                    try await loadImageInt(filename: filename)
+                }
+            }
+
+            var results = [PixelatedImage]()
+            for try await image in group {
+                if let img = image {
+                    results.append(img)
+                }
+            }
+            return results
+        }
+
+        let horizonMask = try await loadOrCreateHorizonMask()
+        
+        let alignedFrames = originalFrame.align(
+          frames: neighborImages,
+          masked: horizonMask.image,
+          invertMask: isEarth,    // apply to sky, not ground
+          invertBrightness: isEarth, // XXX need to play with this more
+          maxKeypoints: 500          // XXX hardcoded constant
+        )
+
+        self.set(state: .creatingStarAlignedFrame)
+        
+        if let firstImage = alignedFrames.first {
+
+            let goodPixelImage = try await buildAlignedFrame(
+              alignedImages: alignedFrames,
+              width: width,
+              height: height,
+              thresholdFactor: pixelThreshold
+            )
+            
+            try await imageAccessor.save(goodPixelImage,
+                                         frameIndex: frameIndex,
+                                         as: type,
+                                         atSize: .original,
+                                         overwrite: true)
+
+            try await imageAccessor.save(goodPixelImage,
+                                         frameIndex: frameIndex,
+                                         as: type,
+                                         atSize: .preview,
+                                         overwrite: true)
+
+            // keep track of the number of alignment images used
+            // so we can make sure it's the same as the desired amount later
+            try self.write(numberOfAlignedImagesForThisFrame: alignedFrames.count)
+
+            // if everything above here has worked,
+            // then we can delete all intermediate images we used to compute the goodPixelImage
+            removeStarAlignedImages()
+
+            return goodPixelImage
+        }
+
+        throw "unable to star align images"
+    }    
     // load or create a star aligned image for this frame
     // this image is a composite of numberOfAlignedFrames neighbor images
     // which have been all star-aligned with the frame at frameIndex.
     // We then filter out pixels which are abberently brighter by self.pixelThreshold
     // than the average for that location in all aligned images
-    private func loadOrCreateStarAlignedImage() async throws -> PixelatedImage {
+    private func loadOrCreateStarAlignedImage_WITH_HUGIN() async throws -> PixelatedImage {
 
         // go ahead and create these now, for use later
         /*
@@ -841,6 +963,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     // creates star aligned neighboring frames
+    // XXX CAN GO AWAY WHEN HUGIN DOES
     private func createStarAlignedImages() async throws -> [Int: PixelatedImage] {
         Log.d("frame \(frameIndex) starAlignedImages")
         guard let imageSequence else {
