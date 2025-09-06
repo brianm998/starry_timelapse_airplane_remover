@@ -1667,7 +1667,7 @@ extension PixelatedImage {
         // finally free the cv::Mat pointers
         PixelatedImageBridge.freeCvMat(baseMat)
         PixelatedImageBridge.freeCvMat(maskMat)
-        //PixelatedImageBridge.freeCvMat(processedMat)
+        PixelatedImageBridge.freeCvMat(processedMat)
         
         return ret
     }
@@ -1691,7 +1691,7 @@ extension PixelatedImage {
         // finally free the cv::Mat pointers
         PixelatedImageBridge.freeCvMat(baseMat)
         PixelatedImageBridge.freeCvMat(maskMat)
-        //PixelatedImageBridge.freeCvMat(processedMat)
+        PixelatedImageBridge.freeCvMat(processedMat)
         
         return ret
     }
@@ -1716,6 +1716,7 @@ extension PixelatedImage {
         PixelatedImageBridge.freeCvMat(selfMat)
         PixelatedImageBridge.freeCvMat(backgroundMat)
         PixelatedImageBridge.freeCvMat(maskMat)
+        PixelatedImageBridge.freeCvMat(combinedMat)
 
         return combinedImage
     }
