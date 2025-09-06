@@ -4,7 +4,7 @@ import logging
 import Cocoa
 import Semaphore
 
-public let imageCache = ImageCache(cacheLimit: 10) // XXX guess
+public let imageCache = ImageCache(cacheLimit: 30) // XXX guess
 
 /*
 
