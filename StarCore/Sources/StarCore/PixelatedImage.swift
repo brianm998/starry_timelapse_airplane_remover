@@ -1476,6 +1476,55 @@ extension PixelatedImage {
 
 extension PixelatedImage {
 
+    public func align(
+      frames: [PixelatedImage],
+      masked mask: PixelatedImage?,
+      maxKeypoints: Int32
+    ) -> [PixelatedImage] {
+        let baseMat = self.cvMat
+        let frameMats = frames.map { $0.cvMat }
+        var maskMat: Mat? = nil
+        if let mask {
+            maskMat = mask.cvMat
+        }
+
+        let wrappedFrames = frameMats.map { NSValue(pointer: $0) }
+
+        var ret: [PixelatedImage] = []
+        if let aligned = ImageAligner.alignFrames(
+             baseMat,
+             frames: wrappedFrames,
+             mask: maskMat,
+             maxKeypoints: maxKeypoints
+           )
+        {
+            // Unwrap results
+            for wrapped in aligned {
+                if let matPtr = wrapped.pointerValue {
+                    let mat = matPtr
+
+                    // assumes self and processedMat have same bits per pixel, num components, etc.
+                    ret.append(self.newImage(from: mat))
+
+                    // XXX free mat?
+                    // XXX not sure
+                }
+            }
+        }
+
+        PixelatedImageBridge.freeCvMat(baseMat)
+
+        for frameMat in frameMats {
+            PixelatedImageBridge.freeCvMat(frameMat)
+        }
+
+        if let maskMat {
+            PixelatedImageBridge.freeCvMat(maskMat)
+        }
+
+        return ret
+    }
+    
     public var horizonBounds: HorizonBounds {
         // first convert images to cv::Mat
         let baseMat = self.cvMat
@@ -1656,7 +1705,9 @@ extension PixelatedImage {
 
     // convert a mat back into a PixelatedImage, using an the self image
     // for image bitmapInfo, colorSpace, and ciFormat
-    public func newImage(from mat: Mat) -> PixelatedImage {
+    public func newImage(
+      from mat: Mat
+    ) -> PixelatedImage {
         PixelatedImageBridge.pixelatedImage(
           from: mat,
           bitmapInfo: self.bitmapInfo,
@@ -1708,16 +1759,18 @@ extension PixelatedImageBridge {
         let width = step/bytesPerPixel
         let height = nsdata.count / (width*bytesPerPixel)
 
-        return PixelatedImage(width: width,
-                              height: height,
-                              imageData: df,
-                              bitsPerPixel: bytesPerPixel*8,
-                              bytesPerRow: step,
-                              bitsPerComponent: bytesPerPixel/channels*8,
-                              bytesPerPixel: bytesPerPixel,
-                              bitmapInfo: bitmapInfo,
-                              componentsPerPixel: channels,
-                              colorSpace: colorSpace,
-                              ciFormat: ciFormat)
+        return PixelatedImage(
+          width: width,
+          height: height,
+          imageData: df,
+          bitsPerPixel: bytesPerPixel*8,
+          bytesPerRow: step,
+          bitsPerComponent: bytesPerPixel/channels*8,
+          bytesPerPixel: bytesPerPixel,
+          bitmapInfo: bitmapInfo,
+          componentsPerPixel: channels,
+          colorSpace: colorSpace,
+          ciFormat: ciFormat
+        )
     }
 }
