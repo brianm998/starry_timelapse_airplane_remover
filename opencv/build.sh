@@ -48,7 +48,7 @@ set(CMAKE_CXX_STANDARD 17) ## HACK HACK
 ' CMakeLists.txt
 
 # build opencv2 framework for osx and the given ARCHS
-time python3 platforms/osx/build_framework.py FRAMEWORK_BUILD --macos_archs "$ARCHS" --without objc --without dnn_tf --without dnn --without features2d --without calib3d --without flann --without gapi --without java --without js --without ml --without objdetect --without photo --without python --without stitching --without ts --without video --without videoio --without world --build_only_specified_archs True 
+time python3 platforms/osx/build_framework.py FRAMEWORK_BUILD --macos_archs "$ARCHS" --without objc --without dnn_tf --without dnn --without gapi --without java --without js --without ml --without objdetect --without photo --without python --without stitching --without ts --without video --without videoio --without world --build_only_specified_archs True 
 
 if [ "$ARCHS" = "x86_64,arm64" ]; then 
     # if we are building more than one platform, package up the .a files for both as a universal binary
