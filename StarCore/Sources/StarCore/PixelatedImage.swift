@@ -1534,6 +1534,7 @@ extension PixelatedImage {
       frames: [PixelatedImage],
       masked mask: PixelatedImage? = nil,
       invertMask: Bool = false, // use zero values instead of non zero values for the mask
+      invertBrightness: Bool = false, // flip the brightness before finding keypoints
       maxKeypoints: Int32 = 500
     ) -> [PixelatedImage] {
         let baseMat = self.cvMat
@@ -1551,6 +1552,7 @@ extension PixelatedImage {
              frames: wrappedFrames,
              mask: maskMat,
              invertMask: invertMask,
+             invertBrightness: invertBrightness,
              maxKeypoints: maxKeypoints
            )
         {

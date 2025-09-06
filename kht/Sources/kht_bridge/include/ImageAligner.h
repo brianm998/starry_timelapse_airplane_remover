@@ -11,6 +11,7 @@ typedef void* Mat;
 			     frames:(NSArray<NSValue *> *)frames
 			       mask:(Mat)mask
                          invertMask:(BOOL)invertMask
+		   invertBrightness:(BOOL)invertBrightness
 		       maxKeypoints:(int)maxKeypoints;
 
 @end

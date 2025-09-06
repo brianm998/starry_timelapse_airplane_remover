@@ -8,9 +8,18 @@
 
 @implementation ImageAligner
 
-
 #include <opencv2/opencv.hpp>
 #include <iostream>
+
+
+/*
+  This ImageAligner replaces hugin's align_image_stack with in-process usage of opencv2
+  it's faster and better at detecting stars using SIFT.
+
+  However, it's still not good at detecting detail in the ground, especially when it's dark.
+  tried flipping the image, and boosting contrast, but so far, no dice.
+  returns the original image when there are not enough found control points.
+ */
 
 void printMatInfo(const cv::Mat& mat, const std::string& name = "") {
     if (!name.empty()) {
@@ -48,6 +57,61 @@ void printMatInfo(const cv::Mat& mat, const std::string& name = "") {
     } else {
         std::cout << "  Alpha channel: Unknown (non-standard channel count)\n";
     }
+}
+
+// Convert image to 8-bit grayscale, normalize only within mask area
+cv::Mat toGray8UWithMask(const cv::Mat& src, const cv::Mat& mask, bool normalize = true) {
+  printf("SHIT\n");
+    if (src.empty()) {
+        throw std::runtime_error("Input image is empty!");
+    }
+
+    cv::Mat gray;
+    if (src.channels() > 1) {
+      cv::cvtColor(src, gray, cv::COLOR_BGR2GRAY);
+    } else {
+      gray = src.clone();
+    }
+
+    cv::Mat tmp;
+
+    // If normalization is requested and a valid mask is provided
+    if (normalize && !mask.empty() && mask.type() == CV_8U) {
+      printf("CAKES\n");
+        double minVal, maxVal;
+	printMatInfo(mask, "mask");
+        cv::minMaxLoc(gray, &minVal, &maxVal, nullptr, nullptr, mask);
+
+
+        // Avoid divide-by-zero
+        double scale = (maxVal > minVal) ? 255.0 / (maxVal - minVal) : 1.0;
+        double shift = -minVal * scale;
+
+        // Apply scaling
+        gray.convertTo(tmp, CV_8U, scale, shift);
+	
+    } else {
+      printf("TIME\n");
+        // Fall back to existing conversion logic
+        if (gray.depth() == CV_16U) {
+            gray.convertTo(tmp, CV_8U, 1.0 / 256.0);
+        } else if (gray.depth() != CV_8U) {
+            double minVal, maxVal;
+            cv::minMaxLoc(gray, &minVal, &maxVal);
+            double scale = (maxVal > 0) ? 255.0 / maxVal : 1.0;
+            gray.convertTo(tmp, CV_8U, scale);
+        } else {
+            tmp = gray.clone();
+        }
+    }
+      printf("CRAP\n");
+
+    // Convert to grayscale if needed
+    if (tmp.channels() > 1) {
+        cv::cvtColor(tmp, tmp, cv::COLOR_BGR2GRAY);
+    }
+
+    return tmp;
 }
 
 // Convert any depth image to 8-bit grayscale for SIFT
@@ -106,6 +170,7 @@ cv::Mat addAlphaChannel(const cv::Mat& img) {
                              frames:(NSArray<NSValue *> *)frames
                                mask:(Mat)mask
                          invertMask:(BOOL)invertMask
+		   invertBrightness:(BOOL)invertBrightness
                        maxKeypoints:(int)maxKeypoints
 {
     cv::Mat &specialMat = *(cv::Mat *)special;
@@ -127,8 +192,17 @@ cv::Mat addAlphaChannel(const cv::Mat& img) {
 
     NSMutableArray *aligned = [NSMutableArray arrayWithCapacity:frames.count];
 
+    if (invertBrightness) {
+      cv::bitwise_not(specialMat, specialMat);
+      cv::imwrite("/tmp/invert.png", specialMat);
+    }
+
     // Prepare special image for SIFT
-    cv::Mat specialGray = toGray8U(specialMat);
+    printf("FUCK\n");
+    cv::imwrite("/tmp/specialMat.png", specialMat);
+    cv::Mat specialGray = toGray8UWithMask(specialMat, maskMat, true);
+    cv::imwrite("/tmp/specialGray.png", specialGray);
+    printf("YOU\n");
 
     cv::Ptr<cv::SIFT> detector = cv::SIFT::create(maxKeypoints);
     std::vector<cv::KeyPoint> kpSpecial;
@@ -143,9 +217,16 @@ cv::Mat addAlphaChannel(const cv::Mat& img) {
     for (NSValue *val in frames) {
         cv::Mat &frame = *(cv::Mat *)val.pointerValue;
 
-        // Convert to 8-bit grayscale for SIFT
-        cv::Mat frameGray = toGray8U(frame);
+	if (invertBrightness) {
+	  cv::bitwise_not(frame, frame);
+	}
 
+	printf("FUCK\n");
+	
+        // Convert to 8-bit grayscale for SIFT
+        cv::Mat frameGray = toGray8UWithMask(frame, maskMat, true);
+	
+	printf("YOU\n");
         std::vector<cv::KeyPoint> kpFrame;
         cv::Mat descFrame;
         detector->detectAndCompute(frameGray, maskMat, kpFrame, descFrame);
@@ -180,6 +261,9 @@ cv::Mat addAlphaChannel(const cv::Mat& img) {
         } else {
             printf("ImageAligner.m: FUCKING FALLBACK :(\n");
             warped = frame;
+	    if (invertBrightness) {
+	      cv::bitwise_not(warped, warped);
+	    }
         }
 
 	//cv::imwrite("/tmp/warped.png", warped);
