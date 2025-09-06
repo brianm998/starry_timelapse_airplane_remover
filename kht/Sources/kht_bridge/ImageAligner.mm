@@ -61,7 +61,6 @@ void printMatInfo(const cv::Mat& mat, const std::string& name = "") {
 
 // Convert image to 8-bit grayscale, normalize only within mask area
 cv::Mat toGray8UWithMask(const cv::Mat& src, const cv::Mat& mask, bool normalize = true) {
-  printf("SHIT\n");
     if (src.empty()) {
         throw std::runtime_error("Input image is empty!");
     }
@@ -77,9 +76,8 @@ cv::Mat toGray8UWithMask(const cv::Mat& src, const cv::Mat& mask, bool normalize
 
     // If normalization is requested and a valid mask is provided
     if (normalize && !mask.empty() && mask.type() == CV_8U) {
-      printf("CAKES\n");
         double minVal, maxVal;
-	printMatInfo(mask, "mask");
+	//printMatInfo(mask, "mask");
         cv::minMaxLoc(gray, &minVal, &maxVal, nullptr, nullptr, mask);
 
 
@@ -91,7 +89,6 @@ cv::Mat toGray8UWithMask(const cv::Mat& src, const cv::Mat& mask, bool normalize
         gray.convertTo(tmp, CV_8U, scale, shift);
 	
     } else {
-      printf("TIME\n");
         // Fall back to existing conversion logic
         if (gray.depth() == CV_16U) {
             gray.convertTo(tmp, CV_8U, 1.0 / 256.0);
@@ -104,7 +101,6 @@ cv::Mat toGray8UWithMask(const cv::Mat& src, const cv::Mat& mask, bool normalize
             tmp = gray.clone();
         }
     }
-      printf("CRAP\n");
 
     // Convert to grayscale if needed
     if (tmp.channels() > 1) {
@@ -166,13 +162,14 @@ cv::Mat addAlphaChannel(const cv::Mat& img) {
     return result;
 }
 
-+ (NSArray<NSValue *> *)alignFrames:(Mat)special
-                             frames:(NSArray<NSValue *> *)frames
-                               mask:(Mat)mask
-                         invertMask:(BOOL)invertMask
-		   invertBrightness:(BOOL)invertBrightness
-                       maxKeypoints:(int)maxKeypoints
++ (id)alignFrames:(Mat)special
+	   frames:(NSArray<NSValue *> *)frames
+	     mask:(Mat)mask
+       invertMask:(BOOL)invertMask
+ invertBrightness:(BOOL)invertBrightness
+     maxKeypoints:(int)maxKeypoints
 {
+  try {
     cv::Mat &specialMat = *(cv::Mat *)special;
 
     // Use mask or full white if none provided
@@ -182,27 +179,25 @@ cv::Mat addAlphaChannel(const cv::Mat& img) {
     } else {
         maskMat = cv::Mat(specialMat.size(), CV_8U, cv::Scalar(255));
     }
-    printMatInfo(maskMat, "pre inversion mask");
+    //printMatInfo(maskMat, "pre inversion mask");
 
     // Invert mask if requested
     if (invertMask) {
         cv::bitwise_not(maskMat, maskMat);
-	printMatInfo(maskMat, "post inversion mask");
+	//printMatInfo(maskMat, "post inversion mask");
     }
 
     NSMutableArray *aligned = [NSMutableArray arrayWithCapacity:frames.count];
 
     if (invertBrightness) {
       cv::bitwise_not(specialMat, specialMat);
-      cv::imwrite("/tmp/invert.png", specialMat);
+      //cv::imwrite("/tmp/invert.png", specialMat);
     }
 
     // Prepare special image for SIFT
-    printf("FUCK\n");
-    cv::imwrite("/tmp/specialMat.png", specialMat);
+    //cv::imwrite("/tmp/specialMat.png", specialMat);
     cv::Mat specialGray = toGray8UWithMask(specialMat, maskMat, true);
-    cv::imwrite("/tmp/specialGray.png", specialGray);
-    printf("YOU\n");
+    //cv::imwrite("/tmp/specialGray.png", specialGray);
 
     cv::Ptr<cv::SIFT> detector = cv::SIFT::create(maxKeypoints);
     std::vector<cv::KeyPoint> kpSpecial;
@@ -221,12 +216,10 @@ cv::Mat addAlphaChannel(const cv::Mat& img) {
 	  cv::bitwise_not(frame, frame);
 	}
 
-	printf("FUCK\n");
 	
         // Convert to 8-bit grayscale for SIFT
         cv::Mat frameGray = toGray8UWithMask(frame, maskMat, true);
 	
-	printf("YOU\n");
         std::vector<cv::KeyPoint> kpFrame;
         cv::Mat descFrame;
         detector->detectAndCompute(frameGray, maskMat, kpFrame, descFrame);
@@ -249,26 +242,43 @@ cv::Mat addAlphaChannel(const cv::Mat& img) {
         }
 
 	//cv::imwrite("/tmp/frame.png", frame);
-        printMatInfo(frame, "frame");
+        //printMatInfo(frame, "frame");
 
-	printf("ImageAligner.m: ptsFrame.size() %ld\n", ptsFrame.size());
+	//printf("ImageAligner.m: ptsFrame.size() %ld\n", ptsFrame.size());
 	
         cv::Mat warped;
-        if (ptsFrame.size() >= 4) {
-            cv::Mat H = cv::findHomography(ptsFrame, ptsSpecial, cv::RANSAC);
-            cv::warpPerspective(frame, warped, H, specialMat.size(),
-                                cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0,0,0,0));
-        } else {
-            printf("ImageAligner.m: FUCKING FALLBACK :(\n");
+	if (ptsFrame.size() >= 4) {
+	  cv::Mat H = cv::findHomography(ptsFrame, ptsSpecial, cv::RANSAC);
+	  
+	  if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
+	    H.convertTo(H, CV_64F);
+	  }
+	  
+	  if (H.empty() || (H.rows != 3 || H.cols != 3) || !(H.type() == CV_32F || H.type() == CV_64F)) {
+	    // fallback, cannot warp for some reason
+	    //printf("ImageAligner.m: FUCKING FALLBACK :(\n");
+	    // XXX expose that this has happened to callers somehow
             warped = frame;
 	    if (invertBrightness) {
 	      cv::bitwise_not(warped, warped);
 	    }
-        }
+	  } else {
+	    cv::warpPerspective(frame, warped, H, specialMat.size(),
+				cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0,0,0,0));
+	  }
+	} else {
+	  // fallback, cannot warp because of not enough control points
+	  //printf("ImageAligner.m: FUCKING FALLBACK :(\n");
+	  // XXX expose that this has happened to callers somehow
+	  warped = frame;
+	  if (invertBrightness) {
+	    cv::bitwise_not(warped, warped);
+	  }
+	}
 
 	//cv::imwrite("/tmp/warped.png", warped);
 	cv::Mat output;
-        printMatInfo(warped, "warped");
+        //printMatInfo(warped, "warped");
 	
 	if (warped.channels() == 4) {
 	  // If it's BGRA, convert to BGR
@@ -278,13 +288,20 @@ cv::Mat addAlphaChannel(const cv::Mat& img) {
 	}
 
         cv::Mat *result = new cv::Mat(output);
-        printMatInfo(*result, "result");
+        //printMatInfo(*result, "result");
 	//cv::imwrite("/tmp/result.png", *result);
         [aligned addObject:[NSValue valueWithPointer:result]];
         count++;
     }
 
     return aligned;
+  } catch (const cv::Exception& e) {
+    return [NSString stringWithUTF8String:e.what()]; 
+  } catch (const std::exception& e) {
+    return [NSString stringWithUTF8String:e.what()]; 
+  } catch (...) {
+    return @"Unknown Exception";
+  }
 }
 
 @end

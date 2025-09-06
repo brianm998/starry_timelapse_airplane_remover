@@ -7,11 +7,11 @@ typedef void* Mat;
 
 @interface ImageAligner : NSObject
 
-+ (NSArray<NSValue *> *)alignFrames:(Mat)special
-			     frames:(NSArray<NSValue *> *)frames
-			       mask:(Mat)mask
-                         invertMask:(BOOL)invertMask
-		   invertBrightness:(BOOL)invertBrightness
-		       maxKeypoints:(int)maxKeypoints;
++ (id)alignFrames:(Mat)special
+	   frames:(NSArray<NSValue *> *)frames
+	     mask:(Mat)mask
+       invertMask:(BOOL)invertMask
+ invertBrightness:(BOOL)invertBrightness
+     maxKeypoints:(int)maxKeypoints;
 
 @end
