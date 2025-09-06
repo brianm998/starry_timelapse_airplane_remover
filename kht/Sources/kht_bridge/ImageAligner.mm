@@ -9,6 +9,9 @@
 @implementation ImageAligner
 
 
+#include <opencv2/opencv.hpp>
+#include <iostream>
+
 void printMatInfo(const cv::Mat& mat, const std::string& name = "") {
     if (!name.empty()) {
         std::cout << "Mat '" << name << "':\n";
@@ -18,25 +21,34 @@ void printMatInfo(const cv::Mat& mat, const std::string& name = "") {
 
     std::cout << "  Size: " << mat.cols << " x " << mat.rows << "\n";
 
-    int depth = mat.depth(); // depth = CV_8U, CV_16U, CV_32F, etc.
+    int depth = mat.depth();
     int bitsPerComponent = 0;
-
     switch (depth) {
         case CV_8U: case CV_8S: bitsPerComponent = 8; break;
         case CV_16U: case CV_16S: bitsPerComponent = 16; break;
-        case CV_32S: bitsPerComponent = 32; break;
-        case CV_32F: bitsPerComponent = 32; break;
+        case CV_32S: case CV_32F: bitsPerComponent = 32; break;
         case CV_64F: bitsPerComponent = 64; break;
         default: bitsPerComponent = 0; break;
     }
 
-    int componentsPerPixel = mat.channels();
-
+    int channels = mat.channels();
     std::cout << "  Bits per component: " << bitsPerComponent << "\n";
-    std::cout << "  Components per pixel: " << componentsPerPixel << "\n";
-    std::cout << "  Total depth (bits per pixel): " << bitsPerComponent * componentsPerPixel << "\n";
-}
+    std::cout << "  Components per pixel: " << channels << "\n";
+    std::cout << "  Total depth (bits per pixel): " << bitsPerComponent * channels << "\n";
 
+    // Guess alpha information
+    if (channels == 4) {
+        std::cout << "  Alpha channel: Present (assumed)\n";
+        std::cout << "  Channel order: Likely BGRA (OpenCV default)\n";
+        std::cout << "  Premultiplied alpha: Unknown (must track separately)\n";
+    } else if (channels == 3) {
+        std::cout << "  Alpha channel: None (RGB/BGR)\n";
+    } else if (channels == 1) {
+        std::cout << "  Alpha channel: None (Grayscale)\n";
+    } else {
+        std::cout << "  Alpha channel: Unknown (non-standard channel count)\n";
+    }
+}
 
 // Convert any depth image to 8-bit grayscale for SIFT
 cv::Mat toGray8U(const cv::Mat& src) {
@@ -93,6 +105,7 @@ cv::Mat addAlphaChannel(const cv::Mat& img) {
 + (NSArray<NSValue *> *)alignFrames:(Mat)special
                              frames:(NSArray<NSValue *> *)frames
                                mask:(Mat)mask
+                         invertMask:(BOOL)invertMask
                        maxKeypoints:(int)maxKeypoints
 {
     cv::Mat &specialMat = *(cv::Mat *)special;
@@ -104,6 +117,13 @@ cv::Mat addAlphaChannel(const cv::Mat& img) {
     } else {
         maskMat = cv::Mat(specialMat.size(), CV_8U, cv::Scalar(255));
     }
+    printMatInfo(maskMat, "pre inversion mask");
+
+    // Invert mask if requested
+    if (invertMask) {
+        cv::bitwise_not(maskMat, maskMat);
+	printMatInfo(maskMat, "post inversion mask");
+    }
 
     NSMutableArray *aligned = [NSMutableArray arrayWithCapacity:frames.count];
 
@@ -114,8 +134,6 @@ cv::Mat addAlphaChannel(const cv::Mat& img) {
     std::vector<cv::KeyPoint> kpSpecial;
     cv::Mat descSpecial;
 
-    //cv::imwrite("/tmp/special_gray.png", specialGray);
-    
     detector->detectAndCompute(specialGray, maskMat, kpSpecial, descSpecial);
 
     cv::BFMatcher matcher(cv::NORM_L2);
@@ -127,7 +145,6 @@ cv::Mat addAlphaChannel(const cv::Mat& img) {
 
         // Convert to 8-bit grayscale for SIFT
         cv::Mat frameGray = toGray8U(frame);
-	//cv::imwrite("/tmp/frame_gray.png", frameGray);
 
         std::vector<cv::KeyPoint> kpFrame;
         cv::Mat descFrame;
@@ -150,28 +167,37 @@ cv::Mat addAlphaChannel(const cv::Mat& img) {
             }
         }
 
+	//cv::imwrite("/tmp/frame.png", frame);
+        printMatInfo(frame, "frame");
+
+	printf("ImageAligner.m: ptsFrame.size() %ld\n", ptsFrame.size());
+	
         cv::Mat warped;
         if (ptsFrame.size() >= 4) {
             cv::Mat H = cv::findHomography(ptsFrame, ptsSpecial, cv::RANSAC);
             cv::warpPerspective(frame, warped, H, specialMat.size(),
                                 cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0,0,0,0));
-	    //cv::imwrite("/tmp/FU3.png", H);
         } else {
-            // fallback: empty image with alpha
-            warped = cv::Mat(frame.size(), CV_8UC4, cv::Scalar(0,0,0,0));
+            printf("ImageAligner.m: FUCKING FALLBACK :(\n");
+            warped = frame;
         }
 
 	//cv::imwrite("/tmp/warped.png", warped);
+	cv::Mat output;
+        printMatInfo(warped, "warped");
+	
+	if (warped.channels() == 4) {
+	  // If it's BGRA, convert to BGR
+	  cv::cvtColor(warped, output, cv::COLOR_BGRA2BGR);
+	} else {
+	  output = warped;
+	}
 
-        cv::Mat *result = new cv::Mat(warped);
- 
+        cv::Mat *result = new cv::Mat(output);
+        printMatInfo(*result, "result");
 	//cv::imwrite("/tmp/result.png", *result);
- 
-	printMatInfo(*result, "result");
-  
         [aligned addObject:[NSValue valueWithPointer:result]];
-
-	count++;
+        count++;
     }
 
     return aligned;

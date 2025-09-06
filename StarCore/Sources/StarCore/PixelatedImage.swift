@@ -486,32 +486,83 @@ extension PixelatedImage {
         }
         return nil
     }
-    
+
     func image(fromData imageData: Data) throws -> CGImage {
-        if let dataProvider = CGDataProvider(data: imageData as CFData) {
-            if let image = CGImage(width: width, 
-                                   height: height,
-                                   bitsPerComponent: bitsPerComponent,
-                                   bitsPerPixel: bytesPerPixel*8,
-                                   bytesPerRow: width*bytesPerPixel,
-                                   space: colorSpace,
-                                   bitmapInfo: bitmapInfo,
-                                   provider: dataProvider,
-                                   decode: nil,
-                                   shouldInterpolate: false,
-                                   intent: .defaultIntent)
-            {
-                return image
-            } else {
-                let message = "could not create CGImage from data"
-                Log.e(message)
-                throw message
-            }
-        } else {
-            let message = "could not create CGImage with no data provider"
+        Log.d("self bitsPerPixel \(self.bitsPerPixel) bitsPerComponent \(self.bitsPerComponent) bytesPerPixel \(self.bytesPerPixel)")
+        guard width > 0 && height > 0 else {
+            let message = "invalid dimensions"
             Log.e(message)
             throw message
         }
+
+        let expectedBytes = width * height * bytesPerPixel
+        guard imageData.count >= expectedBytes else {
+            let message = "image data too small (\(imageData.count) < \(expectedBytes))"
+            Log.e(message)
+            throw message
+        }
+
+        // Make a mutable copy when we might need to rewrite channel order (BGR->RGB)
+        var pixelData = imageData
+
+        let colorSpace: CGColorSpace
+        var bitmapInfo: CGBitmapInfo
+
+        if componentsPerPixel == 4 {
+            Log.d("FUCKING ALPHA self.bitmapInfo \(self.bitmapInfo)")
+            // 4-channel: assume OpenCV BGRA layout in memory (B G R A)
+            colorSpace = CGColorSpaceCreateDeviceRGB()
+            // Combine byte order and alpha info by OR'ing rawValues
+            // Using premultipliedFirst is common for BGRA (little-endian)
+
+            let raw = CGBitmapInfo.byteOrder16Little.rawValue |
+              UInt32(CGImageAlphaInfo.last.rawValue)
+
+            bitmapInfo = CGBitmapInfo(rawValue: raw)
+
+            //bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue)
+            
+            Log.d("FUCKING NEW ALPHA bitmapInfo \(bitmapInfo)")
+        } else if componentsPerPixel == 3 {
+            Log.d("FUCKING NO ALPHA")
+            // 3-channel: OpenCV gives BGR — convert to RGB to avoid color swap
+            colorSpace = CGColorSpaceCreateDeviceRGB()
+            // No alpha
+            bitmapInfo = self.bitmapInfo
+        } else {
+            Log.d("FUCKING GRAYSCALE")
+            // Grayscale / 1-channel
+            colorSpace = CGColorSpaceCreateDeviceGray()
+            let raw = UInt32(CGImageAlphaInfo.none.rawValue)
+            bitmapInfo = CGBitmapInfo(rawValue: raw)
+        }
+
+        guard let provider = CGDataProvider(data: pixelData as CFData) else {
+            let message = "could not create CGDataProvider"
+            Log.e(message)
+            throw message
+        }
+
+        guard let cgImage = CGImage(
+                width: width,
+                height: height,
+                bitsPerComponent: bitsPerComponent,
+                bitsPerPixel: bytesPerPixel * 8,
+                bytesPerRow: width * bytesPerPixel,
+                space: colorSpace,
+                bitmapInfo: bitmapInfo,
+                provider: provider,
+                decode: nil,
+                shouldInterpolate: false,
+                intent: .defaultIntent
+              ) 
+        else {
+            let message = "could not create CGImage from data"
+            Log.e(message)
+            throw message
+        }
+
+        return cgImage
     }
 
     func nsImage(ofSize size: NSSize, fromData imageData: Data) -> NSImage? {
@@ -538,13 +589,16 @@ extension PixelatedImage {
                            toFilename imageFilename: String) throws
     {
         Log.d("writeTIFFEncoding of imageData \(imageData.count)")
+        Log.d("self bitsPerPixel \(self.bitsPerPixel) bitsPerComponent \(self.bitsPerComponent) bytesPerPixel \(self.bytesPerPixel)")
         if FileManager.default.fileExists(atPath: imageFilename) {
             Log.i("overwriting already existing filename \(imageFilename)")
             try FileManager.default.removeItem(atPath: imageFilename)
         }
         
         // create a CGImage from the data we just changed
-        let newImage = try image(fromData: imageData) 
+
+        
+        let newImage = try self.image(fromData: imageData) 
         // save it
         //Log.d("newImage \(newImage)")
 
@@ -1478,8 +1532,9 @@ extension PixelatedImage {
 
     public func align(
       frames: [PixelatedImage],
-      masked mask: PixelatedImage?,
-      maxKeypoints: Int32
+      masked mask: PixelatedImage? = nil,
+      invertMask: Bool = false, // use zero values instead of non zero values for the mask
+      maxKeypoints: Int32 = 500
     ) -> [PixelatedImage] {
         let baseMat = self.cvMat
         let frameMats = frames.map { $0.cvMat }
@@ -1495,13 +1550,14 @@ extension PixelatedImage {
              baseMat,
              frames: wrappedFrames,
              mask: maskMat,
+             invertMask: invertMask,
              maxKeypoints: maxKeypoints
            )
         {
             // Unwrap results
             for wrapped in aligned {
                 if let matPtr = wrapped.pointerValue {
-                    let mat = matPtr
+                    let mat = matPtr // XXX why is this here?
 
                     // assumes self and processedMat have same bits per pixel, num components, etc.
                     ret.append(self.newImage(from: mat))

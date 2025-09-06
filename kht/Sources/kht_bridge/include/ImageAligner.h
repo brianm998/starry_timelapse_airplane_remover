@@ -10,6 +10,7 @@ typedef void* Mat;
 + (NSArray<NSValue *> *)alignFrames:(Mat)special
 			     frames:(NSArray<NSValue *> *)frames
 			       mask:(Mat)mask
+                         invertMask:(BOOL)invertMask
 		       maxKeypoints:(int)maxKeypoints;
 
 @end
