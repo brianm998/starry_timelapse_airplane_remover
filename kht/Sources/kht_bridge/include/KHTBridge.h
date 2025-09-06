@@ -9,6 +9,7 @@ typedef void* Mat;
 
 #import "PixelatedImageBridge.h"
 #import "HorizonResult.h"
+#import "ImageAligner.h"
 
 @interface KHTBridgeLine : NSObject
 @property (nonatomic) double theta;
