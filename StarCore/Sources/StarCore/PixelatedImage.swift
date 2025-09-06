@@ -1556,17 +1556,23 @@ extension PixelatedImage {
              maxKeypoints: maxKeypoints
            )
         {
-            // Unwrap results
-            for wrapped in aligned {
-                if let matPtr = wrapped.pointerValue {
-                    let mat = matPtr // XXX why is this here?
+            if let aligned = aligned as? String {
+                Log.e("error: \(aligned)")
+            } else if let aligned = aligned as? [NSValue] {
+                // Unwrap results
+                for wrapped in aligned {
+                    if let matPtr = wrapped.pointerValue {
+                        let mat = matPtr // XXX why is this here?
 
-                    // assumes self and processedMat have same bits per pixel, num components, etc.
-                    ret.append(self.newImage(from: mat))
+                        // assumes self and processedMat have same bits per pixel, num components, etc.
+                        ret.append(self.newImage(from: mat))
 
-                    // XXX free mat?
-                    // XXX not sure
+                        // XXX free mat?
+                        // XXX not sure
+                    }
                 }
+            } else {
+                Log.e("cannot handle aligned \(aligned)")
             }
         }
 
