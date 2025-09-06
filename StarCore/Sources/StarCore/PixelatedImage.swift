@@ -696,86 +696,25 @@ extension PixelatedImage {
     }
     
     // returns a 16 bit grayscale image that results from subtrating
-    // the given frame from this frame
+    // the given frame from this frame, done in c++ opencv2 land for speed
     public func subtract(_ otherFrame: PixelatedImage) -> PixelatedImage {
+
+        // convert images to cv::Mat
         let selfMat = self.cvMat
         let otherMat = otherFrame.cvMat
 
+        // jump into c++ land for the actual subtraction
         let resultMat = PixelatedImageBridge.subtractImage(otherMat, fromImage: selfMat)
 
-        Log.i("FUCKING USING NEW SUBTRACTION")
-        
+        // reconstruct a PixelatedImage from the returned cv::Mat
         let ret = self.newImage(from: resultMat)
-        
+
+        // free the c++ cv::Mat images
         PixelatedImageBridge.freeCvMat(resultMat)
         PixelatedImageBridge.freeCvMat(selfMat)
         PixelatedImageBridge.freeCvMat(otherMat)
 
         return ret
-    }
-
-    public func subtract_BROKEN(_ otherFrame: PixelatedImage) -> PixelatedImage {
-        switch self.imageData {
-        case .eightBit(_):
-            fatalError("NOT SUPPORTED YET")
-        case .thirtyTwoBit(_):
-            fatalError("NOT SUPPORTED YET")
-        case .sixteenBit(let origImagePixels):
-            
-            switch otherFrame.imageData {
-                
-            case .thirtyTwoBit(_):
-                fatalError("NOT SUPPORTED YET")
-            case .eightBit(_):
-                fatalError("NOT SUPPORTED YET")
-            case .sixteenBit(let otherImagePixels):
-                // the grayscale image pixel array to return when we've calculated it
-                let numPixels = width*height
-                var subtractionArray = [UInt16](repeating: 0, count: numPixels)
-                
-                // compare pixels at the same image location in adjecent frames
-                // detect Outliers which are much more brighter than the adject frames
-
-                for i in 0 ..< numPixels {
-                    let origOffset = i*self.componentsPerPixel
-                    let otherOffset = i*otherFrame.componentsPerPixel
-                    
-                    if otherFrame.componentsPerPixel == 4,
-                       otherImagePixels[otherOffset+3] != 0xFFFF
-                    {
-                        // ignore any partially or fully transparent pixels
-                        // these crop up in the star alignment images
-                        // there is nothing to copy from these pixels
-                    } else {
-
-                        var maxBrightness: Int32 = 0
-                        
-                        // rgb values of the image we're modifying at this index
-                        let origRed   = Int32(origImagePixels[origOffset])
-                        let origGreen = Int32(origImagePixels[origOffset+1])
-                        let origBlue  = Int32(origImagePixels[origOffset+2])
-                        
-                        // rgb values of an adjecent image at this index
-                        let otherRed   = Int32(otherImagePixels[otherOffset])
-                        let otherGreen = Int32(otherImagePixels[otherOffset+1])
-                        let otherBlue  = Int32(otherImagePixels[otherOffset+2])
-
-                        maxBrightness += origRed  + origGreen  + origBlue
-                        maxBrightness -= otherRed + otherGreen + otherBlue
-                        
-                        // record the brightness change if it is brighter
-                        if maxBrightness > 0 {
-                            subtractionArray[i] = UInt16(maxBrightness/3)
-                        }
-                    }
-                }
-                
-                return PixelatedImage(width: width,
-                                      height: height,
-                                      grayscale16BitImageData: subtractionArray)
-                
-            }
-        }
     }
 
     // returns a 16 bit grayscale image that results from subtrating
