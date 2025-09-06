@@ -1765,8 +1765,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let config = await configManager.config()
 
         // the alpha mask that we will convolve across all removable pixels
-        let removeMask = RemoveMask(innerWallSize: config.outlierGroupPaintBorderInnerWallPixels,
-                                    radius: config.outlierGroupPaintBorderPixels)
+        let removeMask = RemoveMask(
+          innerWallSize: config.outlierGroupPaintBorderInnerWallPixels,
+          radius: config.outlierGroupPaintBorderPixels
+        )
         
         let removeMaskIntRadius = Int(removeMask.radius)
 
@@ -1827,18 +1829,26 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
 
-            let removeMaskImage = PixelatedImage(width: width, height: height,
-                                                 grayscale8BitImageData: removeMaskImageData)
-            let (_,_) = await (try imageAccessor.save(removeMaskImage,
-                                                      frameIndex: frameIndex,
-                                                      as: .removeMask,
-                                                      atSize: .original,
-                                                      overwrite: true),
-                               try imageAccessor.save(removeMaskImage,
-                                                      frameIndex: frameIndex,
-                                                      as: .removeMask,
-                                                      atSize: .preview,
-                                                      overwrite: true))
+            let removeMaskImage = PixelatedImage(
+              width: width, height: height,
+              grayscale8BitImageData: removeMaskImageData
+            )
+            let (_,_) = await (
+              try imageAccessor.save(
+                removeMaskImage,
+                frameIndex: frameIndex,
+                as: .removeMask,
+                atSize: .original,
+                overwrite: true
+              ),
+              try imageAccessor.save(
+                removeMaskImage,
+                frameIndex: frameIndex,
+                as: .removeMask,
+                atSize: .preview,
+                overwrite: true
+              )
+            )
         }
 
         if shouldRemove {
@@ -1912,7 +1922,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
         
         // how far away from the horizon do we need to be to use the star aligned image
-        let padding: Int = 20   // XXX guess, make this a parameter
+        let padding: Int = 60   // XXX guess, make this a parameter
         
         if y < horizonMask.horizonTopY - padding {
             // use star aligned image
