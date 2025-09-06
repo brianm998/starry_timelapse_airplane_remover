@@ -114,7 +114,6 @@ public class StarAlignment {
                 Log.e("\(error)")
             }
 
-            /*
             // if the alignment fails, simply hard link them together
             // assuming same volume :(
 
@@ -153,7 +152,6 @@ public class StarAlignment {
             } else {
                 Log.w("Failed")
             }
-             */
         }
 
         Log.e("alignment totally failed :(")
