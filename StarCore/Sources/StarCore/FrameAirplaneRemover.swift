@@ -514,7 +514,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         // with no saved aligned frame, first load or create the set of aligned frames
         // that we used to create the final aligned frame
-        self.set(state: .creatingStarAlignedFrame)
+
+        switch type {
+        case .starAligned:
+            self.set(state: .starAlignment)
+        case .earthAligned:
+            self.set(state: .earthAlignment)
+        default:
+            break
+        }
 
         guard let originalFrame = try await imageAccessor.load(frameIndex: frameIndex,
                                                                type: .original,
@@ -524,9 +532,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
         
         let neighborImages = try await withThrowingTaskGroup(of: PixelatedImage?.self) { group in
-            for filename in alignmentFilenames.values {
+            for neibhforIndex in alignmentFilenames.keys {
                 group.addTask {
-                    try await loadImageInt(filename: filename)
+                    try await self.imageAccessor.load(
+                      frameIndex: neibhforIndex,
+                      type: .original,
+                      atSize: .original
+                    )
                 }
             }
 
@@ -540,7 +552,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         let horizonMask = try await loadOrCreateHorizonMask()
-        
+
         let alignedFrames = originalFrame.align(
           frames: neighborImages,
           masked: horizonMask.image,
@@ -549,10 +561,31 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           maxKeypoints: 500          // XXX hardcoded constant
         )
 
+        switch type {
+        case .starAligned:
+            self.set(state: .creatingStarAlignedFrame)
+        case .earthAligned:
+            self.set(state: .creatingEarthAlignedFrame)
+        default:
+            break
+        }
         self.set(state: .creatingStarAlignedFrame)
         
         if let firstImage = alignedFrames.first {
 
+            /*
+
+             Next steps here:
+
+             * better handling multiple files at the same time (probably churning on that now)
+             - use opencv2 for buildAlignedFrame (have code in chatgpt already)
+             * fix self.set, it always says star now :(
+             - leaking memory?
+             - parallalize the align opencv2
+
+             
+             */
+            
             let goodPixelImage = try await buildAlignedFrame(
               alignedImages: alignedFrames,
               width: width,
