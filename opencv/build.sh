@@ -47,21 +47,42 @@ sed -i '' '1i\
 set(CMAKE_CXX_STANDARD 17) ## HACK HACK
 ' CMakeLists.txt
 
-# build opencv2 framework for osx and the given ARCHS
-time python3 platforms/osx/build_framework.py FRAMEWORK_BUILD --macos_archs "$ARCHS" --without objc --without dnn_tf --without dnn --without gapi --without java --without js --without ml --without objdetect --without photo --without python --without stitching --without ts --without video --without videoio --without world --build_only_specified_archs True 
+# split ARCHS into array
+IFS=',' read -r -a ARCH_ARRAY <<< "$ARCHS"
 
-if [ "$ARCHS" = "x86_64,arm64" ]; then 
+# function to build a single architecture
+build_arch() {
+    local ARCH=$1
+    echo "Building OpenCV for $ARCH..."
+    python3 platforms/osx/build_framework.py "FRAMEWORK_BUILD_$ARCH" --macos_archs "$ARCH" \
+        --without objc --without dnn_tf --without dnn --without gapi --without java \
+        --without js --without ml --without objdetect --without photo --without python \
+        --without stitching --without ts --without video --without videoio --without world \
+        --build_only_specified_archs True
+}
+
+# build all architectures in parallel
+for ARCH in "${ARCH_ARRAY[@]}"; do
+    build_arch "$ARCH" &
+done
+
+# wait for all parallel builds to complete
+wait
+
+# create universal binary if multiple architectures
+if [ "${#ARCH_ARRAY[@]}" -gt 1 ]; then
     # if we are building more than one platform, package up the .a files for both as a universal binary
-    lipo FRAMEWORK_BUILD/build/build-arm64-macosx/lib/Release/libopencv_merged.a \
-	 FRAMEWORK_BUILD/build/build-x86_64-macosx/lib/Release/libopencv_merged.a \
-	 -create -output ../lib/libopencv2.a
+    LIPO_INPUTS=()
+    for ARCH in "${ARCH_ARRAY[@]}"; do
+        LIPO_INPUTS+=("FRAMEWORK_BUILD_$ARCH/build/build-$ARCH-macosx/lib/Release/libopencv_merged.a")
+    done
+    lipo "${LIPO_INPUTS[@]}" -create -output ../lib/libopencv2.a
 else
     # for development we can just use one platform
-    cp "FRAMEWORK_BUILD/build/build-$ARCHS-macosx/lib/Release/libopencv_merged.a" \
-       ../lib/libopencv2.a
+    cp "FRAMEWORK_BUILD_${ARCH_ARRAY[0]}/build/build-${ARCH_ARRAY[0]}-macosx/lib/Release/libopencv_merged.a" ../lib/libopencv2.a
 fi
 
-mv FRAMEWORK_BUILD/opencv2.framework ..
+mv "FRAMEWORK_BUILD_${ARCH_ARRAY[0]}/opencv2.framework" ..
 cd ..
 cd include
 mkdir opencv2
