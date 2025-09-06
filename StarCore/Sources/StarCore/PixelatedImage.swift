@@ -603,18 +603,25 @@ extension PixelatedImage {
         let fileURL = NSURL(fileURLWithPath: imageFilename, isDirectory: false) as URL
 
         let options: [CIImageRepresentationOption: Any] = [:]
+        var ciFormat: CIFormat = self.ciFormat
+
+        if let newColorSpace = newImage.colorSpace,
+           newColorSpace != self.colorSpace
+        {
+            if newColorSpace == CGColorSpaceCreateDeviceGray() {
+                ciFormat = .L16 // XXX should handle other depths too
+            }
+        }
         
         try context.writeTIFFRepresentation(
           of: CIImage(cgImage: newImage),
           to: fileURL,
           format: ciFormat,
-          colorSpace: colorSpace,
+          colorSpace: newImage.colorSpace ?? self.colorSpace,
           options: options
         )
         Log.i("image written to \(imageFilename)")
     }
-
-    
     
     // linearly merges all images together
     public func mergeWith(_ otherImages: [PixelatedImage]) throws -> PixelatedImage {
