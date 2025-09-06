@@ -22,11 +22,5 @@ public struct ToolPaths {
           .appendingPathComponent("ffprobe")
           .path
     }
-    
-    public static var alignImageStack: String {
-        ToolPaths.binaryDirURL
-          .appendingPathComponent("align_image_stack")
-          .path
-    }
 }
 

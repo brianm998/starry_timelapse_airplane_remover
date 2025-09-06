@@ -309,7 +309,9 @@ public struct Config: Codable, Sendable, Transferable {
     // 0.9.0 add horizon detection
     //       add ground alignment images
     //       adjust pixel removal to use ground image when appropriate
-    
+    //       replace align_image_stack with custom opencv2 SIFT code for speed and accuracy
+    //       move image subtraction logic to opencv2 for speed
+
     public var starVersion = Config.latestVersion
 
     public static let latestVersion = "0.9.0"

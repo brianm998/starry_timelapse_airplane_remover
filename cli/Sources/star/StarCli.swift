@@ -157,20 +157,7 @@ You should have received a copy of the GNU General Public License along with sta
  - 12/22/2022 videos have false positives on clouds because of both assumed size and streak detection
    enhance streak detection to make sure the group center line between frames is close to the outlier
    groups hough line
-
-   STAR ALIGNMENT: 
    
-   USE hugin's align_image_stack (MIT license)
-
-   align_image_stack --use-given-order -a name FIRST_IMAGE.TIF COMPARISON_IMATE.TIF
-
-   first image is reference frame.
-   seems to  work on beginning (with more light)
-   seems make sure it work w/ clouds
-   need to ignore transparent areas at edges 
-   make new dir of aligned frames
-   if align command fails, just replace the expected result with a hard link to the original
- 
  */
 
 
