@@ -9,6 +9,8 @@
 
 #include <memory>
 
+extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
+
 
 #define LogWithLocation(fmt, ...) \
     NSLog((@"[%s:%d] " fmt), __FILE__, __LINE__, ##__VA_ARGS__)
@@ -620,6 +622,65 @@
   cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
   delete mat;
 }
+
++ (Mat)subtractImage:(Mat)img2 fromImage:(Mat)img1 {
+    // Step 1: Convert both images to grayscale if they are not already
+
+  cv::Mat *img1Mat = reinterpret_cast<cv::Mat *>(img1);
+  cv::Mat *img2Mat = reinterpret_cast<cv::Mat *>(img2);
+
+  cv::Mat gray1, gray2;
+    
+    if (img1Mat->channels() == 1) {
+        gray1 = img1Mat->clone();
+    } else {
+      cv::cvtColor(*img1Mat, gray1, cv::COLOR_BGR2GRAY);
+    }
+
+    if (img2Mat->channels() == 1) {
+        gray2 = img2Mat->clone();
+    } else {
+        cv::cvtColor(*img2Mat, gray2, cv::COLOR_BGR2GRAY);
+    }
+
+    // Step 2: Determine the higher bit depth between the two images
+    int depth1 = gray1.depth();
+    int depth2 = gray2.depth();
+    int targetDepth = std::max(depth1, depth2);
+
+    // Map OpenCV depth constants to corresponding CV types
+    int cvTargetType;
+    switch (targetDepth) {
+        case CV_8U:  cvTargetType = CV_8U; break;
+        case CV_8S:  cvTargetType = CV_8S; break;
+        case CV_16U: cvTargetType = CV_16U; break;
+        case CV_16S: cvTargetType = CV_16S; break;
+        case CV_32S: cvTargetType = CV_32S; break;
+        case CV_32F: cvTargetType = CV_32F; break;
+        case CV_64F: cvTargetType = CV_64F; break;
+        default:     cvTargetType = CV_32F; break;
+    }
+
+    // Step 3: Convert both images to the target depth for subtraction
+    cv::Mat gray1f, gray2f;
+    gray1.convertTo(gray1f, cvTargetType);
+    gray2.convertTo(gray2f, cvTargetType);
+
+    // Step 4: Subtract img2 from img1
+    cv::Mat diff;
+    cv::subtract(gray1f, gray2f, diff);
+
+    // Step 5: Clip negative values to zero
+    cv::Mat diffClipped;
+    cv::max(diff, 0, diffClipped);
+    printMatInfo(diffClipped, "result");
+
+    cv::Mat* resultPtr = new cv::Mat(diffClipped);
+
+    return resultPtr;
+}
+
+
 
 @end
 

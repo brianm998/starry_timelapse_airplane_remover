@@ -282,6 +282,7 @@ cv::Mat addAlphaChannel(const cv::Mat& img) {
 	
 	if (warped.channels() == 4) {
 	  // If it's BGRA, convert to BGR
+	  // had a real hard time getting CGImage to accept alpha from here :(
 	  cv::cvtColor(warped, output, cv::COLOR_BGRA2BGR);
 	} else {
 	  output = warped;

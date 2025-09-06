@@ -15,6 +15,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface PixelatedImageBridge : NSObject
 
++ (Mat)subtractImage:(Mat)img1 fromImage:(Mat)img2;
+
 // combines two images with a mask
 // non zero mask pixels get image1
 //     zero mask pixels get image2

@@ -620,7 +620,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let alignedFrames = originalFrame.align(
           frames: neighborImages,
           masked: horizonMask.image,
-          invertMask: isEarth,    // apply to sky, not ground
+          invertMask: isEarth,       // earth is zero in mask
           invertBrightness: isEarth, // XXX need to play with this more
           maxKeypoints: 500          // XXX hardcoded constant
         )

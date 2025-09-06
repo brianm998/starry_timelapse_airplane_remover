@@ -358,7 +358,7 @@ extension PixelatedImage {
         }
     }
     
-    func readPixel(atX x: Int, andY y: Int) -> Pixel {
+    public func readPixel(atX x: Int, andY y: Int) -> Pixel {
         switch imageData {
         case .thirtyTwoBit(_):
             fatalError("not supported yet")
@@ -488,7 +488,7 @@ extension PixelatedImage {
     }
 
     func image(fromData imageData: Data) throws -> CGImage {
-        Log.d("self bitsPerPixel \(self.bitsPerPixel) bitsPerComponent \(self.bitsPerComponent) bytesPerPixel \(self.bytesPerPixel)")
+        Log.d("self bitsPerPixel \(self.bitsPerPixel) bitsPerComponent \(self.bitsPerComponent) bytesPerPixel \(self.bytesPerPixel) componentsPerPixel \(self.componentsPerPixel)")
         guard width > 0 && height > 0 else {
             let message = "invalid dimensions"
             Log.e(message)
@@ -519,8 +519,6 @@ extension PixelatedImage {
               UInt32(CGImageAlphaInfo.last.rawValue)
 
             bitmapInfo = CGBitmapInfo(rawValue: raw)
-
-            //bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue)
             
             Log.d("FUCKING NEW ALPHA bitmapInfo \(bitmapInfo)")
         } else if componentsPerPixel == 3 {
@@ -533,8 +531,7 @@ extension PixelatedImage {
             Log.d("FUCKING GRAYSCALE")
             // Grayscale / 1-channel
             colorSpace = CGColorSpaceCreateDeviceGray()
-            let raw = UInt32(CGImageAlphaInfo.none.rawValue)
-            bitmapInfo = CGBitmapInfo(rawValue: raw)
+            bitmapInfo = self.bitmapInfo
         }
 
         guard let provider = CGDataProvider(data: pixelData as CFData) else {
@@ -589,7 +586,7 @@ extension PixelatedImage {
                            toFilename imageFilename: String) throws
     {
         Log.d("writeTIFFEncoding of imageData \(imageData.count)")
-        Log.d("self bitsPerPixel \(self.bitsPerPixel) bitsPerComponent \(self.bitsPerComponent) bytesPerPixel \(self.bytesPerPixel)")
+        Log.d("self bitsPerPixel \(self.bitsPerPixel) bitsPerComponent \(self.bitsPerComponent) bytesPerPixel \(self.bytesPerPixel) componentsPerPixel \(self.componentsPerPixel)")
         if FileManager.default.fileExists(atPath: imageFilename) {
             Log.i("overwriting already existing filename \(imageFilename)")
             try FileManager.default.removeItem(atPath: imageFilename)
@@ -701,6 +698,23 @@ extension PixelatedImage {
     // returns a 16 bit grayscale image that results from subtrating
     // the given frame from this frame
     public func subtract(_ otherFrame: PixelatedImage) -> PixelatedImage {
+        let selfMat = self.cvMat
+        let otherMat = otherFrame.cvMat
+
+        let resultMat = PixelatedImageBridge.subtractImage(otherMat, fromImage: selfMat)
+
+        Log.i("FUCKING USING NEW SUBTRACTION")
+        
+        let ret = self.newImage(from: resultMat)
+        
+        PixelatedImageBridge.freeCvMat(resultMat)
+        PixelatedImageBridge.freeCvMat(selfMat)
+        PixelatedImageBridge.freeCvMat(otherMat)
+
+        return ret
+    }
+
+    public func subtract_BROKEN(_ otherFrame: PixelatedImage) -> PixelatedImage {
         switch self.imageData {
         case .eightBit(_):
             fatalError("NOT SUPPORTED YET")
@@ -1810,6 +1824,7 @@ extension PixelatedImageBridge {
         let channels = Int(Self.matChannels(mat))
         let bytesPerPixel = Int(Self.matElemSize(mat))
         let step = Int(Self.matStep(mat))
+        Log.d("channels \(channels) bytesPerPixel \(bytesPerPixel)")
         let bitsPerComponent = bytesPerPixel / channels * 8
 
         let df: PixelatedImage.DataFormat
