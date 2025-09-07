@@ -1522,13 +1522,9 @@ extension PixelatedImage {
                 // Unwrap results
                 for wrapped in aligned {
                     if let matPtr = wrapped.pointerValue {
-                        let mat = matPtr // XXX why is this here?
-
                         // assumes self and processedMat have same bits per pixel, num components, etc.
-                        ret.append(self.newImage(from: mat))
-
-                        // XXX free mat?
-                        // XXX not sure
+                        ret.append(self.newImage(from: matPtr))
+                        PixelatedImageBridge.freeCvMat(matPtr)
                     }
                 }
             } else {
