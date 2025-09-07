@@ -569,21 +569,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         default:
             break
         }
-        self.set(state: .creatingStarAlignedFrame)
         
         if let firstImage = alignedFrames.first {
 
             /*
-
              Next steps here:
-
-             * better handling multiple files at the same time (probably churning on that now)
              - use opencv2 for buildAlignedFrame (have code in chatgpt already)
-             * fix self.set, it always says star now :(
-             - leaking memory?
-             - parallalize the align opencv2
-
-             
              */
             
             let goodPixelImage = try await buildAlignedFrame(
