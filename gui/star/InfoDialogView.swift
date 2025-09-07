@@ -122,21 +122,37 @@ public enum InfoType: CaseIterable {
             return """
               Star processes each frame of a sequence in this manner:
 
-              Identify a neighbor frame.
-              Either the proceeding, or following frame can be used for this, mostly it doesn't matter.
+              Identify the horizon, if desired.
+              
+              The first step is to maybe identify the horizon.  This step is optional, as sometimes overnight timelapses don't have a horizon for some or all of the video.  It also is faster to ignore the horizon, as less processing is done later.
+              However, knowing the horizon can help in a number of ways:
+               - better pixel replacement close to the horizon
+               - better pixel replacement below the horizon
+               - less noise below the horizon due to earth alignment 
+              
+              Identify a set of neighbor frames.
+              
+              It is configurable how many neighbors are best to use, the default is 8.  Using less can still work, but risks being unable to remove bad pixels in some really noisy situations.
 
-              Align the neighbor frame.
-              Star uses Hugin's align_image_stack utility to attempt to align the neighbor frame with the frame being processed.  If the sky is showing at least some stars, and the frame has more sky than ground, then align_image_stack is really good at aligning the stars between the frames.
-              What this means is that the frame being processed stays static, and the neighbor frame is then modified with complex math to account for changes between the frames.  This works for both timelapses taken on a static tripod (not moving), and also for timelapses taken on a moving head.
-              The reason to align the neighbor frame is that we can then overwrite the parts of the frame we are processing that are considered undesirable with data from the aligned frame.  In this case, the stars are close to the same spot, and the earth has moved.
-              If the star alignment fails, either because Hugin isn't installed, or because align_image_stack failed to properly align the frames, Star will fall back to simply using the un-aligned neighbor frame.  This does work, but results in more noise during processing, and the overwritten data is going to be slightly off.
-              You can see the neighbor for each frame and how well is is aligned in edit mode.
+              Align the neighbor frames for sky and maybe earth too.
+              
+              Star uses opencv2 for its SIFT (Scale Invariant Feature Transform) logic to align neibhgoring frames with each frame being processed.
+              If horizon detection is enabled, the calculated horizon mask for the frame being procssed is used to only identify keypoints in either the sky or the ground.  Without horizon detection, the whole image is scanned for keypoints, which almost always ends up aligning the sky.
+              If the alignment fails to properly align the frames, Star will fall back to simply using the un-aligned neighbor frames.  This does work, but results in more noise during processing, and the overwritten data is going to be slightly off.
 
-              Subtract the aligned neighbor frame
+              Condense the aligned neighbor frames.
+              
+              After aligning some set of neighbor frames for the frame being procssed, star will then condense this set of frames into a single frame for the sky, and also the earth, if horizon detection is enabled.
+              Each pixel is selected from neighboring frames using statistical analysis to remove pixels that are significally brighter than others in the same x,y location in other frames.
+              You can see the star and earth aligned images for each frame and how well is is aligned in edit mode.
+
+              Subtract the aligned neighbor frame.
+              
               Next, Star will subtract the aligned neighbor frame from the frame being processed.
               This results in a new grayscale image which indicates where, and by how much, the original frame was brighter than the neighbor frame.
+              If horizon detection is enabled, the calculated horizon mask for the frame being processd will be used.  This way, the earth alignment image is used as well as the sky alignment image.
               You can see the subtraction image for each frame in edit mode.
-              While a lot of things do show up in this image, you will see any airplanes or satellites as lines.
+              While a lot of other things will show up in the subtraction image, you will see any airplanes or satellites as lines, ideally without any stars or static lights on the ground.
 
               Detect Blobs
               Next Star detects what are called Blobs of brighter pixels, using an algorithm that sorts all of the pixels in an image by brightness, and then processing them in order of brighest first, stopping on dimmer pixels.
@@ -156,12 +172,12 @@ public enum InfoType: CaseIterable {
               To classify the outlier groups, Star uses a decision tree based upon validated sequences.
               To validate a sequence means processing it through Star and then manually playing the video and correcting bad classifications by hand on each frame.  This can take while.
 
-              Paint Mask Creation.
+              Removal Mask Creation.
               After classifying all of the Outlier Groups for a frame, we now know which pixels are considered noise and which ones are ok to keep.
-              With this data, Star then creates a paint mask, similar to a layer mask in Photoshop or the GIMP.  This mask is used to 'paint' over the noisy pixels with data from the aligned neighbor frame.
+              With this data, Star then creates a removal mask, similar to a layer mask in Photoshop or the GIMP.  This mask is used to remove any noisy pixels with data from the aligned neighbor frame.
 
-              Final Noise Removal
-              At this final step, Star simply composts the frame being processed with the aligned neighor frame, using the paint mask as a layer mask, to only overwrite a small number of pixels in the frame we are processing.
+              Final Bad Pixel Removal
+              At this final step, Star simply composts the frame being processed with the aligned neighor frame, using the removal mask as a layer mask, to only overwrite a small number of pixels in the frame we are processing.
 
               After Star has finished processing your image sequence, you can then watch a video of the sequence at preview resolution.  This can be helpful to allow you to make any corrections.
 
