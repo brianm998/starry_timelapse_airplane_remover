@@ -306,3 +306,142 @@ cv::Mat addAlphaChannel(const cv::Mat& img) {
 }
 
 @end
+/*
+
+  XXX code to do best match on multiple aligned images in opencv2
+
+
+  How to Enable OpenMP on macOS
+  
+Apple Clang doesn’t ship OpenMP by default. Install libomp:
+
+  brew install libomp
+
+Then update your Xcode build flags (in Build Settings → Other C++ Flags):
+
+  -fopenmp -I/usr/local/include -L/usr/local/lib -lomp
+
+This gives you real multithreading with very little overhead.
+
+  
+// ImageAligner.mm
+#import "ImageAligner.h"
+#import <vector>
+#import <cmath>
+#import <algorithm>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
+@implementation ImageAligner
+
++ (cv::Mat)buildAlignedFrameFromImages:(NSArray<NSValue *> *)images
+                          thresholdK:(double)k
+{
+    if (images.count == 0) {
+        throw std::runtime_error("No images passed");
+    }
+
+    // Convert NSArray<NSValue> to std::vector<cv::Mat>
+    std::vector<cv::Mat> mats;
+    mats.reserve(images.count);
+    for (NSValue *val in images) {
+        const cv::Mat *matPtr = (const cv::Mat *)val.pointerValue;
+        mats.push_back(*matPtr);
+    }
+
+    const int nFrames = (int)mats.size();
+    const int width = mats[0].cols;
+    const int height = mats[0].rows;
+    const int channels = mats[0].channels();
+    CV_Assert(channels == 3 || channels == 4);
+
+    // Validate all mats are the same size/type
+    int type = mats[0].type();
+    for (const auto &m : mats) {
+        CV_Assert(m.type() == type);
+        CV_Assert(m.cols == width && m.rows == height);
+    }
+
+    // Prepare output Mat
+    cv::Mat out(height, width, type, cv::Scalar(0));
+    CV_Assert(CV_MAT_DEPTH(type) == CV_16U);
+
+    // Parallelize over rows
+    #pragma omp parallel for schedule(dynamic)
+    for (int y = 0; y < height; y++) {
+        std::vector<double> intensities(nFrames);
+
+        const uint16_t *srcPtrs[nFrames];
+        for (int i = 0; i < nFrames; i++) {
+            srcPtrs[i] = mats[i].ptr<uint16_t>(y);
+        }
+        uint16_t *dst = out.ptr<uint16_t>(y);
+
+        for (int x = 0; x < width; x++) {
+            // 1) Compute intensity and mean
+            double sum = 0.0;
+            for (int i = 0; i < nFrames; i++) {
+                const uint16_t *pix = srcPtrs[i] + x * channels;
+                double I = pix[0] + pix[1] + pix[2];
+                intensities[i] = I;
+                sum += I;
+            }
+            double mean = sum / nFrames;
+
+            // 2) Compute stddev
+            double varSum = 0.0;
+            for (double v : intensities) {
+                double d = v - mean;
+                varSum += d * d;
+            }
+            double stddev = sqrt(varSum / nFrames);
+            double threshold = mean + k * stddev;
+
+            // 3) Merge good frames
+            double acc[4] = {0, 0, 0, 0};
+            double countGood = 0.0;
+
+            if (channels == 3) {
+                for (int i = 0; i < nFrames; i++) {
+                    if (intensities[i] <= threshold) {
+                        const uint16_t *pix = srcPtrs[i] + x * channels;
+                        acc[0] += pix[0];
+                        acc[1] += pix[1];
+                        acc[2] += pix[2];
+                        countGood += 1.0;
+                    }
+                }
+                if (countGood > 0) {
+                    dst[x * channels + 0] = (uint16_t)(acc[0] / countGood);
+                    dst[x * channels + 1] = (uint16_t)(acc[1] / countGood);
+                    dst[x * channels + 2] = (uint16_t)(acc[2] / countGood);
+                }
+            } else { // RGBA
+                for (int i = 0; i < nFrames; i++) {
+                    if (intensities[i] <= threshold) {
+                        const uint16_t *pix = srcPtrs[i] + x * channels;
+                        double a = pix[3];
+                        double w = a / 65535.0;
+                        acc[0] += pix[0] * w;
+                        acc[1] += pix[1] * w;
+                        acc[2] += pix[2] * w;
+                        acc[3] += a;
+                        countGood += 1.0;
+                    }
+                }
+                if (countGood > 0) {
+                    dst[x * channels + 0] = (uint16_t)(acc[0] / countGood);
+                    dst[x * channels + 1] = (uint16_t)(acc[1] / countGood);
+                    dst[x * channels + 2] = (uint16_t)(acc[2] / countGood);
+                    dst[x * channels + 3] = (uint16_t)(acc[3] / countGood);
+                }
+            }
+        }
+    }
+
+    return out;
+}
+
+@end
+*/
