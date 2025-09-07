@@ -296,6 +296,7 @@ cv::Mat toGray8U(const cv::Mat& src) {
 + (id)alignFrames:(Mat)special
            frames:(NSArray<NSValue *> *)frames
              mask:(Mat)mask
+     maxDeviation:(double)maxDeviation
        invertMask:(BOOL)invertMask
  invertBrightness:(BOOL)invertBrightness
      maxKeypoints:(int)maxKeypoints
@@ -383,17 +384,27 @@ cv::Mat toGray8U(const cv::Mat& src) {
                         if (H.empty() || H.rows != 3 || H.cols != 3) {
 			    // Fallback, couldn't warp
                             warped = frame.clone();
-                            if (invertBrightness) cv::bitwise_not(warped, warped);
                         } else {
-                            cv::warpPerspective(frame, warped, H, specialMat.size(),
-                                                cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0,0,0,0));
+			  
+                            // Compute deviation from identity
+                            cv::Mat I = cv::Mat::eye(3, 3, H.type());
+                            double deviation = cv::norm(H - I, cv::NORM_L2);
+
+			    if(deviation < maxDeviation) {
+                                // only warp if less than max deviation
+                                cv::warpPerspective(frame, warped, H, specialMat.size(),
+						    cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0,0,0,0));
+			    } else {
+                                warped = frame.clone();
+			    }
                         }
                     } else {
 		        // Fallback, couldn't warp because not enough keypoints
                         warped = frame.clone();
-                        if (invertBrightness) cv::bitwise_not(warped, warped);
                     }
 
+		    if (invertBrightness) cv::bitwise_not(warped, warped);
+		    
                     cv::Mat output;
                     if (warped.channels() == 4) {
                         cv::cvtColor(warped, output, cv::COLOR_BGRA2BGR);
@@ -403,7 +414,7 @@ cv::Mat toGray8U(const cv::Mat& src) {
 
                     cv::Mat *result = new cv::Mat(output);
                     @synchronized (aligned) {
-                        aligned[idx] = [NSValue valueWithPointer:result];
+		        aligned[idx] = [NSValue valueWithPointer:result];
                     }
                 } catch (...) {
                     @synchronized (aligned) {

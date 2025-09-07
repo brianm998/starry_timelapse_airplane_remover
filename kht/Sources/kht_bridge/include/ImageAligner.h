@@ -12,6 +12,7 @@ typedef void* Mat;
 + (id)alignFrames:(Mat)special
 	   frames:(NSArray<NSValue *> *)frames
 	     mask:(Mat)mask	// XXX really should pass frameMasks here too
+     maxDeviation:(double)maxDeviation
        invertMask:(BOOL)invertMask
  invertBrightness:(BOOL)invertBrightness
      maxKeypoints:(int)maxKeypoints;
