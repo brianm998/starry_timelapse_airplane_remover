@@ -1553,9 +1553,10 @@ extension PixelatedImage {
     public func align(
       frames: [PixelatedImage],
       masked mask: PixelatedImage? = nil,
+      maxDeviation: Double = 100, // maximum warping deviation from identity (GUESSED)
       invertMask: Bool = false, // use zero values instead of non zero values for the mask
       invertBrightness: Bool = false, // flip the brightness before finding keypoints
-      maxKeypoints: Int32 = 500
+      maxKeypoints: Int32 = 500       // XXX expose this and maxDeviation as parameters to user
     ) -> [PixelatedImage] {
         let baseMat = self.cvMat
         let frameMats = frames.map { $0.cvMat }
@@ -1571,6 +1572,7 @@ extension PixelatedImage {
              baseMat,
              frames: wrappedFrames,
              mask: maskMat,
+             maxDeviation: maxDeviation,
              invertMask: invertMask,
              invertBrightness: invertBrightness,
              maxKeypoints: maxKeypoints
@@ -1583,7 +1585,9 @@ extension PixelatedImage {
                 for wrapped in aligned {
                     if let matPtr = wrapped.pointerValue {
                         // assumes self and processedMat have same bits per pixel, num components, etc.
-                        ret.append(self.newImage(from: matPtr))
+                        if !PixelatedImageBridge.matIsEmpty(matPtr) {
+                            ret.append(self.newImage(from: matPtr))
+                        }
                         PixelatedImageBridge.freeCvMat(matPtr)
                     }
                 }
