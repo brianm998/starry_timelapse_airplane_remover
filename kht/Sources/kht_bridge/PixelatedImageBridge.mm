@@ -598,8 +598,12 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 }
 
 + (NSData *)dataFromCvMat:(Mat)matPtr {
+  try {
     cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
     return [NSData dataWithBytes:mat->data length:mat->total() * mat->elemSize()];
+  } catch (const cv::Exception &e) {
+    LogWithLocation(@"OpenCV Exception: %s", e.what());
+  }
 }
 
 + (int)matChannels:(Mat)matPtr {
@@ -610,6 +614,11 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 + (size_t)matElemSize:(Mat)matPtr {
     cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
     return mat->elemSize();
+}
+
++ (BOOL)matIsEmpty:(Mat)matPtr {
+    cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
+    return mat->empty();
 }
 
 + (size_t)matStep:(Mat)matPtr {

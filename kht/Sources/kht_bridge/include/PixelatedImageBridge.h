@@ -61,6 +61,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (int)matChannels:(Mat)mat;
 + (size_t)matElemSize:(Mat)mat;
 + (size_t)matStep:(Mat)mat;
++ (BOOL)matIsEmpty:(Mat)matPtr;
 
 // make sure you call this to free any Mat returned anywhere here, they're all copies
 // also make sure to free the Mat arguments passed in after creating them, they're in c++ world.
