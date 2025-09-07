@@ -34,30 +34,22 @@ These are each images computed from a number of neighboring frames, aligned to e
 
 ### Step #2, Star Alignment
 
-The next step is to use Hugin's `align_image_stack` utility.  This is a great little program that attempts to align two or more images together.
+The next step is to use opencv2's SIFT (Scale Invariant Feature Transform).  This is a great way to map different images together that is both accurate and fast.
 
 This alignment is based upon some number of detected control points, i.e the same feature in each frame.  How far away they are from eachother is used to calculate a transformation to all but the first image given in the stack to be aligned.
 
-The logic used is complex math that works well as long as the images are more tha 90% overlapping.  If images have less overlap, manual control point generation is usually necessary.  Thankfully, almost every timelapse has a lot less than 10% change in view between each image.
-
-This means that for both static and moving tripod heads (any number of axes), `align_image_stack` is able to align one of the neighboring frames to each frame that Star is processing.  Typically there will be a very small area around the borders of the frame which have been rotated out.  In practice this is just a handful of pixels, and is not a problem.
+This means that for both static and moving tripod heads (any number of axes), Star is able to align one or more of the neighboring frames to each frame that Star is processing.  Typically there will be a very small area around the borders of the frame which have been rotated out.  In practice this is just a handful of pixels, and is not a problem.
 
 The benefits of having a star aligned neighbor frame image for each frame Star processes are:
 
  - a much more accurate subtraction image in step #6
  - more accurate data to replace unwanted pixels with
 
-Currently Star needs Hugin to be installed to use `align_image_stack`.  
-
-I've found that `align_image_stack` works really well, even with clouds covering a lot of the sky.  As long as there are a good number of bright stars visible, it will find them for control points.
-
-On 12mm full frame lenses, the alignment of `align_image_stack` is not as good, i.e. some bright stars only partially overlap themselves after alignment, and then partially show up in the subtraction image in step #6.
-
-However, on 14mm lenses `align_image_stack` is a lot better.  And at 20mm or longer, it's really good.  That means that the subraction images are really dark except for areas that include airplanes.
-
 One unfortnate side-effect of aligning images for comparison is that the ground of the image typically gets moved a small amount, even for timelapses captured on a static tripod.  This can be slightly worked around by using the `--ignore-lower-pixels` command line argument, which will not process any pixels that are the given vertical distance from the bottom of the frame.
 
-As of Star v7.3, more than one neighboring frame can be aligned with the frame being processed.  This is neessary with lots of noise in the sky from bright moving objects.  Previous versions of Star assumed that whatever pixels were sourced from aligned images were not noise.  That is, Star would easily replace a noisy pixel with another noisy pixel, sometimes a really bright one.  Especially closer to dawn or dusk, long streaks of satellites can end up causing really noisy situations.
+As of Star v0.9.0, horizon detection can be enabled, which allows separate alignment for the earth and sky in the image.  While horizon detection is optional, it decreases the amount of noise on the earth by allowing for separate earth alignment.
+
+As of Star v0.7.3, more than one neighboring frame can be aligned with the frame being processed.  This is neessary with lots of noise in the sky from bright moving objects.  Previous versions of Star assumed that whatever pixels were sourced from aligned images were not noise.  That is, Star would easily replace a noisy pixel with another noisy pixel, sometimes a really bright one.  Especially closer to dawn or dusk, long streaks of satellites can end up causing really noisy situations.
 
 When using multiple aligned frames, Star applies the standard deviation of brightness between a given pixel position in each of them to determine if any of them contains a noisy value at that pixel.  This works best when aligning with more frames, which is slower.  I've found that 8 frames is a good number of frames to have aligned to each frame being processed.  This gives enough signal over the noise of artifical objects in the sky.
 
@@ -65,7 +57,7 @@ This parameter is configurable from a minimum of 1 to the ability of your machin
 
 ### Step #3, combine aligned images 
 
-After `align_image_stack` is run on a set of neighboring frames for the frame we are processing, the next step is to combine all of these frames into a single aligned image for our frame.
+After Star has aligned a set of neighboring frames for the frame we are processing, the next step is to combine all of these frames into a single aligned image for our frame.
 
 We apply some statistics to rule out pixels which are a certain amount brighter than the norm for a given location.  We combine all of the other pixels from each aligned frame to calculate the best guess we can for the best pixel value at each x,y position in the image.
 
@@ -81,9 +73,7 @@ This combined aligned image is then also used for step #3, image subtraction.  B
 
 This is only done when horizon detection is enabled.
 
-Earth alignment is similar to star alignment, but we crop out most of the sky on all of the incoming images so that `align_image_stack` puts more control points on the ground that in the sky. 
-
-A small amount of the sky is left in, as we want to be able to pull pixels from that that don't include the ground.
+Earth alignment is similar to star alignment, but we invert the horizon mask so that keypoints are taken from the ground, not the sky.
 
 One negative of the sky aligned image is that the ground tends to move, even for image sequences shot on a static tripod head.  Any bad pixels that we want to remove that are really close to the horizon then are at risk of pulling some of the blurred horizon from the sky aligned image.
 
@@ -91,7 +81,7 @@ Star 0.9.0 and above have logic to prefer the earth aligned image over the sky a
 
 ### Step #5, compute a single earth aligned image per frame
 
-After we have computed a set of earth aligned images for the frame, star then applies the same logic as with the sky aligned images to reduce them into a single image.
+After we have computed a set of earth aligned images for the frame, Star then applies the same logic as with the sky aligned images to reduce them into a single image.
 
 Statistics are used to weed out pixels that are excessively brighter than others, to avoid replacing one bad pixel with another.
 
@@ -167,7 +157,7 @@ A set of images sequences can be validated as being 'correct' by fixing all of t
 
 Each version of Star has some set of decision trees embedded in it.  Currently the approach is to generate a 'forest' of trees, each using a slightly different set of test data.  Then a high level classifier combines all of their scores to get a consensus vote, which tends to increase accuracy by 0.5% or more.
 
-As of star 0.7.1, two levels of decision tree forests are used with different classification criteria.  The first level of classification does not rely upon other frames, only data from within the frame being processed is used for this level of classification.  We also accept a level less than zero to let more pass through.
+As of Star 0.7.1, two levels of decision tree forests are used with different classification criteria.  The first level of classification does not rely upon other frames, only data from within the frame being processed is used for this level of classification.  We also accept a level less than zero to let more pass through.
 
 Any blobs that fail this first level of classification are left in the trash bin.  Data in the trash bin can be recovered later if desired.
 
