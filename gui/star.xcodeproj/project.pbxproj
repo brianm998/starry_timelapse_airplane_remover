@@ -72,7 +72,6 @@
 		D3D7F0FC2A2BE10D00658862 /* StarCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */; };
 		D3DC07FC2C077DEB0031A3AE /* EditableFrameNumberView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3DC07FB2C077DEA0031A3AE /* EditableFrameNumberView.swift */; };
 		D3E67E1A2E3E63E000A97C28 /* ffmpeg in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3E67DE22E3E5DE300A97C28 /* ffmpeg */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
-		D3E67E202E3E75FC00A97C28 /* align_image_stack in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3E67DE12E3E5DE300A97C28 /* align_image_stack */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		D3E680472E3EADAF00A97C28 /* ffprobe in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3E680452E3EAD9000A97C28 /* ffprobe */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		D3E680492E3FB75600A97C28 /* RenderVideoSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E680482E3FB75600A97C28 /* RenderVideoSheetView.swift */; };
 		D3E6804B2E424B0700A97C28 /* FocusedField.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E6804A2E424B0700A97C28 /* FocusedField.swift */; };
@@ -117,7 +116,6 @@
 			dstSubfolderSpec = 6;
 			files = (
 				D3E680472E3EADAF00A97C28 /* ffprobe in CopyFiles */,
-				D3E67E202E3E75FC00A97C28 /* align_image_stack in CopyFiles */,
 				D3E67E1A2E3E63E000A97C28 /* ffmpeg in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -190,7 +188,6 @@
 		D3CD86782CF5815100D2D53F /* InitialInstructionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InitialInstructionsView.swift; sourceTree = "<group>"; };
 		D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StarCommands.swift; sourceTree = "<group>"; };
 		D3DC07FB2C077DEA0031A3AE /* EditableFrameNumberView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EditableFrameNumberView.swift; sourceTree = "<group>"; };
-		D3E67DE12E3E5DE300A97C28 /* align_image_stack */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = align_image_stack; sourceTree = "<group>"; };
 		D3E67DE22E3E5DE300A97C28 /* ffmpeg */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ffmpeg; sourceTree = "<group>"; };
 		D3E680452E3EAD9000A97C28 /* ffprobe */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ffprobe; sourceTree = "<group>"; };
 		D3E680482E3FB75600A97C28 /* RenderVideoSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderVideoSheetView.swift; sourceTree = "<group>"; };
@@ -396,7 +393,6 @@
 			isa = PBXGroup;
 			children = (
 				D3E680452E3EAD9000A97C28 /* ffprobe */,
-				D3E67DE12E3E5DE300A97C28 /* align_image_stack */,
 				D3E67DE22E3E5DE300A97C28 /* ffmpeg */,
 			);
 			path = bin;
@@ -422,7 +418,6 @@
 				D386FA0A298B617300878B56 /* Frameworks */,
 				D386FA0B298B617300878B56 /* Resources */,
 				D3E67E062E3E5E2700A97C28 /* CopyFiles */,
-				D3E67E212E3E7DF500A97C28 /* Run Script */,
 			);
 			buildRules = (
 			);
@@ -551,27 +546,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		D3E67E212E3E7DF500A97C28 /* Run Script */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Run Script";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "#!/bin/bash\n# copy and sign dylibs for align_image_stack\n\nset -e\n\n# 1) Define paths\nAPP=\"${TARGET_BUILD_DIR}/${FULL_PRODUCT_NAME}\"\nFRAMEWORKS_DIR=\"$APP/Contents/Libraries\"\nALIGN_IMAGE_STACK_BIN=\"$APP/Contents/MacOs/align_image_stack\"  \nLIB_DIR=\"$SRCROOT/../external_binaries/Libraries\"\n\n# 2) Create Frameworks dir and copy .dylib files\nmkdir -p \"$FRAMEWORKS_DIR\"\nfor dylib in \"$LIB_DIR\"/*.dylib; do\n  cp \"$dylib\" \"$FRAMEWORKS_DIR\"\ndone\n\n# 3) Rewrite each dylib’s install_name to point to @rpath\nfor dylib in \"$FRAMEWORKS_DIR\"/*.dylib; do\n  basename=\"$(basename \"$dylib\")\"\n  echo \"⭑ Setting id of $basename → @rpath/$basename\"\n  install_name_tool -id \"@rpath/$basename\" \"$dylib\"\ndone\n\n# 4) In your ffmpeg binary, redirect each reference to the in-bundle copy\nfor dylib in \"$FRAMEWORKS_DIR\"/*.dylib; do\n  old_path=\"$LIB_DIR/$(basename \"$dylib\")\"\n  new_path=\"@rpath/$(basename \"$dylib\")\"\n  echo \"⭑ Patching ffmpeg: $old_path → $new_path\"\n  install_name_tool -change \"$old_path\" \"$new_path\" \"$ALIGN_IMAGE_STACK_BIN\"\ndone\n\n# 5) Re-sign each dylib (and then ffmpeg) with Hardened Runtime + entitlements\nSIGN_IDENTITY=\"${EXPANDED_CODE_SIGN_IDENTITY}\"\nENTITLEMENTS_PLIST=\"$SRCROOT/ffmpeg.entitlements.plist\"\n\nfor file in \"$FRAMEWORKS_DIR\"/*.dylib \"$ALIGN_IMAGE_STACK_BIN\"; do\n  echo \"⭑ Codesigning $file\"\n  /usr/bin/codesign --force --timestamp \\\n     --options runtime \\\n     --entitlements \"$ENTITLEMENTS_PLIST\" \\\n     --sign \"$SIGN_IDENTITY\" \\\n     \"$file\"\ndone\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		D386FA09298B617300878B56 /* Sources */ = {
@@ -747,7 +721,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				SDKROOT = macosx14.0;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -801,7 +775,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				SDKROOT = macosx14.0;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -829,8 +803,8 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.8.0;
-				ONLY_ACTIVE_ARCH = YES;
+				MARKETING_VERSION = 0.9.0;
+				ONLY_ACTIVE_ARCH = NO;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-weak_framework",
@@ -872,8 +846,8 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.8.0;
-				ONLY_ACTIVE_ARCH = YES;
+				MARKETING_VERSION = 0.9.0;
+				ONLY_ACTIVE_ARCH = NO;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-weak_framework",
@@ -904,7 +878,7 @@
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 12.5;
-				MARKETING_VERSION = 0.8.0;
+				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -923,7 +897,7 @@
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 12.5;
-				MARKETING_VERSION = 0.8.0;
+				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -940,7 +914,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.8.0;
+				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -957,7 +931,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.8.0;
+				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

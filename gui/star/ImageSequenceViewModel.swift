@@ -477,10 +477,12 @@ public final class ImageSequenceViewModel {
         }
 
         // make image accessor here now
-        // the image accessor always has the orignal config
-        let imageAccessor = ImageAccessor(config: configManager.config(),
-                                          imageSequence: imageSequence,
-                                          frameIndexToBaseNameMap: frameIndexToBaseNameMap) { [weak self] frameIndex, image, type, size in
+        // the image accessor always has the original config
+        let imageAccessor = ImageAccessor(
+          config: configManager.config(),
+          imageSequence: imageSequence,
+          frameIndexToBaseNameMap: frameIndexToBaseNameMap
+        ) { [weak self] frameIndex, image, type, size in
             Task { @MainActor in 
                 self?.frames[frameIndex].savedImage(image, ofType: type, atSize: size)
             }
@@ -987,7 +989,6 @@ public final class ImageSequenceViewModel {
             if numberOfAlignedImages != numPrevAlignedImages {
                 // this does delete the alignment and subtraction images, because the next
                 // run should use a different number of alignment images
-                await frameToClear.removeStarAlignedImages()
                 try await frameToClear.removeNumberOfAlignedImagesForThisFrameFile()
             }
             
