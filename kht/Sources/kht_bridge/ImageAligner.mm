@@ -21,6 +21,135 @@
   returns the original image when there are not enough found control points.
  */
 
+cv::Mat preprocessMaskForSIFT_BLUR(const cv::Mat& mask) {
+    cv::Mat grayMask;
+
+    if (mask.channels() > 1)
+        cv::cvtColor(mask, grayMask, cv::COLOR_BGR2GRAY);
+    else
+        grayMask = mask.clone();
+
+    if (grayMask.type() != CV_8UC1)
+        grayMask.convertTo(grayMask, CV_8UC1);
+
+    // Turn sharp edges into smooth gradients
+    cv::GaussianBlur(grayMask, grayMask, cv::Size(9, 9), 2);
+
+    return grayMask;
+}
+
+
+cv::Mat preprocessMaskForSIFT_LAPACIAN(const cv::Mat& mask) {
+    cv::Mat grayMask, grad;
+
+    // Ensure grayscale
+    if (mask.channels() > 1)
+        cv::cvtColor(mask, grayMask, cv::COLOR_BGR2GRAY);
+    else
+        grayMask = mask.clone();
+
+    // Convert to 8-bit
+    if (grayMask.type() != CV_8UC1)
+        grayMask.convertTo(grayMask, CV_8UC1);
+
+    // Slight blur for stability
+    cv::GaussianBlur(grayMask, grayMask, cv::Size(3, 3), 0);
+
+    // Laplacian to get edges but with gradient info
+    cv::Laplacian(grayMask, grad, CV_8U, 3);
+
+    return grad;
+}
+
+cv::Mat preprocessMaskForSIFT(const cv::Mat& mask) {
+    cv::Mat grayMask, edges;
+
+    // Ensure grayscale
+    if (mask.channels() > 1) {
+        cv::cvtColor(mask, grayMask, cv::COLOR_BGR2GRAY);
+    } else {
+        grayMask = mask.clone();
+    }
+
+    // Ensure it's 8-bit
+    if (grayMask.type() != CV_8UC1) {
+        grayMask.convertTo(grayMask, CV_8UC1);
+    }
+
+    // Edge detection to give SIFT something to latch onto
+    //cv::Canny(grayMask, edges, 50, 150);
+
+    return createGradientMaskIntoSky(grayMask, 100); // XXX guess on tradient distance
+    //return grayMask;
+}
+
+// gradients into the zero area of the mask
+cv::Mat createGradientMask(const cv::Mat &binaryMask, int gradientDistance) {
+    CV_Assert(binaryMask.type() == CV_8UC1); // Must be single-channel 8-bit
+    
+    // Step 1: Invert binary mask (so ground=255, sky=0)
+    cv::Mat inverted;
+    cv::bitwise_not(binaryMask, inverted);
+
+    // Step 2: Find edges using Canny or morphological gradient
+    cv::Mat edges;
+    cv::Canny(inverted, edges, 50, 150);
+
+    // Step 3: Distance transform on inverted mask
+    cv::Mat dist;
+    cv::distanceTransform(inverted, dist, cv::DIST_L2, 3);
+
+    // Step 4: Normalize distances to 0..255 based on gradientDistance
+    cv::Mat distNormalized;
+    dist.convertTo(distNormalized, CV_32F);
+    distNormalized = cv::min(distNormalized, (float)gradientDistance);
+    distNormalized = 1.0f - (distNormalized / (float)gradientDistance);
+    distNormalized *= 255.0f;
+
+    // Step 5: Create gradient mask
+    cv::Mat gradientMask;
+    distNormalized.convertTo(gradientMask, CV_8UC1);
+
+    // Step 6: Keep original sky pixels at 255
+    cv::Mat output = cv::max(binaryMask, gradientMask);
+
+    return output;
+}
+
+// gradients into the non-zero area of the sky
+cv::Mat createGradientMaskIntoSky(const cv::Mat &binaryMask, int gradientDistance) {
+    CV_Assert(binaryMask.type() == CV_8UC1); // Must be single-channel 8-bit
+    
+    // Step 1: Distance transform on sky (non-zero) region
+    cv::Mat skyMask;
+    cv::threshold(binaryMask, skyMask, 1, 255, cv::THRESH_BINARY); // Ensure binary
+    
+    // Invert so sky becomes 255, ground becomes 0
+    cv::Mat inverted;
+    cv::bitwise_not(skyMask, inverted);
+
+    // Distance transform on skyMask (we want distance into sky)
+    cv::Mat dist;
+    cv::distanceTransform(skyMask, dist, cv::DIST_L2, 3);
+
+    // Step 2: Normalize distances to 0..255 based on gradientDistance
+    cv::Mat distNormalized;
+    dist.convertTo(distNormalized, CV_32F);
+    distNormalized = cv::min(distNormalized, (float)gradientDistance);
+    distNormalized = distNormalized / (float)gradientDistance;  // 0 near edge, 1 far inside sky
+    distNormalized *= 255.0f;
+
+    // Step 3: Create gradient mask
+    cv::Mat gradientMask;
+    distNormalized.convertTo(gradientMask, CV_8UC1);
+
+    // Step 4: Keep original ground pixels black, merge gradient into sky
+    cv::Mat output = cv::min(binaryMask, gradientMask);
+
+    return output;
+}
+
+
 void printMatInfo(const cv::Mat& mat, const std::string& name = "") {
     if (!name.empty()) {
         std::cout << "Mat '" << name << "':\n";
@@ -140,6 +269,30 @@ cv::Mat toGray8U(const cv::Mat& src) {
     return tmp;
 }
 
++(Mat)createGradientMaskIntoSky:(Mat)binaryMask
+	       gradientDistance:(int)gradientDistance
+{
+  cv::Mat &mat = *(cv::Mat *)binaryMask;
+
+  cv::Mat result = createGradientMaskIntoSky(mat, gradientDistance);
+
+  cv::Mat* resultPtr = new cv::Mat(result);
+
+  return resultPtr;
+}
+
++(Mat)createGradientMaskIntoGround:(Mat)binaryMask
+		  gradientDistance:(int)gradientDistance
+{
+  cv::Mat &mat = *(cv::Mat *)binaryMask;
+
+  cv::Mat result = createGradientMask(mat, gradientDistance);
+
+  cv::Mat* resultPtr = new cv::Mat(result);
+
+  return resultPtr;
+}
+
 + (id)alignFrames:(Mat)special
            frames:(NSArray<NSValue *> *)frames
              mask:(Mat)mask
@@ -171,10 +324,12 @@ cv::Mat toGray8U(const cv::Mat& src) {
 
         // Detector & matcher (thread-safe because SIFT::create() returns a new instance)
         cv::Ptr<cv::SIFT> detector = cv::SIFT::create(maxKeypoints);
+	//cv::Ptr<cv::Feature2D> detector = cv::ORB::create(2000); // more keypoints
         std::vector<cv::KeyPoint> kpSpecial;
         cv::Mat descSpecial;
         detector->detectAndCompute(specialGray, maskMat, kpSpecial, descSpecial);
-        cv::BFMatcher matcher(cv::NORM_L2);
+	//cv::BFMatcher matcher(cv::NORM_HAMMING); // for ORB
+        cv::BFMatcher matcher(cv::NORM_L2); // for SIFT
 
         NSMutableArray *aligned = [NSMutableArray arrayWithCapacity:frames.count];
         dispatch_group_t group = dispatch_group_create();
@@ -220,7 +375,7 @@ cv::Mat toGray8U(const cv::Mat& src) {
 
                     cv::Mat warped;
                     if (ptsFrame.size() >= 4) {
-                        cv::Mat H = cv::findHomography(ptsFrame, ptsSpecial, cv::RANSAC);
+                        cv::Mat H = cv::findHomography(ptsFrame, ptsSpecial, cv::RANSAC, 10);
                         if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
                             H.convertTo(H, CV_64F);
                         }
@@ -292,11 +447,11 @@ cv::Mat toGray8U(const cv::Mat& src) {
 	cv::Mat emptyMat;
 	
         // Prepare special image for SIFT
-        cv::Mat specialGray = toGray8UWithMask(maskMat, emptyMat, false);
-	
-	printMatInfo(specialGray, "specialGray");
+	cv::Mat specialMaskProcessed = preprocessMaskForSIFT(maskMat);
+  
+	printMatInfo(specialMaskProcessed, "specialMaskProcessed");
 	// detect on mask, not special base image
-        detector->detectAndCompute(specialGray, emptyMat, kpSpecial, descSpecial);
+        detector->detectAndCompute(specialMaskProcessed, emptyMat, kpSpecial, descSpecial);
         cv::BFMatcher matcher(cv::NORM_L2);
 
         NSMutableArray *aligned = [NSMutableArray arrayWithCapacity:frames.count];
@@ -319,9 +474,10 @@ cv::Mat toGray8U(const cv::Mat& src) {
                     cv::Mat descFrame;
 
 		    // Prepare special image for SIFT
-		    cv::Mat frameGray = toGray8UWithMask(frameMask, emptyMat, false);
-		    printMatInfo(frameGray, "frameGray");
-                    detector->detectAndCompute(frameGray, emptyMat, kpFrame, descFrame);
+		    cv::Mat frameMaskProcessed = preprocessMaskForSIFT(frameMask);
+		    cv::imwrite("/tmp/frameMaskProcessed.png", frameMaskProcessed);
+		    printMatInfo(frameMaskProcessed, "frameMaskProcessed");
+                    detector->detectAndCompute(frameMaskProcessed, emptyMat, kpFrame, descFrame);
 
                     std::vector<cv::DMatch> matches;
                     matcher.match(descFrame, descSpecial, matches);
@@ -347,15 +503,26 @@ cv::Mat toGray8U(const cv::Mat& src) {
                             H.convertTo(H, CV_64F);
                         }
 
-                        if (H.empty() || H.rows != 3 || H.cols != 3) {
+                        if (H.empty()) {
 			    // Fallback, couldn't warp
                             warped = frame.clone();
+                            printf("NOT WARPING 1\n");
+			} else if(H.rows != 3) {
+			    // Fallback, couldn't warp
+                            warped = frame.clone();
+                            printf("NOT WARPING 2\n");
+			} else if(H.cols != 3) {
+			    // Fallback, couldn't warp
+                            warped = frame.clone();
+                            printf("NOT WARPING 3\n");
                         } else {
+                            printf("WARPING\n");
                             cv::warpPerspective(frame, warped, H, specialMat.size(),
                                                 cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0,0,0,0));
                         }
                     } else {
 		        // Fallback, couldn't warp because not enough keypoints
+		        printf("NOT WARPING 4\n");
                         warped = frame.clone();
                     }
 

@@ -575,6 +575,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             /*
              Next steps here:
              - use opencv2 for buildAlignedFrame (have code in chatgpt already)
+               this step is actually not slow in swift, maybe delay this change
+             
+             - fix earth alignment by:
+               using the horizon mask image for homologation, (no mask)
+               instead of the frame masked for the dark ground
+
+             - use a threshold for alignment distance to avoid really bad alignment  
              */
             
             let goodPixelImage = try await buildAlignedFrame(
@@ -1440,6 +1447,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 return
             }
         }
+
+        var expendedHorizonMaskImage: PixelatedImage? = nil
+        
+        if let horizonMask {
+            // raise the mask with a gradient to allow replacement pixel values to come
+            // from the earth aligned image when they are this close to the horizon
+            expendedHorizonMaskImage = horizonMask.image.raiseMaskBy(60) // XXX hardcoded constant
+        }
         
         // remove every outlier in the list with pixels from the adjecent frames
         guard let outlierGroups = outlierGroups else {
@@ -1576,7 +1591,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                           image: image,
                           starAlignedImage: starAlignedImage,
                           earthAlignedImage: earthAlignedImage,
-                          horizonMask: horizonMask
+                          horizonMask: expendedHorizonMaskImage
                         )
                         /*
 
@@ -1609,7 +1624,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
       image: PixelatedImage,
       starAlignedImage: PixelatedImage,
       earthAlignedImage: PixelatedImage?,
-      horizonMask: HorizonMask?
+      horizonMask: PixelatedImage?
     ) {
 
         guard let horizonMask,
@@ -1625,69 +1640,27 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             return
         }
         
-        // how far away from the horizon do we need to be to use the star aligned image
-        let padding: Int = 60   // XXX guess, make this a parameter
-        
-        if y < horizonMask.horizonTopY - padding {
-            // use star aligned image
-            //Log.d("frame \(frameIndex) updating pixel [\(x), \(y)] as star aligned")
-            self.updatePixel(x: x, y: y,
-                             alpha: alpha,
-                             toData: &data,
-                             image: image,
-                             with: starAlignedImage.readPixel(atX: x, andY: y))
-        } else if y > horizonMask.horizonBottomY {
-            // use earth aligned image
+        if horizonMask.isMax(atX: x, andY: y) {
+            // we are in the sky
             //Log.d("frame \(frameIndex) updating pixel [\(x), \(y)] as earth aligned")
-            self.updatePixel(x: x, y: y,
-                             alpha: alpha,
-                             toData: &data,
-                             image: image,
-                             with: earthAlignedImage.readPixel(atX: x, andY: y))
-        } else if horizonMask.image.isZero(atX: x, andY: y) {
-            // between the bounds of the horizon, do a more careful check to see where to get this pixel from
-            // direct ground hit, use earth aligned image
-            //Log.d("frame \(frameIndex) updating pixel [\(x), \(y)] as earth aligned")
-            self.updatePixel(x: x, y: y,
-                             alpha: alpha,
-                             toData: &data,
-                             image: image,
-                             with: earthAlignedImage.readPixel(atX: x, andY: y))
+            self.updatePixel(
+              x: x, y: y,
+              alpha: alpha,
+              toData: &data,
+              image: image,
+              with: starAlignedImage.readPixel(atX: x, andY: y)
+            )
         } else {
-            // horizon mask is not zero at x, y, we hit the sky, but how far?
-            var inSky = true
-            var max = padding
-            var computedY = y+1
-            // look down padding pixels in the y direction for ground
-            while(inSky && max > 0 && computedY  < horizonMask.image.height) {
-                if horizonMask.image.isZero(atX: x, andY: computedY) {
-                    inSky = false
-                } else {
-                    max -= 1
-                    computedY += 1
-                }
-            }
-
-            if inSky {
-                // didn't find any ground, use the star aligned image
-                //Log.d("frame \(frameIndex) updating pixel [\(x), \(y)] as star aligned")
-                self.updatePixel(x: x, y: y,
-                                 alpha: alpha,
-                                 toData: &data,
-                                 image: image,
-                                 with: starAlignedImage.readPixel(atX: x, andY: y))
-            } else {
-                // we found ground, use the earth aligned image                    
-                //Log.d("frame \(frameIndex) updating pixel [\(x), \(y)] as earth aligned")
-                self.updatePixel(x: x, y: y,
-                                 alpha: alpha,
-                                 toData: &data,
-                                 image: image,
-                                 with: earthAlignedImage.readPixel(atX: x, andY: y))
-            }
-            
-        }
-        
+            // we are in the ground
+            //Log.d("frame \(frameIndex) updating pixel [\(x), \(y)] as earth aligned")
+            self.updatePixel(
+              x: x, y: y,
+              alpha: alpha,
+              toData: &data,
+              image: image,
+              with: earthAlignedImage.readPixel(atX: x, andY: y)
+            )
+        } 
     }
 
     // remove a selected outlier pixel with data from pixels from adjecent frames

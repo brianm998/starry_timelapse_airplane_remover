@@ -22,4 +22,10 @@ typedef void* Mat;
 	     frameMasks:(NSArray<NSValue *> *)frameMasks
 	   maxKeypoints:(int)maxKeypoints;
 
++(Mat)createGradientMaskIntoSky:(Mat)binaryMask
+	       gradientDistance:(int)gradientDistance;
+
++(Mat)createGradientMaskIntoGround:(Mat)binaryMask
+		  gradientDistance:(int)gradientDistance;
+
 @end

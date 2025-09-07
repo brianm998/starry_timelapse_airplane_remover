@@ -322,9 +322,20 @@ public final class PixelatedImage: Sendable {
 extension PixelatedImage {
     func isZero(atX x: Int, andY y: Int) -> Bool {
         switch imageData {
-        case .thirtyTwoBit(_):
-            fatalError("not supported yet")
-            break
+        case .thirtyTwoBit(let arr):
+            let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
+            let red = arr[offset]
+
+            if red != 0 { return false }
+            if self.componentsPerPixel >= 2 {
+                let green = arr[offset+1]
+                if green != 0 { return false }
+            }
+            if self.componentsPerPixel >= 3 {
+                let blue = arr[offset+2]
+                if blue != 0 { return false }
+            }
+            return true
             
         case .sixteenBit(let arr):
             let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
@@ -353,6 +364,55 @@ extension PixelatedImage {
             if self.componentsPerPixel >= 3 {
                 let blue = arr[offset+2]
                 if blue != 0 { return false }
+            }
+            return true
+        }
+    }
+
+    func isMax(atX x: Int, andY y: Int) -> Bool {
+        switch imageData {
+        case .thirtyTwoBit(let arr):
+            let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
+            let red = arr[offset]
+
+            if red != 0xFFFFFFFF { return false }
+            if self.componentsPerPixel >= 2 {
+                let green = arr[offset+1]
+                if green != 0xFFFFFFFF { return false }
+            }
+            if self.componentsPerPixel >= 3 {
+                let blue = arr[offset+2]
+                if blue != 0xFFFFFFFF { return false }
+            }
+            return true
+            
+        case .sixteenBit(let arr):
+            let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
+            let red = arr[offset]
+
+            if red != 0xFFFF { return false }
+            if self.componentsPerPixel >= 2 {
+                let green = arr[offset+1]
+                if green != 0xFFFF { return false }
+            }
+            if self.componentsPerPixel >= 3 {
+                let blue = arr[offset+2]
+                if blue != 0xFFFF { return false }
+            }
+            return true
+
+        case .eightBit(let arr):
+            let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
+            let red = arr[offset]
+
+            if red != 0xFF { return false }
+            if self.componentsPerPixel >= 2 {
+                let green = arr[offset+1]
+                if green != 0xFF { return false }
+            }
+            if self.componentsPerPixel >= 3 {
+                let blue = arr[offset+2]
+                if blue != 0xFF { return false }
             }
             return true
         }
@@ -1567,7 +1627,7 @@ extension PixelatedImage {
              byMask: baseMat,
              base: baseMat,
              frames: wrappedFrames,
-             frameMasks: wrappedFrames,
+             frameMasks: wrappedFrameMasks,
              maxKeypoints: maxKeypoints
            )
         {
@@ -1601,6 +1661,48 @@ extension PixelatedImage {
 
         return ret
     }
+
+    // raises the mask by the given amount, creating a gradient
+    // areas that were non zero and within borderAmount of the border
+    // will be part of the gradient
+    public func raiseMaskBy(_ borderAmount: Int) -> PixelatedImage? {
+        let maskMat = self.cvMat
+
+        if let result = ImageAligner.createGradientMask(
+             intoSky: maskMat,
+             gradientDistance: Int32(borderAmount))
+        {
+            let ret = self.newImage(from: result)
+            
+            PixelatedImageBridge.freeCvMat(result)
+            PixelatedImageBridge.freeCvMat(maskMat)
+            return ret
+        } else {
+            PixelatedImageBridge.freeCvMat(maskMat)
+            return nil
+        }
+    }
+    
+    // raises the mask by the given amount, creating a gradient
+    // areas that were non zero and within borderAmount of the border
+    // will be part of the gradient
+    public func raiseLoweredBy(_ borderAmount: Int) -> PixelatedImage? {
+        let maskMat = self.cvMat
+
+        if let result = ImageAligner.createGradientMask(
+             intoGround: maskMat,
+             gradientDistance: Int32(borderAmount))
+        {
+            let ret = self.newImage(from: result)
+            
+            PixelatedImageBridge.freeCvMat(result)
+            PixelatedImageBridge.freeCvMat(maskMat)
+            return ret
+        } else {
+            PixelatedImageBridge.freeCvMat(maskMat)
+            return nil
+        }
+    }
     
     public var horizonBounds: HorizonBounds {
         // first convert images to cv::Mat
@@ -1616,73 +1718,6 @@ extension PixelatedImage {
         )
     }
 
-    // slow, but it works
-    public func maskRaisedBy(borderAmount: Int, mask: PixelatedImage) -> PixelatedImage {
-        switch self.imageData {
-        case .eightBit(_):
-            fatalError("NOT SUPPORTED YET")
-        case .thirtyTwoBit(_):
-            fatalError("NOT SUPPORTED YET")
-        case .sixteenBit(let origImagePixels):
-            
-            switch mask.imageData {
-                
-            case .thirtyTwoBit(_):
-                fatalError("NOT SUPPORTED YET")
-            case .sixteenBit(_):
-                fatalError("NOT SUPPORTED YET")
-            case .eightBit(let maskPixels):
-                let numPixels = width*height
-                var outputData = origImagePixels
-
-                for y in 0 ..< self.height {
-                    for x in 0 ..< self.width {
-                        let origOffset = (y*self.width+x)*self.componentsPerPixel
-
-                        if y+borderAmount < self.height {
-                            let otherOffset = ((y+borderAmount)*self.width+x)*mask.componentsPerPixel
-                            if maskPixels[otherOffset] != 0 {
-                                outputData[origOffset] = UInt16.max  
-                                outputData[origOffset+1] = UInt16.max  
-                                outputData[origOffset+2] = UInt16.max  
-                            }
-                        }
-                    }
-                }
-
-                return PixelatedImage(
-                  width: width,
-                  height: height,
-                  imageData: DataFormat(from: outputData),
-                  bitsPerPixel: self.bitsPerPixel,
-                  bytesPerRow: self.bytesPerRow,
-                  bitsPerComponent: self.bitsPerComponent,
-                  bytesPerPixel: self.bytesPerPixel,
-                  bitmapInfo: self.bitmapInfo,
-                  componentsPerPixel: self.componentsPerPixel,
-                  colorSpace: self.colorSpace,
-                  ciFormat: self.ciFormat
-                )
-            }
-        }
-    }
-
-    // a whole lot faster than the one above
-    public func maskRaisedBy_SOMETIMES_CRASHES(borderAmount: Int, mask: PixelatedImage) -> PixelatedImage {
-        let baseMat = self.cvMat
-        let maskMat = mask.cvMat
-
-        let processedMat = PixelatedImageBridge.maskRaised(
-          by: baseMat,
-          mask: maskMat,
-          border: Int32(borderAmount)
-        )
-        
-        // then convert back in to PixelatedImage
-        return self.newImage(from: processedMat)
-    }
-
-    
     public func maxBrightnessScale(in darksMask: PixelatedImage) -> Double {
         // first convert images to cv::Mat
         let baseMat = self.cvMat
