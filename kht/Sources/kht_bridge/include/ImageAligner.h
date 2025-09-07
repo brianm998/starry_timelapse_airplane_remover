@@ -7,11 +7,19 @@ typedef void* Mat;
 
 @interface ImageAligner : NSObject
 
+// align frames to special frame, with optional mask which shows where to get keypoints from
+// 
 + (id)alignFrames:(Mat)special
 	   frames:(NSArray<NSValue *> *)frames
-	     mask:(Mat)mask
+	     mask:(Mat)mask	// XXX really should pass frameMasks here too
        invertMask:(BOOL)invertMask
  invertBrightness:(BOOL)invertBrightness
      maxKeypoints:(int)maxKeypoints;
+
++ (id)alignFramesByMask:(Mat)mask
+		   base:(Mat)special
+		 frames:(NSArray<NSValue *> *)frames
+	     frameMasks:(NSArray<NSValue *> *)frameMasks
+	   maxKeypoints:(int)maxKeypoints;
 
 @end
