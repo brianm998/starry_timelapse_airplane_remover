@@ -1,4 +1,5 @@
 #import "ImageAligner.h"
+#import "logging.h"
 #import <opencv2/core.hpp>
 #import <opencv2/imgproc.hpp>
 #import <opencv2/imgcodecs.hpp>
@@ -389,12 +390,47 @@ cv::Mat toGray8U(const cv::Mat& src) {
                             // Compute deviation from identity
                             cv::Mat I = cv::Mat::eye(3, 3, H.type());
                             double deviation = cv::norm(H - I, cv::NORM_L2);
+			    /*
+			      need to fild other kinds of devation to also check.
+			      the above one does help a lot, but for some yet unknown
+			      reason, a numbe of frames still slip through with some
+			      really poorly aligned neibhors.
 
-			    if(deviation < maxDeviation) {
+			      XXX HERE XXX
+			    */
+
+			    // Compute corner reprojection error
+			    std::vector<cv::Point2f> corners = {
+			      cv::Point2f(0, 0),
+			      cv::Point2f((float)frame.cols, 0),
+			      cv::Point2f((float)frame.cols, (float)frame.rows),
+			      cv::Point2f(0, (float)frame.rows)
+			    };
+
+			    std::vector<cv::Point2f> projectedCorners;
+			    cv::perspectiveTransform(corners, projectedCorners, H);
+
+			    double maxCornerDist = 0.0;
+			    for (size_t i = 0; i < corners.size(); i++) {
+			      double dist = cv::norm(projectedCorners[i] - corners[i]);
+			      maxCornerDist = std::max(maxCornerDist, dist);
+			    }
+
+			    // Combined decision
+			    bool acceptWarp = (deviation < maxDeviation) && (maxCornerDist < maxDeviation * 5.0);
+
+			    if(acceptWarp) {
+			      Log_i(@"acceptWarp TRUE = (%f < %f) && (%f < %f)", deviation, maxDeviation, maxCornerDist, maxDeviation * 5.0);
+			    } else {
+			      Log_w(@"acceptWarp FALSE = (%f < %f) && (%f < %f)", deviation, maxDeviation, maxCornerDist, maxDeviation * 5.0);
+			    }
+			    if(acceptWarp) {
                                 // only warp if less than max deviation
                                 cv::warpPerspective(frame, warped, H, specialMat.size(),
 						    cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0,0,0,0));
 			    } else {
+			      // XXX need to log these failures so the GUI can show them
+			      // XXX need objc => swift logging bridge somehow
                                 warped = frame.clone();
 			    }
                         }
@@ -517,23 +553,23 @@ cv::Mat toGray8U(const cv::Mat& src) {
                         if (H.empty()) {
 			    // Fallback, couldn't warp
                             warped = frame.clone();
-                            printf("NOT WARPING 1\n");
+                            Log_i(@"not warping because H is empty");
 			} else if(H.rows != 3) {
 			    // Fallback, couldn't warp
                             warped = frame.clone();
-                            printf("NOT WARPING 2\n");
+                            Log_i(@"not warping because H.rows %d != 3", H.rows);
 			} else if(H.cols != 3) {
 			    // Fallback, couldn't warp
                             warped = frame.clone();
-                            printf("NOT WARPING 3\n");
+                            Log_i(@"not warping because H.cols %d != 3", H.cols);
                         } else {
-                            printf("WARPING\n");
+			  Log_i(@"warping");
                             cv::warpPerspective(frame, warped, H, specialMat.size(),
                                                 cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0,0,0,0));
                         }
                     } else {
 		        // Fallback, couldn't warp because not enough keypoints
-		        printf("NOT WARPING 4\n");
+		        Log_d(@"NOT WARPING 4");
                         warped = frame.clone();
                     }
 
