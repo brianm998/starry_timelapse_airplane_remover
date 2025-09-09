@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D30356DD2E6FDC8B0092140B /* LoggingObjC in Frameworks */ = {isa = PBXBuildFile; productRef = D30356DC2E6FDC8B0092140B /* LoggingObjC */; };
 		D3058E1B2AC0745C00C58F1D /* MultiSelectSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */; };
 		D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBC299736730001CD0C /* ViewModel.swift */; };
 		D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */; };
@@ -217,6 +218,7 @@
 				D3B29C9E2B2FE23F00754C10 /* StarCore in Frameworks */,
 				D3B29CB12B2FE5BE00754C10 /* StarCore in Frameworks */,
 				D3B29CA42B2FE31800754C10 /* KHTSwift in Frameworks */,
+				D30356DD2E6FDC8B0092140B /* LoggingObjC in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -431,6 +433,7 @@
 				D3B29C9D2B2FE23F00754C10 /* StarCore */,
 				D3B29CA32B2FE31800754C10 /* KHTSwift */,
 				D3B29CB02B2FE5BE00754C10 /* StarCore */,
+				D30356DC2E6FDC8B0092140B /* LoggingObjC */,
 			);
 			productName = Star;
 			productReference = D386FA0D298B617300878B56 /* Star.app */;
@@ -506,6 +509,7 @@
 			mainGroup = D386FA04298B617300878B56;
 			packageReferences = (
 				D3B29CAF2B2FE5BE00754C10 /* XCLocalSwiftPackageReference "../StarCore" */,
+				D30356DB2E6FDC8B0092140B /* XCLocalSwiftPackageReference "../logging-objc" */,
 			);
 			productRefGroup = D386FA0E298B617300878B56 /* Products */;
 			projectDirPath = "";
@@ -721,7 +725,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = NO;
+				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx14.0;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -775,7 +779,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = NO;
+				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx14.0;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -804,7 +808,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.9.0;
-				ONLY_ACTIVE_ARCH = NO;
+				ONLY_ACTIVE_ARCH = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-weak_framework",
@@ -847,7 +851,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.9.0;
-				ONLY_ACTIVE_ARCH = NO;
+				ONLY_ACTIVE_ARCH = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-weak_framework",
@@ -982,6 +986,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		D30356DB2E6FDC8B0092140B /* XCLocalSwiftPackageReference "../logging-objc" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../logging-objc";
+		};
 		D3B29C9C2B2FE23F00754C10 /* XCLocalSwiftPackageReference "../StarCore" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../StarCore;
@@ -1008,6 +1016,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		D30356DC2E6FDC8B0092140B /* LoggingObjC */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LoggingObjC;
+		};
 		D3B29C9D2B2FE23F00754C10 /* StarCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = StarCore;

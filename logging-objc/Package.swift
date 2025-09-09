@@ -2,19 +2,19 @@
 import PackageDescription
 
 let package = Package(
-    name: "loggingObjC",
+    name: "LoggingObjC",
     platforms: [
         .macOS(.v13)
     ],
     products: [
         .library(
-            name: "loggingObjC",
-            targets: ["loggingObjC"]
+            name: "LoggingObjC",
+            targets: ["LoggingObjC"]
         ),
     ],
     targets: [
         .target(
-            name: "loggingObjC",
+            name: "LoggingObjC",
             dependencies: [ ],
             publicHeadersPath: "."
         )

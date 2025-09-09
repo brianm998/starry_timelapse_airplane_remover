@@ -16,6 +16,7 @@ let package = Package(
             targets: ["KHTSwift"])
     ],
     dependencies: [
+      .package(name: "LoggingObjC", path: "../logging-objc"),
       .package(name: "logging", path: "../logging"),
     ],
     targets: [                  // C++
@@ -40,7 +41,7 @@ let package = Package(
 
       ),      
       .target(name: "kht_bridge", // Objective C
-              dependencies: ["kht"],
+              dependencies: ["kht", "LoggingObjC"],
               publicHeadersPath: "include",
               cSettings: [
                 .headerSearchPath("../../opencv/include"),   // for headers
