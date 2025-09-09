@@ -139,7 +139,7 @@ public enum FrameProcessingState: Int,
         case .loadingImages1:
             return "loading images 1"
         case .creatingRemovalMask:
-            return "creating paint mask"
+            return "creating removal mask"
         case .assemblingProcessedFrame:
             return "calculating processed frame"
         case .writingOutputFile:
@@ -281,9 +281,9 @@ public enum FrameProcessingState: Int,
         case .loadingImages1:
             return "loading 2"
         case .creatingRemovalMask:
-            return "paint mask"
+            return "removal mask"
         case .assemblingProcessedFrame:
-            return "painting"
+            return "removal"
         case .writingOutputFile:
             return "writing"
         case .complete:
