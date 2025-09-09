@@ -962,7 +962,7 @@ extension PixelatedImage {
                 if yOffset + matrixHeight > height {
                     matrixHeight = height - yOffset
                 }
-                Log.i("matrix height \(matrixHeight)")
+                //Log.i("matrix height \(matrixHeight)")
                 if matrixWidth > 0,
                    matrixHeight > 0
                 {
@@ -1553,10 +1553,10 @@ extension PixelatedImage {
     public func align(
       frames: [PixelatedImage],
       masked mask: PixelatedImage? = nil,
-      maxDeviation: Double = 100, // maximum warping deviation from identity (GUESSED)
+      maxDeviation: Double = 40, // maximum warping deviation from identity (GUESSED)
       invertMask: Bool = false, // use zero values instead of non zero values for the mask
       invertBrightness: Bool = false, // flip the brightness before finding keypoints
-      maxKeypoints: Int32 = 500       // XXX expose this and maxDeviation as parameters to user
+      maxKeypoints: Int32 = 1000       // XXX expose this and maxDeviation as parameters to user
     ) -> [PixelatedImage] {
         let baseMat = self.cvMat
         let frameMats = frames.map { $0.cvMat }
