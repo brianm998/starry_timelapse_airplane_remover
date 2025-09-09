@@ -11,7 +11,7 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 import Foundation
-
+import loggingObjC
 /*
 
  Verbose Log functions:
@@ -990,6 +990,15 @@ public actor LogGremlin {
     }
     
     public init() {
+        loggingObjC.ObjCLogging.setHandler { message, level, file, function, line in
+            Log.logInternal(
+              message,
+              at: Log.Level(rawValue: level ?? "") ?? .debug,
+              file ?? "",
+              function ?? "",
+              Int(line)
+            )
+        }
         Task {
             while(await self.isRunning()) {
                 await self.logNext()
@@ -1096,3 +1105,5 @@ extension Thread {
         }
     }
 }
+
+

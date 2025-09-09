@@ -14,11 +14,13 @@ let package = Package(
             name: "logging",
             targets: ["logging"]),
     ],
-    dependencies: [ ],
+    dependencies: [
+      .package(name: "loggingObjC", path: "../logging-objc") 
+    ],
     targets: [
         .target(
             name: "logging",
-            dependencies: [ ]
+            dependencies: [ "loggingObjC" ]
         )
     ]
 )
