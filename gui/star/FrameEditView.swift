@@ -54,16 +54,23 @@ struct FrameEditView: View {
                           }
                       }
                       .onChange(of: geometry.size) {
-                          withAnimation(.none) {
-                              currentZoomScale = min // make it full size
+                          Log.i("onChange(of: geometry.size \(geometry.size))")
+                          if let currentZoomScale,
+                             currentZoomScale != 1 // don't zoom out when we're already all the way in
+                          {
+                              withAnimation(.none) {
+                                  self.currentZoomScale = min // make it full size
+                              }
                           }
                       }
                       .onChange(of: currentZoomScale) {
+                          Log.i("onChange(of: currentZoomScale \(currentZoomScale))")
                           if let currentZoomScale {
                               viewModel.currentZoomScale = currentZoomScale
                           }
                       }
                       .onChange(of: viewModel.currentZoomScale) {
+                          Log.i("onChange(of: viewModel.currentZoomScale \(viewModel.currentZoomScale))")
                           currentZoomScale = viewModel.currentZoomScale
                       }
                       .onChange(of: viewModel.selectionMode) {
