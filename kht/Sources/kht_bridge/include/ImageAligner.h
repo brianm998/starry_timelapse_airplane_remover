@@ -13,6 +13,7 @@ typedef void* Mat;
 	   frames:(NSArray<NSValue *> *)frames
 	     mask:(Mat)mask	// XXX really should pass frameMasks here too
      maxDeviation:(double)maxDeviation
+maxCornerDeviation:(double)maxCornerDeviation
        invertMask:(BOOL)invertMask
  invertBrightness:(BOOL)invertBrightness
      maxKeypoints:(int)maxKeypoints;

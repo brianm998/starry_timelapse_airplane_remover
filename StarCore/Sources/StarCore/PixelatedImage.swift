@@ -1553,7 +1553,8 @@ extension PixelatedImage {
     public func align(
       frames: [PixelatedImage],
       masked mask: PixelatedImage? = nil,
-      maxDeviation: Double = 40, // maximum warping deviation from identity (GUESSED)
+      maxDeviation: Double = 30, // maximum warping deviation from identity (GUESSED)
+      maxCornerDeviation: Double = 70, // similar to max deviation, but for the corners
       invertMask: Bool = false, // use zero values instead of non zero values for the mask
       invertBrightness: Bool = false, // flip the brightness before finding keypoints
       maxKeypoints: Int32 = 1000       // XXX expose this and maxDeviation as parameters to user
@@ -1573,6 +1574,7 @@ extension PixelatedImage {
              frames: wrappedFrames,
              mask: maskMat,
              maxDeviation: maxDeviation,
+             maxCornerDeviation: maxCornerDeviation,
              invertMask: invertMask,
              invertBrightness: invertBrightness,
              maxKeypoints: maxKeypoints

@@ -298,6 +298,7 @@ cv::Mat toGray8U(const cv::Mat& src) {
            frames:(NSArray<NSValue *> *)frames
              mask:(Mat)mask
      maxDeviation:(double)maxDeviation
+maxCornerDeviation:(double)maxCornerDeviation
        invertMask:(BOOL)invertMask
  invertBrightness:(BOOL)invertBrightness
      maxKeypoints:(int)maxKeypoints
@@ -390,14 +391,6 @@ cv::Mat toGray8U(const cv::Mat& src) {
                             // Compute deviation from identity
                             cv::Mat I = cv::Mat::eye(3, 3, H.type());
                             double deviation = cv::norm(H - I, cv::NORM_L2);
-			    /*
-			      need to fild other kinds of devation to also check.
-			      the above one does help a lot, but for some yet unknown
-			      reason, a numbe of frames still slip through with some
-			      really poorly aligned neibhors.
-
-			      XXX HERE XXX
-			    */
 
 			    // Compute corner reprojection error
 			    std::vector<cv::Point2f> corners = {
@@ -417,7 +410,7 @@ cv::Mat toGray8U(const cv::Mat& src) {
 			    }
 
 			    // Combined decision
-			    bool acceptWarp = (deviation < maxDeviation) && (maxCornerDist < maxDeviation * 5.0);
+			    bool acceptWarp = (deviation < maxDeviation) && (maxCornerDist < maxCornerDeviation);
 
 			    if(acceptWarp) {
 			      Log_i(@"acceptWarp TRUE = (%f < %f) && (%f < %f)", deviation, maxDeviation, maxCornerDist, maxDeviation * 5.0);

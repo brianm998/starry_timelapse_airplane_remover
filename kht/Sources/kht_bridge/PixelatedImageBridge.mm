@@ -604,6 +604,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
   } catch (const cv::Exception &e) {
     LogWithLocation(@"OpenCV Exception: %s", e.what());
   }
+  return NULL;
 }
 
 + (int)matChannels:(Mat)matPtr {
