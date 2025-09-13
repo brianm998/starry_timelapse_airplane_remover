@@ -294,7 +294,226 @@ cv::Mat toGray8U(const cv::Mat& src) {
   return resultPtr;
 }
 
+
+// Helper: compute star mask from special frame
+static cv::Mat makeStarMask(const cv::Mat &gray, int dilateSize = 3, int thresholdVal = 200) {
+    cv::Mat mask, thresh;
+    // Threshold for bright spots (stars)
+    cv::threshold(gray, thresh, thresholdVal, 255, cv::THRESH_BINARY);
+    // Dilate to give SIFT some gradients around stars
+    if (dilateSize > 0) {
+        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE,
+                          cv::Size(2*dilateSize+1, 2*dilateSize+1));
+        cv::dilate(thresh, mask, kernel);
+    } else {
+        mask = thresh;
+    }
+    return mask;
+}
+
 + (id)alignFrames:(Mat)special
+           frames:(NSArray<NSValue *> *)frames
+             mask:(Mat)mask
+     maxDeviation:(double)maxDeviation
+maxCornerDeviation:(double)maxCornerDeviation
+       invertMask:(BOOL)invertMask
+ invertBrightness:(BOOL)invertBrightness
+     maxKeypoints:(int)maxKeypoints
+{
+    try {
+        cv::Mat &specialMat = *(cv::Mat *)special;
+
+        // Horizon mask (sky = nonzero, ground = 0)
+        cv::Mat horizonMask;
+        if (mask != NULL && !(*(cv::Mat *)mask).empty()) {
+            horizonMask = *(cv::Mat *)mask;
+        } else {
+            horizonMask = cv::Mat(specialMat.size(), CV_8U, cv::Scalar(255));
+        }
+        if (invertMask) {
+            cv::bitwise_not(horizonMask, horizonMask);
+        }
+
+        if (invertBrightness) {
+            cv::bitwise_not(specialMat, specialMat);
+        }
+
+        // Prepare grayscale special frame
+        cv::Mat specialGray = toGray8UWithMask(specialMat, horizonMask, true);
+
+	horizonMask = toGray8U(horizonMask);
+	
+	cv::Mat detectionMask = horizonMask;
+
+	if(!invertMask) {
+	  // Build star mask for special frame
+	  detectionMask = makeStarMask(specialGray, /*dilateSize=*/30, /*thresholdVal=*/200);
+	}
+
+	cv::imwrite("/tmp/detectionMask.png", detectionMask);
+	
+        // Detector and matcher
+        cv::Ptr<cv::SIFT> detector = cv::SIFT::create(maxKeypoints);
+        std::vector<cv::KeyPoint> kpSpecial;
+        cv::Mat descSpecial;
+        detector->detectAndCompute(specialGray, detectionMask, kpSpecial, descSpecial);
+
+        cv::BFMatcher matcher(cv::NORM_L2);
+
+        NSMutableArray *aligned = [NSMutableArray arrayWithCapacity:frames.count];
+        dispatch_group_t group = dispatch_group_create();
+        dispatch_queue_t queue = dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0);
+
+        for (NSUInteger i = 0; i < frames.count; i++) {
+            [aligned addObject:[NSNull null]];
+        }
+
+        [frames enumerateObjectsUsingBlock:^(NSValue *val, NSUInteger idx, BOOL *stop) {
+            dispatch_group_async(group, queue, ^{
+                try {
+                    cv::Mat &frame = *(cv::Mat *)val.pointerValue;
+
+                    if (invertBrightness) {
+                        cv::bitwise_not(frame, frame);
+                    }
+
+                    cv::Mat frameGray = toGray8UWithMask(frame, horizonMask, true);
+
+                    std::vector<cv::KeyPoint> kpFrame;
+                    cv::Mat descFrame;
+
+		    cv::Mat detectionMask = horizonMask;
+
+		    if(!invertMask) {
+
+		      detectionMask = makeStarMask(specialGray, /*dilateSize=*/30, /*thresholdVal=*/200);
+		    }
+		    
+                    detector->detectAndCompute(frameGray, detectionMask, kpFrame, descFrame);
+
+                    if (descFrame.empty() || descSpecial.empty()) {
+		        Log_d(@"frame %d is empty\n", idx);
+                        @synchronized (aligned) {
+                            aligned[idx] = [NSValue valueWithPointer:new cv::Mat(frame.clone())];
+                        }
+                        return;
+                    }
+
+                    std::vector<cv::DMatch> matches;
+                    matcher.match(descFrame, descSpecial, matches);
+
+                    double minDist = std::numeric_limits<double>::max();
+                    for (auto &m : matches) {
+                        minDist = std::min(minDist, (double)m.distance);
+                    }
+                    double cutoff = std::max(2 * minDist, 30.0);
+
+                    std::vector<cv::Point2f> ptsFrame, ptsSpecial;
+                    for (auto &m : matches) {
+                        if (m.distance <= cutoff) {
+                            ptsFrame.push_back(kpFrame[m.queryIdx].pt);
+                            ptsSpecial.push_back(kpSpecial[m.trainIdx].pt);
+                        }
+                    }
+
+                    cv::Mat warped;
+                    if (ptsFrame.size() >= 4) {
+                        cv::Mat H = cv::findHomography(ptsFrame, ptsSpecial, cv::RANSAC, 10);
+                        if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
+                            H.convertTo(H, CV_64F);
+                        }
+
+                        if (!H.empty() && H.rows == 3 && H.cols == 3) {
+                            // Check warp quality
+                            cv::Mat I = cv::Mat::eye(3, 3, H.type());
+                            double deviation = cv::norm(H - I, cv::NORM_L2);
+
+                            std::vector<cv::Point2f> corners = {
+                                {0, 0},
+                                {(float)frame.cols, 0},
+                                {(float)frame.cols, (float)frame.rows},
+                                {0, (float)frame.rows}
+                            };
+                            std::vector<cv::Point2f> projectedCorners;
+                            cv::perspectiveTransform(corners, projectedCorners, H);
+
+                            double maxCornerDist = 0.0;
+                            for (size_t i = 0; i < corners.size(); i++) {
+                                maxCornerDist = std::max(maxCornerDist,
+                                                         (double)cv::norm(projectedCorners[i] - corners[i]));
+                            }
+
+                            bool acceptWarp = (deviation < maxDeviation) &&
+                                              (maxCornerDist < maxCornerDeviation);
+
+			    if(acceptWarp) {
+			      Log_i(@"acceptWarp TRUE = (%f < %f) && (%f < %f)", deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
+			    } else {
+			      Log_w(@"acceptWarp FALSE = (%f < %f) && (%f < %f)", deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
+			    }
+                            if (acceptWarp) {
+                                cv::warpPerspective(frame, warped, H, specialMat.size(),
+                                                    cv::INTER_LINEAR, cv::BORDER_CONSTANT,
+                                                    cv::Scalar(0,0,0,0));
+                            } else {
+                                warped = frame.clone();
+                            }
+                        } else {
+                            warped = frame.clone();
+                        }
+                    } else {
+                        warped = frame.clone();
+                    }
+
+                    if (invertBrightness) cv::bitwise_not(warped, warped);
+
+                    cv::Mat output;
+                    if (warped.channels() == 4) {
+                        cv::cvtColor(warped, output, cv::COLOR_BGRA2BGR);
+                    } else {
+                        output = warped;
+                    }
+
+                    cv::Mat *result = new cv::Mat(output);
+                    @synchronized (aligned) {
+                        aligned[idx] = [NSValue valueWithPointer:result];
+                    }
+		} catch (const cv::Exception &e) {
+		    Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
+                    @synchronized (aligned) {
+                        aligned[idx] = [NSValue valueWithPointer:nullptr];
+                    }
+		} catch (const std::exception &e) {
+		    Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
+                    @synchronized (aligned) {
+                        aligned[idx] = [NSValue valueWithPointer:nullptr];
+                    }
+                } catch (...) {
+                    Log_e(@"Unknown Error");
+                    @synchronized (aligned) {
+                        aligned[idx] = [NSValue valueWithPointer:nullptr];
+                    }
+                }
+            });
+        }];
+
+        dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
+        return aligned;
+
+    } catch (const cv::Exception &e) {
+        return [NSString stringWithUTF8String:e.what()];
+    } catch (const std::exception &e) {
+        return [NSString stringWithUTF8String:e.what()];
+    } catch (...) {
+        return @"Unknown Exception";
+    }
+}
+
+
+
+
+
++ (id)OLD_alignFrames:(Mat)special
            frames:(NSArray<NSValue *> *)frames
              mask:(Mat)mask
      maxDeviation:(double)maxDeviation
@@ -467,6 +686,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 
 // aligns frames by finding keypoints on their horizon masks,
 // instead of on the frames themselves
+// XXX DOESN'T WORK :(
 + (id)alignFramesByMask:(Mat)mask
 		   base:(Mat)special
 		 frames:(NSArray<NSValue *> *)frames
