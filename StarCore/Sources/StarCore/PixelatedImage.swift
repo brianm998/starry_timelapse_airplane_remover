@@ -1556,7 +1556,6 @@ extension PixelatedImage {
       maxDeviation: Double = 30, // maximum warping deviation from identity (GUESSED)
       maxCornerDeviation: Double = 70, // similar to max deviation, but for the corners
       invertMask: Bool = false, // use zero values instead of non zero values for the mask
-      invertBrightness: Bool = false, // flip the brightness before finding keypoints
       maxKeypoints: Int32 = 1000       // XXX expose this and maxDeviation as parameters to user
     ) -> [PixelatedImage] {
         let baseMat = self.cvMat
@@ -1576,7 +1575,6 @@ extension PixelatedImage {
              maxDeviation: maxDeviation,
              maxCornerDeviation: maxCornerDeviation,
              invertMask: invertMask,
-             invertBrightness: invertBrightness,
              maxKeypoints: maxKeypoints
            )
         {
@@ -1611,63 +1609,6 @@ extension PixelatedImage {
         return ret
     }
     
-    public func align(
-      by mask: PixelatedImage,
-      frames: [PixelatedImage],
-      frameMasks: [PixelatedImage],
-      maxKeypoints: Int32 = 500
-    ) -> [PixelatedImage] {
-
-        Log.d("ALIGN BY MASK")
-        
-        let baseMat = self.cvMat
-        let frameMats = frames.map { $0.cvMat }
-        let frameMaskMats = frameMasks.map { $0.cvMat }
-        let maskMat = mask.cvMat
-
-        let wrappedFrames = frameMats.map { NSValue(pointer: $0) }
-        let wrappedFrameMasks = frameMaskMats.map { NSValue(pointer: $0) }
-
-        var ret: [PixelatedImage] = []
-        if let aligned = ImageAligner.alignFrames(
-             byMask: baseMat,
-             base: baseMat,
-             frames: wrappedFrames,
-             frameMasks: wrappedFrameMasks,
-             maxKeypoints: maxKeypoints
-           )
-        {
-            if let aligned = aligned as? String {
-                Log.e("error: \(aligned)")
-            } else if let aligned = aligned as? [NSValue] {
-                // Unwrap results
-                for wrapped in aligned {
-                    if let matPtr = wrapped.pointerValue {
-                        // assumes self and processedMat have same bits per pixel, num components, etc.
-                        ret.append(self.newImage(from: matPtr))
-                        PixelatedImageBridge.freeCvMat(matPtr)
-                    }
-                }
-            } else {
-                Log.e("cannot handle aligned \(aligned)")
-            }
-        }
-
-        PixelatedImageBridge.freeCvMat(baseMat)
-
-        for frameMat in frameMats {
-            PixelatedImageBridge.freeCvMat(frameMat)
-        }
-
-        for frameMaskMat in frameMaskMats {
-            PixelatedImageBridge.freeCvMat(frameMaskMat)
-        }
-
-        PixelatedImageBridge.freeCvMat(maskMat)
-
-        return ret
-    }
-
     // raises the mask by the given amount, creating a gradient
     // areas that were non zero and within borderAmount of the border
     // will be part of the gradient

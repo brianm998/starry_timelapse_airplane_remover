@@ -15,14 +15,7 @@ typedef void* Mat;
      maxDeviation:(double)maxDeviation
 maxCornerDeviation:(double)maxCornerDeviation
        invertMask:(BOOL)invertMask
- invertBrightness:(BOOL)invertBrightness
      maxKeypoints:(int)maxKeypoints;
-
-+ (id)alignFramesByMask:(Mat)mask
-		   base:(Mat)special
-		 frames:(NSArray<NSValue *> *)frames
-	     frameMasks:(NSArray<NSValue *> *)frameMasks
-	   maxKeypoints:(int)maxKeypoints;
 
 +(Mat)createGradientMaskIntoSky:(Mat)binaryMask
 	       gradientDistance:(int)gradientDistance;

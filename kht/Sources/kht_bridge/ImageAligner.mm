@@ -20,7 +20,18 @@
   However, it's still not good at detecting detail in the ground, especially when it's dark.
   tried flipping the image, and boosting contrast, but so far, no dice.
   returns the original image when there are not enough found control points.
+
+  TODO:
+
+   - cleanup alignment code (get rid of old method)
+   - change return value to be two lists, one aligned, the others that failed
+   - update calling code to deal with the situation as it is
+
+  
  */
+
+
+
 
 cv::Mat preprocessMaskForSIFT_BLUR(const cv::Mat& mask) {
     cv::Mat grayMask;
@@ -317,7 +328,6 @@ static cv::Mat makeStarMask(const cv::Mat &gray, int dilateSize = 3, int thresho
      maxDeviation:(double)maxDeviation
 maxCornerDeviation:(double)maxCornerDeviation
        invertMask:(BOOL)invertMask
- invertBrightness:(BOOL)invertBrightness
      maxKeypoints:(int)maxKeypoints
 {
     try {
@@ -332,10 +342,6 @@ maxCornerDeviation:(double)maxCornerDeviation
         }
         if (invertMask) {
             cv::bitwise_not(horizonMask, horizonMask);
-        }
-
-        if (invertBrightness) {
-            cv::bitwise_not(specialMat, specialMat);
         }
 
         // Prepare grayscale special frame
@@ -372,10 +378,6 @@ maxCornerDeviation:(double)maxCornerDeviation
             dispatch_group_async(group, queue, ^{
                 try {
                     cv::Mat &frame = *(cv::Mat *)val.pointerValue;
-
-                    if (invertBrightness) {
-                        cv::bitwise_not(frame, frame);
-                    }
 
                     cv::Mat frameGray = toGray8UWithMask(frame, horizonMask, true);
 
@@ -465,8 +467,6 @@ maxCornerDeviation:(double)maxCornerDeviation
                         warped = frame.clone();
                     }
 
-                    if (invertBrightness) cv::bitwise_not(warped, warped);
-
                     cv::Mat output;
                     if (warped.channels() == 4) {
                         cv::cvtColor(warped, output, cv::COLOR_BGRA2BGR);
@@ -513,309 +513,6 @@ maxCornerDeviation:(double)maxCornerDeviation
 
 
 
-+ (id)OLD_alignFrames:(Mat)special
-           frames:(NSArray<NSValue *> *)frames
-             mask:(Mat)mask
-     maxDeviation:(double)maxDeviation
-maxCornerDeviation:(double)maxCornerDeviation
-       invertMask:(BOOL)invertMask
- invertBrightness:(BOOL)invertBrightness
-     maxKeypoints:(int)maxKeypoints
-{
-    try {
-        cv::Mat &specialMat = *(cv::Mat *)special;
-
-        // Use mask or full white if none provided
-        cv::Mat maskMat;
-        if (mask != NULL && !(*(cv::Mat *)mask).empty()) {
-            maskMat = *(cv::Mat *)mask;
-        } else {
-            maskMat = cv::Mat(specialMat.size(), CV_8U, cv::Scalar(255));
-        }
-
-        if (invertMask) {
-            cv::bitwise_not(maskMat, maskMat);
-        }
-
-        if (invertBrightness) {
-            cv::bitwise_not(specialMat, specialMat);
-        }
-
-        // Prepare special image for SIFT
-        cv::Mat specialGray = toGray8UWithMask(specialMat, maskMat, true);
-
-        // Detector & matcher (thread-safe because SIFT::create() returns a new instance)
-        cv::Ptr<cv::SIFT> detector = cv::SIFT::create(maxKeypoints);
-	//cv::Ptr<cv::Feature2D> detector = cv::ORB::create(2000); // more keypoints
-        std::vector<cv::KeyPoint> kpSpecial;
-        cv::Mat descSpecial;
-        detector->detectAndCompute(specialGray, maskMat, kpSpecial, descSpecial);
-	//cv::BFMatcher matcher(cv::NORM_HAMMING); // for ORB
-        cv::BFMatcher matcher(cv::NORM_L2); // for SIFT
-
-        NSMutableArray *aligned = [NSMutableArray arrayWithCapacity:frames.count];
-        dispatch_group_t group = dispatch_group_create();
-        dispatch_queue_t queue = dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0);
-
-        // Pre-allocate result array with NSNull
-        for (NSUInteger i = 0; i < frames.count; i++) {
-            [aligned addObject:[NSNull null]];
-        }
-
-        // Parallelize frame processing
-        [frames enumerateObjectsUsingBlock:^(NSValue *val, NSUInteger idx, BOOL *stop) {
-            dispatch_group_async(group, queue, ^{
-                try {
-                    cv::Mat &frame = *(cv::Mat *)val.pointerValue;
-
-                    if (invertBrightness) {
-                        cv::bitwise_not(frame, frame);
-                    }
-
-                    // Convert frame to grayscale for SIFT
-                    cv::Mat frameGray = toGray8UWithMask(frame, maskMat, true);
-                    std::vector<cv::KeyPoint> kpFrame;
-                    cv::Mat descFrame;
-                    detector->detectAndCompute(frameGray, maskMat, kpFrame, descFrame);
-
-                    std::vector<cv::DMatch> matches;
-                    matcher.match(descFrame, descSpecial, matches);
-
-                    double minDist = std::numeric_limits<double>::max();
-                    for (auto &m : matches) {
-                        minDist = std::min(minDist, (double)m.distance);
-                    }
-                    double cutoff = std::max(2 * minDist, 30.0);
-
-                    std::vector<cv::Point2f> ptsFrame, ptsSpecial;
-                    for (auto &m : matches) {
-                        if (m.distance <= cutoff) {
-                            ptsFrame.push_back(kpFrame[m.queryIdx].pt);
-                            ptsSpecial.push_back(kpSpecial[m.trainIdx].pt);
-                        }
-                    }
-
-                    cv::Mat warped;
-                    if (ptsFrame.size() >= 4) {
-                        cv::Mat H = cv::findHomography(ptsFrame, ptsSpecial, cv::RANSAC, 10);
-                        if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
-                            H.convertTo(H, CV_64F);
-                        }
-
-                        if (H.empty() || H.rows != 3 || H.cols != 3) {
-			    // Fallback, couldn't warp
-                            warped = frame.clone();
-                        } else {
-			  
-                            // Compute deviation from identity
-                            cv::Mat I = cv::Mat::eye(3, 3, H.type());
-                            double deviation = cv::norm(H - I, cv::NORM_L2);
-
-			    // Compute corner reprojection error
-			    std::vector<cv::Point2f> corners = {
-			      cv::Point2f(0, 0),
-			      cv::Point2f((float)frame.cols, 0),
-			      cv::Point2f((float)frame.cols, (float)frame.rows),
-			      cv::Point2f(0, (float)frame.rows)
-			    };
-
-			    std::vector<cv::Point2f> projectedCorners;
-			    cv::perspectiveTransform(corners, projectedCorners, H);
-
-			    double maxCornerDist = 0.0;
-			    for (size_t i = 0; i < corners.size(); i++) {
-			      double dist = cv::norm(projectedCorners[i] - corners[i]);
-			      maxCornerDist = std::max(maxCornerDist, dist);
-			    }
-
-			    // Combined decision
-			    bool acceptWarp = (deviation < maxDeviation) && (maxCornerDist < maxCornerDeviation);
-
-			    if(acceptWarp) {
-			      Log_i(@"acceptWarp TRUE = (%f < %f) && (%f < %f)", deviation, maxDeviation, maxCornerDist, maxDeviation * 5.0);
-			    } else {
-			      Log_w(@"acceptWarp FALSE = (%f < %f) && (%f < %f)", deviation, maxDeviation, maxCornerDist, maxDeviation * 5.0);
-			    }
-			    if(acceptWarp) {
-                                // only warp if less than max deviation
-                                cv::warpPerspective(frame, warped, H, specialMat.size(),
-						    cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0,0,0,0));
-			    } else {
-			      // XXX need to log these failures so the GUI can show them
-			      // XXX need objc => swift logging bridge somehow
-                                warped = frame.clone();
-			    }
-                        }
-                    } else {
-		        // Fallback, couldn't warp because not enough keypoints
-                        warped = frame.clone();
-                    }
-
-		    if (invertBrightness) cv::bitwise_not(warped, warped);
-		    
-                    cv::Mat output;
-                    if (warped.channels() == 4) {
-                        cv::cvtColor(warped, output, cv::COLOR_BGRA2BGR);
-                    } else {
-                        output = warped;
-                    }
-
-                    cv::Mat *result = new cv::Mat(output);
-                    @synchronized (aligned) {
-		        aligned[idx] = [NSValue valueWithPointer:result];
-                    }
-                } catch (...) {
-                    @synchronized (aligned) {
-                        aligned[idx] = [NSValue valueWithPointer:nullptr];
-                    }
-                }
-            });
-        }];
-
-        dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
-        return aligned;
-
-    } catch (const cv::Exception &e) {
-        return [NSString stringWithUTF8String:e.what()];
-    } catch (const std::exception &e) {
-        return [NSString stringWithUTF8String:e.what()];
-    } catch (...) {
-        return @"Unknown Exception";
-    }
-}
-
-// aligns frames by finding keypoints on their horizon masks,
-// instead of on the frames themselves
-// XXX DOESN'T WORK :(
-+ (id)alignFramesByMask:(Mat)mask
-		   base:(Mat)special
-		 frames:(NSArray<NSValue *> *)frames
-	     frameMasks:(NSArray<NSValue *> *)frameMasks
-	   maxKeypoints:(int)maxKeypoints;
-{
-    try {
-        cv::Mat &specialMat = *(cv::Mat *)special;
-
-        // Use mask or full white if none provided
-        cv::Mat maskMat = *(cv::Mat *)mask;
-
-        // Detector & matcher (thread-safe because SIFT::create() returns a new instance)
-        cv::Ptr<cv::SIFT> detector = cv::SIFT::create(maxKeypoints);
-        std::vector<cv::KeyPoint> kpSpecial;
-        cv::Mat descSpecial;
-
-	cv::Mat emptyMat;
-	
-        // Prepare special image for SIFT
-	cv::Mat specialMaskProcessed = preprocessMaskForSIFT(maskMat);
-  
-	printMatInfo(specialMaskProcessed, "specialMaskProcessed");
-	// detect on mask, not special base image
-        detector->detectAndCompute(specialMaskProcessed, emptyMat, kpSpecial, descSpecial);
-        cv::BFMatcher matcher(cv::NORM_L2);
-
-        NSMutableArray *aligned = [NSMutableArray arrayWithCapacity:frames.count];
-        dispatch_group_t group = dispatch_group_create();
-        dispatch_queue_t queue = dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0);
-
-        // Pre-allocate result array with NSNull
-        for (NSUInteger i = 0; i < frames.count; i++) {
-            [aligned addObject:[NSNull null]];
-        }
-
-        // Parallelize frame processing
-        [frames enumerateObjectsUsingBlock:^(NSValue *val, NSUInteger idx, BOOL *stop) {
-            dispatch_group_async(group, queue, ^{
-                try {
-                    cv::Mat &frame = *(cv::Mat *)val.pointerValue;
-                    cv::Mat &frameMask = *(cv::Mat *)frameMasks[idx].pointerValue;
-
-                    std::vector<cv::KeyPoint> kpFrame;
-                    cv::Mat descFrame;
-
-		    // Prepare special image for SIFT
-		    cv::Mat frameMaskProcessed = preprocessMaskForSIFT(frameMask);
-		    cv::imwrite("/tmp/frameMaskProcessed.png", frameMaskProcessed);
-		    printMatInfo(frameMaskProcessed, "frameMaskProcessed");
-                    detector->detectAndCompute(frameMaskProcessed, emptyMat, kpFrame, descFrame);
-
-                    std::vector<cv::DMatch> matches;
-                    matcher.match(descFrame, descSpecial, matches);
-
-                    double minDist = std::numeric_limits<double>::max();
-                    for (auto &m : matches) {
-                        minDist = std::min(minDist, (double)m.distance);
-                    }
-                    double cutoff = std::max(2 * minDist, 30.0);
-
-                    std::vector<cv::Point2f> ptsFrame, ptsSpecial;
-                    for (auto &m : matches) {
-                        if (m.distance <= cutoff) {
-                            ptsFrame.push_back(kpFrame[m.queryIdx].pt);
-                            ptsSpecial.push_back(kpSpecial[m.trainIdx].pt);
-                        }
-                    }
-
-                    cv::Mat warped;
-                    if (ptsFrame.size() >= 4) {
-                        cv::Mat H = cv::findHomography(ptsFrame, ptsSpecial, cv::RANSAC);
-                        if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
-                            H.convertTo(H, CV_64F);
-                        }
-
-                        if (H.empty()) {
-			    // Fallback, couldn't warp
-                            warped = frame.clone();
-                            Log_i(@"not warping because H is empty");
-			} else if(H.rows != 3) {
-			    // Fallback, couldn't warp
-                            warped = frame.clone();
-                            Log_i(@"not warping because H.rows %d != 3", H.rows);
-			} else if(H.cols != 3) {
-			    // Fallback, couldn't warp
-                            warped = frame.clone();
-                            Log_i(@"not warping because H.cols %d != 3", H.cols);
-                        } else {
-			  Log_i(@"warping");
-                            cv::warpPerspective(frame, warped, H, specialMat.size(),
-                                                cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0,0,0,0));
-                        }
-                    } else {
-		        // Fallback, couldn't warp because not enough keypoints
-		        Log_d(@"NOT WARPING 4");
-                        warped = frame.clone();
-                    }
-
-                    cv::Mat output;
-                    if (warped.channels() == 4) {
-                        cv::cvtColor(warped, output, cv::COLOR_BGRA2BGR);
-                    } else {
-                        output = warped;
-                    }
-
-                    cv::Mat *result = new cv::Mat(output);
-                    @synchronized (aligned) {
-                        aligned[idx] = [NSValue valueWithPointer:result];
-                    }
-                } catch (...) {
-                    @synchronized (aligned) {
-                        aligned[idx] = [NSValue valueWithPointer:nullptr];
-                    }
-                }
-            });
-        }];
-
-        dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
-        return aligned;
-
-    } catch (const cv::Exception &e) {
-        return [NSString stringWithUTF8String:e.what()];
-    } catch (const std::exception &e) {
-        return [NSString stringWithUTF8String:e.what()];
-    } catch (...) {
-        return @"Unknown Exception";
-    }
-}
 
 @end
 /*

@@ -557,8 +557,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           frames: neighborImages,
           masked: horizonMask.image,
           invertMask: isEarth,       // earth is zero in mask
-          invertBrightness: isEarth, // XXX need to play with this more
-          maxKeypoints: 500          // XXX hardcoded constant
+          maxKeypoints: 2000          // XXX hardcoded constant
         )
 
         switch type {
@@ -1886,7 +1885,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
      
      */
 
-    // returns a grayscale image pixel value array from subtracting the aligned frame
+    // returns a grayscale image pixel value array from subtracting the aligned frames
     // from the frame being processed.
     internal func loadOrCreateSubtractionImage() async throws -> PixelatedImage {
         // first try to load the subtracted image directly from file
