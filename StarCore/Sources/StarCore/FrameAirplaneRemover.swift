@@ -114,7 +114,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
     }
-
+    
     public weak var observer: FrameObserver?
 
     public func set(observer: FrameObserver) {
@@ -553,7 +553,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         let horizonMask = try await loadOrCreateHorizonMask()
 
-        let alignedFrames = originalFrame.align(
+        let (alignedFrames, failedAlignments) = originalFrame.align(
           frames: neighborImages,
           masked: horizonMask.image,
           invertMask: isEarth,       // earth is zero in mask
@@ -568,23 +568,18 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         default:
             break
         }
+
+        var framesToUse = alignedFrames
+
+        if framesToUse.count == 0 {
+            Log.w("frame \(frameIndex) falling back to failed alignments of \(type) because of no properly aligned frames")
+            framesToUse = failedAlignments
+        }
         
-        if let firstImage = alignedFrames.first {
+        if let firstImage = framesToUse.first {
 
-            /*
-             Next steps here:
-             - use opencv2 for buildAlignedFrame (have code in chatgpt already)
-               this step is actually not slow in swift, maybe delay this change
-             
-             - fix earth alignment by:
-               using the horizon mask image for homologation, (no mask)
-               instead of the frame masked for the dark ground
-
-             - use a threshold for alignment distance to avoid really bad alignment  
-             */
-            
             let goodPixelImage = try await buildAlignedFrame(
-              alignedImages: alignedFrames,
+              alignedImages: framesToUse,
               width: width,
               height: height,
               thresholdFactor: pixelThreshold
@@ -604,7 +599,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             // keep track of the number of alignment images used
             // so we can make sure it's the same as the desired amount later
-            try self.write(numberOfAlignedImagesForThisFrame: alignedFrames.count)
+            try self.write(numberOfAlignedImagesForThisFrame: neighborImages.count)
 
             return goodPixelImage
         }

@@ -1557,7 +1557,7 @@ extension PixelatedImage {
       maxCornerDeviation: Double = 70, // similar to max deviation, but for the corners
       invertMask: Bool = false, // use zero values instead of non zero values for the mask
       maxKeypoints: Int32 = 1000       // XXX expose this and maxDeviation as parameters to user
-    ) -> [PixelatedImage] {
+    ) -> ([PixelatedImage], [PixelatedImage]) { // aligned, failed
         let baseMat = self.cvMat
         let frameMats = frames.map { $0.cvMat }
         var maskMat: Mat? = nil
@@ -1567,8 +1567,9 @@ extension PixelatedImage {
 
         let wrappedFrames = frameMats.map { NSValue(pointer: $0) }
 
-        var ret: [PixelatedImage] = []
-        if let aligned = ImageAligner.alignFrames(
+        var aligned: [PixelatedImage] = []
+        var failed: [PixelatedImage] = []
+        if let result = ImageAligner.alignFrames(
              baseMat,
              frames: wrappedFrames,
              mask: maskMat,
@@ -1578,21 +1579,32 @@ extension PixelatedImage {
              maxKeypoints: maxKeypoints
            )
         {
-            if let aligned = aligned as? String {
-                Log.e("error: \(aligned)")
-            } else if let aligned = aligned as? [NSValue] {
-                // Unwrap results
-                for wrapped in aligned {
+            if let error = result as? String {
+                Log.e("error: \(error)")
+            } else if let result = result as? AlignmentResult {
+
+                for wrapped in result.aligned {
                     if let matPtr = wrapped.pointerValue {
                         // assumes self and processedMat have same bits per pixel, num components, etc.
                         if !PixelatedImageBridge.matIsEmpty(matPtr) {
-                            ret.append(self.newImage(from: matPtr))
+                            aligned.append(self.newImage(from: matPtr))
                         }
                         PixelatedImageBridge.freeCvMat(matPtr)
                     }
                 }
+
+                for wrapped in result.failed {
+                    if let matPtr = wrapped.pointerValue {
+                        // assumes self and processedMat have same bits per pixel, num components, etc.
+                        if !PixelatedImageBridge.matIsEmpty(matPtr) {
+                            failed.append(self.newImage(from: matPtr))
+                        }
+                        PixelatedImageBridge.freeCvMat(matPtr)
+                    }
+                }
+                
             } else {
-                Log.e("cannot handle aligned \(aligned)")
+                Log.e("cannot handle aligned result \(result)")
             }
         }
 
@@ -1606,7 +1618,7 @@ extension PixelatedImage {
             PixelatedImageBridge.freeCvMat(maskMat)
         }
 
-        return ret
+        return (aligned, failed)
     }
     
     // raises the mask by the given amount, creating a gradient

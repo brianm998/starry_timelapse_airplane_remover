@@ -7,6 +7,11 @@
 #import <opencv2/calib3d.hpp>
 #include <iostream>
 
+
+@implementation AlignmentResult
+@end
+
+
 @implementation ImageAligner
 
 #include <opencv2/opencv.hpp>
@@ -29,9 +34,6 @@
 
   
  */
-
-
-
 
 cv::Mat preprocessMaskForSIFT_BLUR(const cv::Mat& mask) {
     cv::Mat grayMask;
@@ -324,10 +326,10 @@ static cv::Mat makeStarMask(const cv::Mat &gray, int dilateSize = 3, int thresho
 
 + (id)alignFrames:(Mat)special
            frames:(NSArray<NSValue *> *)frames
-             mask:(Mat)mask
+             mask:(Mat)mask	// assumed to be zero for ground, non-zero for sky
      maxDeviation:(double)maxDeviation
 maxCornerDeviation:(double)maxCornerDeviation
-       invertMask:(BOOL)invertMask
+       invertMask:(BOOL)invertMask // true when processing ground, false for sky
      maxKeypoints:(int)maxKeypoints
 {
     try {
@@ -367,17 +369,19 @@ maxCornerDeviation:(double)maxCornerDeviation
         cv::BFMatcher matcher(cv::NORM_L2);
 
         NSMutableArray *aligned = [NSMutableArray arrayWithCapacity:frames.count];
+        NSMutableArray *failed  = [NSMutableArray arrayWithCapacity:frames.count];
         dispatch_group_t group = dispatch_group_create();
         dispatch_queue_t queue = dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0);
 
         for (NSUInteger i = 0; i < frames.count; i++) {
             [aligned addObject:[NSNull null]];
+            [failed  addObject:[NSNull null]];
         }
 
         [frames enumerateObjectsUsingBlock:^(NSValue *val, NSUInteger idx, BOOL *stop) {
             dispatch_group_async(group, queue, ^{
+		cv::Mat &frame = *(cv::Mat *)val.pointerValue;
                 try {
-                    cv::Mat &frame = *(cv::Mat *)val.pointerValue;
 
                     cv::Mat frameGray = toGray8UWithMask(frame, horizonMask, true);
 
@@ -418,6 +422,8 @@ maxCornerDeviation:(double)maxCornerDeviation
                         }
                     }
 
+		    bool acceptWarp = FALSE;
+
                     cv::Mat warped;
                     if (ptsFrame.size() >= 4) {
                         cv::Mat H = cv::findHomography(ptsFrame, ptsSpecial, cv::RANSAC, 10);
@@ -445,8 +451,8 @@ maxCornerDeviation:(double)maxCornerDeviation
                                                          (double)cv::norm(projectedCorners[i] - corners[i]));
                             }
 
-                            bool acceptWarp = (deviation < maxDeviation) &&
-                                              (maxCornerDist < maxCornerDeviation);
+                            acceptWarp = (deviation < maxDeviation) &&
+			                 (maxCornerDist < maxCornerDeviation);
 
 			    if(acceptWarp) {
 			      Log_i(@"acceptWarp TRUE = (%f < %f) && (%f < %f)", deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
@@ -476,30 +482,56 @@ maxCornerDeviation:(double)maxCornerDeviation
 
                     cv::Mat *result = new cv::Mat(output);
                     @synchronized (aligned) {
+		      if(acceptWarp) {
                         aligned[idx] = [NSValue valueWithPointer:result];
+		      } else {
+                        failed[idx] = [NSValue valueWithPointer:result];
+		      }
                     }
 		} catch (const cv::Exception &e) {
 		    Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
+		    cv::Mat *result = new cv::Mat(frame);
                     @synchronized (aligned) {
-                        aligned[idx] = [NSValue valueWithPointer:nullptr];
+		      failed[idx] = [NSValue valueWithPointer:result];
                     }
 		} catch (const std::exception &e) {
 		    Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
+		    cv::Mat *result = new cv::Mat(frame);
                     @synchronized (aligned) {
-                        aligned[idx] = [NSValue valueWithPointer:nullptr];
+		      failed[idx] = [NSValue valueWithPointer:result];
                     }
                 } catch (...) {
                     Log_e(@"Unknown Error");
+		    cv::Mat *result = new cv::Mat(frame);
                     @synchronized (aligned) {
-                        aligned[idx] = [NSValue valueWithPointer:nullptr];
+		      failed[idx] = [NSValue valueWithPointer:result];
                     }
                 }
             });
         }];
 
         dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
-        return aligned;
 
+	// Remove NSNulls from aligned and failed arrays
+	NSMutableArray *alignedClean = [NSMutableArray array];
+	for (id obj in aligned) {
+	  if (obj != [NSNull null] && obj != nil) {
+	    [alignedClean addObject:obj];
+	  }
+	}
+
+	NSMutableArray *failedClean = [NSMutableArray array];
+	for (id obj in failed) {
+	  if (obj != [NSNull null] && obj != nil) {
+	    [failedClean addObject:obj];
+	  }
+	}
+
+	AlignmentResult *resultObj = [AlignmentResult new];
+	resultObj.aligned = alignedClean;
+	resultObj.failed  = failedClean;
+	return resultObj;
+ 
     } catch (const cv::Exception &e) {
         return [NSString stringWithUTF8String:e.what()];
     } catch (const std::exception &e) {

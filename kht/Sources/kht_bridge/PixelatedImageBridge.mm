@@ -1,5 +1,6 @@
 #import "PixelatedImageBridge.h"
 
+#import "logging.h"
 
 #include <opencv2/core.hpp>
 #import <opencv2/imgproc.hpp>
@@ -10,10 +11,6 @@
 #include <memory>
 
 extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
-
-
-#define LogWithLocation(fmt, ...) \
-    NSLog((@"[%s:%d] " fmt), __FILE__, __LINE__, ##__VA_ARGS__)
 
 // PixelatedImageBridge.mm
 
@@ -57,14 +54,14 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 	cv::Mat* resultPtr = new cv::Mat(result);
 	
 	//delete matPtr;
-	LogWithLocation(@"filterConnectedComponents done\n");
+	Log_d(@"filterConnectedComponents done");
     
 	return resultPtr;
       } catch (const cv::Exception &e) {
-	LogWithLocation(@"OpenCV Exception: %s", e.what());
+	Log_d(@"OpenCV Exception: %s", e.what());
       }
     } @catch (NSException *exception) {
-      LogWithLocation(@"Objective-C Exception: %@", exception);
+      Log_d(@"Objective-C Exception: %@", exception);
     }
     return nil;
     
@@ -121,14 +118,14 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 	cv::Mat* resultPtr = new cv::Mat(filtered);
 
 	//delete matPtr;
-	LogWithLocation(@"filterConnectedComponents done\n");
+	Log_d(@"filterConnectedComponents done");
     
 	return resultPtr;
       } catch (const cv::Exception &e) {
-	LogWithLocation(@"OpenCV Exception: %s", e.what());
+	Log_d(@"OpenCV Exception: %s", e.what());
       }
     } @catch (NSException *exception) {
-      LogWithLocation(@"Objective-C Exception: %@", exception);
+      Log_d(@"Objective-C Exception: %@", exception);
     }
     return nil;
 }
@@ -137,7 +134,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 + (Mat)groundOnlyFrom:(Mat)image {
   @try {
     try {
-      LogWithLocation(@"groundOnlyFrom started\n");
+      Log_d(@"groundOnlyFrom started");
       // reinterpret as pointer
       cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
 
@@ -215,14 +212,14 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       cv::Mat* resultPtr = new cv::Mat(finalMask.clone());
 
       //delete matPtr;
-      LogWithLocation(@"groundOnlyFrom done\n");
+      Log_d(@"groundOnlyFrom done");
     
       return resultPtr;
     } catch (const cv::Exception &e) {
-      LogWithLocation(@"OpenCV Exception: %s", e.what());
+      Log_d(@"OpenCV Exception: %s", e.what());
     }
   } @catch (NSException *exception) {
-    LogWithLocation(@"Objective-C Exception: %@", exception);
+    Log_d(@"Objective-C Exception: %@", exception);
   }
   return nil;    
 }
@@ -231,7 +228,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 + (HorizonResult *)horizonExtentsFromImage:(Mat)image {
   @try {
     try {
-      LogWithLocation(@"horizonExtentsFromImage started\n");
+      Log_d(@"horizonExtentsFromImage started");
       // reinterpret as pointer
       cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
 
@@ -255,7 +252,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       } else if (owned.channels() == 1) {
 	gray = owned; // already grayscale
       } else {
-	LogWithLocation(@"Unsupported channel count: %d", owned.channels());
+	Log_d(@"Unsupported channel count: %d", owned.channels());
 	return nil;
       }
 
@@ -279,16 +276,16 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       }
 
       //delete matPtr;
-      LogWithLocation(@"horizonExtentsFromImage done\n");
+      Log_d(@"horizonExtentsFromImage done");
       
       return [[HorizonResult alloc]
 	       initWithHorizonTopY: horizonTopY
 		    horizonBottomY: horizonBottomY];
     } catch (const cv::Exception &e) {
-      LogWithLocation(@"OpenCV Exception: %s", e.what());
+      Log_d(@"OpenCV Exception: %s", e.what());
     }
   } @catch (NSException *exception) {
-    LogWithLocation(@"Objective-C Exception: %@", exception);
+    Log_d(@"Objective-C Exception: %@", exception);
   }
   return nil;
 }
@@ -301,7 +298,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 {
   @try {
     try {
-      //LogWithLocation(@"maskRaisedBy started\n");
+      //Log_d(@"maskRaisedBy started");
       cv::Mat& mat = *reinterpret_cast<cv::Mat*>(image);
       cv::Mat& maskMat = *reinterpret_cast<cv::Mat*>(mask);
 
@@ -315,7 +312,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       const int h = owned.rows;
       const int w = owned.cols;
 
-      //LogWithLocation(@"Original size [%d, %d]\n", h, w);
+      //Log_d(@"Original size [%d, %d]", h, w);
 
       // --- Step 1: create keep mask (zeros in ownedMask are keep) ---
       cv::Mat keepMask = (ownedMask == 0);  // 255 = keep, 0 = masked
@@ -325,7 +322,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       cv::findNonZero(keepMask, origNonZero);
       int origMaxY = 0;
       for (auto &p : origNonZero) if (p.y > origMaxY) origMaxY = p.y;
-      //LogWithLocation(@"Original keep mask maxY: %d\n", origMaxY);
+      //Log_d(@"Original keep mask maxY: %d", origMaxY);
 
       // --- Step 2: shift keep area upward by borderAmount ---
       cv::Mat dilatedMask = cv::Mat::zeros(keepMask.size(), keepMask.type());
@@ -344,7 +341,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       cv::findNonZero(dilatedMask, dilatedNonZero);
       int dilatedMaxY = 0;
       for (auto &p : dilatedNonZero) if (p.y > dilatedMaxY) dilatedMaxY = p.y;
-      //LogWithLocation(@"Dilated keep mask maxY: %d\n", dilatedMaxY);
+      //Log_d(@"Dilated keep mask maxY: %d", dilatedMaxY);
 
       // --- Step 3: apply mask to image ---
       cv::Mat masked = owned.clone();
@@ -365,17 +362,17 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
         owned.rowRange(h - bottomRows, h).copyTo(masked.rowRange(h - bottomRows, h));
       }
 
-      //LogWithLocation("Masked size [%d, %d]\n", masked.rows, masked.cols);
+      //Log_d("Masked size [%d, %d]", masked.rows, masked.cols);
 
-      //LogWithLocation("maskRaisedBy done\n");
+      //Log_d("maskRaisedBy done");
 
       // --- Step 4: return full-size masked image ---
       return new cv::Mat(masked);
     } catch (const cv::Exception &e) {
-      LogWithLocation(@"OpenCV Exception: %s", e.what());
+      Log_d(@"OpenCV Exception: %s", e.what());
     }
   } @catch (NSException *exception) {
-    LogWithLocation(@"Objective-C Exception: %@", exception);
+    Log_d(@"Objective-C Exception: %@", exception);
   }
   return nil;
 }
@@ -426,10 +423,10 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       return new cv::Mat(result.clone());
       
     } catch (const cv::Exception &e) {
-      LogWithLocation(@"OpenCV Exception: %s", e.what());
+      Log_d(@"OpenCV Exception: %s", e.what());
     }
   } @catch (NSException *exception) {
-    LogWithLocation(@"Objective-C Exception: %@", exception);
+    Log_d(@"Objective-C Exception: %@", exception);
   }
   return nil;
 }
@@ -484,10 +481,10 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       return new cv::Mat(result.clone());
       
     } catch (const cv::Exception &e) {
-      LogWithLocation(@"OpenCV Exception: %s", e.what());
+      Log_d(@"OpenCV Exception: %s", e.what());
     }
   } @catch (NSException *exception) {
-    LogWithLocation(@"Objective-C Exception: %@", exception);
+    Log_d(@"Objective-C Exception: %@", exception);
   }
   return nil;
 }
@@ -498,7 +495,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
   @try {
     try {
 
-      //LogWithLocation("maxBrightnessScaleForImage started\n");
+      //Log_d("maxBrightnessScaleForImage started");
       // reinterpret as pointer
       cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
       cv::Mat* maskPtr = reinterpret_cast<cv::Mat*>(mask);
@@ -551,13 +548,13 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       default:     maxAllowed = 255.0;   break;  // fallback
       }
 
-      //LogWithLocation("maxBrightnessScaleForImage done\n");
+      //Log_d("maxBrightnessScaleForImage done");
       return maxAllowed / maxValOverall;
     } catch (const cv::Exception &e) {
-      LogWithLocation(@"OpenCV Exception: %s", e.what());
+      Log_d(@"OpenCV Exception: %s", e.what());
     }
   } @catch (NSException *exception) {
-    LogWithLocation(@"Objective-C Exception: %@", exception);
+    Log_d(@"Objective-C Exception: %@", exception);
   }
   return 1;
 }
@@ -579,7 +576,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       default: return nullptr;
       }
 
-      LogWithLocation(@"width %d, height %d, channels %d, bitsPerChannel %d bytesPerRow %d\n",
+      Log_d(@"width %d, height %d, channels %d, bitsPerChannel %d bytesPerRow %d",
 		      width, height, channels, bitsPerChannel, bytesPerRow);
 
       // Create a temporary header referencing the provided buffer
@@ -589,10 +586,10 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       cv::Mat *mat = new cv::Mat(tmp.clone());
       return (Mat)mat;
     } catch (const cv::Exception &e) {
-      LogWithLocation(@"OpenCV Exception: %s", e.what());
+      Log_d(@"OpenCV Exception: %s", e.what());
     }
   } @catch (NSException *exception) {
-    LogWithLocation(@"Objective-C Exception: %@", exception);
+    Log_d(@"Objective-C Exception: %@", exception);
   }
   return nil;
 }
@@ -602,7 +599,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
     cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
     return [NSData dataWithBytes:mat->data length:mat->total() * mat->elemSize()];
   } catch (const cv::Exception &e) {
-    LogWithLocation(@"OpenCV Exception: %s", e.what());
+    Log_d(@"OpenCV Exception: %s", e.what());
   }
   return NULL;
 }
