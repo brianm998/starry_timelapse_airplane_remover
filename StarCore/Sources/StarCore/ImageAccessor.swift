@@ -365,6 +365,7 @@ public struct ImageAccessor: Sendable {
             case .original:
                 break           // don't delete the original images
 
+                /*
             case .starAligned:
                 break     
 
@@ -373,7 +374,7 @@ public struct ImageAccessor: Sendable {
 
             case .subtraction:
                 break        
-
+*/
             default:
                 try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .original)
                 try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .preview)
