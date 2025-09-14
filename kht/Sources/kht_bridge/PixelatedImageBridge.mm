@@ -576,8 +576,8 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       default: return nullptr;
       }
 
-      Log_d(@"width %d, height %d, channels %d, bitsPerChannel %d bytesPerRow %d",
-		      width, height, channels, bitsPerChannel, bytesPerRow);
+//      Log_d(@"width %d, height %d, channels %d, bitsPerChannel %d bytesPerRow %d",
+//		      width, height, channels, bitsPerChannel, bytesPerRow);
 
       // Create a temporary header referencing the provided buffer
       cv::Mat tmp(height, width, type, buffer, bytesPerRow);
