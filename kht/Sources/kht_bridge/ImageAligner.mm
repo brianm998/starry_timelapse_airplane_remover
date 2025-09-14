@@ -336,7 +336,7 @@ maxCornerDeviation:(double)maxCornerDeviation
     try {
         cv::Mat &specialMat = *(cv::Mat *)special;
 
-	//uint32_t logID = arc4random_uniform(1000);
+	uint32_t logID = arc4random_uniform(1000);
 
 	//Log_i(@"id %d: starting to align frames", logID);
 	
@@ -378,14 +378,14 @@ maxCornerDeviation:(double)maxCornerDeviation
         cv::Mat descSpecial;
 	//Log_i(@"id %d: starting base SIFT detection", logID);
 
-
-	// Apply Contrast Limited Adaptive Histogram Equlization
-	cv::Mat specialProcessed;
+	// not used for sky, only for earth
 	cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(4.0, cv::Size(8,8));
-	clahe->apply(specialGray, specialProcessed);
-
 
 	if(invertMask) {
+	  // Apply Contrast Limited Adaptive Histogram Equlization
+	  cv::Mat specialProcessed;
+	  clahe->apply(specialGray, specialProcessed);
+
 	  // ground
 	  // apply gamma correction to brighten the shadows only
 	  cv::Mat gammaCorrected;
@@ -396,7 +396,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 	  orb->detectAndCompute(specialProcessed, detectionMask, kpSpecial, descSpecial);
 	} else {
 	  // sky
-	  detector->detectAndCompute(specialProcessed, detectionMask, kpSpecial, descSpecial);
+	  detector->detectAndCompute(specialGray, detectionMask, kpSpecial, descSpecial);
 	}
 
 	//Log_i(@"id %d: finished base SIFT detection", logID);
@@ -437,11 +437,11 @@ maxCornerDeviation:(double)maxCornerDeviation
 	    }
 
 	    // Apply Contrast Limited Adaptive Histogram Equlization
-	    cv::Mat claheOut;
-	    //	    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(4.0, cv::Size(8,8));
-	    clahe->apply(frameGray, claheOut);
 
 	    if(invertMask) {
+	      cv::Mat claheOut;
+	      //	    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(4.0, cv::Size(8,8));
+	      clahe->apply(frameGray, claheOut);
 	      // ground
 	      // apply gamma correction to brighten the shadows only
 	      cv::Mat gammaCorrected;
@@ -452,7 +452,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 	      orb->detectAndCompute(claheOut, detectionMask, kpFrame, descFrame);
 	    } else {
 	      // sky
-	      detector->detectAndCompute(claheOut, detectionMask, kpFrame, descFrame);
+	      detector->detectAndCompute(frameGray, detectionMask, kpFrame, descFrame);
 	    }
 	    
 	    //Log_i(@"id %d: neighbor %lu starting SIFT detection", logID, idx);
@@ -533,8 +533,9 @@ maxCornerDeviation:(double)maxCornerDeviation
 	    bool acceptWarp = FALSE;
 
 	    cv::Mat warped;
+	    Log_i(@"id %d: neighbor %lu ptsFrame.size() %zu", logID, idx, ptsFrame.size());
 	    if (ptsFrame.size() >= 4) {
-	      //Log_i(@"id %d: neighbor %lu finding homography", logID, idx);
+	      Log_i(@"id %d: neighbor %lu finding homography", logID, idx);
 	      cv::Mat H = cv::findHomography(ptsFrame, ptsSpecial, cv::RANSAC, 10);
 	      //Log_i(@"id %d: neighbor %lu found homography", logID, idx);
 	      if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
@@ -563,12 +564,12 @@ maxCornerDeviation:(double)maxCornerDeviation
 
 		acceptWarp = (deviation < maxDeviation) &&
 		  (maxCornerDist < maxCornerDeviation);
-		/*
+
 		if(acceptWarp) {
 		  Log_i(@"id %d: neighbor %lu acceptWarp TRUE = (%f < %f) && (%f < %f)", logID, idx, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
 		} else {
 		  Log_w(@"id %d: neighbor %lu acceptWarp FALSE = (%f < %f) && (%f < %f)", logID, idx, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
-		  }*/
+		}
 		if (acceptWarp) {
 		  cv::warpPerspective(frame, warped, H, frame/*specialMat*/.size(),
 				      cv::INTER_LINEAR, cv::BORDER_CONSTANT,
