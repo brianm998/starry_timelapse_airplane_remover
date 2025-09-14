@@ -131,6 +131,25 @@ struct BottomRightView: View {
                     }
                 }
 
+                
+                if frameView.frameObserver.starAlignmentResults != nil ||
+                   frameView.frameObserver.earthAlignmentResults != nil
+                {
+                    Text("alignment")
+                      .foregroundColor(.white)
+                }
+                
+                VStack(alignment: .trailing) {
+                    if let results = frameView.frameObserver.starAlignmentResults {
+                        Text("star \(results.numberAligned)/\(results.total)")
+                          .foregroundColor(results.numberAligned == results.total ? .white : .red)
+                    }
+                    if let results = frameView.frameObserver.earthAlignmentResults {
+                        Text("earth \(results.numberAligned)/\(results.total)")
+                          .foregroundColor(results.numberAligned == results.total ? .white : .red)
+                    }
+                }
+                
                 VStack {
                     if let _ = frameView.outlierViews {
                         
@@ -157,6 +176,8 @@ struct BottomRightView: View {
                     }
                 }
 
+                Space(width: 5)
+                
                 EditableFrameNumberView()
 
                 ExpandUpButton($viewModel.showFilmstrip)
