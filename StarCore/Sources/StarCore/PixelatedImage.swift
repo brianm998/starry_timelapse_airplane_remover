@@ -1572,6 +1572,7 @@ extension PixelatedImage {
         if let result = ImageAligner.alignFrames(
              baseMat,
              frames: wrappedFrames,
+             matchMethod: .FLANN, // .FLANN or .bruteForce or .knnLowes
              mask: maskMat,
              maxDeviation: maxDeviation,
              maxCornerDeviation: maxCornerDeviation,

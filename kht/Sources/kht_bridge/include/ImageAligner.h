@@ -11,12 +11,19 @@ typedef void* Mat;
 @end
 
 
+typedef NS_ENUM(NSInteger, FeatureMatchMethod) {
+    FeatureMatchMethodBruteForce = 0,
+    FeatureMatchMethodKNNLowes   = 1,
+    FeatureMatchMethodFLANN      = 2
+};
+
 @interface ImageAligner : NSObject
 
 // align frames to special frame, with optional mask which shows where to get keypoints from
 // 
 + (id)alignFrames:(Mat)special
 	   frames:(NSArray<NSValue *> *)frames
+      matchMethod:(FeatureMatchMethod)matchMethod
 	     mask:(Mat)mask	// XXX really should pass frameMasks here too
      maxDeviation:(double)maxDeviation
 maxCornerDeviation:(double)maxCornerDeviation

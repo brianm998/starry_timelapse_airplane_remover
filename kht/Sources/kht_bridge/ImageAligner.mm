@@ -326,6 +326,7 @@ static cv::Mat makeStarMask(const cv::Mat &gray, int dilateSize = 3, int thresho
 
 + (id)alignFrames:(Mat)special
            frames:(NSArray<NSValue *> *)frames
+      matchMethod:(FeatureMatchMethod)matchMethod
              mask:(Mat)mask	// assumed to be zero for ground, non-zero for sky
      maxDeviation:(double)maxDeviation
 maxCornerDeviation:(double)maxCornerDeviation
@@ -335,9 +336,9 @@ maxCornerDeviation:(double)maxCornerDeviation
     try {
         cv::Mat &specialMat = *(cv::Mat *)special;
 
-	uint32_t logID = arc4random_uniform(1000);
+	//uint32_t logID = arc4random_uniform(1000);
 
-	Log_i(@"id %d: starting to align frames", logID);
+	//Log_i(@"id %d: starting to align frames", logID);
 	
         // Horizon mask (sky = nonzero, ground = 0)
         cv::Mat horizonMask;
@@ -359,7 +360,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 
 	if(!invertMask) {
 	  // Build star mask for special frame
-	  Log_i(@"id %d: making star mask", logID);
+	  //Log_i(@"id %d: making star mask", logID);
 	  detectionMask = makeStarMask(specialGray, /*dilateSize=*/30, /*thresholdVal=*/200);
 	}
 
@@ -369,9 +370,9 @@ maxCornerDeviation:(double)maxCornerDeviation
         cv::Ptr<cv::SIFT> detector = cv::SIFT::create(maxKeypoints);
         std::vector<cv::KeyPoint> kpSpecial;
         cv::Mat descSpecial;
-	Log_i(@"id %d: starting base SIFT detection", logID);
+	//Log_i(@"id %d: starting base SIFT detection", logID);
         detector->detectAndCompute(specialGray, detectionMask, kpSpecial, descSpecial);
-	Log_i(@"id %d: finished base SIFT detection", logID);
+	//Log_i(@"id %d: finished base SIFT detection", logID);
 
         NSMutableArray *aligned = [NSMutableArray arrayWithCapacity:frames.count];
         NSMutableArray *failed  = [NSMutableArray arrayWithCapacity:frames.count];
@@ -383,14 +384,15 @@ maxCornerDeviation:(double)maxCornerDeviation
             [failed  addObject:[NSNull null]];
         }
 
-	//cv::setNumThreads(1);	// XXX make this a parameter?
+	cv::setNumThreads(10);	// XXX make this a parameter?
 
+	cv::BFMatcher matcher(cv::NORM_L2);
+	
         for (NSUInteger idx = 0; idx < frames.count; idx++) {
 	  cv::Mat &frame = *(cv::Mat *)frames[idx].pointerValue;
 	  try {
-	    Log_i(@"id %d: neighbor %lu starting", logID, idx);
-	    cv::Ptr<cv::SIFT> detector = cv::SIFT::create(maxKeypoints);
-	    cv::BFMatcher matcher(cv::NORM_L2);
+	    //Log_i(@"id %d: neighbor %lu starting", logID, idx);
+	    //cv::Ptr<cv::SIFT> detector = cv::SIFT::create(maxKeypoints);
 	    cv::Mat frameGray = toGray8UWithMask(frame, horizonMask, true);
 
 	    std::vector<cv::KeyPoint> kpFrame;
@@ -401,48 +403,95 @@ maxCornerDeviation:(double)maxCornerDeviation
 	    if(!invertMask) {
 	      // XXX this is using specialGray, not frameGray, try that XXX
 	      //detectionMask = makeStarMask(specialGray, /*dilateSize=*/30, /*thresholdVal=*/200);
-	      Log_i(@"id %d: neighbor %lu making star mask", logID, idx);
+	      //Log_i(@"id %d: neighbor %lu making star mask", logID, idx);
 	      detectionMask = makeStarMask(frameGray, /*dilateSize=*/30, /*thresholdVal=*/200);
-	      Log_i(@"id %d: neighbor %lu made star mask", logID, idx);
+	      //Log_i(@"id %d: neighbor %lu made star mask", logID, idx);
 	      // XXX this is using specialGray, not frameGray, try that XXX
 	    }
 		    
-	    Log_i(@"id %d: neighbor %lu starting SIFT detection", logID, idx);
+	    //Log_i(@"id %d: neighbor %lu starting SIFT detection", logID, idx);
 	    detector->detectAndCompute(frameGray, detectionMask, kpFrame, descFrame);
-	    Log_i(@"id %d: neighbor %lu finished SIFT detection", logID, idx);
+	    //Log_i(@"id %d: neighbor %lu finished SIFT detection", logID, idx);
 
 	    if (descFrame.empty() || descSpecial.empty()) {
 	      Log_d(@"frame %lu is empty\n", idx);
-	      //@synchronized (failed) {
-		failed[idx] = [NSValue valueWithPointer:new cv::Mat(frame)];
-		//}
-		continue;
+	      failed[idx] = [NSValue valueWithPointer:new cv::Mat(frame)];
+	      continue;
 	    }
-
-	    std::vector<cv::DMatch> matches;
-	    matcher.match(descFrame, descSpecial, matches);
-
-	    double minDist = std::numeric_limits<double>::max();
-	    for (auto &m : matches) {
-	      minDist = std::min(minDist, (double)m.distance);
-	    }
-	    double cutoff = std::max(2 * minDist, 30.0);
 
 	    std::vector<cv::Point2f> ptsFrame, ptsSpecial;
-	    for (auto &m : matches) {
-	      if (m.distance <= cutoff) {
-		ptsFrame.push_back(kpFrame[m.queryIdx].pt);
-		ptsSpecial.push_back(kpSpecial[m.trainIdx].pt);
-	      }
-	    }
+	    std::vector<std::vector<cv::DMatch>> knnMatches;
+	    double cutoff = 0;
+	    double minDist = 0;
+	    std::vector<cv::DMatch> matches;
+	    
+	    switch (matchMethod) {
+	    case FeatureMatchMethodBruteForce:
+	      // brute force method
+	      
+	      matcher.match(descFrame, descSpecial, matches);
 
+	      minDist = std::numeric_limits<double>::max();
+	      for (auto &m : matches) {
+		minDist = std::min(minDist, (double)m.distance);
+	      }
+	      cutoff = std::max(2 * minDist, 30.0);
+
+	      for (auto &m : matches) {
+		if (m.distance <= cutoff) {
+		  ptsFrame.push_back(kpFrame[m.queryIdx].pt);
+		  ptsSpecial.push_back(kpSpecial[m.trainIdx].pt);
+		}
+	      }
+	      break;
+	      
+
+	    case FeatureMatchMethodKNNLowes:
+	      // kNN + Lowe's Ratio Test
+	      matcher.knnMatch(descFrame, descSpecial, knnMatches, 2);
+
+	      for (size_t i = 0; i < knnMatches.size(); i++) {
+		if (knnMatches[i].size() == 2) {
+		  const cv::DMatch &m1 = knnMatches[i][0];
+		  const cv::DMatch &m2 = knnMatches[i][1];
+		  if (m1.distance < 0.75 * m2.distance) { // Lowe’s ratio test
+		    ptsFrame.push_back(kpFrame[m1.queryIdx].pt);
+		    ptsSpecial.push_back(kpSpecial[m1.trainIdx].pt);
+		  }
+		}
+	      }
+	      break;
+
+	    case FeatureMatchMethodFLANN:
+	      // FLANN based matcher
+	      // Convert to CV_32F because FLANN requires float descriptors
+	      cv::Mat descFrame32f, descSpecial32f;
+	      descFrame.convertTo(descFrame32f, CV_32F);
+	      descSpecial.convertTo(descSpecial32f, CV_32F);
+
+	      cv::FlannBasedMatcher flann;
+	      flann.knnMatch(descFrame32f, descSpecial32f, knnMatches, 2);
+
+	      for (size_t i = 0; i < knnMatches.size(); i++) {
+		if (knnMatches[i].size() == 2) {
+		  const cv::DMatch &m1 = knnMatches[i][0];
+		  const cv::DMatch &m2 = knnMatches[i][1];
+		  if (m1.distance < 0.75 * m2.distance) {
+		    ptsFrame.push_back(kpFrame[m1.queryIdx].pt);
+		    ptsSpecial.push_back(kpSpecial[m1.trainIdx].pt);
+		  }
+		}
+	      }
+	      break;
+	    }
+	    
 	    bool acceptWarp = FALSE;
 
 	    cv::Mat warped;
 	    if (ptsFrame.size() >= 4) {
-	      Log_i(@"id %d: neighbor %lu finding homography", logID, idx);
+	      //Log_i(@"id %d: neighbor %lu finding homography", logID, idx);
 	      cv::Mat H = cv::findHomography(ptsFrame, ptsSpecial, cv::RANSAC, 10);
-	      Log_i(@"id %d: neighbor %lu found homography", logID, idx);
+	      //Log_i(@"id %d: neighbor %lu found homography", logID, idx);
 	      if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
 		H.convertTo(H, CV_64F);
 	      }
@@ -469,12 +518,12 @@ maxCornerDeviation:(double)maxCornerDeviation
 
 		acceptWarp = (deviation < maxDeviation) &&
 		  (maxCornerDist < maxCornerDeviation);
-
+		/*
 		if(acceptWarp) {
-		  Log_i(@"id %d: neighbor %lu acceptWarp TRUE = (%f < %f) && (%f < %f)", deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
+		  Log_i(@"id %d: neighbor %lu acceptWarp TRUE = (%f < %f) && (%f < %f)", logID, idx, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
 		} else {
-		  Log_w(@"id %d: neighbor %lu acceptWarp FALSE = (%f < %f) && (%f < %f)", deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
-		}
+		  Log_w(@"id %d: neighbor %lu acceptWarp FALSE = (%f < %f) && (%f < %f)", logID, idx, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
+		  }*/
 		if (acceptWarp) {
 		  cv::warpPerspective(frame, warped, H, frame/*specialMat*/.size(),
 				      cv::INTER_LINEAR, cv::BORDER_CONSTANT,
@@ -489,48 +538,35 @@ maxCornerDeviation:(double)maxCornerDeviation
 	      warped = frame;
 	    }
 
-	    cv::Mat output;
 	    if (warped.channels() == 4) {
-	      cv::cvtColor(warped, output, cv::COLOR_BGRA2BGR);
-	    } else {
-	      output = warped;
+	      cv::cvtColor(warped, warped, cv::COLOR_BGRA2BGR);
 	    }
 
-	    cv::Mat *result = new cv::Mat(output);
+	    cv::Mat *result = new cv::Mat(warped);
 	    if(acceptWarp) {
-	      //@synchronized (aligned) {
-		aligned[idx] = [NSValue valueWithPointer:result];
-		//	      }
+	      aligned[idx] = [NSValue valueWithPointer:result];
 	    } else {
-	      //	      @synchronized (failed) {
-		failed[idx] = [NSValue valueWithPointer:result];
-		//	      }
+	      failed[idx] = [NSValue valueWithPointer:result];
 	    }
 	  } catch (const cv::Exception &e) {
 	    Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
 	    cv::Mat *result = new cv::Mat(frame);
-	    //	    @synchronized (failed) {
-	      failed[idx] = [NSValue valueWithPointer:result];
-	      //	    }
+	    failed[idx] = [NSValue valueWithPointer:result];
 	  } catch (const std::exception &e) {
 	    Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
 	    cv::Mat *result = new cv::Mat(frame);
-	    //	    @synchronized (failed) {
-	      failed[idx] = [NSValue valueWithPointer:result];
-	      //	    }
+	    failed[idx] = [NSValue valueWithPointer:result];
 	  } catch (...) {
 	    Log_e(@"Unknown Error");
 	    cv::Mat *result = new cv::Mat(frame);
-	    //	    @synchronized (failed) {
-	      failed[idx] = [NSValue valueWithPointer:result];
-	      //	    }
+	    failed[idx] = [NSValue valueWithPointer:result];
 	  }
 	}
 
-	Log_i(@"id %d: waiting for dispatch group", logID);
+	//Log_i(@"id %d: waiting for dispatch group", logID);
 	dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
 			      
-	Log_i(@"id %d: done waiting for dispatch group", logID);
+	//Log_i(@"id %d: done waiting for dispatch group", logID);
 
 	// Remove NSNulls from aligned and failed arrays
 	NSMutableArray *alignedClean = [NSMutableArray array];
