@@ -20,7 +20,7 @@ public func decodeVideo(
 ) async throws -> (outputDirectory: String, videoInfo: VideoInfo) {
     let inputURL = URL(fileURLWithPath: inputPath)
     let fileName = inputURL.deletingPathExtension().lastPathComponent
-    let fileExtension = inputURL.pathExtension
+    //let fileExtension = inputURL.pathExtension
     let outputFolder = inputURL
       .deletingLastPathComponent()
       .appendingPathComponent(fileName)

@@ -169,7 +169,7 @@ extension PixelatedImage {
 
 
         return await withTaskGroup(of: Optional<ImageMatrixElement>.self) { taskGroup in
-            for (index, element) in matrix.enumerated() {
+            for (_, element) in matrix.enumerated() {
                 taskGroup.addTask {
                     // calculate Otsu classification for this image element
                     let otsu = element.image.binaryOtsuImage
@@ -358,7 +358,7 @@ extension Array where Element == ImageMatrixElement {
         // Lowest horizon = smallest horizonBottomY
         let globalLowestWhiteY = allLowestWhiteY.max()
 
-        Log.d("XXX (\(globalHighestBlackY), \(globalLowestWhiteY))")
+        //Log.d("XXX (\(globalHighestBlackY), \(globalLowestWhiteY))")
         
         return (globalHighestBlackY, globalLowestWhiteY)
     }

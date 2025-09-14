@@ -230,7 +230,7 @@ public actor OutlierGroups {
             if let outlierGroupPaintData,
                let shouldRemove = outlierGroupPaintData[outlierGroup.id]
             {
-                await outlierGroup.shouldRemove(shouldRemove)
+                _ = await outlierGroup.shouldRemove(shouldRemove)
             }
             self.members[outlierGroup.id] = outlierGroup
         }
