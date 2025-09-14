@@ -563,7 +563,7 @@ extension PixelatedImage {
         }
 
         // Make a mutable copy when we might need to rewrite channel order (BGR->RGB)
-        var pixelData = imageData
+        let pixelData = imageData
 
         let colorSpace: CGColorSpace
         var bitmapInfo: CGBitmapInfo
@@ -1553,6 +1553,7 @@ extension PixelatedImage {
     public func align(
       frames: [PixelatedImage],
       masked mask: PixelatedImage? = nil,
+      matchMethod: FeatureMatchMethod, // .knnLowes or .FLANN or .bruteForce
       maxDeviation: Double = 30, // maximum warping deviation from identity (GUESSED)
       maxCornerDeviation: Double = 70, // similar to max deviation, but for the corners
       invertMask: Bool = false, // use zero values instead of non zero values for the mask
@@ -1572,7 +1573,7 @@ extension PixelatedImage {
         if let result = ImageAligner.alignFrames(
              baseMat,
              frames: wrappedFrames,
-             matchMethod: .FLANN, // .FLANN or .bruteForce or .knnLowes
+             matchMethod: matchMethod,//.knnLowes, // .knnLowes or .FLANN or .bruteForce
              mask: maskMat,
              maxDeviation: maxDeviation,
              maxCornerDeviation: maxCornerDeviation,

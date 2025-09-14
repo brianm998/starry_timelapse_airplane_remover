@@ -422,8 +422,10 @@ public final class ImageSequenceViewModel {
         
     }
 
-    init(with configManager: ConfigManager, closure: @Sendable @escaping (Int, Double, Int, Double) -> Void) async throws {
-
+    init(
+      with configManager: ConfigManager,
+      closure: @Sendable @escaping (Int, Double, Int, Double) -> Void
+    ) async throws {
         self.trashLevel = await constants.getTrashLevel()
         self.smallTrashMax = await constants.getSmallTrashMax()
 
@@ -978,19 +980,14 @@ public final class ImageSequenceViewModel {
             await frameToClear.set(state: .unprocessed)
             //await frameToClear.updateCombineSubjects()
 
-            // this doesn't delete the alignment and subtraction images
+            // this now does delete the alignment and subtraction images too
             frameToClear.imageAccessor.deleteAllImages(frameIndex: frameToClear.frameIndex)
 
             let numberOfAlignedImages = await self.numberOfNeighborFrames
             
             await frameToClear.setNumberOfAlignmentImages(numberOfAlignedImages)
 
-            let numPrevAlignedImages = await frameToClear.readNumberOfAlignedImagesForThisFrame()
-            if numberOfAlignedImages != numPrevAlignedImages {
-                // this does delete the alignment and subtraction images, because the next
-                // run should use a different number of alignment images
-                try await frameToClear.removeNumberOfAlignedImagesForThisFrameFile()
-            }
+            try await frameToClear.removeNumberOfAlignedImagesForThisFrameFile()
             
             Task { @MainActor in
                 self.frameViewMode = .original

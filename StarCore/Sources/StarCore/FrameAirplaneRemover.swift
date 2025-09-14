@@ -22,6 +22,13 @@ You should have received a copy of the GNU General Public License along with sta
 
 // the first pass is done upon init, finding and pruning outlier groups
 
+public struct FrameAlignmentResults: Codable, Sendable {
+    public let numberAligned: Int
+    public let numberFailed: Int
+
+    public var total: Int { numberAligned + numberFailed }
+}
+
 public enum FrameSavingState: Sendable {
     case notSaving
     case inPurgatory
@@ -67,7 +74,19 @@ public class FrameObserver {
     public var numberOfUndecidedOutliers: Int?
     public var numberOfTrashOutliers: Int?
 
+    public var starAlignmentResults: FrameAlignmentResults?
+    public var earthAlignmentResults: FrameAlignmentResults?
+    
     // XXX stick more here, like state
+
+
+    public func set(starAlignmentResults: FrameAlignmentResults) {
+        self.starAlignmentResults = starAlignmentResults
+    }
+
+    public func set(earthAlignmentResults: FrameAlignmentResults) {
+        self.earthAlignmentResults = earthAlignmentResults
+    }
     
     public func set(numberOfPositiveOutliers: Int) {
         self.numberOfPositiveOutliers = numberOfPositiveOutliers
@@ -119,6 +138,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func set(observer: FrameObserver) {
         self.observer = observer
+
+        Task {
+            if let results = await self.readNumberOfEarthAlignedImagesForThisFrame() {
+                await observer.set(earthAlignmentResults: results)
+            }
+
+            if let results = await self.readNumberOfStarAlignedImagesForThisFrame() {
+                await observer.set(starAlignmentResults: results)
+            }
+        }
     }
     
     public func set(state: FrameProcessingState) {
@@ -411,10 +440,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(frameIndex) trying to load horizon mask")
         // load if possible
         do {
-            if let horizonMaskImage = try await imageAccessor.load(frameIndex: frameIndex,
-                                                              type: .horizon,
-                                                              atSize: .original),
-               let nsImage = horizonMaskImage.nsImage
+            if let horizonMaskImage = try await imageAccessor.load(
+                 frameIndex: frameIndex,
+                 type: .horizon,
+                 atSize: .original
+               )
             {
                 Log.d("frame \(frameIndex) successfully loaded horizon mask")
 
@@ -492,24 +522,37 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                                            type: type,
                                                            atSize: .original)
         {
+            var results: FrameAlignmentResults? = nil
+            if isEarth {
+                results = await self.readNumberOfEarthAlignedImagesForThisFrame()
+                if let results {
+                    await observer?.set(earthAlignmentResults: results)
+                }
+            } else {
+                results = await self.readNumberOfStarAlignedImagesForThisFrame()
+                if let results {
+                    await observer?.set(starAlignmentResults: results)
+                }
+            }                
+            
             // check for number of aligned images, and re-do if it's different
-            if let numberAligned = self.readNumberOfAlignedImagesForThisFrame() {
-                if numberOfAlignedFrames == numberAligned || numberOfAlignedFrames > imageSequence?.filenames.count ?? 0 {
+//            if let results {
+//                if numberOfAlignedFrames == results.total || numberOfAlignedFrames > imageSequence?.filenames.count ?? 0 {
                     // we have both an existing aligned frame, and a saved number of aligned
                     // images used to calculate that frame that matches the expected number,
                     // so we can just return the aligned frame we found.
                     return alignedFrame
-                } else {
-                    Log.i("redoing aligned images because numberOfAlignedFrames \(numberOfAlignedFrames) != numberAligned \(numberAligned)")
-                }
-            } else {
-                Log.i("redoing aligned images because we were unable to read the number of aligned images for this frame")
-            }
+//                } else {
+//                    Log.i("redoing aligned images because numberOfAlignedFrames \(numberOfAlignedFrames) != results.total \(results.total)")
+//                }
+//            } else {
+//                Log.i("redoing aligned images because we were unable to read the number of aligned images for this frame")
+//            }
             
             // we didn't meet the above requirements, so re-do star alignment for this frame,
             // getting rid of any existing files first
-            removeSubtractionImages()
-            try removeNumberOfAlignedImagesForThisFrameFile()
+//            removeSubtractionImages()
+//            try removeNumberOfAlignedImagesForThisFrameFile()
         }
 
         // with no saved aligned frame, first load or create the set of aligned frames
@@ -556,6 +599,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let (alignedFrames, failedAlignments) = originalFrame.align(
           frames: neighborImages,
           masked: horizonMask.image,
+          matchMethod: .bruteForce,//.FLANN,//.knnLowes,
           invertMask: isEarth,       // earth is zero in mask
           maxKeypoints: 2000          // XXX hardcoded constant
         )
@@ -576,58 +620,126 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             framesToUse = failedAlignments
         }
         
-        if let firstImage = framesToUse.first {
 
-            let goodPixelImage = try await buildAlignedFrame(
-              alignedImages: framesToUse,
-              width: width,
-              height: height,
-              thresholdFactor: pixelThreshold
+        let goodPixelImage = try await buildAlignedFrame(
+          alignedImages: framesToUse,
+          width: width,
+          height: height,
+          thresholdFactor: pixelThreshold
+        )
+        
+        try await imageAccessor.save(goodPixelImage,
+                                     frameIndex: frameIndex,
+                                     as: type,
+                                     atSize: .original,
+                                     overwrite: true)
+
+        try await imageAccessor.save(goodPixelImage,
+                                     frameIndex: frameIndex,
+                                     as: type,
+                                     atSize: .preview,
+                                     overwrite: true)
+
+        // keep track of the number of alignment images used
+        // so we can make sure it's the same as the desired amount later
+
+        switch type {
+        case .starAligned:
+            try self.write(
+              numberOfStarAlignedImagesForThisFrame: alignedFrames.count,
+              andFailures: failedAlignments.count
             )
-            
-            try await imageAccessor.save(goodPixelImage,
-                                         frameIndex: frameIndex,
-                                         as: type,
-                                         atSize: .original,
-                                         overwrite: true)
-
-            try await imageAccessor.save(goodPixelImage,
-                                         frameIndex: frameIndex,
-                                         as: type,
-                                         atSize: .preview,
-                                         overwrite: true)
-
-            // keep track of the number of alignment images used
-            // so we can make sure it's the same as the desired amount later
-            try self.write(numberOfAlignedImagesForThisFrame: neighborImages.count)
-
-            return goodPixelImage
+        case .earthAligned:
+            try self.write(
+              numberOfEarthAlignedImagesForThisFrame: alignedFrames.count,
+              andFailures: failedAlignments.count
+            )
+        default:
+            break
         }
 
-        throw "unable to star align images"
+        return goodPixelImage
     }    
 
-    let numberOfAlignedImagesFilename = "number_of_aligned_images.txt"
+    let numberOfStarAlignedImagesFilename = "number_of_star_aligned_images.json"
     
-    private func write(numberOfAlignedImagesForThisFrame: Int) throws {
+    private func write(
+      numberOfStarAlignedImagesForThisFrame: Int,
+      andFailures failures: Int
+    ) throws {
+        try write(
+          success: numberOfStarAlignedImagesForThisFrame,
+          andFailures: failures,
+          to: numberOfStarAlignedImagesFilename
+        )
+    }
+    
+    private func write(
+      success: Int,
+      andFailures: Int,
+      to filename: String
+    ) throws {
         if let dirname = imageAccessor.dirForImage(ofType: .starAligned,
                                                    atSize: .original)
         {
             let dirname = "\(dirname)/\(frameIndex)"
             StarCore.mkdir(dirname)
             // write a text file with
-            try StarCore.write(integer: numberOfAlignedImagesForThisFrame,
-                               toFile: "\(dirname)/\(numberOfAlignedImagesFilename)")
+
+            let results = FrameAlignmentResults(
+              numberAligned: success,
+              numberFailed: andFailures
+            )
+
+            let encoder = JSONEncoder()
+            do {
+                let jsonData = try encoder.encode(results)
+
+                let fullPath = "\(dirname)/\(filename)"
+                if FileManager.default.fileExists(atPath: fullPath) {
+                    try FileManager.default.removeItem(atPath: fullPath)
+                } 
+                Log.i("creating \(fullPath)")                      
+                FileManager.default.createFile(
+                  atPath: fullPath,
+                  contents: jsonData,
+                  attributes: nil
+                )
+            } catch {
+                Log.e("\(error)")
+            }
         }
     }
     
-    public func readNumberOfAlignedImagesForThisFrame() -> Int? {
+    public func readNumberOfStarAlignedImagesForThisFrame() async -> FrameAlignmentResults? {
+        await readAlignmentResults(from: numberOfStarAlignedImagesFilename)
+    }
+
+    private func readAlignmentResults(from filename: String) async -> FrameAlignmentResults? {
         if let dirname = imageAccessor.dirForImage(ofType: .starAligned,
                                                    atSize: .original)
         {
-            let dirname = "\(dirname)/\(frameIndex)"
-            StarCore.mkdir(dirname)
-            return readInteger(fromFile: "\(dirname)/\(numberOfAlignedImagesFilename)")
+            do {
+                let dirname = "\(dirname)/\(frameIndex)"
+                StarCore.mkdir(dirname)
+
+                let fullPath = "\(dirname)/\(filename)"
+                let url = NSURL(
+                  fileURLWithPath: fullPath,
+                  isDirectory: false
+                ) as URL
+                
+                let (data, _) = try await URLSession.shared.data(
+                  for: URLRequest(
+                       url: url
+                     )
+                )
+                let decoder = JSONDecoder()
+                return try decoder.decode(FrameAlignmentResults.self, from: data)
+            } catch {
+                Log.e("Error: \(error)")
+                return nil
+            }
         }
         return nil
     }
@@ -639,8 +751,25 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         {
             let dirname = "\(dirname)/\(frameIndex)"
             StarCore.mkdir(dirname)
-            try? removeFiles(withSuffix: ".txt", in: dirname)
+            try? removeFiles(withSuffix: ".json", in: dirname)
         } 
+    }
+        
+    let numberOfEarthAlignedImagesFilename = "number_of_earth_aligned_images.json"
+
+    private func write(
+      numberOfEarthAlignedImagesForThisFrame: Int,
+      andFailures failures: Int
+    ) throws {
+        try write(
+          success: numberOfEarthAlignedImagesForThisFrame,
+          andFailures: failures,
+          to: numberOfEarthAlignedImagesFilename
+        )
+    }
+    
+    public func readNumberOfEarthAlignedImagesForThisFrame() async -> FrameAlignmentResults? {
+        await readAlignmentResults(from: numberOfEarthAlignedImagesFilename)
     }
         
     public func removeSubtractionImages() {
@@ -1247,7 +1376,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     if groupIsValid { break }
                 }
                 //Log.d("group \(group) shouldRemove \(String(describing: group.shouldRemove))")
-                await group.shouldRemove(.userSelected(groupIsValid))
+                _ = await group.shouldRemove(.userSelected(groupIsValid))
             }
         } else {
             Log.w("cannot classify nil outlier groups")
@@ -1711,7 +1840,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                                         overwrite: Bool = false,
                                                         minimumSize: Int? = nil) async {
         if let classifier = await currentClassifier.get(for: .all) {
-            await foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
+            _ = await foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
                 if let minimumSize,
                    group.size < minimumSize { return false }
                 
@@ -1743,7 +1872,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public func clearOutlierGroupValueCaches(includingTrash: Bool) async {
-        await foreachOutlierGroupMulti(includingTrash: includingTrash) { group, _ in
+        _ = await foreachOutlierGroupMulti(includingTrash: includingTrash) { group, _ in
             await group.clearFeatureValueCache()
             return false
         }
@@ -2094,7 +2223,7 @@ fileprivate class OutlierClassifier {
                                     // XXX we need to grab the feature data from the FrameDataHarvester
                                     //let featureData = await group.featureData(dataHarvester: dataHarvester)
                                     let classification = await classifier.classification(of: group)
-                                    await group.shouldRemove(.fromClassifier(classification))
+                                    _ = await group.shouldRemove(.fromClassifier(classification))
                                 }
                             }
                         }
@@ -2112,7 +2241,7 @@ fileprivate class OutlierClassifier {
                                         // only apply classifier when no other classification is otherwise present
                                         //let featureData = await group.featureData(dataHarvester: dataHarvester)
                                         let classification = await classifier.classification(of: group)
-                                        await group.shouldRemove(.fromClassifier(classification))
+                                        _ = await group.shouldRemove(.fromClassifier(classification))
                                         await outlierGroups.promoteFromTrash(group)
                                         await frame.markAsChanged()
                                     }
@@ -2144,7 +2273,7 @@ fileprivate class OutlierClassifier {
                                     // only apply classifier when no other classification is otherwise present
                                     //let featureData = await group.featureData(dataHarvester: dataHarvester)
                                     let classification = await classifier.classification(of: group)
-                                    await group.shouldRemove(.fromClassifier(classification))
+                                    _ = await group.shouldRemove(.fromClassifier(classification))
                                 }
                             }
                         }
