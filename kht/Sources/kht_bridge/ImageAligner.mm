@@ -367,11 +367,38 @@ maxCornerDeviation:(double)maxCornerDeviation
 	//cv::imwrite("/tmp/detectionMask.png", detectionMask);
 	
         // Detector and matcher
+
+	// use SIFT for sky
         cv::Ptr<cv::SIFT> detector = cv::SIFT::create(maxKeypoints);
+
+	// try ORB for ground
+	cv::Ptr<cv::ORB> orb = cv::ORB::create(maxKeypoints, 1.2f, 12);
+	
         std::vector<cv::KeyPoint> kpSpecial;
         cv::Mat descSpecial;
 	//Log_i(@"id %d: starting base SIFT detection", logID);
-        detector->detectAndCompute(specialGray, detectionMask, kpSpecial, descSpecial);
+
+
+	// Apply Contrast Limited Adaptive Histogram Equlization
+	cv::Mat specialProcessed;
+	cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(4.0, cv::Size(8,8));
+	clahe->apply(specialGray, specialProcessed);
+
+
+	if(invertMask) {
+	  // ground
+	  // apply gamma correction to brighten the shadows only
+	  cv::Mat gammaCorrected;
+	  specialProcessed.convertTo(specialProcessed, CV_32F, 1.0/255.0);
+	  cv::pow(specialProcessed, 0.5, specialProcessed); // gamma < 1 brightens
+	  specialProcessed.convertTo(specialProcessed, CV_8U, 255.0);
+
+	  orb->detectAndCompute(specialProcessed, detectionMask, kpSpecial, descSpecial);
+	} else {
+	  // sky
+	  detector->detectAndCompute(specialProcessed, detectionMask, kpSpecial, descSpecial);
+	}
+
 	//Log_i(@"id %d: finished base SIFT detection", logID);
 
         NSMutableArray *aligned = [NSMutableArray arrayWithCapacity:frames.count];
@@ -408,9 +435,27 @@ maxCornerDeviation:(double)maxCornerDeviation
 	      //Log_i(@"id %d: neighbor %lu made star mask", logID, idx);
 	      // XXX this is using specialGray, not frameGray, try that XXX
 	    }
-		    
+
+	    // Apply Contrast Limited Adaptive Histogram Equlization
+	    cv::Mat claheOut;
+	    //	    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(4.0, cv::Size(8,8));
+	    clahe->apply(frameGray, claheOut);
+
+	    if(invertMask) {
+	      // ground
+	      // apply gamma correction to brighten the shadows only
+	      cv::Mat gammaCorrected;
+	      claheOut.convertTo(claheOut, CV_32F, 1.0/255.0);
+	      cv::pow(claheOut, 0.5, claheOut); // gamma < 1 brightens
+	      claheOut.convertTo(claheOut, CV_8U, 255.0);
+
+	      orb->detectAndCompute(claheOut, detectionMask, kpFrame, descFrame);
+	    } else {
+	      // sky
+	      detector->detectAndCompute(claheOut, detectionMask, kpFrame, descFrame);
+	    }
+	    
 	    //Log_i(@"id %d: neighbor %lu starting SIFT detection", logID, idx);
-	    detector->detectAndCompute(frameGray, detectionMask, kpFrame, descFrame);
 	    //Log_i(@"id %d: neighbor %lu finished SIFT detection", logID, idx);
 
 	    if (descFrame.empty() || descSpecial.empty()) {
