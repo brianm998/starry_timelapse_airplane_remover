@@ -310,6 +310,8 @@ maxCornerDeviation:(double)maxCornerDeviation
         // Prepare grayscale special frame
         cv::Mat specialGray = toGray8UWithMask(specialMat, horizonMask, true);
 
+        specialMat.release();
+        
 	cv::Mat detectionMask = horizonMask;
 
 	if(!invertMask) {
@@ -327,9 +329,8 @@ maxCornerDeviation:(double)maxCornerDeviation
 
 	// use AKAZE detector for ground
 	cv::Ptr<cv::AKAZE> akaze = cv::AKAZE::create();
-	// You can tweak descriptor_type (e.g. DESCRIPTOR_MLDB, DESCRIPTOR_KAZE_UPRIGHT),
-	// descriptor_size, and threshold for more/less sensitivity.
-	// Example:
+
+        akaze->setDescriptorSize(256);
 	akaze->setThreshold(1e-4);
 
 	
@@ -362,6 +363,10 @@ maxCornerDeviation:(double)maxCornerDeviation
 	  sift->detectAndCompute(specialGray, detectionMask, kpSpecial, descSpecial);
 	}
 
+        kpSpecial.shrink_to_fit();
+        
+        specialGray.release();
+        
 	//Log_i(@"id %d: finished base SIFT detection", logID);
 
         NSMutableArray *aligned = [NSMutableArray arrayWithCapacity:frames.count];
@@ -373,13 +378,15 @@ maxCornerDeviation:(double)maxCornerDeviation
         }
 
 	cv::BFMatcher matcher(cv::NORM_L2);
-	
+
+        cv::Mat frameGray, claheOut, gammaCorrected;
+        
         for (NSUInteger idx = 0; idx < frames.count; idx++) {
 	  cv::Mat &frame = *(cv::Mat *)frames[idx].pointerValue;
 	  try {
 	    //Log_i(@"id %d: neighbor %lu starting", logID, idx);
 	    //cv::Ptr<cv::SIFT> sift = cv::SIFT::create(maxKeypoints);
-	    cv::Mat frameGray = toGray8UWithMask(frame, horizonMask, true);
+	    frameGray = toGray8UWithMask(frame, horizonMask, true);
 
 	    std::vector<cv::KeyPoint> kpFrame;
 	    cv::Mat descFrame;
@@ -394,13 +401,10 @@ maxCornerDeviation:(double)maxCornerDeviation
 	    if(invertMask) {
 	      // ground
 
-	      cv::Mat claheOut;
-
 	      // Apply Contrast Limited Adaptive Histogram Equalization
 	      clahe->apply(frameGray, claheOut);
 
 	      // apply gamma correction to brighten the shadows only
-	      cv::Mat gammaCorrected;
 	      claheOut.convertTo(claheOut, CV_32F, 1.0/255.0);
 	      cv::pow(claheOut, 0.5, claheOut); // gamma < 1 brightens
 	      claheOut.convertTo(claheOut, CV_8U, 255.0);
@@ -413,6 +417,8 @@ maxCornerDeviation:(double)maxCornerDeviation
 	      sift->detectAndCompute(frameGray, detectionMask, kpFrame, descFrame);
 	    }
 	    
+            kpFrame.shrink_to_fit();
+        
 	    if (descFrame.empty() || descSpecial.empty()) {
 	      Log_d(@"frame %lu is empty", idx);
 	      failed[idx] = [NSValue valueWithPointer:new cv::Mat(frame)];
@@ -526,7 +532,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 		  Log_w(@"id %d: neighbor %lu acceptWarp FALSE = (%f < %f) && (%f < %f)", logID, idx, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
 		}
 		if (acceptWarp) {
-		  cv::warpPerspective(frame, warped, H, frame/*specialMat*/.size(),
+		  cv::warpPerspective(frame, warped, H, frame.size(),
 				      cv::INTER_LINEAR, cv::BORDER_CONSTANT,
 				      cv::Scalar(0,0,0,0));
 		} else {
@@ -539,7 +545,11 @@ maxCornerDeviation:(double)maxCornerDeviation
               warped = frame;
 	    }
 
-	    if (warped.channels() == 4) {
+            frameGray.release();
+            claheOut.release();
+            gammaCorrected.release();
+
+            if (warped.channels() == 4) {
               // really we want the alpha channel to see what parts of each warped
               // frame we should not use for good signal.
               // BUT need to figure out how to get cv::Mat images with alpha back
