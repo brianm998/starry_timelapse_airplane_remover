@@ -20,82 +20,14 @@
 
 /*
   This ImageAligner replaces hugin's align_image_stack with in-process usage of opencv2
-  it's faster and better at detecting stars using SIFT.
-
-  However, it's still not good at detecting detail in the ground, especially when it's dark.
-  tried flipping the image, and boosting contrast, but so far, no dice.
-  returns the original image when there are not enough found control points.
+  it's faster and better at detecting stars using SIFT and ground using AKAZE.
 
   TODO:
 
    - cleanup alignment code (get rid of old method)
-   - change return value to be two lists, one aligned, the others that failed
    - update calling code to deal with the situation as it is
 
-  
  */
-
-cv::Mat preprocessMaskForSIFT_BLUR(const cv::Mat& mask) {
-    cv::Mat grayMask;
-
-    if (mask.channels() > 1)
-        cv::cvtColor(mask, grayMask, cv::COLOR_BGR2GRAY);
-    else
-        grayMask = mask.clone();
-
-    if (grayMask.type() != CV_8UC1)
-        grayMask.convertTo(grayMask, CV_8UC1);
-
-    // Turn sharp edges into smooth gradients
-    cv::GaussianBlur(grayMask, grayMask, cv::Size(9, 9), 2);
-
-    return grayMask;
-}
-
-
-cv::Mat preprocessMaskForSIFT_LAPACIAN(const cv::Mat& mask) {
-    cv::Mat grayMask, grad;
-
-    // Ensure grayscale
-    if (mask.channels() > 1)
-        cv::cvtColor(mask, grayMask, cv::COLOR_BGR2GRAY);
-    else
-        grayMask = mask.clone();
-
-    // Convert to 8-bit
-    if (grayMask.type() != CV_8UC1)
-        grayMask.convertTo(grayMask, CV_8UC1);
-
-    // Slight blur for stability
-    cv::GaussianBlur(grayMask, grayMask, cv::Size(3, 3), 0);
-
-    // Laplacian to get edges but with gradient info
-    cv::Laplacian(grayMask, grad, CV_8U, 3);
-
-    return grad;
-}
-
-cv::Mat preprocessMaskForSIFT(const cv::Mat& mask) {
-    cv::Mat grayMask, edges;
-
-    // Ensure grayscale
-    if (mask.channels() > 1) {
-        cv::cvtColor(mask, grayMask, cv::COLOR_BGR2GRAY);
-    } else {
-        grayMask = mask.clone();
-    }
-
-    // Ensure it's 8-bit
-    if (grayMask.type() != CV_8UC1) {
-        grayMask.convertTo(grayMask, CV_8UC1);
-    }
-
-    // Edge detection to give SIFT something to latch onto
-    //cv::Canny(grayMask, edges, 50, 150);
-
-    return createGradientMaskIntoSky(grayMask, 100); // XXX guess on tradient distance
-    //return grayMask;
-}
 
 // gradients into the zero area of the mask
 cv::Mat createGradientMask(const cv::Mat &binaryMask, int gradientDistance) {
@@ -357,13 +289,17 @@ maxCornerDeviation:(double)maxCornerDeviation
         // Horizon mask (sky = nonzero, ground = 0)
         cv::Mat horizonMask;
         if (mask != NULL && !(*(cv::Mat *)mask).empty()) {
+            // use passed in horizon mask
             horizonMask = *(cv::Mat *)mask;
         } else {
+            // if no horizon mask is passed, assume a fully white mask (all pixels)
             horizonMask = cv::Mat(specialMat.size(), CV_8U, cv::Scalar(255));
         }
+
 	horizonMask = toGray8U(horizonMask);
 	
         if (invertMask) {
+            // the mask inverted to apply to the ground instead of the sky
             cv::bitwise_not(horizonMask, horizonMask);
 	    // for the ground, we make the horizon mask include the horizon,
 	    // which leads to better keypoints down the road
@@ -405,7 +341,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 	cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(4.0, cv::Size(8,8));
 
 	if(invertMask) {
-	  // Apply Contrast Limited Adaptive Histogram Equlization
+	  // Apply Contrast Limited Adaptive Histogram Equalization
 	  cv::Mat specialProcessed;
 
 	  clahe->apply(specialGray, specialProcessed);
@@ -430,8 +366,6 @@ maxCornerDeviation:(double)maxCornerDeviation
 
         NSMutableArray *aligned = [NSMutableArray arrayWithCapacity:frames.count];
         NSMutableArray *failed  = [NSMutableArray arrayWithCapacity:frames.count];
-        dispatch_group_t group = dispatch_group_create();
-        dispatch_queue_t queue = dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0);
 
         for (NSUInteger i = 0; i < frames.count; i++) {
             [aligned addObject:[NSNull null]];
@@ -457,13 +391,12 @@ maxCornerDeviation:(double)maxCornerDeviation
 	      detectionMask = makeStarMask(frameGray, /*dilateSize=*/30, /*thresholdVal=*/200);
 	    }
 
-
 	    if(invertMask) {
 	      // ground
 
 	      cv::Mat claheOut;
 
-	      // Apply Contrast Limited Adaptive Histogram Equlization
+	      // Apply Contrast Limited Adaptive Histogram Equalization
 	      clahe->apply(frameGray, claheOut);
 
 	      // apply gamma correction to brighten the shadows only
@@ -602,11 +535,16 @@ maxCornerDeviation:(double)maxCornerDeviation
 	      } else {
 		warped = frame;
 	      }
-	    } else {
-	      warped = frame;
+            } else {
+              warped = frame;
 	    }
 
 	    if (warped.channels() == 4) {
+              // really we want the alpha channel to see what parts of each warped
+              // frame we should not use for good signal.
+              // BUT need to figure out how to get cv::Mat images with alpha back
+              // to PixelatedImages properly, that's busted :(
+              // so for now, discard the alpha channel
 	      cv::cvtColor(warped, warped, cv::COLOR_BGRA2BGR);
 	    }
 
@@ -630,11 +568,6 @@ maxCornerDeviation:(double)maxCornerDeviation
 	    failed[idx] = [NSValue valueWithPointer:result];
 	  }
 	}
-
-	//Log_i(@"id %d: waiting for dispatch group", logID);
-	dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
-			      
-	//Log_i(@"id %d: done waiting for dispatch group", logID);
 
 	// Remove NSNulls from aligned and failed arrays
 	NSMutableArray *alignedClean = [NSMutableArray array];
@@ -665,148 +598,4 @@ maxCornerDeviation:(double)maxCornerDeviation
     }
 }
 
-
-
-
-
-
 @end
-/*
-
-  XXX code to do best match on multiple aligned images in opencv2
-
-
-  How to Enable OpenMP on macOS
-  
-Apple Clang doesn’t ship OpenMP by default. Install libomp:
-
-  brew install libomp
-
-Then update your Xcode build flags (in Build Settings → Other C++ Flags):
-
-  -fopenmp -I/usr/local/include -L/usr/local/lib -lomp
-
-This gives you real multithreading with very little overhead.
-
-  
-// ImageAligner.mm
-#import "ImageAligner.h"
-#import <vector>
-#import <cmath>
-#import <algorithm>
-#ifdef _OPENMP
-#include <omp.h>
-#endif
-
-@implementation ImageAligner
-
-+ (cv::Mat)buildAlignedFrameFromImages:(NSArray<NSValue *> *)images
-                          thresholdK:(double)k
-{
-    if (images.count == 0) {
-        throw std::runtime_error("No images passed");
-    }
-
-    // Convert NSArray<NSValue> to std::vector<cv::Mat>
-    std::vector<cv::Mat> mats;
-    mats.reserve(images.count);
-    for (NSValue *val in images) {
-        const cv::Mat *matPtr = (const cv::Mat *)val.pointerValue;
-        mats.push_back(*matPtr);
-    }
-
-    const int nFrames = (int)mats.size();
-    const int width = mats[0].cols;
-    const int height = mats[0].rows;
-    const int channels = mats[0].channels();
-    CV_Assert(channels == 3 || channels == 4);
-
-    // Validate all mats are the same size/type
-    int type = mats[0].type();
-    for (const auto &m : mats) {
-        CV_Assert(m.type() == type);
-        CV_Assert(m.cols == width && m.rows == height);
-    }
-
-    // Prepare output Mat
-    cv::Mat out(height, width, type, cv::Scalar(0));
-    CV_Assert(CV_MAT_DEPTH(type) == CV_16U);
-
-    // Parallelize over rows
-    #pragma omp parallel for schedule(dynamic)
-    for (int y = 0; y < height; y++) {
-        std::vector<double> intensities(nFrames);
-
-        const uint16_t *srcPtrs[nFrames];
-        for (int i = 0; i < nFrames; i++) {
-            srcPtrs[i] = mats[i].ptr<uint16_t>(y);
-        }
-        uint16_t *dst = out.ptr<uint16_t>(y);
-
-        for (int x = 0; x < width; x++) {
-            // 1) Compute intensity and mean
-            double sum = 0.0;
-            for (int i = 0; i < nFrames; i++) {
-                const uint16_t *pix = srcPtrs[i] + x * channels;
-                double I = pix[0] + pix[1] + pix[2];
-                intensities[i] = I;
-                sum += I;
-            }
-            double mean = sum / nFrames;
-
-            // 2) Compute stddev
-            double varSum = 0.0;
-            for (double v : intensities) {
-                double d = v - mean;
-                varSum += d * d;
-            }
-            double stddev = sqrt(varSum / nFrames);
-            double threshold = mean + k * stddev;
-
-            // 3) Merge good frames
-            double acc[4] = {0, 0, 0, 0};
-            double countGood = 0.0;
-
-            if (channels == 3) {
-                for (int i = 0; i < nFrames; i++) {
-                    if (intensities[i] <= threshold) {
-                        const uint16_t *pix = srcPtrs[i] + x * channels;
-                        acc[0] += pix[0];
-                        acc[1] += pix[1];
-                        acc[2] += pix[2];
-                        countGood += 1.0;
-                    }
-                }
-                if (countGood > 0) {
-                    dst[x * channels + 0] = (uint16_t)(acc[0] / countGood);
-                    dst[x * channels + 1] = (uint16_t)(acc[1] / countGood);
-                    dst[x * channels + 2] = (uint16_t)(acc[2] / countGood);
-                }
-            } else { // RGBA
-                for (int i = 0; i < nFrames; i++) {
-                    if (intensities[i] <= threshold) {
-                        const uint16_t *pix = srcPtrs[i] + x * channels;
-                        double a = pix[3];
-                        double w = a / 65535.0;
-                        acc[0] += pix[0] * w;
-                        acc[1] += pix[1] * w;
-                        acc[2] += pix[2] * w;
-                        acc[3] += a;
-                        countGood += 1.0;
-                    }
-                }
-                if (countGood > 0) {
-                    dst[x * channels + 0] = (uint16_t)(acc[0] / countGood);
-                    dst[x * channels + 1] = (uint16_t)(acc[1] / countGood);
-                    dst[x * channels + 2] = (uint16_t)(acc[2] / countGood);
-                    dst[x * channels + 3] = (uint16_t)(acc[3] / countGood);
-                }
-            }
-        }
-    }
-
-    return out;
-}
-
-@end
-*/
