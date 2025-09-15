@@ -9,18 +9,15 @@ At a high level, Star processes each frame in the following steps.
 As of Star 0.9.0, horizon detection is optional, but defaulted to on.  Turn in off if you don't have a horizon, or aren't worried about stars close to the horizon.
 
 1. optionally detect horizon across all frames first
-2. star-align some number of neighboring frames
-3. compute a single star aligned image for each frame composed of best pixels
-4. earth-align some number of neighboring frames if we have a horizon mask
-5. compute a single earth aligned image for each frame composed of best pixels
-6. subtract the image(s) from steps #3 and #5 from the frame being processed
-7. detect bright groups of pixels in the image from step #3
-8. apply some heuristics to filter out a lot of the groups from step #4
-9. use grouping and line detection to combine lines of dots
-10. throw out a lot of smaller groups
-11. classify groups left after step #7 using machine learning to decide which ones to derive layer masks from
-12. create a layer mask for this frame using the classified groups from step #8
-13. use the layer mask from step #9 and the aligned neighbor frames from step #3 and #5 to generate the output image for this frame
+2. align some number of neighboring frames
+3. subtract the image(s) from steps #3 and #5 from the frame being processed
+4. detect bright groups of pixels in the image from step #3
+5. apply some heuristics to filter out a lot of the groups from step #4
+6. use grouping and line detection to combine lines of dots
+7. throw out a lot of smaller groups
+8. classify groups left after step #7 using machine learning to decide which ones to derive layer masks from
+9. create a layer mask for this frame using the classified groups from step #8
+10. use the layer mask from step #9 and the aligned neighbor frames from step #3 and #5 to generate the output image for this frame
 
 ### Step #1, horizon detection
 
@@ -32,60 +29,36 @@ Having a horizon mask allows us to know what part of the image is ground, and th
 
 These are each images computed from a number of neighboring frames, aligned to either the sky or the earth.  
 
-### Step #2, Star Alignment
+### Step #2, Neignboring Image Alignment
 
-The next step is to use opencv2's SIFT (Scale Invariant Feature Transform).  This is a great way to map different images together that is both accurate and fast.
+As of Star 0.9.0, neighboring image alignment is no longer done with hugin's align_image_stack.  While align_image_stack did a pretty good job, it struggled at the edges with wide lenses, and had trouble aligning the earth.
 
-This alignment is based upon some number of detected control points, i.e the same feature in each frame.  How far away they are from eachother is used to calculate a transformation to all but the first image given in the stack to be aligned.
+If horizon detection is enabled, then Star does two separate kinds of image alignment, one for each the sky and earth, determined by the horizon mask.
+
+If horizon detection is not enabled, then Star does star alignment for the entire frame.
+
+Star alignment is done with opencv2's SIFT (Scale Invariant Feature Transform).  The area of each frame to detect keypoints in is masked by a star mask, which is a mask computed based thresholding the image for really bright spots and then dilating them bit.  This avoids letting SIFT grab keypoints from things like clouds.
+
+Earth alignment is done with opencv2's AKAZE Algorithm.  Before alignment the image is boosted in a number of ways to allow at least the horizon area to allow keypoint detection, if not other parts of the foreground as well.
+
+These alignments are based upon some number of detected control points, i.e the same feature in each frame.  How far away they are from eachother is used to calculate a transformation to all but the first image given in the stack to be aligned.
 
 This means that for both static and moving tripod heads (any number of axes), Star is able to align one or more of the neighboring frames to each frame that Star is processing.  Typically there will be a very small area around the borders of the frame which have been rotated out.  In practice this is just a handful of pixels, and is not a problem.
 
-The benefits of having a star aligned neighbor frame image for each frame Star processes are:
+The benefits of having aligned neighbor frames for each frame Star processes are:
 
- - a much more accurate subtraction image in step #6
+ - a much more accurate subtraction image in step #3
  - more accurate data to replace unwanted pixels with
-
-One unfortnate side-effect of aligning images for comparison is that the ground of the image typically gets moved a small amount, even for timelapses captured on a static tripod.  This can be slightly worked around by using the `--ignore-lower-pixels` command line argument, which will not process any pixels that are the given vertical distance from the bottom of the frame.
-
-As of Star v0.9.0, horizon detection can be enabled, which allows separate alignment for the earth and sky in the image.  While horizon detection is optional, it decreases the amount of noise on the earth by allowing for separate earth alignment.
-
-As of Star v0.7.3, more than one neighboring frame can be aligned with the frame being processed.  This is neessary with lots of noise in the sky from bright moving objects.  Previous versions of Star assumed that whatever pixels were sourced from aligned images were not noise.  That is, Star would easily replace a noisy pixel with another noisy pixel, sometimes a really bright one.  Especially closer to dawn or dusk, long streaks of satellites can end up causing really noisy situations.
 
 When using multiple aligned frames, Star applies the standard deviation of brightness between a given pixel position in each of them to determine if any of them contains a noisy value at that pixel.  This works best when aligning with more frames, which is slower.  I've found that 8 frames is a good number of frames to have aligned to each frame being processed.  This gives enough signal over the noise of artifical objects in the sky.
 
 This parameter is configurable from a minimum of 1 to the ability of your machine to process lots and lots of data.  In theory the more aligned frames the better, except for machine overload and the fact that the ground moves further when aligning more frames.  This can be a problem for removing noise next to the horizon. 
 
-### Step #3, combine aligned images 
+The end result from this step is one or two aligned composite frames, one for the sky and maybe one for the earth.
 
-After Star has aligned a set of neighboring frames for the frame we are processing, the next step is to combine all of these frames into a single aligned image for our frame.
+Each one of these will have had most of the unwanted signal removed, the better signal to noise ratio happens when more images are processed.
 
-We apply some statistics to rule out pixels which are a certain amount brighter than the norm for a given location.  We combine all of the other pixels from each aligned frame to calculate the best guess we can for the best pixel value at each x,y position in the image.
-
-The result is an image that should have most all of the noisy signal removed.  That means that if we determine some set of x,y pixels in the frame we are processing that we want to replace, we can replace them with pixels from this image.
-
-Combining the aligned frames in this way can produce an image which is avoids replacing bad pixels in a frame with more bad pixels from another frame.  This can happen with lots of bright objects very close to eachother so that they overlap in neighboring frames.
-
-One side effect of using many frames for alignment is that the horizon moves as a function of the number of frames aligned.  This may make it more difficult to deal with bad signals close to the horizon.
-
-This combined aligned image is then also used for step #3, image subtraction.  By doing this we attempt to ensure that we are only subtracting real signal from the frame being processed.
-
-### Step #4, earth alignment
-
-This is only done when horizon detection is enabled.
-
-Earth alignment is similar to star alignment, but we invert the horizon mask so that keypoints are taken from the ground, not the sky.
-
-One negative of the sky aligned image is that the ground tends to move, even for image sequences shot on a static tripod head.  Any bad pixels that we want to remove that are really close to the horizon then are at risk of pulling some of the blurred horizon from the sky aligned image.
-
-Star 0.9.0 and above have logic to prefer the earth aligned image over the sky aligned image when sourcing pixels close to the horizon to replace bad pixels in the original frame.
-
-### Step #5, compute a single earth aligned image per frame
-
-After we have computed a set of earth aligned images for the frame, Star then applies the same logic as with the sky aligned images to reduce them into a single image.
-
-Statistics are used to weed out pixels that are excessively brighter than others, to avoid replacing one bad pixel with another.
-
-### Step #6, image subtraction
+### Step #3, image subtraction
 
 The next step is to subtract the aligned image from the frame being processed.
 
@@ -99,7 +72,7 @@ With more subtraction images assembled into the subtraction image, we can more e
 
 As of Star v0.9.0, the subtraction image can be calculated from both the star aligned and earth aligned images if horizon detection is enabled.  This allows for detection of headlights, and recudes the number of false negative signals found on the ground.
 
-### Step #7, detect groups of bright pixels in the subtraction image 
+### Step #4, detect groups of bright pixels in the subtraction image 
 
 In the next step, Star sorts all of the pixels in the subtraction image from step #2 by brightness, brightess first.
 
@@ -113,9 +86,9 @@ Other signals can show up in the subtraction image which do not follow this rule
 
 So before being added to the initial list to blobs to consider, a quick check of nearby pixels on the original source image is performed, which can throw out nearly half of the blobs in many cases.
 
-### Step #8, apply heuristics to filter out groups
+### Step #5, apply heuristics to filter out groups
 
-In step #8, a set of heuristics is applied to the potentially large group of blobs from step #7.
+In step #5, a set of heuristics is applied to the potentially large group of blobs from step #4.
 
 This can be controlled the `--detection-type` command line argument.
 
@@ -125,7 +98,7 @@ Using different versions of `--detection-type` will result in more Blobs making 
 
 This can drasticaly reduce the number of blobs present
 
-### Step #9, use grouping and line detection to combine blobs
+### Step #6, use grouping and line detection to combine blobs
 
 In these steps, nearby blobs are grouped together, and then some of them may be combined together if they are found to be linear, i.e. making a line.  Star uses the kernel hough transform to detect lines in blobs.
 
@@ -133,11 +106,11 @@ Many airplane signals close to the horizon are a sequence of separated dots.  Th
 
 Combining these small dots at this step helps us to both categorize based upon linearity, and weed out smaller blobs after this that do not form a line.
 
-### Step #10, throw out a lot of small, dimmer blobs
+### Step #7, throw out a lot of small, dimmer blobs
 
 At this step, we assume that any blobs that are small and too dim can be thrown away.  This can really reduce the number of blobs per frame, from thousands to hundreds or less.
 
-### Step #11, use machine learning to classify bright groups
+### Step #8, use machine learning to classify bright groups
 
 At this point, what are called `Blob`s in the code are promoted to `OutlierGroup`s.
 
@@ -151,7 +124,7 @@ Data from neighboring frames is used as well, things like how many pixels in fra
 
 All of this data is fed into a machine learning system developed for Star, using decision trees.
 
-For each `OutlierGroup`, the machine learning system will output a real number value between -1 and 1.  -1 means that Star should leave it alone.  1 means that Star should include the pixels from this `OutlierGroup` in the layer mask for step #6.  Zero is wholly unclear.  Any other value betwee -1 and 1 is a guess, multiply by 100 to get percentage.  Negative values mean likelyhood of leaving it alone.  Positive values mean the likeyhood of removing those pixels.
+For each `OutlierGroup`, the machine learning system will output a real number value between -1 and 1.  -1 means that Star should leave it alone.  1 means that Star should include the pixels from this `OutlierGroup` in the layer mask for step #3.  Zero is wholly unclear.  Any other value betwee -1 and 1 is a guess, multiply by 100 to get percentage.  Negative values mean likelyhood of leaving it alone.  Positive values mean the likeyhood of removing those pixels.
 
 A set of images sequences can be validated as being 'correct' by fixing all of the classification errors using the Star gui application, frame by frame.  This can be tedious, but results in both an image sequence with as much unwanted signal removed as possble, as well as a 'validated' image sequence, which can be used to train the machine learning engine to produce more accurate decision trees.
 
@@ -171,7 +144,7 @@ Best accuracy so far is approx 99.1% on test data.
 
 Other approaches to machine learning are also possible, if I find time to pursue them.  So far I've been making the data more linear for easier classification. 
 
-### Step #12, layer mask creation
+### Step #9, layer mask creation
 
 After final classification of all the `OutlierGroup`s for the frame being processed, Star will then create a layer mask.
 
@@ -185,9 +158,9 @@ Next this selection is enlarged by a handful of pixels, at full opacity, meaning
 
 Then, the selection is feathered a larger amount of pixels.  During this feathering, the opacity of the layer mask decreases to zero at the edges.  This helps to avoid any rough changes when Star replaces pixels in the final output.
 
-### Step #13, generate output image.
+### Step #10, generate output image.
 
-Given the layer mask from step #6, and the (hopefully aligned) neighbor frame from step #1, Star simply blends the desired pixels from the neighbor frame into the right places into the frame being processed.
+Given the layer mask from step #3, and the (hopefully aligned) neighbor frame from step #1, Star simply blends the desired pixels from the neighbor frame into the right places into the frame being processed.
 
 If all has gone well with detection and classification for this frame, then the output image will not include the vast majority of unwanted airplane and satellite signals.
 
