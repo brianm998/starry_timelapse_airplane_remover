@@ -599,7 +599,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let (alignedFrames, failedAlignments) = originalFrame.align(
           frames: neighborImages,
           masked: horizonMask.image,
-          matchMethod: .bruteForce,//.FLANN,//.knnLowes,
+          matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
           invertMask: isEarth,       // earth is zero in mask
           maxKeypoints: 2000          // XXX hardcoded constant
         )
