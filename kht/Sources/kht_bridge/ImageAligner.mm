@@ -339,7 +339,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 	uint32_t logID = arc4random_uniform(1000);
 
 	//Log_i(@"id %d: starting to align frames", logID);
-	
+
         // Horizon mask (sky = nonzero, ground = 0)
         cv::Mat horizonMask;
         if (mask != NULL && !(*(cv::Mat *)mask).empty()) {
@@ -347,15 +347,17 @@ maxCornerDeviation:(double)maxCornerDeviation
         } else {
             horizonMask = cv::Mat(specialMat.size(), CV_8U, cv::Scalar(255));
         }
+	horizonMask = toGray8U(horizonMask);
+	
         if (invertMask) {
             cv::bitwise_not(horizonMask, horizonMask);
+	    horizonMask = createGradientMaskIntoSky(horizonMask, 100); // XXX hardcoded constant
+	    //cv::imwrite("/tmp/horizonMask.png", horizonMask);
         }
 
         // Prepare grayscale special frame
         cv::Mat specialGray = toGray8UWithMask(specialMat, horizonMask, true);
 
-	horizonMask = toGray8U(horizonMask);
-	
 	cv::Mat detectionMask = horizonMask;
 
 	if(!invertMask) {
@@ -369,10 +371,15 @@ maxCornerDeviation:(double)maxCornerDeviation
         // Detector and matcher
 
 	// use SIFT for sky
-        cv::Ptr<cv::SIFT> detector = cv::SIFT::create(maxKeypoints);
+        cv::Ptr<cv::SIFT> sift = cv::SIFT::create(maxKeypoints);
 
-	// try ORB for ground
-	cv::Ptr<cv::ORB> orb = cv::ORB::create(maxKeypoints, 1.2f, 12);
+	// use AKAZE detector for ground
+	cv::Ptr<cv::AKAZE> akaze = cv::AKAZE::create();
+	// You can tweak descriptor_type (e.g. DESCRIPTOR_MLDB, DESCRIPTOR_KAZE_UPRIGHT),
+	// descriptor_size, and threshold for more/less sensitivity.
+	// Example:
+	akaze->setThreshold(1e-4);
+
 	
         std::vector<cv::KeyPoint> kpSpecial;
         cv::Mat descSpecial;
@@ -384,19 +391,26 @@ maxCornerDeviation:(double)maxCornerDeviation
 	if(invertMask) {
 	  // Apply Contrast Limited Adaptive Histogram Equlization
 	  cv::Mat specialProcessed;
-	  clahe->apply(specialGray, specialProcessed);
 
+	  clahe->apply(specialGray, specialProcessed);
+	  //specialProcessed = specialGray;
+
+	  //cv::imwrite("/tmp/clahe.png", specialProcessed);
+	  
 	  // ground
 	  // apply gamma correction to brighten the shadows only
-	  cv::Mat gammaCorrected;
-	  specialProcessed.convertTo(specialProcessed, CV_32F, 1.0/255.0);
-	  cv::pow(specialProcessed, 0.5, specialProcessed); // gamma < 1 brightens
-	  specialProcessed.convertTo(specialProcessed, CV_8U, 255.0);
-
-	  orb->detectAndCompute(specialProcessed, detectionMask, kpSpecial, descSpecial);
+	  if (TRUE) {
+	    cv::Mat gammaCorrected;
+	    specialProcessed.convertTo(specialProcessed, CV_32F, 1.0/255.0);
+	    cv::pow(specialProcessed, 0.5, specialProcessed); // gamma < 1 brightens
+	    specialProcessed.convertTo(specialProcessed, CV_8U, 255.0);
+	    //cv::imwrite("/tmp/gamma.png", specialProcessed);
+	  }
+	  
+	  akaze->detectAndCompute(specialProcessed, detectionMask, kpSpecial, descSpecial);
 	} else {
 	  // sky
-	  detector->detectAndCompute(specialGray, detectionMask, kpSpecial, descSpecial);
+	  sift->detectAndCompute(specialGray, detectionMask, kpSpecial, descSpecial);
 	}
 
 	//Log_i(@"id %d: finished base SIFT detection", logID);
@@ -419,7 +433,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 	  cv::Mat &frame = *(cv::Mat *)frames[idx].pointerValue;
 	  try {
 	    //Log_i(@"id %d: neighbor %lu starting", logID, idx);
-	    //cv::Ptr<cv::SIFT> detector = cv::SIFT::create(maxKeypoints);
+	    //cv::Ptr<cv::SIFT> sift = cv::SIFT::create(maxKeypoints);
 	    cv::Mat frameGray = toGray8UWithMask(frame, horizonMask, true);
 
 	    std::vector<cv::KeyPoint> kpFrame;
@@ -442,24 +456,27 @@ maxCornerDeviation:(double)maxCornerDeviation
 	      cv::Mat claheOut;
 	      //	    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(4.0, cv::Size(8,8));
 	      clahe->apply(frameGray, claheOut);
+	      //claheOut = frameGray;
+
 	      // ground
 	      // apply gamma correction to brighten the shadows only
-	      cv::Mat gammaCorrected;
-	      claheOut.convertTo(claheOut, CV_32F, 1.0/255.0);
-	      cv::pow(claheOut, 0.5, claheOut); // gamma < 1 brightens
-	      claheOut.convertTo(claheOut, CV_8U, 255.0);
-
-	      orb->detectAndCompute(claheOut, detectionMask, kpFrame, descFrame);
+	      if (TRUE) {
+		cv::Mat gammaCorrected;
+		claheOut.convertTo(claheOut, CV_32F, 1.0/255.0);
+		cv::pow(claheOut, 0.5, claheOut); // gamma < 1 brightens
+		claheOut.convertTo(claheOut, CV_8U, 255.0);
+	      }
+	      akaze->detectAndCompute(claheOut, detectionMask, kpFrame, descFrame);
 	    } else {
 	      // sky
-	      detector->detectAndCompute(frameGray, detectionMask, kpFrame, descFrame);
+	      sift->detectAndCompute(frameGray, detectionMask, kpFrame, descFrame);
 	    }
 	    
 	    //Log_i(@"id %d: neighbor %lu starting SIFT detection", logID, idx);
 	    //Log_i(@"id %d: neighbor %lu finished SIFT detection", logID, idx);
 
 	    if (descFrame.empty() || descSpecial.empty()) {
-	      Log_d(@"frame %lu is empty\n", idx);
+	      Log_d(@"frame %lu is empty", idx);
 	      failed[idx] = [NSValue valueWithPointer:new cv::Mat(frame)];
 	      continue;
 	    }
