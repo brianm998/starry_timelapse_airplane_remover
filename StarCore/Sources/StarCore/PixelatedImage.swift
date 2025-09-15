@@ -1554,7 +1554,7 @@ extension PixelatedImage {
       frames: [PixelatedImage],
       masked mask: PixelatedImage? = nil,
       matchMethod: FeatureMatchMethod, // .knnLowes or .FLANN or .bruteForce
-      maxDeviation: Double = 30, // maximum warping deviation from identity (GUESSED)
+      maxDeviation: Double = 45, // maximum warping deviation from identity (GUESSED)
       maxCornerDeviation: Double = 70, // similar to max deviation, but for the corners
       invertMask: Bool = false, // use zero values instead of non zero values for the mask
       maxKeypoints: Int32 = 1000       // XXX expose this and maxDeviation as parameters to user
