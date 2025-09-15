@@ -324,6 +324,18 @@ static cv::Mat makeStarMask(const cv::Mat &gray, int dilateSize = 3, int thresho
     return mask;
 }
 
+/***
+ * Main alignment method. 
+ *
+ * Aligns array of 'frames' to 'special'.
+ * The 'mask' is a binary mask with zero for the ground and non-zero for the sky
+ * 
+ * Returns an AlignmentResult with:
+ *  - a list of properly aligned frames
+ *  - a list of frames where alignment was not successful
+ *
+ * Uses different logic for sky and earth alignment, invertMask governs that. 
+ */
 + (id)alignFrames:(Mat)special
            frames:(NSArray<NSValue *> *)frames
       matchMethod:(FeatureMatchMethod)matchMethod
@@ -334,6 +346,8 @@ maxCornerDeviation:(double)maxCornerDeviation
      maxKeypoints:(int)maxKeypoints
 {
     try {
+	cv::setNumThreads(10);	// XXX make this a parameter?
+
         cv::Mat &specialMat = *(cv::Mat *)special;
 
 	uint32_t logID = arc4random_uniform(1000);
@@ -351,6 +365,8 @@ maxCornerDeviation:(double)maxCornerDeviation
 	
         if (invertMask) {
             cv::bitwise_not(horizonMask, horizonMask);
+	    // for the ground, we make the horizon mask include the horizon,
+	    // which leads to better keypoints down the road
 	    horizonMask = createGradientMaskIntoSky(horizonMask, 100); // XXX hardcoded constant
 	    //cv::imwrite("/tmp/horizonMask.png", horizonMask);
         }
@@ -393,19 +409,16 @@ maxCornerDeviation:(double)maxCornerDeviation
 	  cv::Mat specialProcessed;
 
 	  clahe->apply(specialGray, specialProcessed);
-	  //specialProcessed = specialGray;
 
 	  //cv::imwrite("/tmp/clahe.png", specialProcessed);
 	  
 	  // ground
 	  // apply gamma correction to brighten the shadows only
-	  if (TRUE) {
-	    cv::Mat gammaCorrected;
-	    specialProcessed.convertTo(specialProcessed, CV_32F, 1.0/255.0);
-	    cv::pow(specialProcessed, 0.5, specialProcessed); // gamma < 1 brightens
-	    specialProcessed.convertTo(specialProcessed, CV_8U, 255.0);
-	    //cv::imwrite("/tmp/gamma.png", specialProcessed);
-	  }
+	  cv::Mat gammaCorrected;
+	  specialProcessed.convertTo(specialProcessed, CV_32F, 1.0/255.0);
+	  cv::pow(specialProcessed, 0.5, specialProcessed); // gamma < 1 brightens
+	  specialProcessed.convertTo(specialProcessed, CV_8U, 255.0);
+	  //cv::imwrite("/tmp/gamma.png", specialProcessed);
 	  
 	  akaze->detectAndCompute(specialProcessed, detectionMask, kpSpecial, descSpecial);
 	} else {
@@ -425,8 +438,6 @@ maxCornerDeviation:(double)maxCornerDeviation
             [failed  addObject:[NSNull null]];
         }
 
-	cv::setNumThreads(10);	// XXX make this a parameter?
-
 	cv::BFMatcher matcher(cv::NORM_L2);
 	
         for (NSUInteger idx = 0; idx < frames.count; idx++) {
@@ -442,39 +453,33 @@ maxCornerDeviation:(double)maxCornerDeviation
 	    cv::Mat detectionMask = horizonMask;
 
 	    if(!invertMask) {
-	      // XXX this is using specialGray, not frameGray, try that XXX
-	      //detectionMask = makeStarMask(specialGray, /*dilateSize=*/30, /*thresholdVal=*/200);
-	      //Log_i(@"id %d: neighbor %lu making star mask", logID, idx);
+	      // detection mask is a star mask for the sky
 	      detectionMask = makeStarMask(frameGray, /*dilateSize=*/30, /*thresholdVal=*/200);
-	      //Log_i(@"id %d: neighbor %lu made star mask", logID, idx);
-	      // XXX this is using specialGray, not frameGray, try that XXX
 	    }
 
-	    // Apply Contrast Limited Adaptive Histogram Equlization
 
 	    if(invertMask) {
-	      cv::Mat claheOut;
-	      //	    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(4.0, cv::Size(8,8));
-	      clahe->apply(frameGray, claheOut);
-	      //claheOut = frameGray;
-
 	      // ground
+
+	      cv::Mat claheOut;
+
+	      // Apply Contrast Limited Adaptive Histogram Equlization
+	      clahe->apply(frameGray, claheOut);
+
 	      // apply gamma correction to brighten the shadows only
-	      if (TRUE) {
-		cv::Mat gammaCorrected;
-		claheOut.convertTo(claheOut, CV_32F, 1.0/255.0);
-		cv::pow(claheOut, 0.5, claheOut); // gamma < 1 brightens
-		claheOut.convertTo(claheOut, CV_8U, 255.0);
-	      }
+	      cv::Mat gammaCorrected;
+	      claheOut.convertTo(claheOut, CV_32F, 1.0/255.0);
+	      cv::pow(claheOut, 0.5, claheOut); // gamma < 1 brightens
+	      claheOut.convertTo(claheOut, CV_8U, 255.0);
+
+	      // detect and compute on the processed mat with akaze
 	      akaze->detectAndCompute(claheOut, detectionMask, kpFrame, descFrame);
 	    } else {
+	      
 	      // sky
 	      sift->detectAndCompute(frameGray, detectionMask, kpFrame, descFrame);
 	    }
 	    
-	    //Log_i(@"id %d: neighbor %lu starting SIFT detection", logID, idx);
-	    //Log_i(@"id %d: neighbor %lu finished SIFT detection", logID, idx);
-
 	    if (descFrame.empty() || descSpecial.empty()) {
 	      Log_d(@"frame %lu is empty", idx);
 	      failed[idx] = [NSValue valueWithPointer:new cv::Mat(frame)];
