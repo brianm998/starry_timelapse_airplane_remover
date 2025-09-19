@@ -132,7 +132,7 @@ public final class PixelatedImage: Sendable {
         init(from array: [UInt32]) {
             self = .thirtyTwoBit(array)
         }
-
+        
         var data: Data {
             switch self {
             case .eightBit(let arr):
@@ -1552,10 +1552,10 @@ extension PixelatedImage {
 // aligned is a per pixel median of all properly aligned frames
 // failed is a per pixel median of all frames which were not able to be aligned 
 public struct AlignmentResult {
-    let aligned: PixelatedImage?
-    let failed: PixelatedImage?
-    let numAligned: Int
-    let numFailed: Int
+    public let aligned: PixelatedImage?
+    public let failed: PixelatedImage?
+    public let numAligned: Int
+    public let numFailed: Int
 }
 
 extension PixelatedImage {
