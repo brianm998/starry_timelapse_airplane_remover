@@ -12,357 +12,85 @@
 @implementation AlignmentResult
 @end
 
+// merges the provided vector of cv::Mat images with median brightness per channel
+// throws out 99% or more of airplane and satellite signal
+// also gives a single, not fuzzy horizon
+cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats) {
+    if (mats.empty()) return cv::Mat();
 
-cv::Mat medianImageFromArray_SEQUENTIAL(const std::vector<cv::Mat>& mats) {
-    if (mats.empty()) {
-        return cv::Mat();
+    int maxSize = 12;
+    
+    if (mats.size() > maxSize) {
+      throw std::runtime_error("More than 12 input mats not supported");
     }
-
+    
     const cv::Mat& first = mats[0];
     int rows = first.rows;
     int cols = first.cols;
-    int type = first.type();
     int ch   = first.channels();
+    int depth = first.depth();
     int n    = static_cast<int>(mats.size());
 
-    cv::Mat output(rows, cols, type);
-
-    // Small buffers for median calculation (N ≤ 12)
-    int intensities[12];
-    int indices[12];
-
-    for (int y = 0; y < rows; y++) {
-        if (ch == 1) {
-            // --- Grayscale case ---
-            const uchar* rowPtrs[12];
-            for (int i = 0; i < n; i++) {
-                rowPtrs[i] = mats[i].ptr<uchar>(y);
-            }
-            uchar* outRow = output.ptr<uchar>(y);
-
-            for (int x = 0; x < cols; x++) {
-                for (int i = 0; i < n; i++) {
-                    intensities[i] = rowPtrs[i][x];
-                    indices[i] = i;
-                }
-                std::sort(indices, indices + n, [&](int a, int b) {
-                    return intensities[a] < intensities[b];
-                });
-                int medianIdx = indices[n / 2];
-                outRow[x] = rowPtrs[medianIdx][x];
-            }
-
-        } else if (ch == 3) {
-            // --- Color case (BGR) ---
-            const cv::Vec3b* rowPtrs[12];
-            for (int i = 0; i < n; i++) {
-                rowPtrs[i] = mats[i].ptr<cv::Vec3b>(y);
-            }
-            cv::Vec3b* outRow = output.ptr<cv::Vec3b>(y);
-
-            for (int x = 0; x < cols; x++) {
-                for (int i = 0; i < n; i++) {
-                    const cv::Vec3b& pix = rowPtrs[i][x];
-                    intensities[i] = pix[0] + pix[1] + pix[2];
-                    indices[i] = i;
-                }
-                std::sort(indices, indices + n, [&](int a, int b) {
-                    return intensities[a] < intensities[b];
-                });
-                int medianIdx = indices[n / 2];
-                outRow[x] = rowPtrs[medianIdx][x];
-            }
+    // basic validation
+    for (int i = 1; i < n; ++i) {
+        if (mats[i].rows != rows || mats[i].cols != cols || mats[i].type() != first.type()) {
+            throw std::runtime_error("All mats must have same size and type");
         }
     }
-
-    return output;
-}
-
-
-//#include <opencv2/opencv.hpp>
-//#include <vector>
-//#include <algorithm>
-
-// Combine N images of the same size/type by taking the pixel
-// from the image whose intensity is the median at that location.
-cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats) {
-    if (mats.empty()) {
-        return cv::Mat();
+    if (ch != 1 && ch != 3 && ch != 4) {
+        throw std::runtime_error("Unsupported channel count");
     }
 
-    const cv::Mat& first = mats[0];
-    int rows = first.rows;
-    int cols = first.cols;
-    int ch   = first.channels();
-    int n    = static_cast<int>(mats.size());
-
-    NSLog(@"first mat rows %d cols %d", rows, cols);
-    
     cv::Mat output(rows, cols, first.type());
 
-    // Small buffers for median calculation (for N <= 12)
-    int intensities[12];
-    int indices[12];
-
-    for (int y = 0; y < rows; y++) {
-        if (ch == 1) {
-            // --- Grayscale case ---
-            const uchar* rowPtrs[12];
-            for (int i = 0; i < n; i++) {
-                rowPtrs[i] = mats[i].ptr<uchar>(y);
-            }
+    if (depth == CV_8U) {
+        // 8-bit per channel
+        for (int y = 0; y < rows; ++y) {
+            const uchar* rowPtrs[maxSize];
+            for (int i = 0; i < n; ++i) rowPtrs[i] = mats[i].ptr<uchar>(y);
             uchar* outRow = output.ptr<uchar>(y);
 
-            for (int x = 0; x < cols; x++) {
-                // Collect intensities
-                for (int i = 0; i < n; i++) {
-                    intensities[i] = rowPtrs[i][x];
-                    indices[i] = i;
+            for (int x = 0; x < cols; ++x) {
+                int vals[4][maxSize]; // up to 4 channels, up to 12 mats
+                for (int i = 0; i < n; ++i) {
+                    const uchar* pix = rowPtrs[i] + x * ch; // bytes-per-pixel = ch * 1
+                    for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
                 }
-                // Find median index
-                std::sort(indices, indices + n, [&](int a, int b) {
-                    return intensities[a] < intensities[b];
-                });
-                int medianIdx = indices[n / 2];
-                outRow[x] = rowPtrs[medianIdx][x];
-            }
-        } else if (ch == 3) {
-            // --- Color case (BGR) ---
-            const cv::Vec3b* rowPtrs[12];
-            for (int i = 0; i < n; i++) {
-                rowPtrs[i] = mats[i].ptr<cv::Vec3b>(y);
-            }
-            cv::Vec3b* outRow = output.ptr<cv::Vec3b>(y);
-
-            for (int x = 0; x < cols*2; x++) { // XXX WTF why the *2?
-                for (int i = 0; i < n; i++) {
-                    const cv::Vec3b& pix = rowPtrs[i][x];
-                    intensities[i] = pix[0] + pix[1] + pix[2]; // simple intensity metric
-                    indices[i] = i;
+                for (int c = 0; c < ch; ++c) {
+                    std::sort(vals[c], vals[c] + n);
+                    outRow[x * ch + c] = static_cast<uchar>(vals[c][n / 2]);
                 }
-                // Find median index
-                std::sort(indices, indices + n, [&](int a, int b) {
-                    return intensities[a] < intensities[b];
-                });
-                int medianIdx = indices[n / 2];
-
-		outRow[x] = rowPtrs[medianIdx][x];
-		//outRow[x] = 0xFF;
             }
-        } else {
-            throw std::runtime_error("Unsupported number of channels in medianImageFromArray");
         }
+    } else if (depth == CV_16U) {
+        // 16-bit per channel
+        for (int y = 0; y < rows; ++y) {
+            const uint16_t* rowPtrs[maxSize];
+            for (int i = 0; i < n; ++i) rowPtrs[i] = mats[i].ptr<uint16_t>(y);
+            uint16_t* outRow = output.ptr<uint16_t>(y);
+
+            for (int x = 0; x < cols; ++x) {
+                int vals[4][maxSize]; // use int for sorting/safety
+                for (int i = 0; i < n; ++i) {
+                    const uint16_t* pix = rowPtrs[i] + x * ch; // element-per-pixel = ch (uint16_t)
+                    for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
+                }
+                for (int c = 0; c < ch; ++c) {
+                    std::sort(vals[c], vals[c] + n);
+                    outRow[x * ch + c] = static_cast<uint16_t>(vals[c][n / 2]);
+                }
+            }
+        }
+    } else {
+        throw std::runtime_error("Unsupported element depth (only CV_8U and CV_16U implemented)");
     }
 
     return output;
 }
 
 
-// Combine N images of the same size/type by taking the pixel
-// from the image whose intensity is the median at that location.
-cv::Mat medianImageFromArray_PARALLEL(const std::vector<cv::Mat>& mats) {
-    if (mats.empty()) {
-        return cv::Mat();
-    }
-
-    const cv::Mat& first = mats[0];
-    int rows = first.rows;
-    int cols = first.cols;
-    int type = first.type();
-    int ch   = first.channels();
-    int n    = static_cast<int>(mats.size());
-
-    cv::Mat output(rows, cols, type);
-
-    cv::parallel_for_(cv::Range(0, rows), [&](const cv::Range& range) {
-        int intensities[12];
-        int indices[12];
-
-        for (int y = range.start; y < range.end; y++) {
-            if (ch == 1) {
-                // --- Grayscale case ---
-                const uchar* rowPtrs[12];
-                for (int i = 0; i < n; i++) {
-                    rowPtrs[i] = mats[i].ptr<uchar>(y);
-                }
-                uchar* outRow = output.ptr<uchar>(y);
-
-                for (int x = 0; x < cols; x++) {
-                    for (int i = 0; i < n; i++) {
-                        intensities[i] = rowPtrs[i][x];
-                        indices[i] = i;
-                    }
-                    std::sort(indices, indices + n, [&](int a, int b) {
-                        return intensities[a] < intensities[b];
-                    });
-                    int medianIdx = indices[n / 2];
-                    outRow[x] = rowPtrs[medianIdx][x];
-                }
-
-            } else if (ch == 3) {
-                // --- Color case (BGR) ---
-                const cv::Vec3b* rowPtrs[12];
-                for (int i = 0; i < n; i++) {
-                    rowPtrs[i] = mats[i].ptr<cv::Vec3b>(y);
-                }
-                cv::Vec3b* outRow = output.ptr<cv::Vec3b>(y);
-
-                for (int x = 0; x < cols; x++) {
-                    for (int i = 0; i < n; i++) {
-                        const cv::Vec3b& pix = rowPtrs[i][x];
-                        intensities[i] = pix[0] + pix[1] + pix[2]; // brightness metric
-                        indices[i] = i;
-                    }
-                    std::sort(indices, indices + n, [&](int a, int b) {
-                        return intensities[a] < intensities[b];
-                    });
-                    int medianIdx = indices[n / 2];
-                    outRow[x] = rowPtrs[medianIdx][x];
-                }
-            }
-        }
-    });
-
-    return output;
-}
-
-
-// Combine N images of the same size/type by taking the pixel
-// from the image whose intensity is the median at that location.
-cv::Mat medianImageFromArray_BROKEN(const std::vector<cv::Mat>& mats) {
-    if (mats.empty()) {
-        return cv::Mat();
-    }
-
-    const cv::Mat& first = mats[0];
-    int rows = first.rows;
-    int cols = first.cols;
-    int type = first.type();
-    int ch   = first.channels();
-    int n    = static_cast<int>(mats.size());
-
-    cv::Mat output(rows, cols, type);
-
-    // Parallelize across rows
-    cv::parallel_for_(cv::Range(0, rows), [&](const cv::Range& range) {
-        // Stack arrays for small-N median calc
-        int intensities[12];
-        int indices[12];
-
-        for (int y = range.start; y < range.end; y++) {
-            // Row pointers for each image
-            const uchar* rowPtrs[12];
-            for (int i = 0; i < n; i++) {
-                rowPtrs[i] = mats[i].ptr<uchar>(y);
-            }
-            uchar* outRow = output.ptr<uchar>(y);
-
-            for (int x = 0; x < cols; x++) {
-                // Collect intensities + indices
-                for (int i = 0; i < n; i++) {
-                    if (ch == 1) {
-                        intensities[i] = rowPtrs[i][x];
-                    } else { // ch == 3
-                        const cv::Vec3b* row = reinterpret_cast<const cv::Vec3b*>(rowPtrs[i]);
-                        const cv::Vec3b& pix = row[x];
-                        intensities[i] = pix[0] + pix[1] + pix[2];
-                    }
-                    indices[i] = i;
-                }
-
-                // Sort by intensity (tiny N so std::sort is fine)
-                std::sort(indices, indices + n, [&](int a, int b) {
-                    return intensities[a] < intensities[b];
-                });
-
-                int medianIdx = indices[n / 2];
-
-                // Copy pixel from chosen source
-                if (ch == 1) {
-                    outRow[x] = rowPtrs[medianIdx][x];
-                } else { // ch == 3
-                    const cv::Vec3b* srcRow = reinterpret_cast<const cv::Vec3b*>(rowPtrs[medianIdx]);
-                    cv::Vec3b* outRow3 = reinterpret_cast<cv::Vec3b*>(outRow);
-                    outRow3[x] = srcRow[x];
-                }
-            }
-        }
-    });
-
-    return output;
-}
 
 @implementation ImageAligner
-
-+ (cv::Mat)medianImageFromArray_sequential:(NSArray<NSValue *> *)frames {
-    // frames assumed to be NSArray of NSValue wrapping cv::Mat (all same size, type CV_8UC3 or CV_8UC1)
-
-    if (frames.count == 0) {
-        return cv::Mat();
-    }
-
-    cv::Mat first;
-    [frames[0] getValue:&first];
-
-    int rows = first.rows;
-    int cols = first.cols;
-    int type = first.type();
-
-    cv::Mat output(rows, cols, type);
-
-    int numFrames = (int)frames.count;
-
-    // Pre-unpack into vector for easier use
-    std::vector<cv::Mat> mats;
-    mats.reserve(numFrames);
-    for (NSValue *val in frames) {
-        cv::Mat m;
-        [val getValue:&m];
-        mats.push_back(m);
-    }
-
-    // Handle grayscale and color separately
-    if (first.channels() == 1) {
-        for (int y = 0; y < rows; y++) {
-            for (int x = 0; x < cols; x++) {
-                std::vector<uchar> intensities;
-                intensities.reserve(numFrames);
-
-                // store (intensity, index)
-                std::vector<std::pair<int,int>> vals;
-                vals.reserve(numFrames);
-                for (int i = 0; i < numFrames; i++) {
-                    int intensity = mats[i].at<uchar>(y, x);
-                    vals.emplace_back(intensity, i);
-                }
-                std::nth_element(vals.begin(), vals.begin() + numFrames/2, vals.end(),
-                                 [](auto &a, auto &b){ return a.first < b.first; });
-
-                int medianIdx = vals[numFrames/2].second;
-                output.at<uchar>(y, x) = mats[medianIdx].at<uchar>(y, x);
-            }
-        }
-    } else if (first.channels() == 3) {
-        for (int y = 0; y < rows; y++) {
-            for (int x = 0; x < cols; x++) {
-                std::vector<std::pair<int,int>> vals;
-                vals.reserve(numFrames);
-                for (int i = 0; i < numFrames; i++) {
-                    cv::Vec3b pix = mats[i].at<cv::Vec3b>(y, x);
-                    int intensity = (int)pix[0] + (int)pix[1] + (int)pix[2]; // simple sum
-                    vals.emplace_back(intensity, i);
-                }
-                std::nth_element(vals.begin(), vals.begin() + numFrames/2, vals.end(),
-                                 [](auto &a, auto &b){ return a.first < b.first; });
-
-                int medianIdx = vals[numFrames/2].second;
-                output.at<cv::Vec3b>(y, x) = mats[medianIdx].at<cv::Vec3b>(y, x);
-            }
-        }
-    }
-
-    return output;
-}
 
 
 /*
