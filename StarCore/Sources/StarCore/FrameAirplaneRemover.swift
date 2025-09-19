@@ -596,7 +596,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         let horizonMask = try await loadOrCreateHorizonMask()
 
-        let (alignedFrames, failedAlignments) = originalFrame.align(
+        let alignmentResult = originalFrame.align(
           frames: neighborImages,
           masked: horizonMask.image,
           matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
@@ -613,32 +613,31 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             break
         }
 
-        var framesToUse = alignedFrames
-
-        if framesToUse.count == 0 {
-            Log.w("frame \(frameIndex) falling back to failed alignments of \(type) because of no properly aligned frames")
-            framesToUse = failedAlignments
+        var goodPixelImage: PixelatedImage? = nil
+        if let aligned = alignmentResult.aligned {
+            goodPixelImage = aligned
+        } else if let failed = alignmentResult.failed {
+            goodPixelImage = failed
+        } else {
+            Log.e("frame \(frameIndex) didn't get either an aligned image or a failed image from alignment results")
+            fatalError("frame \(frameIndex) didn't get either an aligned image or a failed image from alignment results") // XXX handle this better
         }
-        
 
-        let goodPixelImage = try await buildAlignedFrame(
-          alignedImages: framesToUse,
-          width: width,
-          height: height,
-          thresholdFactor: pixelThreshold
+        try await imageAccessor.save(
+          goodPixelImage!,
+          frameIndex: frameIndex,
+          as: type,
+          atSize: .original,
+          overwrite: true
         )
-        
-        try await imageAccessor.save(goodPixelImage,
-                                     frameIndex: frameIndex,
-                                     as: type,
-                                     atSize: .original,
-                                     overwrite: true)
 
-        try await imageAccessor.save(goodPixelImage,
-                                     frameIndex: frameIndex,
-                                     as: type,
-                                     atSize: .preview,
-                                     overwrite: true)
+        try await imageAccessor.save(
+          goodPixelImage!,
+          frameIndex: frameIndex,
+          as: type,
+          atSize: .preview,
+          overwrite: true
+        )
 
         // keep track of the number of alignment images used
         // so we can make sure it's the same as the desired amount later
@@ -646,19 +645,19 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         switch type {
         case .starAligned:
             try self.write(
-              numberOfStarAlignedImagesForThisFrame: alignedFrames.count,
-              andFailures: failedAlignments.count
+              numberOfStarAlignedImagesForThisFrame: alignmentResult.numAligned,
+              andFailures: alignmentResult.numFailed
             )
         case .earthAligned:
             try self.write(
-              numberOfEarthAlignedImagesForThisFrame: alignedFrames.count,
-              andFailures: failedAlignments.count
+              numberOfEarthAlignedImagesForThisFrame: alignmentResult.numAligned,
+              andFailures: alignmentResult.numFailed
             )
         default:
             break
         }
 
-        return goodPixelImage
+        return goodPixelImage!
     }    
 
     let numberOfStarAlignedImagesFilename = "number_of_star_aligned_images.json"
