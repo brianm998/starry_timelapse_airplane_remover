@@ -330,8 +330,11 @@ maxCornerDeviation:(double)maxCornerDeviation
 	// use AKAZE detector for ground
 	cv::Ptr<cv::AKAZE> akaze = cv::AKAZE::create();
 
-        akaze->setDescriptorSize(256);
-	akaze->setThreshold(1e-4);
+        //akaze->setDescriptorSize(486); // 4/4
+        //        akaze->setDescriptorSize(256); // 4/4
+	akaze->setThreshold(1e-5); // good results :) but slow :( 5/8
+
+        //	akaze->setThreshold(1e-4);
 
 	
         std::vector<cv::KeyPoint> kpSpecial;
