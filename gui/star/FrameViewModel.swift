@@ -21,6 +21,8 @@ public class FrameViewModel {
     var frameState: FrameProcessingState?
 
     var outliersLoaded: OutlierLoadingState = .unloaded
+
+    var outlierLoadIndex = 0           // used to indicate when we've reloaded outliers
     
     private var cancelBag = Set<AnyCancellable>()
 
@@ -336,7 +338,7 @@ public class FrameViewModel {
         }
     }
     
-    func setOutlierGroups() async {
+    func setOutlierGroups(forced: Bool = false) async {
         guard let frame else {
             Log.w("cannot set outlier groups with no frame reference")
             return
@@ -367,7 +369,7 @@ public class FrameViewModel {
                 let foo = newOutlierGroups
                 await MainActor.run {
                     self.outlierViews = foo
-                   // self.objectWillChange.send()
+                    if !forced { self.outlierLoadIndex += 1 }
                 }
             } else {
                 // need to load outliers, we don't have any

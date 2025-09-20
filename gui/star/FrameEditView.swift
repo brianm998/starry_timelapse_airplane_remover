@@ -111,7 +111,7 @@ struct FrameEditView: View {
         ZStack() {
             // the main image shown
 
-            FrameEditImageView()
+            FrameEditImageView(frameViewModel: viewModel.frames[viewModel.currentIndex])
               .frame(width: viewModel.frameWidth, height: viewModel.frameHeight)
             
             // this is the selection overlay

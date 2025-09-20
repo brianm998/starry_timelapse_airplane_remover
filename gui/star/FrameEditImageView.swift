@@ -9,17 +9,18 @@ import logging
 public struct FrameEditImageView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
+    let frameViewModel: FrameViewModel
+    
     @State private var localID = 0
     
     private var fullResolutionImage: some View {
         @Bindable var viewModel = viewModel
         return Group {
-            let frameView = self.viewModel.currentFrameView
-
-            if let nextFrame = frameView.frame {
-                if let url = nextFrame.imageAccessor.urlForImage(frameIndex: nextFrame.frameIndex,
-                                                                 ofType: viewModel.frameViewMode,
-                                                                 atSize: .original)
+            if let nextFrame = frameViewModel.frame {
+                if let url = nextFrame.imageAccessor.urlForImage(
+                     frameIndex: nextFrame.frameIndex,
+                     ofType: viewModel.frameViewMode,
+                     atSize: .original)
                 {
                     AsyncImage(url: url) { phase in
                         if let image = phase.image {
@@ -28,9 +29,11 @@ public struct FrameEditImageView: View {
                             self.previewImage
                         }
                     }
-                } else if let url = nextFrame.imageAccessor.urlForImage(frameIndex: nextFrame.frameIndex,
-                                                                        ofType: viewModel.frameViewMode,
-                                                                        atSize: .preview) {
+                } else if let url = nextFrame.imageAccessor.urlForImage(
+                            frameIndex: nextFrame.frameIndex,
+                            ofType: viewModel.frameViewMode,
+                            atSize: .preview)
+                {
                     AsyncImage(url: url) { phase in
                         if let image = phase.image {
                             image
@@ -48,31 +51,29 @@ public struct FrameEditImageView: View {
 
     
     private var previewImage: some View {
-        let frameView = self.viewModel.frames[self.viewModel.currentIndex]
-        return frameView.previewImage(type: viewModel.frameViewMode)
+        frameViewModel.previewImage(type: viewModel.frameViewMode)
     }
 
-    private func maybeLoadOutliers() {
-        let frameView = self.viewModel.frames[self.viewModel.currentIndex]
-        Log.d("maybeLoadOutliers loading already = \(frameView.loadingOutlierViews)")
+    private func maybeLoadOutliers(force: Bool = false) {
+        Log.d("maybeLoadOutliers loading already = \(frameViewModel.loadingOutlierViews)")
         // try loading outliers if there aren't any present
 
-        if frameView.outlierViews == nil {
-            if  !frameView.loadingOutlierViews {
-                if let frame = frameView.frame {
+        if frameViewModel.outlierViews == nil || force {
+            if  !frameViewModel.loadingOutlierViews {
+                if let frame = frameViewModel.frame {
                     Log.d("maybeLoadOutliers actually loading")
-                    frameView.loadingOutlierViews = true
+                    frameViewModel.loadingOutlierViews = true
                     viewModel.loadingOutliers = true
                     
                     let FU = viewModel
                     Task.detached(priority: .userInitiated) {
                         Log.d("maybeLoadOutliers actually loading in background")
                         let _ = try await frame.loadOutliers(loadOnly: true)
-                        await frameView.computeSmallOutlierImage()
+                        await frameViewModel.computeSmallOutlierImage()
                         Task { @MainActor in
                             Log.d("maybeLoadOutliers done loading, putting outliers in view")
-                            await frameView.setOutlierGroups()
-                            frameView.loadingOutlierViews = false
+                            await frameViewModel.setOutlierGroups(forced: force)
+                            frameViewModel.loadingOutlierViews = false
                             FU.loadingOutliers = FU.loadingOutlierGroups
 
                             maybeLoadTrash()
@@ -90,18 +91,17 @@ public struct FrameEditImageView: View {
 
     private func maybeLoadTrash() {
         // try loading trash outliers if there aren't any present
-        let frameView = self.viewModel.frames[self.viewModel.currentIndex]
 
         if viewModel.shouldShowTrash,
-           frameView.trashImage == nil,
-           !frameView.loadingTrashViews
+           frameViewModel.trashImage == nil,
+           !frameViewModel.loadingTrashViews
         {
-            frameView.loadingTrashViews = true
+            frameViewModel.loadingTrashViews = true
 
             Task.detached(priority: .userInitiated) {
-                await frameView.computeTrashImage()
+                await frameViewModel.computeTrashImage()
                 await MainActor.run {
-                    frameView.loadingTrashViews = false
+                    frameViewModel.loadingTrashViews = false
                 }
             }
         } 
@@ -109,10 +109,9 @@ public struct FrameEditImageView: View {
 
     private func maybeLoadSmallOutliers() {
         // try loading trash outliers if there aren't any present
-        let frameView = self.viewModel.frames[self.viewModel.currentIndex]
 
-        if (frameView.positiveOutlierImage == nil || frameView.negativeOutlierImage == nil) {
-            frameView.computeSmallOutlierImage()
+        if (frameViewModel.positiveOutlierImage == nil || frameViewModel.negativeOutlierImage == nil) {
+            frameViewModel.computeSmallOutlierImage()
         }
     }
 
@@ -133,12 +132,11 @@ public struct FrameEditImageView: View {
                   .frame(maxWidth: .infinity, maxHeight: .infinity)
                   .opacity(1.0-viewModel.frameOpacity)
                 
-                let frameView = self.viewModel.frames[self.viewModel.currentIndex]
                 ZStack() {
                     // in edit mode, show outliers groups
 
                     // trash goes below
-                    if let trashImage = frameView.trashImage {
+                    if let trashImage = frameViewModel.trashImage {
                         if self.viewModel.shouldShowTrash {
                             trashImage
                               .renderingMode(.template) 
@@ -148,20 +146,20 @@ public struct FrameEditImageView: View {
                     }
 
                     // then small outliers in single images by state
-                    if let smallPositiveOutlierImage = frameView.positiveOutlierImage {
+                    if let smallPositiveOutlierImage = frameViewModel.positiveOutlierImage {
                         smallPositiveOutlierImage
                           .renderingMode(.template) 
                           .foregroundColor(.red)
                     }
                     
-                    if let smallNegativeOutlierImage = frameView.negativeOutlierImage {
+                    if let smallNegativeOutlierImage = frameViewModel.negativeOutlierImage {
                         smallNegativeOutlierImage
                           .renderingMode(.template) 
                           .foregroundColor(.green)
                     }
                     
                     // then the outliers that have view models
-                    if let outlierViews = frameView.outlierViews {
+                    if let outlierViews = frameViewModel.outlierViews {
                         ForEach(outlierViews) { outlierViewModel in
                             if outlierViewModel.group.size > 40 { // XXX use a constant here
                                 OutlierGroupView(groupViewModel: outlierViewModel)
@@ -178,6 +176,9 @@ public struct FrameEditImageView: View {
         }
           .onChange(of: viewModel.currentIndex, initial: true) {
               maybeLoadOutliers()
+          }
+          .onChange(of: frameViewModel.outlierLoadIndex) {
+              maybeLoadOutliers(force: true)
           }
           .onChange(of: viewModel.shouldShowTrash) {
               maybeLoadTrash()

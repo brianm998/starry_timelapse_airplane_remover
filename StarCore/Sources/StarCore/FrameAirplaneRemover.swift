@@ -737,7 +737,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 let decoder = JSONDecoder()
                 return try decoder.decode(FrameAlignmentResults.self, from: data)
             } catch {
-                Log.e("Error: \(error)")
+                Log.i("Error: \(error)")
                 return nil
             }
         }
@@ -1107,12 +1107,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("shovel frame \(frameIndex) finding outliers within bounds \(bounds)")
         mkdir(await self.outliersDirname)
 
-
-        //let _ = try await loadOrCreateHorizonMask()
-        // XXX this is here for testing now
-        // XXX pass this to the blob detector later
-
-        
         let blobProcessor = await constants.getDetectionType().blobProcessor
         
         let newBlobMap = try await blobProcessor.process(frame: self, within: bounds)
