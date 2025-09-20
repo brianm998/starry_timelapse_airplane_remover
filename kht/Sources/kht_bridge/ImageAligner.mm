@@ -61,7 +61,7 @@ cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats, double k) {
             uchar* outRow = output.ptr<uchar>(y);
 
             for (int x = 0; x < cols; ++x) {
-                int vals[4][n]; // up to 4 channels, up to 12 mats
+                int vals[4][n]; // up to 4 channels, up to n mats
                 for (int i = 0; i < n; ++i) {
                     const uchar* pix = rowPtrs[i] + x * ch; // bytes-per-pixel = ch * 1
                     for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
@@ -114,14 +114,14 @@ cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats, double k) {
                     for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
                 }
                 for (int c = 0; c < ch; ++c) {
-		    /*
+                   /*
 		      apply statistics here to weed bright outliers
 
 		      1. calculcate mean intensity
 		      2. standard deviation to get threshold
 		      3. see what index the threshold appears at
 		      4. divide that number by 2 instead of n to get the median
-		     */
+		    */
 
 		    // sort values for this pixel component across images
                     std::sort(vals[c], vals[c] + n);
@@ -161,6 +161,146 @@ cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats, double k) {
     return output;
 }
 
+// tries to match the base mat from the aligned mats
+// preserves too much bad signal, but does keep clouds in the right place
+cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Mat>& mats, double k) {
+    if (mats.empty()) return cv::Mat();
+
+    // grab first image to read its characteristics
+    const cv::Mat& first = mats[0];
+
+    // image height
+    int rows = first.rows;
+
+    // image width
+    int cols = first.cols;
+
+    // channels per pixel
+    int ch   = first.channels();
+
+    // size of each channel
+    int depth = first.depth();
+
+    // how many incoming images we're dealing with
+    int n    = static_cast<int>(mats.size());
+
+    // basic validation
+
+    if (baseMat.rows != rows || baseMat.cols != cols || baseMat.type() != first.type()) {
+      throw std::runtime_error("base mat must be the same size as the first vector mat");
+    }
+    
+    for (int i = 1; i < n; ++i) {
+        if (mats[i].rows != rows || mats[i].cols != cols || mats[i].type() != first.type()) {
+            throw std::runtime_error("All mats must have same size and type");
+        }
+    }
+    if (ch != 1 && ch != 3 && ch != 4) {
+        throw std::runtime_error("Unsupported channel count");
+    }
+
+    cv::Mat output(rows, cols, first.type());
+
+    if (depth == CV_8U) {
+        // 8-bit per channel
+        for (int y = 0; y < rows; ++y) {
+            const uchar* rowPtrs[n];
+            for (int i = 0; i < n; ++i) {
+	      rowPtrs[i] = mats[i].ptr<uchar>(y);
+	    }
+            uchar* outRow = output.ptr<uchar>(y);
+            const uchar* baseRow = baseMat.ptr<uchar>(y);
+
+            for (int x = 0; x < cols; ++x) {
+                int vals[4][n]; // up to 4 channels, up to n mats
+                for (int i = 0; i < n; ++i) {
+                    const uchar* pix = rowPtrs[i] + x * ch; // bytes-per-pixel = ch * 1
+                    for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
+                }
+                for (int c = 0; c < ch; ++c) {
+                    std::sort(vals[c], vals[c] + n);
+
+		    // sort values for this pixel component across images
+                    std::sort(vals[c], vals[c] + n);
+
+		    uchar baseValue = *(baseRow + x * ch);
+		    /*
+		      find the value which is closest to the base, and use that
+		     */
+		    int best_index = 0;
+		    uchar best_value = 0;
+		    uchar best_diff = 0xFFFF;
+		      
+		    for(int z = 0 ; z < n ; ++z) {
+		      uchar diff = abs(baseValue - vals[c][z]);
+		      if(diff < best_diff) {
+			best_index = z;
+			best_value = vals[c][z];
+			best_diff = diff;
+		      }
+		    }
+		    
+                    outRow[x * ch + c] = static_cast<uchar>(vals[c][best_index]);
+                }
+            }
+        }
+    } else if (depth == CV_16U) {
+        // 16-bit per channel
+        for (int y = 0; y < rows; ++y) {
+            const uint16_t* rowPtrs[n];
+            for (int i = 0; i < n; ++i) {
+	      rowPtrs[i] = mats[i].ptr<uint16_t>(y);
+	    }
+            uint16_t* outRow = output.ptr<uint16_t>(y);
+            const uint16_t* baseRow = baseMat.ptr<uint16_t>(y);
+
+            for (int x = 0; x < cols; ++x) {
+                int vals[4][n]; // use int for sorting/safety
+                for (int i = 0; i < n; ++i) {
+                    const uint16_t* pix = rowPtrs[i] + x * ch; // element-per-pixel = ch (uint16_t)
+                    for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
+                }
+                for (int c = 0; c < ch; ++c) {
+                   /*
+		      apply statistics here to weed bright outliers
+
+		      1. calculcate mean intensity
+		      2. standard deviation to get threshold
+		      3. see what index the threshold appears at
+		      4. divide that number by 2 instead of n to get the median
+		    */
+
+		    // sort values for this pixel component across images
+                    std::sort(vals[c], vals[c] + n);
+
+		    uint16_t baseValue = *(baseRow + x * ch);
+		    /*
+		      find the value which is closest to the base, and use that
+		     */
+		    int best_index = 0;
+		    uint16_t best_value = 0;
+		    uint16_t best_diff = 0xFFFF;
+		      
+		    for(int z = 0 ; z < n ; ++z) {
+		      uint16_t diff = abs(baseValue - vals[c][z]);
+		      if(diff < best_diff) {
+			best_index = z;
+			best_value = vals[c][z];
+			best_diff = diff;
+		      }
+		    }
+		    
+                    outRow[x * ch + c] = static_cast<uint16_t>(vals[c][best_index]);
+                }
+            }
+        }
+    } else {
+        throw std::runtime_error("Unsupported element depth (only CV_8U and CV_16U implemented)");
+    }
+
+    return output;
+}
+
 
 
 @implementation ImageAligner
@@ -169,12 +309,7 @@ cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats, double k) {
 /*
   This ImageAligner replaces hugin's align_image_stack with in-process usage of opencv2
   it's faster and better at detecting stars using SIFT and ground using AKAZE.
-
-  TODO:
-
-   - cleanup alignment code (get rid of old method)
-   - update calling code to deal with the situation as it is
-
+  also nicely combines the aligned images weeding out bad signals
  */
 
 // gradients into the zero area of the mask
@@ -424,7 +559,7 @@ static cv::Mat makeStarMask(const cv::Mat &gray, int dilateSize = 3, int thresho
 maxCornerDeviation:(double)maxCornerDeviation
        invertMask:(BOOL)invertMask // true when processing ground, false for sky
      maxKeypoints:(int)maxKeypoints
- outlierThreshold:(double)k
+ outlierThreshold:(double)k 
 {
     try {
         // how far vertically to extend the horizon mask when inverted
@@ -466,7 +601,7 @@ maxCornerDeviation:(double)maxCornerDeviation
         // Prepare grayscale special frame with the horizon mask
         cv::Mat specialGray = toGray8UWithMask(specialMat, horizonMask, true);
 
-        specialMat.release();	// done with specialMat, release it
+	specialMat.release();	// done with specialMat, release it
 
 	// default to deteting with the horizon mask as is
 	cv::Mat detectionMask = horizonMask;
@@ -776,6 +911,13 @@ maxCornerDeviation:(double)maxCornerDeviation
 	  }
 	}
 
+
+	// an attempt to not use median merge, but closest to bawes to avoid clouds
+	// did restrict clouds, but kept too much bad signal in aligned image :(
+	//cv::Mat *alignedResult = new cv::Mat(matchingImageFromArray(specialMat,aligned, k));
+	//cv::Mat *failedResult = new cv::Mat(matchingImageFromArray(specialMat,failed, k));
+
+	// use median mergs
         cv::Mat *alignedResult = new cv::Mat(medianImageFromArray(aligned, k));
         cv::Mat *failedResult = new cv::Mat(medianImageFromArray(failed, k));
         
