@@ -88,15 +88,22 @@ cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats, double k) {
 		    double threshold = mean + k * std; // our threshold
 
 		    int maxIndex = 0;
+		    int minIndex = 0;
 		    for(int z = 0 ; z < n ; ++z) {
+		      char value = vals[c][z];
+		      if(value == 0) {
+			minIndex = z + 1;
+		      }
+
 		      if((double)vals[c][z] < threshold) {
 			maxIndex = z;
 		      } else {
 			break;
 		      }
 		    }
-		    
-                    outRow[x * ch + c] = static_cast<uchar>(vals[c][maxIndex / 2]);
+		    int index = (minIndex+maxIndex)/2;
+		    if(index >= n) { index = n - 1; }
+                    outRow[x * ch + c] = static_cast<uchar>(vals[c][index]);
                 }
             }
         }
@@ -142,15 +149,29 @@ cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats, double k) {
 		    double threshold = mean + k * std; // our threshold
 
 		    int maxIndex = 0;
+		    int minIndex = 0;
+		    // throw out pixels with value zero at the bottom
+		    // throw out pixels with too much statistal variation at the top
 		    for(int z = 0 ; z < n ; ++z) {
-		      if((double)vals[c][z] < threshold) {
+		      uint16_t value = vals[c][z];
+		      if(value == 0) {
+			minIndex = z + 1;
+		      }
+		      if((double)value < threshold) {
 			maxIndex = z;
 		      } else {
 			break;
 		      }
 		    }
-		    
-                    outRow[x * ch + c] = static_cast<uint16_t>(vals[c][maxIndex / 2]);
+
+		    // choose the median between the given bounds
+		    int index = (minIndex+maxIndex)/2;
+
+		    // make sure we don't overrun
+		    if(index >= n) { index = n - 1; }
+
+		    // actual set the output pixel to the given value
+                    outRow[x * ch + c] = static_cast<uint16_t>(vals[c][index]);
                 }
             }
         }
@@ -229,7 +250,7 @@ cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Ma
 		     */
 		    int best_index = 0;
 		    uchar best_value = 0;
-		    uchar best_diff = 0xFFFF;
+		    uchar best_diff = 0xFF;
 		      
 		    for(int z = 0 ; z < n ; ++z) {
 		      uchar diff = abs(baseValue - vals[c][z]);
