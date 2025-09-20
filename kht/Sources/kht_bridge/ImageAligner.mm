@@ -14,7 +14,7 @@
 
 // merges the provided vector of cv::Mat images with median brightness per channel
 // throws out 99% or more of airplane and satellite signal
-// also gives a single, not fuzzy horizon
+// also gives a pretty clear horizon
 cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats) {
     if (mats.empty()) return cv::Mat();
 
@@ -58,6 +58,9 @@ cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats) {
                 }
                 for (int c = 0; c < ch; ++c) {
                     std::sort(vals[c], vals[c] + n);
+
+		    // XXX weed out outliers here too?
+		    
                     outRow[x * ch + c] = static_cast<uchar>(vals[c][n / 2]);
                 }
             }
@@ -76,8 +79,44 @@ cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats) {
                     for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
                 }
                 for (int c = 0; c < ch; ++c) {
+		    /*
+		      apply statistics here to weed bright outliers
+
+		      1. calculcate mean intensity
+		      2. standard deviation to get threshold
+		      3. see what index the threshold appears at
+		      4. divide that number by 2 instead of n to get the median
+		     */
+
+		    // sort values for this pixel component across images
                     std::sort(vals[c], vals[c] + n);
-                    outRow[x * ch + c] = static_cast<uint16_t>(vals[c][n / 2]);
+
+		    // calculate mean intensity for this channel
+		    double sum = 0;
+		    for(int z = 0 ; z < n ; ++z) {
+		      sum += (double)vals[c][z];
+		    }
+		    double mean = sum / n; // mean intensity for this channel
+		    
+		    double varSum = 0.0;
+		    for(int z = 0 ; z < n ; ++z) {
+		      double d = (double)vals[c][z] - mean;
+		      varSum += d * d;
+		    }
+		    double k = 1.2; // XXX make this a parameter
+		    double std = sqrt(varSum / n);
+		    double threshold = mean + k * std; // our threshold
+
+		    int maxIndex = 0;
+		    for(int z = 0 ; z < n ; ++z) {
+		      if((double)vals[c][z] < threshold) {
+			maxIndex = z;
+		      } else {
+			break;
+		      }
+		    }
+		    
+                    outRow[x * ch + c] = static_cast<uint16_t>(vals[c][maxIndex / 2]);
                 }
             }
         }
