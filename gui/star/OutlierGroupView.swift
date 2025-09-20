@@ -122,10 +122,6 @@ struct OutlierGroupView: View {
             }
 
             self.outlierView
-              .onHover { isInside in
-                  groupViewModel.selectArrow(isInside)
-              }
-              .cursor(self.currentCursor)
             
             // tap gesture toggles paintability of the tapped group
               .onTapGesture {
@@ -238,11 +234,15 @@ struct OutlierGroupView: View {
 
             
         }
-          .offset(x: CGFloat(bounds.min.x) - half_frame_width + half_bounds_width,
-                  y: CGFloat(bounds.min.y) - half_frame_height + half_bounds_height)
           .frame(width: bounds_width,
                  height: bounds_height)
-
+          .onHover { isInside in
+              self.groupViewModel.selectArrow(isInside)
+          }
+          .cursor(self.currentCursor)
+          // apply offset last
+          .offset(x: CGFloat(bounds.min.x) - half_frame_width + half_bounds_width,
+                  y: CGFloat(bounds.min.y) - half_frame_height + half_bounds_height)
     }
     
     // used when user taps on outlier group in with selection mode set to details
