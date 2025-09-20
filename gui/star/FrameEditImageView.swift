@@ -131,6 +131,7 @@ public struct FrameEditImageView: View {
                   .background(.black)
                   .frame(maxWidth: .infinity, maxHeight: .infinity)
                   .opacity(1.0-viewModel.frameOpacity)
+                  .allowsHitTesting(false)
                 
                 ZStack() {
                     // in edit mode, show outliers groups
@@ -142,6 +143,7 @@ public struct FrameEditImageView: View {
                               .renderingMode(.template) 
                               .foregroundColor(.yellow)
                               .opacity(viewModel.trashOpacity)
+                              .allowsHitTesting(false)
                         }
                     }
 
@@ -150,20 +152,26 @@ public struct FrameEditImageView: View {
                         smallPositiveOutlierImage
                           .renderingMode(.template) 
                           .foregroundColor(.red)
+                          .allowsHitTesting(false)
                     }
                     
                     if let smallNegativeOutlierImage = frameViewModel.negativeOutlierImage {
                         smallNegativeOutlierImage
                           .renderingMode(.template) 
                           .foregroundColor(.green)
+                          .allowsHitTesting(false)
                     }
                     
                     // then the outliers that have view models
                     if let outlierViews = frameViewModel.outlierViews {
-                        ForEach(outlierViews) { outlierViewModel in
+                        // put the smaller boxes first, for easier hover and tap
+                        let sorted = outlierViews.sorted() {
+                            $0.group.bounds.size > $1.group.bounds.size
+                        }
+                        ForEach(sorted) { outlierViewModel in
                             if outlierViewModel.group.size > 40 { // XXX use a constant here
                                 OutlierGroupView(groupViewModel: outlierViewModel)
-                                  .id(localID)
+                                  .id(outlierViewModel.group.id)
                             }
                         }
                     }
