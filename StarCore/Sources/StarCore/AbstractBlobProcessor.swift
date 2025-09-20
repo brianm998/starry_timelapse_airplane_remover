@@ -47,7 +47,8 @@ public class AbstractBlobProcessor {
     
     // runs each step in sequence and returns the result
     public func process(frame: FrameAirplaneRemover,
-                        within bounds: BoundingBox? = nil)
+                        within bounds: BoundingBox? = nil,
+                        startingBlobID: UInt16 = 0)
       async throws -> [UInt32:Blob]
     {
         self.frame = frame
@@ -66,52 +67,63 @@ public class AbstractBlobProcessor {
             switch step {
                 
             case .findBlobs(let args):
-                blobMap = await BlobFinder().process(args,
-                                                     subtractionArray: subtractionArray,
-                                                     originalImage: originalImage,
-                                                     frame: frame,
-                                                     within: bounds)
+                Log.i("frame \(frame.frameIndex) finding blobs with startingBlobID \(startingBlobID)")
+                blobMap = await BlobFinder().process(
+                  args,
+                  subtractionArray: subtractionArray,
+                  originalImage: originalImage,
+                  frame: frame,
+                  within: bounds,
+                  startingBlobID: startingBlobID
+                )
                 
             case .applyUserSlices:
                 blobMap = try await applyUserSlices(blobMap)
-                
 
             case .smallBlobRemover(let args): // no analyzer
-                let remover = SmallBlobRemover(blobMap: blobMap,
-                                               frameIndex: frame.frameIndex)
-                
+                let remover = SmallBlobRemover(
+                  blobMap: blobMap,
+                  frameIndex: frame.frameIndex
+                )
                 await remover.process(args)
                 blobMap = await remover.blobMap()
-                
-
 
             case .blobDupeCheck(let step): // uses analyzer
-                let _ = await BlobDupeCheck(blobMap: blobMap,
-                                            width: frame.width,
-                                            height: frame.height,
-                                            frameIndex: frame.frameIndex,
-                                            step: step)
+                let _ = await BlobDupeCheck(
+                  blobMap: blobMap,
+                  width: frame.width,
+                  height: frame.height,
+                  frameIndex: frame.frameIndex,
+                  step: step
+                )
                 
             case .linearBlobConnector(let args): // uses analyzer
-                let connector = await LinearBlobConnector(blobMap: blobMap,
-                                                          width: frame.width,
-                                                          height: frame.height,
-                                                          frameIndex: frame.frameIndex)
+                let connector = await LinearBlobConnector(
+                  blobMap: blobMap,
+                  width: frame.width,
+                  height: frame.height,
+                  frameIndex: frame.frameIndex
+                )
                 await connector.process(args)
                 blobMap = await connector.blobMap()
                 
                 
             case .linearBlobExtender(let args): // uses analyzer
-                let extender = await LinearBlobExtender(blobMap: blobMap,
-                                                        width: frame.width,
-                                                        height: frame.height,
-                                                        frameIndex: frame.frameIndex)
+                let extender = await LinearBlobExtender(
+                  blobMap: blobMap,
+                  width: frame.width,
+                  height: frame.height,
+                  frameIndex: frame.frameIndex
+                )
                 await extender.process(args)
                 blobMap = await extender.blobMap()
                 
                 
             case .blobLineTrim(let args): // no analyzer
-                let trimmer = BlobLineTrim(blobMap: blobMap, frameIndex: frame.frameIndex)
+                let trimmer = BlobLineTrim(
+                  blobMap: blobMap,
+                  frameIndex: frame.frameIndex
+                )
                 blobMap = await trimmer.process(args)
                 
                 
@@ -127,10 +139,12 @@ public class AbstractBlobProcessor {
                 
                 
             case .houghLineMatrixBlobConnector(let args):
-                let connector = await HoughLineMatrixBlobConnector(blobMap: blobMap,
-                                                                   width: frame.width,
-                                                                   height: frame.height,
-                                                                   frameIndex: frame.frameIndex)
+                let connector = await HoughLineMatrixBlobConnector(
+                  blobMap: blobMap,
+                  width: frame.width,
+                  height: frame.height,
+                  frameIndex: frame.frameIndex
+                )
                 await connector.process(args)
                 blobMap = await connector.blobMap()
                 

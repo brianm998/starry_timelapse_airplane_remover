@@ -89,7 +89,8 @@ public class FullFrameBlobber {
                 subtractionPixelData: [UInt16],
                 originalImage: PixelatedImage,
                 frameIndex: Int,
-                neighborType: NeighborType) async
+                neighborType: NeighborType,
+                startingBlobID: UInt16 = 1) async
     {
         // pixels that are local maximums, but have a value lower than this are ignored
         let minIntensity = args.minPixelIntensity
@@ -105,6 +106,7 @@ public class FullFrameBlobber {
         self.originalImage = originalImage
         self.frameIndex = frameIndex
         self.neighborType = neighborType
+        self.newBlobId = UInt32(startingBlobID)
 
         guard subtractionPixelData.count == imageWidth*imageHeight else {
             fatalError("subtractionPixelData.count \(subtractionPixelData.count) is not imageWidth*imageHeight \(imageWidth*imageHeight)")
@@ -198,6 +200,7 @@ public class FullFrameBlobber {
                 // a local maximum, this pixel is a blob seed
 
                 if newBlobId < UInt32.max {
+                    Log.d("frame \(frameIndex) creating new blob with id \(newBlobId)")
                     let newBlob = Blob(pixel,
                                        id: newBlobId,
                                        frameIndex: frameIndex,
@@ -226,7 +229,7 @@ public class FullFrameBlobber {
             }                    
         }
 
-        Log.i("frame \(frameIndex) found \(blobs.count) blobs")
+        Log.i("frame \(frameIndex) found \(blobs.count)")
     }
     
     public var blobMap: [UInt32:Blob] {

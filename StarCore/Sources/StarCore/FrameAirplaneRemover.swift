@@ -430,7 +430,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             alignmentFrames.append(index)
         }
 
-        Log.d("frame \(frameIndex) has alignment frames \(alignmentFrames)")
+        //Log.d("frame \(frameIndex) has alignment frames \(alignmentFrames)")
     }
 
     public var numberOfAlignedFrames: Int { alignmentFrames.count }
@@ -737,7 +737,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 let decoder = JSONDecoder()
                 return try decoder.decode(FrameAlignmentResults.self, from: data)
             } catch {
-                Log.i("Error: \(error)")
+                //Log.i("Error: \(error)")
                 return nil
             }
         }
@@ -1105,16 +1105,30 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // re-runs outlier detection within bounds with current settings
     public func findOutliers(within bounds: BoundingBox) async throws {
         Log.d("shovel frame \(frameIndex) finding outliers within bounds \(bounds)")
+
+        guard let outlierGroups else {
+            Log.e("cannot find outliers without outlier groups")
+            return
+        }
+        
         mkdir(await self.outliersDirname)
 
         let blobProcessor = await constants.getDetectionType().blobProcessor
+
+        let currentMaxID = await outlierGroups.maxID
+
+        Log.i("frame \(frameIndex) found currentMaxID \(currentMaxID)")
         
-        let newBlobMap = try await blobProcessor.process(frame: self, within: bounds)
+        let newBlobMap = try await blobProcessor.process(
+          frame: self,
+          within: bounds,
+          startingBlobID: currentMaxID + 1
+        )
 
         // add new blobs to outlier groups, fore-going any classification for now
-        await outlierGroups?.add(blobs: newBlobMap, within: bounds)
+        await outlierGroups.add(blobs: newBlobMap, within: bounds)
 
-        try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)
+        try await outlierGroups.writeOutliersBinary(to: self.outliersDirname)
         Log.d("shovel frame \(frameIndex) done finding outliers within bounds \(bounds)")
     }
     

@@ -176,21 +176,26 @@ public class BlobFinder {
                         subtractionArray: [UInt16],
                         originalImage: PixelatedImage,
                         frame: FrameAirplaneRemover,
-                        within bounds: BoundingBox? = nil) async -> [UInt32: Blob]
-    {
+                        within bounds: BoundingBox? = nil,
+                        startingBlobID: UInt16 = 1
+    ) async -> [UInt32: Blob] {
         // detect blobs of difference in brightness in the subtraction array
         // airplanes show up as lines or dots in a line
         // because the image subtracted from this frame had the sky aligned,
         // the ground may get moved, and therefore may contain blobs as well.
-        let blobber = await FullFrameBlobber(config: await frame.configManager.config(),
-                                             args: args,
-                                             imageWidth: frame.width,
-                                             imageHeight: frame.height,
-                                             within: bounds,
-                                             subtractionPixelData: subtractionArray,
-                                             originalImage: originalImage,
-                                             frameIndex: frame.frameIndex,
-                                             neighborType: .eight)//.fourCardinal
+        Log.i("frame \(frame.frameIndex) startingBlobID \(startingBlobID)")
+        let blobber = await FullFrameBlobber(
+          config: await frame.configManager.config(),
+          args: args,
+          imageWidth: frame.width,
+          imageHeight: frame.height,
+          within: bounds,
+          subtractionPixelData: subtractionArray,
+          originalImage: originalImage,
+          frameIndex: frame.frameIndex,
+          neighborType: .eight,//.fourCardinal
+          startingBlobID: startingBlobID
+        )
 
         blobber.sortPixels()
         

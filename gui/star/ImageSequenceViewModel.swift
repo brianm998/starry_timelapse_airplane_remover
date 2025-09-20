@@ -512,7 +512,7 @@ public final class ImageSequenceViewModel {
             
             for (frameIndex, filename) in filenames.enumerated() {
 
-                Log.d("add task at frameIndex \(frameIndex)")
+                //Log.d("add task at frameIndex \(frameIndex)")
 
                 taskGroup.addTask() {
                     let basename = removePath(fromString: filename)
@@ -723,7 +723,7 @@ public final class ImageSequenceViewModel {
     }
     
     func refresh(frame: FrameAirplaneRemover) async {
-        Log.d("refreshing frame \(frame.frameIndex)")
+//        Log.d("refreshing frame \(frame.frameIndex)")
         
         // load the view frames from the main image
         
@@ -776,12 +776,12 @@ public final class ImageSequenceViewModel {
             self.frames[frame.frameIndex].thumbnailImage = image
         }
 
-        Log.d("done refreshing frame \(frame.frameIndex)")
+        //Log.d("done refreshing frame \(frame.frameIndex)")
         //if let outlierTask { await outlierTask.value }
     }
 
   func append(frame: FrameAirplaneRemover) async {
-        Log.d("appending frame \(frame.frameIndex)")
+      //Log.d("appending frame \(frame.frameIndex)")
 
         guard frame.frameIndex >= 0,
               frame.frameIndex < self.frames.count

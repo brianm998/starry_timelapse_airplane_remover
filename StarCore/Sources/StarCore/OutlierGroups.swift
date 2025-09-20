@@ -40,9 +40,21 @@ public actor OutlierGroups {
         }
     }
 
+    public var maxID: UInt16 {
+        var ret: UInt16 = 0
+        for (id, group) in members {
+            if id > ret { ret = id }
+        }
+        return ret
+    }
+    
     // adds blobs as outlier groups within the bounds, and slices out
     // any pixels from existing outlier groups within the bounds
     public func add(blobs: [UInt32:Blob], within bounds: BoundingBox) async {
+        Log.i("frame \(frameIndex) adding \(blobs.count) blobs within bounds \(bounds)")
+        for (id, blob) in blobs.enumerated() {
+            Log.i("frame \(frameIndex) adding blob id \(id)")
+        }
         var maxID: UInt16 = 0
 
         var newMembers: [UInt16: OutlierGroup] = [:]
@@ -54,14 +66,18 @@ public actor OutlierGroups {
         //  if they're outside the bounding box, keep them
         for (id, group) in members {
             if id > maxID { maxID = id }
-
+        }
+        Log.d("frame \(frameIndex) have maxID \(maxID)")
+        for (id, group) in members {
             if let overlap = group.bounds.overlap(with: bounds) {
                 if bounds.contains(group.bounds) {
                     // this outlier group is entirely within the bounds, dump it
+                    Log.i("dumping group of size \(group.size) becasue it is entirely within bounds")
                 } else {
+                    Log.i("splitting group of size \(group.size) becasue it overlaps with bounds")
                     let blob = await group.blob()
                     await blob.removePixels(within: overlap)
-                    newMembers[id] = await blob.outlierGroup(at: frameIndex)
+                    newMembers[id] = await blob.outlierGroup(at: frameIndex, withId: id)
                 }
             } else {
                 // this outlier doesn't overlap at all, keep it
@@ -78,7 +94,7 @@ public actor OutlierGroups {
                 } else {
                     let blob = await group.blob()
                     await blob.removePixels(within: overlap)
-                    newTrash[id] = await blob.outlierGroup(at: frameIndex)
+                    newTrash[id] = await blob.outlierGroup(at: frameIndex, withId: id)
                 }
             } else {
                 // this outlier doesn't overlap at all, keep it
@@ -86,17 +102,18 @@ public actor OutlierGroups {
             }
         }
 
-        maxID += 1
+        //maxID += 1
         
         // add the new blobs as outlier groups
         for blob in blobs.values {
             maxID += 1
             let id = maxID
-            newMembers[id] = await blob.outlierGroup(at: frameIndex)
+            newMembers[id] = await blob.outlierGroup(at: frameIndex, withId: id)
         }
         
         self.members = newMembers
         self.trash = newTrash
+        Log.i("frame \(frameIndex) after adding \(blobs.count) blobs we have \(members.count) blobs")
     }
     
     public func get(with id: UInt16) -> OutlierGroup? { members[id] }
@@ -219,6 +236,7 @@ public actor OutlierGroups {
         self.frameIndex = frameIndex
         let blobBinaryLoader = BlobBinaryLoader()
         let blobs = try await blobBinaryLoader.load(from: outlierDir, with: frameIndex)
+        Log.i("frame \(frameIndex) loaded \(blobs.count) blobs")
         let trashBlobs = try? await blobBinaryLoader.loadTrash(from: outlierDir, with: frameIndex)
         let outlierGroupPaintDataFilename = "\(outlierDir)/\(OutlierGroups.outlierGroupPaintJsonFilename)"
         let outlierGroupPaintData = try await OutlierGroups.loadOutlierGroupPaintData(from: outlierGroupPaintDataFilename)
@@ -367,16 +385,20 @@ public actor OutlierGroups {
 
     // hopefully faster version to just write out what we need
     public func writeOutliersBinary(to dirname: String) async throws {
-
+        Log.d("frame \(frameIndex) writing \(self.members.count) outliers to file")
         mkdir(dirname)
 
         // save members
-        await self.writeBinary(outlierMap: self.members,
-                         to: "\(dirname)/\(BlobBinarySaver.outlierBinaryFilename)")
+        await self.writeBinary(
+          outlierMap: self.members,
+          to: "\(dirname)/\(BlobBinarySaver.outlierBinaryFilename)"
+        )
 
         // save trash
-        await self.writeBinary(outlierMap: self.trash,
-                         to: "\(dirname)/\(BlobBinarySaver.trashBinaryFilename)")
+        await self.writeBinary(
+          outlierMap: self.trash,
+          to: "\(dirname)/\(BlobBinarySaver.trashBinaryFilename)"
+        )
     }
 
     // removes outliers.bin and dust.bin from outliers dir for this frame
@@ -394,12 +416,17 @@ public actor OutlierGroups {
     }
 
     private func writeBinary(outlierMap: [UInt16: OutlierGroup], to filename: String) async {
+        Log.i("frame \(frameIndex) writing \(outlierMap.count) outliers to file");
         var blobMap: [UInt32: Blob] = [:]
 
         for outlier in outlierMap.values {
             let blob = await outlier.blob()
+            if blobMap[blob.id] != nil {
+                Log.e("frame \(frameIndex) found duplicate blobId \(blob.id)")
+            }
             blobMap[blob.id] = blob
         }
+        Log.i("frame \(frameIndex) writing \(blobMap.count) outliers to file");
 
         await BlobBinarySaver(blobMap: blobMap).save(to: filename)
     }
