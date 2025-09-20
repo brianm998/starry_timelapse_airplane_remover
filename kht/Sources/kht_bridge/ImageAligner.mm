@@ -14,21 +14,31 @@
 
 // merges the provided vector of cv::Mat images with median brightness per channel
 // throws out 99% or more of airplane and satellite signal
-// also gives a pretty clear horizon
-cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats) {
+// gives a pretty clear horizon
+// k is the threshold used for weeding out bright pixels 1.2 is good
+// smaller weeds out more bright pixels, larger weeds out less.
+// It is good to weed out these bright pixels before taking the median
+// as otherwise areas with lots of bright bad pixels in the same spot across
+// multiple images can sometimes allow the bad pixels to show up at the median 
+cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats, double k) {
     if (mats.empty()) return cv::Mat();
 
-    int maxSize = 12;
-    
-    if (mats.size() > maxSize) {
-      throw std::runtime_error("More than 12 input mats not supported");
-    }
-    
+    // grab first image to read its characteristics
     const cv::Mat& first = mats[0];
+
+    // image height
     int rows = first.rows;
+
+    // image width
     int cols = first.cols;
+
+    // channels per pixel
     int ch   = first.channels();
+
+    // size of each channel
     int depth = first.depth();
+
+    // how many incoming images we're dealing with
     int n    = static_cast<int>(mats.size());
 
     // basic validation
@@ -46,12 +56,12 @@ cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats) {
     if (depth == CV_8U) {
         // 8-bit per channel
         for (int y = 0; y < rows; ++y) {
-            const uchar* rowPtrs[maxSize];
+            const uchar* rowPtrs[n];
             for (int i = 0; i < n; ++i) rowPtrs[i] = mats[i].ptr<uchar>(y);
             uchar* outRow = output.ptr<uchar>(y);
 
             for (int x = 0; x < cols; ++x) {
-                int vals[4][maxSize]; // up to 4 channels, up to 12 mats
+                int vals[4][n]; // up to 4 channels, up to 12 mats
                 for (int i = 0; i < n; ++i) {
                     const uchar* pix = rowPtrs[i] + x * ch; // bytes-per-pixel = ch * 1
                     for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
@@ -59,21 +69,46 @@ cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats) {
                 for (int c = 0; c < ch; ++c) {
                     std::sort(vals[c], vals[c] + n);
 
-		    // XXX weed out outliers here too?
+		    // sort values for this pixel component across images
+                    std::sort(vals[c], vals[c] + n);
+
+		    // calculate mean intensity for this channel
+		    double sum = 0;
+		    for(int z = 0 ; z < n ; ++z) {
+		      sum += (double)vals[c][z];
+		    }
+		    double mean = sum / n; // mean intensity for this channel
 		    
-                    outRow[x * ch + c] = static_cast<uchar>(vals[c][n / 2]);
+		    double varSum = 0.0;
+		    for(int z = 0 ; z < n ; ++z) {
+		      double d = (double)vals[c][z] - mean;
+		      varSum += d * d;
+		    }
+		    double std = sqrt(varSum / n);
+		    double threshold = mean + k * std; // our threshold
+
+		    int maxIndex = 0;
+		    for(int z = 0 ; z < n ; ++z) {
+		      if((double)vals[c][z] < threshold) {
+			maxIndex = z;
+		      } else {
+			break;
+		      }
+		    }
+		    
+                    outRow[x * ch + c] = static_cast<uchar>(vals[c][maxIndex / 2]);
                 }
             }
         }
     } else if (depth == CV_16U) {
         // 16-bit per channel
         for (int y = 0; y < rows; ++y) {
-            const uint16_t* rowPtrs[maxSize];
+            const uint16_t* rowPtrs[n];
             for (int i = 0; i < n; ++i) rowPtrs[i] = mats[i].ptr<uint16_t>(y);
             uint16_t* outRow = output.ptr<uint16_t>(y);
 
             for (int x = 0; x < cols; ++x) {
-                int vals[4][maxSize]; // use int for sorting/safety
+                int vals[4][n]; // use int for sorting/safety
                 for (int i = 0; i < n; ++i) {
                     const uint16_t* pix = rowPtrs[i] + x * ch; // element-per-pixel = ch (uint16_t)
                     for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
@@ -103,7 +138,6 @@ cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats) {
 		      double d = (double)vals[c][z] - mean;
 		      varSum += d * d;
 		    }
-		    double k = 1.2; // XXX make this a parameter
 		    double std = sqrt(varSum / n);
 		    double threshold = mean + k * std; // our threshold
 
@@ -390,6 +424,7 @@ static cv::Mat makeStarMask(const cv::Mat &gray, int dilateSize = 3, int thresho
 maxCornerDeviation:(double)maxCornerDeviation
        invertMask:(BOOL)invertMask // true when processing ground, false for sky
      maxKeypoints:(int)maxKeypoints
+ outlierThreshold:(double)k
 {
     try {
 	cv::setNumThreads(10);	// XXX make this a parameter?
@@ -446,6 +481,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 
         //akaze->setDescriptorSize(486); // 4/4
         //        akaze->setDescriptorSize(256); // 4/4
+
 	akaze->setThreshold(1e-5); // good results :) but slow :( 5/8
 
         //	akaze->setThreshold(1e-4);
@@ -459,6 +495,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 	cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(4.0, cv::Size(8,8));
 
 	if(invertMask) {
+	  // ground
 	  // Apply Contrast Limited Adaptive Histogram Equalization
 	  cv::Mat specialProcessed;
 
@@ -466,7 +503,6 @@ maxCornerDeviation:(double)maxCornerDeviation
 
 	  //cv::imwrite("/tmp/clahe.png", specialProcessed);
 	  
-	  // ground
 	  // apply gamma correction to brighten the shadows only
 	  cv::Mat gammaCorrected;
 	  specialProcessed.convertTo(specialProcessed, CV_32F, 1.0/255.0);
@@ -489,14 +525,6 @@ maxCornerDeviation:(double)maxCornerDeviation
 	std::vector<cv::Mat> aligned;
 	std::vector<cv::Mat> failed;
 	
-        //NSMutableArray *aligned = [NSMutableArray arrayWithCapacity:frames.count];
-        //NSMutableArray *failed  = [NSMutableArray arrayWithCapacity:frames.count];
-
-	//        for (NSUInteger i = 0; i < frames.count; i++) {
-	//            [aligned addObject:[NSNull null]];
-	//            [failed  addObject:[NSNull null]];
-	//        }
-
 	cv::BFMatcher matcher(cv::NORM_L2);
 
         cv::Mat frameGray, claheOut, gammaCorrected;
@@ -550,7 +578,9 @@ maxCornerDeviation:(double)maxCornerDeviation
 	    double cutoff = 0;
 	    double minDist = 0;
 	    std::vector<cv::DMatch> matches;
-	    
+
+	    // how do we match?
+	    // three different methods available
 	    switch (matchMethod) {
 	    case FeatureMatchMethodBruteForce:
 	      // brute force method
@@ -655,7 +685,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 		  cv::warpPerspective(frame, warped, H, frame.size(),
 				      cv::INTER_LINEAR, cv::BORDER_CONSTANT,
 				      cv::Scalar(0,0,0,0));
-		  cv::imwrite("/tmp/warped_first_" + std::to_string(idx) + ".png", warped);
+		  //cv::imwrite("/tmp/warped_first_" + std::to_string(idx) + ".png", warped);
 		} else {
 		  warped = frame;
 		}
@@ -681,9 +711,9 @@ maxCornerDeviation:(double)maxCornerDeviation
 
 	    //	    cv::Mat *result = new cv::Mat(warped);
 
-	    cv::imwrite("/tmp/warped_" + std::to_string(idx) + ".png", warped);
+	    //cv::imwrite("/tmp/warped_" + std::to_string(idx) + ".png", warped);
 	    if(acceptWarp) {
-	      aligned.push_back(warped.clone());
+	      aligned.push_back(warped);
 	    } else {
 	      failed.push_back(frame);
 	    }
@@ -699,8 +729,8 @@ maxCornerDeviation:(double)maxCornerDeviation
 	  }
 	}
 
-        cv::Mat *alignedResult = new cv::Mat(medianImageFromArray(aligned));
-        cv::Mat *failedResult = new cv::Mat(medianImageFromArray(failed));
+        cv::Mat *alignedResult = new cv::Mat(medianImageFromArray(aligned, k));
+        cv::Mat *failedResult = new cv::Mat(medianImageFromArray(failed, k));
         
         AlignmentResult *resultObj = [AlignmentResult new];
 	resultObj.aligned = [NSValue valueWithPointer:alignedResult];

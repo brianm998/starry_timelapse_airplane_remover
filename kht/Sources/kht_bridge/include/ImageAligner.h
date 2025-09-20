@@ -30,7 +30,8 @@ typedef NS_ENUM(NSInteger, FeatureMatchMethod) {
      maxDeviation:(double)maxDeviation
 maxCornerDeviation:(double)maxCornerDeviation
        invertMask:(BOOL)invertMask
-     maxKeypoints:(int)maxKeypoints;
+     maxKeypoints:(int)maxKeypoints
+ outlierThreshold:(double)k;
 
 +(Mat)createGradientMaskIntoSky:(Mat)binaryMask
 	       gradientDistance:(int)gradientDistance;

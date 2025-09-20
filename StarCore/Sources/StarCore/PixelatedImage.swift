@@ -1567,7 +1567,8 @@ extension PixelatedImage {
       maxDeviation: Double = 45, // maximum warping deviation from identity (GUESSED)
       maxCornerDeviation: Double = 70, // similar to max deviation, but for the corners
       invertMask: Bool = false, // use zero values instead of non zero values for the mask
-      maxKeypoints: Int32 = 1000       // XXX expose this and maxDeviation as parameters to user
+      maxKeypoints: Int32 = 1000,       // XXX expose this and maxDeviation as parameters to user
+      outlierThreshold: Double = 1.2
     ) -> AlignmentResult {
         let baseMat = self.cvMat
         let frameMats = frames.map { $0.cvMat }
@@ -1591,7 +1592,8 @@ extension PixelatedImage {
              maxDeviation: maxDeviation,
              maxCornerDeviation: maxCornerDeviation,
              invertMask: invertMask,
-             maxKeypoints: maxKeypoints
+             maxKeypoints: maxKeypoints,
+             outlierThreshold: outlierThreshold
            )
         {
             if let error = result as? String {

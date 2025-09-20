@@ -601,7 +601,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           masked: horizonMask.image,
           matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
           invertMask: isEarth,       // earth is zero in mask
-          maxKeypoints: 2000          // XXX hardcoded constant
+          maxKeypoints: 2000,         // XXX hardcoded constant
+          outlierThreshold: pixelThreshold
         )
 
         switch type {
