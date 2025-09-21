@@ -6,7 +6,7 @@ Written as of Star 0.9.0.
 
 At a high level, Star processes each frame in the following steps.
 
-As of Star 0.9.0, horizon detection is optional, but defaulted to on.  Turn in off if you don't have a horizon, or aren't worried about stars close to the horizon.
+As of Star 0.9.0, horizon detection is optional, but defaulted to on.  Turn in off if you don't have a horizon, or aren't worried about airplanes close to the horizon.
 
 1. optionally detect horizon across all frames first
 2. align some number of neighboring frames
