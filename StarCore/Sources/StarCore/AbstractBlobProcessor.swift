@@ -224,8 +224,9 @@ public class AbstractBlobProcessor {
                 Log.d("frame \(frameIndex) loaded subtraction image")
                 subtractionImage = image
                 switch image.imageData {
-                case .unsafeSixteenBit(_):
-                    fatalError("not implemented")
+                case .unsafeSixteenBit(let buffer):
+                    subtractionArray = Array(buffer)
+
                 case .unsafeEightBit(_):
                     fatalError("not implemented")
                 case .thirtyTwoBit(_):
@@ -254,8 +255,8 @@ public class AbstractBlobProcessor {
             Log.d("frame \(frameIndex) created subtraction image") 
             subtractionImage = image
             switch image.imageData {
-            case .unsafeSixteenBit(_):
-                fatalError("not implemented")
+            case .unsafeSixteenBit(let buffer):
+                subtractionArray = Array(buffer)
             case .unsafeEightBit(_):
                 fatalError("not implemented")
             case .eightBit(_):
