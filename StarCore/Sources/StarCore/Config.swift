@@ -311,6 +311,9 @@ public struct Config: Codable, Sendable, Transferable {
     //       adjust pixel removal to use ground image when appropriate
     //       replace align_image_stack with custom opencv2 SIFT code for speed and accuracy
     //       move image subtraction logic to opencv2 for speed
+    //       add MatWrapper for better cv::Mat memory handling
+    //       fix shovel bug
+    //       better hovering logic
 
     public var starVersion = Config.latestVersion
 
