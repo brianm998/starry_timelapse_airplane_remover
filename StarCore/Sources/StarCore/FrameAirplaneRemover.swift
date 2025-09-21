@@ -448,7 +448,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             {
                 Log.d("frame \(frameIndex) successfully loaded horizon mask")
 
-                let bounds = horizonMaskImage.horizonBounds
+                let bounds = try horizonMaskImage.horizonBounds()
                 return HorizonMask(
                   image: horizonMaskImage,
                   horizonTopY: bounds.topY,
@@ -468,7 +468,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                                        type: .original,
                                                        atSize: .original),
            // calculate horizon mask from original image
-           let horizonMask = await original.horizonMask(
+           let horizonMask = try await original.horizonMask(
              at: frameIndex,
              bottomPercentage: config.horizonBottomPercentage ?? 50,
              stripWidth: config.horizonStripWidth ?? 400
@@ -987,9 +987,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let format = image.imageData // make a copy
 
         switch format {
-        case .unsafeSixteenBit(let buffer):
+        case .unsafeSixteenBit(_):
             fatalError("not implemented")
-        case .unsafeEightBit(let buffer):
+        case .unsafeEightBit(_):
             fatalError("not implemented")
         case .thirtyTwoBit(_):
             fatalError("frame \(self.frameIndex) cannot load 32 bit image here now")
@@ -1327,9 +1327,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                                     atSize: .original)
         {
             switch image.imageData {
-            case .unsafeSixteenBit(let buffer):
+            case .unsafeSixteenBit(_):
                 fatalError("not implemented")
-            case .unsafeEightBit(let buffer):
+            case .unsafeEightBit(_):
                 fatalError("not implemented")
             case .thirtyTwoBit(_):
                 fatalError("frame \(frameIndex) cannot load 32 bit validation image")
@@ -2073,14 +2073,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             let horizonMask = try await loadOrCreateHorizonMask()
             let earthAlignedImage = try await loadOrCreateEarthAlignedImage()
 
-            let combinedImage = starAlignedImage.apply(mask: horizonMask.image,
-                                                       with: earthAlignedImage)
+            let combinedImage = try starAlignedImage.apply(
+              mask: horizonMask.image,
+              with: earthAlignedImage
+            )
             
-            subtractionImage = image.subtract(combinedImage)
+            subtractionImage = try image.subtract(combinedImage)
             
         } else {
             // with no horizon to worry about, just subtract the star aligned image
-            subtractionImage = image.subtract(starAlignedImage)
+            subtractionImage = try image.subtract(starAlignedImage)
         }
 
         

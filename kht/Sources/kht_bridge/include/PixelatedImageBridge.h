@@ -2,11 +2,7 @@
 #pragma once
 
 #import <Foundation/Foundation.h>
-
-#ifndef STAR_MAT_TYPEDEF
-#define STAR_MAT_TYPEDEF
-typedef void* Mat;
-#endif
+#import "MatWrapper.h"
 
 #import "HorizonResult.h"
 
@@ -15,60 +11,40 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface PixelatedImageBridge : NSObject
 
-+ (Mat)subtractImage:(Mat)img1 fromImage:(Mat)img2;
++ (MatWrapper *)subtractImage:(MatWrapper *)img1 fromImage:(MatWrapper *)img2;
 
 // combines two images with a mask
 // non zero mask pixels get image1
 //     zero mask pixels get image2
-+ (Mat)combineImage:(Mat)image1
-               mask:(Mat)mask
-         background:(Mat)image2;
++ (MatWrapper *)combineImage:(MatWrapper *)image1
+			mask:(MatWrapper *)mask
+		  background:(MatWrapper *)image2;
 
 /// Takes an expected binary cv::Mat and makes it 8-bit grayscale,
 // then and keeps N largest connected components, returning a cv::Mat
-+ (Mat)filterConnectedComponents:(Mat)image keepLargest:(NSInteger)n;
++ (MatWrapper *)filterConnectedComponents:(MatWrapper *)image keepLargest:(NSInteger)n;
 
 // removes anything but the ground, and returns the Y boundaries of the horizon
-+ (Mat)groundOnlyFrom:(Mat)image;
++ (MatWrapper *)groundOnlyFrom:(MatWrapper *)image;
 
 /// Returns the vertical horizon extents
-+ (HorizonResult *)horizonExtentsFromImage:(Mat)image;
++ (HorizonResult *)horizonExtentsFromImage:(MatWrapper *)image;
 
-+(double)maxBrightnessScaleForImage:(Mat)image
-			  maskImage:(Mat)mask;
++(double)maxBrightnessScaleForImage:(MatWrapper *)image
+			  maskImage:(MatWrapper *)mask;
 
-+(Mat)brightenDarks:(Mat)image
-	       mask:(Mat)mask
-	     amount:(double)amount;
++(MatWrapper *)brightenDarks:(MatWrapper *)image
+			mask:(MatWrapper *)mask
+		      amount:(double)amount;
 
-+(Mat)darkenDarks:(Mat)image
-	       mask:(Mat)mask
-	     amount:(double)amount;
++(MatWrapper *)darkenDarks:(MatWrapper *)image
+		      mask:(MatWrapper *)mask
+		    amount:(double)amount;
 
-+(Mat)maskRaisedBy:(Mat)image
-              mask:(Mat)mask
-            border:(int)amount;
++(MatWrapper *)maskRaisedBy:(MatWrapper *)image
+		       mask:(MatWrapper *)mask
+		     border:(int)amount;
 
-/// Create a cv::Mat wrapper around raw pixel buffer (no copy)
-+ (Mat)cvMatFromBuffer:(void *)bytes
-		 width:(int)w
-		height:(int)h
-	      channels:(int)c
-	bitsPerChannel:(int)bits
-	   bytesPerRow:(int)bpr;
-
-// helpers to read values from cv::Mat
-+ (int)matChannels:(Mat)mat;
-+ (size_t)matElemSize:(Mat)mat;
-+ (size_t)matStep:(Mat)mat;
-+ (BOOL)matIsEmpty:(Mat)matPtr;
-
-// make sure you call this to free any Mat returned anywhere here, they're all copies
-// also make sure to free the Mat arguments passed in after creating them, they're in c++ world.
-+ (void)freeCvMat:(Mat)mat;
-
-// used when turning a Mat back into a PixelatedImage
-+ (NSData *)dataFromCvMat:(Mat)matPtr;
 
 @end
 

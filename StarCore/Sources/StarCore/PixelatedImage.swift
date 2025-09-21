@@ -824,24 +824,24 @@ extension PixelatedImage {
     
     // returns a 16 bit grayscale image that results from subtrating
     // the given frame from this frame, done in c++ opencv2 land for speed
-    public func subtract(_ otherFrame: PixelatedImage) -> PixelatedImage {
-
+    public func subtract(_ otherFrame: PixelatedImage) throws -> PixelatedImage {
         // convert images to cv::Mat
-        let selfMat = self.cvMat
-        let otherMat = otherFrame.cvMat
+        if let selfMat = self.asMatWrapper,
+           let otherMat = otherFrame.asMatWrapper
+        {
+            // jump into c++ land for the actual subtraction
+            let resultMat = PixelatedImageBridge.subtractImage(otherMat, fromImage: selfMat)
 
-        // jump into c++ land for the actual subtraction
-        let resultMat = PixelatedImageBridge.subtractImage(otherMat, fromImage: selfMat)
+            // reconstruct a PixelatedImage from the returned cv::Mat
+            if let ret = PixelatedImage(mat: resultMat) {
 
-        // reconstruct a PixelatedImage from the returned cv::Mat
-        let ret = self.newImage(from: resultMat)
-
-        // free the c++ cv::Mat images
-        PixelatedImageBridge.freeCvMat(resultMat)
-        PixelatedImageBridge.freeCvMat(selfMat)
-        PixelatedImageBridge.freeCvMat(otherMat)
-
-        return ret
+                return ret
+            } else {
+                throw "cannot create PixelatedImage from resulting mat during image subtraction"
+            }
+        } else {
+            throw "cannot subtract images without mat wrappers"
+        }
     }
 
     // returns a 16 bit grayscale image that results from subtrating
@@ -1742,191 +1742,92 @@ extension PixelatedImage {
         }
     }
     
-    public var horizonBounds: HorizonBounds {
+    public func horizonBounds() throws -> HorizonBounds {
         // first convert images to cv::Mat
-        let baseMat = self.cvMat
-        
-        let bounds = PixelatedImageBridge.horizonExtents(fromImage: baseMat)
+        if let baseMat = self.asMatWrapper {
+            let bounds = PixelatedImageBridge.horizonExtents(fromImage: baseMat)
 
-        PixelatedImageBridge.freeCvMat(baseMat)
-        
-        return HorizonBounds(
-          topY: bounds.horizonTopY,
-          bottomY: bounds.horizonBottomY
-        )
+            return HorizonBounds(
+              topY: bounds.horizonTopY,
+              bottomY: bounds.horizonBottomY
+            )
+        }
+        throw "cannot calculate horizon bounds without a mat wrapper"
     }
 
-    public func maxBrightnessScale(in darksMask: PixelatedImage) -> Double {
+    public func maxBrightnessScale(in darksMask: PixelatedImage) throws -> Double {
         // first convert images to cv::Mat
-        let baseMat = self.cvMat
-        let maskMat = darksMask.cvMat
-
-        let ret = PixelatedImageBridge.maxBrightnessScale(
-          forImage: baseMat,
-          maskImage: maskMat
-        )
-        
-        // finally free the cv::Mat pointers
-        PixelatedImageBridge.freeCvMat(baseMat)
-        PixelatedImageBridge.freeCvMat(maskMat)
-
-        return ret
+        if let baseMat = self.asMatWrapper,
+           let maskMat = darksMask.asMatWrapper
+        {
+            return PixelatedImageBridge.maxBrightnessScale(
+              forImage: baseMat,
+              maskImage: maskMat
+            )
+        }
+        throw "cannot calculate max brightness scale without mat wrappers"
     }
 
-    public func brightenDarks(with darksMask: PixelatedImage, by amount: Double) -> PixelatedImage {
+    public func brightenDarks(with darksMask: PixelatedImage, by amount: Double) throws -> PixelatedImage {
         // first convert images to cv::Mat
-
         
-        let baseMat = self.cvMat
-        let maskMat = darksMask.cvMat
+        if let baseMat = self.asMatWrapper,
+           let maskMat = darksMask.asMatWrapper
+        {
+            // then process in cv world
+            let processedMat = PixelatedImageBridge.brightenDarks(
+              baseMat,
+              mask: maskMat,
+              amount: amount
+            )
 
-        // then process in cv world
-        let processedMat = PixelatedImageBridge.brightenDarks(
-          baseMat,
-          mask: maskMat,
-          amount: amount
-        )
-
-        // then convert back in to PixelatedImage
-        let ret = self.newImage(from: processedMat)
-
-        // finally free the cv::Mat pointers
-        PixelatedImageBridge.freeCvMat(baseMat)
-        PixelatedImageBridge.freeCvMat(maskMat)
-        PixelatedImageBridge.freeCvMat(processedMat)
-        
-        return ret
+            // then convert back in to PixelatedImage
+            if let ret = PixelatedImage(mat: processedMat) { return ret }
+        }
+        throw "cannot brighten darks without a mat wrapper"
     }
 
-    public func darkenDarks(with darksMask: PixelatedImage, by amount: Double) -> PixelatedImage {
+    public func darkenDarks(with darksMask: PixelatedImage, by amount: Double) throws -> PixelatedImage {
 
         // first convert images to cv::Mat
-        let baseMat = self.cvMat
-        let maskMat = darksMask.cvMat
-        
-        // then process in cv world
-        let processedMat = PixelatedImageBridge.darkenDarks(
-          baseMat,
-          mask: maskMat,
-          amount: amount
-        )
+        if let baseMat = self.asMatWrapper,
+           let maskMat = darksMask.asMatWrapper
+        {
+            
+            // then process in cv world
+            let processedMat = PixelatedImageBridge.darkenDarks(
+              baseMat,
+              mask: maskMat,
+              amount: amount
+            )
 
-        // then convert back in to PixelatedImage
-        let ret = self.newImage(from: processedMat)
-
-        // finally free the cv::Mat pointers
-        PixelatedImageBridge.freeCvMat(baseMat)
-        PixelatedImageBridge.freeCvMat(maskMat)
-        PixelatedImageBridge.freeCvMat(processedMat)
-        
-        return ret
+            // then convert back in to PixelatedImage
+            if let ret = PixelatedImage(mat: processedMat) { return ret }
+        }
+        throw "cannot darken darks without a mat wrapper"
     }
 
     public func apply(
       mask: PixelatedImage,
       with background: PixelatedImage
-    ) -> PixelatedImage {
-        let selfMat = self.cvMat
-        let backgroundMat = background.cvMat
-        let maskMat = mask.cvMat
-            
-        let combinedMat =
-          PixelatedImageBridge.combineImage(
-            selfMat,
-            mask: maskMat,
-            background: backgroundMat
-          )
+    ) throws -> PixelatedImage {
 
-        let combinedImage = self.newImage(from: combinedMat)
-        
-        PixelatedImageBridge.freeCvMat(selfMat)
-        PixelatedImageBridge.freeCvMat(backgroundMat)
-        PixelatedImageBridge.freeCvMat(maskMat)
-        PixelatedImageBridge.freeCvMat(combinedMat)
-
-        return combinedImage
-    }
-}
-
-// simple swift wrappers over the ObjC -> OpenCV bridge
-extension PixelatedImage {
-    // convert any PixelatedImage directly into a cv::Mat for opencv2 processing
-    // need to be freed (c++ delete) after opencv2 is done by PixelatedImageBridge.freeCvMat(_)
-    public var cvMat: Mat { PixelatedImageBridge.cvMat(from: self) }
-
-    // convert a mat back into a PixelatedImage, using an the self image
-    // for image bitmapInfo, colorSpace, and ciFormat
-    public func newImage(
-      from mat: Mat
-    ) -> PixelatedImage {
-        PixelatedImageBridge.pixelatedImage(
-          from: mat,
-          bitmapInfo: self.bitmapInfo,
-          colorSpace: self.colorSpace,
-          ciFormat: self.ciFormat
-        )
+        if let selfMat = self.asMatWrapper,
+           let backgroundMat = background.asMatWrapper,
+           let maskMat = mask.asMatWrapper
+        {
+           let combinedMat =
+             PixelatedImageBridge.combineImage(
+               selfMat,
+               mask: maskMat,
+               background: backgroundMat
+             )
+           if let ret = PixelatedImage(mat: combinedMat) { return ret }
+        }
+        throw "Unable to apply mask to image without mask wrappers"
     }
 }
     
-// swift extesion to objc code that bridges between cv::Mat and PixleatedImage
-extension PixelatedImageBridge {
-    
-    static func cvMat(from image: PixelatedImage) -> Mat {
-        var data = image.imageData.data
-        return data.withUnsafeMutableBytes { buf in
-            Self.cvMat(
-              fromBuffer: buf.baseAddress!,
-              width: Int32(image.width),
-              height: Int32(image.height),
-              channels: Int32(image.componentsPerPixel),
-              bitsPerChannel: Int32(image.bitsPerComponent),
-              bytesPerRow: Int32(image.bytesPerRow)
-            )
-        }
-    }
-
-    static func pixelatedImage(
-      from mat: Mat,
-      bitmapInfo: CGBitmapInfo,
-      colorSpace: CGColorSpace,
-      ciFormat: CIFormat) -> PixelatedImage
-    {
-        let nsdata = Self.data(fromCvMat: mat)
-        let bytes = [UInt8](nsdata)
-
-        let channels = Int(Self.matChannels(mat))
-        let bytesPerPixel = Int(Self.matElemSize(mat))
-        let step = Int(Self.matStep(mat))
-        Log.d("channels \(channels) bytesPerPixel \(bytesPerPixel)")
-        let bitsPerComponent = bytesPerPixel / channels * 8
-
-        let df: PixelatedImage.DataFormat
-        switch bitsPerComponent {
-        case 8: df = .eightBit(bytes)
-        case 16: df = .sixteenBit(nsdata.uInt16Array)
-        case 32: df = .thirtyTwoBit(nsdata.uInt32Array)
-        default: fatalError("Unsupported depth \(bitsPerComponent)")
-        }
-
-        let width = step/bytesPerPixel
-        let height = nsdata.count / (width*bytesPerPixel)
-
-        return PixelatedImage(
-          width: width,
-          height: height,
-          imageData: df,
-          bitsPerPixel: bytesPerPixel*8,
-          bytesPerRow: step,
-          bitsPerComponent: bytesPerPixel/channels*8,
-          bytesPerPixel: bytesPerPixel,
-          bitmapInfo: bitmapInfo,
-          componentsPerPixel: channels,
-          colorSpace: colorSpace,
-          ciFormat: ciFormat
-        )
-    }
-}
-
 extension MatWrapper: @unchecked Sendable {}
 extension UnsafeBufferPointer: @unchecked Sendable {}
 

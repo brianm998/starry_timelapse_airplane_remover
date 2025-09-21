@@ -109,21 +109,15 @@ public extension Array where Element == HorizonBounds {
 extension PixelatedImage {
     // should get rid of all but the ground, designed to run after Otsu classification and
     // connected component filtering.  Returns HorizonMask, including the Y bounds of the horizon
-    public var groundOnly: PixelatedImage {
-
-        // first convert image to cv::Mat
-        let baseMat = self.cvMat
-        
-        let horizonResult = PixelatedImageBridge.groundOnly(from: baseMat)
-
-        // then convert back in to PixelatedImage
-        let ret = self.newImage(from: horizonResult)
-
-        // finally free the cv::Mat pointers
-        PixelatedImageBridge.freeCvMat(baseMat)
-        PixelatedImageBridge.freeCvMat(horizonResult)
-        
-        return ret
+    public func groundOnly() throws -> PixelatedImage {
+        if let matWrapper = self.asMatWrapper,
+           let ret = PixelatedImage(
+             mat: PixelatedImageBridge.groundOnly(from: matWrapper)
+           )
+        {
+            return ret
+        }
+        throw "cannot get ground only from image without mat wrapper"
     }
 }
 
@@ -133,7 +127,7 @@ extension PixelatedImage {
     // tries to compute a binary ground mask, where the ground is zero (black) 
     public func horizonMask(at frameIndex: Int,
                             bottomPercentage: Double = 50,
-                            stripWidth: Int = 400) async -> HorizonMask? {
+                            stripWidth: Int = 400) async throws -> HorizonMask? {
         /*
          horizon detection alg:
          * split frame image into bottom half, discarding top half
@@ -168,18 +162,18 @@ extension PixelatedImage {
         Log.d("frame \(frameIndex) has \(newElements.count) matrix elements for horizon removal")
 
 
-        return await withTaskGroup(of: Optional<ImageMatrixElement>.self) { taskGroup in
+        return try await withThrowingTaskGroup(of: Optional<ImageMatrixElement>.self) { taskGroup in
             for (_, element) in matrix.enumerated() {
                 taskGroup.addTask {
                     // calculate Otsu classification for this image element
                     let otsu = element.image.binaryOtsuImage
 
                     // apply connect component filtering and ground only logic
-                    let filtered = otsu.connectedComponentFiltered(keepLargest: 2)
+                    let filtered = try otsu.connectedComponentFiltered(keepLargest: 2)
                        
-                    let groundOnly = filtered.groundOnly
+                    let groundOnly = try filtered.groundOnly()
                     
-                    let bounds = groundOnly.horizonBounds
+                    let bounds = try groundOnly.horizonBounds()
 
                     return ImageMatrixElement(
                       x: element.x,
@@ -190,7 +184,7 @@ extension PixelatedImage {
                     )
                 }
             }
-            for await result in taskGroup {
+            for try await result in taskGroup {
                 if let result { newElements.append(result) }
             }
             
@@ -220,20 +214,15 @@ extension PixelatedImage {
 
 extension PixelatedImage {
     // digs into opencv2 to remove a lot of connected components 
-    public func connectedComponentFiltered(keepLargest n: Int = 2) -> PixelatedImage {
+    public func connectedComponentFiltered(keepLargest n: Int = 2) throws -> PixelatedImage {
 
-        // first convert self to cv::Mat
-        let baseMat = self.cvMat
-        let filtered = PixelatedImageBridge.filterConnectedComponents(baseMat, keepLargest: n)
-
-        // then convert back in to PixelatedImage
-        let ret = self.newImage(from: filtered)
-        
-        // finally free the cv::Mat pointers
-        PixelatedImageBridge.freeCvMat(filtered)
-        PixelatedImageBridge.freeCvMat(baseMat)
-
-        return ret
+        // first convert self to MatWrapper
+        if let baseMat = self.asMatWrapper {
+            let filtered = PixelatedImageBridge.filterConnectedComponents(baseMat, keepLargest: n)
+            // then convert back in to PixelatedImage
+            if let ret = PixelatedImage(mat: filtered) { return ret }
+        }
+        throw "unable to connected component filter without a mat wrapper"
     }
 }
 

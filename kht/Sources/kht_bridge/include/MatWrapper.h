@@ -36,24 +36,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// Debug info
 - (NSString *)debugDescription;
 
-
-/// Construct from a raw buffer without copying
-- (instancetype)initWithWidth:(NSInteger)width
-                       height:(NSInteger)height
-                     channels:(NSInteger)channels
-                         type:(int)cvType
-                        bytesPerRow:(size_t)step
-                           data:(void *)data
-                    deallocator:(dispatch_block_t _Nullable)deallocator;
-
 + (int)cvTypeForBitsPerComponent:(int)bits componentsPerPixel:(int)components;
 
 - (instancetype)initWithWidth:(NSInteger)width
                        height:(NSInteger)height
-                    cvType:(int)cvType
-                 bytesPerRow:(size_t)step
-                        data:(void *)data
-              takeOwnership:(BOOL)takeOwnership;
+		       cvType:(int)cvType
+		  bytesPerRow:(size_t)step
+			 data:(void *)data
+		takeOwnership:(BOOL)takeOwnership;
 
 @end
 

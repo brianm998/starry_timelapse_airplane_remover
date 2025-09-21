@@ -1,4 +1,5 @@
 #import "PixelatedImageBridge.h"
+#import "MatWrapper_Internal.h"
 
 #import "logging.h"
 
@@ -22,21 +23,21 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 
 @implementation PixelatedImageBridge
 
-+ (Mat)combineImage:(Mat)image1
-               mask:(Mat)mask
-         background:(Mat)image2
++ (MatWrapper *)combineImage:(MatWrapper *)image1
+			mask:(MatWrapper *)mask
+		  background:(MatWrapper *)image2
 {
     @try {
       try {
 	// Reinterpret the opaque Mat pointers back to cv::Mat references
-	cv::Mat& mat1 = *reinterpret_cast<cv::Mat*>(image1);
-	cv::Mat& matMask = *reinterpret_cast<cv::Mat*>(mask);
-	cv::Mat& mat2 = *reinterpret_cast<cv::Mat*>(image2);
+	cv::Mat mat1 = image1.mat;
+	cv::Mat mat2 = image2.mat;
+	cv::Mat matMask = mask.mat;
 
 	// Safety check: ensure sizes match
 	if (mat1.size() != mat2.size() || mat1.size() != matMask.size()) {
 	  NSLog(@"combineWithMask: Input Mats must have the same size.");
-	  return reinterpret_cast<Mat>(new cv::Mat()); // Return empty Mat
+	  return nil;
 	}
 
 	// Prepare output Mat
@@ -49,14 +50,8 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 	cv::bitwise_not(matMask, matMask);     // Invert mask to copy from mat2
 	mat2.copyTo(result, matMask);         // Fill other region with mat2
 
-
-	// make a new result on the heap XXX CLEAR THIS LATER WITH freeCvMat:
-	cv::Mat* resultPtr = new cv::Mat(result);
+	return [[MatWrapper alloc] initWithMat: result];
 	
-	//delete matPtr;
-	Log_d(@"filterConnectedComponents done");
-    
-	return resultPtr;
       } catch (const cv::Exception &e) {
 	Log_d(@"OpenCV Exception: %s", e.what());
       }
@@ -68,14 +63,11 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 }
 
 
-+ (Mat)filterConnectedComponents:(Mat)image keepLargest:(NSInteger)n {
++ (MatWrapper *)filterConnectedComponents:(MatWrapper *)image keepLargest:(NSInteger)n {
     @try {
       try {
-	// reinterpret as pointer
-	cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
-
 	// now work with references
-	cv::Mat& mat = *matPtr;
+	cv::Mat& mat = image.mat;
 
 	// make copy for safer concurrency
 	cv::Mat owned = mat.clone();
@@ -114,13 +106,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 	  }
 	}
 
-	// make a new result on the heap XXX CLEAR THIS LATER WITH freeCvMat:
-	cv::Mat* resultPtr = new cv::Mat(filtered);
-
-	//delete matPtr;
-	Log_d(@"filterConnectedComponents done");
-    
-	return resultPtr;
+	return [[MatWrapper alloc] initWithMat: filtered];
       } catch (const cv::Exception &e) {
 	Log_d(@"OpenCV Exception: %s", e.what());
       }
@@ -131,15 +117,12 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 }
 
 // this is the last step in horizon detection
-+ (Mat)groundOnlyFrom:(Mat)image {
++ (MatWrapper *)groundOnlyFrom:(MatWrapper *)image {
   @try {
     try {
       Log_d(@"groundOnlyFrom started");
-      // reinterpret as pointer
-      cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
 
-      // now work with references
-      cv::Mat& mat = *matPtr;
+      cv::Mat mat = image.mat;
 
       // make copy for safer concurrency
       cv::Mat owned = mat.clone();
@@ -208,13 +191,8 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 	horizonBottomY = std::max(horizonBottomY, p.y); // lowest white pixel
       }
 
-      // make a new result on the heap XXX CLEAR THIS LATER WITH freeCvMat:
-      cv::Mat* resultPtr = new cv::Mat(finalMask.clone());
+      return [[MatWrapper alloc] initWithMat: finalMask]; // XXX was cloned
 
-      //delete matPtr;
-      Log_d(@"groundOnlyFrom done");
-    
-      return resultPtr;
     } catch (const cv::Exception &e) {
       Log_d(@"OpenCV Exception: %s", e.what());
     }
@@ -225,15 +203,12 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 }
 
 
-+ (HorizonResult *)horizonExtentsFromImage:(Mat)image {
++ (HorizonResult *)horizonExtentsFromImage:(MatWrapper *)image {
   @try {
     try {
       Log_d(@"horizonExtentsFromImage started");
-      // reinterpret as pointer
-      cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
 
-      // now work with references
-      cv::Mat& mat = *matPtr;
+      cv::Mat mat = image.mat;
 
       // make copy for safer concurrency
       cv::Mat owned = mat.clone();
@@ -292,15 +267,15 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 
 // shifts mask up by borderAmount pixels and crops the image with it
 // does this really work?
-+ (Mat)maskRaisedBy:(Mat)image
-	       mask:(Mat)mask
-	     border:(int)borderAmount
++ (MatWrapper *)maskRaisedBy:(MatWrapper *)image
+			mask:(MatWrapper *)mask
+		      border:(int)borderAmount
 {
   @try {
     try {
       //Log_d(@"maskRaisedBy started");
-      cv::Mat& mat = *reinterpret_cast<cv::Mat*>(image);
-      cv::Mat& maskMat = *reinterpret_cast<cv::Mat*>(mask);
+      cv::Mat mat = image.mat;
+      cv::Mat maskMat = mask.mat;
 
       // make copies for safer concurrency
       cv::Mat owned = mat.clone();
@@ -367,7 +342,8 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       //Log_d("maskRaisedBy done");
 
       // --- Step 4: return full-size masked image ---
-      return new cv::Mat(masked);
+      return [[MatWrapper alloc] initWithMat:masked];
+      
     } catch (const cv::Exception &e) {
       Log_d(@"OpenCV Exception: %s", e.what());
     }
@@ -377,15 +353,14 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
   return nil;
 }
 
-+(Mat)brightenDarks:(Mat)image
-	       mask:(Mat)mask
-	     amount:(double)amount
++(MatWrapper *)brightenDarks:(MatWrapper *)image
+			mask:(MatWrapper *)mask
+		      amount:(double)amount
 {
   @try {
     try {
-
-      cv::Mat &mat = *reinterpret_cast<cv::Mat*>(image);
-      cv::Mat &maskMat = *reinterpret_cast<cv::Mat*>(mask);
+      cv::Mat mat = image.mat;
+      cv::Mat maskMat = mask.mat;
 
       cv::Mat owned = mat.clone();
       cv::Mat ownedMask = maskMat.clone();
@@ -420,7 +395,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 	}
       }
 
-      return new cv::Mat(result.clone());
+      return [[MatWrapper alloc] initWithMat: result];
       
     } catch (const cv::Exception &e) {
       Log_d(@"OpenCV Exception: %s", e.what());
@@ -433,15 +408,15 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 
 
 
-+(Mat)darkenDarks:(Mat)image
-	     mask:(Mat)mask
-	   amount:(double)amount
++(MatWrapper *)darkenDarks:(MatWrapper *)image
+		      mask:(MatWrapper *)mask
+		    amount:(double)amount
 {
   @try {
     try {
 
-      cv::Mat &mat = *reinterpret_cast<cv::Mat*>(image);
-      cv::Mat &maskMat = *reinterpret_cast<cv::Mat*>(mask);
+      cv::Mat mat = image.mat;
+      cv::Mat maskMat = mask.mat;
 
       cv::Mat owned = mat.clone();
       cv::Mat ownedMask = maskMat.clone();
@@ -478,7 +453,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 	}
       }
 
-      return new cv::Mat(result.clone());
+      return [[MatWrapper alloc] initWithMat: result];
       
     } catch (const cv::Exception &e) {
       Log_d(@"OpenCV Exception: %s", e.what());
@@ -489,20 +464,15 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
   return nil;
 }
 
-+(double)maxBrightnessScaleForImage:(Mat)image
-			  maskImage:(Mat)mask
++(double)maxBrightnessScaleForImage:(MatWrapper *)image
+			  maskImage:(MatWrapper *)mask
 {
   @try {
     try {
 
-      //Log_d("maxBrightnessScaleForImage started");
-      // reinterpret as pointer
-      cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
-      cv::Mat* maskPtr = reinterpret_cast<cv::Mat*>(mask);
-
       // now work with references
-      cv::Mat& mat = *matPtr;
-      cv::Mat& maskMat = *maskPtr;
+      cv::Mat mat = image.mat;
+      cv::Mat maskMat = mask.mat;
     
       // make copies for safer concurrency
       cv::Mat owned = mat.clone();
@@ -559,95 +529,24 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
   return 1;
 }
 
-+ (Mat)cvMatFromBuffer:(void *)buffer
-                 width:(int)width
-                height:(int)height
-              channels:(int)channels
-	bitsPerChannel:(int)bitsPerChannel
-	   bytesPerRow:(int)bytesPerRow
-{
-  @try {
-    try {
-      int type = 0;
-      switch (bitsPerChannel) {
-      case 8:  type = CV_8UC(channels); break;
-      case 16: type = CV_16UC(channels); break;
-      case 32: type = CV_32SC(channels); break;
-      default: return nullptr;
-      }
++ (MatWrapper *)subtractImage:(MatWrapper *)img1 fromImage:(MatWrapper *)img2 {
+  // Step 1: Convert both images to grayscale if they are not already
 
-//      Log_d(@"width %d, height %d, channels %d, bitsPerChannel %d bytesPerRow %d",
-//		      width, height, channels, bitsPerChannel, bytesPerRow);
-
-      // Create a temporary header referencing the provided buffer
-      cv::Mat tmp(height, width, type, buffer, bytesPerRow);
-
-      // Clone into an owning mat and heap-allocate that one (caller must free)
-      cv::Mat *mat = new cv::Mat(tmp.clone());
-      return (Mat)mat;
-    } catch (const cv::Exception &e) {
-      Log_d(@"OpenCV Exception: %s", e.what());
-    }
-  } @catch (NSException *exception) {
-    Log_d(@"Objective-C Exception: %@", exception);
-  }
-  return nil;
-}
-
-+ (NSData *)dataFromCvMat:(Mat)matPtr {
-  try {
-    cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
-    return [NSData dataWithBytes:mat->data length:mat->total() * mat->elemSize()];
-  } catch (const cv::Exception &e) {
-    Log_d(@"OpenCV Exception: %s", e.what());
-  }
-  return NULL;
-}
-
-+ (int)matChannels:(Mat)matPtr {
-    cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
-    return mat->channels();
-}
-
-+ (size_t)matElemSize:(Mat)matPtr {
-    cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
-    return mat->elemSize();
-}
-
-+ (BOOL)matIsEmpty:(Mat)matPtr {
-    cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
-    return mat->empty();
-}
-
-+ (size_t)matStep:(Mat)matPtr {
-    cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
-    return mat->step;
-}
-
-+ (void)freeCvMat:(Mat)matPtr {
-  if (!matPtr) return;
-  cv::Mat *mat = reinterpret_cast<cv::Mat *>(matPtr);
-  delete mat;
-}
-
-+ (Mat)subtractImage:(Mat)img2 fromImage:(Mat)img1 {
-    // Step 1: Convert both images to grayscale if they are not already
-
-  cv::Mat *img1Mat = reinterpret_cast<cv::Mat *>(img1);
-  cv::Mat *img2Mat = reinterpret_cast<cv::Mat *>(img2);
+  cv::Mat img1Mat = img1.mat;
+  cv::Mat img2Mat = img2.mat;
 
   cv::Mat gray1, gray2;
     
-    if (img1Mat->channels() == 1) {
-        gray1 = img1Mat->clone();
+    if (img1Mat.channels() == 1) {
+        gray1 = img1Mat.clone();
     } else {
-      cv::cvtColor(*img1Mat, gray1, cv::COLOR_BGR2GRAY);
+      cv::cvtColor(img1Mat, gray1, cv::COLOR_BGR2GRAY);
     }
 
-    if (img2Mat->channels() == 1) {
-        gray2 = img2Mat->clone();
+    if (img2Mat.channels() == 1) {
+        gray2 = img2Mat.clone();
     } else {
-        cv::cvtColor(*img2Mat, gray2, cv::COLOR_BGR2GRAY);
+        cv::cvtColor(img2Mat, gray2, cv::COLOR_BGR2GRAY);
     }
 
     // Step 2: Determine the higher bit depth between the two images
@@ -682,9 +581,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
     cv::max(diff, 0, diffClipped);
     printMatInfo(diffClipped, "result");
 
-    cv::Mat* resultPtr = new cv::Mat(diffClipped);
-
-    return resultPtr;
+    return [[MatWrapper alloc] initWithMat: diffClipped];
 }
 
 
