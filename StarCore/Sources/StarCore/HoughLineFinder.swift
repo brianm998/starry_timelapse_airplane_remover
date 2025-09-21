@@ -328,26 +328,26 @@ public struct HoughLineFinder: Sendable {
     
     public var lineData: [LineInfo] {
         var ret: [LineInfo] = []
-        let mat = pixelImage.cvMat
 
-        let lines = kernelHoughTransform(
-          image: mat,
-          width: pixelImage.width,
-          height: pixelImage.height,
-          maxResults: args.maxLineConstant
-        )
+        if let mat = pixelImage.asMatWrapper {
+            let lines = kernelHoughTransform(
+              image: mat,
+              width: pixelImage.width,
+              height: pixelImage.height,
+              maxResults: args.maxLineConstant
+            )
 
-        PixelatedImageBridge.freeCvMat(mat)
-
-        for i in 0..<lines.count {
-            let originZeroLine = self.originZeroLine(from: lines[i])
-            
-            ret.append(LineInfo(line: lines[i],
-                                intensityScore: intensityScore(for: originZeroLine),
-                                pixelScore: pixelScore(for: originZeroLine),
-                                border: self.imageDataBorderSize))
+            for i in 0..<lines.count {
+                let originZeroLine = self.originZeroLine(from: lines[i])
+                
+                ret.append(LineInfo(line: lines[i],
+                                    intensityScore: intensityScore(for: originZeroLine),
+                                    pixelScore: pixelScore(for: originZeroLine),
+                                    border: self.imageDataBorderSize))
+            }
+        } else {
+            Log.w("unable to create mat from image for line data")
         }
-        
         return ret
     }
     
@@ -362,50 +362,48 @@ public struct HoughLineFinder: Sendable {
     public var line: LineInfo? {
         let pixelImage = self.pixelImage
 
-        let mat = pixelImage.cvMat
-        
-        let lines = kernelHoughTransform(
-          image: mat,
-          width: pixelImage.width,
-          height: pixelImage.height,
-          maxResults: args.maxLineConstant
-        )
-
-        PixelatedImageBridge.freeCvMat(mat)
-
-        /*
-         - look at the first N lines
-         - calculate the average distance from the line for each of them.
-         - choose the best one
-         */
-
-        if lines.count > 0 {
-            var bestIntensityScore: Double = 0
-            var bestPixelScore: Double = 0
-            var bestLineIndex = 0
-            var max = lines.count
-            if max > args.maxLineConstant { max = args.maxLineConstant } 
+        if let mat = pixelImage.asMatWrapper {
             
-            for i in 0..<max {
-                let originZeroLine = self.originZeroLine(from: lines[i])
+            let lines = kernelHoughTransform(
+              image: mat,
+              width: pixelImage.width,
+              height: pixelImage.height,
+              maxResults: args.maxLineConstant
+            )
 
-                let intensityScore = intensityScore(for: originZeroLine)
-                let pixelScore = pixelScore(for: originZeroLine)
+            /*
+             - look at the first N lines
+             - calculate the average distance from the line for each of them.
+             - choose the best one
+             */
+
+            if lines.count > 0 {
+                var bestIntensityScore: Double = 0
+                var bestPixelScore: Double = 0
+                var bestLineIndex = 0
+                var max = lines.count
+                if max > args.maxLineConstant { max = args.maxLineConstant } 
                 
-                if intensityScore > bestIntensityScore {
-                    //Log.d("line \(i) is best theta \(lines[i].theta) avg median max \(avg) \(median) \(max)")
-                    bestIntensityScore = intensityScore
-                    bestPixelScore = pixelScore
-                    bestLineIndex = i
+                for i in 0..<max {
+                    let originZeroLine = self.originZeroLine(from: lines[i])
+
+                    let intensityScore = intensityScore(for: originZeroLine)
+                    let pixelScore = pixelScore(for: originZeroLine)
+                    
+                    if intensityScore > bestIntensityScore {
+                        //Log.d("line \(i) is best theta \(lines[i].theta) avg median max \(avg) \(median) \(max)")
+                        bestIntensityScore = intensityScore
+                        bestPixelScore = pixelScore
+                        bestLineIndex = i
+                    }
                 }
+
+                return LineInfo(line: lines[bestLineIndex],
+                                intensityScore: bestIntensityScore,
+                                pixelScore: bestPixelScore,
+                                border: 0)                
             }
-
-            return LineInfo(line: lines[bestLineIndex],
-                            intensityScore: bestIntensityScore,
-                            pixelScore: bestPixelScore,
-                            border: 0)                
         }
-
         return nil
     }
 

@@ -8,7 +8,7 @@
 #import <opencv2/imgproc.hpp>
 #import <opencv2/highgui.hpp>
 #import <opencv2/imgcodecs/macosx.h>
-
+#import "MatWrapper_Internal.h"
 
 #import "../kht/include/kht.hpp"
 #import "include/KHTBridge.h"
@@ -22,17 +22,14 @@
 
 @implementation KHTBridge
 
-+(NSArray *) translate:(Mat)image {
++(NSArray *) translate:(MatWrapper *)image {
   // return value for run_kht below
   kht::ListOfLines lineList = kht::ListOfLines(); // XXX dealocated?
 
   cv::Mat eightBit, canny;
 
-  // reinterpret as pointer
-  cv::Mat* matPtr = reinterpret_cast<cv::Mat*>(image);
-
   // now work with references
-  cv::Mat& mat = *matPtr;
+  cv::Mat& mat = image.mat;
 
   // make copy for safer concurrency
   cv::Mat im = mat.clone();

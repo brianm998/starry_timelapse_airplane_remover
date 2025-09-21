@@ -1,11 +1,6 @@
 #import <Foundation/Foundation.h>
 #import "MatWrapper.h"
 
-#ifndef STAR_MAT_TYPEDEF
-#define STAR_MAT_TYPEDEF
-typedef void* Mat;
-#endif
-
 @interface AlignmentResult : NSObject
 @property(nonatomic, strong) MatWrapper *aligned;   // warped frame
 @property(nonatomic, assign) int numAligned;

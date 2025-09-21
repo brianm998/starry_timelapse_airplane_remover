@@ -12,7 +12,7 @@ public let RADIANS_TO_DEGREES = 45 / atan(1.0)
 // we convert the coordinate system of the returned lines, and filter them a bit
 // these default parameter values need more documentation.  All but the last
 // four were taken from main.cpp from the kht implementation.
-public func kernelHoughTransform(image: Mat,
+public func kernelHoughTransform(image: MatWrapper,
                                  width: Int,
                                  height: Int,
                                  // never return more than this many lines
