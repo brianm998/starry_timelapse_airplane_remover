@@ -46,10 +46,6 @@ struct InitialInstructionsView: View {
                           .foregroundColor(.white)
 
                         HStack {
-                            Toggle("Horizon Detection Enabled",
-                                   isOn: $viewModel.horizonDetectionEnabled)
-                              .foregroundColor(.white)
-
                             Text("Process ")
                               .foregroundColor(.white)
                             TextField("\(maxConcurrentHorizonCalculations)",
@@ -69,33 +65,49 @@ struct InitialInstructionsView: View {
                             Text(" at once")
                               .foregroundColor(.white)
                         }
-                        
-                       // expand this text, and add some buttons?
-                       // add don't show again, put in preferenes
-                        Button() {
-                            if let config = viewModel.config {
-                                // force the config to save itself now
-                                // otherwise the horizonDetectionEnabled may
-                                // still be nil
-                                var newConfig = config.config()
-                                newConfig.horizonDetectionEnabled = viewModel.horizonDetectionEnabled
-                                config.update(newConfig)
+
+                        HStack {
+                            Button() {
+                                viewModel.horizonDetectionEnabled = false
+                                if let config = viewModel.config {
+                                    // force the config to save itself now
+                                    // otherwise the horizonDetectionEnabled may
+                                    // still be nil
+                                    var newConfig = config.config()
+                                    newConfig.horizonDetectionEnabled = viewModel.horizonDetectionEnabled
+                                    config.update(newConfig)
+                                }
+                                
+                                viewModel.shouldShowInitialInstructions = false
+                                viewModel.showProcessingOptionsSheet = true
+                            } label: {
+                                Text("No, this image sequence does not include a horizon.\nHorizon Detection is not necessary.")
                             }
-                            
-                            
-                            viewModel.shouldShowInitialInstructions = false
-                            if viewModel.horizonDetectionEnabled {
+                              .buttonStyle(PlainButtonStyle()) // XXX these styles suck
+                            // this one is transparent totally :(
+
+                            Button() {
+                                viewModel.horizonDetectionEnabled = true
+                                if let config = viewModel.config {
+                                    // force the config to save itself now
+                                    // otherwise the horizonDetectionEnabled may
+                                    // still be nil
+                                    var newConfig = config.config()
+                                    newConfig.horizonDetectionEnabled = viewModel.horizonDetectionEnabled
+                                    config.update(newConfig)
+                                }
+                                
+                                viewModel.shouldShowInitialInstructions = false
+
                                 viewModel.showIgnoreLowerBar = false
                                 viewModel.processHorizonForAllFrames()
+
+                            } label: {
+                                Text("Yes, this image sequence includes a horizon.\nRun Horizon Detection on it.")
                             }
-                        } label: {
-                            if viewModel.horizonDetectionEnabled {
-                                Text("Run Horizon Detection")
-                            } else {
-                                Text("Close")
-                            }
+                              .buttonStyle(.borderedProminent)
+                            // this style is bad too :(
                         }
-                          .buttonStyle(ShrinkingButton(.clear))
                     }
                       .padding(20)
                       .background(.gray)

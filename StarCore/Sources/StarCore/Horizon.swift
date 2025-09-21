@@ -248,6 +248,12 @@ extension PixelatedImage {
         let rowBytes = width * comps
 
         switch imageData {
+
+        case .unsafeSixteenBit(let buffer):
+            fatalError("not implemented")
+        case .unsafeEightBit(let buffer):
+            fatalError("not implemented")
+            
         case .eightBit(let buffer):
             let maxValue: UInt8 = .max
             var newBuffer = [UInt8](repeating: 0, count: width * newHeight * comps)

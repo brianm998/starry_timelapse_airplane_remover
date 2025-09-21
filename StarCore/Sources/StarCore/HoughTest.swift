@@ -49,6 +49,10 @@ func hough_test(filename: String, outputFilename: String) async {
                                                             output_image.imageData.data as CFData) as? Data else { fatalError("fuck") }
 
             switch image.imageData {
+            case .unsafeSixteenBit(let buffer):
+                fatalError("not implemented")
+            case .unsafeEightBit(let buffer):
+                fatalError("not implemented")
             case .thirtyTwoBit(_):
                 Log.w("FUCK")
             case .eightBit(_):

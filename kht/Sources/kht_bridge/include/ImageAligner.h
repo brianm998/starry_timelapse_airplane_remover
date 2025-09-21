@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import "MatWrapper.h"
 
 #ifndef STAR_MAT_TYPEDEF
 #define STAR_MAT_TYPEDEF
@@ -23,20 +24,20 @@ typedef NS_ENUM(NSInteger, FeatureMatchMethod) {
 
 // align frames to special frame, with optional mask which shows where to get keypoints from
 // 
-+ (id)alignFrames:(Mat)special
-	   frames:(NSArray<NSValue *> *)frames
++ (id)alignFrames:(MatWrapper *)special
+           frames:(NSArray<MatWrapper *> *)frames
       matchMethod:(FeatureMatchMethod)matchMethod
-	     mask:(Mat)mask	// XXX really should pass frameMasks here too
+             mask:(MatWrapper *)mask // assumed to be zero for ground, non-zero for sky
      maxDeviation:(double)maxDeviation
 maxCornerDeviation:(double)maxCornerDeviation
        invertMask:(BOOL)invertMask
      maxKeypoints:(int)maxKeypoints
  outlierThreshold:(double)k;
 
-+(Mat)createGradientMaskIntoSky:(Mat)binaryMask
-	       gradientDistance:(int)gradientDistance;
++(MatWrapper *)createGradientMaskIntoSky:(MatWrapper*)binaryMask
+			gradientDistance:(int)gradientDistance;
 
-+(Mat)createGradientMaskIntoGround:(Mat)binaryMask
-		  gradientDistance:(int)gradientDistance;
++(MatWrapper *)createGradientMaskIntoGround:(MatWrapper*)binaryMask
+			   gradientDistance:(int)gradientDistance;
 
 @end

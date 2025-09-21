@@ -1,4 +1,5 @@
 #import "ImageAligner.h"
+#import "MatWrapper_Internal.h"
 #import "logging.h"
 #import <opencv2/core.hpp>
 #import <opencv2/imgproc.hpp>
@@ -519,28 +520,18 @@ cv::Mat toGray8U(const cv::Mat& src) {
     return tmp;
 }
 
-+(Mat)createGradientMaskIntoSky:(Mat)binaryMask
-	       gradientDistance:(int)gradientDistance
++(MatWrapper *)createGradientMaskIntoSky:(MatWrapper*)binaryMask
+			gradientDistance:(int)gradientDistance
 {
-  cv::Mat &mat = *(cv::Mat *)binaryMask;
-
-  cv::Mat result = createGradientMaskIntoSky(mat, gradientDistance);
-
-  cv::Mat* resultPtr = new cv::Mat(result);
-
-  return resultPtr;
+  return [[MatWrapper alloc]
+	   initWithMat:createGradientMaskIntoSky(binaryMask.mat, gradientDistance)];
 }
 
-+(Mat)createGradientMaskIntoGround:(Mat)binaryMask
-		  gradientDistance:(int)gradientDistance
++(MatWrapper *)createGradientMaskIntoGround:(MatWrapper*)binaryMask
+			   gradientDistance:(int)gradientDistance
 {
-  cv::Mat &mat = *(cv::Mat *)binaryMask;
-
-  cv::Mat result = createGradientMask(mat, gradientDistance);
-
-  cv::Mat* resultPtr = new cv::Mat(result);
-
-  return resultPtr;
+  return [[MatWrapper alloc]
+	   initWithMat:createGradientMask(binaryMask.mat, gradientDistance)];
 }
 
 
@@ -572,10 +563,10 @@ static cv::Mat makeStarMask(const cv::Mat &gray, int dilateSize = 3, int thresho
  *
  * Uses different logic for sky and earth alignment, invertMask governs that. 
  */
-+ (id)alignFrames:(Mat)special
-           frames:(NSArray<NSValue *> *)frames
++ (id)alignFrames:(MatWrapper *)special
+           frames:(NSArray<MatWrapper *> *)frames
       matchMethod:(FeatureMatchMethod)matchMethod
-             mask:(Mat)mask	// assumed to be zero for ground, non-zero for sky
+             mask:(MatWrapper *)mask // assumed to be zero for ground, non-zero for sky
      maxDeviation:(double)maxDeviation
 maxCornerDeviation:(double)maxCornerDeviation
        invertMask:(BOOL)invertMask // true when processing ground, false for sky
@@ -590,7 +581,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 	cv::setNumThreads(10);	// XXX make this a parameter?
 
 	// pull in the frame we're aligning everything with as a cv::Mat
-        cv::Mat &specialMat = *(cv::Mat *)special;
+        cv::Mat &specialMat = special.mat;
 
 	// random logID
 	uint32_t logID = arc4random_uniform(1000);
@@ -599,9 +590,9 @@ maxCornerDeviation:(double)maxCornerDeviation
 
         // Horizon mask (sky = nonzero, ground = 0)
         cv::Mat horizonMask;
-        if (mask != NULL && !(*(cv::Mat *)mask).empty()) {
+        if (mask != NULL && !mask.mat.empty()) {
             // use passed in horizon mask
-            horizonMask = *(cv::Mat *)mask;
+            horizonMask = mask.mat;
         } else {
             // if no horizon mask is passed, assume a fully white mask (all pixels)
             horizonMask = cv::Mat(specialMat.size(), CV_8U, cv::Scalar(255));
@@ -710,7 +701,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 	// iterate over the given frames to align to the special frame
         for (NSUInteger idx = 0; idx < frames.count; idx++) {
 	  // grab the frame as a cv::Mat
-	  cv::Mat &frame = *(cv::Mat *)frames[idx].pointerValue;
+	  cv::Mat &frame = frames[idx].mat;
 	  try {
 	    //Log_i(@"id %d: neighbor %lu starting", logID, idx);
 

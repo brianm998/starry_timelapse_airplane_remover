@@ -987,6 +987,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let format = image.imageData // make a copy
 
         switch format {
+        case .unsafeSixteenBit(let buffer):
+            fatalError("not implemented")
+        case .unsafeEightBit(let buffer):
+            fatalError("not implemented")
         case .thirtyTwoBit(_):
             fatalError("frame \(self.frameIndex) cannot load 32 bit image here now")
                 
@@ -1323,6 +1327,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                                     atSize: .original)
         {
             switch image.imageData {
+            case .unsafeSixteenBit(let buffer):
+                fatalError("not implemented")
+            case .unsafeEightBit(let buffer):
+                fatalError("not implemented")
             case .thirtyTwoBit(_):
                 fatalError("frame \(frameIndex) cannot load 32 bit validation image")
                 

@@ -107,6 +107,8 @@ public final class PixelatedImage: Sendable {
 
     public let componentsPerPixel: Int
 
+    public let mat: MatWrapper?
+    
     let colorSpace: CGColorSpace // XXX why both space and name?
     let ciFormat: CIFormat    // used to write tiff formats properly
     
@@ -117,9 +119,11 @@ public final class PixelatedImage: Sendable {
 
         // the number of bits per pixel, not per component
         case eightBit([UInt8])
+        case unsafeEightBit(UnsafeBufferPointer<UInt8>)
         case sixteenBit([UInt16])
+        case unsafeSixteenBit(UnsafeBufferPointer<UInt16>)
         case thirtyTwoBit([UInt32])
-        // XXX add another for more bit depth
+        //case unsafeThirtyTwoBit(UnsafeBufferPointer<UInt32>)
         
         init(from array: [UInt8]) {
             self = .eightBit(array)
@@ -135,12 +139,18 @@ public final class PixelatedImage: Sendable {
         
         var data: Data {
             switch self {
+            case .unsafeSixteenBit(let buffer):
+                Data(buffer: buffer)
+            case .unsafeEightBit(let buffer):
+                Data(buffer: buffer)
+            //case .unsafeThirtyTwoBit(let buffer):
+            //    Data(buffer: buffer)
             case .eightBit(let arr):
-                return arr.data
+                arr.data
             case .sixteenBit(let arr):
-                return arr.data
+                arr.data
             case .thirtyTwoBit(let arr):
-                return arr.data
+                arr.data
             }
         }
     }
@@ -195,6 +205,36 @@ public final class PixelatedImage: Sendable {
                   colorSpace: CGColorSpaceCreateDeviceGray(),
                   ciFormat: .L8)
     }
+
+    public init?(mat: MatWrapper,
+                 file: String = #file,
+                 function: String = #function,
+                 line: Int = #line)
+    {
+        self.file = file
+        self.function = function
+        self.line = line
+        self.width = mat.cols
+        self.height = mat.rows
+        self.bytesPerRow = Int(mat.step)
+        self.mat = mat // retain ownership so memory stays alive
+        self.bitsPerPixel = mat.bitsPerPixel
+        self.bitsPerComponent = mat.bitsPerComponent
+        self.bytesPerPixel = mat.bitsPerPixel/8
+        self.bitmapInfo = mat.bitmapInfo
+        self.componentsPerPixel = mat.channels
+        self.colorSpace = mat.colorSpace
+        if mat.bitsPerComponent == 16 {
+            self.imageData = .unsafeSixteenBit(mat.buffer(of: UInt16.self))
+            self.ciFormat = .L16
+        } else if mat.bitsPerComponent == 8 {
+            self.imageData = .unsafeEightBit(mat.buffer(of: UInt8.self))
+            self.ciFormat = .L8
+        } else {
+            Log.w("unsupported bitsPerComponent \(mat.bitsPerComponent)")
+            return nil
+        }
+    }
     
     public init(width: Int,
                 height: Int,
@@ -216,6 +256,7 @@ public final class PixelatedImage: Sendable {
         self.line = line
         self.width = width
         self.height = height
+        self.mat = nil
         self.imageData = imageData
         self.bitsPerPixel = bitsPerPixel
         self.bytesPerRow = bytesPerRow
@@ -269,7 +310,7 @@ public final class PixelatedImage: Sendable {
         self.file = file
         self.function = function
         self.line = line
-        
+        self.mat = nil
         if Thread.isMainThread { Log.w("ON MAIN THREAD") }
         
         self.width = image.width
@@ -319,107 +360,119 @@ public final class PixelatedImage: Sendable {
     }
 }
 
+
 extension PixelatedImage {
+
+    private func bufferIsZero<T: Numeric & Comparable>(
+      _ buffer: UnsafeBufferPointer<T>,
+      atX x: Int,
+      andY y: Int
+    ) -> Bool {
+        let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
+        let red = buffer[offset]
+
+        if red != 0 { return false }
+        if self.componentsPerPixel >= 2 {
+            let green = buffer[offset+1]
+            if green != 0 { return false }
+        }
+        if self.componentsPerPixel >= 3 {
+            let blue = buffer[offset+2]
+            if blue != 0 { return false }
+        }
+        return true
+    }
+    
     func isZero(atX x: Int, andY y: Int) -> Bool {
         switch imageData {
-        case .thirtyTwoBit(let arr):
-            let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
-            let red = arr[offset]
+        case .unsafeSixteenBit(let buffer):
+            return bufferIsZero(buffer, atX: x, andY: y)
 
-            if red != 0 { return false }
-            if self.componentsPerPixel >= 2 {
-                let green = arr[offset+1]
-                if green != 0 { return false }
+        case .unsafeEightBit(let buffer):
+            return bufferIsZero(buffer, atX: x, andY: y)
+
+        case .thirtyTwoBit(let arr):
+            return arr.withUnsafeBufferPointer { buffer in
+                return bufferIsZero(buffer, atX: x, andY: y)
             }
-            if self.componentsPerPixel >= 3 {
-                let blue = arr[offset+2]
-                if blue != 0 { return false }
-            }
-            return true
             
         case .sixteenBit(let arr):
-            let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
-            let red = arr[offset]
-
-            if red != 0 { return false }
-            if self.componentsPerPixel >= 2 {
-                let green = arr[offset+1]
-                if green != 0 { return false }
+            return arr.withUnsafeBufferPointer { buffer in
+                return bufferIsZero(buffer, atX: x, andY: y)
             }
-            if self.componentsPerPixel >= 3 {
-                let blue = arr[offset+2]
-                if blue != 0 { return false }
-            }
-            return true
 
         case .eightBit(let arr):
-            let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
-            let red = arr[offset]
-
-            if red != 0 { return false }
-            if self.componentsPerPixel >= 2 {
-                let green = arr[offset+1]
-                if green != 0 { return false }
+            return arr.withUnsafeBufferPointer { buffer in
+                return bufferIsZero(buffer, atX: x, andY: y)
             }
-            if self.componentsPerPixel >= 3 {
-                let blue = arr[offset+2]
-                if blue != 0 { return false }
-            }
-            return true
         }
     }
 
+    private func bufferIsMax<T: FixedWidthInteger>(
+      _ buffer: UnsafeBufferPointer<T>,
+      atX x: Int,
+      andY y: Int
+    ) -> Bool {
+        let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
+        let red = buffer[offset]
+
+        if red != T.max { return false }
+        if self.componentsPerPixel >= 2 {
+            let green = buffer[offset+1]
+            if green != T.max { return false }
+        }
+        if self.componentsPerPixel >= 3 {
+            let blue = buffer[offset+2]
+            if blue != T.max { return false }
+        }
+        return true
+    }
+    
     func isMax(atX x: Int, andY y: Int) -> Bool {
         switch imageData {
-        case .thirtyTwoBit(let arr):
-            let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
-            let red = arr[offset]
 
-            if red != 0xFFFFFFFF { return false }
-            if self.componentsPerPixel >= 2 {
-                let green = arr[offset+1]
-                if green != 0xFFFFFFFF { return false }
+        case .unsafeSixteenBit(let buffer):
+            return bufferIsMax(buffer, atX: x, andY: y)
+
+        case .unsafeEightBit(let buffer):
+            return bufferIsMax(buffer, atX: x, andY: y)
+
+        case .thirtyTwoBit(let arr):
+            return arr.withUnsafeBufferPointer { buffer in
+                return bufferIsMax(buffer, atX: x, andY: y)
             }
-            if self.componentsPerPixel >= 3 {
-                let blue = arr[offset+2]
-                if blue != 0xFFFFFFFF { return false }
-            }
-            return true
             
         case .sixteenBit(let arr):
-            let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
-            let red = arr[offset]
-
-            if red != 0xFFFF { return false }
-            if self.componentsPerPixel >= 2 {
-                let green = arr[offset+1]
-                if green != 0xFFFF { return false }
+            return arr.withUnsafeBufferPointer { buffer in
+                return bufferIsMax(buffer, atX: x, andY: y)
             }
-            if self.componentsPerPixel >= 3 {
-                let blue = arr[offset+2]
-                if blue != 0xFFFF { return false }
-            }
-            return true
 
         case .eightBit(let arr):
-            let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
-            let red = arr[offset]
-
-            if red != 0xFF { return false }
-            if self.componentsPerPixel >= 2 {
-                let green = arr[offset+1]
-                if green != 0xFF { return false }
+            return arr.withUnsafeBufferPointer { buffer in
+                return bufferIsMax(buffer, atX: x, andY: y)
             }
-            if self.componentsPerPixel >= 3 {
-                let blue = arr[offset+2]
-                if blue != 0xFF { return false }
-            }
-            return true
         }
     }
     
     public func readPixel(atX x: Int, andY y: Int) -> Pixel {
         switch imageData {
+        case .unsafeSixteenBit(let buffer):
+            let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
+            var pixel = Pixel(numberOfComponents: self.componentsPerPixel)
+            pixel.red = buffer[offset]
+            if self.componentsPerPixel >= 2 {
+                pixel.green = buffer[offset+1]
+            }
+            if self.componentsPerPixel >= 3 {
+                pixel.blue = buffer[offset+2]
+            }
+            if self.componentsPerPixel == 4 {
+                pixel.alpha = buffer[offset+3]
+            }
+            return pixel
+            
+        case .unsafeEightBit(let buffer):
+            fatalError("not implemented")
         case .thirtyTwoBit(_):
             fatalError("not supported yet")
             break
@@ -448,6 +501,10 @@ extension PixelatedImage {
     func sortablePixels(baseX: Int, baseY: Int) -> [SortablePixel] {
         var ret: [SortablePixel] = []
         switch imageData {
+        case .unsafeSixteenBit(let buffer):
+            fatalError("not implemented")
+        case .unsafeEightBit(let buffer):
+            fatalError("not implemented")
         case .thirtyTwoBit(let arr):
             for x in 0..<width {
                 for y in 0..<height {
@@ -530,6 +587,10 @@ extension PixelatedImage {
         case .eightBit(_):
             fatalError("not supported yet")
             break
+        case .unsafeSixteenBit(let buffer):
+            fatalError("not implemented")
+        case .unsafeEightBit(let buffer):
+            fatalError("not implemented")
         }
     }
 
@@ -687,6 +748,10 @@ extension PixelatedImage {
     public func mergeWith(_ otherImages: [PixelatedImage]) throws -> PixelatedImage {
         Log.d("mergeWith \(otherImages.count) other images")
         switch self.imageData {
+        case .unsafeSixteenBit(let buffer):
+            fatalError("not implemented")
+        case .unsafeEightBit(let buffer):
+            fatalError("not implemented")
         case .eightBit(_):
             fatalError("cannot merge eight bit images")
         case .thirtyTwoBit(_):
@@ -704,6 +769,10 @@ extension PixelatedImage {
                     fatalError("cannot merge images with different params")
                 }
                 switch otherImage.imageData {
+                case .unsafeSixteenBit(let buffer):
+                    fatalError("not implemented")
+                case .unsafeEightBit(let buffer):
+                    fatalError("not implemented")
                 case .eightBit(_):
                     fatalError("cannot merge eight bit images")
                 case .thirtyTwoBit(_):
@@ -791,6 +860,10 @@ extension PixelatedImage {
       closure: (UInt16, UInt16, UInt16, Bool) -> (UInt16, UInt16, UInt16)
     ) -> PixelatedImage {
         switch self.imageData {
+        case .unsafeSixteenBit(let buffer):
+            fatalError("not implemented")
+        case .unsafeEightBit(let buffer):
+            fatalError("not implemented")
         case .eightBit(_):
             fatalError("NOT SUPPORTED YET")
         case .thirtyTwoBit(_):
@@ -798,6 +871,10 @@ extension PixelatedImage {
         case .sixteenBit(let origImagePixels):
             
             switch mask.imageData {
+            case .unsafeSixteenBit(let buffer):
+                fatalError("not implemented")
+            case .unsafeEightBit(let buffer):
+                fatalError("not implemented")
                 
             case .thirtyTwoBit(_):
                 fatalError("NOT SUPPORTED YET")
@@ -967,6 +1044,10 @@ extension PixelatedImage {
                    matrixHeight > 0
                 {
                     switch imageData {
+                    case .unsafeSixteenBit(let buffer):
+                        fatalError("not implemented")
+                    case .unsafeEightBit(let buffer):
+                        fatalError("not implemented")
                     case .thirtyTwoBit(let arr):
                         //fatalError("THIS MIGHT BE BROKEN")
                         var matrixImageData = [UInt32](repeating: 0, count: matrixWidth*matrixHeight)
@@ -1080,6 +1161,11 @@ extension PixelatedImage {
         // Step 1: Build grayscale intensities (average of RGB, ignoring alpha if present)
         let (intensities, maxValue): ([UInt], UInt) = {
             switch self.imageData {
+            case .unsafeSixteenBit(let buffer):
+                fatalError("not implemented")
+            case .unsafeEightBit(let buffer):
+                fatalError("not implemented")
+                
             case .eightBit(let arr):
                 let comps = componentsPerPixel
                 let vals = stride(from: 0, to: arr.count, by: comps).map { i -> UInt in
@@ -1165,6 +1251,10 @@ public extension PixelatedImage {
         let startRow = self.height - cropHeight
         
         switch self.imageData {
+        case .unsafeSixteenBit(let buffer):
+            fatalError("not implemented")
+        case .unsafeEightBit(let buffer):
+            fatalError("not implemented")
         case .eightBit(let arr):
             let bytesPerRow = self.bytesPerPixel * self.width
             let startIndex = startRow * bytesPerRow
@@ -1473,6 +1563,11 @@ extension PixelatedImage {
         let totalCount = width * height * comps
 
         switch first.imageData {
+        case .unsafeSixteenBit(let buffer):
+            fatalError("not implemented")
+        case .unsafeEightBit(let buffer):
+            fatalError("not implemented")
+            
         case .eightBit:
             var buffer = [UInt8](repeating: 0, count: totalCount)
             for elem in matrixElements {
@@ -1570,14 +1665,11 @@ extension PixelatedImage {
       maxKeypoints: Int32 = 1000,       // XXX expose this and maxDeviation as parameters to user
       outlierThreshold: Double = 1.2
     ) -> AlignmentResult {
-        let baseMat = self.cvMat
-        let frameMats = frames.map { $0.cvMat }
-        var maskMat: Mat? = nil
+        let frameMats = frames.compactMap { $0.asMatWrapper }
+        var maskMat: MatWrapper? = nil
         if let mask {
-            maskMat = mask.cvMat
+            maskMat = mask.asMatWrapper
         }
-
-        let wrappedFrames = frameMats.map { NSValue(pointer: $0) }
 
         var aligned: PixelatedImage? = nil
         var failed: PixelatedImage? = nil
@@ -1585,8 +1677,8 @@ extension PixelatedImage {
         var numFailed: Int = 0
 
         if let result = ImageAligner.alignFrames(
-             baseMat,
-             frames: wrappedFrames,
+             self.asMatWrapper,
+             frames: frameMats,
              matchMethod: matchMethod,//.knnLowes, // .knnLowes or .FLANN or .bruteForce
              mask: maskMat,
              maxDeviation: maxDeviation,
@@ -1623,16 +1715,6 @@ extension PixelatedImage {
             }
         }
 
-        PixelatedImageBridge.freeCvMat(baseMat)
-
-        for frameMat in frameMats {
-            PixelatedImageBridge.freeCvMat(frameMat)
-        }
-
-        if let maskMat {
-            PixelatedImageBridge.freeCvMat(maskMat)
-        }
-
         return AlignmentResult(
           aligned: aligned,
           failed: failed,
@@ -1645,19 +1727,13 @@ extension PixelatedImage {
     // areas that were non zero and within borderAmount of the border
     // will be part of the gradient
     public func raiseMaskBy(_ borderAmount: Int) -> PixelatedImage? {
-        let maskMat = self.cvMat
-
-        if let result = ImageAligner.createGradientMask(
-             intoSky: maskMat,
+        if let matWrapper = self.asMatWrapper,
+           let result = ImageAligner.createGradientMask(
+             intoSky: matWrapper,
              gradientDistance: Int32(borderAmount))
         {
-            let ret = self.newImage(from: result)
-            
-            PixelatedImageBridge.freeCvMat(result)
-            PixelatedImageBridge.freeCvMat(maskMat)
-            return ret
+            return PixelatedImage(mat: result)
         } else {
-            PixelatedImageBridge.freeCvMat(maskMat)
             return nil
         }
     }
@@ -1666,19 +1742,13 @@ extension PixelatedImage {
     // areas that were non zero and within borderAmount of the border
     // will be part of the gradient
     public func raiseLoweredBy(_ borderAmount: Int) -> PixelatedImage? {
-        let maskMat = self.cvMat
-
-        if let result = ImageAligner.createGradientMask(
-             intoGround: maskMat,
+        if let matWrapper = self.asMatWrapper,
+           let result = ImageAligner.createGradientMask(
+             intoGround: matWrapper,
              gradientDistance: Int32(borderAmount))
         {
-            let ret = self.newImage(from: result)
-            
-            PixelatedImageBridge.freeCvMat(result)
-            PixelatedImageBridge.freeCvMat(maskMat)
-            return ret
+            return PixelatedImage(mat: result)
         } else {
-            PixelatedImageBridge.freeCvMat(maskMat)
             return nil
         }
     }
@@ -1865,5 +1935,109 @@ extension PixelatedImageBridge {
           colorSpace: colorSpace,
           ciFormat: ciFormat
         )
+    }
+}
+
+extension MatWrapper: @unchecked Sendable {}
+extension UnsafeBufferPointer: @unchecked Sendable {}
+
+extension MatWrapper {
+    func buffer<T>(of type: T.Type) -> UnsafeBufferPointer<T> {
+        let count = self.lengthInBytes / MemoryLayout<T>.stride
+        return UnsafeBufferPointer(start: dataPtr.assumingMemoryBound(to: T.self),
+                                   count: count)
+    }
+
+    func mutableBuffer<T>(of type: T.Type) -> UnsafeMutableBufferPointer<T> {
+        let count = self.lengthInBytes / MemoryLayout<T>.stride
+        return UnsafeMutableBufferPointer(start: UnsafeMutableRawPointer(mutating: dataPtr)!
+                                            .assumingMemoryBound(to: T.self),
+                                          count: count)
+    }
+}
+
+extension PixelatedImage {
+    public var asMatWrapper: MatWrapper? {
+        let cvType = MatWrapper.cvType(
+          forBitsPerComponent: Int32(self.bitsPerComponent),
+          componentsPerPixel: Int32(self.componentsPerPixel)
+        )
+        guard cvType != -1 else { return nil }
+
+        switch self.imageData {
+        case .unsafeSixteenBit(let buffer):
+            if let baseAddress = buffer.baseAddress {
+                return MatWrapper(
+                  width: self.width,
+                  height: self.height,
+                  cvType: cvType,
+                  bytesPerRow: self.bytesPerRow,
+                  data: UnsafeMutableRawPointer(mutating: baseAddress),
+                  takeOwnership: false
+                )
+            } else {
+                return nil
+            }
+
+        case .unsafeEightBit(let buffer):
+            if let baseAddress = buffer.baseAddress {
+                return MatWrapper(
+                  width: self.width,
+                  height: self.height,
+                  cvType: cvType,
+                  bytesPerRow: self.bytesPerRow,
+                  data: UnsafeMutableRawPointer(mutating: baseAddress),
+                  takeOwnership: false
+                )
+            } else {
+                return nil
+            }
+            
+        case .eightBit(let arr):
+            return arr.withUnsafeBufferPointer { buf in
+                if let baseAddress = buf.baseAddress {
+                    return MatWrapper(
+                      width: self.width,
+                      height: self.height,
+                      cvType: cvType,
+                      bytesPerRow: self.bytesPerRow,
+                      data: UnsafeMutableRawPointer(mutating: baseAddress),
+                      takeOwnership: false
+                    )
+                } else {
+                    return nil
+                }
+            }
+        case .sixteenBit(let arr):
+            return arr.withUnsafeBufferPointer { buf in
+                if let baseAddress = buf.baseAddress {
+                    return MatWrapper(
+                      width: self.width,
+                      height: self.height,
+                      cvType: cvType,
+                      bytesPerRow: self.bytesPerRow,
+                      data: UnsafeMutableRawPointer(mutating: baseAddress),
+                      takeOwnership: false
+                    )
+                } else {
+                    return nil
+                }
+            }
+        case .thirtyTwoBit(let arr):
+            return arr.withUnsafeBufferPointer { buf in
+                if let baseAddress = buf.baseAddress {
+                    return MatWrapper(
+                      width: self.width,
+                      height: self.height,
+                      cvType: cvType,
+                      bytesPerRow: self.bytesPerRow,
+                      data: UnsafeMutableRawPointer(mutating: baseAddress),
+                      takeOwnership: false
+                    )
+                } else {
+                    return nil
+                }
+            }
+        }
     }
 }
