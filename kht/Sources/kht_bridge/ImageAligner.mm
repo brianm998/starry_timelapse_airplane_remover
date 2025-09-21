@@ -930,13 +930,13 @@ maxCornerDeviation:(double)maxCornerDeviation
 	//cv::Mat *failedResult = new cv::Mat(matchingImageFromArray(specialMat,failed, k));
 
 	// use median mergs
-        cv::Mat *alignedResult = new cv::Mat(medianImageFromArray(aligned, k));
-        cv::Mat *failedResult = new cv::Mat(medianImageFromArray(failed, k));
+        cv::Mat alignedResult = medianImageFromArray(aligned, k);
+        cv::Mat failedResult = medianImageFromArray(failed, k);
         
         AlignmentResult *resultObj = [AlignmentResult new];
-	resultObj.aligned = [NSValue valueWithPointer:alignedResult];
+	resultObj.aligned = [[MatWrapper alloc] initWithMat: alignedResult];
 	resultObj.numAligned = aligned.size();
-	resultObj.failed  = [NSValue valueWithPointer:failedResult];
+	resultObj.failed  = [[MatWrapper alloc] initWithMat: failedResult];
 	resultObj.numFailed = failed.size();
 	return resultObj;
  

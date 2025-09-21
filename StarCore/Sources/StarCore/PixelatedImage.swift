@@ -28,6 +28,7 @@ import KHTSwift
 import logging
 import Cocoa
 import kht_bridge
+import ImageIO
 
 fileprivate let doingMemoryTesting = false
 
@@ -600,7 +601,7 @@ extension PixelatedImage {
 
     public var nsImage: NSImage? {
         do {
-            let cgImage = try image(fromData: imageData.data) 
+            let cgImage = try image(fromData: imageData.data)
             return NSImage(cgImage: cgImage, size: .zero)
         } catch {
             Log.e("error \(error)")
@@ -715,32 +716,22 @@ extension PixelatedImage {
         
         // create a CGImage from the data we just changed
 
-        
         let newImage = try self.image(fromData: imageData) 
         // save it
         //Log.d("newImage \(newImage)")
 
-        let context = CIContext()
+
         let fileURL = NSURL(fileURLWithPath: imageFilename, isDirectory: false) as URL
 
-        let options: [CIImageRepresentationOption: Any] = [:]
-        var ciFormat: CIFormat = self.ciFormat
-
-        if let newColorSpace = newImage.colorSpace,
-           newColorSpace != self.colorSpace
-        {
-            if newColorSpace == CGColorSpaceCreateDeviceGray() {
-                ciFormat = .L16 // XXX should handle other depths too
-            }
+        guard let dest = CGImageDestinationCreateWithURL(fileURL as CFURL, kUTTypeTIFF, 1, nil) else {
+            throw NSError(domain: "SaveTIFF", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create image destination"])
         }
-        
-        try context.writeTIFFRepresentation(
-          of: CIImage(cgImage: newImage),
-          to: fileURL,
-          format: ciFormat,
-          colorSpace: newImage.colorSpace ?? self.colorSpace,
-          options: options
-        )
+    
+        CGImageDestinationAddImage(dest, newImage, nil)
+    
+        if !CGImageDestinationFinalize(dest) {
+            throw NSError(domain: "SaveTIFF", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to write image"])
+        }        
         Log.i("image written to \(imageFilename)")
     }
     
@@ -1692,20 +1683,18 @@ extension PixelatedImage {
                 Log.e("error: \(error)")
             } else if let result = result as? kht_bridge.AlignmentResult {
 
-                if let matPtr = result.aligned.pointerValue {
+                if let mat = result.aligned {
                     // assumes self and processedMat have same bits per pixel, num components, etc.
-                    if !PixelatedImageBridge.matIsEmpty(matPtr) {
-                        aligned = self.newImage(from: matPtr)
+                    if !mat.isEmpty {
+                        aligned = PixelatedImage(mat: mat)
                     }
-                    PixelatedImageBridge.freeCvMat(matPtr)
                 }
 
-                if let matPtr = result.failed.pointerValue {
+                if let mat = result.failed {
                     // assumes self and processedMat have same bits per pixel, num components, etc.
-                    if !PixelatedImageBridge.matIsEmpty(matPtr) {
-                        failed = self.newImage(from: matPtr)
+                    if !mat.isEmpty {
+                        failed = PixelatedImage(mat: mat)
                     }
-                    PixelatedImageBridge.freeCvMat(matPtr)
                 }
                 numAligned = Int(result.numAligned)
                 numFailed = Int(result.numFailed)

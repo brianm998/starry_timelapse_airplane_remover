@@ -7,9 +7,9 @@ typedef void* Mat;
 #endif
 
 @interface AlignmentResult : NSObject
-@property(nonatomic, strong) NSValue *aligned;   // warped frame
+@property(nonatomic, strong) MatWrapper *aligned;   // warped frame
 @property(nonatomic, assign) int numAligned;
-@property(nonatomic, strong) NSValue *failed;    // fallback/original frame
+@property(nonatomic, strong) MatWrapper *failed;    // fallback/original frame
 @property(nonatomic, assign) int numFailed;
 @end
 

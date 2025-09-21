@@ -19,6 +19,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// Length of contiguous data buffer in bytes
 @property (nonatomic, readonly) size_t dataLength;
 
+@property (nonatomic, readonly) BOOL isEmpty;
+
 /// Raw data pointer (optional, unsafe!)
 @property (nonatomic, readonly) const void *dataPtr;
 

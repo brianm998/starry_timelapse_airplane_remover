@@ -42,7 +42,7 @@
 - (size_t)dataLength  { return _mat.total() * _mat.elemSize(); }
 - (size_t)step        { return _mat.step; }
 - (const void *)dataPtr { return _mat.data; }
-
+- (BOOL)isEmpty { return _mat.empty(); }
 - (size_t)lengthInBytes {
     return _mat.total() * _mat.elemSize();
 }
