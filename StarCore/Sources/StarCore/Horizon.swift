@@ -272,8 +272,7 @@ extension PixelatedImage {
                                   bytesPerPixel: bytesPerPixel,
                                   bitmapInfo: bitmapInfo,
                                   componentsPerPixel: comps,
-                                  colorSpace: colorSpace,
-                                  ciFormat: ciFormat)
+                                  colorSpace: colorSpace)
 
         case .sixteenBit(let buffer):
             let maxValue: UInt16 = .max
@@ -302,8 +301,7 @@ extension PixelatedImage {
                                   bytesPerPixel: bytesPerPixel,
                                   bitmapInfo: bitmapInfo,
                                   componentsPerPixel: comps,
-                                  colorSpace: colorSpace,
-                                  ciFormat: ciFormat)
+                                  colorSpace: colorSpace)
 
         case .thirtyTwoBit(let buffer):
             let maxValue: UInt32 = .max
@@ -332,8 +330,7 @@ extension PixelatedImage {
                                   bytesPerPixel: bytesPerPixel,
                                   bitmapInfo: bitmapInfo,
                                   componentsPerPixel: comps,
-                                  colorSpace: colorSpace,
-                                  ciFormat: ciFormat)
+                                  colorSpace: colorSpace)
         }
     }
 }

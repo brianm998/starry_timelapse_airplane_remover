@@ -241,17 +241,18 @@ public class FullFrameBlobber {
     public func outputImage() async -> PixelatedImage {
 
         // write out the subtractionArray here as an image
-        let outputImage = PixelatedImage(width: imageWidth,
-                                         height: imageHeight,
-                                         imageData: PixelatedImage.DataFormat(from: await self.outputData()),
-                                         bitsPerPixel: 16,
-                                         bytesPerRow: 2*imageWidth,
-                                         bitsPerComponent: 16,
-                                         bytesPerPixel: 2,
-                                         bitmapInfo: .byteOrder16Little, 
-                                         componentsPerPixel: 1,
-                                         colorSpace: CGColorSpaceCreateDeviceGray(),
-                                         ciFormat: .L16)
+        let outputImage = PixelatedImage(
+          width: imageWidth,
+          height: imageHeight,
+          imageData: .init(from: await self.outputData()),
+          bitsPerPixel: 16,
+          bytesPerRow: 2*imageWidth,
+          bitsPerComponent: 16,
+          bytesPerPixel: 2,
+          bitmapInfo: .byteOrder16Little, 
+          componentsPerPixel: 1,
+          colorSpace: CGColorSpaceCreateDeviceGray()
+        )
 
         return outputImage
     }

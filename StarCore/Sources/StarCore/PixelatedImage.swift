@@ -108,10 +108,11 @@ public final class PixelatedImage: Sendable {
 
     public let componentsPerPixel: Int
 
+    // if instantiated with a cv::Mat, keep its wrapper here so the
+    // image buffer stays allocated while this object does
     public let mat: MatWrapper?
     
     let colorSpace: CGColorSpace // XXX why both space and name?
-    let ciFormat: CIFormat    // used to write tiff formats properly
     
     // enum to bridge between Data and direct individual component access
     // do we have 8 bits per component, or 16?
@@ -169,8 +170,7 @@ public final class PixelatedImage: Sendable {
                   bytesPerPixel: 4,
                   bitmapInfo: .byteOrder32Little, 
                   componentsPerPixel: 1,
-                  colorSpace: CGColorSpaceCreateDeviceGray(),
-                  ciFormat: .Af)
+                  colorSpace: CGColorSpaceCreateDeviceGray())
     }
 
     public convenience init(width: Int,
@@ -186,8 +186,7 @@ public final class PixelatedImage: Sendable {
                   bytesPerPixel: 2,
                   bitmapInfo: .byteOrder16Little, 
                   componentsPerPixel: 1,
-                  colorSpace: CGColorSpaceCreateDeviceGray(),
-                  ciFormat: .L16)
+                  colorSpace: CGColorSpaceCreateDeviceGray())
     }
 
     public convenience init(width: Int,
@@ -203,8 +202,7 @@ public final class PixelatedImage: Sendable {
                   bytesPerPixel: 1,
                   bitmapInfo: .byteOrderDefault, 
                   componentsPerPixel: 1,
-                  colorSpace: CGColorSpaceCreateDeviceGray(),
-                  ciFormat: .L8)
+                  colorSpace: CGColorSpaceCreateDeviceGray())
     }
 
     public init?(mat: MatWrapper,
@@ -227,10 +225,8 @@ public final class PixelatedImage: Sendable {
         self.colorSpace = mat.colorSpace
         if mat.bitsPerComponent == 16 {
             self.imageData = .unsafeSixteenBit(mat.buffer(of: UInt16.self))
-            self.ciFormat = .L16
         } else if mat.bitsPerComponent == 8 {
             self.imageData = .unsafeEightBit(mat.buffer(of: UInt8.self))
-            self.ciFormat = .L8
         } else {
             Log.w("unsupported bitsPerComponent \(mat.bitsPerComponent)")
             return nil
@@ -247,7 +243,6 @@ public final class PixelatedImage: Sendable {
                 bitmapInfo: CGBitmapInfo,
                 componentsPerPixel: Int,
                 colorSpace: CGColorSpace,
-                ciFormat: CIFormat,
                 file: String = #file,
                 function: String = #function,
                 line: Int = #line)    
@@ -266,7 +261,6 @@ public final class PixelatedImage: Sendable {
         self.bitmapInfo = bitmapInfo
         self.componentsPerPixel = componentsPerPixel
         self.colorSpace = colorSpace
-        self.ciFormat = ciFormat
         if doingMemoryTesting {
             Task { await activeImageCounter.add(for: file, and: function, at: line) }
         }
@@ -282,8 +276,7 @@ public final class PixelatedImage: Sendable {
                               bytesPerPixel: self.bytesPerPixel,
                               bitmapInfo: self.bitmapInfo,
                               componentsPerPixel: self.componentsPerPixel,
-                              colorSpace: self.colorSpace,
-                              ciFormat: self.ciFormat)
+                              colorSpace: self.colorSpace)
     }
 
     deinit {
@@ -324,26 +317,6 @@ public final class PixelatedImage: Sendable {
         self.componentsPerPixel = image.bitsPerPixel/image.bitsPerComponent
         self.colorSpace = image.colorSpace ?? CGColorSpaceCreateDeviceRGB()
 
-        let numComponentsPerPixel = image.bitsPerPixel / image.bitsPerComponent
-        if numComponentsPerPixel == 1 {
-            if bitsPerPixel == 8 {
-                self.ciFormat = CIFormat.L8
-            } else if bitsPerPixel == 16 {
-                self.ciFormat = CIFormat.L16
-            } else {
-                self.ciFormat = CIFormat.RGBA16
-            }
-        } else if numComponentsPerPixel == 4 {
-            if bitsPerPixel == 8 {
-                self.ciFormat = CIFormat.RGBA8
-            } else if bitsPerPixel == 16 {
-                self.ciFormat = CIFormat.RGBA16
-            } else {
-                self.ciFormat = CIFormat.RGBA16
-            }
-        } else {
-            self.ciFormat = CIFormat.RGBA16
-        }
 
         if let data = image.dataProvider?.data as? Data {
             if bytesPerPixel == 1 {
@@ -980,8 +953,7 @@ extension PixelatedImage {
                               bytesPerPixel: self.bytesPerPixel,
                               bitmapInfo: self.bitmapInfo,
                               componentsPerPixel: self.componentsPerPixel,
-                              colorSpace: self.colorSpace,
-                              ciFormat: self.ciFormat
+                              colorSpace: self.colorSpace
                             )
                             
                             let element = ImageMatrixElement(x: xOffset,
@@ -1133,8 +1105,7 @@ public extension PixelatedImage {
               bytesPerPixel: self.bytesPerPixel,
               bitmapInfo: self.bitmapInfo,
               componentsPerPixel: self.componentsPerPixel,
-              colorSpace: self.colorSpace,
-              ciFormat: self.ciFormat
+              colorSpace: self.colorSpace
             )
             
         case .unsafeEightBit(let buffer):
@@ -1153,8 +1124,7 @@ public extension PixelatedImage {
               bytesPerPixel: self.bytesPerPixel,
               bitmapInfo: self.bitmapInfo,
               componentsPerPixel: self.componentsPerPixel,
-              colorSpace: self.colorSpace,
-              ciFormat: self.ciFormat
+              colorSpace: self.colorSpace
             )
 
         case .eightBit(let arr):
@@ -1173,8 +1143,7 @@ public extension PixelatedImage {
               bytesPerPixel: self.bytesPerPixel,
               bitmapInfo: self.bitmapInfo,
               componentsPerPixel: self.componentsPerPixel,
-              colorSpace: self.colorSpace,
-              ciFormat: self.ciFormat
+              colorSpace: self.colorSpace
             )
             
         case .sixteenBit(let arr):
@@ -1193,8 +1162,7 @@ public extension PixelatedImage {
               bytesPerPixel: self.bytesPerPixel,
               bitmapInfo: self.bitmapInfo,
               componentsPerPixel: self.componentsPerPixel,
-              colorSpace: self.colorSpace,
-              ciFormat: self.ciFormat
+              colorSpace: self.colorSpace
             )
             
         case .thirtyTwoBit(let arr):
@@ -1213,8 +1181,7 @@ public extension PixelatedImage {
               bytesPerPixel: self.bytesPerPixel,
               bitmapInfo: self.bitmapInfo,
               componentsPerPixel: self.componentsPerPixel,
-              colorSpace: self.colorSpace,
-              ciFormat: self.ciFormat
+              colorSpace: self.colorSpace
             )
         }
     }
@@ -1486,8 +1453,7 @@ extension PixelatedImage {
                       bytesPerPixel: first.bytesPerPixel,
                       bitmapInfo: first.bitmapInfo,
                       componentsPerPixel: comps,
-                      colorSpace: first.colorSpace,
-                      ciFormat: first.ciFormat)
+                      colorSpace: first.colorSpace)
             
         case .unsafeEightBit(let buffer):
             var buffer = [UInt8](repeating: 0, count: totalCount)
@@ -1510,8 +1476,7 @@ extension PixelatedImage {
                       bytesPerPixel: first.bytesPerPixel,
                       bitmapInfo: first.bitmapInfo,
                       componentsPerPixel: comps,
-                      colorSpace: first.colorSpace,
-                      ciFormat: first.ciFormat)
+                      colorSpace: first.colorSpace)
             
         case .eightBit:
             var buffer = [UInt8](repeating: 0, count: totalCount)
@@ -1534,8 +1499,7 @@ extension PixelatedImage {
                       bytesPerPixel: first.bytesPerPixel,
                       bitmapInfo: first.bitmapInfo,
                       componentsPerPixel: comps,
-                      colorSpace: first.colorSpace,
-                      ciFormat: first.ciFormat)
+                      colorSpace: first.colorSpace)
 
         case .sixteenBit:
             var buffer = [UInt16](repeating: 0, count: totalCount)
@@ -1558,8 +1522,7 @@ extension PixelatedImage {
                       bytesPerPixel: first.bytesPerPixel,
                       bitmapInfo: first.bitmapInfo,
                       componentsPerPixel: comps,
-                      colorSpace: first.colorSpace,
-                      ciFormat: first.ciFormat)
+                      colorSpace: first.colorSpace)
 
         case .thirtyTwoBit:
             var buffer = [UInt32](repeating: 0, count: totalCount)
@@ -1582,8 +1545,7 @@ extension PixelatedImage {
                       bytesPerPixel: first.bytesPerPixel,
                       bitmapInfo: first.bitmapInfo,
                       componentsPerPixel: comps,
-                      colorSpace: first.colorSpace,
-                      ciFormat: first.ciFormat)
+                      colorSpace: first.colorSpace)
         }
     }
 }
