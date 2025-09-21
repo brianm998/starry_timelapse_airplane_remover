@@ -37,14 +37,16 @@ struct InitialInstructionsView: View {
                           .frame(maxHeight: 10)
 
                         Text("""
-                               Does this image sequence include the horizon?
-                               Or is it pointing only at the sky?
-                               If there is no ground in your image at all, turn off horizon detection below.
+                               The next step is to let Star know if it should try to find a horizon in this image sequence.
+                               Unless there is only sky in this video, horizon detection and then earth alignment are helpful.
                                Horizion detection is used to distinguish between ground and sky so that when replacing pixels close to the horizon we can ensure a better match.
                                """)
-                          .font(.title2)
+                          .font(.title3)
+                          .multilineTextAlignment(.leading)
+                          .lineLimit(nil) // allow unlimited lines
+                          .fixedSize(horizontal: true, vertical: false) // let it grow vertically, not horizontally
                           .foregroundColor(.white)
-
+/*
                         HStack {
                             Text("Process ")
                               .foregroundColor(.white)
@@ -65,7 +67,13 @@ struct InitialInstructionsView: View {
                             Text(" at once")
                               .foregroundColor(.white)
                         }
-
+ */
+                        Space(height: 40)
+                        Text("Does This Video include the horizon?")
+                          .font(.largeTitle)
+                          .foregroundColor(.white)
+                        
+                        Space(height: 20)
                         HStack {
                             Button() {
                                 viewModel.horizonDetectionEnabled = false
@@ -80,12 +88,24 @@ struct InitialInstructionsView: View {
                                 
                                 viewModel.shouldShowInitialInstructions = false
                                 viewModel.showProcessingOptionsSheet = true
+                                viewModel.showIgnoreLowerBar = false
+                                viewModel.ignoreLowerPixels = 0
                             } label: {
-                                Text("No, this image sequence does not include a horizon.\nHorizon Detection is not necessary.")
+                                ZStack {
+                                    Color.white
+                                      .cornerRadius(20)
+                                    
+                                    Text("No, this image sequence does not include a horizon.\nHorizon Detection is not necessary.")
+                                      .font(.title2)
+                                      .padding(20)
+                                }
+                                  .fixedSize(horizontal: true, vertical: true)
                             }
                               .buttonStyle(PlainButtonStyle()) // XXX these styles suck
                             // this one is transparent totally :(
 
+                            Space(width: 80)
+                            
                             Button() {
                                 viewModel.horizonDetectionEnabled = true
                                 if let config = viewModel.config {
@@ -103,10 +123,18 @@ struct InitialInstructionsView: View {
                                 viewModel.processHorizonForAllFrames()
 
                             } label: {
-                                Text("Yes, this image sequence includes a horizon.\nRun Horizon Detection on it.")
+                                ZStack {
+                                    Color.blue
+                                      .cornerRadius(20)
+                                    
+                                    Text("Yes, this image sequence includes a horizon.\nRun Horizon Detection on it.")
+                                      .foregroundColor(.white)
+                                      .font(.title2)
+                                      .padding(20)
+                                }
+                                  .fixedSize(horizontal: true, vertical: true)
                             }
-                              .buttonStyle(.borderedProminent)
-                            // this style is bad too :(
+                              .buttonStyle(PlainButtonStyle()) // XXX these styles suck
                         }
                     }
                       .padding(20)
