@@ -33,6 +33,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, readonly) CGBitmapInfo bitmapInfo;
 
+- (void)writeTo:(NSString*)filename;
+
 /// Debug info
 - (NSString *)debugDescription;
 

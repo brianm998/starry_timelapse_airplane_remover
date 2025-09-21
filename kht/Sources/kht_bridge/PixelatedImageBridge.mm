@@ -36,7 +36,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 
 	// Safety check: ensure sizes match
 	if (mat1.size() != mat2.size() || mat1.size() != matMask.size()) {
-	  NSLog(@"combineWithMask: Input Mats must have the same size.");
+	  Log_e(@"combineWithMask: Input Mats must have the same size.");
 	  return nil;
 	}
 
@@ -529,7 +529,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
   return 1;
 }
 
-+ (MatWrapper *)subtractImage:(MatWrapper *)img1 fromImage:(MatWrapper *)img2 {
++ (MatWrapper *)subtractImage:(MatWrapper *)img2 fromImage:(MatWrapper *)img1 {
   // Step 1: Convert both images to grayscale if they are not already
 
   cv::Mat img1Mat = img1.mat;
@@ -574,13 +574,13 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 
     // Step 4: Subtract img2 from img1
     cv::Mat diff;
+    
     cv::subtract(gray1f, gray2f, diff);
-
+    
     // Step 5: Clip negative values to zero
     cv::Mat diffClipped;
     cv::max(diff, 0, diffClipped);
-    printMatInfo(diffClipped, "result");
-
+    
     return [[MatWrapper alloc] initWithMat: diffClipped];
 }
 

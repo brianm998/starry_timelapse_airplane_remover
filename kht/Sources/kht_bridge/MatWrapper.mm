@@ -51,6 +51,10 @@
             (long)_mat.cols, (long)_mat.rows, (long)_mat.channels(), _mat.type()];
 }
 
+- (void)writeTo:(NSString*)filename {
+  cv::imwrite(std::string([filename UTF8String]), _mat);
+}
+
 - (instancetype)initWithWidth:(NSInteger)width
                        height:(NSInteger)height
                         cvType:(int)cvType

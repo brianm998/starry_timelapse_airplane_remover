@@ -2028,9 +2028,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         let accessor = imageAccessor
         
-        if let image = try await imageAccessor.load(frameIndex: frameIndex,
-                                                    type: .subtraction,
-                                                    atSize: .original)
+        if let image = try await imageAccessor.load(
+             frameIndex: frameIndex,
+             type: .subtraction,
+             atSize: .original)
         {
             return image
         }
@@ -2038,11 +2039,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // if we don't have the subtracted image on file yet, make it
         Log.d("frame \(frameIndex) loadOrCreateSubtractionImage")
 
-
         // load the original
-        guard let image = try await accessor.load(frameIndex: frameIndex,
-                                                  type: .original,
-                                                  atSize: .original)
+        guard let image = try await accessor.load(
+                frameIndex: frameIndex,
+                type: .original,
+                atSize: .original)
         else {
             Log.e("frame \(frameIndex) couldn't load original image")
             // XXX these should really throw an error, and that really should
@@ -2066,6 +2067,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // will be bright in the subtractionImage
         
         if config.horizonDetectionEnabled ?? true {
+            Log.d("doing horizon enabled subtraction image")
             // we care about the horizon, so make a composite
             // of the earth and star aligned images, and subtract
             // that from the image instead of just the star aligned image
@@ -2085,7 +2087,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             subtractionImage = try image.subtract(starAlignedImage)
         }
 
-        
         if config.writeOutlierGroupFiles {
             // write out image of outlier amounts
             do {
