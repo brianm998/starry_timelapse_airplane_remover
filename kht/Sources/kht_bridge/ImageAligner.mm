@@ -571,22 +571,20 @@ static cv::Mat makeStarMask(const cv::Mat &gray, int dilateSize = 3, int thresho
 maxCornerDeviation:(double)maxCornerDeviation
        invertMask:(BOOL)invertMask // true when processing ground, false for sky
      maxKeypoints:(int)maxKeypoints
- outlierThreshold:(double)k 
+ outlierThreshold:(double)k
 {
     try {
         // how far vertically to extend the horizon mask when inverted
         int horizonExtension = 100; // XXX make this a parameter?
 
-	// how many threads opencv can use
-	cv::setNumThreads(10);	// XXX make this a parameter?
+        // how many threads opencv can use
+        //cv::setNumThreads(20);    // XXX make this a parameter?
 
-	// pull in the frame we're aligning everything with as a cv::Mat
+        // pull in the frame we're aligning everything with as a cv::Mat
         cv::Mat &specialMat = special.mat;
 
-	// random logID
-	uint32_t logID = arc4random_uniform(1000);
-
-	//Log_i(@"id %d: starting to align frames", logID);
+        // random logID
+        uint32_t logID = arc4random_uniform(1000);
 
         // Horizon mask (sky = nonzero, ground = 0)
         cv::Mat horizonMask;
@@ -598,356 +596,329 @@ maxCornerDeviation:(double)maxCornerDeviation
             horizonMask = cv::Mat(specialMat.size(), CV_8U, cv::Scalar(255));
         }
 
-	horizonMask = toGray8U(horizonMask);
-	
+        horizonMask = toGray8U(horizonMask);
+
         if (invertMask) {
             // invert the mask to apply to the ground instead of the sky
             cv::bitwise_not(horizonMask, horizonMask);
 
-	    // for the ground, we make the horizon mask include a bit above the horizon,
-	    // which leads to better keypoints down the road
-	    horizonMask = createGradientMaskIntoSky(horizonMask, 100); // XXX hardcoded constant
-	    //cv::imwrite("/tmp/horizonMask.png", horizonMask);
+            // for the ground, we make the horizon mask include a bit above the horizon,
+            // which leads to better keypoints down the road
+            horizonMask = createGradientMaskIntoSky(horizonMask, horizonExtension);
         }
 
         // Prepare grayscale special frame with the horizon mask
         cv::Mat specialGray = toGray8UWithMask(specialMat, horizonMask, true);
 
-	specialMat.release();	// done with specialMat, release it
+        specialMat.release();    // done with specialMat, release it
 
-	// default to deteting with the horizon mask as is
-	cv::Mat detectionMask = horizonMask;
+        // default to deteting with the horizon mask as is
+        cv::Mat detectionMask = horizonMask;
 
-	if(!invertMask) {
-	  // Build star mask for special frame when doing sky
-	  // the star mask restricts keypoint detection to near bright spots in the sky
+        if (!invertMask) {
+            // Build star mask for special frame when doing sky
+            // the star mask restricts keypoint detection to near bright spots in the sky
 
-	  //Log_i(@"id %d: making star mask", logID);
-	  // dilate further to expand keypoint detection area
-	  // threshold is 0..0xFF for what is considered bright
-	  detectionMask = makeStarMask(specialGray,
-				       /*dilateSize=*/30,
-				       /*thresholdVal=*/200);
-	}
+            // dilate further to expand keypoint detection area
+            // threshold is 0..0xFF for what is considered bright
+            detectionMask = makeStarMask(specialGray,
+                                         /*dilateSize=*/30,
+                                         /*thresholdVal=*/200);
+        }
 
-	//cv::imwrite("/tmp/detectionMask.png", detectionMask);
-	
-        // Detector and matcher
-
-	// use SIFT for sky
-        cv::Ptr<cv::SIFT> sift = cv::SIFT::create(maxKeypoints);
-
-	// use AKAZE detector for ground
-	cv::Ptr<cv::AKAZE> akaze = cv::AKAZE::create();
-
-	// this doesn't seem to help :(
-        //        akaze->setDescriptorSize(256); // 4/4
-
-	// XXX XXX make this VVV a parameter?
-	akaze->setThreshold(1e-5); // good results :) but slow :( 5/8
-
-	// key points from the special frame we're aligning to 
+        // Detector and matcher (we'll compute kpSpecial & descSpecial once, reused read-only)
         std::vector<cv::KeyPoint> kpSpecial;
         cv::Mat descSpecial;
-	//Log_i(@"id %d: starting base SIFT detection", logID);
 
-	// not used for sky, only for earth
-	cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(4.0, cv::Size(8,8));
-
-	// first detect keypoints in the special frame we're aligning to
-	if(invertMask) {
-	  // ground
-
-	  // apply extra processing to pull up dark details to help
-	  // find more keypoints in the dark ground 
+        // first detect keypoints in the special frame we're aligning to
+        if (invertMask) {
+            // not used for sky, only for earth
+            cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(4.0, cv::Size(8,8));
 	  
-	  cv::Mat specialProcessed;
+            // ground: create a processed special image for detection
+            // apply extra processing to pull up dark details to help
+            // find more keypoints in the dark ground 
+            cv::Mat specialProcessed;
 
-	  // Apply Contrast Limited Adaptive Histogram Equalization
-	  clahe->apply(specialGray, specialProcessed);
+	    // Apply Contrast Limited Adaptive Histogram Equalization
+            clahe->apply(specialGray, specialProcessed);
 
-	  //cv::imwrite("/tmp/clahe.png", specialProcessed);
-	  
-	  // apply gamma correction to brighten the shadows only
-	  cv::Mat gammaCorrected;
-	  specialProcessed.convertTo(specialProcessed, CV_32F, 1.0/255.0);
-	  cv::pow(specialProcessed, 0.5, specialProcessed); // gamma < 1 brightens
-	  specialProcessed.convertTo(specialProcessed, CV_8U, 255.0);
-	  //cv::imwrite("/tmp/gamma.png", specialProcessed);
+            // apply gamma correction to brighten the shadows only
+            specialProcessed.convertTo(specialProcessed, CV_32F, 1.0/255.0);
+            cv::pow(specialProcessed, 0.5, specialProcessed);
+            specialProcessed.convertTo(specialProcessed, CV_8U, 255.0);
 
-	  // run advanced kaze to detect and compute keypoints in the ground
-	  akaze->detectAndCompute(specialProcessed, detectionMask, kpSpecial, descSpecial);
-	} else {
-	  // sky
-	  // we use sift in the sky to compute 
-	  sift->detectAndCompute(specialGray, detectionMask, kpSpecial, descSpecial);
-	}
+            cv::Ptr<cv::AKAZE> akazeBase = cv::AKAZE::create();
+            akazeBase->setThreshold(1e-5);
+
+	    // run advanced kaze to detect and compute keypoints in the ground
+            akazeBase->detectAndCompute(specialProcessed, detectionMask, kpSpecial, descSpecial);
+        } else {
+            // sky: use SIFT
+            cv::Ptr<cv::SIFT> siftBase = cv::SIFT::create(maxKeypoints);
+            siftBase->detectAndCompute(specialGray, detectionMask, kpSpecial, descSpecial);
+        }
 
         kpSpecial.shrink_to_fit();
-        
-        specialGray.release();	// done with specialGray, release it to save on ram
-        
-	//Log_i(@"id %d: finished base SIFT detection", logID);
+        specialGray.release();
 
-	std::vector<cv::Mat> aligned; // vector of properly aligned frames
-	std::vector<cv::Mat> failed;  // vector of frames that failed
+        // Preallocate per-index result storage to avoid push_back from many threads
+        const size_t n = frames.count;
+        std::vector<cv::Mat> resultMats(n);         // will hold warped (success) or original (failure)
+        std::vector<char>    resultSuccess(n, 0);   // 1 if accepted warp, 0 otherwise
 
-	// use the same matcher on each iteration of the loop
-	cv::BFMatcher matcher(cv::NORM_L2);
-
-	// declated outside the following loop for ram re-use on iteration
-        cv::Mat frameGray, claheOut, gammaCorrected;
-
-	// iterate over the given frames to align to the special frame
-        for (NSUInteger idx = 0; idx < frames.count; idx++) {
-	  // grab the frame as a cv::Mat
-	  cv::Mat &frame = frames[idx].mat;
-	  try {
-	    //Log_i(@"id %d: neighbor %lu starting", logID, idx);
-
-	    // make a gray 8 bit image for detection
-	    frameGray = toGray8UWithMask(frame, horizonMask, true);
-
-	    // keypoints for the alignment frame on this iteration
-	    std::vector<cv::KeyPoint> kpFrame;
-
-	    cv::Mat descFrame;
-
-	    cv::Mat detectionMask = horizonMask;
-
-	    if(!invertMask) {
-	      // detection mask is a star mask for the sky
-	      detectionMask = makeStarMask(frameGray, /*dilateSize=*/30, /*thresholdVal=*/200);
-	    }
-
-	    // same logic as for the special frame, detect and compute keytpoints
-	    // for the frame we're iterating on 
-	    if(invertMask) {
-	      // ground
-
-	      // Apply Contrast Limited Adaptive Histogram Equalization
-	      clahe->apply(frameGray, claheOut);
-
-	      // apply gamma correction to brighten the shadows only
-	      claheOut.convertTo(claheOut, CV_32F, 1.0/255.0);
-	      cv::pow(claheOut, 0.5, claheOut); // gamma < 1 brightens
-	      claheOut.convertTo(claheOut, CV_8U, 255.0);
-
-	      // detect and compute on the processed mat with akaze
-	      akaze->detectAndCompute(claheOut, detectionMask, kpFrame, descFrame);
-	    } else {
-	      // sky
-	      sift->detectAndCompute(frameGray, detectionMask, kpFrame, descFrame);
-	    }
+	Log_i(@"about to align in parallel");
+	
+        // We will run the heavy loop in parallel with OpenCV
+        cv::parallel_for_(cv::Range(0, (int)n), [&](const cv::Range &range) {
 	    
-            kpFrame.shrink_to_fit();
+	    static thread_local cv::Ptr<cv::SIFT> sift;
+	    static thread_local cv::Ptr<cv::AKAZE> akaze;
+	    static thread_local cv::Ptr<cv::CLAHE> clahe;
+			    
+            for (int ii = range.start; ii < range.end; ++ii) {
+                NSUInteger idx = (NSUInteger)ii;
+                try {
+                    // grab the frame as a cv::Mat (read-only access)
+                    cv::Mat &frame = frames[idx].mat;
 
-	    // if we got nothing, then fail fast
-	    if (descFrame.empty() || descSpecial.empty()) {
-	      Log_d(@"frame %lu is empty", idx);
-	      failed.push_back(frame);
-	      continue;
-	    }
+                    // make a gray 8 bit image for detection
+                    cv::Mat frameGray = toGray8UWithMask(frame, horizonMask, true);
 
-	    // we have keypoints to match between the special frame
-	    // and the special frame we're iterating on
+                    std::vector<cv::KeyPoint> kpFrame;
+                    cv::Mat descFrame;
+
+                    cv::Mat localDetectionMask = horizonMask;
+
+                    if (!invertMask) {
+                        // detection mask is a star mask for the sky
+                        localDetectionMask = makeStarMask(frameGray, /*dilateSize=*/30, /*thresholdVal=*/200);
+                    }
+
+                    // create local detector/matcher/clahe instances so they are thread-local
+                    if (invertMask) {
+                        // ground: AKAZE + CLAHE + gamma
+                        if(!clahe) clahe = cv::createCLAHE(4.0, cv::Size(8,8));
+                        cv::Mat claheOut;
+                        clahe->apply(frameGray, claheOut);
+                        claheOut.convertTo(claheOut, CV_32F, 1.0/255.0);
+                        cv::pow(claheOut, 0.5, claheOut);
+                        claheOut.convertTo(claheOut, CV_8U, 255.0);
+
+			if(!akaze) akaze = cv::AKAZE::create();
+                        akaze->setThreshold(1e-5);
+                        akaze->detectAndCompute(claheOut, localDetectionMask, kpFrame, descFrame);
+                    } else {
+                        // sky: SIFT
+                        if(!sift) sift = cv::SIFT::create(maxKeypoints);
+                        sift->detectAndCompute(frameGray, localDetectionMask, kpFrame, descFrame);
+                    }
+
+		    // if we got nothing, then fail fast
+                    if (descFrame.empty() || descSpecial.empty()) {
+                        // failed early: no descriptors
+                        resultSuccess[idx] = 0;
+                        resultMats[idx] = frame;
+                        continue;
+                    }
+
+		    // we have keypoints to match between the special frame
+		    // and the special frame we're iterating on
 	    
-	    std::vector<cv::Point2f> ptsFrame, ptsSpecial;
-	    std::vector<std::vector<cv::DMatch>> knnMatches;
-	    double cutoff = 0;
-	    double minDist = 0;
-	    std::vector<cv::DMatch> matches;
+                    std::vector<cv::Point2f> ptsFrame, ptsSpecial;
+                    std::vector<std::vector<cv::DMatch>> knnMatches;
+                    std::vector<cv::DMatch> matches;
+                    double cutoff = 0;
+                    double minDist = 0;
+		    // local matcher (thread-local)
+		    cv::BFMatcher matcher(cv::NORM_L2);
+		    
+		    // how do we match between the two sets of keypoints?
+		    // three different methods are available
+                    switch (matchMethod) {
+		    case FeatureMatchMethodBruteForce:
+		        // brute force method
+		      
+                        matcher.match(descFrame, descSpecial, matches);
 
-	    // how do we match between the two sets of keypoints?
-	    // three different methods are available
-	    switch (matchMethod) {
-	    case FeatureMatchMethodBruteForce:
-	      // brute force method
-	      
-	      matcher.match(descFrame, descSpecial, matches);
+                        minDist = std::numeric_limits<double>::max();
+                        for (auto &m : matches) {
+                            minDist = std::min(minDist, (double)m.distance);
+                        }
+                        cutoff = std::max(2 * minDist, 30.0);
 
-	      minDist = std::numeric_limits<double>::max();
-	      for (auto &m : matches) {
-		minDist = std::min(minDist, (double)m.distance);
-	      }
-	      cutoff = std::max(2 * minDist, 30.0);
+                        for (auto &m : matches) {
+                            if (m.distance <= cutoff) {
+                                ptsFrame.push_back(kpFrame[m.queryIdx].pt);
+                                ptsSpecial.push_back(kpSpecial[m.trainIdx].pt);
+                            }
+                        }
+			break;
+			
 
-	      for (auto &m : matches) {
-		if (m.distance <= cutoff) {
-		  ptsFrame.push_back(kpFrame[m.queryIdx].pt);
-		  ptsSpecial.push_back(kpSpecial[m.trainIdx].pt);
-		}
-	      }
-	      break;
-	      
+		    case FeatureMatchMethodKNNLowes:
+		        // kNN + Lowe's Ratio Test
 
-	    case FeatureMatchMethodKNNLowes:
-	      // kNN + Lowe's Ratio Test
-	      matcher.knnMatch(descFrame, descSpecial, knnMatches, 2);
+                        matcher.knnMatch(descFrame, descSpecial, knnMatches, 2);
+                        for (size_t i = 0; i < knnMatches.size(); i++) {
+                            if (knnMatches[i].size() == 2) {
+                                const cv::DMatch &m1 = knnMatches[i][0];
+                                const cv::DMatch &m2 = knnMatches[i][1];
+                                if (m1.distance < 0.75 * m2.distance) {
+                                    ptsFrame.push_back(kpFrame[m1.queryIdx].pt);
+                                    ptsSpecial.push_back(kpSpecial[m1.trainIdx].pt);
+                                }
+                            }
+                        }
+			break;
 
-	      for (size_t i = 0; i < knnMatches.size(); i++) {
-		if (knnMatches[i].size() == 2) {
-		  const cv::DMatch &m1 = knnMatches[i][0];
-		  const cv::DMatch &m2 = knnMatches[i][1];
-		  if (m1.distance < 0.75 * m2.distance) { // Lowe’s ratio test
-		    ptsFrame.push_back(kpFrame[m1.queryIdx].pt);
-		    ptsSpecial.push_back(kpSpecial[m1.trainIdx].pt);
-		  }
-		}
-	      }
-	      break;
+			
+		    case FeatureMatchMethodFLANN:
+		      // FLANN based matcher
+		      // Convert to CV_32F because FLANN requires float descriptors
+                        cv::Mat descFrame32f, descSpecial32f;
+                        descFrame.convertTo(descFrame32f, CV_32F);
+                        descSpecial.convertTo(descSpecial32f, CV_32F);
+                        cv::FlannBasedMatcher flann;
+                        flann.knnMatch(descFrame32f, descSpecial32f, knnMatches, 2);
+                        for (size_t i = 0; i < knnMatches.size(); i++) {
+                            if (knnMatches[i].size() == 2) {
+                                const cv::DMatch &m1 = knnMatches[i][0];
+                                const cv::DMatch &m2 = knnMatches[i][1];
+                                if (m1.distance < 0.75 * m2.distance) {
+                                    ptsFrame.push_back(kpFrame[m1.queryIdx].pt);
+                                    ptsSpecial.push_back(kpSpecial[m1.trainIdx].pt);
+                                }
+                            }
+                        }
+			break;
+                    }
 
-	    case FeatureMatchMethodFLANN:
-	      // FLANN based matcher
-	      // Convert to CV_32F because FLANN requires float descriptors
-	      cv::Mat descFrame32f, descSpecial32f;
-	      descFrame.convertTo(descFrame32f, CV_32F);
-	      descSpecial.convertTo(descSpecial32f, CV_32F);
+		    // after matching the keypoints between the special frame and
+		    // the alignment frame we're iterating over, we next need to
+		    // check how good a fit we got from the match.
+		    // only accept the warp if it's between provided boundaries
+		    // otherwise widly off erroneous matches can creep in
 
-	      cv::FlannBasedMatcher flann;
-	      flann.knnMatch(descFrame32f, descSpecial32f, knnMatches, 2);
+		    // innocent until proven guilty
+                    bool acceptWarp = FALSE;
+                    cv::Mat warped;
 
-	      for (size_t i = 0; i < knnMatches.size(); i++) {
-		if (knnMatches[i].size() == 2) {
-		  const cv::DMatch &m1 = knnMatches[i][0];
-		  const cv::DMatch &m2 = knnMatches[i][1];
-		  if (m1.distance < 0.75 * m2.distance) {
-		    ptsFrame.push_back(kpFrame[m1.queryIdx].pt);
-		    ptsSpecial.push_back(kpSpecial[m1.trainIdx].pt);
-		  }
-		}
-	      }
-	      break;
-	    }
+                    // need at least four points
+                    if (ptsFrame.size() >= 4) {
 
-	    // after matching the keypoints between the special frame and
-	    // the alignment frame we're iterating over, we next need to
-	    // check how good a fit we got from the match.
-	    // only accept the warp if it's between provided boundaries
-	    // otherwise widly off erroneous matches can creep in
+		        // find homography between the matched keypoints 
+                        cv::Mat H = cv::findHomography(ptsFrame, ptsSpecial, cv::RANSAC, 10);
+                        if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
+                            H.convertTo(H, CV_64F);
+                        }
 
-	    // innocent until proven guilty
-	    bool acceptWarp = FALSE;
+                        if (!H.empty() && H.rows == 3 && H.cols == 3) {
+			    // Check warp quality with two checks
 
-	    cv::Mat warped;
-	    Log_i(@"id %d: neighbor %lu ptsFrame.size() %zu", logID, idx, ptsFrame.size());
+			    // first check is simple, max deviation
+                            cv::Mat I = cv::Mat::eye(3, 3, H.type());
+                            double deviation = cv::norm(H - I, cv::NORM_L2);
 
-	    // we need at least four points.
-	    if (ptsFrame.size() >= 4) {
-	      Log_i(@"id %d: neighbor %lu finding homography", logID, idx);
+			    // second check makes sure all four corners aren't very far away
+			    // we're aligning images from a timelapse video here, so even with
+			    // a moving camera we shouldn't need very much frame to frame adjustement
+                            std::vector<cv::Point2f> corners = {
+                                {0, 0},
+                                {(float)frame.cols, 0},
+                                {(float)frame.cols, (float)frame.rows},
+                                {0, (float)frame.rows}
+                            };
+                            std::vector<cv::Point2f> projectedCorners;
+                            cv::perspectiveTransform(corners, projectedCorners, H);
 
-	      // find homography between the matched keypoints 
-	      cv::Mat H = cv::findHomography(ptsFrame, ptsSpecial, cv::RANSAC, 10);
-	      
-	      //Log_i(@"id %d: neighbor %lu found homography", logID, idx);
-	      if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
-		H.convertTo(H, CV_64F);
-	      }
+                            double maxCornerDist = 0.0;
+                            for (size_t i = 0; i < corners.size(); i++) {
+                                maxCornerDist = std::max(maxCornerDist,
+                                                         (double)cv::norm(projectedCorners[i] - corners[i]));
+                            }
 
-	      if (!H.empty() && H.rows == 3 && H.cols == 3) {
-		// Check warp quality with two checks
+			    // accept the warp only if our values are within range
+                            acceptWarp = (deviation < maxDeviation) &&
+                                         (maxCornerDist < maxCornerDeviation);
 
-		// first check is simple, max deviation
-		cv::Mat I = cv::Mat::eye(3, 3, H.type());
-		double deviation = cv::norm(H - I, cv::NORM_L2);
+                            if (acceptWarp) {
+                                // if we accept the warp, then actually warp
+                                // this frame to fit the special image
+                                cv::warpPerspective(frame, warped, H, frame.size(),
+                                                    cv::INTER_LINEAR, cv::BORDER_CONSTANT,
+                                                    cv::Scalar(0,0,0,0));
+                            }
+                        }
+                    }
 
-		// second check makes sure all four corners aren't very far away
-		// we're aligning images from a timelapse video here, so even with
-		// a moving camera we shouldn't need very much frame to frame adjustement
-		std::vector<cv::Point2f> corners = {
-		  {0, 0},
-		  {(float)frame.cols, 0},
-		  {(float)frame.cols, (float)frame.rows},
-		  {0, (float)frame.rows}
-		};
-		std::vector<cv::Point2f> projectedCorners;
-		cv::perspectiveTransform(corners, projectedCorners, H);
+                    if (acceptWarp) {
+                        if (warped.channels() == 4) {
+                            // force no alpha (still necessary?)
+                            cv::cvtColor(warped, warped, cv::COLOR_BGRA2BGR);
+                        }
+                        resultSuccess[idx] = 1;
+                        resultMats[idx] = warped;
+                    } else {
+                        resultSuccess[idx] = 0;
+                        resultMats[idx] = frame;
+                    }
 
-		double maxCornerDist = 0.0;
-		for (size_t i = 0; i < corners.size(); i++) {
-		  maxCornerDist = std::max(maxCornerDist,
-					   (double)cv::norm(projectedCorners[i] - corners[i]));
-		}
+                    // explicit releases (optional, local mats go out of scope)
+                    frameGray.release();
 
-		// accept the warp only if our values are within range
-		acceptWarp = (deviation < maxDeviation) &&
-		  (maxCornerDist < maxCornerDeviation);
+                } catch (const cv::Exception &e) {
+                    Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
+                    // On exception mark as failed and store original
+                    resultSuccess[idx] = 0;
+                    resultMats[idx] = frames[idx].mat;
+                } catch (const std::exception &e) {
+                    Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
+                    resultSuccess[idx] = 0;
+                    resultMats[idx] = frames[idx].mat;
+                } catch (...) {
+                    Log_e(@"Unknown Error");
+                    resultSuccess[idx] = 0;
+                    resultMats[idx] = frames[idx].mat;
+                }
+            }
+        });
 
-		if(acceptWarp) {
-		  Log_i(@"id %d: neighbor %lu acceptWarp TRUE = (%f < %f) && (%f < %f)", logID, idx, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
-		} else {
-		  Log_w(@"id %d: neighbor %lu acceptWarp FALSE = (%f < %f) && (%f < %f)", logID, idx, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
-		}
-		if (acceptWarp) {
-		  // if we accept the warp, then actually warp this frame to fit
-		  // the special image
-		  cv::warpPerspective(frame, warped, H, frame.size(),
-				      cv::INTER_LINEAR, cv::BORDER_CONSTANT,
-				      cv::Scalar(0,0,0,0));
-		  //cv::imwrite("/tmp/warped_first_" + std::to_string(idx) + ".png", warped);
-		}
-	      }
-	    }
+        // Gather aligned and failed in the same shape as original function
+        std::vector<cv::Mat> aligned;
+        std::vector<cv::Mat> failed;
+        aligned.reserve(n);
+        failed.reserve(n);
 
-	    // done with all of these cv::Mats
-            frameGray.release();
-            claheOut.release();
-            gammaCorrected.release();
+        for (size_t i = 0; i < n; ++i) {
+            if (resultSuccess[i]) {
+                aligned.push_back(resultMats[i]);
+            } else {
+                failed.push_back(resultMats[i]);
+            }
+        }
 
-	    if(acceptWarp) {
-
-	      if (warped.channels() == 4) {
-		// really we want the alpha channel to see what parts of each warped
-		// frame we should not use for good signal.
-		// BUT need to figure out how to get cv::Mat images with alpha back
-		// to PixelatedImages properly, that's busted :(
-		// so for now, discard the alpha channel
-		cv::cvtColor(warped, warped, cv::COLOR_BGRA2BGR);
-	      }
-
-	      //cv::imwrite("/tmp/warped_" + std::to_string(idx) + ".png", warped);
-	      
-	      aligned.push_back(warped);
-	    } else {
-	      failed.push_back(frame);
-	    }
-	  } catch (const cv::Exception &e) {
-	    Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
-	    failed.push_back(frame);
-	  } catch (const std::exception &e) {
-	    Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
-	    failed.push_back(frame);
-	  } catch (...) {
-	    Log_e(@"Unknown Error");
-	    failed.push_back(frame);
-	  }
-	}
-
-
-	// an attempt to not use median merge, but closest to bawes to avoid clouds
-	// did restrict clouds, but kept too much bad signal in aligned image :(
-	//cv::Mat *alignedResult = new cv::Mat(matchingImageFromArray(specialMat,aligned, k));
-	//cv::Mat *failedResult = new cv::Mat(matchingImageFromArray(specialMat,failed, k));
-
-	// use median mergs
+        // use median merges
         cv::Mat alignedResult = medianImageFromArray(aligned, k);
         cv::Mat failedResult = medianImageFromArray(failed, k);
-        
+
         AlignmentResult *resultObj = [AlignmentResult new];
-	resultObj.aligned = [[MatWrapper alloc] initWithMat: alignedResult];
-	resultObj.numAligned = aligned.size();
-	resultObj.failed  = [[MatWrapper alloc] initWithMat: failedResult];
-	resultObj.numFailed = failed.size();
-	return resultObj;
- 
+        resultObj.aligned = [[MatWrapper alloc] initWithMat: alignedResult];
+        resultObj.numAligned = aligned.size();
+        resultObj.failed  = [[MatWrapper alloc] initWithMat: failedResult];
+        resultObj.numFailed = failed.size();
+        return resultObj;
+
     } catch (const cv::Exception &e) {
-      return [NSString stringWithUTF8String:e.what()];
+        return [NSString stringWithUTF8String:e.what()];
     } catch (const std::exception &e) {
-      return [NSString stringWithUTF8String:e.what()];
+        return [NSString stringWithUTF8String:e.what()];
     } catch (...) {
-      return @"Unknown Exception";
+        return @"Unknown Exception";
     }
 }
+
+
 
 
 @end
