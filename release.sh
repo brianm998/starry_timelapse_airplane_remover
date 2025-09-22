@@ -11,7 +11,7 @@ set -e
 # this is a large c++ library that is used by the kernel hough transform 
 ####
 
-# doesn't properly build for all archs on i86 :(
+# takes about 15-20 minutes
 #cd opencv
 #./release.sh
 #cd ..

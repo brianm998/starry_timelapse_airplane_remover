@@ -205,6 +205,14 @@ public final class PixelatedImage: Sendable {
                   colorSpace: CGColorSpaceCreateDeviceGray())
     }
 
+    public convenience init?(filename: String) {
+        if let wrapper = MatWrapper.load(fromFilename: filename) {
+            self.init(mat: wrapper)
+        } else {
+            return nil
+        }
+    }
+    
     public init?(mat: MatWrapper,
                  file: String = #file,
                  function: String = #function,
@@ -1764,6 +1772,9 @@ extension MatWrapper {
 
 extension PixelatedImage {
     public var asMatWrapper: MatWrapper? {
+        // we may already have a MatWrapper, if so, just return that
+        if let mat { return mat }
+        
         let cvType = MatWrapper.cvType(
           forBitsPerComponent: Int32(self.bitsPerComponent),
           componentsPerPixel: Int32(self.componentsPerPixel)

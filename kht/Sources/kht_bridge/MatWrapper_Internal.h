@@ -10,4 +10,5 @@
 /// Access underlying cv::Mat
 @property (nonatomic, readonly) cv::Mat& mat;
 
+				
 @end

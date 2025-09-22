@@ -1,6 +1,7 @@
 // MatWrapper.mm
 #import "MatWrapper.h"
 #import "MatWrapper_Internal.h"
+#import "logging.h"
 
 @interface MatWrapper () {
     cv::Mat _mat;
@@ -49,6 +50,17 @@
 - (NSString *)debugDescription {
     return [NSString stringWithFormat:@"cv::Mat %ldx%ld, ch=%ld, type=%d",
             (long)_mat.cols, (long)_mat.rows, (long)_mat.channels(), _mat.type()];
+}
+
++ (nullable MatWrapper*)loadFromFilename:(NSString*)filename {
+     cv::Mat img = cv::imread(std::string([filename UTF8String]), cv::IMREAD_UNCHANGED);
+
+    if (img.empty()) {
+        Log_w(@"Failed to load image from filename %@", filename);
+        return nil;
+    }
+
+    return [[MatWrapper alloc] initWithMat: img];
 }
 
 - (void)writeTo:(NSString*)filename {

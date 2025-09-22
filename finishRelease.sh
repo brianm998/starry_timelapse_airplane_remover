@@ -22,5 +22,5 @@ git push origin "release/${STAR_VERSION}"
 
 # named zip file of this release is now in releases dir
 
-echo "git tag releases/${STAR_VERSION} created and pushed to remove"
+echo "git tag releases/${STAR_VERSION} created and pushed to remote"
 echo "packages for star release ${STAR_VERSOIN} are in releases/ dir"

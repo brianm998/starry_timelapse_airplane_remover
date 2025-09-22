@@ -40,6 +40,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (int)cvTypeForBitsPerComponent:(int)bits componentsPerPixel:(int)components;
 
++ (nullable MatWrapper*)loadFromFilename:(NSString*)filename;
+
 - (instancetype)initWithWidth:(NSInteger)width
                        height:(NSInteger)height
 		       cvType:(int)cvType

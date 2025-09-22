@@ -10,7 +10,7 @@ As of Star 0.9.0, horizon detection is optional, but defaulted to on.  Turn in o
 
 1. optionally detect horizon across all frames first
 2. align some number of neighboring frames
-3. subtract the image(s) from steps #3 and #5 from the frame being processed
+3. subtract the image(s) from step #2 from the frame being processed
 4. detect bright groups of pixels in the image from step #3
 5. apply some heuristics to filter out a lot of the groups from step #4
 6. use grouping and line detection to combine lines of dots

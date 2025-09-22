@@ -9,6 +9,19 @@ public let imageCache = ImageCache(cacheLimit: 30) // XXX guess
 /*
 
  Keep a memory cache of PixelatedImages with with NSCache, keyed by filename.
+
+
+ XXX rewrite this to use reference counting of what images are currently in use.
+
+ weak refs to PixelatedImages
+
+
+ 1. Get a way to load from .tiff straight to cv::Mat
+ 2. Load PixelatedImages like that by default
+ 3. Fix a few paths where we still expect a [UInt16] array, not unsafe as with cv::Mat
+ 4. Update this ImageCache to keep a weak reference hash from filename to image
+ 5. upon load, check cache, remove bad ref is present, load image if missing
+ 
  
  */
 public actor ImageCache {
@@ -89,18 +102,9 @@ public actor ImageCache {
     }
 }
 
+// XXX make this fileprivate
 public func loadImageInt(filename: String) async throws -> PixelatedImage? {
-    Log.d("ImageCache loadImageInt(filename: \(filename))")
-    let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
-    let request = URLRequest(url: imageURL as URL)
-    let (data, _) = try await URLSession.shared.data(for: request)
-    if let nsImage = NSImage(data: data),
-       let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil),
-       let pixelatedImage = PixelatedImage(cgImage)
-    {
-        return pixelatedImage
-    }
-    return nil
+    PixelatedImage(filename: filename) 
 }
 
 public func loadImageIntSync(filename: String) throws -> NSImage? {
