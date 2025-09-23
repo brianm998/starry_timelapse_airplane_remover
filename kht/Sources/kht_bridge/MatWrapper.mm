@@ -285,8 +285,9 @@ static inline NSImage* NSImageFromCvMat(const cv::Mat& mat) {
 
 // quality 0..100
 -(void)saveJpegWithQuality:(NSUInteger)quality filename:(NSString*)filename {
+  cv::Mat eightBit = ensure8U(_mat);
   std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, static_cast<int>(quality)};
-    cv::imwrite(std::string([filename UTF8String]), _mat, params);
+  cv::imwrite(std::string([filename UTF8String]), eightBit, params);
 }
 
 -(MatWrapper *)downScaleTo:(NSUInteger)width height:(NSUInteger)height {
