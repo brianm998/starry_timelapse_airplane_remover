@@ -86,9 +86,10 @@ public struct ImageAccessor: Sendable {
             return Image(nsImage: image)
         } else if let image = try? await makeMissingImage(frameIndex: frameIndex,
                                                           ofType: imageType,
-                                                          andSize: size)
+                                                          andSize: size),
+                  let nsImage = image.nsImage
         {
-            return Image(nsImage: image)
+            return Image(nsImage: nsImage)
         } else {
             Log.w("cannot load image of type \(imageType) at size \(size)")
         }
@@ -162,7 +163,9 @@ public struct ImageAccessor: Sendable {
                                                atSize: size)
                 {
                     if FileManager.default.fileExists(atPath: filename) {
-                        return try await imageSequence.getImage(withName: filename).image()
+                        Log.d("filename \(filename) exists")
+                        return PixelatedImage(filename: filename)
+                        //return try await imageSequence.getImage(withName: filename).image()
                         //return try await PixelatedImage(fromFile: filename)
                     } else {
                         // no file
@@ -386,7 +389,7 @@ public struct ImageAccessor: Sendable {
     public func makeMissingImage(frameIndex: Int,
                                  ofType type: FrameViewMode,
                                  andSize size: ImageDisplaySize,
-                                 semaphore: AsyncSemaphore? = nil) async throws -> NSImage?
+                                 semaphore: AsyncSemaphore? = nil) async throws -> PixelatedImage?
     {
         Log.d("start with frame \(frameIndex)")
         if let filename = nameForImage(frameIndex: frameIndex,
@@ -400,10 +403,13 @@ public struct ImageAccessor: Sendable {
             Log.d("loaded 1 for frame \(frameIndex)")
 
             semaphore?.signal()
-            
-            if let scaledImageData = fullResImage.nsImage(ofSize: smallerSize) {
+
+            if let scaledImage = fullResImage.downScaleTo(
+                 width: UInt(smallerSize.width),
+                 height: UInt(smallerSize.height)
+               )
+            {
                 Log.d("loaded 2 for frame \(frameIndex)")
-                let dataToSave = scaledImageData.jpegData
                 
                 if FileManager.default.fileExists(atPath: filename) {
                     Log.i("overwriting already existing file \(filename)")
@@ -411,11 +417,9 @@ public struct ImageAccessor: Sendable {
                 }
 
                 // write to file
-                FileManager.default.createFile(atPath: filename,
-                                               contents: dataToSave,
-                                               attributes: nil)
-
-                return scaledImageData
+                scaledImage.saveJpeg(withQuality: 50, filename: filename)
+                
+                return scaledImage
             }
         } else {
             semaphore?.signal()
@@ -429,18 +433,14 @@ public struct ImageAccessor: Sendable {
                                     andSize size: ImageDisplaySize)
       async throws -> PixelatedImage?
     {
-        if let scaledImageData = try await makeMissingImage(frameIndex: frameIndex,
+        if let scaledImage = try await makeMissingImage(frameIndex: frameIndex,
                                                             ofType: type,
                                                             andSize: size)
         {
-            if let cgImage = scaledImageData.cgImage(forProposedRect: nil,
-                                                     context: nil,
-                                                     hints: nil)
-            {
-                return PixelatedImage(cgImage)
-            }
+            return scaledImage
+        } else {
+            return nil
         }
-        return nil
     }
 
     public func writeMissingImages(_ closure: @Sendable @escaping (Int) -> Void) async throws {

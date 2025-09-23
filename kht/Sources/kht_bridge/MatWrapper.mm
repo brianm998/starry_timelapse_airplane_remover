@@ -2,6 +2,77 @@
 #import "MatWrapper.h"
 #import "MatWrapper_Internal.h"
 #import "logging.h"
+#import <Cocoa/Cocoa.h>
+#import <opencv2/opencv.hpp>
+
+extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
+
+static inline NSImage* NSImageFromCvMat(const cv::Mat& mat) {
+    // Make sure we have a supported type
+    cv::Mat clone = mat.clone();  
+
+    clone.convertTo(clone, CV_8U);
+
+    CV_Assert(clone.depth() == CV_8U);
+    CV_Assert(clone.channels() == 1 || clone.channels() == 3 || clone.channels() == 4);
+
+    int width  = clone.cols;
+    int height = clone.rows;
+    int channels = clone.channels();
+
+    // Convert to BGRA if needed (CoreGraphics wants RGBA or grayscale)
+    cv::Mat rgbaMat;
+    switch (channels) {
+        case 1:
+            cv::cvtColor(clone, rgbaMat, cv::COLOR_GRAY2BGRA);
+            break;
+        case 3:
+            cv::cvtColor(clone, rgbaMat, cv::COLOR_BGR2BGRA);
+            break;
+        case 4:
+            cv::cvtColor(clone, rgbaMat, cv::COLOR_BGRA2RGBA);
+            break;
+    }
+
+    // Wrap raw data into a CGDataProvider
+    size_t dataSize = rgbaMat.total() * rgbaMat.elemSize();
+    CGDataProviderRef provider = CGDataProviderCreateWithData(
+        nullptr,
+        rgbaMat.data,
+        dataSize,
+        nullptr // don't free, cv::Mat owns it
+    );
+
+    // Color space (sRGB)
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+
+    // Bitmap info
+    CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrderDefault;
+
+    CGImageRef cgImage = CGImageCreate(
+        width,
+        height,
+        8,                  // bits per component
+        32,                 // bits per pixel
+        rgbaMat.step[0],    // bytes per row
+        colorSpace,
+        bitmapInfo,
+        provider,
+        nullptr,
+        false,
+        kCGRenderingIntentDefault
+    );
+
+    NSImage *image = [[NSImage alloc] initWithCGImage:cgImage
+                                                 size:NSMakeSize(width, height)];
+
+    // Cleanup
+    CGImageRelease(cgImage);
+    CGColorSpaceRelease(colorSpace);
+    CGDataProviderRelease(provider);
+
+    return image;
+}
 
 @interface MatWrapper () {
     cv::Mat _mat;
@@ -24,8 +95,8 @@
                        height:(NSInteger)height
                      channels:(NSInteger)channels
                          type:(int)cvType
-                    bytesPerRow:(size_t)step
-                           data:(void *)data
+		  bytesPerRow:(size_t)step
+			 data:(void *)data
 {
     self = [super init];
     if (self) {
@@ -52,12 +123,149 @@
             (long)_mat.cols, (long)_mat.rows, (long)_mat.channels(), _mat.type()];
 }
 
-+ (nullable MatWrapper*)loadFromFilename:(NSString*)filename {
-     cv::Mat img = cv::imread(std::string([filename UTF8String]), cv::IMREAD_UNCHANGED);
 
+// Objective-C++ (.mm file)
+#import <Foundation/Foundation.h>
+#import <opencv2/opencv.hpp>
+
+// Crop the top N pixels of an image, leaving just the bottom after crop
+-(MatWrapper *) bottomCrop:(int) N {
+    // Ensure N is within valid range
+
+    int newHeight = self.mat.rows - N;
+    if (newHeight <= 0) {
+        // If cropping removes everything, return an empty Mat
+        return [[MatWrapper alloc] initWithMat: cv::Mat()];
+    }
+
+    // Define the region of interest (ROI)
+    cv::Rect roi(0, N, self.mat.cols, newHeight);
+
+    // Crop using ROI
+    // clone ensures a new Mat is returned
+    return [[MatWrapper alloc] initWithMat: self.mat(roi).clone()]; 
+}
+
+- (MatWrapper *)addWhiteRowsOnTop:(int)rows {
+    // Determine the fill color (white depends on type)
+    cv::Scalar white;
+    if (_mat.channels() == 1) {
+        white = cv::Scalar(255); // grayscale white
+    } else if (_mat.channels() == 3) {
+        white = cv::Scalar(255, 255, 255); // BGR white
+    } else if (_mat.channels() == 4) {
+        white = cv::Scalar(255, 255, 255, 255); // BGRA white
+    } else {
+        // Default to single channel white
+        white = cv::Scalar(255);
+    }
+
+    cv::Mat result;
+    // Add rows on top: (top, bottom, left, right)
+    copyMakeBorder(_mat, result, rows, 0, 0, 0, cv::BORDER_CONSTANT, white);
+
+    return [[MatWrapper alloc] initWithMat: result];
+}
+
+- (NSArray<ObjcImageMatrixElement*>*)splitWithTileWidth:(int)tileWidth
+					     tileHeight:(int)tileHeight
+					 overlapPercent:(double)overlapPercent
+{
+    Log_d(@"split into matrix");
+    NSMutableArray<ObjcImageMatrixElement*>* results = [NSMutableArray array];
+
+    int stepX = static_cast<int>(tileWidth  * (1.0 - overlapPercent));
+    int stepY = static_cast<int>(tileHeight * (1.0 - overlapPercent));
+
+    if (stepX <= 0 || stepY <= 0) {
+        NSLog(@"Invalid overlap: step becomes <= 0");
+        return results;
+    }
+
+    for (int y = 0; y < _mat.rows; y += stepY) {
+        for (int x = 0; x < _mat.cols; x += stepX) {
+            int w = std::min(tileWidth,  _mat.cols - x);
+            int h = std::min(tileHeight, _mat.rows - y);
+
+            cv::Rect roi(x, y, w, h);
+            cv::Mat subMat = _mat(roi).clone(); // clone so it owns its own data
+
+            MatWrapper* wrapper = [[MatWrapper alloc] initWithMat:subMat];
+
+            ObjcImageMatrixElement* elem = [[ObjcImageMatrixElement alloc] init];
+            elem.x = x;
+            elem.y = y;
+            elem.width = w;
+            elem.height = h;
+            elem.image = wrapper;
+
+            [results addObject:elem];
+        }
+    }
+
+    Log_d(@"split into matrix returning %d results", [results count]);
+    return results;
+}
+
+
+
+// Reassemble method (Objective-C++)
++ (MatWrapper*)combineFromMatrixElements:(NSArray<ObjcImageMatrixElement*>*)elements {
+    NSAssert(elements.count > 0, @"Matrix must contain at least one element");
+
+    // 1. Determine output dimensions
+    int maxX = 0, maxY = 0;
+    for (ObjcImageMatrixElement* elem in elements) {
+        maxX = std::max(maxX, elem.x + elem.width);
+        maxY = std::max(maxY, elem.y + elem.height);
+    }
+
+    Log_d(@"maxX %d, maxy %d", maxX, maxY);
+    
+    // 2. Assume all tiles share the same type and channels
+    cv::Mat first = elements[0].image.mat;
+    int type = first.type();
+    int channels = first.channels();
+
+    // 3. Allocate output buffer (zeros initially)
+    cv::Mat combined(maxY, maxX, type, cv::Scalar::all(0));
+
+    // 4. Copy each tile into its location
+    for (ObjcImageMatrixElement* elem in elements) {
+        const cv::Mat& tile = elem.image.mat;
+        CV_Assert(tile.type() == type);
+        CV_Assert(tile.rows == elem.height && tile.cols == elem.width);
+
+        // Region of interest in destination
+        cv::Rect roi(elem.x, elem.y, elem.width, elem.height);
+        cv::Mat destROI = combined(roi);
+
+        // Copy tile into output
+        tile.copyTo(destROI);
+    }
+
+    return [[MatWrapper alloc] initWithMat:combined];
+}
+
+// quality 0..100
+-(void)saveJpegWithQuality:(NSUInteger)quality filename:(NSString*)filename {
+  std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, static_cast<int>(quality)};
+    cv::imwrite(std::string([filename UTF8String]), _mat, params);
+}
+
+-(MatWrapper *)downScaleTo:(NSUInteger)width height:(NSUInteger)height {
+  cv::Mat output;
+  cv::resize(_mat, output, cv::Size(width, height), 0, 0, cv::INTER_AREA);
+  return [[MatWrapper alloc] initWithMat: output]; // returns a new Mat
+}
+
++ (nullable MatWrapper*)loadFromFilename:(NSString*)filename {
+    cv::Mat img = cv::imread(std::string([filename UTF8String]), cv::IMREAD_UNCHANGED);
     if (img.empty()) {
         Log_w(@"Failed to load image from filename %@", filename);
         return nil;
+    } else {
+        Log_d(@"Loaded from filename %@", filename);
     }
 
     return [[MatWrapper alloc] initWithMat: img];
@@ -120,6 +328,10 @@
 
 - (NSInteger)bitsPerComponent {
     return static_cast<NSInteger>(_mat.elemSize1() * 8);
+}
+
+-(NSImage*)nsImage {
+    return NSImageFromCvMat(_mat);
 }
 
 

@@ -15,7 +15,7 @@ import logging
 public actor Blob: CustomStringConvertible,
                    Hashable
 {
-    nonisolated(unsafe) public var id: UInt32
+    nonisolated(unsafe) public var id: Int32
     public let frameIndex: Int
     public var pixels: Set<SortablePixel> = []
     public weak var statusTracker: PixelStatusTracker?
@@ -27,7 +27,7 @@ public actor Blob: CustomStringConvertible,
     }
 
     public init(_ pixels: Set<SortablePixel>, // more than UInt16.max pixels is bad
-                id: UInt32,
+                id: Int32,
                 frameIndex: Int,
                 statusTracker: PixelStatusTracker? = nil)
     {
@@ -37,7 +37,7 @@ public actor Blob: CustomStringConvertible,
         self.statusTracker = statusTracker
     }
     
-    public init(id: UInt32,
+    public init(id: Int32,
                 frameIndex: Int,
                 statusTracker: PixelStatusTracker? = nil)
     {
@@ -47,7 +47,7 @@ public actor Blob: CustomStringConvertible,
     }
     
     public init(_ pixel: SortablePixel,
-                id: UInt32,
+                id: Int32,
                 frameIndex: Int,
                 statusTracker: PixelStatusTracker? = nil)
     {
@@ -69,7 +69,7 @@ public actor Blob: CustomStringConvertible,
         self.pixels = [ ]
 
         if index+1 < persitentDataArray.count {
-            self.id = UInt32(persitentDataArray[index]) // convert from UInt16 to UInt32
+            self.id = Int32(persitentDataArray[index]) // convert from UInt16 to Int32
             index += 1
             
             let pixelCount = persitentDataArray[index]
@@ -98,7 +98,7 @@ public actor Blob: CustomStringConvertible,
               statusTracker: self.statusTracker)
     }
     
-    public func update(id: UInt32) { self.id = id }
+    public func update(id: Int32) { self.id = id }
     
     public func persistentDataArray() -> [UInt16] {
         let size = self.persistentDataSizeBytes()
@@ -124,7 +124,7 @@ public actor Blob: CustomStringConvertible,
 
         if self.id > UInt16.max { Log.e("blob id \(self.id) is too big") }
         
-        array[index] = UInt16(self.id)  // convert from UInt32 to UInt16 
+        array[index] = UInt16(self.id)  // convert from Int32 to UInt16 
         index += 1
 
         array[index] = pixelCount

@@ -15,10 +15,10 @@ You should have received a copy of the GNU General Public License along with sta
 
 // indicates that two blobs are linked, i.e. mapped together
 public struct BlobMapping: Hashable, Equatable, Sendable {
-    let id1: UInt32
-    let id2: UInt32
+    let id1: Int32
+    let id2: Int32
 
-    public init(_ id1: UInt32, _ id2: UInt32) {
+    public init(_ id1: Int32, _ id2: Int32) {
         // make sure the ids are ordered so (2,1) == (1,2)
         if id1 < id2 {
             self.id1 = id1
@@ -29,7 +29,7 @@ public struct BlobMapping: Hashable, Equatable, Sendable {
         }
     }
     
-    public func contains(id: UInt32) -> Bool { id1 == id || id2 == id }
+    public func contains(id: Int32) -> Bool { id1 == id || id2 == id }
     
     public static func == (lhs: BlobMapping, rhs: BlobMapping) -> Bool {
         // [a,b] == [a,b]

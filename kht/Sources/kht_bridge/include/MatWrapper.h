@@ -1,8 +1,11 @@
 // MatWrapper.h
 #import <Foundation/Foundation.h>
 #import <CoreGraphics/CoreGraphics.h>
+#import "ObjcImageMatrixElement.h"
 
 NS_ASSUME_NONNULL_BEGIN
+
+@class ObjcImageMatrixElement;
 
 @interface MatWrapper : NSObject
 
@@ -41,6 +44,23 @@ NS_ASSUME_NONNULL_BEGIN
 + (int)cvTypeForBitsPerComponent:(int)bits componentsPerPixel:(int)components;
 
 + (nullable MatWrapper*)loadFromFilename:(NSString*)filename;
+
+// removes N rows of pixels from the top of the image
+-(MatWrapper *) bottomCrop:(int) N;
+
+-(void)saveJpegWithQuality:(NSUInteger)quality filename:(NSString*)filename;
+
+-(NSImage*)nsImage;
+
+-(MatWrapper *)downScaleTo:(NSUInteger)width height:(NSUInteger)height;
+
+- (MatWrapper *)addWhiteRowsOnTop:(int)rows;
+
+- (NSArray<ObjcImageMatrixElement*>*)splitWithTileWidth:(int)tileWidth
+					     tileHeight:(int)tileHeight
+					 overlapPercent:(double)overlapPercent;
+
++ (MatWrapper*)combineFromMatrixElements:(NSArray<ObjcImageMatrixElement*>*)elements;
 
 - (instancetype)initWithWidth:(NSInteger)width
                        height:(NSInteger)height

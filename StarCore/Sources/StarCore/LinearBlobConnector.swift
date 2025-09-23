@@ -55,7 +55,7 @@ public actor LinearBlobConnector {
     let analyzer: BlobAnalyzer
     let frameIndex: Int
     
-    init(blobMap: [UInt32: Blob],
+    init(blobMap: [Int32: Blob],
          width: Int,
          height: Int,
          frameIndex: Int) async
@@ -67,9 +67,9 @@ public actor LinearBlobConnector {
                                            frameIndex: frameIndex)
     }
 
-    private var internalBlobMap: [UInt32:Blob] = [:]
+    private var internalBlobMap: [Int32:Blob] = [:]
     
-    public func blobMap() async -> [UInt32:Blob] { internalBlobMap }
+    public func blobMap() async -> [Int32:Blob] { internalBlobMap }
 
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         let scanSize: Int         // how far in each direction to look for neighbors
@@ -249,13 +249,13 @@ public actor LinearBlobConnector {
 
     fileprivate final class Data: Sendable {
         let args: Args
-        let blobMap: [UInt32:Blob]
+        let blobMap: [Int32:Blob]
         let blobRefs: BlobRefs
         let analyzer: BlobAnalyzer
         let frameIndex: Int
 
         init(args: Args,
-             blobMap: [UInt32:Blob],
+             blobMap: [Int32:Blob],
              blobRefs: BlobRefs,
              analyzer: BlobAnalyzer,
              frameIndex: Int)
@@ -497,7 +497,7 @@ fileprivate func iterate(on blobLine: Line,
     
     if let start, let end {
         Log.d("frame \(frameIndex) blob \(fullBlob.id) iterating between \(start) and \(end)")
-        let linearBlobIds = SetActor<UInt32>()
+        let linearBlobIds = SetActor<Int32>()
         // iterate over the line and absorbs all blobs along it into a new blob
         // remove all ids expept for the one from the combined blob ids from the blob map
         

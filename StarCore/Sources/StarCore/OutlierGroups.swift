@@ -42,7 +42,7 @@ public actor OutlierGroups {
 
     public var maxID: UInt16 {
         var ret: UInt16 = 0
-        for (id, group) in members {
+        for (id, _) in members {
             if id > ret { ret = id }
         }
         return ret
@@ -50,9 +50,9 @@ public actor OutlierGroups {
     
     // adds blobs as outlier groups within the bounds, and slices out
     // any pixels from existing outlier groups within the bounds
-    public func add(blobs: [UInt32:Blob], within bounds: BoundingBox) async {
+    public func add(blobs: [Int32:Blob], within bounds: BoundingBox) async {
         Log.i("frame \(frameIndex) adding \(blobs.count) blobs within bounds \(bounds)")
-        for (id, blob) in blobs.enumerated() {
+        for (id, _) in blobs.enumerated() {
             Log.i("frame \(frameIndex) adding blob id \(id)")
         }
         var maxID: UInt16 = 0
@@ -64,7 +64,7 @@ public actor OutlierGroups {
         //  if they're inside the bounding box, discard them
         //  if they're overlapping the bounding box, remove offending pixels
         //  if they're outside the bounding box, keep them
-        for (id, group) in members {
+        for (id, _) in members {
             if id > maxID { maxID = id }
         }
         Log.d("frame \(frameIndex) have maxID \(maxID)")
@@ -355,7 +355,7 @@ public actor OutlierGroups {
             members[newOutlier.id] = newOutlier
         }
         if newBlobPixels.count > 0 {
-            let slicedOutlier = await Blob(newBlobPixels, id: UInt32(maxKey), frameIndex: frameIndex).outlierGroup(at: frameIndex)
+            let slicedOutlier = await Blob(newBlobPixels, id: Int32(maxKey), frameIndex: frameIndex).outlierGroup(at: frameIndex)
             members[slicedOutlier.id] = slicedOutlier
             return true
         } else {
@@ -417,7 +417,7 @@ public actor OutlierGroups {
 
     private func writeBinary(outlierMap: [UInt16: OutlierGroup], to filename: String) async {
         Log.i("frame \(frameIndex) writing \(outlierMap.count) outliers to file");
-        var blobMap: [UInt32: Blob] = [:]
+        var blobMap: [Int32: Blob] = [:]
 
         for outlier in outlierMap.values {
             let blob = await outlier.blob()
@@ -475,17 +475,18 @@ public actor OutlierGroups {
 
     // outputs an 8 bit monochrome image that contains a white
     // value for every pixel that was determined to be an outlier
-    public func validationImage() async -> PixelatedImage {
-        PixelatedImage(width: Int(IMAGE_WIDTH!),
-                       height: Int(IMAGE_HEIGHT!),
-                       grayscale8BitImageData: await self.validationImageData())
+    public func validationImage() async -> PixelatedImage? {
+        await self.validationImageData().image
     }
     
     // outputs image data for an 8 bit monochrome image that contains a white
     // value for every pixel that was determined to be an outlier
-    public func validationImageData() async -> [UInt8] {
+    public func validationImageData() async -> ImageBuffer<UInt8> {
         // create base image data array
-        var baseData = [UInt8](repeating: 0, count: Int(IMAGE_WIDTH!*IMAGE_HEIGHT!))
+        var baseData = ImageBuffer<UInt8>(
+          width: Int(IMAGE_WIDTH!),
+          height: Int(IMAGE_HEIGHT!)
+        )
 
         // write into this array from the pixels in this group
         for (_, group) in self.members {

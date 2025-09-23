@@ -40,7 +40,7 @@ public actor HoughLineMatrixBlobConnector {
     let analyzer: BlobAnalyzer
     let frameIndex: Int
     
-    init(blobMap: [UInt32: Blob],
+    init(blobMap: [Int32: Blob],
          width: Int,
          height: Int,
          frameIndex: Int) async
@@ -52,9 +52,9 @@ public actor HoughLineMatrixBlobConnector {
                                            frameIndex: frameIndex)
     }
 
-    private var internalBlobMap: [UInt32:Blob] = [:]
+    private var internalBlobMap: [Int32:Blob] = [:]
     
-    public func blobMap() async -> [UInt32:Blob] { internalBlobMap }
+    public func blobMap() async -> [Int32:Blob] { internalBlobMap }
 
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
         let elementWidth: Int  // size in pixels of the width of each matrix element
@@ -203,23 +203,31 @@ public actor HoughLineMatrixBlobConnector {
         //let startTime = Date().timeIntervalSince1970
         
         // first, assemble matrix from the blobrefs in the analyzer
-        let fullFrameImage = await analyzer.pixelatedImage
+        guard let fullFrameImage = await analyzer.pixelatedImage else {
+            Log.w("unable to create full frame image")
+            return
+        }
 
         //let t1 = Date().timeIntervalSince1970
 
         // a matrix of images from the original image for this frame
-        let matrix = fullFrameImage.splitIntoMatrix(maxWidth: args.elementWidth,
-                                                    maxHeight: args.elementHeight,
-                                                    overlapPercent: args.overlapPercent)
+        let matrix = fullFrameImage.splitIntoMatrix(
+          maxWidth: args.elementWidth,
+          maxHeight: args.elementHeight,
+          overlapPercent: args.overlapPercent)
 
-        let blobImage = await analyzer.pixelatedImage
+        guard let blobImage = await analyzer.pixelatedImage else {
+            Log.w("unable to create blob image")
+            return
+        }
 
         // a matrix of images from in image that keeps track of each blob's pixels
         // used to find blobs independently for each element
-        let blobMatrix = blobImage.splitIntoMatrix(maxWidth: args.elementWidth,
-                                                   maxHeight: args.elementHeight,
-                                                   overlapPercent: args.overlapPercent)
-        
+        let blobMatrix = blobImage.splitIntoMatrix(
+          maxWidth: args.elementWidth,
+          maxHeight: args.elementHeight,
+          overlapPercent: args.overlapPercent
+        )
         
         //let t2 = Date().timeIntervalSince1970
 
@@ -301,7 +309,7 @@ fileprivate func process(element: ImageMatrixElement,
                          blobElement: ImageMatrixElement,
                          with args: HoughLineMatrixBlobConnector.Args,
                          frameIndex: Int,
-                         blobMap: [UInt32: Blob]) async -> Set<BlobMapping>
+                         blobMap: [Int32: Blob]) async -> Set<BlobMapping>
 { 
     //let elementStartTime = Date().timeIntervalSince1970
     let processedBlobs = SetActor<Blob>()
@@ -349,8 +357,8 @@ fileprivate func process(element: ImageMatrixElement,
                                               numberOfAdjecentPixels: args.sideIterationPixels)
             { x, y, direction in
                 if let potentialBlobId = blobElement.intensity(atX: x, andY: y),
-                   potentialBlobId < UInt32.max,
-                   let blob = blobMap[UInt32(potentialBlobId)]
+                   potentialBlobId < Int32.max,
+                   let blob = blobMap[Int32(potentialBlobId)]
                 {
                     if let lastSeenBlob = await lastSeenBlob.value,
                        lastSeenBlob == blob

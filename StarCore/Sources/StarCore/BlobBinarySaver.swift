@@ -32,21 +32,21 @@ You should have received a copy of the GNU General Public License along with sta
 public struct BlobBinaryLoader {
     // returns good blobs first, then the trash
     public func load(from dirname: String,
-                     with frameIndex: Int) async throws -> [UInt32: Blob]
+                     with frameIndex: Int) async throws -> [Int32: Blob]
     {
         try await loadMap(from: "\(dirname)/\(BlobBinarySaver.outlierBinaryFilename)",
                           with: frameIndex)
     }
 
     public func loadTrash(from dirname: String,
-                            with frameIndex: Int) async throws -> [UInt32: Blob]
+                            with frameIndex: Int) async throws -> [Int32: Blob]
     {
          try await loadMap(from: "\(dirname)/\(BlobBinarySaver.trashBinaryFilename)",
                            with: frameIndex)
     }
 
     private func loadMap(from filename: String,
-                         with frameIndex: Int) async throws -> [UInt32: Blob]
+                         with frameIndex: Int) async throws -> [Int32: Blob]
     {
         let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
         let request = URLRequest(url: imageURL as URL)
@@ -55,7 +55,7 @@ public struct BlobBinaryLoader {
         var index = 0
         let numberOfBlobs = blobDataArray[index]
         index += 1
-        var blobMap: [UInt32:Blob] = [:]
+        var blobMap: [Int32:Blob] = [:]
         for _ in 0..<numberOfBlobs {
             if let blob = Blob(frameIndex: frameIndex,
                                with: blobDataArray,
@@ -74,9 +74,9 @@ public struct BlobBinaryLoader {
 public actor BlobBinarySaver {
 
     // map of all known blobs keyed by blob id
-    private var blobMap: [UInt32: Blob]
+    private var blobMap: [Int32: Blob]
 
-    init(blobMap: [UInt32: Blob]) {
+    init(blobMap: [Int32: Blob]) {
         self.blobMap = blobMap
     }
 

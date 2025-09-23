@@ -314,10 +314,11 @@ public struct Config: Codable, Sendable, Transferable {
     //       add MatWrapper for better cv::Mat memory handling
     //       fix shovel bug
     //       better hovering logic
-
+    // 0.9.1 every PixelatedImage is a cv::Mat
+    
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.9.0"
+    public static let latestVersion = "0.9.1"
     
     public var basename: String {
         let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)"

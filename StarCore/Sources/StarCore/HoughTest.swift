@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 // this method is used for testing the hough transformation code by itself
+/*
 func hough_test(filename: String, outputFilename: String) async {
 
     // the output filename needs to be exactly the right size
@@ -255,3 +256,4 @@ func hough_test(filename: String, outputFilename: String) async {
         Log.e(error)
     }
 }    
+*/

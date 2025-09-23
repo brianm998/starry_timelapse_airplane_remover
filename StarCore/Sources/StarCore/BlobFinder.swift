@@ -178,7 +178,7 @@ public class BlobFinder {
                         frame: FrameAirplaneRemover,
                         within bounds: BoundingBox? = nil,
                         startingBlobID: UInt16 = 1
-    ) async -> [UInt32: Blob] {
+    ) async -> [Int32: Blob] {
         // detect blobs of difference in brightness in the subtraction array
         // airplanes show up as lines or dots in a line
         // because the image subtracted from this frame had the sky aligned,

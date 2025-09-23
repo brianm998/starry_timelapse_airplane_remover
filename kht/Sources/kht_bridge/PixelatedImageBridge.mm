@@ -36,7 +36,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 
 	// Safety check: ensure sizes match
 	if (mat1.size() != mat2.size() || mat1.size() != matMask.size()) {
-	  Log_e(@"combineWithMask: Input Mats must have the same size.");
+	  Log_e(@"combineWithMask: Input Mats must have the same size. mat1.size [%d, %d] matw.size [%d, %d] matMask.size [%d, %d]", mat1.size().width, mat1.size().height, mat2.size().width, mat2.size().height, matMask.size().width, matMask.size().height);
 	  return nil;
 	}
 

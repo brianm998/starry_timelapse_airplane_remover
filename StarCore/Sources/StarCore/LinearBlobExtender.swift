@@ -24,7 +24,7 @@ public actor LinearBlobExtender {
     let analyzer: BlobAnalyzer
     let frameIndex: Int
     
-    init(blobMap: [UInt32: Blob],
+    init(blobMap: [Int32: Blob],
          width: Int,
          height: Int,
          frameIndex: Int) async
@@ -36,7 +36,7 @@ public actor LinearBlobExtender {
                                            frameIndex: frameIndex)
     }
 
-    public func blobMap() async -> [UInt32:Blob] {
+    public func blobMap() async -> [Int32:Blob] {
         await analyzer.mapOfBlobs()
     }
 
@@ -186,7 +186,10 @@ public actor LinearBlobExtender {
     
     public func process(_ args: Args) async {
 
-        let blobImage = await analyzer.pixelatedImage
+        guard let blobImage = await analyzer.pixelatedImage else {
+            Log.w("unable to create blob image")
+            return
+        }
         let blobMap = await analyzer.mapOfBlobs()
         let processedBlobs = ProcessedBlobs()
 
@@ -216,14 +219,14 @@ public actor LinearBlobExtender {
     // used for passing processing data around to different methods
     final class Data: Sendable {
         let args: LinearBlobExtender.Args
-        let blobMap: [UInt32:Blob]
+        let blobMap: [Int32:Blob]
         let blobImage: PixelatedImage
         let iterationBlob: OptionalActor<Blob>
         let processedBlobs: ProcessedBlobs
         let analyzer: BlobAnalyzer
 
         public init(args: LinearBlobExtender.Args,
-                    blobMap: [UInt32:Blob],
+                    blobMap: [Int32:Blob],
                     blobImage: PixelatedImage,
                     iterationBlob: OptionalActor<Blob>,
                     processedBlobs: ProcessedBlobs,
@@ -339,8 +342,8 @@ fileprivate func maybeAbsorb(x: Int,
 
     let intensity = data.blobImage.intensity(atX: x, andY: y)
     
-    if intensity < UInt32.max,
-       let newBlob = data.blobMap[UInt32(intensity)],
+    if intensity < Int32.max,
+       let newBlob = data.blobMap[Int32(intensity)],
        newBlob != _iterationBlob
     {
         //Log.d("frame \(frameIndex) processing blob \(_iterationBlob) @ [\(x), \(y)] found other blob \(newBlob)")

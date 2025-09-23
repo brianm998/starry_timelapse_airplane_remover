@@ -19,14 +19,14 @@ You should have received a copy of the GNU General Public License along with sta
 // trim pixels that are too far from a blobs's line
 public actor BlobLineTrim {
 
-    var blobMap: [UInt32: Blob]
+    var blobMap: [Int32: Blob]
     let frameIndex: Int
     let maxBlobID: IntegralActor
     
-    init(blobMap: [UInt32: Blob], frameIndex: Int) {
+    init(blobMap: [Int32: Blob], frameIndex: Int) {
         self.frameIndex = frameIndex
         self.blobMap = blobMap
-        var max: UInt32 = 0
+        var max: Int32 = 0
         for (id, _) in blobMap { if id > max { max = id } }
         maxBlobID = IntegralActor(value: Int(max))
     }
@@ -119,7 +119,7 @@ public actor BlobLineTrim {
         }
     }
 
-    public func process(_ args: Args) async -> [UInt32:Blob] {
+    public func process(_ args: Args) async -> [Int32:Blob] {
         let blobMap = blobMap
         self.blobMap = await Task.detached(priority: .userInitiated) {
             var blobMap = blobMap
@@ -163,13 +163,13 @@ fileprivate func process(_ blob: Blob,
                 let trimmedPixels = await blob.lineTrim(by: args.trimAmount)
                 if trimmedPixels.count > 0 {
                     let newBlobID = await maxBlobID.increment()
-                    if newBlobID < UInt32.max {
+                    if newBlobID < Int32.max {
 
                         // iterate on this
                         
                         // make another blob from any trimmed pixels
                         let newBlob = Blob(trimmedPixels,
-                                           id: UInt32(newBlobID),
+                                           id: Int32(newBlobID),
                                            frameIndex: frameIndex)
 
                         var ret = [newBlob]

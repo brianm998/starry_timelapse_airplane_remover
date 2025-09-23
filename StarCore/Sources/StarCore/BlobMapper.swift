@@ -29,23 +29,23 @@ public class BlobMapper {
     }
 
     // outputs a list of lists of adjecent blobs
-    public var mappingLists: [[UInt32]] {
+    public var mappingLists: [[Int32]] {
         // 1) Build an adjacency list
-        var graph = [UInt32: Set<UInt32>]()
+        var graph = [Int32: Set<Int32>]()
         for m in mappings {
             graph[m.id1, default: []].insert(m.id2)
             graph[m.id2, default: []].insert(m.id1)
         }
 
         // 2) Track which nodes we’ve already visited
-        var visited = Set<UInt32>()
-        var groups: [[UInt32]] = []
+        var visited = Set<Int32>()
+        var groups: [[Int32]] = []
 
         // 3) For each node, if not visited, BFS/DFS to collect its component
         for node in graph.keys {
             guard !visited.contains(node) else { continue }
             var stack = [node]
-            var component = [UInt32]()
+            var component = [Int32]()
 
             visited.insert(node)
             while let current = stack.popLast() {

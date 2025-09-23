@@ -474,7 +474,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
              stripWidth: config.horizonStripWidth ?? 400
            )
         {
-            Log.d("frame \(frameIndex) horizon mask created")
+            Log.d("frame \(frameIndex) horizon mask image \(horizonMask.image) created")
             try await imageAccessor.save(horizonMask.image,
                                          frameIndex: frameIndex,
                                          as: .horizon,
@@ -567,9 +567,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             break
         }
 
-        guard let originalFrame = try await imageAccessor.load(frameIndex: frameIndex,
-                                                               type: .original,
-                                                               atSize: .original)
+        guard let originalFrame = try await imageAccessor.load(
+                frameIndex: frameIndex,
+                type: .original,
+                atSize: .original)
         else {
             throw "frame \(frameIndex) unable to load original frame for star alignment"
         }
@@ -594,6 +595,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             return results
         }
 
+        Log.d("original frame \(originalFrame.description)")
+        
         let horizonMask = try await loadOrCreateHorizonMask()
 
         let alignmentResult = originalFrame.align(
@@ -621,7 +624,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             goodPixelImage = failed
         } else {
             Log.e("frame \(frameIndex) didn't get either an aligned image or a failed image from alignment results")
-            fatalError("frame \(frameIndex) didn't get either an aligned image or a failed image from alignment results") // XXX handle this better
+            throw "frame \(frameIndex) didn't get either an aligned image or a failed image from alignment results" // XXX handle this better
         }
 
         try await imageAccessor.save(
@@ -987,10 +990,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let format = image.imageData // make a copy
 
         switch format {
-        case .unsafeSixteenBit(_):
-            fatalError("not implemented")
-        case .unsafeEightBit(_):
-            fatalError("not implemented")
         case .thirtyTwoBit(_):
             fatalError("frame \(self.frameIndex) cannot load 32 bit image here now")
                 
@@ -999,9 +998,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         case .sixteenBit(var outputData):
             Log.d("frame \(self.frameIndex) removing airplanes")
 
+            // copy the outputData to a new Buffer
+            var newImageBuffer = ImageBuffer<UInt16>(
+              pointer: outputData,
+              width: image.width,
+              height: image.height,
+              components: image.componentsPerPixel
+            )
+            
             try await self.removeAirplanes(
               image: image,
-              toData: &outputData,
+              toData: &newImageBuffer,
               starAlignedImage: starAlignedImage,
               earthAlignedImage: earthAlignedImage,
               horizonMask: horizonMask
@@ -1011,51 +1018,58 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             self.set(state: .writingOutputFile)
 
             Log.d("frame \(self.frameIndex) updating image")
-            let processedImage = image.updated(with: outputData)
-            // write frame out as processed versions
-            do {
-                Log.d("frame \(self.frameIndex) processed file")
-                try await imageAccessor.saveFinal(
-                  processedImage,
-                  frameIndex: frameIndex,
-                  as: .processed,
-                  atSize: .original,
-                  overwrite: true
-                )
-                Log.d("frame \(self.frameIndex) writing processed preview")
-                try await imageAccessor.saveFinal(
-                  processedImage,
-                  frameIndex: frameIndex,
-                  as: .processed,
-                  atSize: .preview,
-                  overwrite: true
-                )
-            } catch {
-                // XXX for some reason this error gets missed if we don't catch it here :(
-                Log.d("frame \(self.frameIndex) ERROR \(error)")
+            
+            if let processedImage = newImageBuffer.image {
+                // write frame out as processed versions
+                do {
+                    Log.d("frame \(self.frameIndex) processed file")
+                    try await imageAccessor.saveFinal(
+                      processedImage,
+                      frameIndex: frameIndex,
+                      as: .processed,
+                      atSize: .original,
+                      overwrite: true
+                    )
+                    Log.d("frame \(self.frameIndex) writing processed preview")
+                    try await imageAccessor.saveFinal(
+                      processedImage,
+                      frameIndex: frameIndex,
+                      as: .processed,
+                      atSize: .preview,
+                      overwrite: true
+                    )
+                } catch {
+                    // XXX for some reason this error gets missed if we don't catch it here :(
+                    Log.d("frame \(self.frameIndex) ERROR \(error)")
 
+                }
+                if let outlierGroups {
+                    Log.d("frame \(self.frameIndex) getting validating image")
+                    if let validationImage = await outlierGroups.validationImage() {
+                        Log.d("frame \(self.frameIndex) writing validated image")
+                        try await imageAccessor.saveFinal(
+                          validationImage,
+                          frameIndex: frameIndex,
+                          as: .validation,
+                          atSize: .original,
+                          overwrite: false
+                        )
+                        Log.d("frame \(self.frameIndex) writing validated preview")
+                        try await imageAccessor.saveFinal(
+                          validationImage,
+                          frameIndex: frameIndex,
+                          as: .validation,
+                          atSize: .preview,
+                          overwrite: false
+                        )
+                    } else {
+                        Log.w("frame \(self.frameIndex) cannot create validation image")
+                    }
+                }
+                Log.d("frame \(self.frameIndex) done writing output files")
+            } else {
+                Log.w("frame \(self.frameIndex) unable to make new processed image buffer")
             }
-            if let outlierGroups {
-                Log.d("frame \(self.frameIndex) getting validating image")
-                let validationImage = await outlierGroups.validationImage()
-                Log.d("frame \(self.frameIndex) writing validated image")
-                try await imageAccessor.saveFinal(
-                  validationImage,
-                  frameIndex: frameIndex,
-                  as: .validation,
-                  atSize: .original,
-                  overwrite: false
-                )
-                Log.d("frame \(self.frameIndex) writing validated preview")
-                try await imageAccessor.saveFinal(
-                  validationImage,
-                  frameIndex: frameIndex,
-                  as: .validation,
-                  atSize: .preview,
-                  overwrite: false
-                )
-            }
-            Log.d("frame \(self.frameIndex) done writing output files")
         }
         self.set(state: .complete)
         if let completion { await completion() }
@@ -1327,10 +1341,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                                     atSize: .original)
         {
             switch image.imageData {
-            case .unsafeSixteenBit(_):
-                fatalError("not implemented")
-            case .unsafeEightBit(_):
-                fatalError("not implemented")
             case .thirtyTwoBit(_):
                 fatalError("frame \(frameIndex) cannot load 32 bit validation image")
                 
@@ -1366,7 +1376,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // this validation image contains a non zero pixel for each outlier
     // that should be removed.
     // any outlier that matches any pixels is classified to remove here.
-    private func classifyOutliers(with validationData: [UInt8]) async {
+    private func classifyOutliers(with validationData: UnsafeBufferPointer<UInt8>) async {
         Log.d("frame \(frameIndex) classifying outliers with validation image data")
 
         if let outlierGroups {
@@ -1425,7 +1435,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     // used for saving different images of blobs
     public func saveImages(for blobs: [Blob], as frameImageType: FrameViewMode) async throws {
-        var blobImageData = [UInt8](repeating: 0, count: width*height)
+        var blobImageData = ImageBuffer<UInt8>(width: width, height: height)
         for blob in blobs {
             for pixel in await blob.getPixels() {
                 let imageIntensity = pixel.uInt16Value >> 8
@@ -1433,14 +1443,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
         let fuck = frameImageType
-        let blobImage = PixelatedImage(width: width, height: height,
-                                       grayscale8BitImageData: blobImageData)
-        let (_) = await (/*try imageAccessor.save(blobImage, as: fuck,
-                                                   atSize: .original, overwrite: true),*/
-          try imageAccessor.save(blobImage,
-                                 frameIndex: frameIndex,
-                                 as: fuck,
-                                 atSize: .preview, overwrite: true))
+        if let blobImage = blobImageData.image {
+
+            let (_) = await (/*try imageAccessor.save(blobImage, as: fuck,
+                               atSize: .original, overwrite: true),*/
+              try imageAccessor.save(blobImage,
+                                     frameIndex: frameIndex,
+                                     as: fuck,
+                                     atSize: .preview, overwrite: true))
+        } else {
+            Log.w("frame \(frameIndex) unable to get blob image to save")
+        }
         
     }
 
@@ -1567,7 +1580,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // actually remove outlier groups that have been selected as airplane tracks
     internal func removeAirplanes(
       image: PixelatedImage,
-      toData data: inout [UInt16],
+      toData data: inout ImageBuffer<UInt16>,
       starAlignedImage: PixelatedImage,
       earthAlignedImage: PixelatedImage?,
       horizonMask: HorizonMask?
@@ -1672,7 +1685,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         if config.writeOutlierGroupFiles { // XXX this config value is very much overloaded
-            var removeMaskImageData = [UInt8](repeating: 0, count: width*height)
+            var removeMaskImageData = ImageBuffer<UInt8>(width: width, height: height)
 
             for y in 0 ..< height {
                 if alphaYAxis[y] == 0 { continue }
@@ -1687,26 +1700,26 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
 
-            let removeMaskImage = PixelatedImage(
-              width: width, height: height,
-              grayscale8BitImageData: removeMaskImageData
-            )
-            let (_,_) = await (
-              try imageAccessor.save(
-                removeMaskImage,
-                frameIndex: frameIndex,
-                as: .removeMask,
-                atSize: .original,
-                overwrite: true
-              ),
-              try imageAccessor.save(
-                removeMaskImage,
-                frameIndex: frameIndex,
-                as: .removeMask,
-                atSize: .preview,
-                overwrite: true
-              )
-            )
+            if let removeMaskImage = removeMaskImageData.image {
+                let (_,_) = await (
+                  try imageAccessor.save(
+                    removeMaskImage,
+                    frameIndex: frameIndex,
+                    as: .removeMask,
+                    atSize: .original,
+                    overwrite: true
+                  ),
+                  try imageAccessor.save(
+                    removeMaskImage,
+                    frameIndex: frameIndex,
+                    as: .removeMask,
+                    atSize: .preview,
+                    overwrite: true
+                  )
+                )
+            } else {
+                Log.w("unable to create remove mask image from data")
+            }
         }
 
         if shouldRemove {
@@ -1759,7 +1772,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     internal func updatePixel(
       x: Int, y: Int,
       alpha: Double,
-      toData data: inout [UInt16],
+      toData data: inout ImageBuffer<UInt16>,
       image: PixelatedImage,
       starAlignedImage: PixelatedImage,
       earthAlignedImage: PixelatedImage?,
@@ -1805,7 +1818,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // remove a selected outlier pixel with data from pixels from adjecent frames
     internal func updatePixel(x: Int, y: Int,
                               alpha: Double,
-                              toData data: inout [UInt16],
+                              toData data: inout ImageBuffer<UInt16>,
                               image: PixelatedImage,
                               with overwritingPixel: Pixel)
     {
@@ -1823,22 +1836,18 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // actually remove that airplane like thing in the image data
         if self.bytesPerPixel == 2 {
             // one componant per pixel, binary 16 bit image
-            data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
-                                 with: [overwritingPixel.red])
+            data[offset] = overwritingPixel.red
         } else if self.bytesPerPixel == 6 {
             // three componants per pixel, RGB 16 bit image
-            data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
-                                 with: [overwritingPixel.red,
-                                        overwritingPixel.green,
-                                        overwritingPixel.blue])
-
+            data[offset] = overwritingPixel.red
+            data[offset+1] = overwritingPixel.green
+            data[offset+2] = overwritingPixel.blue
         } else if self.bytesPerPixel == 8 {
             // four componants per pixel, RGBA 16 bit image
-            data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
-                                 with: [overwritingPixel.red,
-                                        overwritingPixel.green,
-                                        overwritingPixel.blue,
-                                        0xFFFF]) // always write full opacity
+            data[offset] = overwritingPixel.red
+            data[offset+1] = overwritingPixel.green
+            data[offset+2] = overwritingPixel.blue
+            data[offset+3] = 0xFFFF
         }
     }
 
@@ -2584,7 +2593,7 @@ func readInteger(fromFile path: String) -> Int? {
 }
 
 
-
+/*
 // Convenience: grab 16-bit backing store if present.
 private extension PixelatedImage {
     var u16: [UInt16]? {
@@ -2593,3 +2602,4 @@ private extension PixelatedImage {
     }
 }
 
+*/

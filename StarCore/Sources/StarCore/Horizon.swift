@@ -110,8 +110,8 @@ extension PixelatedImage {
     // should get rid of all but the ground, designed to run after Otsu classification and
     // connected component filtering.  Returns HorizonMask, including the Y bounds of the horizon
     public func groundOnly() throws -> PixelatedImage {
-        if let matWrapper = self.asMatWrapper,
-           let ret = PixelatedImage(
+        let matWrapper = self.mat
+        if let ret = PixelatedImage(
              mat: PixelatedImageBridge.groundOnly(from: matWrapper)
            )
         {
@@ -128,6 +128,8 @@ extension PixelatedImage {
     public func horizonMask(at frameIndex: Int,
                             bottomPercentage: Double = 50,
                             stripWidth: Int = 400) async throws -> HorizonMask? {
+
+        
         /*
          horizon detection alg:
          * split frame image into bottom half, discarding top half
@@ -149,7 +151,10 @@ extension PixelatedImage {
                               .rounded(.toNearestOrAwayFromZero))
 
         // crop out the top part
-        let bottomCrop = self.bottomCrop(by: bottomHeight)
+        guard let bottomCrop = self.bottomCrop(by: bottomHeight) else {
+            Log.w("Unable to bottom crop")
+            return nil
+        }
 
         // split into an array of smaller images
         let matrix = bottomCrop.splitIntoMatrix(maxWidth: stripWidth,
@@ -166,22 +171,26 @@ extension PixelatedImage {
             for (_, element) in matrix.enumerated() {
                 taskGroup.addTask {
                     // calculate Otsu classification for this image element
-                    let otsu = element.image.binaryOtsuImage
+                    if let otsu = element.image.binaryOtsuImage {
 
-                    // apply connect component filtering and ground only logic
-                    let filtered = try otsu.connectedComponentFiltered(keepLargest: 2)
-                       
-                    let groundOnly = try filtered.groundOnly()
-                    
-                    let bounds = try groundOnly.horizonBounds()
+                        // apply connect component filtering and ground only logic
+                        let filtered = try otsu.connectedComponentFiltered(keepLargest: 2)
+                        
+                        let groundOnly = try filtered.groundOnly()
+                        
+                        let bounds = try groundOnly.horizonBounds()
 
-                    return ImageMatrixElement(
-                      x: element.x,
-                      y: element.y,
-                      image: groundOnly,
-                      horizonTopY: bounds.topY,
-                      horizonBottomY: bounds.bottomY
-                    )
+                        return ImageMatrixElement(
+                          x: element.x,
+                          y: element.y,
+                          image: groundOnly,
+                          horizonTopY: bounds.topY,
+                          horizonBottomY: bounds.bottomY
+                        )
+                    } else {
+                        Log.w("unable to create otsu horizon image")
+                        return nil
+                    }
                 }
             }
             for try await result in taskGroup {
@@ -191,23 +200,29 @@ extension PixelatedImage {
             if newElements.count == matrix.count {
                 let (horizonTopY, horizonBottomY) = newElements.combinedHorizonExtents()
 
-                let image = PixelatedImage(from: newElements)
-                    .addSky(height: topHeight)
+                if let no_sky_image = PixelatedImage(from: newElements),
+                   let image = no_sky_image.addSky(height: topHeight)
+                {
+                    Log.d("image \(image.description)")
+                    Log.d("no_sky_image \(no_sky_image.description)")
+                    var _horizonTopY: Int = image.height
+                    if let horizonTopY { _horizonTopY = horizonTopY + topHeight }
 
-                var _horizonTopY: Int = image.height
-                if let horizonTopY { _horizonTopY = horizonTopY + topHeight }
-
-                var _horizonBottomY: Int = 0
-                if let horizonBottomY { _horizonBottomY = horizonBottomY + topHeight }
-                
-                return HorizonMask(
-                  image: image,
-                  horizonTopY: _horizonTopY,
-                  horizonBottomY: _horizonBottomY
-                )
+                    var _horizonBottomY: Int = 0
+                    if let horizonBottomY { _horizonBottomY = horizonBottomY + topHeight }
+                    
+                    return HorizonMask(
+                      image: image,
+                      horizonTopY: _horizonTopY,
+                      horizonBottomY: _horizonBottomY
+                    )
+                } else {
+                    Log.w("unable to add sky to image")
+                }
             } else {
                 return nil
             }
+            return nil
         }
     }
 }
@@ -217,11 +232,11 @@ extension PixelatedImage {
     public func connectedComponentFiltered(keepLargest n: Int = 2) throws -> PixelatedImage {
 
         // first convert self to MatWrapper
-        if let baseMat = self.asMatWrapper {
-            let filtered = PixelatedImageBridge.filterConnectedComponents(baseMat, keepLargest: n)
-            // then convert back in to PixelatedImage
-            if let ret = PixelatedImage(mat: filtered) { return ret }
-        }
+        let baseMat = self.mat 
+        let filtered = PixelatedImageBridge.filterConnectedComponents(baseMat, keepLargest: n) 
+        // then convert back in to PixelatedImage
+        if let ret = PixelatedImage(mat: filtered) { return ret }
+
         throw "unable to connected component filter without a mat wrapper"
     }
 }
@@ -229,109 +244,10 @@ extension PixelatedImage {
 extension PixelatedImage {
     /// Returns a new image with `height` rows of white pixels
     /// added to the top of the current image.
-    func addSky(height: Int) -> PixelatedImage {
+    func addSky(height: Int) -> PixelatedImage? {
         guard height > 0 else { return self }
 
-        let newHeight = self.height + height
-        let comps = self.componentsPerPixel
-        let rowBytes = width * comps
-
-        switch imageData {
-
-        case .unsafeSixteenBit(let buffer):
-            fatalError("not implemented")
-        case .unsafeEightBit(let buffer):
-            fatalError("not implemented")
-            
-        case .eightBit(let buffer):
-            let maxValue: UInt8 = .max
-            var newBuffer = [UInt8](repeating: 0, count: width * newHeight * comps)
-
-            // Fill top sky rows with white
-            for y in 0..<height {
-                let destBase = y * rowBytes
-                for x in 0..<width * comps {
-                    newBuffer[destBase + x] = maxValue
-                }
-            }
-
-            // Copy existing image data below sky
-            for row in 0..<self.height {
-                let srcBase = row * rowBytes
-                let destBase = (row + height) * rowBytes
-                newBuffer.replaceSubrange(destBase..<destBase + rowBytes,
-                                          with: buffer[srcBase..<srcBase + rowBytes])
-            }
-
-            return PixelatedImage(width: width,
-                                  height: newHeight,
-                                  imageData: .eightBit(newBuffer),
-                                  bitsPerPixel: bitsPerPixel,
-                                  bytesPerRow: width * bytesPerPixel,
-                                  bitsPerComponent: bitsPerComponent,
-                                  bytesPerPixel: bytesPerPixel,
-                                  bitmapInfo: bitmapInfo,
-                                  componentsPerPixel: comps,
-                                  colorSpace: colorSpace)
-
-        case .sixteenBit(let buffer):
-            let maxValue: UInt16 = .max
-            var newBuffer = [UInt16](repeating: 0, count: width * newHeight * comps)
-
-            for y in 0..<height {
-                let destBase = y * rowBytes
-                for x in 0..<width * comps {
-                    newBuffer[destBase + x] = maxValue
-                }
-            }
-
-            for row in 0..<self.height {
-                let srcBase = row * rowBytes
-                let destBase = (row + height) * rowBytes
-                newBuffer.replaceSubrange(destBase..<destBase + rowBytes,
-                                          with: buffer[srcBase..<srcBase + rowBytes])
-            }
-
-            return PixelatedImage(width: width,
-                                  height: newHeight,
-                                  imageData: .sixteenBit(newBuffer),
-                                  bitsPerPixel: bitsPerPixel,
-                                  bytesPerRow: width * bytesPerPixel,
-                                  bitsPerComponent: bitsPerComponent,
-                                  bytesPerPixel: bytesPerPixel,
-                                  bitmapInfo: bitmapInfo,
-                                  componentsPerPixel: comps,
-                                  colorSpace: colorSpace)
-
-        case .thirtyTwoBit(let buffer):
-            let maxValue: UInt32 = .max
-            var newBuffer = [UInt32](repeating: 0, count: width * newHeight * comps)
-
-            for y in 0..<height {
-                let destBase = y * rowBytes
-                for x in 0..<width * comps {
-                    newBuffer[destBase + x] = maxValue
-                }
-            }
-
-            for row in 0..<self.height {
-                let srcBase = row * rowBytes
-                let destBase = (row + height) * rowBytes
-                newBuffer.replaceSubrange(destBase..<destBase + rowBytes,
-                                          with: buffer[srcBase..<srcBase + rowBytes])
-            }
-
-            return PixelatedImage(width: width,
-                                  height: newHeight,
-                                  imageData: .thirtyTwoBit(newBuffer),
-                                  bitsPerPixel: bitsPerPixel,
-                                  bytesPerRow: width * bytesPerPixel,
-                                  bitsPerComponent: bitsPerComponent,
-                                  bytesPerPixel: bytesPerPixel,
-                                  bitmapInfo: bitmapInfo,
-                                  componentsPerPixel: comps,
-                                  colorSpace: colorSpace)
-        }
+        return PixelatedImage(mat: self.mat.addWhiteRows(onTop: Int32(height)))
     }
 }
 

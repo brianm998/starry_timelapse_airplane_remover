@@ -255,9 +255,12 @@ public struct HoughLineFinder: Sendable {
         }
     }
 
-    private func imageData() -> [UInt8] {
-        var imageData = [UInt8](repeating: 0, count: self.imageDataWidth * self.imageDataHeight)
-        
+    private func imageData() -> ImageBuffer<UInt8> {
+        var imageData = ImageBuffer<UInt8>(
+          width: self.imageDataWidth,
+          height: self.imageDataHeight
+        )
+
         //Log.d("frame \(frameIndex) blob image data with \(pixels.count) pixels")
         
         let minX = self.bounds.min.x
@@ -311,11 +314,7 @@ public struct HoughLineFinder: Sendable {
         return ret
     }
     
-    var pixelImage: PixelatedImage {
-         PixelatedImage(width: self.imageDataWidth,
-                        height: self.imageDataHeight,
-                        grayscale8BitImageData: self.imageData())
-    }
+    var pixelImage: PixelatedImage? { self.imageData().image }
 
     public struct LineInfo: Identifiable, Sendable {
         public let id = UUID()
@@ -329,7 +328,8 @@ public struct HoughLineFinder: Sendable {
     public var lineData: [LineInfo] {
         var ret: [LineInfo] = []
 
-        if let mat = pixelImage.asMatWrapper {
+        if let pixelImage {
+            let mat = pixelImage.mat 
             let lines = kernelHoughTransform(
               image: mat,
               width: pixelImage.width,
@@ -346,7 +346,7 @@ public struct HoughLineFinder: Sendable {
                                     border: self.imageDataBorderSize))
             }
         } else {
-            Log.w("unable to create mat from image for line data")
+            Log.w("no pixelated image")
         }
         return ret
     }
@@ -360,10 +360,10 @@ public struct HoughLineFinder: Sendable {
     }
     
     public var line: LineInfo? {
-        let pixelImage = self.pixelImage
+        
 
-        if let mat = pixelImage.asMatWrapper {
-            
+        if let pixelImage = self.pixelImage {
+            let mat = pixelImage.mat    
             let lines = kernelHoughTransform(
               image: mat,
               width: pixelImage.width,

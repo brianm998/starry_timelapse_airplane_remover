@@ -60,7 +60,7 @@ public class FullFrameBlobber {
 
     public let pixelStatusTracker: PixelStatusTracker
     
-    private var newBlobId: UInt32 = 1 // start at one as zero means no blob
+    private var newBlobId: Int32 = 1 // start at one as zero means no blob
     
     // neighbor search policies
     public enum NeighborType {
@@ -106,7 +106,7 @@ public class FullFrameBlobber {
         self.originalImage = originalImage
         self.frameIndex = frameIndex
         self.neighborType = neighborType
-        self.newBlobId = UInt32(startingBlobID)
+        self.newBlobId = Int32(startingBlobID)
 
         guard subtractionPixelData.count == imageWidth*imageHeight else {
             fatalError("subtractionPixelData.count \(subtractionPixelData.count) is not imageWidth*imageHeight \(imageWidth*imageHeight)")
@@ -199,7 +199,7 @@ public class FullFrameBlobber {
                 // no higher neighbors
                 // a local maximum, this pixel is a blob seed
 
-                if newBlobId < UInt32.max {
+                if newBlobId < Int32.max {
                     Log.d("frame \(frameIndex) creating new blob with id \(newBlobId)")
                     let newBlob = Blob(pixel,
                                        id: newBlobId,
@@ -232,29 +232,14 @@ public class FullFrameBlobber {
         Log.i("frame \(frameIndex) found \(blobs.count)")
     }
     
-    public var blobMap: [UInt32:Blob] {
-        var ret: [UInt32:Blob] = [:]
+    public var blobMap: [Int32:Blob] {
+        var ret: [Int32:Blob] = [:]
         for blob in self.blobs { ret[blob.id] = blob }
         return ret
     }
 
-    public func outputImage() async -> PixelatedImage {
-
-        // write out the subtractionArray here as an image
-        let outputImage = PixelatedImage(
-          width: imageWidth,
-          height: imageHeight,
-          imageData: .init(from: await self.outputData()),
-          bitsPerPixel: 16,
-          bytesPerRow: 2*imageWidth,
-          bitsPerComponent: 16,
-          bytesPerPixel: 2,
-          bitmapInfo: .byteOrder16Little, 
-          componentsPerPixel: 1,
-          colorSpace: CGColorSpaceCreateDeviceGray()
-        )
-
-        return outputImage
+    public func outputImage() async -> PixelatedImage? {
+        await self.outputData().image
     }
 
     // for the NeighborType of this Blobber
@@ -319,8 +304,12 @@ public class FullFrameBlobber {
     }
 
     // used for writing out blob data for viewing 
-    public func outputData() async -> [UInt16] {
-        var ret = [UInt16](repeating: 0, count: subtractionPixelData.count)
+    public func outputData() async -> ImageBuffer<UInt16> {
+        var ret = ImageBuffer<UInt16>(
+          width: imageWidth,
+          height: imageHeight,
+          components: 1
+        )
 
         let min:  UInt16 = 0x4FFF
         let max:  UInt16 = 0xFFFF

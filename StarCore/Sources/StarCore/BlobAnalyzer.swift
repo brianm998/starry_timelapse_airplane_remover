@@ -25,7 +25,7 @@ public class LastBlob {
 public actor BlobAnalyzer {
 
     // map of all known blobs keyed by blob id
-    private var blobMap: [UInt32:Blob]
+    private var blobMap: [Int32:Blob]
 
     // width of the frame
     internal let width: Int
@@ -40,15 +40,13 @@ public actor BlobAnalyzer {
     // non zero values reference a blob
     internal var blobRefs: BlobRefs
 
-    internal var maxBlobId: UInt32 = 0
+    internal var maxBlobId: Int32 = 0
 
-    var pixelatedImage: PixelatedImage {
-        .init(width: self.width,
-              height: self.height,
-              grayscale32BitImageData: blobRefs.refs)
+    var pixelatedImage: PixelatedImage? {
+        blobRefs.refs.image
     }
 
-    func blobs(with blobIdSet: Set<UInt32>) -> [Blob] {
+    func blobs(with blobIdSet: Set<Int32>) -> [Blob] {
         blobIdSet.compactMap { blobMap[$0] }
     }
 
@@ -63,7 +61,7 @@ public actor BlobAnalyzer {
         return nil
     }
     
-    func blobId(at x: Int, and y: Int) -> UInt32? {
+    func blobId(at x: Int, and y: Int) -> Int32? {
         let index = y*width+x
         if index >= 0,
            index < blobRefs.refs.count
@@ -74,7 +72,7 @@ public actor BlobAnalyzer {
         return nil
     }
     
-    func blob(with blobId: UInt32) -> Blob? { blobMap[blobId] }
+    func blob(with blobId: Int32) -> Blob? { blobMap[blobId] }
     
     func update(blob: Blob) async {
         blobMap[blob.id] = blob
@@ -129,13 +127,13 @@ public actor BlobAnalyzer {
         blobRefs = blobRefs.updated(with: refsArr)
     }
 
-    func mapOfBlobs() -> [UInt32: Blob] { blobMap }
+    func mapOfBlobs() -> [Int32: Blob] { blobMap }
     
     func blobs() -> [Blob] {
         Array(blobMap.values)
     }
     
-    init(blobMap: [UInt32: Blob],
+    init(blobMap: [Int32: Blob],
          width: Int,
          height: Int,
          frameIndex: Int,
@@ -149,7 +147,7 @@ public actor BlobAnalyzer {
 
         let startTime = Date().timeIntervalSince1970
         
-        var _blobRefs = [UInt32](repeating: 0, count: width*height)
+        var _blobRefs = ImageBuffer<Int32>(width: width, height: height, components: 1)
         
         Log.d("frame \(frameIndex) has \(blobMap.count) blobs")
         
@@ -178,7 +176,7 @@ public actor BlobAnalyzer {
     }
 
     // skips blobs that are absorbed during iteration
-    internal func iterateOverAllBlobs(closure: @Sendable (UInt32, Blob) async -> Void) async {
+    internal func iterateOverAllBlobs(closure: @Sendable (Int32, Blob) async -> Void) async {
         // iterate over largest blobs first
 
         // prepare synchronous sorting with separate map 
@@ -234,31 +232,31 @@ public actor BlobAnalyzer {
 }
 
 public struct BlobSize {
-    let id: UInt32
+    let id: Int32
     let size: Int
     let blob: Blob
 }
 
 public final class BlobRefs: Sendable {
 
-    let refs: [UInt32]
+    let refs: ImageBuffer<Int32>
     let width: Int
     let height: Int
     
-    public init(refs: [UInt32], width: Int, height: Int) {
+    public init(refs: ImageBuffer<Int32>, width: Int, height: Int) {
         self.refs = refs
         self.width = width
         self.height = height
     }
 
-    public func updated(with newRefs: [UInt32]) -> BlobRefs {
+    public func updated(with newRefs: ImageBuffer<Int32>) -> BlobRefs {
         .init(refs: newRefs, width: width, height: height)
     }
 }
 
 internal func neighborCloud(of blob: Blob,
                             blobRefs: BlobRefs,
-                            blobMap: [UInt32: Blob],
+                            blobMap: [Int32: Blob],
                             scanSize: Int = 12) async -> Set<Blob>
 {
     var blobsToProcess = [blob]
@@ -291,7 +289,7 @@ internal func neighborCloud(of blob: Blob,
 // if requiredNeighbors is set, no more than that number of neighbors will be returned.
 internal func directNeighbors(of blob: Blob,
                               blobRefs: BlobRefs,
-                              blobMap: [UInt32: Blob],
+                              blobMap: [Int32: Blob],
                               scanSize: Int = 12,
                               requiredNeighbors: Int? = nil,
                               blobMattersClosure:  (@Sendable (Blob) async -> Bool)? = nil) async -> Set<Blob>

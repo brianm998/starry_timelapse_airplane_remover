@@ -13,7 +13,7 @@ public struct SortablePixel: Hashable,
     public enum ValueType : Sendable {
         case eightBit(UInt8)
         case sixteenBit(UInt16)
-        case thirtyTwoBit(UInt32)
+        case thirtyTwoBit(Int32)
     }
     
     public init(x: Int = 0,
@@ -75,12 +75,12 @@ public struct SortablePixel: Hashable,
 
     public var description: String { "[\(x), \(y)]" }
 
-    public var uInt32Value: UInt32 {
+    public var uInt32Value: Int32 {
         switch self.value {
         case .eightBit(let eightBits):
-            return UInt32(eightBits)
+            return Int32(eightBits)
         case .sixteenBit(let sixteenBits):
-            return UInt32(sixteenBits)
+            return Int32(sixteenBits)
         case .thirtyTwoBit(let thirtyTwoBits):
             return thirtyTwoBits
         }
