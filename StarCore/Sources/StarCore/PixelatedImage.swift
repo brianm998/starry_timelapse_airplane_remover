@@ -10,18 +10,6 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-/*
-
- XXX
- write a unit test that tests splitIntoMatrix on an image,
- comparing the input image with the returned matrix.
- make sure it works for both 16 and 32 bit images, 32 bit may be broken
- XXX
- 
- */
-
-
-
 import Foundation
 import CoreGraphics
 import KHTSwift
@@ -30,6 +18,21 @@ import Cocoa
 import kht_bridge
 import ImageIO
 
+/*
+
+ remaining problems after mat conversion:
+
+ - jpegs seem to be swapping red and blue :(
+ - computed removal mask is wonky as F
+ - funky image under filmstrip
+ - re-test for crashes on processed frame
+
+ - get rid of remaning NSImage code that isn't for going to SwiftUI Image
+ - re-do ImageAccessor to ditch NSCache and cache by reference counting w/ weak ref
+ - add UI counters to show how many of each type of image there is, and how much
+   ram they are taking based upon their buffer sizes.
+ 
+ */
 fileprivate let doingMemoryTesting = false
 
 fileprivate let activeImageCounter = ActiveImageCounter()
@@ -408,93 +411,7 @@ extension PixelatedImage {
     }
 
     public var nsImage: NSImage? { mat.nsImage() }
-/*
-    func image(fromData imageData: Data) throws -> CGImage {
-        Log.d("self bitsPerPixel \(self.bitsPerPixel) bitsPerComponent \(self.bitsPerComponent) bytesPerPixel \(self.bytesPerPixel) componentsPerPixel \(self.componentsPerPixel)")
-        guard width > 0 && height > 0 else {
-            let message = "invalid dimensions"
-            Log.e(message)
-            throw message
-        }
 
-        let expectedBytes = width * height * bytesPerPixel
-        guard imageData.count >= expectedBytes else {
-            let message = "image data too small (\(imageData.count) < \(expectedBytes))"
-            Log.e(message)
-            throw message
-        }
-
-        // Make a mutable copy when we might need to rewrite channel order (BGR->RGB)
-        let pixelData = imageData
-
-        let colorSpace: CGColorSpace
-        var bitmapInfo: CGBitmapInfo
-
-        if componentsPerPixel == 4 {
-            Log.d("FUCKING ALPHA self.bitmapInfo \(self.bitmapInfo)")
-            // 4-channel: assume OpenCV BGRA layout in memory (B G R A)
-            colorSpace = CGColorSpaceCreateDeviceRGB()
-            // Combine byte order and alpha info by OR'ing rawValues
-            // Using premultipliedFirst is common for BGRA (little-endian)
-
-            let raw = CGBitmapInfo.byteOrder16Little.rawValue |
-              CGImageAlphaInfo.last.rawValue
-
-            bitmapInfo = CGBitmapInfo(rawValue: raw)
-            
-            Log.d("FUCKING NEW ALPHA bitmapInfo \(bitmapInfo)")
-        } else if componentsPerPixel == 3 {
-            Log.d("FUCKING NO ALPHA")
-            // 3-channel: OpenCV gives BGR — convert to RGB to avoid color swap
-            colorSpace = CGColorSpaceCreateDeviceRGB()
-            // No alpha
-            bitmapInfo = self.bitmapInfo
-        } else {
-            Log.d("FUCKING GRAYSCALE")
-            // Grayscale / 1-channel
-            colorSpace = CGColorSpaceCreateDeviceGray()
-            bitmapInfo = self.bitmapInfo
-        }
-
-        guard let provider = CGDataProvider(data: pixelData as CFData) else {
-            let message = "could not create CGDataProvider"
-            Log.e(message)
-            throw message
-        }
-
-        guard let cgImage = CGImage(
-                width: width,
-                height: height,
-                bitsPerComponent: bitsPerComponent,
-                bitsPerPixel: bytesPerPixel * 8,
-                bytesPerRow: width * bytesPerPixel,
-                space: colorSpace,
-                bitmapInfo: bitmapInfo,
-                provider: provider,
-                decode: nil,
-                shouldInterpolate: false,
-                intent: .defaultIntent
-              ) 
-        else {
-            let message = "could not create CGImage from data"
-            Log.e(message)
-            throw message
-        }
-
-        return cgImage
-    }
- */
-/*
-    func nsImage(ofSize size: NSSize, fromData imageData: Data) -> NSImage? {
-        do {
-            let newImage = try image(fromData: imageData) 
-            return NSImage(cgImage: newImage, size: size).resized(to: size)
-        } catch {
-            Log.e("\(error)")
-        }
-        return nil
-    }
-  */  
     // write out the base image data
     public func writeTIFFEncoding(toFilename imageFilename: String) {
         self.mat.write(to: imageFilename)
