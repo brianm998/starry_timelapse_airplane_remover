@@ -148,7 +148,7 @@ extension PixelatedImage {
 
         // round up
         let topHeight = Int(Double(Double(self.height)*(100-bottomPercentage)/100)
-                              .rounded(.toNearestOrAwayFromZero))
+                              .rounded(.down))
 
         // crop out the top part
         guard let bottomCrop = self.bottomCrop(by: bottomHeight) else {
