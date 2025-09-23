@@ -679,7 +679,9 @@ extension PixelatedImage {
         return buffer?.image
     }
 
-
+    var ensureEightBit: PixelatedImage? {
+        PixelatedImage(mat: mat.ensureEightBit())
+    }
 }
 
 

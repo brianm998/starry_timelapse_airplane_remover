@@ -416,8 +416,14 @@ public struct ImageAccessor: Sendable {
                     try FileManager.default.removeItem(atPath: filename)
                 }
 
-                // write to file
-                scaledImage.saveJpeg(withQuality: 50, filename: filename)
+                // make it 8 bit with scaling
+
+                if let eightBitVersion = scaledImage.ensureEightBit {
+                    // write to file
+                    eightBitVersion.saveJpeg(withQuality: 50, filename: filename)
+                } else {
+                    Log.w("Unable to create 8 bit version of scaled image")
+                }
                 
                 return scaledImage
             }
@@ -433,9 +439,10 @@ public struct ImageAccessor: Sendable {
                                     andSize size: ImageDisplaySize)
       async throws -> PixelatedImage?
     {
-        if let scaledImage = try await makeMissingImage(frameIndex: frameIndex,
-                                                            ofType: type,
-                                                            andSize: size)
+        if let scaledImage = try await makeMissingImage(
+             frameIndex: frameIndex,
+             ofType: type,
+             andSize: size)
         {
             return scaledImage
         } else {

@@ -54,6 +54,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 -(MatWrapper *)downScaleTo:(NSUInteger)width height:(NSUInteger)height;
 
+-(MatWrapper *)ensureEightBit;
+
 - (MatWrapper *)addWhiteRowsOnTop:(int)rows;
 
 - (NSArray<ObjcImageMatrixElement*>*)splitWithTileWidth:(int)tileWidth

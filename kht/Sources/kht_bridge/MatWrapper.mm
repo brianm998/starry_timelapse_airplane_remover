@@ -7,11 +7,42 @@
 
 extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 
+cv::Mat ensure8U(const cv::Mat& input) {
+    // If already 8-bit unsigned, just return a copy
+    if (input.depth() == CV_8U) {
+        return input;
+    }
+
+    cv::Mat output;
+    double minVal, maxVal;
+    cv::minMaxLoc(input, &minVal, &maxVal);
+
+    if (minVal == maxVal) {
+        // Degenerate case: all pixels same → map to 0
+        output = cv::Mat::zeros(input.size(), CV_MAKETYPE(CV_8U, input.channels()));
+    } else {
+        // Scale values to [0, 255]
+        input.convertTo(
+            output,
+            CV_MAKETYPE(CV_8U, input.channels()),
+            255.0 / (maxVal - minVal),   // scale
+            -minVal * 255.0 / (maxVal - minVal) // shift
+        );
+    }
+
+    return output;
+}
+
+
 static inline NSImage* NSImageFromCvMat(const cv::Mat& mat) {
     // Make sure we have a supported type
-    cv::Mat clone = mat.clone();  
+    cv::Mat clone;
 
-    clone.convertTo(clone, CV_8U);
+    if (mat.depth() == CV_8U) {
+        clone = mat.clone();  
+    } else {
+        clone = ensure8U(mat);
+    }
 
     CV_Assert(clone.depth() == CV_8U);
     CV_Assert(clone.channels() == 1 || clone.channels() == 3 || clone.channels() == 4);
@@ -80,6 +111,11 @@ static inline NSImage* NSImageFromCvMat(const cv::Mat& mat) {
 @end
 
 @implementation MatWrapper
+
+-(MatWrapper *)ensureEightBit {
+  return [[MatWrapper alloc] initWithMat: ensure8U(_mat)];
+}
+
 
 // Internal init for ObjC++ usage
 - (instancetype)initWithMat:(const cv::Mat&)mat {
