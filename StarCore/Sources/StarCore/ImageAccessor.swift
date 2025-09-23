@@ -254,34 +254,13 @@ public struct ImageAccessor: Sendable {
                 var dataToSave: Data? = nil
                 switch size {
                 case .original:
-                    try image.writeTIFFEncoding(toFilename: filename)
+                    image.writeTIFFEncoding(toFilename: filename)
                 case .preview:
-                    dataToSave = image.nsImage(ofSize: previewSize)?.jpegData
+                    image.saveJpeg(withQuality: 60, filename: filename)
+                    imageSavedClosure?(frameIndex, image, type, size)
                 case .thumbnail:
-                    dataToSave = image.nsImage(ofSize: thumbnailSize)?.jpegData
-                }
-                if let dataToSave = dataToSave {
-                    // only used for previews and thumbnails
-                    var canCreate = true
-                    if FileManager.default.fileExists(atPath: filename) {
-                        if overwrite {
-                            Log.i("overwriting already existing file \(filename)")
-                            try FileManager.default.removeItem(atPath: filename)
-                        } else {
-                            Log.i("not overwriting already existing file \(filename)")
-                            canCreate = false
-                        }
-                    }
-
-                    if canCreate {
-                        // write to file
-                        FileManager.default.createFile(atPath: filename,
-                                                       contents: dataToSave,
-                                                       attributes: nil)
-
-                        // callback to tell what has changed
-                        imageSavedClosure?(frameIndex, image, type, size)
-                    }
+                    image.saveJpeg(withQuality: 60, filename: filename)
+                    imageSavedClosure?(frameIndex, image, type, size)
                 }
             } else {
                 Log.w("no place to save image of type \(type) at size \(size)")
