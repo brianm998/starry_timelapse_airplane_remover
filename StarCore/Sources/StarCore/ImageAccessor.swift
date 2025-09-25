@@ -497,19 +497,24 @@ public struct ImageAccessor: Sendable {
                                    previewExists: Bool,
                                    thumbnailExists: Bool) async throws
     {
-        if let nsImage = try loadImageIntSync(filename: filename) {
+        if let fullResImage = try await load(
+             frameIndex: frameIndex,
+             type: .original,
+             atSize: .original)
+        {
             if !previewExists {
                 if let previewSize = sizeOf(.preview)
                 {
-                    if let smallerImage = nsImage.resized(to: previewSize)
+                    if let smallerImage = fullResImage.downScaleTo(
+                         width: UInt(previewSize.width),
+                         height: UInt(previewSize.height)
+                       ),
+                       let eightBitVersion = smallerImage.ensureEightBit
                     {
-                        if let dataToSave = smallerImage.jpegData
-                        {
-                            // write to file
-                            FileManager.default.createFile(atPath: previewFilename,
-                                                           contents: dataToSave,
-                                                           attributes: nil)
-                        }
+                        eightBitVersion.saveJpeg(
+                          withQuality: 50,
+                          filename: previewFilename
+                        )
                     }
                 }
             }
@@ -517,15 +522,16 @@ public struct ImageAccessor: Sendable {
             if !thumbnailExists {
                 if let thumbnailSize = sizeOf(.thumbnail)
                 {
-                    if let smallerImage = nsImage.resized(to: thumbnailSize)
+                    if let smallerImage = fullResImage.downScaleTo(
+                         width: UInt(thumbnailSize.width),
+                         height: UInt(thumbnailSize.height)
+                       ),
+                       let eightBitVersion = smallerImage.ensureEightBit
                     {
-                        if let dataToSave = smallerImage.jpegData
-                        {
-                            // write to file
-                            FileManager.default.createFile(atPath: thumbnailFilename,
-                                                           contents: dataToSave,
-                                                           attributes: nil)
-                        }
+                        eightBitVersion.saveJpeg(
+                          withQuality: 50,
+                          filename: thumbnailFilename
+                        )
                     }
                 }
             }

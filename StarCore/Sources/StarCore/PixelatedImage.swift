@@ -22,12 +22,16 @@ import ImageIO
 
  remaining problems after mat conversion:
 
- - jpegs seem to be swapping red and blue :(
- - computed removal mask is wonky as F
- - funky image under filmstrip
+ - get rid of remaining NSImage code that isn't for going to SwiftUI Image
+   - this may very well be the cause of many of the other problems
+ - double check that when converting to display format we are copying from the cv::mat
+   
+ - jpegs seem to be swapping red and blue :( RGB BGR?
+   - saved jpegs are fine, display only issue?
+ * computed removal mask is wonky as F, WTF? (zeroing out buffer fixes it)
+ - funky image under filmstrip, bad image?
  - re-test for crashes on processed frame
 
- - get rid of remaning NSImage code that isn't for going to SwiftUI Image
  - re-do ImageAccessor to ditch NSCache and cache by reference counting w/ weak ref
  - add UI counters to show how many of each type of image there is, and how much
    ram they are taking based upon their buffer sizes.
@@ -406,10 +410,6 @@ extension PixelatedImage {
         }
     }
 
-    public func nsImage(ofSize size: NSSize) -> NSImage? {
-        return self.nsImage?.resized(to: size)
-    }
-
     public var nsImage: NSImage? { mat.nsImage() }
 
     // write out the base image data
@@ -627,47 +627,6 @@ fileprivate func isImage(_ image: PixelatedImage,
     if blobPixels.contains(sortablePixel) { return nil }
 
     return image.intensity(atX: x, andY: y)  > intensity
-}
-
-extension NSImage {
-    
-    public func resized(to newSize: NSSize) -> NSImage? {
-        if let bitmapRep = NSBitmapImageRep(
-             bitmapDataPlanes: nil,
-             pixelsWide: Int(newSize.width),
-             pixelsHigh: Int(newSize.height),
-             bitsPerSample: 8,
-             samplesPerPixel: 4,
-             hasAlpha: true,
-             isPlanar: false,
-             colorSpaceName: .calibratedRGB,
-             bytesPerRow: 0, bitsPerPixel: 0
-        ) {
-            bitmapRep.size = newSize
-            NSGraphicsContext.saveGraphicsState()
-            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmapRep)
-            draw(in: NSRect(x: 0, y: 0, width: newSize.width, height: newSize.height), from: .zero, operation: .copy, fraction: 1.0)
-            NSGraphicsContext.restoreGraphicsState()
-
-            let resizedImage = NSImage(size: newSize)
-            resizedImage.addRepresentation(bitmapRep)
-            return resizedImage
-        }
-
-        return nil
-    }
-}
-
-public extension NSImage {
-    var jpegData: Data? {
-        if let cgImage = self.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-            let bitmapRep = NSBitmapImageRep(cgImage: cgImage)
-            if let data = bitmapRep.representation(using: NSBitmapImageRep.FileType.jpeg, properties: [:]) {
-                return data
-            }
-        }
-        return nil
-    }
 }
 
 extension ContiguousBytes {

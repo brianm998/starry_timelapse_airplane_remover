@@ -8,7 +8,7 @@ import kht_bridge
 
  Usage:
 
- let buffer = Buffer<UInt16>(width: 200, height: 200, components: 3)
+ let buffer = ImageBuffer<UInt16>(width: 200, height: 200, components: 3)
  if let image = buffer.image {
      // image is a PixelatedImage pointing at buffer
      // with a cv::Mat (image.mat) pointing to the same buffer 
