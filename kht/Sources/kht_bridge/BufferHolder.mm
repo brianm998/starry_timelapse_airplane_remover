@@ -34,6 +34,8 @@
             // malloc failed
             return nil;
         }
+	// set it all to zero
+	memset(_buffer, 0, totalLength);
 	Log_d(@"init with width %d height %d bitsPerComponent %lu", width, height, bitsPerComponent);
     }
     return self;
