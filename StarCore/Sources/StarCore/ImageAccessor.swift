@@ -76,17 +76,24 @@ public struct ImageAccessor: Sendable {
         }
     }
 
-    public func loadImage(frameIndex: Int,
-                          type imageType: FrameViewMode,
-                          atSize size: ImageDisplaySize) async -> Image?
-    {
-        if let url = urlForImage(frameIndex: frameIndex, ofType: imageType, atSize: size),
-           let image = NSImage(contentsOf: url)
+    public func loadImage(
+      frameIndex: Int,
+      type imageType: FrameViewMode,
+      atSize size: ImageDisplaySize
+    ) async -> Image? {
+        if let filename = nameForImage(
+             frameIndex: frameIndex,
+             ofType: imageType,
+             atSize: size
+           ),
+           let image = PixelatedImage(filename: filename),
+           let nsImage = image.nsImage
         {
-            return Image(nsImage: image)
-        } else if let image = try? await makeMissingImage(frameIndex: frameIndex,
-                                                          ofType: imageType,
-                                                          andSize: size),
+            return Image(nsImage: nsImage)
+        } else if let image = try? await makeMissingImage(
+                    frameIndex: frameIndex,
+                    ofType: imageType,
+                    andSize: size),
                   let nsImage = image.nsImage
         {
             return Image(nsImage: nsImage)
@@ -255,11 +262,16 @@ public struct ImageAccessor: Sendable {
                 switch size {
                 case .original:
                     image.writeTIFFEncoding(toFilename: filename)
-                case .preview:
-                    image.saveJpeg(withQuality: 60, filename: filename)
-                    imageSavedClosure?(frameIndex, image, type, size)
-                case .thumbnail:
-                    image.saveJpeg(withQuality: 60, filename: filename)
+                default:
+                    // everything but originals gets downscaled and saved as a jpeg
+                    if let smallSize = sizeOf(size),
+                       let downScaled = image.downScaleTo(
+                         width: UInt(smallSize.width),
+                         height: UInt(smallSize.height)
+                       )
+                    {
+                        downScaled.saveJpeg(withQuality: 60, filename: filename)
+                    }
                     imageSavedClosure?(frameIndex, image, type, size)
                 }
             } else {
@@ -363,13 +375,13 @@ public struct ImageAccessor: Sendable {
             }
         }
     }
-    
-    
-    public func makeMissingImage(frameIndex: Int,
-                                 ofType type: FrameViewMode,
-                                 andSize size: ImageDisplaySize,
-                                 semaphore: AsyncSemaphore? = nil) async throws -> PixelatedImage?
-    {
+        
+    public func makeMissingImage(
+      frameIndex: Int,
+      ofType type: FrameViewMode,
+      andSize size: ImageDisplaySize,
+      semaphore: AsyncSemaphore? = nil
+    ) async throws -> PixelatedImage? {
         Log.d("start with frame \(frameIndex)")
         if let filename = nameForImage(frameIndex: frameIndex,
                                        ofType: type,
