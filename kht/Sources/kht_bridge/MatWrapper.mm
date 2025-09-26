@@ -35,11 +35,11 @@ cv::Mat ensure8U(const cv::Mat& input) {
 
 
 static inline NSImage* NSImageFromCvMat(const cv::Mat& mat) {
-    // Make sure we have a supported type
     cv::Mat clone;
 
+    // Ensure 8-bit depth
     if (mat.depth() == CV_8U) {
-        clone = mat.clone();  
+        clone = mat.clone();
     } else {
         clone = ensure8U(mat);
     }
@@ -47,37 +47,30 @@ static inline NSImage* NSImageFromCvMat(const cv::Mat& mat) {
     CV_Assert(clone.depth() == CV_8U);
     CV_Assert(clone.channels() == 1 || clone.channels() == 3 || clone.channels() == 4);
 
-    int width  = clone.cols;
-    int height = clone.rows;
-    int channels = clone.channels();
-
-    // Convert to BGRA if needed (CoreGraphics wants RGBA or grayscale)
     cv::Mat rgbaMat;
-    switch (channels) {
+
+    // Convert into RGBA (CoreGraphics prefers RGBA or grayscale with alpha)
+    switch (clone.channels()) {
         case 1:
-            cv::cvtColor(clone, rgbaMat, cv::COLOR_GRAY2BGRA);
+            cv::cvtColor(clone, rgbaMat, cv::COLOR_GRAY2RGBA);
             break;
         case 3:
-            cv::cvtColor(clone, rgbaMat, cv::COLOR_BGR2BGRA);
+            cv::cvtColor(clone, rgbaMat, cv::COLOR_BGR2RGBA);
             break;
         case 4:
             cv::cvtColor(clone, rgbaMat, cv::COLOR_BGRA2RGBA);
             break;
     }
 
-    // Wrap raw data into a CGDataProvider
-    size_t dataSize = rgbaMat.total() * rgbaMat.elemSize();
-    CGDataProviderRef provider = CGDataProviderCreateWithData(
-        nullptr,
-        rgbaMat.data,
-        dataSize,
-        nullptr // don't free, cv::Mat owns it
-    );
+    int width  = rgbaMat.cols;
+    int height = rgbaMat.rows;
 
-    // Color space (sRGB)
+    // Copy the pixel buffer so NSImage owns it
+    NSData *data = [NSData dataWithBytes:rgbaMat.data length:rgbaMat.total() * rgbaMat.elemSize()];
+
+    CGDataProviderRef provider = CGDataProviderCreateWithCFData((__bridge CFDataRef)data);
+
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-
-    // Bitmap info
     CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrderDefault;
 
     CGImageRef cgImage = CGImageCreate(
@@ -97,13 +90,13 @@ static inline NSImage* NSImageFromCvMat(const cv::Mat& mat) {
     NSImage *image = [[NSImage alloc] initWithCGImage:cgImage
                                                  size:NSMakeSize(width, height)];
 
-    // Cleanup
     CGImageRelease(cgImage);
     CGColorSpaceRelease(colorSpace);
     CGDataProviderRelease(provider);
 
     return image;
 }
+
 
 @interface MatWrapper () {
     cv::Mat _mat;
