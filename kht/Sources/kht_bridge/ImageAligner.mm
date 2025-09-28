@@ -620,8 +620,6 @@ maxCornerDeviation:(double)maxCornerDeviation
         // Prepare grayscale special frame with the horizon mask
         cv::Mat specialGray = toGray8UWithMask(specialMat, horizonMask, true);
 
-        specialMat.release();    // done with specialMat, release it
-
         // default to deteting with the horizon mask as is
         cv::Mat detectionMask = horizonMask;
 
@@ -670,7 +668,6 @@ maxCornerDeviation:(double)maxCornerDeviation
         }
 
         kpSpecial.shrink_to_fit();
-        specialGray.release();
 
         // Preallocate per-index result storage to avoid push_back from many threads
         const size_t n = frames.count;
@@ -885,9 +882,6 @@ maxCornerDeviation:(double)maxCornerDeviation
 			  Log_w(@"frame is empty");
 			}
                     }
-
-                    // explicit releases (optional, local mats go out of scope)
-                    frameGray.release();
 
                 } catch (const cv::Exception &e) {
                     Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
