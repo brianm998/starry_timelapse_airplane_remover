@@ -16,8 +16,8 @@ public let imageCache = ImageCache()
   - ram usage of cached image buffers
  */
 
-public final class WeakRef<T> {
-    var value: T?
+public final class WeakRef<T: AnyObject> {
+/*    weak*/ var value: T?
 
     init(_ value: T?) {
         self.value = value
@@ -35,12 +35,39 @@ public actor ImageCache {
     var imageLoadFailures: UInt = 0
 
     var pendingLoads: [String:AsyncSemaphore] = [:]
-
+    
+    
     init() { }
 
-    public func loadImage(filename: String) async throws -> PixelatedImage? {
-        let key = filename
+    public func add(image: PixelatedImage, named filename: String) {
+        if image.isEmpty { Log.w("adding empty image to cache") }
+        cache[filename] = WeakRef(image.clone)
+    }
+    
+    public func prepareUpdate() -> (UInt, UInt, [Int: Int]) {
+         
+        var imageSizeToCountMap: [Int:Int] = [:]
 
+        for (key, weakRef) in cache {
+            if let cachedImage = weakRef.value {
+                if let count = imageSizeToCountMap[cachedImage.byteCount] {
+                    imageSizeToCountMap[cachedImage.byteCount] = count + 1
+                } else {
+                    imageSizeToCountMap[cachedImage.byteCount] = 1
+                }
+            } else {
+                // weak ref in the cache was nil, remove WeakRef holder
+                cache[key] = nil
+            }
+        }
+
+        return (cacheHits, cacheMisses, imageSizeToCountMap)
+    }
+    
+    public func loadImage(filename: String) async throws -> PixelatedImage? {
+
+        Log.d("FUCKING loadImage(\(filename))")
+        
         // if there is a pending load for this filename,
         // we will expect a semaphore for it
         let semaphore = pendingLoads[filename]
@@ -51,19 +78,27 @@ public actor ImageCache {
 
         
         // first look in the cache
-        if let cachedImageRef = cache[key] {
+        if //false,               // XXX disable caching XXX
+           let cachedImageRef = cache[filename] {
             if let cachedImage = cachedImageRef.value {
+
+                if cachedImage.isEmpty {
+                    Log.w("CACHED IMAGE WAS EMPTY")
+                }
+                
                 // cache hit, return cached value
+                Log.d("returning cachedImage \(cachedImage.description)")
                 cacheHits += 1
                 log()
                 if let semaphore { semaphore.signal() }
-                return cachedImage
+                return cachedImage.clone // XXX TEST XXX
             } else {
                 // weak ref in the cache was nil, remove WeakRef holder
-                cache[key] = nil
+                cache[filename] = nil
             }
         }
         
+
         // cache miss, load image from filename
         // allowing other cache lookups while we load this image,
         
@@ -78,7 +113,8 @@ public actor ImageCache {
         }.value
 
         if let ret {
-            cache[key] = WeakRef(ret)
+            if ret.isEmpty { Log.w("adding empty image to cache") }
+            cache[filename] = WeakRef(ret.clone)
             cacheMisses += 1
             imageLoadSuccess += 1
             log()

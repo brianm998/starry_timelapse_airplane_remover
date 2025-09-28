@@ -21,18 +21,10 @@ import ImageIO
 /*
 
  remaining problems after mat conversion:
-
- - get rid of remaining NSImage code that isn't for going to SwiftUI Image
-   - this may very well be the cause of many of the other problems
- - double check that when converting to display format we are copying from the cv::mat
    
- - jpegs seem to be swapping red and blue :( RGB BGR?
-   - saved jpegs are fine, display only issue?
- * computed removal mask is wonky as F, WTF? (zeroing out buffer fixes it)
- - funky image under filmstrip, bad image?
  - re-test for crashes on processed frame
 
- - re-do ImageAccessor to ditch NSCache and cache by reference counting w/ weak ref
+ * re-do ImageAccessor to ditch NSCache and cache by reference counting w/ weak ref
  - add UI counters to show how many of each type of image there is, and how much
    ram they are taking based upon their buffer sizes.
  
@@ -126,7 +118,7 @@ public final class PixelatedImage: Sendable {
     public let thirtyTwoBitBuffer: ImageBuffer<Int32>? 
     
     let colorSpace: CGColorSpace // XXX why both space and name?
-    
+
     // enum to bridge between Data and direct individual component access
     // do we have 8 bits per component, or 16?
     // pixels could have multiple components, or just one.
@@ -137,6 +129,17 @@ public final class PixelatedImage: Sendable {
         case sixteenBit(UnsafeBufferPointer<UInt16>)
         case thirtyTwoBit(UnsafeBufferPointer<Int32>)
 
+        var byteCount: Int {
+            switch self {
+            case .eightBit(let pointer):
+                return pointer.count
+            case .sixteenBit(let pointer):
+                return pointer.count*2
+            case .thirtyTwoBit(let pointer):
+                return pointer.count*4
+            }
+        }
+        
         var data: Data {
             switch self {
             case .eightBit(let buffer):
@@ -149,6 +152,8 @@ public final class PixelatedImage: Sendable {
         }
     }
 
+    public var byteCount: Int { imageData.byteCount }
+        
     public convenience init?(filename: String) {
         if let wrapper = MatWrapper.load(fromFilename: filename) {
             self.init(mat: wrapper)
@@ -423,7 +428,7 @@ extension PixelatedImage {
         // convert images to cv::Mat
         let selfMat = self.mat
         let otherMat = otherFrame.mat
-        
+        Log.d("subtract \(otherMat) from \(selfMat)")
         // jump into c++ land for the actual subtraction
         let resultMat = PixelatedImageBridge.subtractImage(otherMat, fromImage: selfMat)
 
@@ -434,6 +439,12 @@ extension PixelatedImage {
         } else {
             throw "cannot create PixelatedImage from resulting mat during image subtraction"
         }
+    }
+
+    public var isEmpty: Bool { self.mat.isEmpty }
+    
+    public var clone: PixelatedImage {
+        PixelatedImage(mat: self.mat.clone())! // XXX
     }
     
     // used as a classification criteria
@@ -866,6 +877,8 @@ extension PixelatedImage {
         var failed: PixelatedImage? = nil
         var numAligned: Int = 0
         var numFailed: Int = 0
+
+        Log.d("align \(self.mat)")
         
         if let result = ImageAligner.alignFrames(
              self.mat,
@@ -882,6 +895,7 @@ extension PixelatedImage {
             if let error = result as? String {
                 Log.e("error: \(error)")
             } else if let result = result as? kht_bridge.AlignmentResult {
+                Log.d("align \(self.mat)")
                 Log.d("got result \(result)")
                 if let mat = result.aligned {
                     // assumes self and processedMat have same bits per pixel, num components, etc.
@@ -912,6 +926,8 @@ extension PixelatedImage {
             }
         }
 
+        Log.d("align \(self.mat)")
+        
         return AlignmentResult(
           aligned: aligned,
           failed: failed,

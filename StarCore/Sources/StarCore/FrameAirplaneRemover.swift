@@ -574,12 +574,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         else {
             throw "frame \(frameIndex) unable to load original frame for star alignment"
         }
+
+        if originalFrame.isEmpty { Log.w("EMPTY IMAGE") }
+
+        Log.d("original frame \(originalFrame.description)")
         
         let neighborImages = try await withThrowingTaskGroup(of: PixelatedImage?.self) { group in
-            for neibhforIndex in alignmentFilenames.keys {
+            for heighborIndex in alignmentFilenames.keys {
                 group.addTask {
                     try await self.imageAccessor.load(
-                      frameIndex: neibhforIndex,
+                      frameIndex: heighborIndex,
                       type: .original,
                       atSize: .original
                     )
@@ -589,6 +593,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             var results = [PixelatedImage]()
             for try await image in group {
                 if let img = image {
+                    if img.isEmpty { Log.w("EMPTY IMAGE") }
                     results.append(img)
                 }
             }
@@ -599,6 +604,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         let horizonMask = try await loadOrCreateHorizonMask()
 
+        Log.d("horizon mask \(horizonMask.image.description)")
+        
         let alignmentResult = originalFrame.align(
           frames: neighborImages,
           masked: horizonMask.image,
@@ -2048,20 +2055,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // if we don't have the subtracted image on file yet, make it
         Log.d("frame \(frameIndex) loadOrCreateSubtractionImage")
 
-        // load the original
-        guard let image = try await accessor.load(
-                frameIndex: frameIndex,
-                type: .original,
-                atSize: .original)
-        else {
-            Log.e("frame \(frameIndex) couldn't load original image")
-            // XXX these should really throw an error, and that really should
-            // be handled properly at a higher level, but right now, thrown errors
-            // from here end up in the bitbucket :(  Need to figure out why
-            throw "frame \(frameIndex) couldn't original image"
-        }
-        Log.d("frame \(frameIndex) got orig image")
-        
         // load or create the aligned frame
 
         let starAlignedImage = try await loadOrCreateStarAlignedImage()
@@ -2074,6 +2067,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // result is image - alignedFrame
         // any pixel which is bright in image but not bright in alignedFrames
         // will be bright in the subtractionImage
+        //Log.d("frame \(frameIndex) OG image \(image.description)")
+
+        var imageToSubtract: PixelatedImage? = nil
         
         if config.horizonDetectionEnabled ?? true {
             Log.d("doing horizon enabled subtraction image")
@@ -2082,39 +2078,70 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // that from the image instead of just the star aligned image
 
             let horizonMask = try await loadOrCreateHorizonMask()
+            //Log.d("frame \(frameIndex) OG image \(image.description)")
             let earthAlignedImage = try await loadOrCreateEarthAlignedImage()
+            //Log.d("frame \(frameIndex) OG image \(image.description)")
 
+            Log.d("HOLY FUCK earthAlignedImage \(earthAlignedImage.description) horizonMask \(horizonMask)")
+            
             let combinedImage = try starAlignedImage.apply(
               mask: horizonMask.image,
               with: earthAlignedImage
             )
-            
-            subtractionImage = try image.subtract(combinedImage)
+
+            //Log.d("HOLY FUCK image \(image.description) combinedImage \(combinedImage.description)")
+
+        
+            imageToSubtract = combinedImage            
             
         } else {
             // with no horizon to worry about, just subtract the star aligned image
-            subtractionImage = try image.subtract(starAlignedImage)
+            
+            imageToSubtract = starAlignedImage
         }
 
-        if config.writeOutlierGroupFiles {
-            // write out image of outlier amounts
-            do {
-                try await accessor.save(subtractionImage,
-                                        frameIndex: frameIndex,
-                                        as: .subtraction,
-                                        atSize: .original,
-                                        overwrite: true)
-                try await accessor.save(subtractionImage,
-                                        frameIndex: frameIndex,
-                                        as: .subtraction,
-                                        atSize: .preview,
-                                        overwrite: true)
-            } catch {
-                Log.e("frame \(frameIndex) can't write subtraction image: \(error)")
+
+        if let imageToSubtract {
+
+            // load the original
+            guard let image = try await accessor.load(
+                    frameIndex: frameIndex,
+                    type: .original,
+                    atSize: .original)
+            else {
+                Log.e("frame \(frameIndex) couldn't load original image")
+                // XXX these should really throw an error, and that really should
+                // be handled properly at a higher level, but right now, thrown errors
+                // from here end up in the bitbucket :(  Need to figure out why
+                throw "frame \(frameIndex) couldn't original image"
             }
-        }
+            Log.d("frame \(frameIndex) got orig image \(image.description)")
+            
 
-        return subtractionImage
+            subtractionImage = try image.subtract(imageToSubtract)
+
+            if config.writeOutlierGroupFiles {
+                // write out image of outlier amounts
+                do {
+                    try await accessor.save(subtractionImage,
+                                            frameIndex: frameIndex,
+                                            as: .subtraction,
+                                            atSize: .original,
+                                            overwrite: true)
+                    try await accessor.save(subtractionImage,
+                                            frameIndex: frameIndex,
+                                            as: .subtraction,
+                                            atSize: .preview,
+                                            overwrite: true)
+                } catch {
+                    Log.e("frame \(frameIndex) can't write subtraction image: \(error)")
+                }
+            }
+
+            return subtractionImage
+        } else {
+            throw "unable to create image to subtract"
+        }
     }
 
     // Mark - File output

@@ -52,11 +52,15 @@ NS_ASSUME_NONNULL_BEGIN
 
 -(NSImage*)nsImage;
 
+-(MatWrapper *)clone;
+
 -(MatWrapper *)downScaleTo:(NSUInteger)width height:(NSUInteger)height;
 
 -(MatWrapper *)ensureEightBit;
 
 - (MatWrapper *)addWhiteRowsOnTop:(int)rows;
+
+- (BOOL)ownsData;
 
 - (NSArray<ObjcImageMatrixElement*>*)splitWithTileWidth:(int)tileWidth
 					     tileHeight:(int)tileHeight

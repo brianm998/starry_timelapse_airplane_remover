@@ -252,8 +252,8 @@ public final class ImageSequenceViewModel {
     var showProcessingOptionsSheet = false
 
     var showAllFrameViewModes = false
-
     var showAllFrameProcessingStates = false
+    var showAllImageCacheStats = false
 
     var multiSelectionType: MultiSelectionType = .all
     var multiSelectionRemovalType: MultiSelectionRemovalType = .keep

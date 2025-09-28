@@ -7,6 +7,42 @@ struct LeftPanel: View {
 
     let foobar = 134.0/255.0 // XXX make a custom color from these
     let foobar2 = 138.0/255.0
+
+    @State private var isVisible: Bool = false
+    @State private var imageCacheHits: UInt = 0
+    @State private var imageCacheMisses: UInt = 0
+    @State private var imageCacheMap: [Int: Int] = [:]
+
+    var basicImageStats: (String, Int) { // memory usage, number of images
+        var totalImageCount: Int = 0
+        var totalByteCount: Int = 0
+        for (size, count) in imageCacheMap {
+            totalByteCount += size * count
+            totalImageCount += count
+        }
+        return (string(for: totalByteCount), totalImageCount)
+    }
+
+    func string(for byteCount: Int) -> String {
+        Log.d("string(for: byteCount \(byteCount))")
+        if byteCount < 1024 {
+            Log.d("\(byteCount) is bytes")
+            return "\(byteCount) bytes"
+        } else if byteCount < (1024*1024) {
+            Log.d("\(byteCount) is kb")
+            return "\(byteCount/1024) kb"
+        } else if byteCount < (1024*1024*1024) {
+            Log.d("\(byteCount) is mb")
+            return "\(byteCount/(1024*1024)) mb"
+        } else if byteCount < (1024*1024*1024*1024) {
+            Log.d("\(byteCount) is gb")
+            return "\(byteCount/(1024*1024*1024)) gb"
+        } else {// if byteCount < 1024^5 {
+            let ret = "\(byteCount/(1024*1024*1024*1024)) tb"
+            Log.d("\(byteCount) is tb string \(ret)")
+            return ret
+        }
+    }
     
     var body: some View {
         Group {
@@ -22,22 +58,6 @@ struct LeftPanel: View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .trailing) {
 
-            // XXX testing for why sometimes this view doesn't get events
-            // XXX testing for why sometimes this view doesn't get events
-            // XXX testing for why sometimes this view doesn't get events
-            /*
-            Button() {
-                Log.i("FUCK YES IT DOES")
-            } label: {
-                Text("Does this shit still work?")
-            }
-              .buttonStyle(PlainButtonStyle())
-              .cursor(.extractTrashPointing)
-             */
-            // XXX testing for why sometimes this view doesn't get events
-            // XXX testing for why sometimes this view doesn't get events
-            // XXX testing for why sometimes this view doesn't get events
-            
             ScrollView() {
                 VStack(alignment: .leading) {
 
@@ -52,6 +72,30 @@ struct LeftPanel: View {
                     self.processingStateView
 
                     Space(height: 10)
+
+                    self.imageCacheView
+
+                    Space(height: 10)
+                    
+                    /*
+
+                     add
+
+                     imageCache.receiveUpdates() { hits, misses, map
+                     }
+
+                     in didAppear
+
+                     and 
+
+                     imageCache.receiveUpdates(nil)
+
+                     on disappear
+
+                     then show a collapsable view here that shows only number and
+                     size when collapsed, and full details when opened.
+
+                     */
                     
                     self.frameModeView
                     
@@ -60,7 +104,14 @@ struct LeftPanel: View {
             }
               .defaultScrollAnchor(.bottom)
            //   .frame(maxHeight: .infinity, alignment: .bottom)
-            
+
+              .onAppear {
+                  isVisible = true
+                  self.updateImageCacheStats()
+              }
+              .onDisappear() {
+                  isVisible = false
+              }
             Spacer()
             
             Button() {
@@ -78,6 +129,22 @@ struct LeftPanel: View {
         
     }
 
+    func updateImageCacheStats() {
+        guard self.isVisible else { return }
+        Task.detached {
+            let (hits, misses, map) = await imageCache.prepareUpdate()
+            Task { @MainActor in
+                // update values
+                self.imageCacheHits = hits
+                self.imageCacheMisses = misses
+                self.imageCacheMap = map
+                
+                try? await Task.sleep(nanoseconds: 2_000_000_000) // XXX make a param
+                self.updateImageCacheStats()
+            }
+        }
+    }
+    
     var processButtonDisabled: Bool {
         let unprocessed = viewModel.frameStateMap[.unprocessed]?.count ?? 0
         let horizon = viewModel.frameStateMap[.horizonDetected]?.count ?? 0
@@ -169,7 +236,48 @@ struct LeftPanel: View {
               }
         }
     }
-        
+
+    var imageCacheView: some View {
+        @Bindable var viewModel = viewModel
+        return VStack(alignment: .leading) {
+            Text("Image Cache stats")
+              .foregroundColor(.white)
+            Spacer()
+              .frame(maxHeight: 4)
+
+            let (memoryString, imageCount) = self.basicImageStats
+
+            if viewModel.showAllImageCacheStats {
+                // show all image cache stats
+                Text("\(memoryString) used by \(imageCount) images")
+                  .foregroundColor(.gray)
+
+                Text("\(imageCacheHits) cache hits")
+                  .foregroundColor(.gray)
+                Text("\(imageCacheMisses) cache misses")
+                  .foregroundColor(.gray)
+                ForEach(imageCacheMap.keys.sorted { $0 > $1 }, id: \.self) { key in
+                    let sizeString = string(for: key)
+                    if let count = imageCacheMap[key] {
+                        Text("\(count) \(sizeString) images")
+                          .foregroundColor(.gray)
+                    }
+                }
+                
+                // XXX add more here
+            } else {
+                // not all stats, just basics
+                Text("\(memoryString) used by \(imageCount) images")
+                  .foregroundColor(.gray)
+            }
+            
+            Spacer()
+              .frame(maxHeight: 10)
+            
+            ExpandUpButton($viewModel.showAllImageCacheStats)
+        }
+    }
+    
     var processingStateView: some View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .leading) {

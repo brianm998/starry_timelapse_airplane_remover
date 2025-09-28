@@ -10,6 +10,45 @@
 #include <iostream>
 
 
+void printMatInfo(const cv::Mat& mat, const std::string& name = "") {
+    if (!name.empty()) {
+        std::cout << "Mat '" << name << "':\n";
+    } else {
+        std::cout << "Mat info:\n";
+    }
+
+    std::cout << "  Size: " << mat.cols << " x " << mat.rows << "\n";
+
+    int depth = mat.depth();
+    int bitsPerComponent = 0;
+    switch (depth) {
+        case CV_8U: case CV_8S: bitsPerComponent = 8; break;
+        case CV_16U: case CV_16S: bitsPerComponent = 16; break;
+        case CV_32S: case CV_32F: bitsPerComponent = 32; break;
+        case CV_64F: bitsPerComponent = 64; break;
+        default: bitsPerComponent = 0; break;
+    }
+
+    int channels = mat.channels();
+    std::cout << "  Bits per component: " << bitsPerComponent << "\n";
+    std::cout << "  Components per pixel: " << channels << "\n";
+    std::cout << "  Total depth (bits per pixel): " << bitsPerComponent * channels << "\n";
+
+    // Guess alpha information
+    if (channels == 4) {
+        std::cout << "  Alpha channel: Present (assumed)\n";
+        std::cout << "  Channel order: Likely BGRA (OpenCV default)\n";
+        std::cout << "  Premultiplied alpha: Unknown (must track separately)\n";
+    } else if (channels == 3) {
+        std::cout << "  Alpha channel: None (RGB/BGR)\n";
+    } else if (channels == 1) {
+        std::cout << "  Alpha channel: None (Grayscale)\n";
+    } else {
+        std::cout << "  Alpha channel: Unknown (non-standard channel count)\n";
+    }
+}
+
+
 @implementation AlignmentResult
 @end
 
@@ -22,7 +61,10 @@
 // as otherwise areas with lots of bright bad pixels in the same spot across
 // multiple images can sometimes allow the bad pixels to show up at the median 
 cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats, double k) {
-    if (mats.empty()) return cv::Mat();
+  if (mats.empty()) {
+    Log_w(@"given empty mats, returning one too :(");
+    return cv::Mat();
+  }
 
     // grab first image to read its characteristics
     const cv::Mat& first = mats[0];
@@ -180,6 +222,11 @@ cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats, double k) {
         throw std::runtime_error("Unsupported element depth (only CV_8U and CV_16U implemented)");
     }
 
+  if(output.empty()) {
+    Log_w(@"empty mat");
+  }
+    printMatInfo(output, "image align output");
+    
     return output;
 }
 
@@ -401,43 +448,6 @@ cv::Mat createGradientMaskIntoSky(const cv::Mat &binaryMask, int gradientDistanc
 }
 
 
-void printMatInfo(const cv::Mat& mat, const std::string& name = "") {
-    if (!name.empty()) {
-        std::cout << "Mat '" << name << "':\n";
-    } else {
-        std::cout << "Mat info:\n";
-    }
-
-    std::cout << "  Size: " << mat.cols << " x " << mat.rows << "\n";
-
-    int depth = mat.depth();
-    int bitsPerComponent = 0;
-    switch (depth) {
-        case CV_8U: case CV_8S: bitsPerComponent = 8; break;
-        case CV_16U: case CV_16S: bitsPerComponent = 16; break;
-        case CV_32S: case CV_32F: bitsPerComponent = 32; break;
-        case CV_64F: bitsPerComponent = 64; break;
-        default: bitsPerComponent = 0; break;
-    }
-
-    int channels = mat.channels();
-    std::cout << "  Bits per component: " << bitsPerComponent << "\n";
-    std::cout << "  Components per pixel: " << channels << "\n";
-    std::cout << "  Total depth (bits per pixel): " << bitsPerComponent * channels << "\n";
-
-    // Guess alpha information
-    if (channels == 4) {
-        std::cout << "  Alpha channel: Present (assumed)\n";
-        std::cout << "  Channel order: Likely BGRA (OpenCV default)\n";
-        std::cout << "  Premultiplied alpha: Unknown (must track separately)\n";
-    } else if (channels == 3) {
-        std::cout << "  Alpha channel: None (RGB/BGR)\n";
-    } else if (channels == 1) {
-        std::cout << "  Alpha channel: None (Grayscale)\n";
-    } else {
-        std::cout << "  Alpha channel: Unknown (non-standard channel count)\n";
-    }
-}
 
 // Convert image to 8-bit grayscale, normalize only within mask area
 cv::Mat toGray8UWithMask(const cv::Mat& src, const cv::Mat& mask, bool normalize = true) {
@@ -667,7 +677,7 @@ maxCornerDeviation:(double)maxCornerDeviation
         std::vector<cv::Mat> resultMats(n);         // will hold warped (success) or original (failure)
         std::vector<char>    resultSuccess(n, 0);   // 1 if accepted warp, 0 otherwise
 
-	Log_i(@"about to align in parallel");
+	Log_i(@"%d, about to align in parallel", invertMask);
 	
         // We will run the heavy loop in parallel with OpenCV
         cv::parallel_for_(cv::Range(0, (int)n), [&](const cv::Range &range) {
@@ -679,8 +689,10 @@ maxCornerDeviation:(double)maxCornerDeviation
             for (int ii = range.start; ii < range.end; ++ii) {
                 NSUInteger idx = (NSUInteger)ii;
                 try {
+                    Log_i(@"%d top", invertMask);
                     // grab the frame as a cv::Mat (read-only access)
                     cv::Mat &frame = frames[idx].mat;
+                    Log_i(@"%d check", invertMask);
 
                     // make a gray 8 bit image for detection
                     cv::Mat frameGray = toGray8UWithMask(frame, horizonMask, true);
@@ -690,12 +702,14 @@ maxCornerDeviation:(double)maxCornerDeviation
 
                     cv::Mat localDetectionMask = horizonMask;
 
+                    Log_i(@"%d check", invertMask);
                     if (!invertMask) {
                         // detection mask is a star mask for the sky
                         localDetectionMask = makeStarMask(frameGray, /*dilateSize=*/30, /*thresholdVal=*/200);
                     }
 
                     // create local detector/matcher/clahe instances so they are thread-local
+                    Log_i(@"%d check", invertMask);
                     if (invertMask) {
                         // ground: AKAZE + CLAHE + gamma
                         if(!clahe) clahe = cv::createCLAHE(4.0, cv::Size(8,8));
@@ -713,6 +727,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                         if(!sift) sift = cv::SIFT::create(maxKeypoints);
                         sift->detectAndCompute(frameGray, localDetectionMask, kpFrame, descFrame);
                     }
+                    Log_i(@"%d check", invertMask);
 
 		    // if we got nothing, then fail fast
                     if (descFrame.empty() || descSpecial.empty()) {
@@ -793,6 +808,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                         }
 			break;
                     }
+                    Log_i(@"%d check", invertMask);
 
 		    // after matching the keypoints between the special frame and
 		    // the alignment frame we're iterating over, we next need to
@@ -859,9 +875,15 @@ maxCornerDeviation:(double)maxCornerDeviation
                         }
                         resultSuccess[idx] = 1;
                         resultMats[idx] = warped;
+			if(warped.empty()) {
+			  Log_w(@"warped is empty");
+			}
                     } else {
                         resultSuccess[idx] = 0;
                         resultMats[idx] = frame;
+			if(frame.empty()) {
+			  Log_w(@"frame is empty");
+			}
                     }
 
                     // explicit releases (optional, local mats go out of scope)
@@ -891,7 +913,10 @@ maxCornerDeviation:(double)maxCornerDeviation
         failed.reserve(n);
 
         for (size_t i = 0; i < n; ++i) {
-            if (resultSuccess[i]) {
+          if(resultMats[i].empty()) {
+            Log_w(@"FUCK");
+          }
+          if (resultSuccess[i]) {
                 aligned.push_back(resultMats[i]);
             } else {
                 failed.push_back(resultMats[i]);
@@ -902,6 +927,13 @@ maxCornerDeviation:(double)maxCornerDeviation
         cv::Mat alignedResult = medianImageFromArray(aligned, k);
         cv::Mat failedResult = medianImageFromArray(failed, k);
 
+	if(alignedResult.empty()) {
+	  Log_w(@"alignedResult is empty");
+	}
+	if(failedResult.empty()) {
+	  Log_w(@"failedResult is empty");
+	}
+	
         AlignmentResult *resultObj = [AlignmentResult new];
         resultObj.aligned = [[MatWrapper alloc] initWithMat: alignedResult];
         resultObj.numAligned = aligned.size();

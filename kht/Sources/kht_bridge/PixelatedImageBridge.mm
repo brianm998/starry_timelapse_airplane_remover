@@ -29,7 +29,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 {
     @try {
       try {
-	// Reinterpret the opaque Mat pointers back to cv::Mat references
+	Log_d(@"check");
 	cv::Mat mat1 = image1.mat;
 	cv::Mat mat2 = image2.mat;
 	cv::Mat matMask = mask.mat;
@@ -49,14 +49,19 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 	mat1.copyTo(result, matMask);         // Fill masked region with mat1
 	cv::bitwise_not(matMask, matMask);     // Invert mask to copy from mat2
 	mat2.copyTo(result, matMask);         // Fill other region with mat2
+	printMatInfo(result, "result");
+	Log_d(@"check");
 
-	return [[MatWrapper alloc] initWithMat: result];
+	MatWrapper * ret = [[MatWrapper alloc] initWithMat: result];
 	
+	Log_d(@"checked");
+
+	return ret;
       } catch (const cv::Exception &e) {
-	Log_d(@"OpenCV Exception: %s", e.what());
+	Log_e(@"OpenCV Exception: %s", e.what());
       }
     } @catch (NSException *exception) {
-      Log_d(@"Objective-C Exception: %@", exception);
+      Log_e(@"Objective-C Exception: %@", exception);
     }
     return nil;
     
@@ -108,10 +113,10 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 
 	return [[MatWrapper alloc] initWithMat: filtered];
       } catch (const cv::Exception &e) {
-	Log_d(@"OpenCV Exception: %s", e.what());
+	Log_e(@"OpenCV Exception: %s", e.what());
       }
     } @catch (NSException *exception) {
-      Log_d(@"Objective-C Exception: %@", exception);
+      Log_e(@"Objective-C Exception: %@", exception);
     }
     return nil;
 }
@@ -194,10 +199,10 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       return [[MatWrapper alloc] initWithMat: finalMask]; // XXX was cloned
 
     } catch (const cv::Exception &e) {
-      Log_d(@"OpenCV Exception: %s", e.what());
+      Log_e(@"OpenCV Exception: %s", e.what());
     }
   } @catch (NSException *exception) {
-    Log_d(@"Objective-C Exception: %@", exception);
+    Log_e(@"Objective-C Exception: %@", exception);
   }
   return nil;    
 }
@@ -210,12 +215,14 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 
       cv::Mat mat = image.mat;
 
+      if (mat.empty()) {
+	Log_d(@"mat was empty :(");
+        return nil;
+      }
+      
       // make copy for safer concurrency
       cv::Mat owned = mat.clone();
       
-      if (owned.empty()) {
-        return nil;
-      }
 
       cv::Mat gray, binary;
     
@@ -257,10 +264,10 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 	       initWithHorizonTopY: horizonTopY
 		    horizonBottomY: horizonBottomY];
     } catch (const cv::Exception &e) {
-      Log_d(@"OpenCV Exception: %s", e.what());
+      Log_e(@"OpenCV Exception: %s", e.what());
     }
   } @catch (NSException *exception) {
-    Log_d(@"Objective-C Exception: %@", exception);
+    Log_e(@"Objective-C Exception: %@", exception);
   }
   return nil;
 }
@@ -345,10 +352,10 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       return [[MatWrapper alloc] initWithMat:masked];
       
     } catch (const cv::Exception &e) {
-      Log_d(@"OpenCV Exception: %s", e.what());
+      Log_e(@"OpenCV Exception: %s", e.what());
     }
   } @catch (NSException *exception) {
-    Log_d(@"Objective-C Exception: %@", exception);
+    Log_e(@"Objective-C Exception: %@", exception);
   }
   return nil;
 }
@@ -398,10 +405,10 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       return [[MatWrapper alloc] initWithMat: result];
       
     } catch (const cv::Exception &e) {
-      Log_d(@"OpenCV Exception: %s", e.what());
+      Log_e(@"OpenCV Exception: %s", e.what());
     }
   } @catch (NSException *exception) {
-    Log_d(@"Objective-C Exception: %@", exception);
+    Log_e(@"Objective-C Exception: %@", exception);
   }
   return nil;
 }
@@ -456,10 +463,10 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       return [[MatWrapper alloc] initWithMat: result];
       
     } catch (const cv::Exception &e) {
-      Log_d(@"OpenCV Exception: %s", e.what());
+      Log_e(@"OpenCV Exception: %s", e.what());
     }
   } @catch (NSException *exception) {
-    Log_d(@"Objective-C Exception: %@", exception);
+    Log_e(@"Objective-C Exception: %@", exception);
   }
   return nil;
 }
@@ -521,67 +528,81 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       //Log_d("maxBrightnessScaleForImage done");
       return maxAllowed / maxValOverall;
     } catch (const cv::Exception &e) {
-      Log_d(@"OpenCV Exception: %s", e.what());
+      Log_e(@"OpenCV Exception: %s", e.what());
     }
   } @catch (NSException *exception) {
-    Log_d(@"Objective-C Exception: %@", exception);
+    Log_e(@"Objective-C Exception: %@", exception);
   }
   return 1;
 }
 
 + (MatWrapper *)subtractImage:(MatWrapper *)img2 fromImage:(MatWrapper *)img1 {
-  // Step 1: Convert both images to grayscale if they are not already
 
-  cv::Mat img1Mat = img1.mat;
-  cv::Mat img2Mat = img2.mat;
+  @try {
+    try {
+  
+      // Step 1: Convert both images to grayscale if they are not already
 
-  cv::Mat gray1, gray2;
+      cv::Mat img1Mat = img1.mat;
+      cv::Mat img2Mat = img2.mat;
+
+      printMatInfo(img1Mat, "img1");
+      printMatInfo(img2Mat, "img2");
+
+      cv::Mat gray1, gray2;
     
-    if (img1Mat.channels() == 1) {
+      if (img1Mat.channels() == 1) {
         gray1 = img1Mat.clone();
-    } else {
-      cv::cvtColor(img1Mat, gray1, cv::COLOR_BGR2GRAY);
-    }
+      } else {
+	cv::cvtColor(img1Mat, gray1, cv::COLOR_BGR2GRAY);
+      }
 
-    if (img2Mat.channels() == 1) {
+      if (img2Mat.channels() == 1) {
         gray2 = img2Mat.clone();
-    } else {
+      } else {
         cv::cvtColor(img2Mat, gray2, cv::COLOR_BGR2GRAY);
+      }
+
+      // Step 2: Determine the higher bit depth between the two images
+      int depth1 = gray1.depth();
+      int depth2 = gray2.depth();
+      int targetDepth = std::max(depth1, depth2);
+
+      // Map OpenCV depth constants to corresponding CV types
+      int cvTargetType;
+      switch (targetDepth) {
+      case CV_8U:  cvTargetType = CV_8U; break;
+      case CV_8S:  cvTargetType = CV_8S; break;
+      case CV_16U: cvTargetType = CV_16U; break;
+      case CV_16S: cvTargetType = CV_16S; break;
+      case CV_32S: cvTargetType = CV_32S; break;
+      case CV_32F: cvTargetType = CV_32F; break;
+      case CV_64F: cvTargetType = CV_64F; break;
+      default:     cvTargetType = CV_32F; break;
+      }
+
+      // Step 3: Convert both images to the target depth for subtraction
+      cv::Mat gray1f, gray2f;
+      gray1.convertTo(gray1f, cvTargetType);
+      gray2.convertTo(gray2f, cvTargetType);
+
+      // Step 4: Subtract img2 from img1
+      cv::Mat diff;
+    
+      cv::subtract(gray1f, gray2f, diff);
+    
+      // Step 5: Clip negative values to zero
+      cv::Mat diffClipped;
+      cv::max(diff, 0, diffClipped);
+    
+      return [[MatWrapper alloc] initWithMat: diffClipped];
+    } catch (const cv::Exception &e) {
+      Log_e(@"OpenCV Exception: %s", e.what());
     }
-
-    // Step 2: Determine the higher bit depth between the two images
-    int depth1 = gray1.depth();
-    int depth2 = gray2.depth();
-    int targetDepth = std::max(depth1, depth2);
-
-    // Map OpenCV depth constants to corresponding CV types
-    int cvTargetType;
-    switch (targetDepth) {
-        case CV_8U:  cvTargetType = CV_8U; break;
-        case CV_8S:  cvTargetType = CV_8S; break;
-        case CV_16U: cvTargetType = CV_16U; break;
-        case CV_16S: cvTargetType = CV_16S; break;
-        case CV_32S: cvTargetType = CV_32S; break;
-        case CV_32F: cvTargetType = CV_32F; break;
-        case CV_64F: cvTargetType = CV_64F; break;
-        default:     cvTargetType = CV_32F; break;
-    }
-
-    // Step 3: Convert both images to the target depth for subtraction
-    cv::Mat gray1f, gray2f;
-    gray1.convertTo(gray1f, cvTargetType);
-    gray2.convertTo(gray2f, cvTargetType);
-
-    // Step 4: Subtract img2 from img1
-    cv::Mat diff;
-    
-    cv::subtract(gray1f, gray2f, diff);
-    
-    // Step 5: Clip negative values to zero
-    cv::Mat diffClipped;
-    cv::max(diff, 0, diffClipped);
-    
-    return [[MatWrapper alloc] initWithMat: diffClipped];
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception: %@", exception);
+  }
+  return nil;
 }
 
 

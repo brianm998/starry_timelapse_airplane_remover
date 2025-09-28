@@ -33,11 +33,17 @@ public struct ImageAccessor: Sendable {
     let imageSequence: ImageSequence
     let imageSavedClosure: (@Sendable (Int, PixelatedImage, FrameViewMode, ImageDisplaySize) -> Void)?
     
-    public init(config: Config,
-                imageSequence: ImageSequence,
-                frameIndexToBaseNameMap: [Int: String],
-                imageSavedClosure: (@Sendable (Int, PixelatedImage, FrameViewMode, ImageDisplaySize) -> Void)? = nil)
-    {
+    public init(
+      config: Config,
+      imageSequence: ImageSequence,
+      frameIndexToBaseNameMap: [Int: String],
+      imageSavedClosure: (@Sendable (Int,
+                                     PixelatedImage,
+                                     FrameViewMode,
+                                     ImageDisplaySize
+                          ) -> Void
+      )? = nil
+    ) {
         // the dirname (not full path) of where the main output files will sit
         self.config = config
         self.frameIndexToBaseNameMap = frameIndexToBaseNameMap
@@ -76,6 +82,7 @@ public struct ImageAccessor: Sendable {
         }
     }
 
+    // load for display as SwiftUI Image
     public func loadImage(
       frameIndex: Int,
       type imageType: FrameViewMode,
@@ -138,42 +145,45 @@ public struct ImageAccessor: Sendable {
     }
 
     // load using the file system monitor
-    public func loadFinal(frameIndex: Int,
-                          type imageType: FrameViewMode,
-                          atSize size: ImageDisplaySize) async throws -> PixelatedImage?
-    {
+    public func loadFinal(
+      frameIndex: Int,
+      type imageType: FrameViewMode,
+      atSize size: ImageDisplaySize
+    ) async throws -> PixelatedImage? {
         try await finalFileSystemMonitor.load() {
             await self.loadInt(frameIndex: frameIndex, type: imageType, atSize: size)
         }
     }
 
     // load using the file system monitor
-    public func load(frameIndex: Int,
-                     type imageType: FrameViewMode,
-                     atSize size: ImageDisplaySize) async throws -> PixelatedImage?
-    {
+    public func load(
+      frameIndex: Int,
+      type imageType: FrameViewMode,
+      atSize size: ImageDisplaySize
+    ) async throws -> PixelatedImage? {
         try await fileSystemMonitor.load() {
             await self.loadInt(frameIndex: frameIndex, type: imageType, atSize: size)
         }
     }
 
-    public func loadInt(frameIndex: Int,
-                        type imageType: FrameViewMode,
-                        atSize size: ImageDisplaySize) async -> PixelatedImage?
-    {
+    public func loadInt(
+      frameIndex: Int,
+      type imageType: FrameViewMode,
+      atSize size: ImageDisplaySize
+    ) async -> PixelatedImage? {
         var numRetries = 4
-
+        Log.d("load \(frameIndex) type \(imageType) atSize \(size)")
         while numRetries > 0 {
             do {
                 if let filename = nameForImage(frameIndex: frameIndex,
                                                ofType: imageType,
                                                atSize: size)
                 {
-                    if FileManager.default.fileExists(atPath: filename) {
-                        Log.d("filename \(filename) exists")
-                        return PixelatedImage(filename: filename)
-                        //return try await imageSequence.getImage(withName: filename).image()
-                        //return try await PixelatedImage(fromFile: filename)
+                    if FileManager.default.fileExists(atPath: filename),
+                       let image = try? await imageCache.loadImage(filename: filename)
+                    {
+                        Log.d("filename \(filename) exists, returning \(image.description)")
+                        return image
                     } else {
                         // no file
                         // if this is not a request for an original file, then try
@@ -183,9 +193,17 @@ public struct ImageAccessor: Sendable {
                             Log.i("file at \(filename) does not exist :(")
                             return nil  // original does not exist, nothing to return
                         default:
-                            return try await createMissingImage(frameIndex: frameIndex,
-                                                                ofType: imageType,
-                                                                andSize: size)
+                            if let image = try await createMissingImage(
+                              frameIndex: frameIndex,
+                              ofType: imageType,
+                              andSize: size
+                               )
+                            {
+                                Log.d("created filename \(filename), returning \(image.description)")
+                                await imageCache.add(image: image, named: filename)
+                                return image
+                            }
+                            return nil
                         }
                     }
                 } else {
@@ -222,11 +240,13 @@ public struct ImageAccessor: Sendable {
                           overwrite: Bool) async throws
     {
         try await finalFileSystemMonitor.save() {
-            try await self.saveInt(image,
-                                   frameIndex: frameIndex,
-                                   as: type,
-                                   atSize: size,
-                                   overwrite: overwrite)
+            try await self.saveInt(
+              image,
+              frameIndex: frameIndex,
+              as: type,
+              atSize: size,
+              overwrite: overwrite
+            )
         }
     }
             
@@ -238,11 +258,13 @@ public struct ImageAccessor: Sendable {
                      overwrite: Bool) async throws
     {
         try await fileSystemMonitor.save() {
-            try await self.saveInt(image,
-                                   frameIndex: frameIndex,
-                                   as: type,
-                                   atSize: size,
-                                   overwrite: overwrite)
+            try await self.saveInt(
+              image,
+              frameIndex: frameIndex,
+              as: type,
+              atSize: size,
+              overwrite: overwrite
+            )
         }
     }
     

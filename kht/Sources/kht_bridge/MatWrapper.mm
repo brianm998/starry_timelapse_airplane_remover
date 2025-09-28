@@ -35,66 +35,75 @@ cv::Mat ensure8U(const cv::Mat& input) {
 
 
 static inline NSImage* NSImageFromCvMat(const cv::Mat& mat) {
-    cv::Mat clone;
+  @try {
+    try {
+      cv::Mat clone;
 
-    // Ensure 8-bit depth
-    if (mat.depth() == CV_8U) {
+      // Ensure 8-bit depth
+      if (mat.depth() == CV_8U) {
         clone = mat.clone();
-    } else {
+      } else {
         clone = ensure8U(mat);
+      }
+
+      CV_Assert(clone.depth() == CV_8U);
+      CV_Assert(clone.channels() == 1 || clone.channels() == 3 || clone.channels() == 4);
+
+      cv::Mat rgbaMat;
+
+      // Convert into RGBA (CoreGraphics prefers RGBA or grayscale with alpha)
+      switch (clone.channels()) {
+      case 1:
+	cv::cvtColor(clone, rgbaMat, cv::COLOR_GRAY2RGBA);
+	break;
+      case 3:
+	cv::cvtColor(clone, rgbaMat, cv::COLOR_BGR2RGBA);
+	break;
+      case 4:
+	cv::cvtColor(clone, rgbaMat, cv::COLOR_BGRA2RGBA);
+	break;
+      }
+
+      int width  = rgbaMat.cols;
+      int height = rgbaMat.rows;
+
+      // Copy the pixel buffer so NSImage owns it
+      NSData *data = [NSData dataWithBytes:rgbaMat.data length:rgbaMat.total() * rgbaMat.elemSize()];
+
+      CGDataProviderRef provider = CGDataProviderCreateWithCFData((__bridge CFDataRef)data);
+
+      CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+      CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrderDefault;
+
+      CGImageRef cgImage = CGImageCreate(
+					 width,
+					 height,
+					 8,                  // bits per component
+					 32,                 // bits per pixel
+					 rgbaMat.step[0],    // bytes per row
+					 colorSpace,
+					 bitmapInfo,
+					 provider,
+					 nullptr,
+					 false,
+					 kCGRenderingIntentDefault
+					 );
+
+      NSImage *image = [[NSImage alloc] initWithCGImage:cgImage
+						   size:NSMakeSize(width, height)];
+
+      CGImageRelease(cgImage);
+      CGColorSpaceRelease(colorSpace);
+      CGDataProviderRelease(provider);
+
+      return image;
+    } catch (const cv::Exception &e) {
+      Log_e(@"OpenCV Exception: %s", e.what());
     }
-
-    CV_Assert(clone.depth() == CV_8U);
-    CV_Assert(clone.channels() == 1 || clone.channels() == 3 || clone.channels() == 4);
-
-    cv::Mat rgbaMat;
-
-    // Convert into RGBA (CoreGraphics prefers RGBA or grayscale with alpha)
-    switch (clone.channels()) {
-        case 1:
-            cv::cvtColor(clone, rgbaMat, cv::COLOR_GRAY2RGBA);
-            break;
-        case 3:
-            cv::cvtColor(clone, rgbaMat, cv::COLOR_BGR2RGBA);
-            break;
-        case 4:
-            cv::cvtColor(clone, rgbaMat, cv::COLOR_BGRA2RGBA);
-            break;
-    }
-
-    int width  = rgbaMat.cols;
-    int height = rgbaMat.rows;
-
-    // Copy the pixel buffer so NSImage owns it
-    NSData *data = [NSData dataWithBytes:rgbaMat.data length:rgbaMat.total() * rgbaMat.elemSize()];
-
-    CGDataProviderRef provider = CGDataProviderCreateWithCFData((__bridge CFDataRef)data);
-
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrderDefault;
-
-    CGImageRef cgImage = CGImageCreate(
-        width,
-        height,
-        8,                  // bits per component
-        32,                 // bits per pixel
-        rgbaMat.step[0],    // bytes per row
-        colorSpace,
-        bitmapInfo,
-        provider,
-        nullptr,
-        false,
-        kCGRenderingIntentDefault
-    );
-
-    NSImage *image = [[NSImage alloc] initWithCGImage:cgImage
-                                                 size:NSMakeSize(width, height)];
-
-    CGImageRelease(cgImage);
-    CGColorSpaceRelease(colorSpace);
-    CGDataProviderRelease(provider);
-
-    return image;
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception: %@", exception);
+  }
+  return nil;
 }
 
 
@@ -103,7 +112,23 @@ static inline NSImage* NSImageFromCvMat(const cv::Mat& mat) {
 }
 @end
 
+bool matOwnsData(const cv::Mat& m) {
+    return m.u != nullptr;
+}
+
 @implementation MatWrapper
+
+- (BOOL)ownsData {
+  return matOwnsData(_mat);
+}
+
+-(MatWrapper *)clone {
+  return [[MatWrapper alloc] initWithMat: _mat.clone()];
+}
+
+- (void)dealloc {
+  Log_d(@"dealloc %@", [self debugDescription]);
+}
 
 -(MatWrapper *)ensureEightBit {
   return [[MatWrapper alloc] initWithMat: ensure8U(_mat)];
@@ -112,11 +137,20 @@ static inline NSImage* NSImageFromCvMat(const cv::Mat& mat) {
 
 // Internal init for ObjC++ usage
 - (instancetype)initWithMat:(const cv::Mat&)mat {
-    self = [super init];
-    if (self) {
-        _mat = mat; // shallow copy (refcount increment)
+  self = [super init];
+  if(mat.empty()) {
+    Log_w(@"init with empty mat");
+  }
+  if (self) {
+    if(matOwnsData(mat)) {
+      // this mat owns its data, just do a shallow copy
+      _mat = mat.clone()/*XXX*/; // shallow copy (refcount increment)
+    } else {
+      // this mat DOES NOT own its data, we need to clone it
+      _mat = mat.clone(); // copy mat memory into new buffer for us to hold
     }
-    return self;
+  }
+  return self;
 }
 
 // Zero-copy initializer from external memory (Swift buffer)
@@ -148,8 +182,13 @@ static inline NSImage* NSImageFromCvMat(const cv::Mat& mat) {
     return _mat.total() * _mat.elemSize();
 }
 - (NSString *)debugDescription {
-    return [NSString stringWithFormat:@"cv::Mat %ldx%ld, ch=%ld, type=%d",
+  if([self ownsData]) {
+    return [NSString stringWithFormat:@"cv::Mat owns data %ldx%ld, ch=%ld, type=%d",
             (long)_mat.cols, (long)_mat.rows, (long)_mat.channels(), _mat.type()];
+  } else {
+    return [NSString stringWithFormat:@"cv::Mat refs data %ldx%ld, ch=%ld, type=%d",
+            (long)_mat.cols, (long)_mat.rows, (long)_mat.channels(), _mat.type()];
+  }
 }
 
 
@@ -284,9 +323,18 @@ static inline NSImage* NSImageFromCvMat(const cv::Mat& mat) {
 }
 
 -(MatWrapper *)downScaleTo:(NSUInteger)width height:(NSUInteger)height {
-  cv::Mat output;
-  cv::resize(_mat, output, cv::Size(width, height), 0, 0, cv::INTER_AREA);
-  return [[MatWrapper alloc] initWithMat: output]; // returns a new Mat
+  @try {
+    try {
+      cv::Mat output;
+      cv::resize(_mat, output, cv::Size(width, height), 0, 0, cv::INTER_AREA);
+      return [[MatWrapper alloc] initWithMat: output]; // returns a new Mat
+    } catch (const cv::Exception &e) {
+      Log_e(@"OpenCV Exception: %s", e.what());
+    }
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception: %@", exception);
+  }
+  return nil;
 }
 
 + (nullable MatWrapper*)loadFromFilename:(NSString*)filename {
@@ -319,7 +367,7 @@ static inline NSImage* NSImageFromCvMat(const cv::Mat& mat) {
             _mat = cv::Mat((int)height, (int)width, cvType, data, step).clone(); 
         } else {
             // just wrap external memory (zero-copy)
-            _mat = cv::Mat((int)height, (int)width, cvType, data, step);
+	  _mat = cv::Mat((int)height, (int)width, cvType, data, step).clone()/*XXX*/;
         }
     }
     return self;
