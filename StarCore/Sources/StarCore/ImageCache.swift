@@ -145,13 +145,12 @@ public actor ImageCache {
 
                  
                  */
-                return cachedImage.clone // XXX TEST XXX
+                return cachedImage/*.clone*/ // XXX TEST XXX
             } else {
                 // weak ref in the cache was nil, remove TimeoutRef holder
                 cache[filename] = nil
             }
         }
-        
 
         // cache miss, load image from filename
         // allowing other cache lookups while we load this image,
