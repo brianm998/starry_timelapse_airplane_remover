@@ -83,7 +83,7 @@ public actor ImageCache {
 
     public func add(image: PixelatedImage, named filename: String) {
         if image.isEmpty { Log.w("adding empty image to cache") }
-        cache[filename] = TimeoutRef(image.clone)
+        cache[filename] = TimeoutRef(image)
     }
     
     public func prepareUpdate() -> (UInt, UInt, [Int: Int]) {
@@ -156,7 +156,7 @@ public actor ImageCache {
 
         if let ret {
             if ret.isEmpty { Log.w("adding empty image to cache") }
-            cache[filename] = TimeoutRef(ret.clone)
+            cache[filename] = TimeoutRef(ret)
             cacheMisses += 1
             imageLoadSuccess += 1
             log()
