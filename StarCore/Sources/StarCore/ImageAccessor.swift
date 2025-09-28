@@ -200,8 +200,7 @@ public struct ImageAccessor: Sendable {
                                )
                             {
                                 Log.d("created filename \(filename), returning \(image.description)")
-                                await imageCache.add(image: image, named: filename)
-                                return image
+                                return await imageCache.add(image: image, named: filename)
                             }
                             return nil
                         }

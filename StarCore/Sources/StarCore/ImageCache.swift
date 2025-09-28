@@ -46,6 +46,8 @@ public final class TimeoutRef<T: AnyObject> {
         t.schedule(deadline: .now() + timeout)
         t.setEventHandler { [weak self] in
             Log.e("FUCKING CLEARING CACHE VALUE")
+            // XXX add a check to see if the mat is still referenced elsewhere?
+            // XXX and if so, don't clear ther value here, extend the timer further
             self?.clearValue()
         }
         t.resume()
@@ -81,9 +83,11 @@ public actor ImageCache {
     
     init() { }
 
-    public func add(image: PixelatedImage, named filename: String) {
+    public func add(image: PixelatedImage, named filename: String) -> PixelatedImage {
         if image.isEmpty { Log.w("adding empty image to cache") }
-        cache[filename] = TimeoutRef(image.clone)
+        let clone = image.clone
+        cache[filename] = TimeoutRef(clone)
+        return clone
     }
     
     public func prepareUpdate() -> (UInt, UInt, [Int: Int]) {
@@ -159,18 +163,26 @@ public actor ImageCache {
         let loadingSemaphore = AsyncSemaphore(value: 0)
         pendingLoads[filename] = loadingSemaphore
         
-        let ret = try await Task.detached(priority: .userInitiated) {
+        var ret = try await Task.detached(priority: .userInitiated) {
             // load the image in a separate task so other requests to
             // this cache are not blocked during load
             PixelatedImage(filename: filename) 
         }.value
 
-        if let ret {
-            if ret.isEmpty { Log.w("adding empty image to cache") }
-            cache[filename] = TimeoutRef(ret.clone)
-            cacheMisses += 1
-            imageLoadSuccess += 1
-            log()
+        if let preClone = ret {
+            if preClone.isEmpty {
+                Log.w("NOT adding empty image to cache")
+                cacheMisses += 1                
+                imageLoadFailures += 1
+                log()
+            } else {
+                let clone = preClone.clone // clone so we own memory for sure
+                cache[filename] = TimeoutRef(clone)
+                ret = clone // return the clone so ref goes out of scope sooner
+                cacheMisses += 1
+                imageLoadSuccess += 1
+                log()
+            }
         } else {
             cacheMisses += 1                
             imageLoadFailures += 1
