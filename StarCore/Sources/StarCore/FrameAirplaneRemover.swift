@@ -535,24 +535,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }                
             
-            // check for number of aligned images, and re-do if it's different
-//            if let results {
-//                if numberOfAlignedFrames == results.total || numberOfAlignedFrames > imageSequence?.filenames.count ?? 0 {
-                    // we have both an existing aligned frame, and a saved number of aligned
-                    // images used to calculate that frame that matches the expected number,
-                    // so we can just return the aligned frame we found.
-                    return alignedFrame
-//                } else {
-//                    Log.i("redoing aligned images because numberOfAlignedFrames \(numberOfAlignedFrames) != results.total \(results.total)")
-//                }
-//            } else {
-//                Log.i("redoing aligned images because we were unable to read the number of aligned images for this frame")
-//            }
-            
-            // we didn't meet the above requirements, so re-do star alignment for this frame,
-            // getting rid of any existing files first
-//            removeSubtractionImages()
-//            try removeNumberOfAlignedImagesForThisFrameFile()
+            return alignedFrame
         }
 
         // with no saved aligned frame, first load or create the set of aligned frames
@@ -580,21 +563,24 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("original frame \(originalFrame.description)")
         
         let neighborImages = try await withThrowingTaskGroup(of: PixelatedImage?.self) { group in
-            for heighborIndex in alignmentFilenames.keys {
+            for neighborIndex in alignmentFilenames.keys {
                 group.addTask {
                     try await self.imageAccessor.load(
-                      frameIndex: heighborIndex,
+                      frameIndex: neighborIndex,
                       type: .original,
                       atSize: .original
-                    )
+                    ) 
                 }
             }
 
             var results = [PixelatedImage]()
             for try await image in group {
                 if let img = image {
-                    if img.isEmpty { Log.w("EMPTY IMAGE") }
-                    results.append(img)
+                    if img.isEmpty {
+                        Log.w("EMPTY IMAGE")
+                    } else {
+                        results.append(img)
+                    }
                 }
             }
             return results
@@ -839,85 +825,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    private func loadStarAlignedImages() async throws -> [Int: PixelatedImage] {
-        guard let imageSequence else {
-            let error = "cannot load star aligned images with no image sequence"
-            Log.e(error)
-            throw error
-        }
-        var alignedImages: [Int: PixelatedImage] = [:]
-
-
-        if let dirname = imageAccessor.dirForImage(ofType: .starAligned,
-                                                   atSize: .original)
-        {
-            let dirname = "\(dirname)/\(frameIndex)"
-            
-            for alignmentFrameIndex in alignmentFrames {
-                if alignmentFrameIndex != frameIndex,
-                   alignmentFrameIndex < imageSequence.filenames.count
-                {
-                    let origFullPath = imageSequence.filenames[alignmentFrameIndex]
-
-                    if let origFilename = origFullPath.substringAfterLastSlash() {
-                        
-                        let alignedFilename = "\(dirname)/\(origFilename)"
-
-                        if FileManager.default.fileExists(atPath: alignedFilename) {
-                            Log.d("file exists at \(alignedFilename)")
-                            let alignedFrame = try await imageSequence.getImage(withName: alignedFilename).image()
-                            alignedImages[alignmentFrameIndex] = alignedFrame
-                        }
-                    }
-                }
-            }
-        }
-
-        Log.d("loaded \(alignedImages.count) star aligned images")
-        
-        return alignedImages
-    }
-
-    private func loadEarthAlignedImages() async throws -> [Int: PixelatedImage] {
-        guard let imageSequence else {
-            let error = "cannot load earth aligned images with no image sequence"
-            Log.e(error)
-            throw error
-        }
-        var alignedImages: [Int: PixelatedImage] = [:]
-
-
-        if let dirname = imageAccessor.dirForImage(ofType: .earthAligned,
-                                                   atSize: .original)
-        {
-            let dirname = "\(dirname)/\(frameIndex)"
-            
-            for alignmentFrameIndex in alignmentFrames {
-                if alignmentFrameIndex != frameIndex {
-
-                    if alignmentFrameIndex < imageSequence.filenames.count {
-                        let origFullPath = imageSequence.filenames[alignmentFrameIndex]
-
-                        if let origFilename = origFullPath.substringAfterLastSlash() {
-                            
-                            let alignedFilename = "\(dirname)/\(origFilename)"
-
-                            if FileManager.default.fileExists(atPath: alignedFilename) {
-                                Log.d("file exists at \(alignedFilename)")
-                                let alignedFrame = try await imageSequence.getImage(withName: alignedFilename).image()
-                                alignedImages[alignmentFrameIndex] = alignedFrame
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Log.d("loaded \(alignedImages.count) earth aligned images")
-        
-        return alignedImages
-    }
-
     public func setupOutliers() async throws {
         // this takes a long time, and the gui does it later
         try await loadOutliers()
@@ -971,16 +878,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         if self.writeOutputFiles {
             self.set(state: .loadingImages1)
-            try await imageAccessor.saveFinal(image, 
-                                              frameIndex: frameIndex,
-                                              as: .original,
-                                              atSize: .preview,
-                                              overwrite: false)
-            try await imageAccessor.saveFinal(image,
-                                              frameIndex: frameIndex,
-                                              as: .original,
-                                              atSize: .thumbnail,
-                                              overwrite: false)
+            try await imageAccessor.saveFinal(
+              image, 
+              frameIndex: frameIndex,
+              as: .original,
+              atSize: .preview,
+              overwrite: false
+            )
+            try await imageAccessor.saveFinal(
+              image,
+              frameIndex: frameIndex,
+              as: .original,
+              atSize: .thumbnail,
+              overwrite: false
+            )
         }
 
         let starAlignedImage = try await loadOrCreateStarAlignedImage()
