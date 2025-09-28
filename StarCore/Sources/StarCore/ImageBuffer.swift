@@ -80,7 +80,6 @@ public struct ImageBuffer<Element: FixedWidthInteger>: @unchecked Sendable {
 
     var image: PixelatedImage? {
         if let mat = holder.mat() {
-            Log.d("FUCKING mat \(mat)")
             if Element.self == UInt8.self,
                let buffer = self as? ImageBuffer<UInt8>
             {
@@ -105,7 +104,11 @@ public struct ImageBuffer<Element: FixedWidthInteger>: @unchecked Sendable {
                 } else {
                     Log.w("couldn't create 32 bit image")
                 }
+            } else {
+                Log.w("cannot create image from unsupported element type \(Element.self)")
             }
+        } else {
+            Log.w("cannot create image: no cv::Mat")
         }
         return nil
     }
