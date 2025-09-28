@@ -200,7 +200,7 @@ public class FullFrameBlobber {
                 // a local maximum, this pixel is a blob seed
 
                 if newBlobId < Int32.max {
-                    Log.d("frame \(frameIndex) creating new blob with id \(newBlobId)")
+                    //Log.d("frame \(frameIndex) creating new blob with id \(newBlobId)")
                     let newBlob = Blob(pixel,
                                        id: newBlobId,
                                        frameIndex: frameIndex,
