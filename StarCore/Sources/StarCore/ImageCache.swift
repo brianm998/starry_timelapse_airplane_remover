@@ -83,7 +83,7 @@ public actor ImageCache {
 
     public func add(image: PixelatedImage, named filename: String) {
         if image.isEmpty { Log.w("adding empty image to cache") }
-        cache[filename] = TimeoutRef(image)
+        cache[filename] = TimeoutRef(image.clone)
     }
     
     public func prepareUpdate() -> (UInt, UInt, [Int: Int]) {
@@ -133,6 +133,18 @@ public actor ImageCache {
                 cacheHits += 1
                 log()
                 if let semaphore { semaphore.signal() }
+
+                /*
+
+                 XXX if we don't clone this cachedImage before returning it,
+                 it's possible that some other operation on the cv::Mat invalidates it.
+
+                 need to figure out how to avoid that.
+
+                 mutability check some how?
+
+                 
+                 */
                 return cachedImage.clone // XXX TEST XXX
             } else {
                 // weak ref in the cache was nil, remove TimeoutRef holder
@@ -156,7 +168,7 @@ public actor ImageCache {
 
         if let ret {
             if ret.isEmpty { Log.w("adding empty image to cache") }
-            cache[filename] = TimeoutRef(ret)
+            cache[filename] = TimeoutRef(ret.clone)
             cacheMisses += 1
             imageLoadSuccess += 1
             log()
