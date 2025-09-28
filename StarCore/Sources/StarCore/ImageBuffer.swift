@@ -51,7 +51,7 @@ public struct ImageBuffer<Element: FixedWidthInteger>: @unchecked Sendable {
     {
         self.width = width
         self.height = height
-        Log.d("width \(width) height \(height)")
+        //Log.d("width \(width) height \(height)")
         self.components = components
         self.count = width * height * components
         self.holder = BufferHolder(

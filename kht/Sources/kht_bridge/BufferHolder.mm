@@ -36,7 +36,7 @@
         }
 	// set it all to zero
 	memset(_buffer, 0, totalLength);
-	Log_d(@"init with width %d height %d bitsPerComponent %lu", width, height, bitsPerComponent);
+	//Log_d(@"init with width %d height %d bitsPerComponent %lu", width, height, bitsPerComponent);
     }
     return self;
 }
@@ -88,7 +88,7 @@
 }
 
 - (MatWrapper *)mat {
-  Log_d(@"FUCKING width %d height %d", _width, _height);
+  //Log_d(@"FUCKING width %d height %d", _width, _height);
   if(_bitsPerComponent == 8) {
     if(_components == 1) {
       cv::Mat img(_height, _width, CV_8UC1, _buffer);

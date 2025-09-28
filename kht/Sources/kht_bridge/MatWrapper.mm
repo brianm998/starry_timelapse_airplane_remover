@@ -144,7 +144,7 @@ bool matOwnsData(const cv::Mat& m) {
   if (self) {
     if(matOwnsData(mat)) {
       // this mat owns its data, just do a shallow copy
-      _mat = mat.clone()/*XXX*/; // shallow copy (refcount increment)
+      _mat = mat/*.clone() XXX*/; // shallow copy (refcount increment)
     } else {
       // this mat DOES NOT own its data, we need to clone it
       _mat = mat.clone(); // copy mat memory into new buffer for us to hold
@@ -367,7 +367,7 @@ bool matOwnsData(const cv::Mat& m) {
             _mat = cv::Mat((int)height, (int)width, cvType, data, step).clone(); 
         } else {
             // just wrap external memory (zero-copy)
-	  _mat = cv::Mat((int)height, (int)width, cvType, data, step).clone()/*XXX*/;
+	  _mat = cv::Mat((int)height, (int)width, cvType, data, step);//.clone()/*XXX*/;
         }
     }
     return self;

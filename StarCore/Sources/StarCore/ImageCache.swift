@@ -16,18 +16,60 @@ public let imageCache = ImageCache()
   - ram usage of cached image buffers
  */
 
-public final class WeakRef<T: AnyObject> {
-/*    weak*/ var value: T?
+public final class TimeoutRef<T: AnyObject> {
+    private var timer: DispatchSourceTimer?
+    private let timeout: TimeInterval = 20
+    
+    private var _value: T?
+    
+    public var value: T? {
+        get {
+            resetTimer()
+            return _value
+        }
+    }
 
-    init(_ value: T?) {
-        self.value = value
+    internal var valueInt: T? { _value }
+    
+    public init(_ value: T?) {
+        self._value = value
+        if value != nil {
+            resetTimer()
+        }
+    }
+    
+    private func resetTimer() {
+        cancelTimer()
+        
+        let t = DispatchSource.makeTimerSource(queue: DispatchQueue.global())
+        Log.d("FUCKING setting timeout for 20 seconds from now")
+        t.schedule(deadline: .now() + timeout)
+        t.setEventHandler { [weak self] in
+            Log.e("FUCKING CLEARING CACHE VALUE")
+            self?.clearValue()
+        }
+        t.resume()
+        timer = t
+    }
+    
+    private func cancelTimer() {
+        timer?.cancel()
+        timer = nil
+    }
+    
+    public func clearValue() {
+        _value = nil
+    }
+    
+    deinit {
+        cancelTimer()
     }
 }
 
 public actor ImageCache {
 
     // images indexed by filename
-    var cache: [String : WeakRef<PixelatedImage>] = [:]
+    var cache: [String : TimeoutRef<PixelatedImage>] = [:]
 
     var cacheHits: UInt = 0
     var cacheMisses: UInt = 0
@@ -41,7 +83,7 @@ public actor ImageCache {
 
     public func add(image: PixelatedImage, named filename: String) {
         if image.isEmpty { Log.w("adding empty image to cache") }
-        cache[filename] = WeakRef(image.clone)
+        cache[filename] = TimeoutRef(image.clone)
     }
     
     public func prepareUpdate() -> (UInt, UInt, [Int: Int]) {
@@ -49,14 +91,14 @@ public actor ImageCache {
         var imageSizeToCountMap: [Int:Int] = [:]
 
         for (key, weakRef) in cache {
-            if let cachedImage = weakRef.value {
+            if let cachedImage = weakRef.valueInt {
                 if let count = imageSizeToCountMap[cachedImage.byteCount] {
                     imageSizeToCountMap[cachedImage.byteCount] = count + 1
                 } else {
                     imageSizeToCountMap[cachedImage.byteCount] = 1
                 }
             } else {
-                // weak ref in the cache was nil, remove WeakRef holder
+                // weak ref in the cache was nil, remove TimeoutRef holder
                 cache[key] = nil
             }
         }
@@ -93,7 +135,7 @@ public actor ImageCache {
                 if let semaphore { semaphore.signal() }
                 return cachedImage.clone // XXX TEST XXX
             } else {
-                // weak ref in the cache was nil, remove WeakRef holder
+                // weak ref in the cache was nil, remove TimeoutRef holder
                 cache[filename] = nil
             }
         }
@@ -114,7 +156,7 @@ public actor ImageCache {
 
         if let ret {
             if ret.isEmpty { Log.w("adding empty image to cache") }
-            cache[filename] = WeakRef(ret.clone)
+            cache[filename] = TimeoutRef(ret.clone)
             cacheMisses += 1
             imageLoadSuccess += 1
             log()

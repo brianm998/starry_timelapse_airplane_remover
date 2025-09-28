@@ -170,7 +170,7 @@ public final class PixelatedImage: Sendable {
                  function: String = #function,
                  line: Int = #line)
     {
-        Log.d("init from mat [\(mat.cols), \(mat.rows)]")
+        //Log.d("init from mat [\(mat.cols), \(mat.rows)]")
 
         self.file = file
         self.function = function
