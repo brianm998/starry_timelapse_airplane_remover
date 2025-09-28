@@ -20,11 +20,11 @@ public final class TimeoutRef<T: AnyObject> {
     private var timer: DispatchSourceTimer?
     private let timeout: TimeInterval = 20
     
-    private var _value: T?
+    private weak var _value: T?
     
     public var value: T? {
         get {
-            resetTimer()
+            //resetTimer()
             return _value
         }
     }
