@@ -994,7 +994,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             earthAlignedImage = try await loadOrCreateEarthAlignedImage()
         }
         
-        let format = image.imageData // make a copy
+        let format = image.clone.imageData // make a copy
 
         switch format {
         case .thirtyTwoBit(_):
