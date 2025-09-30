@@ -4,6 +4,7 @@
 #import "logging.h"
 #import <Cocoa/Cocoa.h>
 #import <opencv2/opencv.hpp>
+#import <Foundation/Foundation.h>
 
 extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 
@@ -41,7 +42,7 @@ static inline NSImage* NSImageFromCvMat(const cv::Mat& mat) {
 
       // Ensure 8-bit depth
       if (mat.depth() == CV_8U) {
-        clone = mat.clone();
+        clone = mat;//.clone();
       } else {
         clone = ensure8U(mat);
       }
@@ -54,14 +55,14 @@ static inline NSImage* NSImageFromCvMat(const cv::Mat& mat) {
       // Convert into RGBA (CoreGraphics prefers RGBA or grayscale with alpha)
       switch (clone.channels()) {
       case 1:
-	cv::cvtColor(clone, rgbaMat, cv::COLOR_GRAY2RGBA);
-	break;
+        cv::cvtColor(clone, rgbaMat, cv::COLOR_GRAY2RGBA);
+        break;
       case 3:
-	cv::cvtColor(clone, rgbaMat, cv::COLOR_BGR2RGBA);
-	break;
+        cv::cvtColor(clone, rgbaMat, cv::COLOR_BGR2RGBA);
+        break;
       case 4:
-	cv::cvtColor(clone, rgbaMat, cv::COLOR_BGRA2RGBA);
-	break;
+        cv::cvtColor(clone, rgbaMat, cv::COLOR_BGRA2RGBA);
+        break;
       }
 
       int width  = rgbaMat.cols;
@@ -126,10 +127,6 @@ bool matOwnsData(const cv::Mat& m) {
   return [[MatWrapper alloc] initWithMat: _mat.clone()];
 }
 
-- (void)dealloc {
-  Log_d(@"dealloc %@", [self debugDescription]);
-}
-
 -(MatWrapper *)ensureEightBit {
   return [[MatWrapper alloc] initWithMat: ensure8U(_mat)];
 }
@@ -144,10 +141,10 @@ bool matOwnsData(const cv::Mat& m) {
   if (self) {
     if(matOwnsData(mat)) {
       // this mat owns its data, just do a shallow copy
-      _mat = mat/*.clone() XXX*/; // shallow copy (refcount increment)
+      _mat = mat;               // shallow copy (refcount increment)
     } else {
       // this mat DOES NOT own its data, we need to clone it
-      _mat = mat.clone(); // copy mat memory into new buffer for us to hold
+      _mat = mat.clone();       // copy mat memory into new buffer for us to hold
     }
   }
   return self;
@@ -158,8 +155,8 @@ bool matOwnsData(const cv::Mat& m) {
                        height:(NSInteger)height
                      channels:(NSInteger)channels
                          type:(int)cvType
-		  bytesPerRow:(size_t)step
-			 data:(void *)data
+                  bytesPerRow:(size_t)step
+                         data:(void *)data
 {
     self = [super init];
     if (self) {
@@ -169,6 +166,32 @@ bool matOwnsData(const cv::Mat& m) {
     return self;
 }
 
+
+/*
+
+  Next steps:
+
+  To use less ram at once:
+   - move ImageCache into MatWrapper objc++ land
+   - mirror image accessor code in objc
+   - modify alignment code to take frame # of images, not real images
+     use image accessor code to load them when necessary, only when we need them
+
+  For more image usage visibility in the UI:
+   - mirror ObjCLogging code to have a pair static callbacks for bytes allocated, dealloc
+   - update this MatWrapper to call these methods in init and dealloc
+   - update the LeftPanel in the UI to show active non cached images similar to cached ones
+   - modify all objc++ code to use MatWrapper * instead of cv::Mat, so we can keep track of
+     allocations better
+    
+
+ */
+
+- (void)dealloc {
+  Log_d(@"dealloc %@", [self debugDescription]);
+}
+
+- (NSInteger)byteCount { return _mat.total() * _mat.elemSize(); }
 
 - (NSInteger)rows     { return _mat.rows; }
 - (NSInteger)cols     { return _mat.cols; }
@@ -192,10 +215,6 @@ bool matOwnsData(const cv::Mat& m) {
 }
 
 
-// Objective-C++ (.mm file)
-#import <Foundation/Foundation.h>
-#import <opencv2/opencv.hpp>
-
 // Crop the top N pixels of an image, leaving just the bottom after crop
 -(MatWrapper *) bottomCrop:(int) N {
     // Ensure N is within valid range
@@ -211,7 +230,7 @@ bool matOwnsData(const cv::Mat& m) {
 
     // Crop using ROI
     // clone ensures a new Mat is returned
-    return [[MatWrapper alloc] initWithMat: self.mat(roi).clone()]; 
+    return [[MatWrapper alloc] initWithMat: self.mat(roi)/*.clone()*/]; 
 }
 
 - (MatWrapper *)addWhiteRowsOnTop:(int)rows {
@@ -236,8 +255,8 @@ bool matOwnsData(const cv::Mat& m) {
 }
 
 - (NSArray<ObjcImageMatrixElement*>*)splitWithTileWidth:(int)tileWidth
-					     tileHeight:(int)tileHeight
-					 overlapPercent:(double)overlapPercent
+                                             tileHeight:(int)tileHeight
+                                         overlapPercent:(double)overlapPercent
 {
     Log_d(@"split into matrix");
     NSMutableArray<ObjcImageMatrixElement*>* results = [NSMutableArray array];
@@ -256,7 +275,7 @@ bool matOwnsData(const cv::Mat& m) {
             int h = std::min(tileHeight, _mat.rows - y);
 
             cv::Rect roi(x, y, w, h);
-            cv::Mat subMat = _mat(roi).clone(); // clone so it owns its own data
+            cv::Mat subMat = _mat(roi);/*.clone();*/ // clone so it owns its own data
 
             MatWrapper* wrapper = [[MatWrapper alloc] initWithMat:subMat];
 
@@ -367,7 +386,7 @@ bool matOwnsData(const cv::Mat& m) {
             _mat = cv::Mat((int)height, (int)width, cvType, data, step).clone(); 
         } else {
             // just wrap external memory (zero-copy)
-	  _mat = cv::Mat((int)height, (int)width, cvType, data, step);//.clone()/*XXX*/;
+          _mat = cv::Mat((int)height, (int)width, cvType, data, step);//.clone()/*XXX*/;
         }
     }
     return self;

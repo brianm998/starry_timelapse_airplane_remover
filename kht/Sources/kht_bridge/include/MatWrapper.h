@@ -31,6 +31,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, readonly) NSInteger bitsPerPixel;
 @property (nonatomic, readonly) NSInteger bitsPerComponent;
+@property (nonatomic, readonly) NSInteger byteCount;
 
 @property (nonatomic, readonly) CGColorSpaceRef colorSpace;
 

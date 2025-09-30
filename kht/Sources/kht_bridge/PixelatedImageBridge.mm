@@ -75,10 +75,11 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 	cv::Mat& mat = image.mat;
 
 	// make copy for safer concurrency
-	cv::Mat owned = mat.clone();
+	cv::Mat owned = mat;         // only clone below if we mutate
     
 	// If your conversion gives 3/4 channels, force it to grayscale
 	if (owned.channels() > 1) {
+      owned = mat.clone();      // clone becvause we mutate here
 	  cv::cvtColor(owned, owned, cv::COLOR_BGR2GRAY);
 	}
     
@@ -130,11 +131,12 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       cv::Mat mat = image.mat;
 
       // make copy for safer concurrency
-      cv::Mat owned = mat.clone();
+      cv::Mat owned = mat;
     
       // If your conversion gives 3/4 channels, force it to grayscale
       if (owned.channels() > 1) {
-	cv::cvtColor(owned, owned, cv::COLOR_BGR2GRAY);
+        owned = mat.clone();
+        cv::cvtColor(owned, owned, cv::COLOR_BGR2GRAY);
       }
     
       // Ensure binary (Otsu output should already be 0/255)
@@ -216,26 +218,24 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       cv::Mat mat = image.mat;
 
       if (mat.empty()) {
-	Log_d(@"mat was empty :(");
+        Log_d(@"mat was empty :(");
         return nil;
       }
       
-      // make copy for safer concurrency
-      cv::Mat owned = mat.clone();
-      
+      cv::Mat owned = mat; 
 
       cv::Mat gray, binary;
     
       // If not already grayscale, convert
       if (owned.channels() == 3) {
-	cv::cvtColor(owned, gray, cv::COLOR_BGR2GRAY);
+        cv::cvtColor(owned, gray, cv::COLOR_BGR2GRAY);
       } else if (owned.channels() == 4) {
-	cv::cvtColor(owned, gray, cv::COLOR_BGRA2GRAY);
+        cv::cvtColor(owned, gray, cv::COLOR_BGRA2GRAY);
       } else if (owned.channels() == 1) {
-	gray = owned; // already grayscale
+        gray = owned; // already grayscale
       } else {
-	Log_d(@"Unsupported channel count: %d", owned.channels());
-	return nil;
+        Log_d(@"Unsupported channel count: %d", owned.channels());
+        return nil;
       }
 
       cv::threshold(gray, binary, 128, 255, cv::THRESH_BINARY);
@@ -244,16 +244,16 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       int horizonTopY = -1;
       for (int y = 0; y < binary.rows; y++) {
         if (cv::countNonZero(binary.row(y) == 0) > 0) {
-	  horizonTopY = y;
-	  break;
+          horizonTopY = y;
+          break;
         }
       }
     
       int horizonBottomY = -1;
       for (int y = binary.rows - 1; y >= 0; y--) {
         if (cv::countNonZero(binary.row(y) == 255) > 0) {
-	  horizonBottomY = y;
-	  break;
+          horizonBottomY = y;
+          break;
         }
       }
 
@@ -261,8 +261,8 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       Log_d(@"horizonExtentsFromImage done");
       
       return [[HorizonResult alloc]
-	       initWithHorizonTopY: horizonTopY
-		    horizonBottomY: horizonBottomY];
+               initWithHorizonTopY: horizonTopY
+                    horizonBottomY: horizonBottomY];
     } catch (const cv::Exception &e) {
       Log_e(@"OpenCV Exception: %s", e.what());
     }
@@ -275,8 +275,8 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 // shifts mask up by borderAmount pixels and crops the image with it
 // does this really work?
 + (MatWrapper *)maskRaisedBy:(MatWrapper *)image
-			mask:(MatWrapper *)mask
-		      border:(int)borderAmount
+                        mask:(MatWrapper *)mask
+                      border:(int)borderAmount
 {
   @try {
     try {
@@ -285,8 +285,8 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       cv::Mat maskMat = mask.mat;
 
       // make copies for safer concurrency
-      cv::Mat owned = mat.clone();
-      cv::Mat ownedMask = maskMat.clone();
+      cv::Mat owned = mat;//.clone();
+        cv::Mat ownedMask = maskMat;//.clone();
       
       CV_Assert(ownedMask.type() == CV_8UC1);
       CV_Assert(owned.rows == ownedMask.rows && owned.cols == ownedMask.cols);
@@ -326,7 +326,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       //Log_d(@"Dilated keep mask maxY: %d", dilatedMaxY);
 
       // --- Step 3: apply mask to image ---
-      cv::Mat masked = owned.clone();
+      cv::Mat masked = owned.clone(); // must clone so we can mutate
       cv::Scalar whiteScalar;
       switch (owned.depth()) {
       case CV_8U:  whiteScalar = cv::Scalar(255); break;
@@ -361,27 +361,27 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 }
 
 +(MatWrapper *)brightenDarks:(MatWrapper *)image
-			mask:(MatWrapper *)mask
-		      amount:(double)amount
+                        mask:(MatWrapper *)mask
+                      amount:(double)amount
 {
   @try {
     try {
       cv::Mat mat = image.mat;
       cv::Mat maskMat = mask.mat;
 
-      cv::Mat owned = mat.clone();
-      cv::Mat ownedMask = maskMat.clone();
+      cv::Mat owned = mat;//.clone();
+      cv::Mat ownedMask = maskMat;//.clone();
       if (owned.empty() || ownedMask.empty()) return image;
 
-      if (ownedMask.size() != owned.size()) {
-	cv::resize(ownedMask, ownedMask, owned.size(), 0, 0, cv::INTER_NEAREST);
-      }
+      //if (ownedMask.size() != owned.size()) {
+        //cv::resize(ownedMask, ownedMask, owned.size(), 0, 0, cv::INTER_NEAREST);
+      //}
 
       cv::Mat maskGray;
       if (ownedMask.channels() > 1)
-	cv::cvtColor(ownedMask, maskGray, cv::COLOR_BGR2GRAY);
+        cv::cvtColor(ownedMask, maskGray, cv::COLOR_BGR2GRAY);
       else
-	maskGray = ownedMask;
+        maskGray = ownedMask;
 
       cv::Mat binMask;
       cv::threshold(maskGray, binMask, 128, 255, cv::THRESH_BINARY);
@@ -391,15 +391,15 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 
       cv::Mat result = owned.clone();
       for (int y = 0; y < owned.rows; y++) {
-	const uint16_t* src = owned.ptr<uint16_t>(y);
-	uint16_t* dst = result.ptr<uint16_t>(y);
-	const uchar* m = binMask.ptr<uchar>(y);
+        const uint16_t* src = owned.ptr<uint16_t>(y);
+        uint16_t* dst = result.ptr<uint16_t>(y);
+        const uchar* m = binMask.ptr<uchar>(y);
 
-	for (int x = 0; x < owned.cols * owned.channels(); x++) {
-	  if (m[x / owned.channels()] == 255) {
-	    dst[x] = cv::saturate_cast<uint16_t>(src[x] / factor);
-	  }
-	}
+        for (int x = 0; x < owned.cols * owned.channels(); x++) {
+          if (m[x / owned.channels()] == 255) {
+            dst[x] = cv::saturate_cast<uint16_t>(src[x] / factor);
+          }
+        }
       }
 
       return [[MatWrapper alloc] initWithMat: result];
@@ -425,21 +425,21 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       cv::Mat mat = image.mat;
       cv::Mat maskMat = mask.mat;
 
-      cv::Mat owned = mat.clone();
-      cv::Mat ownedMask = maskMat.clone();
+      cv::Mat owned = mat;//.clone();
+      cv::Mat ownedMask = maskMat;//.clone();
       if (owned.empty() || ownedMask.empty()) return image;
 
       // Ensure mask matches image size
-      if (ownedMask.size() != owned.size()) {
-	cv::resize(ownedMask, ownedMask, owned.size(), 0, 0, cv::INTER_NEAREST);
-      }
+      //if (ownedMask.size() != owned.size()) {
+      //cv::resize(ownedMask, ownedMask, owned.size(), 0, 0, cv::INTER_NEAREST);
+      //}
 
       // Get binary mask: 255 = modify, 0 = keep
       cv::Mat maskGray;
       if (ownedMask.channels() > 1)
-	cv::cvtColor(ownedMask, maskGray, cv::COLOR_BGR2GRAY);
+        cv::cvtColor(ownedMask, maskGray, cv::COLOR_BGR2GRAY);
       else
-	maskGray = ownedMask;
+        maskGray = ownedMask;
 
       cv::Mat binMask;
       cv::threshold(maskGray, binMask, 128, 255, cv::THRESH_BINARY);
@@ -447,17 +447,17 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       double factor = 1.0 + amount;
       factor = std::max(0.0, factor);
 
-      cv::Mat result = owned.clone();
+      cv::Mat result = owned.clone(); // clone so we can mutate
       for (int y = 0; y < owned.rows; y++) {
-	const uint16_t* src = owned.ptr<uint16_t>(y);
-	uint16_t* dst = result.ptr<uint16_t>(y);
-	const uchar* m = binMask.ptr<uchar>(y);
+        const uint16_t* src = owned.ptr<uint16_t>(y);
+        uint16_t* dst = result.ptr<uint16_t>(y);
+        const uchar* m = binMask.ptr<uchar>(y);
 
-	for (int x = 0; x < owned.cols * owned.channels(); x++) {
-	  if (m[x / owned.channels()] == 255) {
-	    dst[x] = cv::saturate_cast<uint16_t>(src[x] * factor);
-	  }
-	}
+        for (int x = 0; x < owned.cols * owned.channels(); x++) {
+          if (m[x / owned.channels()] == 255) {
+            dst[x] = cv::saturate_cast<uint16_t>(src[x] * factor);
+          }
+        }
       }
 
       return [[MatWrapper alloc] initWithMat: result];
@@ -472,7 +472,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 }
 
 +(double)maxBrightnessScaleForImage:(MatWrapper *)image
-			  maskImage:(MatWrapper *)mask
+                          maskImage:(MatWrapper *)mask
 {
   @try {
     try {
@@ -482,14 +482,15 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       cv::Mat maskMat = mask.mat;
     
       // make copies for safer concurrency
-      cv::Mat owned = mat.clone();
-      cv::Mat ownedMask = maskMat.clone();
+      cv::Mat owned = mat;//.clone();
+      cv::Mat ownedMask = maskMat;//.clone();
       
       CV_Assert(owned.size() == ownedMask.size());
     
       // If your conversion gives 3/4 channels, force it to grayscale
       if (ownedMask.channels() > 1) {
-	cv::cvtColor(ownedMask, ownedMask, cv::COLOR_BGR2GRAY);
+        ownedMask = maskMat.clone();
+        cv::cvtColor(ownedMask, ownedMask, cv::COLOR_BGR2GRAY);
       }
 
       // ownedMask is 0 for ground, 255 for sky → we want ground.
@@ -507,9 +508,9 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       double maxValOverall = 0.0;
 
       for (auto &ch : chans) {
-	double minVal, maxVal;
-	cv::minMaxLoc(ch, &minVal, &maxVal, nullptr, nullptr, groundMask);
-	maxValOverall = std::max(maxValOverall, maxVal);
+        double minVal, maxVal;
+        cv::minMaxLoc(ch, &minVal, &maxVal, nullptr, nullptr, groundMask);
+        maxValOverall = std::max(maxValOverall, maxVal);
       }
 
       if (maxValOverall <= 0.0) {
@@ -554,7 +555,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       if (img1Mat.channels() == 1) {
         gray1 = img1Mat.clone();
       } else {
-	cv::cvtColor(img1Mat, gray1, cv::COLOR_BGR2GRAY);
+        cv::cvtColor(img1Mat, gray1, cv::COLOR_BGR2GRAY);
       }
 
       if (img2Mat.channels() == 1) {
