@@ -6,65 +6,12 @@ import Semaphore
 
 public let imageCache = ImageCache()
 
-/*
-
- still missing:
-
-  - expose stats about cached images to UI
-  - how many
-  - what size
-  - ram usage of cached image buffers
- */
-
 public final class TimeoutRef<T: AnyObject> {
-    private var timer: DispatchSourceTimer?
-    private let timeout: TimeInterval = 20
-    
-    private weak var _value: T?
-    
-    public var value: T? {
-        get {
-            //resetTimer()
-            return _value
-        }
-    }
 
-    internal var valueInt: T? { _value }
-    
+    public weak var value: T? 
+
     public init(_ value: T?) {
-        self._value = value
-        if value != nil {
-            resetTimer()
-        }
-    }
-    
-    private func resetTimer() {
-        cancelTimer()
-        
-        let t = DispatchSource.makeTimerSource(queue: DispatchQueue.global())
-        Log.d("FUCKING setting timeout for 20 seconds from now")
-        t.schedule(deadline: .now() + timeout)
-        t.setEventHandler { [weak self] in
-            Log.e("FUCKING CLEARING CACHE VALUE")
-            // XXX add a check to see if the mat is still referenced elsewhere?
-            // XXX and if so, don't clear ther value here, extend the timer further
-            self?.clearValue()
-        }
-        t.resume()
-        timer = t
-    }
-    
-    private func cancelTimer() {
-        timer?.cancel()
-        timer = nil
-    }
-    
-    public func clearValue() {
-        _value = nil
-    }
-    
-    deinit {
-        cancelTimer()
+        self.value = value
     }
 }
 
@@ -95,7 +42,7 @@ public actor ImageCache {
         var imageSizeToCountMap: [Int:Int] = [:]
 
         for (key, weakRef) in cache {
-            if let cachedImage = weakRef.valueInt {
+            if let cachedImage = weakRef.value {
                 if let count = imageSizeToCountMap[cachedImage.byteCount] {
                     imageSizeToCountMap[cachedImage.byteCount] = count + 1
                 } else {
