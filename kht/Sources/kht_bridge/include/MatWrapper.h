@@ -9,6 +9,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface MatWrapper : NSObject
 
+@property (class, atomic, assign) NSUInteger totalBytes;
+@property (class, atomic, assign) NSUInteger totalInstances;
+
 /// Dimensions
 @property (nonatomic, readonly) NSInteger rows;
 @property (nonatomic, readonly) NSInteger cols;
@@ -31,7 +34,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, readonly) NSInteger bitsPerPixel;
 @property (nonatomic, readonly) NSInteger bitsPerComponent;
-@property (nonatomic, readonly) NSInteger byteCount;
 
 @property (nonatomic, readonly) CGColorSpaceRef colorSpace;
 

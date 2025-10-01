@@ -119,6 +119,27 @@ bool matOwnsData(const cv::Mat& m) {
 
 @implementation MatWrapper
 
+static NSUInteger _totalBytes = 0;
+static NSUInteger _totalInstances = 0;
+
++(NSUInteger) totalBytes {
+  return _totalBytes;
+}
++(NSUInteger) totalInstances {
+  return _totalInstances;
+}
+
++(void) setTotalInstances:(NSUInteger)totalInstances {
+  _totalInstances = totalInstances;
+}
++(void) setTotalBytes:(NSUInteger)totalBytes {
+  _totalBytes = totalBytes;
+}
+
+
+
+
+
 - (BOOL)ownsData {
   return matOwnsData(_mat);
 }
@@ -130,7 +151,6 @@ bool matOwnsData(const cv::Mat& m) {
 -(MatWrapper *)ensureEightBit {
   return [[MatWrapper alloc] initWithMat: ensure8U(_mat)];
 }
-
 
 // Internal init for ObjC++ usage
 - (instancetype)initWithMat:(const cv::Mat&)mat {
@@ -147,6 +167,14 @@ bool matOwnsData(const cv::Mat& m) {
       _mat = mat.clone();       // copy mat memory into new buffer for us to hold
     }
   }
+
+  NSUInteger count = _mat.step[0] * _mat.rows;
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+      @synchronized([MatWrapper class]) {
+        _totalBytes += count;
+        _totalInstances += 1;
+      }
+    });
   return self;
 }
 
@@ -161,9 +189,28 @@ bool matOwnsData(const cv::Mat& m) {
     self = [super init];
     if (self) {
         _mat = cv::Mat((int)height, (int)width, cvType, data, step);
-        // Do NOT attempt to touch internal cv::Mat allocator
+
+        NSUInteger count = _mat.step[0] * _mat.rows;
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+            @synchronized([MatWrapper class]) {
+              _totalBytes += count;
+              _totalInstances += 1;
+            }
+          });
     }
     return self;
+}
+
+- (void)dealloc {
+  NSUInteger count = _mat.step[0] * _mat.rows;
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+      @synchronized([MatWrapper class]) {
+        _totalBytes -= count;
+        _totalInstances -= 1;
+      }
+    });
+
+  Log_d(@"dealloc %@", [self debugDescription]);
 }
 
 
@@ -178,20 +225,14 @@ bool matOwnsData(const cv::Mat& m) {
      use image accessor code to load them when necessary, only when we need them
 
   For more image usage visibility in the UI:
-   - mirror ObjCLogging code to have a pair static callbacks for bytes allocated, dealloc
-   - update this MatWrapper to call these methods in init and dealloc
+   * mirror ObjCLogging1 code to have a pair static callbacks for bytes allocated, dealloc
+   * update this MatWrapper to call these methods in init and dealloc
    - update the LeftPanel in the UI to show active non cached images similar to cached ones
    - modify all objc++ code to use MatWrapper * instead of cv::Mat, so we can keep track of
      allocations better
     
 
  */
-
-- (void)dealloc {
-  Log_d(@"dealloc %@", [self debugDescription]);
-}
-
-- (NSInteger)byteCount { return _mat.total() * _mat.elemSize(); }
 
 - (NSInteger)rows     { return _mat.rows; }
 - (NSInteger)cols     { return _mat.cols; }
