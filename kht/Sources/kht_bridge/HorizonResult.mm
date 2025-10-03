@@ -3,7 +3,7 @@
 @implementation HorizonResult
 
 - (instancetype)initWithHorizonTopY:(NSInteger)horizonTopY
-		     horizonBottomY:(NSInteger)horizonBottomY
+                     horizonBottomY:(NSInteger)horizonBottomY
 {
   self = [super init];
     if (self) {

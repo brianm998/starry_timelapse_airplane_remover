@@ -60,33 +60,33 @@ void printMatInfo(const cv::Mat& mat, const std::string& name = "") {
 // It is good to weed out these bright pixels before taking the median
 // as otherwise areas with lots of bright bad pixels in the same spot across
 // multiple images can sometimes allow the bad pixels to show up at the median 
-cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats, double k) {
+MatWrapper * medianImageFromArray(const std::vector<MatWrapper *>& mats, double k) {
   if (mats.empty()) {
     Log_w(@"given empty mats, returning one too :(");
-    return cv::Mat();
+    return [[MatWrapper alloc] initWithMat: cv::Mat()];
   }
 
     // grab first image to read its characteristics
-    const cv::Mat& first = mats[0];
+    MatWrapper * first = mats[0];
 
     // image height
-    int rows = first.rows;
+    int rows = first.mat.rows;
 
     // image width
-    int cols = first.cols;
+    int cols = first.mat.cols;
 
     // channels per pixel
-    int ch   = first.channels();
+    int ch   = first.mat.channels();
 
     // size of each channel
-    int depth = first.depth();
+    int depth = first.mat.depth();
 
     // how many incoming images we're dealing with
     int n    = static_cast<int>(mats.size());
 
     // basic validation
     for (int i = 1; i < n; ++i) {
-        if (mats[i].rows != rows || mats[i].cols != cols || mats[i].type() != first.type()) {
+      if (mats[i].mat.rows != rows || mats[i].mat.cols != cols || mats[i].mat.type() != first.mat.type()) {
             throw std::runtime_error("All mats must have same size and type");
         }
     }
@@ -94,13 +94,13 @@ cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats, double k) {
         throw std::runtime_error("Unsupported channel count");
     }
 
-    cv::Mat output(rows, cols, first.type());
+    cv::Mat output(rows, cols, first.mat.type());
 
     if (depth == CV_8U) {
         // 8-bit per channel
         for (int y = 0; y < rows; ++y) {
             const uchar* rowPtrs[n];
-            for (int i = 0; i < n; ++i) rowPtrs[i] = mats[i].ptr<uchar>(y);
+            for (int i = 0; i < n; ++i) rowPtrs[i] = mats[i].mat.ptr<uchar>(y);
             uchar* outRow = output.ptr<uchar>(y);
 
             for (int x = 0; x < cols; ++x) {
@@ -154,7 +154,7 @@ cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats, double k) {
         // 16-bit per channel
         for (int y = 0; y < rows; ++y) {
             const uint16_t* rowPtrs[n];
-            for (int i = 0; i < n; ++i) rowPtrs[i] = mats[i].ptr<uint16_t>(y);
+            for (int i = 0; i < n; ++i) rowPtrs[i] = mats[i].mat.ptr<uint16_t>(y);
             uint16_t* outRow = output.ptr<uint16_t>(y);
 
             for (int x = 0; x < cols; ++x) {
@@ -227,7 +227,7 @@ cv::Mat medianImageFromArray(const std::vector<cv::Mat>& mats, double k) {
   }
     printMatInfo(output, "image align output");
     
-    return output;
+    return [[MatWrapper alloc] initWithMat: output];
 }
 
 // tries to match the base mat from the aligned mats
@@ -382,7 +382,7 @@ cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Ma
  */
 
 // gradients into the zero area of the mask
-cv::Mat createGradientMask(const cv::Mat &binaryMask, int gradientDistance) {
+MatWrapper * createGradientMask(const cv::Mat &binaryMask, int gradientDistance) {
     CV_Assert(binaryMask.type() == CV_8UC1); // Must be single-channel 8-bit
     
     // Step 1: Invert binary mask (so ground=255, sky=0)
@@ -411,11 +411,11 @@ cv::Mat createGradientMask(const cv::Mat &binaryMask, int gradientDistance) {
     // Step 6: Keep original sky pixels at 255
     cv::Mat output = cv::max(binaryMask, gradientMask);
 
-    return output;
+    return [[MatWrapper alloc] initWithMat: output];
 }
 
 // gradients into the non-zero area of the sky
-cv::Mat createGradientMaskIntoSky(const cv::Mat &binaryMask, int gradientDistance) {
+MatWrapper * createGradientMaskIntoSky(const cv::Mat &binaryMask, int gradientDistance) {
     CV_Assert(binaryMask.type() == CV_8UC1); // Must be single-channel 8-bit
     
     // Step 1: Distance transform on sky (non-zero) region
@@ -444,13 +444,13 @@ cv::Mat createGradientMaskIntoSky(const cv::Mat &binaryMask, int gradientDistanc
     // Step 4: Keep original ground pixels black, merge gradient into sky
     cv::Mat output = cv::min(binaryMask, gradientMask);
 
-    return output;
+    return [[MatWrapper alloc] initWithMat: output];
 }
 
 
 
 // Convert image to 8-bit grayscale, normalize only within mask area
-cv::Mat toGray8UWithMask(const cv::Mat& src, const cv::Mat& mask, bool normalize = true) {
+MatWrapper * toGray8UWithMask(const cv::Mat& src, const cv::Mat& mask, bool normalize = true) {
     if (src.empty()) {
         throw std::runtime_error("Input image is empty!");
     }
@@ -497,29 +497,30 @@ cv::Mat toGray8UWithMask(const cv::Mat& src, const cv::Mat& mask, bool normalize
         cv::cvtColor(tmp, tmp, cv::COLOR_BGR2GRAY);
     }
 
-    return tmp;
+    return [[MatWrapper alloc] initWithMat: tmp];
 }
 
 // Convert any depth image to 8-bit grayscale for SIFT
-cv::Mat toGray8U(const cv::Mat& src) {
-    if (src.empty()) {
+MatWrapper * toGray8U(MatWrapper * src) {
+    if (src.mat.empty()) {
         throw std::runtime_error("Input image is empty!");
     }
 
     cv::Mat tmp;
     // Handle 16-bit
-    if (src.depth() == CV_16U) {
-        src.convertTo(tmp, CV_8U, 1.0 / 256.0);
+    if (src.mat.depth() == CV_16U) {
+        src.mat.convertTo(tmp, CV_8U, 1.0 / 256.0);
     }
     // Handle 32-bit float/int
-    else if (src.depth() != CV_8U) {
+    else if (src.mat.depth() != CV_8U) {
         double minVal, maxVal;
-        cv::minMaxLoc(src, &minVal, &maxVal);
+        cv::minMaxLoc(src.mat, &minVal, &maxVal);
         double scale = maxVal > 0 ? 255.0 / maxVal : 1.0;
-        src.convertTo(tmp, CV_8U, scale);
+        src.mat.convertTo(tmp, CV_8U, scale);
     }
     else {
-        tmp = src.clone(); // should probably keep this as we _might_ mutate tmp below 
+      // should probably keep this clone as we _might_ mutate tmp below 
+      tmp = src.mat.clone();
     }
 
     // Convert to grayscale if needed
@@ -527,26 +528,24 @@ cv::Mat toGray8U(const cv::Mat& src) {
         cv::cvtColor(tmp, tmp, cv::COLOR_BGR2GRAY);
     }
 
-    return tmp;
+    return [[MatWrapper alloc] initWithMat: tmp];
 }
 
 +(MatWrapper *)createGradientMaskIntoSky:(MatWrapper*)binaryMask
 			gradientDistance:(int)gradientDistance
 {
-  return [[MatWrapper alloc]
-	   initWithMat:createGradientMaskIntoSky(binaryMask.mat, gradientDistance)];
+  return createGradientMaskIntoSky(binaryMask.mat, gradientDistance);
 }
 
 +(MatWrapper *)createGradientMaskIntoGround:(MatWrapper*)binaryMask
 			   gradientDistance:(int)gradientDistance
 {
-  return [[MatWrapper alloc]
-	   initWithMat:createGradientMask(binaryMask.mat, gradientDistance)];
+  return createGradientMask(binaryMask.mat, gradientDistance);
 }
 
 
 // Helper: compute star mask from special frame
-static cv::Mat makeStarMask(const cv::Mat &gray, int dilateSize = 3, int thresholdVal = 200) {
+static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int thresholdVal = 200) {
     cv::Mat mask, thresh;
     // Threshold for bright spots (stars)
     cv::threshold(gray, thresh, thresholdVal, 255, cv::THRESH_BINARY);
@@ -558,7 +557,7 @@ static cv::Mat makeStarMask(const cv::Mat &gray, int dilateSize = 3, int thresho
     } else {
         mask = thresh;
     }
-    return mask;
+    return [[MatWrapper alloc] initWithMat: mask];
 }
 
 /***
@@ -590,38 +589,36 @@ maxCornerDeviation:(double)maxCornerDeviation
     // how many threads opencv can use
     cv::setNumThreads(36);    // XXX make this a parameter?
 
-    // pull in the frame we're aligning everything with as a cv::Mat
-    cv::Mat &specialMat = special.mat;
-
     // random logID
     uint32_t logID = arc4random_uniform(1000);
 
     // Horizon mask (sky = nonzero, ground = 0)
-    cv::Mat horizonMask;
+    MatWrapper * horizonMask;
     if (mask != NULL && !mask.mat.empty()) {
       // use passed in horizon mask
-      horizonMask = mask.mat;
+      horizonMask = mask;
     } else {
       // if no horizon mask is passed, assume a fully white mask (all pixels)
-      horizonMask = cv::Mat(specialMat.size(), CV_8U, cv::Scalar(255));
+      horizonMask = [[MatWrapper alloc]
+                      initWithMat:cv::Mat(special.mat.size(), CV_8U, cv::Scalar(255))];
     }
 
     horizonMask = toGray8U(horizonMask);
 
     if (invertMask) {
       // invert the mask to apply to the ground instead of the sky
-      cv::bitwise_not(horizonMask, horizonMask);
+      cv::bitwise_not(horizonMask.mat, horizonMask.mat);
 
       // for the ground, we make the horizon mask include a bit above the horizon,
       // which leads to better keypoints down the road
-      horizonMask = createGradientMaskIntoSky(horizonMask, horizonExtension);
+      horizonMask = createGradientMaskIntoSky(horizonMask.mat, horizonExtension);
     }
 
     // Prepare grayscale special frame with the horizon mask
-    cv::Mat specialGray = toGray8UWithMask(specialMat, horizonMask, true);
+    MatWrapper * specialGray = toGray8UWithMask(special.mat, horizonMask.mat, true);
 
     // default to deteting with the horizon mask as is
-    cv::Mat detectionMask = horizonMask;
+    MatWrapper * detectionMask = horizonMask;
 
     if (!invertMask) {
       // Build star mask for special frame when doing sky
@@ -629,7 +626,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 
       // dilate further to expand keypoint detection area
       // threshold is 0..0xFF for what is considered bright
-      detectionMask = makeStarMask(specialGray,
+      detectionMask = makeStarMask(specialGray.mat,
                                    /*dilateSize=*/30,
                                    /*thresholdVal=*/200);
     }
@@ -649,7 +646,7 @@ maxCornerDeviation:(double)maxCornerDeviation
            cv::Mat specialProcessed;
 
       // Apply Contrast Limited Adaptive Histogram Equalization
-      clahe->apply(specialGray, specialProcessed);
+      clahe->apply(specialGray.mat, specialProcessed);
 
       // apply gamma correction to brighten the shadows only
       specialProcessed.convertTo(specialProcessed, CV_32F, 1.0/255.0);
@@ -660,23 +657,30 @@ maxCornerDeviation:(double)maxCornerDeviation
       akazeBase->setThreshold(1e-5);
 
       // run advanced kaze to detect and compute keypoints in the ground
-      akazeBase->detectAndCompute(specialProcessed, detectionMask, kpSpecial, descSpecial);
+      akazeBase->detectAndCompute(specialProcessed,
+                                  detectionMask.mat,
+                                  kpSpecial,
+                                  descSpecial);
     } else {
       // sky: use SIFT
       cv::Ptr<cv::SIFT> siftBase = cv::SIFT::create(maxKeypoints);
-      siftBase->detectAndCompute(specialGray, detectionMask, kpSpecial, descSpecial);
+      siftBase->detectAndCompute(specialGray.mat,
+                                 detectionMask.mat,
+                                 kpSpecial,
+                                 descSpecial);
     }
 
     kpSpecial.shrink_to_fit();
 
     // Preallocate per-index result storage to avoid push_back from many threads
     const size_t n = frames.count;
-    std::vector<cv::Mat> resultMats(n);       // will hold warped (success) or original (failure)
+    std::vector<MatWrapper *> resultMats(n);       // will hold warped (success) or original (failure)
     std::vector<char>    resultSuccess(n, 0); // 1 if accepted warp, 0 otherwise
 
 	Log_i(@"%d, about to align in parallel", invertMask);
 	
     // We will run the heavy loop in parallel with OpenCV
+    // for some reason this doesn't seem to really end up in parallel, not sure why
     cv::parallel_for_(cv::Range(0, (int)n), [&](const cv::Range &range) {
 	    
 	    static thread_local cv::Ptr<cv::SIFT> sift;
@@ -688,21 +692,21 @@ maxCornerDeviation:(double)maxCornerDeviation
           try {
             Log_i(@"%d top", invertMask);
             // grab the frame as a cv::Mat (read-only access)
-            cv::Mat &frame = frames[idx].mat;
+            MatWrapper * frame = frames[idx];
             Log_i(@"%d check", invertMask);
 
             // make a gray 8 bit image for detection
-            cv::Mat frameGray = toGray8UWithMask(frame, horizonMask, true);
+            MatWrapper * frameGray = toGray8UWithMask(frame.mat, horizonMask.mat, true);
 
             std::vector<cv::KeyPoint> kpFrame;
             cv::Mat descFrame;
 
-            cv::Mat localDetectionMask = horizonMask;
+            MatWrapper * localDetectionMask = horizonMask;
 
             Log_i(@"%d check", invertMask);
             if (!invertMask) {
               // detection mask is a star mask for the sky
-              localDetectionMask = makeStarMask(frameGray, /*dilateSize=*/30, /*thresholdVal=*/200);
+              localDetectionMask = makeStarMask(frameGray.mat, /*dilateSize=*/30, /*thresholdVal=*/200);
             }
 
             // create local detector/matcher/clahe instances so they are thread-local
@@ -711,18 +715,18 @@ maxCornerDeviation:(double)maxCornerDeviation
               // ground: AKAZE + CLAHE + gamma
               if(!clahe) clahe = cv::createCLAHE(4.0, cv::Size(8,8));
               cv::Mat claheOut;
-              clahe->apply(frameGray, claheOut);
+              clahe->apply(frameGray.mat, claheOut);
               claheOut.convertTo(claheOut, CV_32F, 1.0/255.0);
               cv::pow(claheOut, 0.5, claheOut);
               claheOut.convertTo(claheOut, CV_8U, 255.0);
 
               if(!akaze) akaze = cv::AKAZE::create();
               akaze->setThreshold(1e-5);
-              akaze->detectAndCompute(claheOut, localDetectionMask, kpFrame, descFrame);
+              akaze->detectAndCompute(claheOut, localDetectionMask.mat, kpFrame, descFrame);
             } else {
               // sky: SIFT
               if(!sift) sift = cv::SIFT::create(maxKeypoints);
-              sift->detectAndCompute(frameGray, localDetectionMask, kpFrame, descFrame);
+              sift->detectAndCompute(frameGray.mat, localDetectionMask.mat, kpFrame, descFrame);
             }
             Log_i(@"%d check", invertMask);
 
@@ -858,7 +862,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                 if (acceptWarp) {
                   // if we accept the warp, then actually warp
                   // this frame to fit the special image
-                  cv::warpPerspective(frame, warped, H, frame.size(),
+                  cv::warpPerspective(frame.mat, warped, H, frame.mat.size(),
                                       cv::INTER_LINEAR, cv::BORDER_CONSTANT,
                                       cv::Scalar(0,0,0,0));
                 }
@@ -871,14 +875,14 @@ maxCornerDeviation:(double)maxCornerDeviation
                 cv::cvtColor(warped, warped, cv::COLOR_BGRA2BGR);
               }
               resultSuccess[idx] = 1;
-              resultMats[idx] = warped;
+              resultMats[idx] = [[MatWrapper alloc] initWithMat: warped];
               if(warped.empty()) {
                 Log_w(@"warped is empty");
               }
             } else {
               resultSuccess[idx] = 0;
               resultMats[idx] = frame;
-              if(frame.empty()) {
+              if(frame.mat.empty()) {
                 Log_w(@"frame is empty");
               }
             }
@@ -887,27 +891,27 @@ maxCornerDeviation:(double)maxCornerDeviation
             Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
             // On exception mark as failed and store original
             resultSuccess[idx] = 0;
-            resultMats[idx] = frames[idx].mat;
+            resultMats[idx] = frames[idx];
           } catch (const std::exception &e) {
             Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
             resultSuccess[idx] = 0;
-            resultMats[idx] = frames[idx].mat;
+            resultMats[idx] = frames[idx];
           } catch (...) {
             Log_e(@"Unknown Error");
             resultSuccess[idx] = 0;
-            resultMats[idx] = frames[idx].mat;
+            resultMats[idx] = frames[idx];
           }
         }
       });
 
     // Gather aligned and failed in the same shape as original function
-    std::vector<cv::Mat> aligned;
-    std::vector<cv::Mat> failed;
+    std::vector<MatWrapper*> aligned;
+    std::vector<MatWrapper*> failed;
     aligned.reserve(n);
     failed.reserve(n);
 
     for (size_t i = 0; i < n; ++i) {
-      if(resultMats[i].empty()) {
+      if(resultMats[i].mat.empty()) {
         Log_w(@"FUCK");
       }
       if (resultSuccess[i]) {
@@ -918,20 +922,20 @@ maxCornerDeviation:(double)maxCornerDeviation
     }
 
     // use median merges
-    cv::Mat alignedResult = medianImageFromArray(aligned, k);
-    cv::Mat failedResult = medianImageFromArray(failed, k);
+    MatWrapper * alignedResult = medianImageFromArray(aligned, k);
+    MatWrapper * failedResult = medianImageFromArray(failed, k);
 
-	if(alignedResult.empty()) {
+	if(alignedResult.mat.empty()) {
 	  Log_w(@"alignedResult is empty");
 	}
-	if(failedResult.empty()) {
+	if(failedResult.mat.empty()) {
 	  Log_w(@"failedResult is empty");
 	}
 	
     AlignmentResult *resultObj = [AlignmentResult new];
-    resultObj.aligned = [[MatWrapper alloc] initWithMat: alignedResult];
+    resultObj.aligned = alignedResult;
     resultObj.numAligned = aligned.size();
-    resultObj.failed  = [[MatWrapper alloc] initWithMat: failedResult];
+    resultObj.failed = failedResult;
     resultObj.numFailed = failed.size();
     return resultObj;
 

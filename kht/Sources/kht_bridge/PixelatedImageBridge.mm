@@ -24,8 +24,8 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 @implementation PixelatedImageBridge
 
 + (MatWrapper *)combineImage:(MatWrapper *)image1
-			mask:(MatWrapper *)mask
-		  background:(MatWrapper *)image2
+                        mask:(MatWrapper *)mask
+                  background:(MatWrapper *)image2
 {
     @try {
       try {
@@ -416,8 +416,8 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 
 
 +(MatWrapper *)darkenDarks:(MatWrapper *)image
-		      mask:(MatWrapper *)mask
-		    amount:(double)amount
+                      mask:(MatWrapper *)mask
+                    amount:(double)amount
 {
   @try {
     try {
