@@ -191,7 +191,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     nonisolated public let frameIndex: Int
 
     // populated by pruning
-    public var outlierGroups: OutlierGroups? 
+    public var outlierGroups: OutlierGroups? // XXX LOTS OF MEMORY ???
 
     public func getOutlierGroups() -> OutlierGroups?  { outlierGroups }
     
@@ -1010,6 +1010,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 // newer file format, default to this
                 return try await loadOutliersFromBinaryFile()
             } catch {
+                Log.e("frame \(frameIndex) failed to load outliers: \(error)")
                 // XXX log here
             }
 
