@@ -4,6 +4,7 @@ import Cocoa
 import StarCore
 import Semaphore
 import logging
+import kht_bridge
 
 public enum VideoPlayMode: String, Equatable, CaseIterable {
     case forward
@@ -334,6 +335,11 @@ public final class ImageSequenceViewModel {
     var numberOfFramesToProcess: Int = 1
 
     var reprocessFrames = false
+
+    // total number of cv::Mat (MatWrapper*) objects currently in ram
+    var totalMatInstances = 0
+    // and their total size
+    var totalMatBytes = 0
     
     convenience init(withConfig jsonConfigFilename: String,
                      closure: @escaping @Sendable (Int, Double, Int, Double) -> Void) async throws
@@ -422,6 +428,12 @@ public final class ImageSequenceViewModel {
         
     }
 
+    deinit {
+        Log.i("DEINIT")
+    }
+    
+    private var matInstancesTask: Task<Void,Never>? = nil
+    
     init(
       with configManager: ConfigManager,
       closure: @Sendable @escaping (Int, Double, Int, Double) -> Void
@@ -493,6 +505,20 @@ public final class ImageSequenceViewModel {
         Log.d("make missing previews")
 
         self.finalProcessor = FinalGUIProcessor(self)
+
+        self.matInstancesTask = Task { [weak self] in 
+            while(true) { 
+                guard let self else { return }
+                let instances = MatWrapper.totalInstances
+                let bytes = MatWrapper.totalBytes
+                Task { @MainActor in
+                    self.totalMatInstances = Int(instances)
+                    self.totalMatBytes = Int(bytes)
+                }
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+            }
+        }
+        
         
         var numberPreviewsSaved = 0
         try await imageAccessor.writeMissingImages() { numberSaved in
@@ -966,7 +992,9 @@ public final class ImageSequenceViewModel {
     func clearProcessing(from startIndex: Int, to endIndex: Int) async throws {
         Log.d("clearing processing from \(startIndex) to \(endIndex)")
         for index in startIndex...endIndex {
-            if let frame = frames[index].frame {
+            if index < frames.count,
+               let frame = frames[index].frame
+            {
                 try await clearProcessing(of: frame)
             }
         }
