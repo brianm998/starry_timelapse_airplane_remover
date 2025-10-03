@@ -71,8 +71,7 @@ public actor ImageCache {
 
         
         // first look in the cache
-        if //false,               // XXX disable caching XXX
-           let cachedImageRef = cache[filename] {
+        if let cachedImageRef = cache[filename] {
             if let cachedImage = cachedImageRef.value {
 
                 if cachedImage.isEmpty {
