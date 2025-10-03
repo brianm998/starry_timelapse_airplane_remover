@@ -9,3 +9,5 @@ find ~/git/nighttime_timelapse_airplane_remover/kht/Sources -name '*.mm' -exec e
 find ~/git/nighttime_timelapse_airplane_remover/kht/Sources -name '*.h' -exec emacsclient -n '{}' ';'
 find ~/git/nighttime_timelapse_airplane_remover/c++_test/Sources -name '*.swift' -exec emacsclient -n '{}' ';'
 find ~/git/nighttime_timelapse_airplane_remover/logging/Sources -name '*.swift' -exec emacsclient -n '{}' ';'
+find ~/git/nighttime_timelapse_airplane_remover/logging-objc/Sources -name '*.h' -exec emacsclient -n '{}' ';'
+find ~/git/nighttime_timelapse_airplane_remover/logging-objc/Sources -name '*.mm' -exec emacsclient -n '{}' ';'
