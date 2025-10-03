@@ -13,14 +13,14 @@ struct LeftPanel: View {
     @State private var imageCacheMisses: UInt = 0
     @State private var imageCacheMap: [Int: Int] = [:]
 
-    var basicImageStats: (String, Int) { // memory usage, number of images
+    var basicImageStats: (Int, Int) { // memory usage, number of images
         var totalImageCount: Int = 0
         var totalByteCount: Int = 0
         for (size, count) in imageCacheMap {
             totalByteCount += size * count
             totalImageCount += count
         }
-        return (string(for: totalByteCount), totalImageCount)
+        return (totalByteCount, totalImageCount)
     }
 
     func string(for byteCount: Int) -> String {
@@ -36,11 +36,12 @@ struct LeftPanel: View {
             return "\(byteCount/(1024*1024)) mb"
         } else if byteCount < (1024*1024*1024*1024) {
             Log.d("\(byteCount) is gb")
-            return "\(byteCount/(1024*1024*1024)) gb"
+            let str = String(format: "%.1f", Double(byteCount)/(1024*1024*1024))
+            return "\(str) gb"
         } else {// if byteCount < 1024^5 {
-            let ret = "\(byteCount/(1024*1024*1024*1024)) tb"
-            Log.d("\(byteCount) is tb string \(ret)")
-            return ret
+            let str = String(format: "%.2f", Double(byteCount)/(1024*1024*1024*1024))
+            Log.d("\(byteCount) is tb string \(str)")
+            return "\(str) tb"
         }
     }
     
@@ -240,27 +241,36 @@ struct LeftPanel: View {
     var imageCacheView: some View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .leading) {
-            Text("Image Cache stats")
+            Text("Non Cached Image stats")
               .foregroundColor(.white)
-            Spacer()
-              .frame(maxHeight: 4)
+            Space(height: 4)
 
-            let (memoryString, imageCount) = self.basicImageStats
+            let (memoryBytesUsed, imageCount) = self.basicImageStats
+
+            let memoryString = string(for: memoryBytesUsed)
+            
+            Text("\(string(for: viewModel.totalMatBytes-memoryBytesUsed)) used by \(viewModel.totalMatInstances - imageCount) images")
+              .foregroundColor(viewModel.totalMatInstances == 0 ? .gray : .green)
+            Space(height: 6)
+            
+            Text("Cached Image stats")
+              .foregroundColor(.white)
+            Space(height: 4)
 
             if viewModel.showAllImageCacheStats {
                 // show all image cache stats
                 Text("\(memoryString) used by \(imageCount) images")
-                  .foregroundColor(.gray)
+                  .foregroundColor(imageCount == 0 ? .gray : .green)
 
                 Text("\(imageCacheHits) cache hits")
-                  .foregroundColor(.gray)
+                  .foregroundColor(imageCacheHits == 0 ? .gray : .green)
                 Text("\(imageCacheMisses) cache misses")
-                  .foregroundColor(.gray)
+                  .foregroundColor(imageCacheMisses == 0 ? .gray : .red)
                 ForEach(imageCacheMap.keys.sorted { $0 > $1 }, id: \.self) { key in
                     let sizeString = string(for: key)
                     if let count = imageCacheMap[key] {
                         Text("\(count) \(sizeString) images")
-                          .foregroundColor(.gray)
+                          .foregroundColor(.yellow)
                     }
                 }
                 
