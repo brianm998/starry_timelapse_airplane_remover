@@ -301,10 +301,11 @@ public struct ImageAccessor: Sendable {
         }.value
     }
 
-    private func nameForImage(frameIndex: Int,
-                              ofType type: FrameViewMode,
-                              atSize size: ImageDisplaySize) -> String?
-    {
+    public func nameForImage(
+      frameIndex: Int,
+      ofType type: FrameViewMode,
+      atSize size: ImageDisplaySize
+    ) -> String? {
         if let (dirname, filename) = dirAndNameForImage(frameIndex: frameIndex,
                                                         ofType: type,
                                                         atSize: size)
