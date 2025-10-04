@@ -60,7 +60,7 @@
         if (_buffer && buffer) {
             memcpy(_buffer, buffer, _length);
         }
-	Log_d(@"init with width %d height %d bitsPerComponent %lu", width, height, bitsPerComponent);
+        Log_d(@"init with width %lu height %lu bitsPerComponent %lu", width, height, bitsPerComponent);
     }
     return self;
 }
