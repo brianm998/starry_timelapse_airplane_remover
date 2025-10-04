@@ -579,14 +579,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         Log.d("original frame \(originalFrame.description)")
-        
-        let horizonMask = try await loadOrCreateHorizonMask()
 
-        Log.d("horizon mask \(horizonMask.image.description)")
+        let config = await configManager.config()
         
+        var horizonMask: HorizonMask? = nil
+        if config.horizonDetectionEnabled ?? true {
+            horizonMask = try await loadOrCreateHorizonMask()
+            if let horizonMask {
+                Log.d("horizon mask \(horizonMask.image.description)")
+            }
+        }
+
         let alignmentResult = originalFrame.align(
           frameFilenames: neighborFilenames,
-          masked: horizonMask.image,
+          masked: horizonMask?.image,
           matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
           invertMask: isEarth,       // earth is zero in mask
           maxKeypoints: 2000,         // XXX hardcoded constant
