@@ -644,7 +644,7 @@ maxCornerDeviation:(double)maxCornerDeviation
       // ground: create a processed special image for detection
       // apply extra processing to pull up dark details to help
       // find more keypoints in the dark ground 
-           cv::Mat specialProcessed;
+      cv::Mat specialProcessed;
 
       // Apply Contrast Limited Adaptive Histogram Equalization
       clahe->apply(specialGray.mat, specialProcessed);
@@ -671,6 +671,9 @@ maxCornerDeviation:(double)maxCornerDeviation
                                  descSpecial);
     }
 
+    detectionMask = nil;        // done with these, allow deallocation
+    specialGray = nil;
+    
     kpSpecial.shrink_to_fit();
 
     // Preallocate per-index result storage to avoid push_back from many threads
@@ -694,8 +697,6 @@ maxCornerDeviation:(double)maxCornerDeviation
           MatWrapper * frame = [ObjcImageCache loadImage:frameFilenames[idx]];
           try {
             //Log_i(@"%d %d loaded", logID, ii);
-            // grab the frame as a cv::Mat (read-only access)
-
 
             // make a gray 8 bit image for detection
             MatWrapper * frameGray = toGray8UWithMask(frame.mat, horizonMask.mat, true);
@@ -733,6 +734,9 @@ maxCornerDeviation:(double)maxCornerDeviation
             }
             //Log_i(@"%d %d detected and computed check", logID, ii);
 
+            frameGray = nil;          // not used past here, allow deallocation
+            localDetectionMask = nil;
+            
 		    // if we got nothing, then fail fast
             if (descFrame.empty() || descSpecial.empty()) {
               // failed early: no descriptors
