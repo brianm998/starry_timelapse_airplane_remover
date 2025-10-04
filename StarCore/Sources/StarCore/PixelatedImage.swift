@@ -857,7 +857,7 @@ public struct AlignmentResult {
 extension PixelatedImage {
 
     public func align(
-      frames: [PixelatedImage],
+      frameFilenames: [String],
       masked mask: PixelatedImage? = nil,
       matchMethod: FeatureMatchMethod, // .knnLowes or .FLANN or .bruteForce
       maxDeviation: Double = 45, // maximum warping deviation from identity (GUESSED)
@@ -867,7 +867,6 @@ extension PixelatedImage {
       outlierThreshold: Double = 1.2
     ) -> AlignmentResult {
         
-        let frameMats = frames.map { $0.mat }
         var maskMat: MatWrapper? = nil
         if let mask {
             maskMat = mask.mat
@@ -882,7 +881,7 @@ extension PixelatedImage {
         
         if let result = ImageAligner.alignFrames(
              self.mat,
-             frames: frameMats,
+             frames: frameFilenames,
              matchMethod: matchMethod,//.knnLowes, // .knnLowes or .FLANN or .bruteForce
              mask: maskMat,
              maxDeviation: maxDeviation,

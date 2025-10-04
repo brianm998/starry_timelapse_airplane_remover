@@ -1,5 +1,6 @@
 #import "ImageAligner.h"
 #import "MatWrapper_Internal.h"
+#import "ObjcImageCache.h"
 #import "logging.h"
 #import <opencv2/core.hpp>
 #import <opencv2/imgproc.hpp>
@@ -538,7 +539,7 @@ MatWrapper * toGray8U(MatWrapper * src) {
 }
 
 +(MatWrapper *)createGradientMaskIntoGround:(MatWrapper*)binaryMask
-			   gradientDistance:(int)gradientDistance
+                           gradientDistance:(int)gradientDistance
 {
   return createGradientMask(binaryMask.mat, gradientDistance);
 }
@@ -573,7 +574,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
  * Uses different logic for sky and earth alignment, invertMask governs that. 
  */
 + (id)alignFrames:(MatWrapper *)special
-           frames:(NSArray<MatWrapper *> *)frames
+           frames:(NSArray<NSString *> *)frameFilenames
       matchMethod:(FeatureMatchMethod)matchMethod
              mask:(MatWrapper *)mask // assumed to be zero for ground, non-zero for sky
      maxDeviation:(double)maxDeviation
@@ -673,7 +674,7 @@ maxCornerDeviation:(double)maxCornerDeviation
     kpSpecial.shrink_to_fit();
 
     // Preallocate per-index result storage to avoid push_back from many threads
-    const size_t n = frames.count;
+    const size_t n = frameFilenames.count;
     std::vector<MatWrapper *> resultMats(n);       // will hold warped (success) or original (failure)
     std::vector<char>    resultSuccess(n, 0); // 1 if accepted warp, 0 otherwise
 
@@ -689,10 +690,11 @@ maxCornerDeviation:(double)maxCornerDeviation
 			    
         for (int ii = range.start; ii < range.end; ++ii) {
           NSUInteger idx = (NSUInteger)ii;
+          MatWrapper * frame = [ObjcImageCache loadImage:frameFilenames[idx]];
           try {
             Log_i(@"%d top", invertMask);
             // grab the frame as a cv::Mat (read-only access)
-            MatWrapper * frame = frames[idx];
+
             Log_i(@"%d check", invertMask);
 
             // make a gray 8 bit image for detection
@@ -891,15 +893,15 @@ maxCornerDeviation:(double)maxCornerDeviation
             Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
             // On exception mark as failed and store original
             resultSuccess[idx] = 0;
-            resultMats[idx] = frames[idx];
+            resultMats[idx] = frame;
           } catch (const std::exception &e) {
             Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
             resultSuccess[idx] = 0;
-            resultMats[idx] = frames[idx];
+            resultMats[idx] = frame;
           } catch (...) {
             Log_e(@"Unknown Error");
             resultSuccess[idx] = 0;
-            resultMats[idx] = frames[idx];
+            resultMats[idx] = frame;
           }
         }
       });

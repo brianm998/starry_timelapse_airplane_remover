@@ -20,7 +20,7 @@ typedef NS_ENUM(NSInteger, FeatureMatchMethod) {
 // align frames to special frame, with optional mask which shows where to get keypoints from
 // 
 + (id)alignFrames:(MatWrapper *)special
-           frames:(NSArray<MatWrapper *> *)frames
+           frames:(NSArray<NSString *> *)frameFilenames
       matchMethod:(FeatureMatchMethod)matchMethod
              mask:(MatWrapper *)mask // assumed to be zero for ground, non-zero for sky
      maxDeviation:(double)maxDeviation

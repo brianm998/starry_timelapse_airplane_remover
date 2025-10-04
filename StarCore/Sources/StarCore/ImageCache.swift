@@ -3,6 +3,7 @@ import CoreGraphics
 import logging
 import Cocoa
 import Semaphore
+import kht_bridge
 
 public let imageCache = ImageCache()
 
@@ -12,6 +13,13 @@ public final class TimeoutRef<T: AnyObject> {
 
     public init(_ value: T?) {
         self.value = value
+    }
+}
+
+final class CompletionBox: @unchecked Sendable {
+    let completion: (MatWrapper?) -> Void
+    init(_ completion: @escaping (MatWrapper?) -> Void) {
+        self.completion = completion
     }
 }
 
@@ -28,7 +36,25 @@ public actor ImageCache {
     var pendingLoads: [String:AsyncSemaphore] = [:]
     
     
-    init() { }
+    init() {
+        ObjcImageCache.imageLoader = { [weak self] name, completion in
+            guard let self else {
+                completion(nil)
+                return
+            }
+            let box = CompletionBox(completion)
+
+            Task { 
+                do {
+                    let image = try await self.loadImage(filename: name) 
+                    box.completion(image?.mat)
+                } catch {
+                    Log.e("image load error: \(error)")
+                    box.completion(nil)
+                }
+            }
+        }
+    }
 
     public func add(image: PixelatedImage, named filename: String) -> PixelatedImage {
         if image.isEmpty { Log.w("adding empty image to cache") }

@@ -448,7 +448,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             {
                 Log.d("frame \(frameIndex) successfully loaded horizon mask")
 
-                let bounds = try horizonMaskImage.horizonBounds()
+                let bounds = horizonMaskImage.horizonBounds()
                 return HorizonMask(
                   image: horizonMaskImage,
                   horizonTopY: bounds.topY,
@@ -494,7 +494,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
-    // uses opencv2 for SIFT fast, accurate image alignment (needs work for earth still)
+    // uses opencv2 for dark ground specific detection logic
     private func loadOrCreateEarthAlignedImage() async throws -> PixelatedImage {
         try await loadOrCreateAlignedImage(of: .earthAligned)
     }
@@ -561,29 +561,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if originalFrame.isEmpty { Log.w("EMPTY IMAGE") }
 
         Log.d("original frame \(originalFrame.description)")
-        
-        let neighborImages = try await withThrowingTaskGroup(of: PixelatedImage?.self) { group in
-            for neighborIndex in alignmentFilenames.keys {
-                group.addTask {
-                    try await self.imageAccessor.load(
-                      frameIndex: neighborIndex,
-                      type: .original,
-                      atSize: .original
-                    ) 
-                }
-            }
 
-            var results = [PixelatedImage]()
-            for try await image in group {
-                if let img = image {
-                    if img.isEmpty {
-                        Log.w("EMPTY IMAGE")
-                    } else {
-                        results.append(img)
-                    }
-                }
+
+        var neighborFilenames: [String] = []
+        
+        for neighborIndex in alignmentFilenames.keys {
+            if let filename = self.imageAccessor.nameForImage(
+                 frameIndex: neighborIndex,
+                 ofType: .original,
+                 atSize: .original
+               )
+            {
+                neighborFilenames.append(filename)
+            } else {
+                Log.w("unable to get filename for original image at frame index \(neighborIndex)")
             }
-            return results
         }
 
         Log.d("original frame \(originalFrame.description)")
@@ -593,7 +585,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("horizon mask \(horizonMask.image.description)")
         
         let alignmentResult = originalFrame.align(
-          frames: neighborImages,
+          frameFilenames: neighborFilenames,
           masked: horizonMask.image,
           matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
           invertMask: isEarth,       // earth is zero in mask
@@ -894,8 +886,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             )
         }
 
-        let starAlignedImage = try await loadOrCreateStarAlignedImage()
-
         var horizonMask: HorizonMask? = nil
         var earthAlignedImage: PixelatedImage? = nil
         
@@ -905,6 +895,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             earthAlignedImage = try await loadOrCreateEarthAlignedImage()
         }
         
+        let starAlignedImage = try await loadOrCreateStarAlignedImage()
+
         let format = image.clone.imageData // make a copy
 
         switch format {
@@ -913,7 +905,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 
         case .eightBit(_):
             Log.e("8 bit not supported here now")
-        case .sixteenBit(var outputData):
+        case .sixteenBit(let outputData):
             Log.d("frame \(self.frameIndex) removing airplanes")
 
             // copy the outputData to a new Buffer
@@ -1969,7 +1961,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         // load or create the aligned frame
 
+        Log.d("frame \(frameIndex) loadOrCreateStarAlignedImage")
         let starAlignedImage = try await loadOrCreateStarAlignedImage()
+        Log.d("frame \(frameIndex) loadedOrCreatedStarAlignedImage")
 
         let config = await configManager.config()
 
@@ -1989,7 +1983,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // of the earth and star aligned images, and subtract
             // that from the image instead of just the star aligned image
 
+            Log.d("frame \(frameIndex) loadOrCreateHorizonMask")
             let horizonMask = try await loadOrCreateHorizonMask()
+            Log.d("frame \(frameIndex) loadedOrCreatedHorizonMask")
             //Log.d("frame \(frameIndex) OG image \(image.description)")
             let earthAlignedImage = try await loadOrCreateEarthAlignedImage()
             //Log.d("frame \(frameIndex) OG image \(image.description)")
