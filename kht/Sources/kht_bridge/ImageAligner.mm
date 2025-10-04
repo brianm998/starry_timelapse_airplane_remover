@@ -113,40 +113,40 @@ MatWrapper * medianImageFromArray(const std::vector<MatWrapper *>& mats, double 
                 for (int c = 0; c < ch; ++c) {
                     std::sort(vals[c], vals[c] + n);
 
-		    // sort values for this pixel component across images
+                    // sort values for this pixel component across images
                     std::sort(vals[c], vals[c] + n);
 
-		    // calculate mean intensity for this channel
-		    double sum = 0;
-		    for(int z = 0 ; z < n ; ++z) {
-		      sum += (double)vals[c][z];
-		    }
-		    double mean = sum / n; // mean intensity for this channel
-		    
-		    double varSum = 0.0;
-		    for(int z = 0 ; z < n ; ++z) {
-		      double d = (double)vals[c][z] - mean;
-		      varSum += d * d;
-		    }
-		    double std = sqrt(varSum / n);
-		    double threshold = mean + k * std; // our threshold
-
-		    int maxIndex = 0;
-		    int minIndex = 0;
-		    for(int z = 0 ; z < n ; ++z) {
-		      char value = vals[c][z];
-		      if(value == 0) {
-			minIndex = z + 1;
-		      }
-
-		      if((double)vals[c][z] < threshold) {
-			maxIndex = z;
-		      } else {
-			break;
-		      }
-		    }
-		    int index = (minIndex+maxIndex)/2;
-		    if(index >= n) { index = n - 1; }
+                    // calculate mean intensity for this channel
+                    double sum = 0;
+                    for(int z = 0 ; z < n ; ++z) {
+                      sum += (double)vals[c][z];
+                    }
+                    double mean = sum / n; // mean intensity for this channel
+                    
+                    double varSum = 0.0;
+                    for(int z = 0 ; z < n ; ++z) {
+                      double d = (double)vals[c][z] - mean;
+                      varSum += d * d;
+                    }
+                    double std = sqrt(varSum / n);
+                    double threshold = mean + k * std; // our threshold
+                    
+                    int maxIndex = 0;
+                    int minIndex = 0;
+                    for(int z = 0 ; z < n ; ++z) {
+                      char value = vals[c][z];
+                      if(value == 0) {
+                        minIndex = z + 1;
+                      }
+                      
+                      if((double)vals[c][z] < threshold) {
+                        maxIndex = z;
+                      } else {
+                        break;
+                      }
+                    }
+                    int index = (minIndex+maxIndex)/2;
+                    if(index >= n) { index = n - 1; }
                     outRow[x * ch + c] = static_cast<uchar>(vals[c][index]);
                 }
             }
@@ -177,55 +177,55 @@ MatWrapper * medianImageFromArray(const std::vector<MatWrapper *>& mats, double 
 		    // sort values for this pixel component across images
                     std::sort(vals[c], vals[c] + n);
 
-		    // calculate mean intensity for this channel
-		    double sum = 0;
-		    for(int z = 0 ; z < n ; ++z) {
-		      sum += (double)vals[c][z];
-		    }
-		    double mean = sum / n; // mean intensity for this channel
+                    // calculate mean intensity for this channel
+                    double sum = 0;
+                    for(int z = 0 ; z < n ; ++z) {
+                      sum += (double)vals[c][z];
+                    }
+                    double mean = sum / n; // mean intensity for this channel
 		    
-		    double varSum = 0.0;
-		    for(int z = 0 ; z < n ; ++z) {
-		      double d = (double)vals[c][z] - mean;
-		      varSum += d * d;
-		    }
-		    double std = sqrt(varSum / n);
-		    double threshold = mean + k * std; // our threshold
+                    double varSum = 0.0;
+                    for(int z = 0 ; z < n ; ++z) {
+                      double d = (double)vals[c][z] - mean;
+                      varSum += d * d;
+                    }
+                    double std = sqrt(varSum / n);
+                    double threshold = mean + k * std; // our threshold
 
-		    int maxIndex = 0;
-		    int minIndex = 0;
-		    // throw out pixels with value zero at the bottom
-		    // throw out pixels with too much statistal variation at the top
-		    for(int z = 0 ; z < n ; ++z) {
-		      uint16_t value = vals[c][z];
-		      if(value == 0) {
-			minIndex = z + 1;
-		      }
-		      if((double)value < threshold) {
-			maxIndex = z;
-		      } else {
-			break;
-		      }
-		    }
+                    int maxIndex = 0;
+                    int minIndex = 0;
+                    // throw out pixels with value zero at the bottom
+                    // throw out pixels with too much statistal variation at the top
+                    for(int z = 0 ; z < n ; ++z) {
+                      uint16_t value = vals[c][z];
+                      if(value == 0) {
+                        minIndex = z + 1;
+                      }
+                      if((double)value < threshold) {
+                        maxIndex = z;
+                      } else {
+                        break;
+                      }
+                    }
 
-		    // choose the median between the given bounds
-		    int index = (minIndex+maxIndex)/2;
+                    // choose the median between the given bounds
+                    int index = (minIndex+maxIndex)/2;
 
-		    // make sure we don't overrun
-		    if(index >= n) { index = n - 1; }
+                    // make sure we don't overrun
+                    if(index >= n) { index = n - 1; }
 
-		    // actual set the output pixel to the given value
+                    // actual set the output pixel to the given value
                     outRow[x * ch + c] = static_cast<uint16_t>(vals[c][index]);
                 }
             }
         }
     } else {
-        throw std::runtime_error("Unsupported element depth (only CV_8U and CV_16U implemented)");
+      throw std::runtime_error("Unsupported element depth (only CV_8U and CV_16U implemented)");
     }
 
-  if(output.empty()) {
-    Log_w(@"empty mat");
-  }
+    if(output.empty()) {
+      Log_w(@"empty mat");
+    }
     printMatInfo(output, "image align output");
     
     return [[MatWrapper alloc] initWithMat: output];
@@ -678,7 +678,7 @@ maxCornerDeviation:(double)maxCornerDeviation
     std::vector<MatWrapper *> resultMats(n);       // will hold warped (success) or original (failure)
     std::vector<char>    resultSuccess(n, 0); // 1 if accepted warp, 0 otherwise
 
-	Log_i(@"%d, about to align in parallel", invertMask);
+	Log_i(@"%d, about to align in parallel", logID);
 	
     // We will run the heavy loop in parallel with OpenCV
     // for some reason this doesn't seem to really end up in parallel, not sure why
@@ -690,29 +690,30 @@ maxCornerDeviation:(double)maxCornerDeviation
 			    
         for (int ii = range.start; ii < range.end; ++ii) {
           NSUInteger idx = (NSUInteger)ii;
+          //Log_i(@"%d %d top", logID, ii);
           MatWrapper * frame = [ObjcImageCache loadImage:frameFilenames[idx]];
           try {
-            Log_i(@"%d top", invertMask);
+            //Log_i(@"%d %d loaded", logID, ii);
             // grab the frame as a cv::Mat (read-only access)
 
-            Log_i(@"%d check", invertMask);
 
             // make a gray 8 bit image for detection
             MatWrapper * frameGray = toGray8UWithMask(frame.mat, horizonMask.mat, true);
+
+            //Log_i(@"%d %d to gray check", logID, ii);
 
             std::vector<cv::KeyPoint> kpFrame;
             cv::Mat descFrame;
 
             MatWrapper * localDetectionMask = horizonMask;
 
-            Log_i(@"%d check", invertMask);
             if (!invertMask) {
               // detection mask is a star mask for the sky
               localDetectionMask = makeStarMask(frameGray.mat, /*dilateSize=*/30, /*thresholdVal=*/200);
+              //Log_i(@"%d %d made star mask check", logID, ii);
             }
 
             // create local detector/matcher/clahe instances so they are thread-local
-            Log_i(@"%d check", invertMask);
             if (invertMask) {
               // ground: AKAZE + CLAHE + gamma
               if(!clahe) clahe = cv::createCLAHE(4.0, cv::Size(8,8));
@@ -730,7 +731,7 @@ maxCornerDeviation:(double)maxCornerDeviation
               if(!sift) sift = cv::SIFT::create(maxKeypoints);
               sift->detectAndCompute(frameGray.mat, localDetectionMask.mat, kpFrame, descFrame);
             }
-            Log_i(@"%d check", invertMask);
+            //Log_i(@"%d %d detected and computed check", logID, ii);
 
 		    // if we got nothing, then fail fast
             if (descFrame.empty() || descSpecial.empty()) {
@@ -811,7 +812,7 @@ maxCornerDeviation:(double)maxCornerDeviation
               }
               break;
             }
-            Log_i(@"%d check", invertMask);
+            //Log_i(@"%d %d matcher check", logID, ii);
 
 		    // after matching the keypoints between the special frame and
 		    // the alignment frame we're iterating over, we next need to
@@ -864,6 +865,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                 if (acceptWarp) {
                   // if we accept the warp, then actually warp
                   // this frame to fit the special image
+                  //Log_i(@"%d %d accepting warp and warping", logID, ii);
                   cv::warpPerspective(frame.mat, warped, H, frame.mat.size(),
                                       cv::INTER_LINEAR, cv::BORDER_CONSTANT,
                                       cv::Scalar(0,0,0,0));
@@ -888,6 +890,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                 Log_w(@"frame is empty");
               }
             }
+            //Log_i(@"%d %d done", logID, ii);
 
           } catch (const cv::Exception &e) {
             Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
