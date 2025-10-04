@@ -316,7 +316,7 @@ static NSUInteger _totalInstances = 0;
             int h = std::min(tileHeight, _mat.rows - y);
 
             cv::Rect roi(x, y, w, h);
-            cv::Mat subMat = _mat(roi);/*.clone();*/ // clone so it owns its own data
+            cv::Mat subMat = _mat(roi).clone(); // clone so it owns its own data
 
             MatWrapper* wrapper = [[MatWrapper alloc] initWithMat:subMat];
 

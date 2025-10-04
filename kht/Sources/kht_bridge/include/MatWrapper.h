@@ -66,17 +66,17 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)ownsData;
 
 - (NSArray<ObjcImageMatrixElement*>*)splitWithTileWidth:(int)tileWidth
-					     tileHeight:(int)tileHeight
-					 overlapPercent:(double)overlapPercent;
+                                             tileHeight:(int)tileHeight
+                                         overlapPercent:(double)overlapPercent;
 
 + (MatWrapper*)combineFromMatrixElements:(NSArray<ObjcImageMatrixElement*>*)elements;
 
 - (instancetype)initWithWidth:(NSInteger)width
                        height:(NSInteger)height
-		       cvType:(int)cvType
-		  bytesPerRow:(size_t)step
-			 data:(void *)data
-		takeOwnership:(BOOL)takeOwnership;
+                       cvType:(int)cvType
+                  bytesPerRow:(size_t)step
+                         data:(void *)data
+                takeOwnership:(BOOL)takeOwnership;
 
 @end
 
