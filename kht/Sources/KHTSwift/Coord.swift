@@ -24,4 +24,10 @@ public struct Coord: Codable, Equatable, Sendable {
         let y_diff = Double(y - other.y)
         return sqrt(x_diff*x_diff + y_diff*y_diff)
     }
+    
+    public func distanceFrom(x: Int, y: Int) -> Double {
+        let x_diff = Double(x - self.x)
+        let y_diff = Double(y - self.y)
+        return sqrt(x_diff*x_diff + y_diff*y_diff)
+    }
 }
