@@ -19,7 +19,15 @@ struct ImageSequenceLoadingView: View {
             }
             Spacer()
             ZStack {
-                if viewModel.isExtractingImageSequence {
+                if viewModel.isProbingImageSequence {
+                    VStack {
+                        Text("Examining Video")
+                          .font(.title)
+                          .foregroundColor(.white)
+                        ProgressView()
+                          .colorScheme(.dark)
+                    }
+                } else if viewModel.isExtractingImageSequence {
                     CircularProgressView(progress: $viewModel.amountExtracted)
                       .frame(maxWidth: 500, maxHeight: 500)
                     Spacer()
@@ -29,7 +37,7 @@ struct ImageSequenceLoadingView: View {
                             Text("All \(viewModel.numberExtracted) frames extracted")
                               .foregroundColor(.green)
                             ProgressView()
-                              .foregroundColor(.white)
+                              .colorScheme(.dark)
                         }
                     } else {
                       Text("\(viewModel.numberExtracted) frames extracted")
@@ -45,7 +53,7 @@ struct ImageSequenceLoadingView: View {
                             Text("All \(viewModel.numberPreviewsSaved) previews created")
                               .foregroundColor(.green)
                             ProgressView()
-                              .foregroundColor(.white)
+                              .colorScheme(.dark)
                         }
                     } else {
                       Text("\(viewModel.numberPreviewsSaved) previews created")
@@ -61,7 +69,7 @@ struct ImageSequenceLoadingView: View {
                             Text("All \(viewModel.numberLoaded) frames loaded")
                               .foregroundColor(.green)
                             ProgressView()
-                              .foregroundColor(.white)
+                              .colorScheme(.dark)
                         }
                     } else {
                         Text("\(viewModel.numberLoaded) frames loaded")

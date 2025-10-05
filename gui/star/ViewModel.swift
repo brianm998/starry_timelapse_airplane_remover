@@ -65,6 +65,7 @@ public final class ViewModel {
     var labelText: String = "Started"
 
     var isLoadingImageSequence = false
+    var isProbingImageSequence = false
     var isExtractingImageSequence = false
     var loadingImageSequenceFilename: String?
 
@@ -224,10 +225,12 @@ public final class ViewModel {
     func startup(withVideoToProcess path: String) async throws {
         isLoadingImageSequence = true
 
-        isExtractingImageSequence = true
+        isProbingImageSequence = true
         let (outputDir, videoInfo) = try await Task.detached() {
             try await decodeVideo(named: path) { currentFrame, totalFrames in
                 Task { @MainActor in
+                    self.isExtractingImageSequence = true
+                    self.isProbingImageSequence = false
                     self.numberExtracted = currentFrame
                     self.amountExtracted = Double(currentFrame) / Double(totalFrames)
                 }

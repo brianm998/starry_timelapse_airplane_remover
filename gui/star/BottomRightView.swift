@@ -99,14 +99,14 @@ struct BottomRightView: View {
 
                 if viewModel.isProcessingFrames {
                     ProgressView()
-                      .foregroundColor(.white)
+                      .colorScheme(.dark)
                     Text("processing \(viewModel.frames.count - viewModel.numberOfFramesProcessed) more frames")
                       .foregroundColor(.white)
                 }
 
                 if viewModel.isFindingAllHorizons {
                     ProgressView()
-                      .foregroundColor(.white)
+                      .colorScheme(.dark)
                     Text("Detecting Horizon on all frames")
                       .foregroundColor(.white)
                 }
@@ -221,6 +221,7 @@ struct BottomRightView: View {
                 } else {
                     if viewModel.isProcessingFrames {
                         ProgressView()
+                          .colorScheme(.dark)
                         Text("processing \(viewModel.frames.count - viewModel.numberOfFramesProcessed) more frames")
                           .foregroundColor(.white)
                     }

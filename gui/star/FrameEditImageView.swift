@@ -40,6 +40,7 @@ public struct FrameEditImageView: View {
                               .resizable()
                         } else {
                             ProgressView()
+                              .colorScheme(.dark)
                         }
                     }
                 }

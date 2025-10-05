@@ -14,6 +14,7 @@ struct ProgressBars: View {
                       .foregroundColor(.white)
                     Spacer()
                     ProgressView()
+                      .colorScheme(.dark)
                       .progressViewStyle(.linear)
                       .frame(maxWidth: .infinity)
                 }
