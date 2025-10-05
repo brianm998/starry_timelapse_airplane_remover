@@ -388,13 +388,15 @@ public final class ImageSequenceViewModel {
             inputImageSequenceName = inputImageSequenceDirname
         }
 
-        var config = Config(outputPath: inputImageSequencePath,
-                            imageSequenceName: inputImageSequenceName,
-                            imageSequencePath: inputImageSequencePath,
-                            writeOutlierGroupFiles: shouldWriteOutlierGroupFiles,
-                            writeFramePreviewFiles: shouldWriteOutlierGroupFiles,
-                            writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
-                            writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
+        var config = Config(
+          outputPath: inputImageSequencePath,
+          imageSequenceName: inputImageSequenceName,
+          imageSequencePath: inputImageSequencePath,
+          writeOutlierGroupFiles: shouldWriteOutlierGroupFiles,
+          writeFramePreviewFiles: shouldWriteOutlierGroupFiles,
+          writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
+          writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles
+        )
 
         if let videoInfo {
             config.set(videoInfo: videoInfo)
@@ -429,7 +431,7 @@ public final class ImageSequenceViewModel {
     }
 
     deinit {
-        Log.i("DEINIT")
+        Log.i("DEINIT")         // XXX not always called :(
     }
     
     private var matInstancesTask: Task<Void,Never>? = nil
@@ -507,13 +509,12 @@ public final class ImageSequenceViewModel {
         self.finalProcessor = FinalGUIProcessor(self)
 
         self.matInstancesTask = Task { [weak self] in 
-            while(true) { 
-                guard let self else { return }
+            while(self != nil) { 
                 let instances = MatWrapper.totalInstances
                 let bytes = MatWrapper.totalBytes
                 Task { @MainActor in
-                    self.totalMatInstances = Int(instances)
-                    self.totalMatBytes = Int(bytes)
+                    self?.totalMatInstances = Int(instances)
+                    self?.totalMatBytes = Int(bytes)
                 }
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
             }
