@@ -20,6 +20,12 @@ You should have received a copy of the GNU General Public License along with sta
 
 // logic for loading different kinds of images
 
+public enum FrameReprocessingType: String, Codable, Equatable, CaseIterable, Sendable {
+    case alignment              // redo both alignment and outliers
+    case outliers               // redo only outliers
+    case none                   // don't redo anything that's already done
+}
+
 public enum ImageDisplaySize: Sendable {
     case original
     case preview
@@ -194,9 +200,9 @@ public struct ImageAccessor: Sendable {
                             return nil  // original does not exist, nothing to return
                         default:
                             if let image = try await createMissingImage(
-                              frameIndex: frameIndex,
-                              ofType: imageType,
-                              andSize: size
+                                 frameIndex: frameIndex,
+                                 ofType: imageType,
+                                 andSize: size
                                )
                             {
                                 Log.d("created filename \(filename), returning \(image.description)")
@@ -363,10 +369,11 @@ public struct ImageAccessor: Sendable {
         }
     }
 
-    public func deleteImage(frameIndex: Int,
-                            ofType imageType: FrameViewMode,
-                            atSize size: ImageDisplaySize) throws
-    {
+    public func deleteImage(
+      frameIndex: Int,
+      ofType imageType: FrameViewMode,
+      atSize size: ImageDisplaySize
+    ) throws {
         if let filename = nameForImage(frameIndex: frameIndex,
                                        ofType: imageType,
                                        atSize: size)
@@ -375,22 +382,24 @@ public struct ImageAccessor: Sendable {
         }
     }
 
-    public func deleteAllImages(frameIndex: Int) {    // XXX except for original
+    // XXX except for original
+    public func deleteAllImages(
+      frameIndex: Int,
+      reprocessingType: FrameReprocessingType
+    ) {
         for type in FrameViewMode.allCases {
             switch type {
             case .original:
                 break           // don't delete the original images
 
-                /*
-            case .starAligned:
-                break     
+            case .starAligned,
+                 .earthAligned,
+                 .subtraction:
+                if reprocessingType == .alignment {
+                    try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .original)
+                    try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .preview)
+                }
 
-            case .earthAligned:
-                break     
-
-            case .subtraction:
-                break        
-*/
             default:
                 try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .original)
                 try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .preview)
@@ -447,11 +456,11 @@ public struct ImageAccessor: Sendable {
         return nil
     }
     
-    private func createMissingImage(frameIndex: Int,
-                                    ofType type: FrameViewMode,
-                                    andSize size: ImageDisplaySize)
-      async throws -> PixelatedImage?
-    {
+    private func createMissingImage(
+      frameIndex: Int,
+      ofType type: FrameViewMode,
+      andSize size: ImageDisplaySize
+    ) async throws -> PixelatedImage? {
         if let scaledImage = try await makeMissingImage(
              frameIndex: frameIndex,
              ofType: type,
@@ -524,13 +533,14 @@ public struct ImageAccessor: Sendable {
         }
     }
 
-    public func writeMissingImages(frameIndex: Int,
-                                   filename: String,
-                                   previewFilename: String,
-                                   thumbnailFilename: String,
-                                   previewExists: Bool,
-                                   thumbnailExists: Bool) async throws
-    {
+    public func writeMissingImages(
+      frameIndex: Int,
+      filename: String,
+      previewFilename: String,
+      thumbnailFilename: String,
+      previewExists: Bool,
+      thumbnailExists: Bool
+    ) async throws {
         if let fullResImage = try await load(
              frameIndex: frameIndex,
              type: .original,
