@@ -142,7 +142,8 @@ public final class ViewModel {
     func startup(withConfigFile jsonConfigFilename: String) async throws {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = jsonConfigFilename
-        let imageSequenceViewModel = try await ImageSequenceViewModel(withConfig: jsonConfigFilename) { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
+        let imageSequenceViewModel = try await ImageSequenceViewModel(withConfig: jsonConfigFilename) { [weak self] numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
+            guard let self else { return }
             Task { @MainActor in
                 self.amountLoaded = amountLoaded
                 self.numberLoaded = numberLoaded
@@ -165,7 +166,8 @@ public final class ViewModel {
     func startup(withConfig config: ConfigManager) async throws {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = config.config().imageSequenceDirname
-        let imageSequenceViewModel = try await ImageSequenceViewModel(with: config) { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
+        let imageSequenceViewModel = try await ImageSequenceViewModel(with: config) { [weak self] numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
+            guard let self else { return }
             Task { @MainActor in
                 self.amountLoaded = amountLoaded
                 self.numberLoaded = numberLoaded
