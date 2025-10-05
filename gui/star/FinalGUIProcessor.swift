@@ -65,8 +65,13 @@ public actor FinalGUIProcessor {
                     if let viewModel {
                         taskGroup.addTask() {
                             await semaphore.wait()
-                            
-                            if await viewModel.reprocessFrames {
+
+                            switch await viewModel.reprocessingType {
+                            case .none:
+                                break
+                            case .alignment:
+                                try await viewModel.clearProcessing(of: frame)
+                            case .outliers:
                                 try await viewModel.clearProcessing(of: frame)
                                 try await frame.deleteOutliers()
                             }

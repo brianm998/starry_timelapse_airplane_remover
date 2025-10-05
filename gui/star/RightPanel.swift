@@ -243,14 +243,24 @@ struct RightPanel: View {
                               alwaysOpen: false
                             )
 
-                            Toggle("reprocess fully", isOn: $viewModel.reprocessFrames)
+                            Picker("redo", selection: $viewModel.reprocessingType) {
+                                ForEach(FrameReprocessingType.allCases, id: \.self) { value in
+                                    Text(value.rawValue).tag(value)
+                                }
+                            }
                               .foregroundColor(.white)
-                            
+                              .frame(maxWidth: 120)
+                                            
                             Button() {
                                 Task {
                                     if let frame = viewModel.currentFrame {
                                         // XXX reprocess
-                                        if viewModel.reprocessFrames {
+                                        switch viewModel.reprocessingType {
+                                        case .none:
+                                            viewModel.processFrames(from: frame.frameIndex,
+                                                                    to: frame.frameIndex+viewModel.numberOfFramesToProcess-1)
+
+                                        default:
                                             do {
                                                 try await viewModel.clearProcessing(from: frame.frameIndex,
                                                                                     to: frame.frameIndex+viewModel.numberOfFramesToProcess-1)
@@ -261,13 +271,13 @@ struct RightPanel: View {
                                         viewModel.processFrames(from: frame.frameIndex,
                                                                 to: frame.frameIndex+viewModel.numberOfFramesToProcess-1)
                                     }
-
                                 }
                             } label: {
-                                if viewModel.reprocessFrames {
-                                    Text("Re-Process the next")
-                                } else {
+                                switch viewModel.reprocessingType {
+                                case .none:
                                     Text("Process the next")
+                                default:
+                                    Text("Re-Process the next")
                                 }
                             }
                               .disabled(//viewModel.isProcessingAllFrames ||

@@ -17,7 +17,7 @@ struct ReProcessCurrentFrameButton: View {
     private func action() {
         Task {
             if let frame = viewModel.currentFrame {
-                frame.imageAccessor.deleteAllImages(frameIndex: frame.frameIndex)
+              frame.imageAccessor.deleteAllImages(frameIndex: frame.frameIndex, reprocessingType: viewModel.reprocessingType)
                 viewModel.frameViewMode = .original
                 viewModel.currentFrameView.existingImages = [.original]
                 

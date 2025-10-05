@@ -334,7 +334,7 @@ public final class ImageSequenceViewModel {
 
     var numberOfFramesToProcess: Int = 1
 
-    var reprocessFrames = false
+    var reprocessingType: FrameReprocessingType = .none
 
     // total number of cv::Mat (MatWrapper*) objects currently in ram
     var totalMatInstances = 0
@@ -1010,7 +1010,10 @@ public final class ImageSequenceViewModel {
             //await frameToClear.updateCombineSubjects()
 
             // this now does delete the alignment and subtraction images too
-            frameToClear.imageAccessor.deleteAllImages(frameIndex: frameToClear.frameIndex)
+            await frameToClear.imageAccessor.deleteAllImages(
+              frameIndex: frameToClear.frameIndex,
+              reprocessingType: self.reprocessingType
+            )
 
             let numberOfAlignedImages = await self.numberOfNeighborFrames
             
