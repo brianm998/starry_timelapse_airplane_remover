@@ -125,10 +125,11 @@ extension PixelatedImage {
 extension PixelatedImage {
     // horizon detection logic
     // tries to compute a binary ground mask, where the ground is zero (black) 
-    public func horizonMask(at frameIndex: Int,
-                            bottomPercentage: Double = 50,
-                            stripWidth: Int = 400) async throws -> HorizonMask? {
-
+    public func horizonMask(
+      at frameIndex: Int,
+      bottomPercentage: Double = 50,
+      stripWidth: Int = 400
+    ) async throws -> HorizonMask? {
         
         /*
          horizon detection alg:
@@ -157,9 +158,11 @@ extension PixelatedImage {
         }
 
         // split into an array of smaller images
-        let matrix = bottomCrop.splitIntoMatrix(maxWidth: stripWidth,
-                                                maxHeight: bottomCrop.height,
-                                                overlapPercent: 0)
+        let matrix = bottomCrop.splitIntoMatrix(
+          maxWidth: stripWidth,
+          maxHeight: bottomCrop.height,
+          overlapPercent: 0
+        )
 
         // updated elements go here
         var newElements: [ImageMatrixElement] = []
@@ -168,11 +171,10 @@ extension PixelatedImage {
 
 
         return try await withThrowingTaskGroup(of: Optional<ImageMatrixElement>.self) { taskGroup in
-            for (_, element) in matrix.enumerated() {
+            for (index, element) in matrix.enumerated() {
                 taskGroup.addTask {
                     // calculate Otsu classification for this image element
                     if let otsu = element.image.binaryOtsuImage {
-
                         // apply connect component filtering and ground only logic
                         let filtered = try otsu.connectedComponentFiltered(keepLargest: 2)
                         
