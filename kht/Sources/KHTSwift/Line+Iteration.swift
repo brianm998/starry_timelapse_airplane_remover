@@ -124,11 +124,12 @@ extension Line {
         }
     }
     
-    public func asyncIterate(_ iterationDirection: IterationDirection,
-                             from centralCoord: DoubleCoord,
-                             numberOfAdjecentPixels: Int = 0, // iterate in the parallel direction this many pixels
-                             closure: @Sendable (Int, Int, IterationOrientation) async -> Bool) async
-    {
+    public func asyncIterate(
+      _ iterationDirection: IterationDirection,
+      from centralCoord: DoubleCoord,
+      numberOfAdjecentPixels: Int = 0, // iterate in the parallel direction this many pixels
+      closure: @Sendable (Int, Int, IterationOrientation) async -> Bool
+    ) async {
         let standardLine = self.standardLine
         switch self.iterationOrientation {
         case .horizontal:
@@ -213,6 +214,41 @@ extension Line {
         }
     }
 
+    public func findSpot(between coord1: DoubleCoord,
+                         and coord2: DoubleCoord,
+                         closure: (Int, Int) -> Bool) -> Coord?
+    {
+        let standardLine = self.standardLine
+
+        switch self.iterationOrientation {
+        case .horizontal:
+            var minX = coord1.x
+            var maxX = coord2.x
+            if coord2.x < minX {
+                minX = coord2.x
+                maxX = coord1.x
+            }
+            for x in Int(minX)...Int(maxX) {
+                let y = Int(standardLine.y(forX: Double(x)))
+
+                if closure(x, y) { return Coord(x: x, y: y) }
+            }
+        case .vertical:
+            var minY = coord1.y
+            var maxY = coord2.y
+            if coord2.y < minY {
+                minY = coord2.y
+                maxY = coord1.y
+            }
+            for y in Int(minY)...Int(maxY) {
+                let x = Int(standardLine.x(forY: Double(y)))
+
+                if closure(x, y) { return Coord(x: x, y: y) }
+            }
+        }
+        return nil
+    }
+    
     public func iterate(between coord1: DoubleCoord,
                         and coord2: DoubleCoord,
                         numberOfAdjecentPixels: Int = 0, // iterate in the parallel direction this many pixels
@@ -277,11 +313,12 @@ extension Line {
         }
     }
 
-    public func asyncIterate(between coord1: DoubleCoord,
-                             and coord2: DoubleCoord,
-                             numberOfAdjecentPixels: Int = 0, // iterate in the parallel direction this many pixels
-                             closure: @Sendable (Int, Int, IterationOrientation) async -> Void) async
-    {
+    public func asyncIterate(
+      between coord1: DoubleCoord,
+      and coord2: DoubleCoord,
+      numberOfAdjecentPixels: Int = 0, // iterate in the parallel direction this many pixels
+      closure: @Sendable (Int, Int, IterationOrientation) async -> Void
+    ) async {
         let standardLine = self.standardLine
 
         //Log.i("self.standardLine \(self.standardLine)")
@@ -335,6 +372,74 @@ extension Line {
                     } else {
                         // only cover one pixel per iteration
                         await closure(x, y, .vertical)
+                    }
+                }
+            }
+        }
+    }
+
+    public func asyncIterate<T>(
+      between coord1: DoubleCoord,
+      and coord2: DoubleCoord,
+      numberOfAdjecentPixels: Int = 0, // iterate in the parallel direction this many pixels
+      closure: @Sendable (Int, Int, IterationOrientation, T?) async -> T?
+    ) async {
+        let standardLine = self.standardLine
+
+        //Log.i("self.standardLine \(self.standardLine)")
+        
+        switch self.iterationOrientation {
+        case .horizontal:
+            var minX = coord1.x
+            var maxX = coord2.x
+            if coord2.x < minX {
+                minX = coord2.x
+                maxX = coord1.x
+            }
+
+            var lastT: T? = nil
+            for x in Int(minX)...Int(maxX) {
+                let y = Int(standardLine.y(forX: Double(x)))
+                if x >= 0,
+                   y >= 0
+                {
+                    if numberOfAdjecentPixels > 0 {
+                        // cover some number of pixels on the perpendicular direction 
+                        for sideY in y-numberOfAdjecentPixels...y+numberOfAdjecentPixels {
+                            if sideY >= 0 {
+                                lastT = await closure(x, sideY, .horizontal, lastT)
+                            }
+                        }
+                    } else {
+                        // only cover one pixel per iteration
+                        lastT = await closure(x, y, .horizontal, lastT)
+                    }
+                }
+            }
+            
+        case .vertical:
+            var minY = coord1.y
+            var maxY = coord2.y
+            if coord2.y < minY {
+                minY = coord2.y
+                maxY = coord1.y
+            }
+            var lastT: T? = nil
+            for y in Int(minY)...Int(maxY) {
+                let x = Int(standardLine.x(forY: Double(y)))
+                if x >= 0,
+                   y >= 0
+                {
+                    if numberOfAdjecentPixels > 0 {
+                        // cover some number of pixels on the perpendicular direction 
+                        for sideX in x-numberOfAdjecentPixels...x+numberOfAdjecentPixels {
+                            if sideX >= 0 {
+                                lastT = await closure(sideX, y, .vertical, lastT)
+                            }
+                        }
+                    } else {
+                        // only cover one pixel per iteration
+                        lastT = await closure(x, y, .vertical, lastT)
                     }
                 }
             }
