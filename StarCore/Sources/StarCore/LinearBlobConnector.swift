@@ -318,15 +318,19 @@ public actor LinearBlobConnector {
                 taskGroup.addTask {
                     // find a cloud of neighbors
                     let neighborCloud =
-                      await StarCore.neighborCloud(of: blob,
-                                                   blobRefs: data.blobRefs,
-                                                   blobMap: data.blobMap,
-                                                   scanSize: data.args.scanSize)
+                      await StarCore.neighborCloud(
+                        of: blob,
+                        blobRefs: data.blobRefs,
+                        blobMap: data.blobMap,
+                        scanSize: data.args.scanSize
+                      )
                     
                     if neighborCloud.count != 0 { 
-                        return await processBlob(blob,
-                                                 data: data,
-                                                 neighborCloud: neighborCloud)
+                        return await processBlob(
+                          blob,
+                          data: data,
+                          neighborCloud: neighborCloud
+                        )
                     } else {
                         return []
                     }
@@ -380,10 +384,11 @@ public actor LinearBlobConnector {
     }
 }
 
-fileprivate func processBlob(_ blob: Blob,
-                             data: LinearBlobConnector.Data,
-                             neighborCloud: Set<Blob>) async -> Set<BlobMapping>
-{
+fileprivate func processBlob(
+  _ blob: Blob,
+  data: LinearBlobConnector.Data,
+  neighborCloud: Set<Blob>
+) async -> Set<BlobMapping> {
     let startTime = Date().timeIntervalSince1970
     
     //Log.d("iterating over blob \(id)")
@@ -492,19 +497,23 @@ fileprivate func iterate(on blobLine: Line,
         start = DoubleCoord(x: 0, y: Double(min))
         end = DoubleCoord(x: 0, y: Double(max))
     }
-
+        
     var ret = Set<BlobMapping>()
-    
     if let start, let end {
+
         Log.d("frame \(frameIndex) blob \(fullBlob.id) iterating between \(start) and \(end)")
         let linearBlobIds = SetActor<Int32>()
         // iterate over the line and absorbs all blobs along it into a new blob
-        // remove all ids expept for the one from the combined blob ids from the blob map
+        // remove all ids except for the one from the combined blob ids from the blob map
+
+        // this is the maximum distance allowed along the line between pixels
+        let maxDistance: Double = 50    // XXX make a param
         
-        await blobLine.asyncIterate(between: start,
-                                    and: end,
-                                    numberOfAdjecentPixels: adjecentPixelsOnIteration)
-        { x, y, orientation in
+        await blobLine.asyncIterate(
+          between: start,
+          and: end,
+          numberOfAdjecentPixels: adjecentPixelsOnIteration
+        ) { (x: Int, y: Int, orientation: IterationOrientation, lastCoord: Coord?) in
             if x >= 0,
                y >= 0,
                x < data.analyzer.width,
@@ -513,8 +522,19 @@ fileprivate func iterate(on blobLine: Line,
                 // look for blobs at x,y, i.e. blobs that are right on the line
                 let index = y*data.analyzer.width+x
                 let blobId = data.blobRefs.refs[index]
-                await linearBlobIds.insert(blobId)
+                if blobId != 0 {
+                    if let _lastCoord = lastCoord {
+                        if _lastCoord.distanceFrom(x: x, y: y) < maxDistance {
+                            await linearBlobIds.insert(blobId)
+                            return Coord(x: x, y: y)
+                        }
+                    } else {
+                        await linearBlobIds.insert(blobId)
+                        return Coord(x: x, y: y)
+                    }
+                }
             }
+            return lastCoord
         }
 
         var linearBlobSet = await linearBlobIds.set.compactMap { data.blobMap[$0] }
