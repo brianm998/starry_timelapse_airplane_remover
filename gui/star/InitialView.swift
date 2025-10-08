@@ -57,22 +57,16 @@ struct InitialView: View {
     private var mainView: some View {
         @Bindable var viewModel = viewModel
         return VStack {
-            Spacer()
-            Text("Welcome to The Star")
+            Space(height: 40)
+            Text("Welcome to Star v\(Config.latestVersion)")
               .font(.largeTitle)
               .foregroundColor(.white)
-            Spacer()
+            Space(height: 20)
             Text("The Starry Timelapse Airplane Remover")
               .font(.largeTitle)
               .foregroundColor(.white)
-            Spacer()
+            Space(height: 20)
 
-            Text("Drag the bar around to see more or less of the processed video on the right, and the unprocessed video on the left.")
-              .font(.title)
-              .foregroundColor(.white)
-
-            Spacer()
-            
             Button() {
                 viewModel.showInfoDialog = true
             } label: {
