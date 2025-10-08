@@ -245,7 +245,7 @@ public struct ImageAccessor: Sendable {
                           overwrite: Bool) async throws
     {
         try await finalFileSystemMonitor.save() {
-            try await self.saveInt(
+            await self.saveInt(
               image,
               frameIndex: frameIndex,
               as: type,
@@ -263,7 +263,7 @@ public struct ImageAccessor: Sendable {
                      overwrite: Bool) async throws
     {
         try await fileSystemMonitor.save() {
-            try await self.saveInt(
+            await self.saveInt(
               image,
               frameIndex: frameIndex,
               as: type,
@@ -278,14 +278,13 @@ public struct ImageAccessor: Sendable {
                          frameIndex: Int,
                          as type: FrameViewMode,
                          atSize size: ImageDisplaySize,
-                         overwrite: Bool) async throws
+                         overwrite: Bool) async 
     {
-        try await Task.detached(priority: .medium) {
+        await Task.detached(priority: .medium) {
             if let filename = nameForImage(frameIndex: frameIndex,
                                            ofType: type,
                                            atSize: size)
             {
-                var dataToSave: Data? = nil
                 switch size {
                 case .original:
                     image.writeTIFFEncoding(toFilename: filename)
@@ -392,9 +391,19 @@ public struct ImageAccessor: Sendable {
             case .original:
                 break           // don't delete the original images
 
-            case .starAligned,
-                 .earthAligned,
-                 .subtraction:
+            case .starAligned:
+                if reprocessingType == .alignment {
+                    try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .original)
+                    try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .preview)
+                }
+                
+            case .earthAligned:
+                if reprocessingType == .alignment {
+                    try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .original)
+                    try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .preview)
+                }
+                
+            case .subtraction:
                 if reprocessingType == .alignment {
                     try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .original)
                     try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .preview)

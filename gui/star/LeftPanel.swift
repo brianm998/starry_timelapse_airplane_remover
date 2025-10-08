@@ -25,22 +25,19 @@ struct LeftPanel: View {
 
     func string(for byteCount: Int) -> String {
         Log.d("string(for: byteCount \(byteCount))")
-        if byteCount < 1024 {
-            Log.d("\(byteCount) is bytes")
+        if byteCount < 0 {
+            return "0 bytes"    // can go negative because of temporarily mismatched data
+        } else if byteCount < 1024 {
             return "\(byteCount) bytes"
         } else if byteCount < (1024*1024) {
-            Log.d("\(byteCount) is kb")
             return "\(byteCount/1024) kb"
         } else if byteCount < (1024*1024*1024) {
-            Log.d("\(byteCount) is mb")
             return "\(byteCount/(1024*1024)) mb"
         } else if byteCount < (1024*1024*1024*1024) {
-            Log.d("\(byteCount) is gb")
             let str = String(format: "%.1f", Double(byteCount)/(1024*1024*1024))
             return "\(str) gb"
         } else {// if byteCount < 1024^5 {
             let str = String(format: "%.2f", Double(byteCount)/(1024*1024*1024*1024))
-            Log.d("\(byteCount) is tb string \(str)")
             return "\(str) tb"
         }
     }
