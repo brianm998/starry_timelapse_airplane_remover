@@ -1375,6 +1375,7 @@ public final class ImageSequenceViewModel {
                     "\(outputPath)/\(filename)"       // output filename
                   ],
                   totalFrames: totalNumberOfFrames,
+                  outputFolder: outputPath,
                   progress: progress)
                 completion()
             } catch {

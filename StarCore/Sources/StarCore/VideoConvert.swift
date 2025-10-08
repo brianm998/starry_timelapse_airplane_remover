@@ -1,7 +1,13 @@
 import Foundation
 import logging
 
-public typealias ProgressCallback = @Sendable (_ currentFrame: Int, _ totalFrames: Int) -> Void
+public typealias ProgressCallback =
+  @Sendable
+  (
+    _ currentFrame: Int,
+    _ totalFrames: Int,
+    _ outputDir: String
+  ) -> Void
 
 public struct VideoInfo: Sendable {
     public let frameRate: FrameRate
@@ -54,6 +60,7 @@ public func decodeVideo(
         try runFFmpegWithProgress(
           arguments: ["-i", inputPath, "-pix_fmt", "rgb48le", "\(outputFolder)/image_%04d.tiff"],
           totalFrames: totalFrames,
+          outputFolder: outputFolder,
           progress: progress
         )
     }
@@ -159,6 +166,7 @@ public func runFFmpegWithProgress(
   arguments: [String],
   totalFrames: Int?,
   ffmpegPath: String = ToolPaths.ffmpeg,
+  outputFolder: String, 
   progress: @escaping ProgressCallback
 ) throws {
     Log.d("starting ffmpeg run with arguments \(arguments)")
@@ -185,7 +193,7 @@ public func runFFmpegWithProgress(
                     .replacingOccurrences(of: "frame=", with: "")
                     .trimmingCharacters(in: .whitespaces)
                 if let frameNum = Int(numberStr) {
-                    progress(frameNum, totalFrames ?? 0)
+                    progress(frameNum, totalFrames ?? 0, outputFolder)
                 }
             }
         }

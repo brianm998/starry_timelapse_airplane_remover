@@ -325,7 +325,7 @@ struct RenderVideoSheetView: View {
                                               encoder: encoder,
                                               pixelFormat: pixelFormat,
                                               muxer: muxer)
-                        { currentFrame, totalFrames in
+                        { currentFrame, totalFrames, _ in
                             let progress = Double(currentFrame)/Double(totalFrames)
                             Task { @MainActor in
                                 self.encodingProgress = progress
