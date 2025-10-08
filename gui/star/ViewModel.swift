@@ -47,6 +47,16 @@ public final class ViewModel {
         if let newPrefs = UserPreferences.initialize() {
             userPreferences = newPrefs
         }
+
+        Task.detached {
+            if let newRelease = await StarCore.newRelease() {
+                Log.i("new release is available: \(newRelease)")
+                Task { @MainActor in
+                    self.newRelease = newRelease
+                    self.newReleaseSheetShowing = true
+                }
+            }
+        }
     }
     
 //    @Environment(\.openWindow) private var openWindow
@@ -92,6 +102,9 @@ public final class ViewModel {
     var cursor: NSCursor = .arrow
 
     var cursorStack: [CursorStackItem] = []
+
+    var newRelease: GitHubRelease? = nil
+    var newReleaseSheetShowing = false
     
     func pushCursor(_ cursor: NSCursor) {
         cursorStack.append(.literal(cursor))
@@ -227,12 +240,20 @@ public final class ViewModel {
 
         isProbingImageSequence = true
         let (outputDir, videoInfo) = try await Task.detached() {
-            try await decodeVideo(named: path) { currentFrame, totalFrames in
+            try await decodeVideo(named: path) { currentFrame, totalFrames, outputDir in
                 Task { @MainActor in
                     self.isExtractingImageSequence = true
                     self.isProbingImageSequence = false
                     self.numberExtracted = currentFrame
                     self.amountExtracted = Double(currentFrame) / Double(totalFrames)
+
+                    // XXX make a preview here
+                    /*
+                     XXX because have no config,
+                         we don't know where the previews and thumbnails should go
+                         or what size they should be
+                     XXX
+                     */
                 }
             }
         }.value

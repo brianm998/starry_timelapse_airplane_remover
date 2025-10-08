@@ -55,7 +55,8 @@ struct InitialView: View {
     }
 
     private var mainView: some View {
-        VStack {
+        @Bindable var viewModel = viewModel
+        return VStack {
             Spacer()
             Text("Welcome to The Star")
               .font(.largeTitle)
@@ -122,6 +123,10 @@ struct InitialView: View {
                 }
                 Spacer()
             }
+              .sheet(isPresented: $viewModel.newReleaseSheetShowing) {
+                  NewReleaseSheetView(isVisible: $viewModel.newReleaseSheetShowing,
+                                      viewModel: viewModel)
+              }
         }
           .background(.clear)
     }
