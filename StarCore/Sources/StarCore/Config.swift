@@ -315,6 +315,11 @@ public struct Config: Codable, Sendable, Transferable {
     //       fix shovel bug
     //       better hovering logic
     // 0.9.1 every PixelatedImage is a cv::Mat
+    //       better image caching, uses less ram
+    //       upgrade sheet on startup if there is a new version
+    //       fix bug where outliers got way to large
+    //       add memory stats on left panel
+    //       add re-processing mode to right panel for easier re-processing
     
     public var starVersion = Config.latestVersion
 
