@@ -930,6 +930,11 @@ maxCornerDeviation:(double)maxCornerDeviation
       }
     }
 
+    // include the original image in the median merge too
+	if(aligned.size() != 0) {
+      aligned.push_back(special);
+    }
+    
     // use median merges
     MatWrapper * alignedResult = medianImageFromArray(aligned, k);
     MatWrapper * failedResult = medianImageFromArray(failed, k);
