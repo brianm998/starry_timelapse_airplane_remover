@@ -331,7 +331,7 @@ static NSUInteger _totalInstances = 0;
         }
     }
 
-    Log_d(@"split into matrix returning %d results", [results count]);
+    Log_d(@"split into matrix returning %lu results", [results count]);
     return results;
 }
 

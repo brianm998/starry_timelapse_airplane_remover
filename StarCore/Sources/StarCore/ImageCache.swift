@@ -135,7 +135,7 @@ public actor ImageCache {
         let loadingSemaphore = AsyncSemaphore(value: 0)
         pendingLoads[filename] = loadingSemaphore
         
-        var ret = try await Task.detached(priority: .userInitiated) {
+        var ret = await Task.detached(priority: .userInitiated) {
             // load the image in a separate task so other requests to
             // this cache are not blocked during load
             PixelatedImage(filename: filename) 

@@ -688,7 +688,7 @@ public class ImageMatrixElement: @unchecked Sendable, Hashable, CustomStringConv
     public let image: PixelatedImage
 
     public var objcElement: ObjcImageMatrixElement {
-        var ret = ObjcImageMatrixElement()
+        let ret = ObjcImageMatrixElement()
         ret.x = Int32(self.x)
         ret.y = Int32(self.y)
         ret.width = Int32(self.width)
@@ -1056,8 +1056,8 @@ extension PixelatedImage {
     public var description: String { "PixelatedImage: \(self.mat)" }
 }
     
-extension MatWrapper: @unchecked Sendable {}
-extension UnsafeBufferPointer: @unchecked Sendable {}
+extension MatWrapper: @unchecked @retroactive Sendable {}
+extension UnsafeBufferPointer: @unchecked @retroactive Sendable {}
 
 extension MatWrapper {
     func buffer<T>(of type: T.Type) -> UnsafeBufferPointer<T> {

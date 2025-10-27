@@ -8,7 +8,7 @@ set -e
 
 ####
 # first build opencv2 into a static, universal library (.a file)
-# this is a large c++ library that is used by the kernel hough transform 
+# this is a large c++ library that is used a lot for image processing
 ####
 
 # takes about 15-20 minutes

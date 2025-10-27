@@ -47,6 +47,9 @@ public class FrameViewModel {
                       .resizable()
                 }
             default:
+                // XXX expand this to the other views
+                // update things so that if the saved FrameViewMode is shown
+                // in this frame, then update the shown image with the saved one
                  break
             }
         }

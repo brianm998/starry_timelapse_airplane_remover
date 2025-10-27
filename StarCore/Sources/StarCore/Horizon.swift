@@ -171,7 +171,7 @@ extension PixelatedImage {
 
 
         return try await withThrowingTaskGroup(of: Optional<ImageMatrixElement>.self) { taskGroup in
-            for (index, element) in matrix.enumerated() {
+            for (_, element) in matrix.enumerated() {
                 taskGroup.addTask {
                     // calculate Otsu classification for this image element
                     if let otsu = element.image.binaryOtsuImage {
@@ -180,7 +180,7 @@ extension PixelatedImage {
                         
                         let groundOnly = try filtered.groundOnly()
                         
-                        let bounds = try groundOnly.horizonBounds()
+                        let bounds = groundOnly.horizonBounds()
 
                         return ImageMatrixElement(
                           x: element.x,
