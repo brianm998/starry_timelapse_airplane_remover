@@ -166,7 +166,17 @@ struct LeftPanel: View {
             let horizonCount = viewModel.frameStateMap[.horizonDetected]?.count ?? 0
 
             Button() {
-                viewModel.showProcessingOptionsSheet = true
+                if let config = viewModel.config {
+                    let pixelReplacementMode = config.config().pixelReplacementMethod// ?? .automatic
+                    switch pixelReplacementMode {
+                    case .automatic:
+                        viewModel.renderAllFramesAutomatic()
+                        
+                    case .selective:
+                        viewModel.showProcessingOptionsSheet = true
+                    }
+                }
+                
                 //viewModel.processFrames(from: 0)
                  /*
                   XXX show a UI here which allows the user to choose:

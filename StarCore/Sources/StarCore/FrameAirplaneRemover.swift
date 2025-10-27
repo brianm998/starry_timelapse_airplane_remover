@@ -823,6 +823,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
+    // called from the CLI only, not the GUI
     public func setupOutliers() async throws {
         // this takes a long time, and the gui does it later
         try await loadOutliers()
@@ -1939,6 +1940,64 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
+    // Mark - Auto Mode Logic
+
+    /*
+     here 'auto processed' means no user interaction at all,
+     and no outlier detection, and no subtraction image.
+     
+     the output image will be a combination of the star and earth aligned
+     images, masked with the horizon mask.
+
+     If the sky contains little to no clouds, this approach can work, and gets
+     rid of even the small distant satellites that move slowly through the sky.
+     */
+    func createAutoProcessedImage() async throws -> PixelatedImage {
+        let starAlignedImage = try await loadOrCreateStarAlignedImage()
+
+        let config = await configManager.config()
+        if config.horizonDetectionEnabled ?? true {
+            let horizonMask = try await loadOrCreateHorizonMask()
+            let earthAlignedImage = try await loadOrCreateEarthAlignedImage()
+
+            return try starAlignedImage.apply(
+              mask: horizonMask.image,
+              with: earthAlignedImage
+            )
+        } else {
+            return starAlignedImage
+        }
+    }
+
+    // used by PixelReplacementMode.automatic
+    public func finishAuto() async throws {
+        let finalImage = try await createAutoProcessedImage()
+        
+        self.set(state: .loadingImages1)
+        try await imageAccessor.saveFinal(
+          finalImage, 
+          frameIndex: frameIndex,
+          as: .processed,
+          atSize: .preview,
+          overwrite: false
+        )
+        try await imageAccessor.saveFinal(
+          finalImage, 
+          frameIndex: frameIndex,
+          as: .processed,
+          atSize: .original,
+          overwrite: false
+        )
+        try await imageAccessor.saveFinal(
+          finalImage,
+          frameIndex: frameIndex,
+          as: .processed,
+          atSize: .thumbnail,
+          overwrite: false
+        )
+        self.set(state: .complete)
+    }
+    
     // Mark - Subtraction
 
     /*

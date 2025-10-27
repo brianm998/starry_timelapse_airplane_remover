@@ -79,6 +79,7 @@ public struct Config: Codable, Sendable, Transferable {
 
     public init() {
         self.outputPath = "."
+        self.pixelReplacementMethod = .automatic
         self.detectionType = .strong
         //self.numConcurrentRenders = 0
         self.imageSequenceDirname = ""
@@ -102,6 +103,7 @@ public struct Config: Codable, Sendable, Transferable {
     }
 
     public init(outputPath: String?,
+                pixelReplacementMethod: PixelReplacementMethod = .automatic,
                 detectionType: DetectionType = .strong,
                 imageSequenceName: String,
                 imageSequencePath: String,
@@ -115,6 +117,7 @@ public struct Config: Codable, Sendable, Transferable {
         } else {
             self.outputPath = "."
         }
+        self.pixelReplacementMethod = pixelReplacementMethod
         self.detectionType = detectionType
         self.imageSequenceDirname = imageSequenceName
         self.imageSequencePath = imageSequencePath
@@ -127,6 +130,9 @@ public struct Config: Codable, Sendable, Transferable {
     // the base dir under which to create dir(s) for output sequence(s)
     public var outputPath: String
 
+    public var pixelReplacementMethod: PixelReplacementMethod
+
+    // used with PixelReplacementMethod.selective
     public var detectionType: DetectionType
     
     // the name of the directory containing the input sequence

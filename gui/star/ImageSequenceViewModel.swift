@@ -1295,6 +1295,57 @@ public final class ImageSequenceViewModel {
     }
 
     func renderAllFrames() {
+        guard let config else {
+            Log.w("cannot render without a config")
+            return
+        }
+        let pixelReplacementMode = config.config().pixelReplacementMethod// ?? .automatic
+        
+        switch pixelReplacementMode {
+        case .automatic:
+            renderAllFramesAutomatic()
+        case .selective:
+            renderAllFramesSelective()
+        }
+    }
+
+    func renderAllFramesAutomatic() {
+        Log.d("renderAllFramesAutomatic")
+        self.renderingAllFrames = true
+        let frameSaveQueue = self.frameSaveQueue
+        Task {
+            let semaphore = AsyncSemaphore(value: self.numberOfFramesToProcessConcurrently)
+            try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+
+                let counter = CountActor()
+                for frameView in self.frames {
+                    if let frame = frameView.frame {
+//                        if await frame.processingState() == .userModified {
+                            taskGroup.addTask() {
+                                await semaphore.wait()
+                                await counter.increase()
+                                
+                                try await frame.finishAuto()
+                                
+                                await self.refresh(frame: frame)
+                                await counter.decrease()
+                                if !(await counter.isMoreThanZero()) {
+                                    await MainActor.run {
+                                        self.renderingAllFrames = false
+                                    }
+                                }
+                                semaphore.signal()
+                            }
+                        }
+  //                  }
+                }
+                
+                try await taskGroup.waitForAll()
+            }
+        }
+    }
+
+    func renderAllFramesSelective() {
         //  let foobar = viewModel
         self.renderingAllFrames = true
         let frameSaveQueue = self.frameSaveQueue
@@ -1385,7 +1436,7 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    func processHorizonForAllFrames() {
+    func processHorizonForAllFrames(closure: @escaping () -> Void) {
         if isFindingAllHorizons { return }
         isFindingAllHorizons = true
 
@@ -1397,64 +1448,63 @@ public final class ImageSequenceViewModel {
             max = maximum
         }
         
-        
-        Task.detached(priority: .medium) { [self] in
+        Task {
+            try await Task.detached(priority: .medium) { [self] in 
 
-            // use a semaphore to not do too many at once
+                // use a semaphore to not do too many at once
 
-            let semaphore = AsyncSemaphore(value: max)
-            
-            let allBounds =
-              try await withThrowingTaskGroup(of: Optional<HorizonBounds>.self) { taskGroup in
+                let semaphore = AsyncSemaphore(value: max)
+                
+                let allBounds =
+                  try await withThrowingTaskGroup(of: Optional<HorizonBounds>.self) { taskGroup in
 
-                  for frameViewModel in await self.frames {
-                      taskGroup.addTask {
-                          await semaphore.wait()
-                          if let frame = await frameViewModel.frame {
-                              let ret = try await frame.loadOrCreateHorizonMask().bounds
-                              semaphore.signal()
-                              return ret
-                          } else {
-                              semaphore.signal()
-                              return nil
+                      for frameViewModel in await self.frames {
+                          taskGroup.addTask {
+                              await semaphore.wait()
+                              if let frame = await frameViewModel.frame {
+                                  let ret = try await frame.loadOrCreateHorizonMask().bounds
+                                  semaphore.signal()
+                                  return ret
+                              } else {
+                                  semaphore.signal()
+                                  return nil
+                              }
                           }
                       }
+
+                      var results: [HorizonBounds] = []
+                      
+                      for try await result in taskGroup {
+                          if let result { results.append(result) }
+                      }
+                      
+                      return results
                   }
 
-                  var results: [HorizonBounds] = []
-                  
-                  for try await result in taskGroup {
-                      if let result { results.append(result) }
-                  }
-                  
-                  return results
-              }
+                if let horizonStats = allBounds.calculateStats() {
+                    Log.i("got horizon stats \(horizonStats)")
 
-            if let horizonStats = allBounds.calculateStats() {
-                Log.i("got horizon stats \(horizonStats)")
-
-                
-                await MainActor.run {
-                    // save the height of the portion of the frames that is sky
-                    // account for 50 extra pixels of sky on top of the highest part
-                    self.earthAlignedImageCropAmount = horizonStats.highestTopY - 50
                     
-                    //self.showIgnoreLowerBar = false
-                    if let config {
-                        self.ignoreLowerPixels = frameHeight - CGFloat(horizonStats.lowestBottomY)
-                        Log.i("ignoreLowerPixels \(ignoreLowerPixels) = \(frameHeight) - \(horizonStats.lowestBottomY)")
-                        var realConfig = config.config()
-                        realConfig.ignoreLowerPixels = Int(ignoreLowerPixels)
-                        config.update(realConfig)
+                    await MainActor.run {
+                        // save the height of the portion of the frames that is sky
+                        // account for 50 extra pixels of sky on top of the highest part
+                        self.earthAlignedImageCropAmount = horizonStats.highestTopY - 50
+                        
+                        //self.showIgnoreLowerBar = false
+                        if let config {
+                            self.ignoreLowerPixels = frameHeight - CGFloat(horizonStats.lowestBottomY)
+                            Log.i("ignoreLowerPixels \(ignoreLowerPixels) = \(frameHeight) - \(horizonStats.lowestBottomY)")
+                            var realConfig = config.config()
+                            realConfig.ignoreLowerPixels = Int(ignoreLowerPixels)
+                            config.update(realConfig)
+                        }
                     }
                 }
-            }
+                
+            }.value
             
-            await MainActor.run {
-                self.isFindingAllHorizons = false
-                // show a dialog to tell new users what to do next
-                self.showProcessingOptionsSheet = true
-            }
+            self.isFindingAllHorizons = false
+            closure()
         }
         /*
          * set a boolean saying we are processing horizon for all frames

@@ -49,7 +49,9 @@ public actor FinalGUIProcessor {
 
         Log.d("process frames from \(firstFrameIndex)...\(lastFrameIndex)")
 
-        if viewModel == nil { return }
+        guard let viewModel else { return }
+
+        let pixelReplacementMode = await viewModel.config?.config().pixelReplacementMethod ?? .automatic
         
         try? await withThrowingTaskGroup(of: Optional<FrameAirplaneRemover>.self) { taskGroup in
             var semaphores = [AsyncSemaphore?](repeating: nil, count: framesCount)
@@ -57,25 +59,32 @@ public actor FinalGUIProcessor {
             var haveFinalProcessed = [Bool](repeating: false, count: framesCount)
             var numberFramesProcessing: Int = 0
             for index in firstFrameIndex...lastFrameIndex {
-                if let frameView = await viewModel?.frames[index],
-                   let frame = await frameView.frame
-                {
+                let frameView = await viewModel.frames[index]
+                if let frame = await frameView.frame {
                     let semaphore = AsyncSemaphore(value: 0)
                     semaphores[index] = semaphore
-                    if let viewModel {
-                        taskGroup.addTask() {
-                            await semaphore.wait()
 
-                            switch await viewModel.reprocessingType {
-                            case .none:
-                                break
-                            case .alignment:
-                                try await viewModel.clearProcessing(of: frame)
-                            case .outliers:
-                                try await viewModel.clearProcessing(of: frame)
-                                try await frame.deleteOutliers()
-                            }
-                            
+                    taskGroup.addTask() {
+                        await semaphore.wait()
+
+                        switch await viewModel.reprocessingType {
+                        case .none:
+                            break
+                        case .alignment:
+                            try await viewModel.clearProcessing(of: frame)
+                        case .outliers:
+                            try await viewModel.clearProcessing(of: frame)
+                            try await frame.deleteOutliers()
+                        }
+
+                        switch pixelReplacementMode {
+
+                        case .automatic:
+                            try await frame.finishAuto()
+                            break
+
+
+                        case .selective:
                             if await !frame.processingState().isReadyForInterframeProcessing {
                                 // this frame needs to have outliers found
 
@@ -88,10 +97,14 @@ public actor FinalGUIProcessor {
                                 await MainActor.run {
                                     frameView.outliersLoaded = .loading
                                 }
+
+                                
                                 await self.findOutliers(frame: frame)
                                 await MainActor.run {
                                     frameView.outliersLoaded = .loaded
                                 }
+
+                                
                             } else {
                                 // this frame should already have outliers,  just load them
                                 try await frame.loadOutliers(loadOnly: true)
@@ -100,10 +113,11 @@ public actor FinalGUIProcessor {
                                     frameView.outliersLoaded = .loaded
                                 }
                             }
-                            return frame
                         }
+                        return frame
                     }
                 }
+
             }
             
             Log.d("processAllFrames 2")
@@ -124,7 +138,7 @@ public actor FinalGUIProcessor {
 
             numberFramesProcessing = num_processed
 
-            let numNeighbors = await viewModel?.config?.config().numberFinalProcessingNeighborsNeeded ?? 1
+            let numNeighbors = await viewModel.config?.config().numberFinalProcessingNeighborsNeeded ?? 1
 
             /*
 
@@ -188,13 +202,13 @@ public actor FinalGUIProcessor {
                         }
 
                         if haveEnoughOutliers {
-                            if let viewModel {
+                          
                                 Task.detached(priority: .userInitiated) {
                                     await finalProcess(atIndex: frameIndex,
                                                        frames: viewModel.frames,
                                                        viewModel: viewModel)
                                 }
-                            }
+                          
                             haveFinalProcessed[frameIndex] = true
                         }
                     }
@@ -202,13 +216,13 @@ public actor FinalGUIProcessor {
             }
             for frameIndex in firstFrameIndex..<lastFrameIndex {
                 if !haveFinalProcessed[frameIndex] {
-                    if let viewModel {
+               
                         Task.detached(priority: .userInitiated) {
                             await finalProcess(atIndex: frameIndex,
                                                frames: viewModel.frames,
                                                viewModel: viewModel)
                         }
-                    }
+                    
                     haveFinalProcessed[frameIndex] = true
                 }
             }
