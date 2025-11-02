@@ -119,6 +119,39 @@ extension PixelatedImage {
         }
         throw "cannot get ground only from image without mat wrapper"
     }
+
+    public func skyOnly() throws -> PixelatedImage {
+        let matWrapper = self.mat
+        if let ret = PixelatedImage(
+             mat: PixelatedImageBridge.skyOnly(from: matWrapper)
+           )
+        {
+            return ret
+        }
+        throw "cannot get sky only from image without mat wrapper"
+    }
+
+    public func growDarkRegions(by radius: Int32) throws -> PixelatedImage {
+        let matWrapper = self.mat
+        if let ret = PixelatedImage(
+             mat: PixelatedImageBridge.growDarkRegions(matWrapper, by: radius)
+           )
+        {
+            return ret
+        }
+        throw "cannot grow dark regions"
+    }
+
+    public func shrinkDarkRegions(by radius: Int32) throws -> PixelatedImage {
+        let matWrapper = self.mat
+        if let ret = PixelatedImage(
+             mat: PixelatedImageBridge.shrinkDarkRegions(matWrapper, by: radius)
+           )
+        {
+            return ret
+        }
+        throw "cannot shrink dark regions"
+    }
 }
 
 

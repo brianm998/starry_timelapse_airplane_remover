@@ -1,5 +1,6 @@
 #import "PixelatedImageBridge.h"
 #import "MatWrapper_Internal.h"
+#import "MatWrapper.h"
 
 #import "logging.h"
 
@@ -12,6 +13,7 @@
 #include <memory>
 
 extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
+extern cv::Mat ensure8U(const cv::Mat& input);
 
 // PixelatedImageBridge.mm
 
@@ -105,16 +107,16 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 	cv::Mat filtered = cv::Mat::zeros(owned.size(), CV_8UC1);
 	for (int y = 0; y < labels.rows; y++) {
 	  for (int x = 0; x < labels.cols; x++) {
-            int lbl = labels.at<int>(y, x);
-            if (keep.count(lbl)) {
-	      filtered.at<uchar>(y, x) = 255;
-            }
+        int lbl = labels.at<int>(y, x);
+        if (keep.count(lbl)) {
+          filtered.at<uchar>(y, x) = 255;
+        }
 	  }
 	}
 
 	return [[MatWrapper alloc] initWithMat: filtered];
       } catch (const cv::Exception &e) {
-	Log_e(@"OpenCV Exception: %s", e.what());
+        Log_e(@"OpenCV Exception: %s", e.what());
       }
     } @catch (NSException *exception) {
       Log_e(@"Objective-C Exception: %@", exception);
@@ -163,10 +165,10 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
       cv::Mat groundMask = cv::Mat::zeros(inv.size(), CV_8UC1);
       for (int y = 0; y < labels.rows; y++) {
         for (int x = 0; x < labels.cols; x++) {
-	  int lbl = labels.at<int>(y, x);
-	  if (bottomLabels.count(lbl)) {
-	    groundMask.at<uchar>(y, x) = 255;
-	  }
+          int lbl = labels.at<int>(y, x);
+          if (bottomLabels.count(lbl)) {
+            groundMask.at<uchar>(y, x) = 255;
+          }
         }
       }
 
@@ -185,7 +187,7 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 
       // find highest black pixel
       for (const auto& p : blackPoints) {
-	horizonTopY = std::min(horizonTopY, p.y); // topmost black pixel
+        horizonTopY = std::min(horizonTopY, p.y); // topmost black pixel
       }
 
       // find lowest white pixel
@@ -195,10 +197,66 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
 
       int horizonBottomY = INT_MIN;
       for (const auto& p : whitePoints) {
-	horizonBottomY = std::max(horizonBottomY, p.y); // lowest white pixel
+        horizonBottomY = std::max(horizonBottomY, p.y); // lowest white pixel
       }
 
       return [[MatWrapper alloc] initWithMat: finalMask]; // XXX was cloned
+
+    } catch (const cv::Exception &e) {
+      Log_e(@"OpenCV Exception: %s", e.what());
+    }
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception: %@", exception);
+  }
+  return nil;    
+}
+
+
+// a reverse of groundOnlyFrom
++ (MatWrapper *)skyOnlyFrom:(MatWrapper *)image {
+  @try {
+    try {
+      Log_d(@"groundOnlyFrom started");
+
+      cv::Mat mat = image.mat;
+
+      // make copy for safer concurrency
+      cv::Mat owned = mat;
+    
+      // If your conversion gives 3/4 channels, force it to grayscale
+      if (owned.channels() > 1) {
+        owned = mat.clone();
+        cv::cvtColor(owned, owned, cv::COLOR_BGR2GRAY);
+      }
+    
+      // Ensure binary
+      cv::Mat bin;
+      cv::threshold(owned, bin, 127, 255, cv::THRESH_BINARY);
+
+      // Connected components
+      cv::Mat labels, stats, centroids;
+      int nLabels = cv::connectedComponentsWithStats(bin, labels, stats, centroids, 8, CV_32S);
+
+      // Collect all labels touching the top row
+      std::set<int> topLabels;
+      int topY = 0;
+      for (int x = 0; x < labels.cols; x++) {
+        int lbl = labels.at<int>(topY, x);
+        if (lbl > 0) topLabels.insert(lbl);
+      }
+
+      // Build filtered mask: keep only top-connected components
+      cv::Mat skyMask = cv::Mat::zeros(bin.size(), CV_8UC1);
+      for (int y = 0; y < labels.rows; y++) {
+        for (int x = 0; x < labels.cols; x++) {
+          int lbl = labels.at<int>(y, x);
+          if (topLabels.count(lbl)) {
+            skyMask.at<uchar>(y, x) = 255;
+          }
+        }
+      }
+
+      return [[MatWrapper alloc] initWithMat: skyMask]; // XXX was cloned
 
     } catch (const cv::Exception &e) {
       Log_e(@"OpenCV Exception: %s", e.what());
@@ -606,6 +664,219 @@ extern void printMatInfo(const cv::Mat& mat, const std::string& name = "");
   return nil;
 }
 
++ (MatWrapper *)cannyEdgeDetect:(MatWrapper *)img
+                   minThreshold:(double)minThreshold
+                   maxThreshold:(double)maxThreshold
+{
+  
+  @try {
+    try {
+      cv::Mat input = img.mat;
+  
+      cv::Mat gray;
+      if (input.channels() == 3)
+        cv::cvtColor(input, gray, cv::COLOR_BGR2GRAY);
+      else
+        gray = input.clone();
+      
+      // 1. Otsu threshold
+      cv::Mat otsuMask;
+      
+      gray = ensure8U(gray);
+      
+      // 2. Canny edge detection
+      cv::Mat edges;
+      cv::Canny(gray, edges, minThreshold, maxThreshold);
+      
+      return [[MatWrapper alloc] initWithMat: edges];
+    } catch (const cv::Exception &e) {
+      Log_e(@"OpenCV Exception: %s", e.what());
+    }
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception: %@", exception);
+  }
+  return nil;
+}
+
+// this is not finished
++ (MatWrapper *)detectHorizon:(MatWrapper *)img {
+
+  @try {
+    try {
+      cv::Mat input = img.mat;
+  
+      cv::Mat gray;
+      if (input.channels() == 3)
+        cv::cvtColor(input, gray, cv::COLOR_BGR2GRAY);
+      else
+        gray = input.clone();
+
+      // 1. Otsu threshold
+      cv::Mat otsuMask;
+
+      gray = ensure8U(gray);
+
+      // 2. Canny edge detection
+      cv::Mat edges;
+      // good 
+      //cv::Canny(gray, edges, 50, 150);
+
+      // testing
+      cv::Canny(gray, edges, 30, 150);
+
+      // too much noise 
+      //cv::Canny(gray, edges, 10, 150);
+      
+
+      
+      Log_d(@"FUCK");
+      /*
+      // 3. Combine — weight edges more near Otsu boundary
+      cv::Mat combined;
+      cv::bitwise_or(otsuMask, edges, combined);
+
+      // 4. Collapse vertically to find strongest transition row
+      cv::Mat rowSum;
+      cv::reduce(combined, rowSum, 1, cv::REDUCE_AVG);
+
+      // 5. Smooth and find max gradient (horizon estimate)
+      cv::Mat rowSumFloat;
+      rowSum.convertTo(rowSumFloat, CV_32F);
+      cv::GaussianBlur(rowSumFloat, rowSumFloat, cv::Size(1, 15), 0);
+
+      double minVal, maxVal;
+      int minIdx[2], maxIdx[2];
+      cv::minMaxIdx(rowSumFloat, &minVal, &maxVal, minIdx, maxIdx);
+
+      int horizonY = maxIdx[0];  // Row with strongest transition
+
+      // 6. Optional: refine horizon locally (fit curve across columns)
+      // You can repeat reduce() in small vertical windows around horizonY
+      // to track ridge lines in more complex terrain.
+      */
+      return [[MatWrapper alloc] initWithMat: edges];
+    } catch (const cv::Exception &e) {
+      Log_e(@"OpenCV Exception: %s", e.what());
+    }
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception: %@", exception);
+  }
+  return nil;
+}
+
++ (MatWrapper *)bitwiseAnd:(MatWrapper *)img withImage:(MatWrapper *)img1 { 
+
+  @try {
+    try {
+      cv::Mat input = img.mat;
+      cv::Mat input1 = img1.mat;
+  
+      cv::Mat gray;
+      if (input.channels() == 3)
+        cv::cvtColor(input, gray, cv::COLOR_BGR2GRAY);
+      else
+        gray = input;
+
+      cv::Mat gray1;
+      if (input1.channels() == 3)
+        cv::cvtColor(input1, gray1, cv::COLOR_BGR2GRAY);
+      else
+        gray1 = input1;
+
+      cv::Mat output;
+      cv::bitwise_and(gray, gray1, output);
+
+      return [[MatWrapper alloc] initWithMat: output];
+    } catch (const cv::Exception &e) {
+      Log_e(@"OpenCV Exception: %s", e.what());
+    }
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception: %@", exception);
+  }
+  return nil;
+
+}
+
++ (MatWrapper *)bitwiseNot:(MatWrapper *)img {
+
+  @try {
+    try {
+      cv::Mat input = img.mat;
+  
+      cv::Mat gray;
+      if (input.channels() == 3)
+        cv::cvtColor(input, gray, cv::COLOR_BGR2GRAY);
+      else
+        gray = input;
+
+      cv::Mat output;
+      cv::bitwise_not(gray, output);
+
+      return [[MatWrapper alloc] initWithMat: output];
+    } catch (const cv::Exception &e) {
+      Log_e(@"OpenCV Exception: %s", e.what());
+    }
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception: %@", exception);
+  }
+  return nil;
+}
+
+/// Expand dark regions (0-valued pixels) outward by `radius` pixels.
++ (MatWrapper *)growDarkRegions:(MatWrapper *)img by:(int)radius {
+  @try {
+    try {
+      cv::Mat binaryImage = img.mat;
+  
+      CV_Assert(binaryImage.type() == CV_8UC1);
+
+      cv::Mat result;
+      int kernelSize = 2 * radius + 1;
+      cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(kernelSize, kernelSize));
+
+      // Invert so dark becomes bright, erode bright areas to shrink them, then invert back.
+      cv::Mat inverted;
+      cv::bitwise_not(binaryImage, inverted);
+      cv::erode(inverted, inverted, kernel);
+      cv::bitwise_not(inverted, result);
+
+      return [[MatWrapper alloc] initWithMat: result];
+    } catch (const cv::Exception &e) {
+      Log_e(@"OpenCV Exception: %s", e.what());
+    }
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception: %@", exception);
+  }
+  return nil;
+}
+
+/// Shrink dark regions (0-valued pixels) inward by `radius` pixels.
++ (MatWrapper *)shrinkDarkRegions:(MatWrapper *)img by:(int)radius {
+  @try {
+    try {
+      cv::Mat binaryImage = img.mat;
+      //cv::Mat shrinkDarkRegions(const cv::Mat &binaryImage, int radius) {
+      CV_Assert(binaryImage.type() == CV_8UC1);
+
+      cv::Mat result;
+      int kernelSize = 2 * radius + 1;
+      cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(kernelSize, kernelSize));
+
+      // Invert so dark becomes bright, dilate bright areas to expand them, then invert back.
+      cv::Mat inverted;
+      cv::bitwise_not(binaryImage, inverted);
+      cv::dilate(inverted, inverted, kernel);
+      cv::bitwise_not(inverted, result);
+
+      return [[MatWrapper alloc] initWithMat: result];
+    } catch (const cv::Exception &e) {
+      Log_e(@"OpenCV Exception: %s", e.what());
+    }
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception: %@", exception);
+  }
+  return nil;
+}
 
 
 @end

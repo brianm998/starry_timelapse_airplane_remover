@@ -11,6 +11,17 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface PixelatedImageBridge : NSObject
 
++ (MatWrapper *)cannyEdgeDetect:(MatWrapper *)img
+                   minThreshold:(double)minThreshold
+                   maxThreshold:(double)maxThreshold;
+
++ (MatWrapper *)bitwiseAnd:(MatWrapper *)img withImage:(MatWrapper *)img1;
+
++ (MatWrapper *)bitwiseNot:(MatWrapper *)img;
+
+// new horizon detection attempt
++ (MatWrapper *)detectHorizon:(MatWrapper *)img;
+
 + (MatWrapper *)subtractImage:(MatWrapper *)img1 fromImage:(MatWrapper *)img2;
 
 // combines two images with a mask
@@ -24,8 +35,14 @@ NS_ASSUME_NONNULL_BEGIN
 // then and keeps N largest connected components, returning a cv::Mat
 + (MatWrapper *)filterConnectedComponents:(MatWrapper *)image keepLargest:(NSInteger)n;
 
-// removes anything but the ground, and returns the Y boundaries of the horizon
+// removes all dark components not touching the ground
 + (MatWrapper *)groundOnlyFrom:(MatWrapper *)image;
+
+// removes all light components not touching the sky
++ (MatWrapper *)skyOnlyFrom:(MatWrapper *)image;
+
++ (MatWrapper *)shrinkDarkRegions:(MatWrapper *)img by:(int)radius;
++ (MatWrapper *)growDarkRegions:(MatWrapper *)img by:(int)radius;
 
 /// Returns the vertical horizon extents
 + (HorizonResult *)horizonExtentsFromImage:(MatWrapper *)image;

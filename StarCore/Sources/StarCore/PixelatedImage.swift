@@ -421,6 +421,51 @@ extension PixelatedImage {
     public func writeTIFFEncoding(toFilename imageFilename: String) {
         self.mat.write(to: imageFilename)
     }
+
+    public func horizonTest() throws -> PixelatedImage {
+        let selfMat = self.mat
+        let resultMat = PixelatedImageBridge.detectHorizon(selfMat)
+        if let ret = PixelatedImage(mat: resultMat) {
+            return ret
+        } else {
+            throw "cannot create horizon mask"
+        }
+    }
+
+    public func bitwiseNot() throws -> PixelatedImage {
+        let selfMat = self.mat
+        let resultMat = PixelatedImageBridge.bitwiseNot(selfMat)
+        if let ret = PixelatedImage(mat: resultMat) {
+            return ret
+        } else {
+            throw "cannot run bitwise not"
+        }
+    }
+
+    public func bitwiseAnd(with image: PixelatedImage) throws -> PixelatedImage {
+        let selfMat = self.mat
+        let otherMat = image.mat
+        let resultMat = PixelatedImageBridge.bitwiseAnd(selfMat, withImage: otherMat)
+        if let ret = PixelatedImage(mat: resultMat) {
+            return ret
+        } else {
+            throw "cannot run bitwise not"
+        }
+    }
+    
+    public func cannyEdgeDetect(minThreshold: Double, maxThreshold: Double) throws -> PixelatedImage {
+        let selfMat = self.mat
+        let resultMat = PixelatedImageBridge.cannyEdgeDetect(
+          selfMat,
+          minThreshold: minThreshold,
+          maxThreshold: maxThreshold
+        )
+        if let ret = PixelatedImage(mat: resultMat) {
+            return ret
+        } else {
+            throw "cannot perform edge detection"
+        }
+    }
     
     // returns a 16 bit grayscale image that results from subtrating
     // the given frame from this frame, done in c++ opencv2 land for speed
@@ -434,7 +479,6 @@ extension PixelatedImage {
 
         // reconstruct a PixelatedImage from the returned cv::Mat
         if let ret = PixelatedImage(mat: resultMat) {
-
             return ret
         } else {
             throw "cannot create PixelatedImage from resulting mat during image subtraction"
