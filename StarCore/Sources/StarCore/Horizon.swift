@@ -175,6 +175,12 @@ extension PixelatedImage {
          * re-combine them all into one
          * assume the top half of the image is sky
 
+         * run canny edge detection
+         * combine that with otsu results
+         * run ground only
+         * add small padding
+         * run sky only
+         * remove small padding
          */        
 
         // determine the new height 
@@ -233,22 +239,41 @@ extension PixelatedImage {
             }
             
             if newElements.count == matrix.count {
+
+                // XXX redo this
                 let (horizonTopY, horizonBottomY) = newElements.combinedHorizonExtents()
 
                 if let no_sky_image = PixelatedImage(from: newElements),
                    let image = no_sky_image.addSky(height: topHeight)
                 {
-                    Log.d("image \(image.description)")
-                    Log.d("no_sky_image \(no_sky_image.description)")
-                    var _horizonTopY: Int = image.height
+                    // find edges on self (source image)
+                    let edges = try self.cannyEdgeDetect(minThreshold: 30, maxThreshold: 150)
+                      .bitwiseNot()
+
+                    // combine otsu and canny edge detection into one image
+                    let combined = try image.bitwiseAnd(with: edges)
+
+                    // get rid of any dark components that don't touch the ground
+                    let groundOnly = try combined.groundOnly()
+
+                    // expand the dark areas by one pixel
+                    let grown = try groundOnly.growDarkRegions(by: 1)
+
+                    // get rid of any bright compoments that don't touch the top
+                    let filtered = try grown.skyOnly()
+
+                    // shrink back down
+                    let shrunk = try filtered.shrinkDarkRegions(by: 1)
+                    
+                    var _horizonTopY: Int = shrunk.height
                     if let horizonTopY { _horizonTopY = horizonTopY + topHeight }
 
                     var _horizonBottomY: Int = 0
                     if let horizonBottomY { _horizonBottomY = horizonBottomY + topHeight }
                     
                     return HorizonMask(
-                      image: image,
-                      horizonTopY: _horizonTopY,
+                      image: shrunk,
+                      horizonTopY: _horizonTopY, // XXX these are not right anymore :(
                       horizonBottomY: _horizonBottomY
                     )
                 } else {
