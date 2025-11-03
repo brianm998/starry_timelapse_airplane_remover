@@ -822,8 +822,8 @@ extern cv::Mat ensure8U(const cv::Mat& input);
   return nil;
 }
 
-/// Expand dark regions (0-valued pixels) outward by `radius` pixels.
-+ (MatWrapper *)growDarkRegions:(MatWrapper *)img by:(int)radius {
+/// Shrink dark regions (0-valued pixels) inward by `radius` pixels.
++ (MatWrapper *)shrinkDarkRegions:(MatWrapper *)img by:(int)radius {
   @try {
     try {
       cv::Mat binaryImage = img.mat;
@@ -850,8 +850,8 @@ extern cv::Mat ensure8U(const cv::Mat& input);
   return nil;
 }
 
-/// Shrink dark regions (0-valued pixels) inward by `radius` pixels.
-+ (MatWrapper *)shrinkDarkRegions:(MatWrapper *)img by:(int)radius {
+/// Expand dark regions (0-valued pixels) outward by `radius` pixels.
++ (MatWrapper *)growDarkRegions:(MatWrapper *)img by:(int)radius {
   @try {
     try {
       cv::Mat binaryImage = img.mat;
