@@ -249,21 +249,24 @@ extension PixelatedImage {
                     // find edges on self (source image)
                     let edges = try self.cannyEdgeDetect(minThreshold: 30, maxThreshold: 150)
                       .bitwiseNot()
-
+                      .growDarkRegions(by: 1)
+                    
                     // combine otsu and canny edge detection into one image
-                    let combined = try image.bitwiseAnd(with: edges)
-
-                    // get rid of any dark components that don't touch the ground
-                    let groundOnly = try combined.groundOnly()
+                    let combined = try image
+                      //.growDarkRegions(by: 2)
+                      .bitwiseAnd(with: edges)
 
                     // expand the dark areas by one pixel
-                    let grown = try groundOnly.growDarkRegions(by: 1)
+                    //let grown = try groundOnly.growDarkRegions(by: 1)
 
                     // get rid of any bright compoments that don't touch the top
-                    let filtered = try grown.skyOnly()
+                    let filtered = try combined.skyOnly()
 
                     // shrink back down
                     let shrunk = try filtered.shrinkDarkRegions(by: 1)
+
+                    // get rid of any dark components that don't touch the ground
+                    let groundOnly = try shrunk.groundOnly()
                     
                     var _horizonTopY: Int = shrunk.height
                     if let horizonTopY { _horizonTopY = horizonTopY + topHeight }
@@ -272,7 +275,7 @@ extension PixelatedImage {
                     if let horizonBottomY { _horizonBottomY = horizonBottomY + topHeight }
                     
                     return HorizonMask(
-                      image: shrunk,
+                      image: groundOnly,
                       horizonTopY: _horizonTopY, // XXX these are not right anymore :(
                       horizonBottomY: _horizonBottomY
                     )
