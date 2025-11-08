@@ -24,7 +24,7 @@ struct LeftPanel: View {
     }
 
     func string(for byteCount: Int) -> String {
-        Log.d("string(for: byteCount \(byteCount))")
+        //Log.d("string(for: byteCount \(byteCount))")
         if byteCount < 0 {
             return "0 bytes"    // can go negative because of temporarily mismatched data
         } else if byteCount < 1024 {
