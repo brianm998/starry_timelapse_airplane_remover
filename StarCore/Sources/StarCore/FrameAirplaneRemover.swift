@@ -141,11 +141,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         Task {
             if let results = await self.readNumberOfEarthAlignedImagesForThisFrame() {
+                Log.d("frame \(frameIndex) setting number of earth alignments \(results)")
                 await observer.set(earthAlignmentResults: results)
+            } else {
+                Log.d("frame \(frameIndex) NO number of earth alignments")
             }
 
             if let results = await self.readNumberOfStarAlignedImagesForThisFrame() {
+                Log.d("frame \(frameIndex) setting number of star alignments \(results)")
                 await observer.set(starAlignmentResults: results)
+            } else {
+                Log.d("frame \(frameIndex) NO number of star alignments")
             }
         }
     }
@@ -661,18 +667,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
       numberOfStarAlignedImagesForThisFrame: Int,
       andFailures failures: Int
     ) throws {
-        try write(
-          success: numberOfStarAlignedImagesForThisFrame,
-          andFailures: failures,
-          to: numberOfStarAlignedImagesFilename
-        )
+        if let results = try write(
+             success: numberOfStarAlignedImagesForThisFrame,
+             andFailures: failures,
+             to: numberOfStarAlignedImagesFilename
+           ),
+           let observer
+        {
+            Task { await observer.set(starAlignmentResults: results) }
+        }
     }
     
     private func write(
       success: Int,
       andFailures: Int,
       to filename: String
-    ) throws {
+    ) throws -> FrameAlignmentResults? {
         if let dirname = imageAccessor.dirForImage(ofType: .starAligned,
                                                    atSize: .original)
         {
@@ -702,6 +712,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             } catch {
                 Log.e("\(error)")
             }
+            return results
+        } else {
+            return nil
         }
     }
     
@@ -755,11 +768,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
       numberOfEarthAlignedImagesForThisFrame: Int,
       andFailures failures: Int
     ) throws {
-        try write(
-          success: numberOfEarthAlignedImagesForThisFrame,
-          andFailures: failures,
-          to: numberOfEarthAlignedImagesFilename
-        )
+        if let results = try write(
+             success: numberOfEarthAlignedImagesForThisFrame,
+             andFailures: failures,
+             to: numberOfEarthAlignedImagesFilename
+           ),
+           let observer
+        {
+            Task { await observer.set(earthAlignmentResults: results) }
+        }
     }
     
     public func readNumberOfEarthAlignedImagesForThisFrame() async -> FrameAlignmentResults? {
