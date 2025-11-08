@@ -376,6 +376,30 @@ cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Ma
 @implementation ImageAligner
 
 
++ (id)medianMergeFilenames:(NSArray<NSString*>*)filenames
+ outlierThreshold:(double)k
+{
+  NSMutableArray<MatWrapper*> * images = [[NSMutableArray<MatWrapper*> alloc] init];
+  for(int i = 0 ; i < filenames.count ; i++) {
+    [images addObject: [ObjcImageCache loadImage:filenames[i]]];
+  }
+  return [ImageAligner medianMerge:images outlierThreshold: k];
+}
+
+//          MatWrapper * frame = ;
+
+// just median merges the frames without any alignment
++ (id)medianMerge:(NSArray<MatWrapper*>*)frames
+ outlierThreshold:(double)k
+{
+    std::vector<MatWrapper*> array;
+    for (size_t i = 0; i < frames.count; ++i) {
+      array.push_back(frames[i]);
+    }
+    return medianImageFromArray(array, k);
+}
+
+
 /*
   This ImageAligner replaces hugin's align_image_stack with in-process usage of opencv2
   it's faster and better at detecting stars using SIFT and ground using AKAZE.

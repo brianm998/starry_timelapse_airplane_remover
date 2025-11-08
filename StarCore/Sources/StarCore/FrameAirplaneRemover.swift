@@ -596,15 +596,45 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
 
-        let alignmentResult = originalFrame.align(
-          frameFilenames: neighborFilenames,
-          masked: horizonMask?.image,
-          matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
-          invertMask: isEarth,       // earth is zero in mask
-          maxKeypoints: 2000,         // XXX hardcoded constant
-          outlierThreshold: pixelThreshold
-        )
+        var alignmentResult: AlignmentResult? = nil
+        
+        if isEarth,
+           !(config.tripodHeadWasMoving ?? false)
+        {
+            Log.d("frame \(frameIndex) not aliging earth, just merging") 
+            // don't try to align if we're combining not moving earth,
+            // just median merge them all
+            
+            if let mergedImage = originalFrame.medianMerge(
+                 with: neighborFilenames,
+                 outlierThreshold: pixelThreshold
+               )
+            {
+                alignmentResult = AlignmentResult(
+                  aligned: mergedImage,
+                  failed: nil,
+                  numAligned: neighborFilenames.count + 1,
+                  numFailed: 0
+                )
+            }
+        } else {
+            Log.d("frame \(frameIndex) doing real alignment for earth \(isEarth)")
+            // do real alignment
+            alignmentResult = originalFrame.align(
+              frameFilenames: neighborFilenames,
+              masked: horizonMask?.image,
+              matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
+              invertMask: isEarth,       // earth is zero in mask
+              maxKeypoints: 2000,         // XXX hardcoded constant
+              outlierThreshold: pixelThreshold
+            )
+        }
 
+        guard let alignmentResult else {
+            Log.e("frame \(frameIndex) got no alignment result")
+            throw "frame \(frameIndex) got no alignment result"
+        }
+        
         switch type {
         case .starAligned:
             self.set(state: .creatingStarAlignedFrame)

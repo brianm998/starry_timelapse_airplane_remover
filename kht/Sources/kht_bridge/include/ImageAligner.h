@@ -17,6 +17,15 @@ typedef NS_ENUM(NSInteger, FeatureMatchMethod) {
 
 @interface ImageAligner : NSObject
 
+
++ (id)medianMergeFilenames:(NSArray<NSString*>*)filenames
+ outlierThreshold:(double)k;
+
+
+// just median merges the frames without any alignment
++ (id)medianMerge:(NSArray<MatWrapper*>*)frames
+ outlierThreshold:(double)k;
+
 // align frames to special frame, with optional mask which shows where to get keypoints from
 // 
 + (id)alignFrames:(MatWrapper *)special

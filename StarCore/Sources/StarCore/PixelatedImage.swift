@@ -900,6 +900,21 @@ public struct AlignmentResult {
 
 extension PixelatedImage {
 
+    public func medianMerge(
+      with frames: [String],
+      outlierThreshold: Double = 1.2
+    ) -> PixelatedImage? {
+        if let mat = ImageAligner.medianMergeFilenames(
+             frames,
+             outlierThreshold: outlierThreshold
+           ) as? MatWrapper
+        {
+            return PixelatedImage(mat: mat)
+        } else {
+            return nil
+        }
+    }
+    
     public func align(
       frameFilenames: [String],
       masked mask: PixelatedImage? = nil,
