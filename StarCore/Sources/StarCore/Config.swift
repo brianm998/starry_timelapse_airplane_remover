@@ -134,6 +134,8 @@ public struct Config: Codable, Sendable, Transferable {
 
     // used with PixelReplacementMethod.selective
     public var detectionType: DetectionType
+
+    public var tripodHeadWasMoving: Bool?
     
     // the name of the directory containing the input sequence
     public var imageSequenceDirname: String
