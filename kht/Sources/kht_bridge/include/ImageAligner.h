@@ -6,6 +6,7 @@
 @property(nonatomic, assign) int numAligned;
 @property(nonatomic, strong) MatWrapper *failed;    // fallback/original frame
 @property(nonatomic, assign) int numFailed;
+@property(nonatomic, strong) MatWrapper *horizonMask; // median merged horizonMask
 @end
 
 
@@ -33,6 +34,7 @@ typedef NS_ENUM(NSInteger, FeatureMatchMethod) {
 // 
 + (id)alignFrames:(MatWrapper *)special
            frames:(NSArray<NSString *> *)frameFilenames
+       frameMasks:(NSArray<NSString *> *)frameMaskFilenames
       matchMethod:(FeatureMatchMethod)matchMethod
              mask:(MatWrapper *)mask // assumed to be zero for ground, non-zero for sky
      maxDeviation:(double)maxDeviation

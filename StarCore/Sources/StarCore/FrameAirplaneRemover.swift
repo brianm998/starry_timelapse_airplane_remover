@@ -481,17 +481,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
            )
         {
             Log.d("frame \(frameIndex) horizon mask image \(horizonMask.image) created")
-            try await imageAccessor.save(horizonMask.image,
-                                         frameIndex: frameIndex,
-                                         as: .horizon,
-                                         atSize: .original,
-                                         overwrite: true)
+            try await imageAccessor.save(
+              horizonMask.image,
+              frameIndex: frameIndex,
+              as: .horizon,
+              atSize: .original,
+              overwrite: true
+            )
 
-            try await imageAccessor.save(horizonMask.image,
-                                         frameIndex: frameIndex,
-                                         as: .horizon,
-                                         atSize: .preview,
-                                         overwrite: true)
+            try await imageAccessor.save(
+              horizonMask.image,
+              frameIndex: frameIndex,
+              as: .horizon,
+              atSize: .preview,
+              overwrite: true
+            )
 
             self.set(state: .horizonDetected)
             return horizonMask
@@ -524,9 +528,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         // load or create the aligned frame
-        if let alignedFrame = try await imageAccessor.load(frameIndex: frameIndex,
-                                                           type: type,
-                                                           atSize: .original)
+        if let alignedFrame = try await imageAccessor.load(
+             frameIndex: frameIndex,
+             type: type,
+             atSize: .original
+           )
         {
             var results: FrameAlignmentResults? = nil
             if isEarth {
@@ -573,6 +579,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("original frame \(originalFrame.description)")
 
         var neighborFilenames: [String] = []
+        var neighborMaskFilenames: [String] = []
         
         for neighborIndex in alignmentFilenames.keys {
             if let filename = self.imageAccessor.nameForImage(
@@ -584,6 +591,18 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 neighborFilenames.append(filename)
             } else {
                 Log.w("unable to get filename for original image at frame index \(neighborIndex)")
+            }
+
+            if isEarth,
+               let filename = self.imageAccessor.nameForImage(
+                 frameIndex: neighborIndex,
+                 ofType: .horizon,
+                 atSize: .original
+               )
+            {
+                neighborMaskFilenames.append(filename)
+            } else {
+                Log.w("unable to get filename mask original image at frame index \(neighborIndex)")
             }
         }
 
@@ -611,11 +630,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                  outlierThreshold: pixelThreshold
                )
             {
+                var mergedHorizonMaskImage: PixelatedImage? = nil
+
+                if let horizonMaskImage = horizonMask?.image {
+                    mergedHorizonMaskImage = horizonMaskImage.medianMerge(
+                      with: neighborMaskFilenames,
+                      outlierThreshold: pixelThreshold
+                    )
+                }
+                
                 alignmentResult = AlignmentResult(
                   aligned: mergedImage,
                   failed: nil,
                   numAligned: neighborFilenames.count + 1,
-                  numFailed: 0
+                  numFailed: 0,
+                  horizonMask: mergedHorizonMaskImage
                 )
             }
         } else {
@@ -623,6 +652,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // do real alignment
             alignmentResult = originalFrame.align(
               frameFilenames: neighborFilenames,
+              frameMaskFilenames: neighborMaskFilenames,
               masked: horizonMask?.image,
               matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
               invertMask: isEarth,       // earth is zero in mask
@@ -655,6 +685,24 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             throw "frame \(frameIndex) didn't get either an aligned image or a failed image from alignment results" // XXX handle this better
         }
 
+        if let horizon = alignmentResult.horizonMask {
+            try await imageAccessor.save(
+              horizon,
+              frameIndex: frameIndex,
+              as: .horizon,
+              atSize: .original,
+              overwrite: true
+            )
+            try await imageAccessor.save(
+              horizon,
+              frameIndex: frameIndex,
+              as: .horizon,
+              atSize: .preview,
+              overwrite: true
+            )
+            // XXX tell gui to reload this frame's horizon mask
+        }
+        
         try await imageAccessor.save(
           goodPixelImage!,
           frameIndex: frameIndex,

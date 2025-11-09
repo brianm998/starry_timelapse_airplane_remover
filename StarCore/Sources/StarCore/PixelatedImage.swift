@@ -896,6 +896,7 @@ public struct AlignmentResult {
     public let failed: PixelatedImage?
     public let numAligned: Int
     public let numFailed: Int
+    public let horizonMask: PixelatedImage?
 }
 
 extension PixelatedImage {
@@ -918,6 +919,7 @@ extension PixelatedImage {
     
     public func align(
       frameFilenames: [String],
+      frameMaskFilenames: [String],
       masked mask: PixelatedImage? = nil,
       matchMethod: FeatureMatchMethod, // .knnLowes or .FLANN or .bruteForce
       maxDeviation: Double = 45, // maximum warping deviation from identity (GUESSED)
@@ -936,12 +938,15 @@ extension PixelatedImage {
         var failed: PixelatedImage? = nil
         var numAligned: Int = 0
         var numFailed: Int = 0
+        var alignedHorizonMask: PixelatedImage? = nil
 
+        
         Log.d("align \(self.mat)")
         
         if let result = ImageAligner.alignFrames(
              self.mat,
              frames: frameFilenames,
+             frameMasks: frameMaskFilenames,
              matchMethod: matchMethod,//.knnLowes, // .knnLowes or .FLANN or .bruteForce
              mask: maskMat,
              maxDeviation: maxDeviation,
@@ -977,6 +982,17 @@ extension PixelatedImage {
                 } else {
                     Log.w("no mat")
                 }
+
+                if let mat = result.horizonMask {
+                    if !mat.isEmpty {
+                        alignedHorizonMask = PixelatedImage(mat: mat)
+                    } else {
+                        Log.w("mat was empty :(")
+                    }
+                } else {
+                    Log.w("no mat")
+                }
+
                 numAligned = Int(result.numAligned)
                 numFailed = Int(result.numFailed)
                 Log.d("numAligned \(numAligned) numFailed \(numFailed)")
@@ -991,7 +1007,8 @@ extension PixelatedImage {
           aligned: aligned,
           failed: failed,
           numAligned: numAligned,
-          numFailed: numFailed
+          numFailed: numFailed,
+          horizonMask: alignedHorizonMask
         )
     }
     

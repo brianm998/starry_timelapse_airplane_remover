@@ -393,7 +393,10 @@ cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Ma
   NSMutableArray<MatWrapper*> * images = [[NSMutableArray<MatWrapper*> alloc] init];
   [images addObject: image];
   for(int i = 0 ; i < filenames.count ; i++) {
-    [images addObject: [ObjcImageCache loadImage:filenames[i]]];
+    MatWrapper * image = [ObjcImageCache loadImage:filenames[i]];
+    if(image != nil) {
+      [images addObject: image];
+    }
   }
   return [ImageAligner medianMerge:images outlierThreshold: k];
 }
@@ -611,6 +614,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
  */
 + (id)alignFrames:(MatWrapper *)special
            frames:(NSArray<NSString *> *)frameFilenames
+       frameMasks:(NSArray<NSString *> *)frameMaskFilenames
       matchMethod:(FeatureMatchMethod)matchMethod
              mask:(MatWrapper *)mask // assumed to be zero for ground, non-zero for sky
      maxDeviation:(double)maxDeviation
@@ -715,6 +719,7 @@ maxCornerDeviation:(double)maxCornerDeviation
     // Preallocate per-index result storage to avoid push_back from many threads
     const size_t n = frameFilenames.count;
     std::vector<MatWrapper *> resultMats(n);       // will hold warped (success) or original (failure)
+    std::vector<MatWrapper *> alignedHorizonMats(n); // will hold warped (success) or original (failure) aligned horizon mats
     std::vector<char>    resultSuccess(n, 0); // 1 if accepted warp, 0 otherwise
 
 	Log_i(@"%d, about to align in parallel", logID);
@@ -731,6 +736,10 @@ maxCornerDeviation:(double)maxCornerDeviation
           NSUInteger idx = (NSUInteger)ii;
           //Log_i(@"%d %d top", logID, ii);
           MatWrapper * frame = [ObjcImageCache loadImage:frameFilenames[idx]];
+          MatWrapper * frameHorizon = 0;
+          if (frameMaskFilenames.count > idx) {
+            frameHorizon = [ObjcImageCache loadImage:frameMaskFilenames[idx]];
+          }
           try {
             //Log_i(@"%d %d loaded", logID, ii);
 
@@ -863,6 +872,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 		    // innocent until proven guilty
             bool acceptWarp = FALSE;
             cv::Mat warped;
+            cv::Mat warpedHorizon;
 
             // need at least four points
             if (ptsFrame.size() >= 4) {
@@ -909,6 +919,16 @@ maxCornerDeviation:(double)maxCornerDeviation
                   cv::warpPerspective(frame.mat, warped, H, frame.mat.size(),
                                       cv::INTER_LINEAR, cv::BORDER_CONSTANT,
                                       cv::Scalar(0,0,0,0));
+
+
+                  if (frameHorizon != NULL) {
+                    // warp horizon with same homography as ground
+                    //Log_i(@"%d %d accepting warp and warping horizon", logID, ii);
+                    cv::warpPerspective(frameHorizon.mat, warpedHorizon, H,
+                                        frameHorizon.mat.size(),
+                                        cv::INTER_LINEAR, cv::BORDER_CONSTANT,
+                                        cv::Scalar(0,0,0,0));
+                  }
                 }
               }
             }
@@ -920,12 +940,14 @@ maxCornerDeviation:(double)maxCornerDeviation
               }
               resultSuccess[idx] = 1;
               resultMats[idx] = [[MatWrapper alloc] initWithMat: warped];
+              alignedHorizonMats[idx] = [[MatWrapper alloc] initWithMat: warpedHorizon];
               if(warped.empty()) {
                 Log_w(@"warped is empty");
               }
             } else {
               resultSuccess[idx] = 0;
               resultMats[idx] = frame;
+              alignedHorizonMats[idx] = frameHorizon;
               if(frame.mat.empty()) {
                 Log_w(@"frame is empty");
               }
@@ -952,9 +974,13 @@ maxCornerDeviation:(double)maxCornerDeviation
     // Gather aligned and failed in the same shape as original function
     std::vector<MatWrapper*> aligned;
     std::vector<MatWrapper*> failed;
+    std::vector<MatWrapper*> horizons;
+
     aligned.reserve(n);
     failed.reserve(n);
 
+    BOOL hasHorizon = NO;
+    
     for (size_t i = 0; i < n; ++i) {
       if(resultMats[i].mat.empty()) {
         Log_w(@"FUCK");
@@ -964,8 +990,14 @@ maxCornerDeviation:(double)maxCornerDeviation
       } else {
         failed.push_back(resultMats[i]);
       }
+      if (alignedHorizonMats[i] != NULL && !alignedHorizonMats[i].mat.empty()) {
+        horizons.push_back(alignedHorizonMats[i]);
+        hasHorizon = YES;
+      }
     }
 
+    if(hasHorizon) horizons.push_back(horizonMask); 
+    
     // include the original image in the median merge too
 	if(aligned.size() != 0) {
       aligned.push_back(special);
@@ -974,6 +1006,8 @@ maxCornerDeviation:(double)maxCornerDeviation
     // use median merges
     MatWrapper * alignedResult = medianImageFromArray(aligned, k);
     MatWrapper * failedResult = medianImageFromArray(failed, k);
+    
+    MatWrapper * horizonResult = medianImageFromArray(horizons, k);
 
 	if(alignedResult.mat.empty()) {
 	  Log_w(@"alignedResult is empty");
@@ -987,6 +1021,7 @@ maxCornerDeviation:(double)maxCornerDeviation
     resultObj.numAligned = aligned.size();
     resultObj.failed = failedResult;
     resultObj.numFailed = failed.size();
+    resultObj.horizonMask = horizonResult;
     return resultObj;
 
   } catch (const cv::Exception &e) {
