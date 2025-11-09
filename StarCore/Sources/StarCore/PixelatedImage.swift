@@ -904,8 +904,9 @@ extension PixelatedImage {
       with frames: [String],
       outlierThreshold: Double = 1.2
     ) -> PixelatedImage? {
-        if let mat = ImageAligner.medianMergeFilenames(
-             frames,
+        if let mat = ImageAligner.medianMergeImage(
+             self.mat,
+             withFilenames: frames,
              outlierThreshold: outlierThreshold
            ) as? MatWrapper
         {

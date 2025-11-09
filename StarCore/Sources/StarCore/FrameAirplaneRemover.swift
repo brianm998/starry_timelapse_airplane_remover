@@ -547,11 +547,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // with no saved aligned frame, first load or create the set of aligned frames
         // that we used to create the final aligned frame
 
+        let config = await configManager.config()
+
         switch type {
         case .starAligned:
             self.set(state: .starAlignment)
         case .earthAligned:
-            self.set(state: .earthAlignment)
+            if (config.tripodHeadWasMoving ?? false) {
+                self.set(state: .earthAlignment)
+            }
         default:
             break
         }
@@ -567,7 +571,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if originalFrame.isEmpty { Log.w("EMPTY IMAGE") }
 
         Log.d("original frame \(originalFrame.description)")
-
 
         var neighborFilenames: [String] = []
         
@@ -585,8 +588,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         Log.d("original frame \(originalFrame.description)")
-
-        let config = await configManager.config()
         
         var horizonMask: HorizonMask? = nil
         if config.horizonDetectionEnabled ?? true {
@@ -1986,7 +1987,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             await self.updateCombineSubjects()
         }
     }
-
+    
     // Mark - Auto Mode Logic
 
     /*

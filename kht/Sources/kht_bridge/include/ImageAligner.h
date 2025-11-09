@@ -17,9 +17,12 @@ typedef NS_ENUM(NSInteger, FeatureMatchMethod) {
 
 @interface ImageAligner : NSObject
 
++ (id)medianMergeImage:(MatWrapper*)image
+         withFilenames:(NSArray<NSString*>*)filenames
+      outlierThreshold:(double)k;
 
 + (id)medianMergeFilenames:(NSArray<NSString*>*)filenames
- outlierThreshold:(double)k;
+          outlierThreshold:(double)k;
 
 
 // just median merges the frames without any alignment
@@ -39,9 +42,9 @@ maxCornerDeviation:(double)maxCornerDeviation
  outlierThreshold:(double)k;
 
 +(MatWrapper *)createGradientMaskIntoSky:(MatWrapper*)binaryMask
-			gradientDistance:(int)gradientDistance;
+                        gradientDistance:(int)gradientDistance;
 
 +(MatWrapper *)createGradientMaskIntoGround:(MatWrapper*)binaryMask
-			   gradientDistance:(int)gradientDistance;
+                           gradientDistance:(int)gradientDistance;
 
 @end

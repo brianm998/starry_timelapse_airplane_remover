@@ -377,9 +377,21 @@ cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Ma
 
 
 + (id)medianMergeFilenames:(NSArray<NSString*>*)filenames
- outlierThreshold:(double)k
+          outlierThreshold:(double)k
 {
   NSMutableArray<MatWrapper*> * images = [[NSMutableArray<MatWrapper*> alloc] init];
+  for(int i = 0 ; i < filenames.count ; i++) {
+    [images addObject: [ObjcImageCache loadImage:filenames[i]]];
+  }
+  return [ImageAligner medianMerge:images outlierThreshold: k];
+}
+
++ (id)medianMergeImage:(MatWrapper*)image
+         withFilenames:(NSArray<NSString*>*)filenames
+      outlierThreshold:(double)k
+{
+  NSMutableArray<MatWrapper*> * images = [[NSMutableArray<MatWrapper*> alloc] init];
+  [images addObject: image];
   for(int i = 0 ; i < filenames.count ; i++) {
     [images addObject: [ObjcImageCache loadImage:filenames[i]]];
   }
