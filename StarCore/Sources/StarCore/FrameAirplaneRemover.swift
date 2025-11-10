@@ -488,13 +488,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                )
             {
                 Log.d("frame \(frameIndex) successfully loaded horizon mask")
-
-                let bounds = horizonMaskImage.horizonBounds()
-                return HorizonMask(
-                  image: horizonMaskImage,
-                  horizonTopY: bounds.topY,
-                  horizonBottomY: bounds.bottomY
-                )
+                return HorizonMask(horizonMaskImage)
             }
         } catch {
             Log.i("frame \(frameIndex) unable to load horizon mask: \(error)")
@@ -540,16 +534,25 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
     
     // uses opencv2 for dark ground specific detection logic
-    private func loadOrCreateEarthAlignedImage() async throws -> PixelatedImage {
+    private func loadOrCreateEarthAlignedImage() async throws -> (
+      PixelatedImage,           // earth aligned image
+      PixelatedImage? // aligned/median merged horizon mask should be present
+    ) {
         try await loadOrCreateAlignedImage(of: .earthAligned)
     }
     
     // uses opencv2 for SIFT fast, accurate image alignment
     private func loadOrCreateStarAlignedImage() async throws -> PixelatedImage {
-        try await loadOrCreateAlignedImage(of: .starAligned)
+        let (image, _) = try await loadOrCreateAlignedImage(of: .starAligned)
+        return image
     }
-
-    private func loadOrCreateAlignedImage(of type: FrameViewMode) async throws -> PixelatedImage {
+    
+    private func loadOrCreateAlignedImage(
+      of type: FrameViewMode
+    ) async throws -> (
+      PixelatedImage,   // aligned image
+      PixelatedImage?   // optional aligned/median merged horizon mask
+    ) {
 
         var isEarth = false
         
@@ -569,6 +572,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
              atSize: .original
            )
         {
+            let horizonMask = try await self.loadMergedHorizonMask()
             var results: FrameAlignmentResults? = nil
             if isEarth {
                 results = await self.readNumberOfEarthAlignedImagesForThisFrame()
@@ -582,7 +586,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }                
             
-            return alignedFrame
+            return (alignedFrame, horizonMask?.image)
         }
 
         // with no saved aligned frame, first load or create the set of aligned frames
@@ -771,7 +775,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             break
         }
 
-        return goodPixelImage!
+        return (goodPixelImage!, alignmentResult.horizonMask)
     }    
 
     let numberOfStarAlignedImagesFilename = "number_of_star_aligned_images.json"
@@ -1028,12 +1032,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         if config.horizonDetectionEnabled ?? true {
             // only load these if we really need them
-            horizonMask = try await loadMergedHorizonMask()
-            if horizonMask == nil {
+            var horizonMaskImage: PixelatedImage? = nil
+            (earthAlignedImage, horizonMaskImage) = try await loadOrCreateEarthAlignedImage()
+            if let horizonMaskImage {
+                horizonMask = HorizonMask(horizonMaskImage)
+            } else {
                 Log.w("frame \(frameIndex) falling back to non-merged horizon mask")
                 horizonMask = try await loadOrCreateHorizonMask()
             }
-            earthAlignedImage = try await loadOrCreateEarthAlignedImage()
         }
         
         let starAlignedImage = try await loadOrCreateStarAlignedImage()
@@ -2092,11 +2098,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let config = await configManager.config()
         if config.horizonDetectionEnabled ?? true {
             // with horizon detection, we need to mask the star and earth images
-            let earthAlignedImage = try await loadOrCreateEarthAlignedImage()
-            if let horizonMask = try await loadMergedHorizonMask() {
+            let (earthAlignedImage, horizonMask) = try await loadOrCreateEarthAlignedImage()
+            if let horizonMask {
                 // this merged horizon mask should have been created right above
                 return try starAlignedImage.apply(
-                  mask: horizonMask.image,
+                  mask: horizonMask,
                   with: earthAlignedImage
                 )
             } else {
@@ -2193,24 +2199,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // of the earth and star aligned images, and subtract
             // that from the image instead of just the star aligned image
 
-            Log.d("frame \(frameIndex) loadOrCreateHorizonMask")
-            let horizonMask = try await loadOrCreateHorizonMask()
-            Log.d("frame \(frameIndex) loadedOrCreatedHorizonMask")
-            //Log.d("frame \(frameIndex) OG image \(image.description)")
-            let earthAlignedImage = try await loadOrCreateEarthAlignedImage()
-            //Log.d("frame \(frameIndex) OG image \(image.description)")
+            let (earthAlignedImage, horizonMask) = try await loadOrCreateEarthAlignedImage()
 
-            Log.d("HOLY FUCK earthAlignedImage \(earthAlignedImage.description) horizonMask \(horizonMask)")
-            
-            let combinedImage = try starAlignedImage.apply(
-              mask: horizonMask.image,
-              with: earthAlignedImage
-            )
-
-            //Log.d("HOLY FUCK image \(image.description) combinedImage \(combinedImage.description)")
-
-        
-            imageToSubtract = combinedImage            
+            if let horizonMask {
+                imageToSubtract = try starAlignedImage.apply(
+                  mask: try await horizonMask,
+                  with: earthAlignedImage
+                )
+            } else {
+                // fall back to non merged horizon mask if we have to
+                imageToSubtract = try starAlignedImage.apply(
+                  mask: try await self.loadOrCreateHorizonMask().image,
+                  with: earthAlignedImage
+                )
+            }
             
         } else {
             // with no horizon to worry about, just subtract the star aligned image

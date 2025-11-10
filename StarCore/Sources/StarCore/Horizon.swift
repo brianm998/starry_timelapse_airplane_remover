@@ -12,6 +12,23 @@ public struct HorizonMask: Sendable {
     public let horizonTopY: Int // this is the bottom 
     public let horizonBottomY: Int // this is the top :( swap these names
 
+    public init(_ image: PixelatedImage) {
+        self.image = image
+        let bounds = image.horizonBounds() 
+        self.horizonTopY = bounds.topY
+        self.horizonBottomY = bounds.bottomY
+    }
+    
+    public init(
+      image: PixelatedImage,
+      horizonTopY: Int, // this is the bottom 
+      horizonBottomY: Int // this is the top :( swap these names
+    ) {
+        self.image = image
+        self.horizonTopY = horizonTopY
+        self.horizonBottomY = horizonBottomY
+    }
+
     public var bounds: HorizonBounds {
         HorizonBounds(
           topY: horizonTopY,
