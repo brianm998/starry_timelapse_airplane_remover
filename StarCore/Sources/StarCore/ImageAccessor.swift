@@ -320,10 +320,11 @@ public struct ImageAccessor: Sendable {
         return nil
     }
 
-    public func dirAndNameForImage(frameIndex: Int,
-                                   ofType type: FrameViewMode,
-                                   atSize size: ImageDisplaySize) -> (String, String)?
-    {
+    public func dirAndNameForImage(
+      frameIndex: Int,
+      ofType type: FrameViewMode,
+      atSize size: ImageDisplaySize
+    ) -> (String, String)? {
         if let dir = config.dirForImage(ofType: type, atSize: size),
            let baseFileName = frameIndexToBaseNameMap[frameIndex]
         {
@@ -333,6 +334,8 @@ public struct ImageAccessor: Sendable {
                 case .subtraction:
                     return (dir, baseFileName)
                 case .horizon:
+                    return (dir, baseFileName)
+                case .mergedHorizon:
                     return (dir, baseFileName)
                 case .starAligned:
                     return (dir, baseFileName)

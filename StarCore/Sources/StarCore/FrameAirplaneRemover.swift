@@ -440,8 +440,43 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public var numberOfAlignedFrames: Int { alignmentFrames.count }
-    
 
+    // this horizon mask has been calculated by a median merge of
+    // possibly aligned horizon masks from neighbor frames.
+    public func loadMergedHorizonMask() async throws -> HorizonMask? {
+        Log.d("frame \(frameIndex) trying to load merged horizon mask")
+        // load if possible
+        do {
+            if let horizonMaskImage = try await imageAccessor.load(
+                 frameIndex: frameIndex,
+                 type: .mergedHorizon,
+                 atSize: .original
+               )
+            {
+                Log.d("frame \(frameIndex) successfully loaded merged horizon mask")
+
+                let bounds = horizonMaskImage.horizonBounds()
+                return HorizonMask(
+                  image: horizonMaskImage,
+                  horizonTopY: bounds.topY,
+                  horizonBottomY: bounds.bottomY
+                )
+            }
+        } catch {
+            Log.w("frame \(frameIndex) unable to load merged horizon mask")
+        }
+
+        /*
+
+         update this to do an earth alignment in this case,
+         and return the merged horizon mask from that method 
+         
+         */
+        
+        return nil
+    }
+
+    // this horizon mask is calculated based upon this frame only
     public func loadOrCreateHorizonMask() async throws -> HorizonMask {
         Log.d("frame \(frameIndex) trying to load horizon mask")
         // load if possible
@@ -685,22 +720,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             throw "frame \(frameIndex) didn't get either an aligned image or a failed image from alignment results" // XXX handle this better
         }
 
-        if let horizon = alignmentResult.horizonMask {
+        if let mergedHorizon = alignmentResult.horizonMask {
             try await imageAccessor.save(
-              horizon,
+              mergedHorizon,
               frameIndex: frameIndex,
-              as: .horizon,
+              as: .mergedHorizon,
               atSize: .original,
               overwrite: true
             )
             try await imageAccessor.save(
-              horizon,
+              mergedHorizon,
               frameIndex: frameIndex,
-              as: .horizon,
+              as: .mergedHorizon,
               atSize: .preview,
               overwrite: true
             )
-            // XXX tell gui to reload this frame's horizon mask
         }
         
         try await imageAccessor.save(
@@ -994,7 +1028,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         if config.horizonDetectionEnabled ?? true {
             // only load these if we really need them
-            horizonMask = try await loadOrCreateHorizonMask()
+            horizonMask = try await loadMergedHorizonMask()
+            if horizonMask == nil {
+                Log.w("frame \(frameIndex) falling back to non-merged horizon mask")
+                horizonMask = try await loadOrCreateHorizonMask()
+            }
             earthAlignedImage = try await loadOrCreateEarthAlignedImage()
         }
         
@@ -2053,14 +2091,25 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         let config = await configManager.config()
         if config.horizonDetectionEnabled ?? true {
-            let horizonMask = try await loadOrCreateHorizonMask()
+            // with horizon detection, we need to mask the star and earth images
             let earthAlignedImage = try await loadOrCreateEarthAlignedImage()
-
-            return try starAlignedImage.apply(
-              mask: horizonMask.image,
-              with: earthAlignedImage
-            )
+            if let horizonMask = try await loadMergedHorizonMask() {
+                // this merged horizon mask should have been created right above
+                return try starAlignedImage.apply(
+                  mask: horizonMask.image,
+                  with: earthAlignedImage
+                )
+            } else {
+                // but if not, fallback to the non-merged one, which is better than nothing
+                Log.w("frame \(frameIndex) falling back to non-merged horizon mask")
+                let horizonMask = try await loadOrCreateHorizonMask()
+                return try starAlignedImage.apply(
+                  mask: horizonMask.image,
+                  with: earthAlignedImage
+                )
+            }
         } else {
+            // without horizon detection, just return the star aligned image
             return starAlignedImage
         }
     }
