@@ -1320,7 +1320,7 @@ public final class ImageSequenceViewModel {
                 let counter = CountActor()
                 for frameView in self.frames {
                     if let frame = frameView.frame {
-//                        if await frame.processingState() == .userModified {
+                        if await frame.processingState() != .complete {
                             taskGroup.addTask() {
                                 await semaphore.wait()
                                 await counter.increase()
@@ -1337,7 +1337,7 @@ public final class ImageSequenceViewModel {
                                 semaphore.signal()
                             }
                         }
-  //                  }
+                    }
                 }
                 
                 try await taskGroup.waitForAll()
