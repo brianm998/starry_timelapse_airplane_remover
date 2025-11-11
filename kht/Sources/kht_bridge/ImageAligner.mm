@@ -928,6 +928,13 @@ maxCornerDeviation:(double)maxCornerDeviation
                                         frameHorizon.mat.size(),
                                         cv::INTER_LINEAR, cv::BORDER_CONSTANT,
                                         cv::Scalar(0,0,0,0));
+
+                    // threshold so all values are 0 or 0xFF
+                    cv::threshold(warpedHorizon,
+                                  warpedHorizon,
+                                  128, // mid
+                                  255,
+                                  cv::THRESH_BINARY);
                   }
                 }
               }

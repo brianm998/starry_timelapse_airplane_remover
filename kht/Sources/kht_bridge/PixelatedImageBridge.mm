@@ -31,36 +31,46 @@ extern cv::Mat ensure8U(const cv::Mat& input);
 {
     @try {
       try {
-	Log_d(@"check");
-	cv::Mat mat1 = image1.mat;
-	cv::Mat mat2 = image2.mat;
-	cv::Mat matMask = mask.mat;
+        cv::Mat mat1 = image1.mat;
+        cv::Mat mat2 = image2.mat;
+        cv::Mat matMask = mask.mat;
 
-	// Safety check: ensure sizes match
-	if (mat1.size() != mat2.size() || mat1.size() != matMask.size()) {
-	  Log_e(@"combineWithMask: Input Mats must have the same size. mat1.size [%d, %d] matw.size [%d, %d] matMask.size [%d, %d]", mat1.size().width, mat1.size().height, mat2.size().width, mat2.size().height, matMask.size().width, matMask.size().height);
-	  return nil;
-	}
+        // Safety check: ensure sizes match
+        if (mat1.size() != mat2.size() || mat1.size() != matMask.size()) {
+          Log_e(@"combineWithMask: Input Mats must have the same size. mat1.size [%d, %d] matw.size [%d, %d] matMask.size [%d, %d]", mat1.size().width, mat1.size().height, mat2.size().width, mat2.size().height, matMask.size().width, matMask.size().height);
+          return nil;
+        }
 
-	// Prepare output Mat
-	cv::Mat result;
-	result.create(mat1.size(), mat1.type());
+        // Prepare output Mat
+        cv::Mat result;
+        result.create(mat1.size(), mat1.type());
 
-	// Combine images using mask
-	// Non-zero in mask -> mat1; zero in mask -> mat2
-	mat1.copyTo(result, matMask);         // Fill masked region with mat1
-	cv::bitwise_not(matMask, matMask);     // Invert mask to copy from mat2
-	mat2.copyTo(result, matMask);         // Fill other region with mat2
-	printMatInfo(result, "result");
-	Log_d(@"check");
+        cv::Mat matMaskThreshold;
+        // threshold mask so all values are 0 or 0xFF
+        cv::threshold(matMask,
+                      matMaskThreshold,
+                      128, // mid
+                      255,
+                      cv::THRESH_BINARY);
 
-	MatWrapper * ret = [[MatWrapper alloc] initWithMat: result];
-	
-	Log_d(@"checked");
+        cv::Mat mat1_3;      // will hold the 3-channel result
+        cv::Mat mat2_3;      // will hold the 3-channel result
 
-	return ret;
+        // force images to be three channel
+        cv::cvtColor(mat1, mat1_3, cv::COLOR_BGRA2BGR);
+        cv::cvtColor(mat2, mat2_3, cv::COLOR_BGRA2BGR);
+        
+        // Combine images using mask
+        // Non-zero in mask -> mat1; zero in mask -> mat2
+        mat1_3.copyTo(result, matMaskThreshold); // Fill masked region with mat1
+        cv::bitwise_not(matMaskThreshold, matMaskThreshold); // Invert mask to copy from mat2
+        mat2_3.copyTo(result, matMaskThreshold); // Fill other region with mat2
+
+        MatWrapper * ret = [[MatWrapper alloc] initWithMat: result];
+
+        return ret;
       } catch (const cv::Exception &e) {
-	Log_e(@"OpenCV Exception: %s", e.what());
+        Log_e(@"OpenCV Exception: %s", e.what());
       }
     } @catch (NSException *exception) {
       Log_e(@"Objective-C Exception: %@", exception);
