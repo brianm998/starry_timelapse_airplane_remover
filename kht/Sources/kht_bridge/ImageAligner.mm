@@ -49,6 +49,19 @@ void printMatInfo(const cv::Mat& mat, const std::string& name = "") {
     }
 }
 
+void growBlack(cv::Mat &img, int pixels)
+{
+    // img should be CV_8UC1 with values 0 or 255
+
+    // Create a structuring element (kernel)
+    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE,
+                                               cv::Size(2 * pixels + 1, 2 * pixels + 1),
+                                               cv::Point(pixels, pixels));
+
+    // Erode to expand black regions
+    cv::erode(img, img, kernel);
+}
+
 
 @implementation AlignmentResult
 @end
@@ -497,6 +510,7 @@ MatWrapper * toGray8UWithMask(const cv::Mat& src, const cv::Mat& mask, bool norm
 
     cv::Mat gray;
     if (src.channels() > 1) {
+      // convert to grayscale
       cv::cvtColor(src, gray, cv::COLOR_BGR2GRAY);
     } else {
       gray = src.clone(); // this clone is necessary as we mutate gray later in this method
@@ -508,16 +522,21 @@ MatWrapper * toGray8UWithMask(const cv::Mat& src, const cv::Mat& mask, bool norm
     if (normalize && !mask.empty() && mask.type() == CV_8U) {
         double minVal, maxVal;
 	//printMatInfo(mask, "mask");
+        
         cv::minMaxLoc(gray, &minVal, &maxVal, nullptr, nullptr, mask);
-
 
         // Avoid divide-by-zero
         double scale = (maxVal > minVal) ? 255.0 / (maxVal - minVal) : 1.0;
         double shift = -minVal * scale;
 
+        cv::Mat test;
+        
+        // apply mask
+        gray.copyTo(test, mask);
+        
         // Apply scaling
-        gray.convertTo(tmp, CV_8U, scale, shift);
-	
+        test.convertTo(tmp, CV_8U, scale, shift);
+
     } else {
         // Fall back to existing conversion logic
         if (gray.depth() == CV_16U) {
@@ -644,6 +663,8 @@ maxCornerDeviation:(double)maxCornerDeviation
                       initWithMat:cv::Mat(special.mat.size(), CV_8U, cv::Scalar(255))];
     }
 
+    //cv::imwrite("/tmp/horizon_start.tiff", horizonMask.mat);
+
     horizonMask = toGray8U(horizonMask);
 
     if (invertMask) {
@@ -656,7 +677,9 @@ maxCornerDeviation:(double)maxCornerDeviation
     }
 
     // Prepare grayscale special frame with the horizon mask
-    MatWrapper * specialGray = toGray8UWithMask(special.mat, horizonMask.mat, true);
+    MatWrapper * specialGray = toGray8UWithMask(special.mat,
+                                                horizonMask.mat,
+                                                true);
 
     // default to deteting with the horizon mask as is
     MatWrapper * detectionMask = horizonMask;
@@ -744,7 +767,26 @@ maxCornerDeviation:(double)maxCornerDeviation
             //Log_i(@"%d %d loaded", logID, ii);
 
             // make a gray 8 bit image for detection
-            MatWrapper * frameGray = toGray8UWithMask(frame.mat, horizonMask.mat, true);
+
+            cv::Mat horizon = horizonMask.mat.clone();
+
+            //cv::imwrite("/tmp/horizon_a_" + std::to_string(idx) + ".tiff", horizon);
+            if (!invertMask) {
+              // attempt to exclude the horizon from the sky area
+              // so key points are not detected there 
+              growBlack(horizon, 100); // XXX make this a parameter
+            }
+
+            //cv::imwrite("/tmp/horizon_b_" + std::to_string(idx) + ".tiff", horizon);
+            
+            MatWrapper * frameGray = toGray8UWithMask(frame.mat,
+                                                      //horizonMask.mat,
+                                                      horizon,
+                                                      //horizonWrapper.mat,
+                                                      true);
+
+            //cv::imwrite("/tmp/frame_gray_" + std::to_string(idx) + ".tiff", frameGray.mat);
+                        
 
             //Log_i(@"%d %d to gray check", logID, ii);
 
@@ -755,7 +797,13 @@ maxCornerDeviation:(double)maxCornerDeviation
 
             if (!invertMask) {
               // detection mask is a star mask for the sky
-              localDetectionMask = makeStarMask(frameGray.mat, /*dilateSize=*/30, /*thresholdVal=*/200);
+              // XXX make the dilate size and threshold value parameters
+              localDetectionMask = makeStarMask(frameGray.mat,
+                                                /*dilateSize=*/10, //30,
+                                                /*thresholdVal=*/150);//200);
+              
+              //cv::imwrite("/tmp/star_mask_" + std::to_string(idx) + ".tiff", localDetectionMask.mat);
+              
               //Log_i(@"%d %d made star mask check", logID, ii);
             }
 
@@ -909,18 +957,26 @@ maxCornerDeviation:(double)maxCornerDeviation
                 }
 
 			    // accept the warp only if our values are within range
-                acceptWarp = (deviation < maxDeviation) &&
+                acceptWarp =
+                  (deviation < maxDeviation) &&
                   (maxCornerDist < maxCornerDeviation);
 
                 if (acceptWarp) {
                   // if we accept the warp, then actually warp
                   // this frame to fit the special image
                   //Log_i(@"%d %d accepting warp and warping", logID, ii);
-                  cv::warpPerspective(frame.mat, warped, H, frame.mat.size(),
-                                      cv::INTER_LINEAR, cv::BORDER_CONSTANT,
+                  cv::warpPerspective(frame.mat, // the input to warp
+                                      warped, // the warped output
+                                      H, // the homography to warp with
+                                      frame.mat.size(),
+                                      cv::INTER_LINEAR,
+                                      cv::BORDER_CONSTANT,
                                       cv::Scalar(0,0,0,0));
 
 
+                  //cv::imwrite("/tmp/warped_first_" + std::to_string(idx) + ".tiff", warped);
+
+                  
                   if (frameHorizon != NULL) {
                     // warp horizon with same homography as ground
                     //Log_i(@"%d %d accepting warp and warping horizon", logID, ii);
@@ -943,7 +999,7 @@ maxCornerDeviation:(double)maxCornerDeviation
             if (acceptWarp) {
               if (warped.channels() == 4) {
                 // force no alpha (still necessary?)
-                cv::cvtColor(warped, warped, cv::COLOR_BGRA2BGR);
+                //cv::cvtColor(warped, warped, cv::COLOR_BGRA2BGR);
               }
               resultSuccess[idx] = 1;
               resultMats[idx] = [[MatWrapper alloc] initWithMat: warped];
@@ -1039,8 +1095,5 @@ maxCornerDeviation:(double)maxCornerDeviation
     return @"Unknown Exception";
   }
 }
-
-
-
 
 @end
