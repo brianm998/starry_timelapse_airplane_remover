@@ -2,66 +2,218 @@ import SwiftUI
 import StarCore
 import logging
 
+
+enum SceneType: String, CaseIterable, Identifiable {
+    case skyHorizon = "Sky + Horizon"
+    case skyOnly = "Sky Only"
+
+    var id: Self { self }
+
+    var helpText: String {
+        switch self {
+        case .skyOnly:
+            "Video contains only the sky; no land or horizon line."
+        case .skyHorizon:
+            "Video shows both sky and ground (horizon line visible)."
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .skyOnly:
+            "Choose this option if every frame contains only stars, sky glow, and clouds, with no land features. In this mode, frames are aligned only to the stars, which is faster and avoids unnecessary processing."
+        case .skyHorizon:
+            "Select this if the video includes ground, mountains, treetops, or a clear horizon line. The processor will automatically align the sky to the stars and the ground to the horizon separately. This produces cleaner results in scenes containing both earth and sky."
+        }
+    }
+}
+
+enum CameraMotion: String, CaseIterable, Identifiable {
+    case fixed = "Fixed Camera"
+    case moving = "Moving Camera"
+
+    var id: Self { self }
+
+    var helpText: String {
+        switch self {
+        case .fixed:
+            "Camera was stationary."
+        case .moving:
+            "Camera panned or tracked."
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .fixed:
+            "Choose this if the tripod/head stayed in one place all night. This gives the processor a stable reference, allowing more accurate alignment of the horizon."
+        case .moving:
+            "Select this if the camera was panning, tracking stars, or following a programmed movement. This helps the processor account for frame-to-frame motion and align images properly even as the scene shifts."
+        }
+    }
+}
+
+// XXX combine this with PixelReplaementMethod
+enum ProcessingMethod: String, CaseIterable, Identifiable {
+    case auto = "Auto Clean"
+    case selective = "Selective Clean"
+
+    var id: Self { self }
+
+    var helpText: String {
+        switch self {
+        case .auto:
+            "Fully automatic removal of airplanes/satellites; replaces each frame with a clean median composite."
+        case .selective:
+            "Selective Clean – Detects only streak-like outliers and lets you decide which to remove; good for clouds or when you want control."
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .auto:
+            "This mode automatically builds a clean “best version” of every frame using neighboring frames. It removes streaks extremely well when skies are clear. It requires almost no user input and is faster to use, but it can struggle around dawn/dusk and may distort fast-moving clouds."
+        case .selective:
+            "This mode compares each original frame to a clean reference frame and highlights only the differences that look like airplane or satellite streaks. You can review and approve these changes. It works better when clouds are present or when you want to keep certain objects (like meteors). It takes more interaction but gives you finer control."
+        }
+    }
+
+    var replacementMethod: PixelReplacementMethod {
+        switch self {
+        case .auto:
+            .automatic
+        case .selective:
+            .selective
+        }        
+    }
+}
+
+func autoCleanSelectiveHelpText(isOn: Bool) -> String {
+    if isOn {
+        "Apply Selective Clean after Auto Clean to keep important objects from the original frame."
+    } else {
+        "Use pure Auto Clean with full automatic replacement."
+    }
+}
+
+func autoCleanSelectiveDescription(isOn: Bool) -> String {
+    if isOn {
+        "After Auto Clean creates a streak-free frame, Selective Clean can be run in reverse to restore specific bright events—such as meteors or flares—from the original footage. This lets you keep rare celestial events while still removing planes and satellites."
+    } else {
+        "The processor will use the fully automatic method only. This gives the cleanest sky possible but removes all bright moving objects, including meteors."
+    }
+}
+
 struct InitialInstructionsView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
-    @State private var horizonDetectionEnabled = true
-    @State private var tripodHeadWasMoving = false
-    @State private var automaticProcessing = true
+    @State private var processingMethod: ProcessingMethod = .auto
+    @State private var cameraMotion: CameraMotion = .fixed
+    @State private var sceneType: SceneType = .skyHorizon
+    @State private var preserveEvents = false
+    @State private var showProcessingMethodInfo = true
     
     var body: some View {
         @Bindable var viewModel = viewModel
         return 
           VStack {
-              Text("How should Star process this video?")
+              Text("Video Processing Options")
                 .font(.largeTitle)
                 .foregroundColor(.white)
 
-              Grid {
+              Space(height: 10)
+              Text("Choose from the following options to let Star know the best way to process your video.")
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .font(.title)
+                .foregroundColor(.white)
 
-                  GridRow {
-                      HStack {
-                          Spacer()
-                          Text("With horizon detection")
-                            .font(.title2)
+              Button {
+                  withAnimation {
+                      showProcessingMethodInfo = !showProcessingMethodInfo
+                  }
+              } label: {
+                  Text("ⓘ")
+                    .font(.title2)
+                    //.font(.largeTitle)
+                    .foregroundColor(showProcessingMethodInfo ? .red : .green)
+              }
+                .buttonStyle(PlainButtonStyle())
+              Space(height: 20)
+
+              ScrollView {
+              Form {
+                  Picker("Scene Type:", selection: $sceneType) {
+                      ForEach(SceneType.allCases, id: \.id) { sceneType in
+                          Text(sceneType.rawValue).tag(sceneType)
                             .foregroundColor(.white)
+                            .help(sceneType.helpText)
                       }
-                      Toggle("", isOn: $horizonDetectionEnabled)
                   }
-                  GridRow {
-                      HStack {
-                          Spacer()
-                          Text("Using moving tripod head")
-                            .font(.title2)
-                            .foregroundColor(horizonDetectionEnabled ? .white : .black)
+                    .pickerStyle(.inline)
+                    .foregroundColor(.white)
+
+                  Divider()
+
+                  if showProcessingMethodInfo {
+                      VStack {
+                          ForEach(SceneType.allCases, id: \.id) { sceneType in
+                              Text(sceneType.description)
+                                .foregroundColor(.white)
+                                .lineLimit(nil)
+                                .fixedSize(horizontal: false, vertical: true)
+                              //.frame(maxWidth: 400, alignment: .center)
+                                .frame(maxWidth: 800, alignment: .center)
+                                .layoutPriority(1)
+                          }
                       }
-                      Toggle("", isOn: $tripodHeadWasMoving)
+                       // .fixedSize(horizontal: true, vertical: true)
+                      Divider()
                   }
-                    .disabled(!horizonDetectionEnabled)
-                  GridRow {
-                      HStack {
-                          Spacer()
-                          Text("Automatically")
-                            .font(.title2)
+                  
+                  Picker("Camera Motion:", selection: $cameraMotion) {
+                      ForEach(CameraMotion.allCases, id: \.id) { cameraMotion in
+                          Text(cameraMotion.rawValue).tag(sceneType)
                             .foregroundColor(.white)
+                            .help(cameraMotion.helpText)
                       }
-                      Toggle("", isOn: $automaticProcessing)
                   }
+                    .pickerStyle(.inline)
+                    .foregroundColor(.white)
+
+                  Divider()
+                  
+                  Picker("Processing Method:", selection: $processingMethod) {
+                      ForEach(ProcessingMethod.allCases, id: \.id) { processingMethod in
+                          Text(processingMethod.rawValue).tag(sceneType)
+                            .foregroundColor(.white)
+                            .help(processingMethod.helpText)
+                      }
+                  }
+                    .pickerStyle(.inline)
+                    .foregroundColor(.white)
+
+                  /*
+
+                   This is not implemented past here yet
+
+                   need a config flag that turns on/off outlier detection
+                   
+                  Divider()
+
+                  Toggle("Preserve Meteors / Flares", isOn: $preserveEvents)
+                    .foregroundColor(.white)
+                    .disabled(processingMethod != .auto)
+
+                   */
               }
                 .fixedSize(horizontal: true, vertical: false)
+              }
+                .fixedSize(horizontal: true, vertical: true)
 
               Space(height: 20)
               
-              Text("Automatic processing removes all airplanes and satellites, as well as moving car headlights on the ground.  Works best with clear skies.")
-                .font(.title3)
-                .foregroundColor(.white)
-              
-              Text("Not using Automatic processing removes only the signals you want removed, allowing more control.  Supports moving clouds better.  Requires more user interaction before final rendering.")
-                .font(.title3)
-                .foregroundColor(.white)
-
-              Space(height: 20)
-
               HStack {
                   Button {
                       viewModel.shouldShowInitialInstructions = false
@@ -79,7 +231,6 @@ struct InitialInstructionsView: View {
 
                   Button {
                       startProcessing()
-                      
                   } label: {
                       ZStack {
                           Color.blue
@@ -95,6 +246,7 @@ struct InitialInstructionsView: View {
               }
                 .fixedSize(horizontal: true, vertical: true)
           }
+          .fixedSize(horizontal: true, vertical: false)
           .padding(20)
           .background(.gray)
           .cornerRadius(20)
@@ -104,16 +256,17 @@ struct InitialInstructionsView: View {
     private func startProcessing() {
         Log.d("Start")
 
-        let pixelReplacementMethod: PixelReplacementMethod = automaticProcessing ? .automatic : .selective
+        var pixelReplacementMethod: PixelReplacementMethod = .automatic
         
         if let config = viewModel.config {
             var newConfig = config.config()
-            newConfig.pixelReplacementMethod = pixelReplacementMethod
-            newConfig.horizonDetectionEnabled = horizonDetectionEnabled
-            newConfig.tripodHeadWasMoving = tripodHeadWasMoving
+            newConfig.pixelReplacementMethod = processingMethod.replacementMethod
+            pixelReplacementMethod = processingMethod.replacementMethod
+            newConfig.horizonDetectionEnabled = sceneType == .skyHorizon
+            newConfig.tripodHeadWasMoving = cameraMotion != .fixed
             config.update(newConfig)
         }
-        viewModel.horizonDetectionEnabled = horizonDetectionEnabled
+        viewModel.horizonDetectionEnabled = sceneType == .skyHorizon
         viewModel.shouldShowInitialInstructions = false
 
 
