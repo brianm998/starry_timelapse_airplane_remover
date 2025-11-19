@@ -353,13 +353,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         self.width = width
         self.height = height
 
-        if ImageSequence.imageWidth == 0 {
-            ImageSequence.imageWidth = width
-        }
-        if ImageSequence.imageHeight == 0 {
-            ImageSequence.imageHeight = height
-        }
-
         self.bytesPerPixel = bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
 
@@ -2203,7 +2196,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             if let horizonMask {
                 imageToSubtract = try starAlignedImage.apply(
-                  mask: try await horizonMask,
+                  mask: horizonMask,
                   with: earthAlignedImage
                 )
             } else {

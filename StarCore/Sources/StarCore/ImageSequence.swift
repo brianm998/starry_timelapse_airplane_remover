@@ -76,9 +76,6 @@ public actor ImageSequence {
         self.filenames = imageFiles
     }
 
-    static var imageWidth: Int = 0
-    static var imageHeight: Int = 0
-    
     public let filenames: [String]
 
     private var images: [String: ImageLoader] = [:]
@@ -118,24 +115,6 @@ public actor ImageSequence {
 
         if let maxImages = maxImages {
             _maxImages = maxImages
-        } else if ImageSequence.imageWidth != 0,
-                  ImageSequence.imageHeight != 0
-        {
-            // calculate the max number of images to keep in ram at once
-            // use the amount of physical ram / size of images
-            let memorySizeBytes = ProcessInfo.processInfo.physicalMemory
-
-            // this is a rough guess, 16 bits per pixel, 4 components per pixel
-            let bytesPerImage = ImageSequence.imageWidth*ImageSequence.imageHeight*8
-
-            // this is a rule of thumb, not exact
-            _maxImages = Int(memorySizeBytes / UInt64(bytesPerImage)) / 5 // XXX hardcoded constant
-
-            let neverGoOverMax = 50 // XXX hardcoded max
-            if _maxImages > neverGoOverMax { _maxImages = neverGoOverMax }
-            
-            maxImages = _maxImages
-            Log.i("calculated maxImages \(_maxImages)")
         } else {
             _maxImages = 10    // initial default
         }
