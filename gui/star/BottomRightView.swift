@@ -210,6 +210,9 @@ struct BottomRightView: View {
               .sheet(isPresented: $viewModel.showProcessingOptionsSheet) {
                   ProcessingOptionsView(isVisible: $viewModel.showProcessingOptionsSheet)
               }
+              .sheet(isPresented: $viewModel.shouldShowInitialInstructions) {
+                InitialInstructionsView()
+              }
             } else {
                 Spacer()
                   .border(.purple)

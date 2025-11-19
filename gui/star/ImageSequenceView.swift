@@ -53,10 +53,7 @@ struct ImageSequenceView: View {
               .frame(maxWidth: .infinity, maxHeight: .infinity)
               .padding([.bottom, .leading, .trailing])
               .background(viewModel.backgroundColor)
-            
-            if viewModel.shouldShowInitialInstructions {
-                InitialInstructionsView()
-            }
+
         }
         /* XXX fix this
           .alert(isPresented: $viewModel.showErrorAlert) {

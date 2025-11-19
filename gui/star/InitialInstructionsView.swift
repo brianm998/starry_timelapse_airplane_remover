@@ -111,88 +111,38 @@ struct InitialInstructionsView: View {
     @State private var cameraMotion: CameraMotion = .fixed
     @State private var sceneType: SceneType = .skyHorizon
     @State private var preserveEvents = false
+
+    @State private var showSceneTypeInfo = true
+    @State private var showCameraMotionInfo = true
     @State private var showProcessingMethodInfo = true
     
     var body: some View {
         @Bindable var viewModel = viewModel
-        return 
+        return
+          ScrollView {
           VStack {
               Text("Video Processing Options")
                 .font(.largeTitle)
                 .foregroundColor(.white)
 
               Space(height: 10)
-              Text("Choose from the following options to let Star know the best way to process your video.")
+              Text("Choose from the following options to let Star know the best way to process this video.")
                 .lineLimit(nil)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .center)
+//                .fixedSize(horizontal: false, vertical: true)
+//                .frame(maxWidth: .infinity, alignment: .center)
                 .font(.title)
                 .foregroundColor(.white)
 
-              Button {
-                  withAnimation {
-                      showProcessingMethodInfo = !showProcessingMethodInfo
-                  }
-              } label: {
-                  Text("ⓘ")
-                    .font(.title2)
-                    //.font(.largeTitle)
-                    .foregroundColor(showProcessingMethodInfo ? .red : .green)
-              }
-                .buttonStyle(PlainButtonStyle())
               Space(height: 20)
 
-              ScrollView {
-              Form {
-                  Picker("Scene Type:", selection: $sceneType) {
-                      ForEach(SceneType.allCases, id: \.id) { sceneType in
-                          Text(sceneType.rawValue).tag(sceneType)
-                            .foregroundColor(.white)
-                            .help(sceneType.helpText)
-                      }
-                  }
-                    .pickerStyle(.inline)
-                    .foregroundColor(.white)
+//              ScrollView {
+//                  VStack {
 
-                  Divider()
+              self.sceneTypeView
 
-                  if showProcessingMethodInfo {
-                      VStack {
-                          ForEach(SceneType.allCases, id: \.id) { sceneType in
-                              Text(sceneType.description)
-                                .foregroundColor(.white)
-                                .lineLimit(nil)
-                                .fixedSize(horizontal: false, vertical: true)
-                              //.frame(maxWidth: 400, alignment: .center)
-                                .frame(maxWidth: 800, alignment: .center)
-                                .layoutPriority(1)
-                          }
-                      }
-                       // .fixedSize(horizontal: true, vertical: true)
-                      Divider()
-                  }
-                  
-                  Picker("Camera Motion:", selection: $cameraMotion) {
-                      ForEach(CameraMotion.allCases, id: \.id) { cameraMotion in
-                          Text(cameraMotion.rawValue).tag(sceneType)
-                            .foregroundColor(.white)
-                            .help(cameraMotion.helpText)
-                      }
-                  }
-                    .pickerStyle(.inline)
-                    .foregroundColor(.white)
-
-                  Divider()
-                  
-                  Picker("Processing Method:", selection: $processingMethod) {
-                      ForEach(ProcessingMethod.allCases, id: \.id) { processingMethod in
-                          Text(processingMethod.rawValue).tag(sceneType)
-                            .foregroundColor(.white)
-                            .help(processingMethod.helpText)
-                      }
-                  }
-                    .pickerStyle(.inline)
-                    .foregroundColor(.white)
+              self.cameraMotionView
+              
+              self.processingMethodView
 
                   /*
 
@@ -207,10 +157,10 @@ struct InitialInstructionsView: View {
                     .disabled(processingMethod != .auto)
 
                    */
-              }
-                .fixedSize(horizontal: true, vertical: false)
-              }
-                .fixedSize(horizontal: true, vertical: true)
+//                  }
+//                    .fixedSize(horizontal: true, vertical: true)
+//              }
+//                .fixedSize(horizontal: true, vertical: true)
 
               Space(height: 20)
               
@@ -246,13 +196,195 @@ struct InitialInstructionsView: View {
               }
                 .fixedSize(horizontal: true, vertical: true)
           }
-          .fixedSize(horizontal: true, vertical: false)
+            .frame(minWidth: 1000)
+          //  .fixedSize(horizontal: true, vertical: false)
+
+          }
+            .frame(maxWidth: 2000)
+        //          .fixedSize(horizontal: true, vertical: false)
           .padding(20)
           .background(.gray)
-          .cornerRadius(20)
+        //          .cornerRadius(16)
+    }
+
+    private var sceneTypeView: some View {
+        VStack {
+            HStack(alignment: .top) {
+                HStack {
+                    Spacer()
+                    VStack(alignment: .trailing) {
+                        Text("Scene Type:")
+                          .font(.title2)
+                          .foregroundColor(.white)
+                        Button {
+                            Task {
+                                withAnimation {
+                                    showSceneTypeInfo = !showSceneTypeInfo
+                                }
+                            }
+                        } label: {
+                            Text("ⓘ")
+                              .font(.title2)
+                            //.font(.largeTitle)
+                              .foregroundColor(showSceneTypeInfo ? .red : .green)
+                              .help(showSceneTypeInfo ? "Hide Scene Type Information" : "Show Scene Type Information")
+                            
+                        }
+                          .buttonStyle(PlainButtonStyle())
+                    }
+                    
+                }
+                HStack {
+                    Picker("", selection: $sceneType) {
+                        ForEach(SceneType.allCases, id: \.id) { sceneType in
+                            Text(sceneType.rawValue).tag(sceneType)
+                              .foregroundColor(.white)
+                              .help(sceneType.helpText)
+                        }
+                    }
+                      .pickerStyle(.inline)
+                      .foregroundColor(.white)
+                    //                                .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                }
+            }
+            Divider()
+
+            if showSceneTypeInfo {
+                VStack(alignment: .leading) {
+                    ForEach(SceneType.allCases, id: \.id) { sceneType in
+                        Text(sceneType.rawValue)
+                          .foregroundColor(.white)
+                          .font(.largeTitle)
+                        
+                        Text(sceneType.description)
+                          .foregroundColor(.white)
+                          .font(.body)
+                    }
+                }
+                Divider()
+            }
+        }
+    }
+
+    private var cameraMotionView: some View {
+        VStack {
+            HStack(alignment: .top) {
+                HStack {
+                    Spacer()
+                    VStack(alignment: .trailing) {
+                        Text("Camera Motion:")
+                          .font(.title2)
+                          .foregroundColor(.white)
+
+                        Button {
+                            Task {
+                                withAnimation {
+                                    showCameraMotionInfo = !showCameraMotionInfo
+                                }
+                            }
+                        } label: {
+                            Text("ⓘ")
+                              .font(.title2)
+                            //.font(.largeTitle)
+                              .foregroundColor(showCameraMotionInfo ? .red : .green)
+                              .help(showCameraMotionInfo ? "Hide Camera Motion Information" : "Show Camera Motion Information")
+                        }
+                          .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                HStack {
+                    Picker("", selection: $cameraMotion) {
+                        ForEach(CameraMotion.allCases, id: \.id) { cameraMotion in
+                            Text(cameraMotion.rawValue).tag(sceneType)
+                              .foregroundColor(.white)
+                              .help(cameraMotion.helpText)
+                        }
+                    }
+                      .pickerStyle(.inline)
+                      .foregroundColor(.white)
+                    //                                .fixedSize(horizontal: false, vertical: true)
+                    
+                    Spacer()
+                }
+            }
+            Divider()
+            
+            if showCameraMotionInfo {
+                VStack(alignment: .leading) {
+                    ForEach(CameraMotion.allCases, id: \.id) { cameraMotion in
+                        Text(cameraMotion.rawValue)
+                          .foregroundColor(.white)
+                          .font(.largeTitle)
+                        
+                        Text(cameraMotion.description)
+                          .foregroundColor(.white)
+                          .font(.body)
+                    }
+                }
+                Divider()
+            }
+        }
+    }
+
+    private var processingMethodView: some View {
+        VStack {
+            HStack(alignment: .top) {
+                HStack {
+                    Spacer()
+                    VStack(alignment: .trailing) {
+                        Text("Processing Method:")
+                          .font(.title2)
+                          .foregroundColor(.white)
+
+                        Button {
+                            Task {
+                                withAnimation {
+                                    showProcessingMethodInfo = !showProcessingMethodInfo
+                                }
+                            }
+                        } label: {
+                            Text("ⓘ")
+                              .font(.title2)
+                            //.font(.largeTitle)
+                              .foregroundColor(showProcessingMethodInfo ? .red : .green)
+                              .help(showProcessingMethodInfo ? "Hide Processing Method Information" : "Show Processing Method Information")
+                        }
+                          .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                HStack {
+                    Picker("", selection: $processingMethod) {
+                        ForEach(ProcessingMethod.allCases, id: \.id) { processingMethod in
+                            Text(processingMethod.rawValue).tag(sceneType)
+                              .foregroundColor(.white)
+                              .help(processingMethod.helpText)
+                        }
+                    }
+                      .pickerStyle(.inline)
+                    //                        .fixedSize(horizontal: false, vertical: true)
+                      .foregroundColor(.white)
+                    Spacer()
+                }
+            }
+
+            if showProcessingMethodInfo {
+                VStack(alignment: .leading) {
+                    ForEach(ProcessingMethod.allCases, id: \.id) { processingMethod in
+                        Text(processingMethod.rawValue)
+                          .foregroundColor(.white)
+                          .font(.largeTitle)
+                        
+                        Text(processingMethod.description)
+                          .foregroundColor(.white)
+                          .font(.body)
+                    }
+                }
+                Divider()
+            }
+        }
     }
     
-
     private func startProcessing() {
         Log.d("Start")
 
