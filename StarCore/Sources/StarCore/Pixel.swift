@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License along with sta
 
 
 // represents a 16 bit per component RGB pixel
-public struct Pixel {
+public struct Pixel: @unchecked Sendable {
     public var value: UInt64
     public let numberOfComponents: Int
     
