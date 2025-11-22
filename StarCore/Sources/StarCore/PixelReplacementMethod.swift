@@ -2,28 +2,61 @@ import Foundation
 
 // An enum that determines our top level processing mode
 
-public enum PixelReplacementMethod: Sendable, Codable {
-    case automatic
+public enum PixelReplacementMethod: CaseIterable,
+                                    Identifiable,
+                                    Hashable,
+                                    Sendable,
+                                    Codable
+{
+    case automatic(Bool)
     case selective
 
-    var description: String {
+    public var id: Self { self }
+
+    public static var allCases: [PixelReplacementMethod] {
+        [
+          .automatic(false),
+          .selective
+        ]
+    }
+    
+    public var usesOutliers: Bool {
         switch self {
-        case .automatic:
-"""
-The automatic pixel replacement method simply either returns the star aligned image directly, or if horizon detection is enabled, returns ths star aligned image masked by the horizon mask with the earth aligned image used based upon that mask.
-"""
+        case .automatic(let selective):
+            selective
         case .selective:
-"""
-The selective method takes the aligned image(s) as a starting point, and with them, computes a subtraction image for each frame, where the aligned image is litereally subtracted from the frame being processed.  This makes most of the bad signal show up a lot more.
+            true
+        }
+    }
 
-From the subtraction image, groups of nearby bright pixels are assembled into groups, and hough line detection is used to attempt to see what pixel group are linear or not.
+    public var titleText: String {
+        switch self {
+        case .automatic(let selective):
+            if selective {
+                "Auto Clean"
+            } else {
+                "Selective Auto Clean"
+            }
+        case .selective:
+            "Selective Clean"
+        }
+    }
+    
+    public var helpText: String {
+        switch self {
+        case .automatic(let selective):
+            "Fully automatic removal of airplanes/satellites; replaces each frame with a clean median composite."
+        case .selective:
+            "Selective Clean – Detects only streak-like outliers and lets you decide which to remove; good for clouds or when you want control."
+        }
+    }
 
-Decision tree logic is then used to separate these outlying pixels into three groups:
-
-1 - trash
-2 - not replaced
-3 - replaced
-"""
+    public var description: String {
+        switch self {
+        case .automatic(let selective):
+            "This mode automatically builds a clean “best version” of every frame using neighboring frames. It removes streaks extremely well when skies are clear. It requires almost no user input and is faster to use, but it can struggle around dawn/dusk and may distort fast-moving clouds."
+        case .selective:
+            "This mode compares each original frame to a clean reference frame and highlights only the differences that look like airplane or satellite streaks. You can review and approve these changes. It works better when clouds are present or when you want to keep certain objects (like meteors). It takes more interaction but gives you finer control."
         }
     }
 }

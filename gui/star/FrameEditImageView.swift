@@ -58,9 +58,9 @@ public struct FrameEditImageView: View {
     private func maybeLoadOutliers(force: Bool = false) {
 
         if let configManager = viewModel.config,
-           configManager.config().pixelReplacementMethod == .automatic
+           !configManager.config().pixelReplacementMethod.usesOutliers
         {
-            // only load outliers in selective pixel replacement mode
+            // don't load outliers if we don't need to 
             return 
         }
 
@@ -101,7 +101,7 @@ public struct FrameEditImageView: View {
     private func maybeLoadTrash() {
 
         if let configManager = viewModel.config,
-           configManager.config().pixelReplacementMethod == .automatic
+           !configManager.config().pixelReplacementMethod.usesOutliers
         {
             // only load trash in selective pixel replacement mode
             return 
@@ -128,7 +128,7 @@ public struct FrameEditImageView: View {
         // try loading trash outliers if there aren't any present
 
         if let configManager = viewModel.config,
-           configManager.config().pixelReplacementMethod == .automatic
+           !configManager.config().pixelReplacementMethod.usesOutliers
         {
             // only load in selective pixel replacement mode
             return 

@@ -53,41 +53,6 @@ enum CameraMotion: String, CaseIterable, Identifiable {
     }
 }
 
-// XXX combine this with PixelReplaementMethod
-enum ProcessingMethod: String, CaseIterable, Identifiable {
-    case auto = "Auto Clean"
-    case selective = "Selective Clean"
-
-    var id: Self { self }
-
-    var helpText: String {
-        switch self {
-        case .auto:
-            "Fully automatic removal of airplanes/satellites; replaces each frame with a clean median composite."
-        case .selective:
-            "Selective Clean – Detects only streak-like outliers and lets you decide which to remove; good for clouds or when you want control."
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .auto:
-            "This mode automatically builds a clean “best version” of every frame using neighboring frames. It removes streaks extremely well when skies are clear. It requires almost no user input and is faster to use, but it can struggle around dawn/dusk and may distort fast-moving clouds."
-        case .selective:
-            "This mode compares each original frame to a clean reference frame and highlights only the differences that look like airplane or satellite streaks. You can review and approve these changes. It works better when clouds are present or when you want to keep certain objects (like meteors). It takes more interaction but gives you finer control."
-        }
-    }
-
-    var replacementMethod: PixelReplacementMethod {
-        switch self {
-        case .auto:
-            .automatic
-        case .selective:
-            .selective
-        }        
-    }
-}
-
 func autoCleanSelectiveHelpText(isOn: Bool) -> String {
     if isOn {
         "Apply Selective Clean after Auto Clean to keep important objects from the original frame."
@@ -107,7 +72,7 @@ func autoCleanSelectiveDescription(isOn: Bool) -> String {
 struct InitialInstructionsView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
-    @State private var processingMethod: ProcessingMethod = .auto
+    @State private var processingMethod: PixelReplacementMethod = .automatic(false)
     @State private var cameraMotion: CameraMotion = .fixed
     @State private var sceneType: SceneType = .skyHorizon
     @State private var preserveEvents = false
@@ -121,16 +86,11 @@ struct InitialInstructionsView: View {
         return
           ScrollView {
           VStack {
-              Text("Video Processing Options")
-                .font(.largeTitle)
-                .foregroundColor(.white)
-
-              Space(height: 10)
               Text("Choose from the following options to let Star know the best way to process this video.")
                 .lineLimit(nil)
 //                .fixedSize(horizontal: false, vertical: true)
 //                .frame(maxWidth: .infinity, alignment: .center)
-                .font(.title)
+                .font(.largeTitle)
                 .foregroundColor(.white)
 
               Space(height: 20)
@@ -355,8 +315,8 @@ struct InitialInstructionsView: View {
                 }
                 HStack {
                     Picker("", selection: $processingMethod) {
-                        ForEach(ProcessingMethod.allCases, id: \.id) { processingMethod in
-                            Text(processingMethod.rawValue).tag(sceneType)
+                        ForEach(PixelReplacementMethod.allCases, id: \.id) { processingMethod in
+                            Text(processingMethod.titleText).tag(sceneType)
                               .foregroundColor(.white)
                               .help(processingMethod.helpText)
                         }
@@ -370,8 +330,8 @@ struct InitialInstructionsView: View {
 
             if showProcessingMethodInfo {
                 VStack(alignment: .leading) {
-                    ForEach(ProcessingMethod.allCases, id: \.id) { processingMethod in
-                        Text(processingMethod.rawValue)
+                    ForEach(PixelReplacementMethod.allCases, id: \.id) { processingMethod in
+                        Text(processingMethod.titleText)
                           .foregroundColor(.white)
                           .font(.largeTitle)
                         
@@ -388,12 +348,12 @@ struct InitialInstructionsView: View {
     private func startProcessing() {
         Log.d("Start")
 
-        var pixelReplacementMethod: PixelReplacementMethod = .automatic
+        var pixelReplacementMethod: PixelReplacementMethod = .automatic(false)
         
         if let config = viewModel.config {
             var newConfig = config.config()
-            newConfig.pixelReplacementMethod = processingMethod.replacementMethod
-            pixelReplacementMethod = processingMethod.replacementMethod
+            newConfig.pixelReplacementMethod = processingMethod
+            pixelReplacementMethod = processingMethod
             newConfig.horizonDetectionEnabled = sceneType == .skyHorizon
             newConfig.tripodHeadWasMoving = cameraMotion != .fixed
             config.update(newConfig)
@@ -410,7 +370,7 @@ struct InitialInstructionsView: View {
                 Log.d("FUCKING CLOSURE CALLED")
                 // after we get horizons for all frames, then either
                 switch pixelReplacementMethod {
-                case .automatic:
+                case .automatic(let detectOutliers): // XXX use thisx
                     // render all frames automatically
                     viewModel.renderAllFramesAutomatic()
                     
@@ -424,7 +384,7 @@ struct InitialInstructionsView: View {
             viewModel.ignoreLowerPixels = 0
 
             switch pixelReplacementMethod {
-            case .automatic:
+            case .automatic(let detectOutliers): // XXX use this
                 // render all frames automatically
                 viewModel.renderAllFramesAutomatic()
                 

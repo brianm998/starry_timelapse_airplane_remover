@@ -79,7 +79,7 @@ public struct Config: Codable, Sendable, Transferable {
 
     public init() {
         self.outputPath = "."
-        self.pixelReplacementMethod = .automatic
+        self.pixelReplacementMethod = .automatic(false)
         self.detectionType = .strong
         //self.numConcurrentRenders = 0
         self.imageSequenceDirname = ""
@@ -103,7 +103,7 @@ public struct Config: Codable, Sendable, Transferable {
     }
 
     public init(outputPath: String?,
-                pixelReplacementMethod: PixelReplacementMethod = .automatic,
+                pixelReplacementMethod: PixelReplacementMethod = .automatic(false),
                 detectionType: DetectionType = .strong,
                 imageSequenceName: String,
                 imageSequencePath: String,
