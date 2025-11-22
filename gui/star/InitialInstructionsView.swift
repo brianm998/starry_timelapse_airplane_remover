@@ -89,15 +89,9 @@ struct InitialInstructionsView: View {
                   self.cameraMotionGridRow
                   Divider()
                   self.processingMethodGridRow
-
-                  switch processingMethod {
-                  case .automatic(_):
-                      Divider()
-                      self.automaticSelectionGridRow
-                      
-                  default:
-                      Group {}
-                  }
+                  Divider()
+                  self.automaticSelectionGridRow
+                    .disabled(processingMethod == .selective)
               }
 
               Space(height: 20)
