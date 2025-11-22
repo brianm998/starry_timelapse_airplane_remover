@@ -61,10 +61,10 @@ struct InitialInstructionsView: View {
     @State private var sceneType: SceneType = .skyHorizon
     @State private var autoPreservationMode: AutoPreservationMode = .no
 
-    @State private var showSceneTypeInfo = true
-    @State private var showCameraMotionInfo = true
-    @State private var showProcessingMethodInfo = true
-    @State private var showAutoPreservationMethodInfo = true
+    @State private var showSceneTypeInfo = false
+    @State private var showCameraMotionInfo = false
+    @State private var showProcessingMethodInfo = false
+    @State private var showAutoPreservationMethodInfo = false
     
     var body: some View {
         @Bindable var viewModel = viewModel
