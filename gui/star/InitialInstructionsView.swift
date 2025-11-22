@@ -53,33 +53,18 @@ enum CameraMotion: String, CaseIterable, Identifiable {
     }
 }
 
-func autoCleanSelectiveHelpText(isOn: Bool) -> String {
-    if isOn {
-        "Apply Selective Clean after Auto Clean to keep important objects from the original frame."
-    } else {
-        "Use pure Auto Clean with full automatic replacement."
-    }
-}
-
-func autoCleanSelectiveDescription(isOn: Bool) -> String {
-    if isOn {
-        "After Auto Clean creates a streak-free frame, Selective Clean can be run in reverse to restore specific bright events—such as meteors or flares—from the original footage. This lets you keep rare celestial events while still removing planes and satellites."
-    } else {
-        "The processor will use the fully automatic method only. This gives the cleanest sky possible but removes all bright moving objects, including meteors."
-    }
-}
-
 struct InitialInstructionsView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     @State private var processingMethod: PixelReplacementMethod = .automatic(false)
     @State private var cameraMotion: CameraMotion = .fixed
     @State private var sceneType: SceneType = .skyHorizon
-    @State private var preserveEvents = false
+    @State private var autoPreservationMode: AutoPreservationMode = .no
 
     @State private var showSceneTypeInfo = true
     @State private var showCameraMotionInfo = true
     @State private var showProcessingMethodInfo = true
+    @State private var showAutoPreservationMethodInfo = true
     
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -98,29 +83,22 @@ struct InitialInstructionsView: View {
 //              ScrollView {
 //                  VStack {
 
-              self.sceneTypeView
-
-              self.cameraMotionView
-              
-              self.processingMethodView
-
-                  /*
-
-                   This is not implemented past here yet
-
-                   need a config flag that turns on/off outlier detection
-                   
+              Grid {
+                  self.sceneTypeGridRow
                   Divider()
+                  self.cameraMotionGridRow
+                  Divider()
+                  self.processingMethodGridRow
 
-                  Toggle("Preserve Meteors / Flares", isOn: $preserveEvents)
-                    .foregroundColor(.white)
-                    .disabled(processingMethod != .auto)
-
-                   */
-//                  }
-//                    .fixedSize(horizontal: true, vertical: true)
-//              }
-//                .fixedSize(horizontal: true, vertical: true)
+                  switch processingMethod {
+                  case .automatic(_):
+                      Divider()
+                      self.automaticSelectionGridRow
+                      
+                  default:
+                      Group {}
+                  }
+              }
 
               Space(height: 20)
               
@@ -167,8 +145,9 @@ struct InitialInstructionsView: View {
         //          .cornerRadius(16)
     }
 
-    private var sceneTypeView: some View {
-        VStack {
+    private var sceneTypeGridRow: some View {
+        GridRow {
+            
             HStack(alignment: .top) {
                 HStack {
                     Spacer()
@@ -176,21 +155,6 @@ struct InitialInstructionsView: View {
                         Text("Scene Type:")
                           .font(.title2)
                           .foregroundColor(.white)
-                        Button {
-                            Task {
-                                withAnimation {
-                                    showSceneTypeInfo = !showSceneTypeInfo
-                                }
-                            }
-                        } label: {
-                            Text("ⓘ")
-                              .font(.title2)
-                            //.font(.largeTitle)
-                              .foregroundColor(showSceneTypeInfo ? .red : .green)
-                              .help(showSceneTypeInfo ? "Hide Scene Type Information" : "Show Scene Type Information")
-                            
-                        }
-                          .buttonStyle(PlainButtonStyle())
                     }
                     
                 }
@@ -204,31 +168,49 @@ struct InitialInstructionsView: View {
                     }
                       .pickerStyle(.inline)
                       .foregroundColor(.white)
-                    //                                .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                 }
             }
-            Divider()
-
-            if showSceneTypeInfo {
-                VStack(alignment: .leading) {
-                    ForEach(SceneType.allCases, id: \.id) { sceneType in
-                        Text(sceneType.rawValue)
-                          .foregroundColor(.white)
-                          .font(.largeTitle)
-                        
-                        Text(sceneType.description)
-                          .foregroundColor(.white)
-                          .font(.body)
-                    }
+            
+            Button {
+                withAnimation {
+                    showSceneTypeInfo = !showSceneTypeInfo
                 }
-                Divider()
+            } label: {
+                Text("ⓘ")
+                  .font(.title2)
+                  .foregroundColor(showSceneTypeInfo ? .red : .green)
+                  .help(showSceneTypeInfo ? "Hide Scene Type Information" : "Show Scene Type Information")
+                
+            }
+              .buttonStyle(PlainButtonStyle())
+        
+            HStack {
+                if showSceneTypeInfo {
+                    VStack(alignment: .leading) {
+                        ForEach(SceneType.allCases, id: \.id) { sceneType in
+                            Text(sceneType.rawValue)
+                              .foregroundColor(.white)
+                              .font(.largeTitle)
+                            
+                            Text(sceneType.description)
+                              .foregroundColor(.white)
+                              .font(.body)
+                        }
+                    }
+                } else {
+                    Text("Show Info")
+                      .foregroundColor(.white)
+                    if addSpacer { Spacer() }
+                }
             }
         }
     }
+    
 
-    private var cameraMotionView: some View {
-        VStack {
+     
+    private var cameraMotionGridRow: some View {
+        GridRow {
             HStack(alignment: .top) {
                 HStack {
                     Spacer()
@@ -237,26 +219,12 @@ struct InitialInstructionsView: View {
                           .font(.title2)
                           .foregroundColor(.white)
 
-                        Button {
-                            Task {
-                                withAnimation {
-                                    showCameraMotionInfo = !showCameraMotionInfo
-                                }
-                            }
-                        } label: {
-                            Text("ⓘ")
-                              .font(.title2)
-                            //.font(.largeTitle)
-                              .foregroundColor(showCameraMotionInfo ? .red : .green)
-                              .help(showCameraMotionInfo ? "Hide Camera Motion Information" : "Show Camera Motion Information")
-                        }
-                          .buttonStyle(PlainButtonStyle())
                     }
                 }
                 HStack {
                     Picker("", selection: $cameraMotion) {
                         ForEach(CameraMotion.allCases, id: \.id) { cameraMotion in
-                            Text(cameraMotion.rawValue).tag(sceneType)
+                            Text(cameraMotion.rawValue).tag(cameraMotion)
                               .foregroundColor(.white)
                               .help(cameraMotion.helpText)
                         }
@@ -268,27 +236,107 @@ struct InitialInstructionsView: View {
                     Spacer()
                 }
             }
-            Divider()
-            
-            if showCameraMotionInfo {
-                VStack(alignment: .leading) {
-                    ForEach(CameraMotion.allCases, id: \.id) { cameraMotion in
-                        Text(cameraMotion.rawValue)
-                          .foregroundColor(.white)
-                          .font(.largeTitle)
-                        
-                        Text(cameraMotion.description)
-                          .foregroundColor(.white)
-                          .font(.body)
-                    }
+            Button {
+                withAnimation {
+                    showCameraMotionInfo = !showCameraMotionInfo
                 }
-                Divider()
+            } label: {
+                Text("ⓘ")
+                  .font(.title2)
+                //.font(.largeTitle)
+                  .foregroundColor(showCameraMotionInfo ? .red : .green)
+                  .help(showCameraMotionInfo ? "Hide Camera Motion Information" : "Show Camera Motion Information")
+            }
+              .buttonStyle(PlainButtonStyle())
+
+            HStack {
+                if showCameraMotionInfo {
+                    VStack(alignment: .leading) {
+                        ForEach(CameraMotion.allCases, id: \.id) { cameraMotion in
+                            Text(cameraMotion.rawValue)
+                              .foregroundColor(.white)
+                              .font(.largeTitle)
+                            
+                            Text(cameraMotion.description)
+                              .foregroundColor(.white)
+                              .font(.body)
+                        }
+                    }
+                } else {
+                    Text("Show Info")
+                      .foregroundColor(.white)
+                    if addSpacer { Spacer() }
+                }
             }
         }
     }
 
-    private var processingMethodView: some View {
-        VStack {
+    private var addSpacer: Bool {
+        showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo
+    }
+
+    private var automaticSelectionGridRow: some View {
+        GridRow {
+            HStack(alignment: .top) {
+                HStack {
+                    Spacer()
+                    VStack(alignment: .trailing) {
+                        Text("Selective Auto Clean:")
+                          .font(.title2)
+                          .foregroundColor(.white)
+
+                    }
+                }
+                HStack {
+                    Picker("", selection: $autoPreservationMode) {
+                        ForEach(AutoPreservationMode.allCases, id: \.id) { mode in
+                            Text(mode.rawValue).tag(mode)
+                              .foregroundColor(.white)
+                              .help(mode.helpText)
+                        }
+                    }
+                      .pickerStyle(.inline)
+                      .foregroundColor(.white)
+                    Spacer()
+                }
+            }
+            Button {
+                withAnimation {
+                    showAutoPreservationMethodInfo = !showAutoPreservationMethodInfo
+                }
+            } label: {
+                Text("ⓘ")
+                  .font(.title2)
+                //.font(.largeTitle)
+                  .foregroundColor(showAutoPreservationMethodInfo ? .red : .green)
+                  .help(showAutoPreservationMethodInfo ? "Hide Auto Clean Information" : "Show Auto Clean Information")
+            }
+              .buttonStyle(PlainButtonStyle())
+
+            HStack {
+                if showAutoPreservationMethodInfo {
+                    VStack(alignment: .leading) {
+                        ForEach(AutoPreservationMode.allCases, id: \.id) { mode in
+                            Text(mode.rawValue)
+                              .foregroundColor(.white)
+                              .font(.largeTitle)
+                            
+                            Text(mode.description)
+                              .foregroundColor(.white)
+                              .font(.body)
+                        }
+                    }
+                } else {
+                    Text("Show Info")
+                      .foregroundColor(.white)
+                    if addSpacer { Spacer() }
+                }
+            }
+        }
+    }
+    
+    private var processingMethodGridRow: some View {
+        GridRow {
             HStack(alignment: .top) {
                 HStack {
                     Spacer()
@@ -297,20 +345,6 @@ struct InitialInstructionsView: View {
                           .font(.title2)
                           .foregroundColor(.white)
 
-                        Button {
-                            Task {
-                                withAnimation {
-                                    showProcessingMethodInfo = !showProcessingMethodInfo
-                                }
-                            }
-                        } label: {
-                            Text("ⓘ")
-                              .font(.title2)
-                            //.font(.largeTitle)
-                              .foregroundColor(showProcessingMethodInfo ? .red : .green)
-                              .help(showProcessingMethodInfo ? "Hide Processing Method Information" : "Show Processing Method Information")
-                        }
-                          .buttonStyle(PlainButtonStyle())
                     }
                 }
                 HStack {
@@ -327,20 +361,37 @@ struct InitialInstructionsView: View {
                     Spacer()
                 }
             }
-
-            if showProcessingMethodInfo {
-                VStack(alignment: .leading) {
-                    ForEach(PixelReplacementMethod.allCases, id: \.id) { processingMethod in
-                        Text(processingMethod.titleText)
-                          .foregroundColor(.white)
-                          .font(.largeTitle)
-                        
-                        Text(processingMethod.description)
-                          .foregroundColor(.white)
-                          .font(.body)
-                    }
+            Button {
+                withAnimation {
+                    showProcessingMethodInfo = !showProcessingMethodInfo
                 }
-                Divider()
+            } label: {
+                Text("ⓘ")
+                  .font(.title2)
+                //.font(.largeTitle)
+                  .foregroundColor(showProcessingMethodInfo ? .red : .green)
+                  .help(showProcessingMethodInfo ? "Hide Processing Method Information" : "Show Processing Method Information")
+            }
+              .buttonStyle(PlainButtonStyle())
+
+            HStack {
+                if showProcessingMethodInfo {
+                    VStack(alignment: .leading) {
+                        ForEach(PixelReplacementMethod.allCases, id: \.id) { processingMethod in
+                            Text(processingMethod.titleText)
+                              .foregroundColor(.white)
+                              .font(.largeTitle)
+                            
+                            Text(processingMethod.description)
+                              .foregroundColor(.white)
+                              .font(.body)
+                        }
+                    }
+                } else {
+                    Text("Show Info")
+                      .foregroundColor(.white)
+                    if addSpacer { Spacer() }
+                }
             }
         }
     }
@@ -348,12 +399,13 @@ struct InitialInstructionsView: View {
     private func startProcessing() {
         Log.d("Start")
 
-        var pixelReplacementMethod: PixelReplacementMethod = .automatic(false)
+        processingMethod = processingMethod.apply(
+          autoPreservationMode: autoPreservationMode
+        )
         
         if let config = viewModel.config {
             var newConfig = config.config()
             newConfig.pixelReplacementMethod = processingMethod
-            pixelReplacementMethod = processingMethod
             newConfig.horizonDetectionEnabled = sceneType == .skyHorizon
             newConfig.tripodHeadWasMoving = cameraMotion != .fixed
             config.update(newConfig)
@@ -367,10 +419,9 @@ struct InitialInstructionsView: View {
         if viewModel.horizonDetectionEnabled {
 
             viewModel.processHorizonForAllFrames() {
-                Log.d("FUCKING CLOSURE CALLED")
                 // after we get horizons for all frames, then either
-                switch pixelReplacementMethod {
-                case .automatic(let detectOutliers): // XXX use thisx
+                switch processingMethod {
+                case .automatic(let detectOutliers): // XXX use this
                     // render all frames automatically
                     viewModel.renderAllFramesAutomatic()
                     
@@ -383,7 +434,7 @@ struct InitialInstructionsView: View {
 
             viewModel.ignoreLowerPixels = 0
 
-            switch pixelReplacementMethod {
+            switch processingMethod {
             case .automatic(let detectOutliers): // XXX use this
                 // render all frames automatically
                 viewModel.renderAllFramesAutomatic()
