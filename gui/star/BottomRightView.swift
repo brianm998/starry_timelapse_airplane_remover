@@ -207,9 +207,6 @@ struct BottomRightView: View {
                   RenderVideoSheetView(isVisible: $viewModel.renderVideoSheetShowing,
                                        viewModel: viewModel)
               }
-              .sheet(isPresented: $viewModel.showProcessingOptionsSheet) {
-                  ProcessingOptionsView(isVisible: $viewModel.showProcessingOptionsSheet)
-              }
               .sheet(isPresented: $viewModel.shouldShowInitialInstructions) {
                 InitialInstructionsView()
               }

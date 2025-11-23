@@ -166,28 +166,7 @@ struct LeftPanel: View {
             let horizonCount = viewModel.frameStateMap[.horizonDetected]?.count ?? 0
 
             Button() {
-                if let config = viewModel.config {
-                    let pixelReplacementMode = config.config().pixelReplacementMethod// ?? .automatic
-                    switch pixelReplacementMode {
-                    case .automatic:
-                        viewModel.renderAllFramesAutomatic()
-                        
-                    case .selective:
-                        viewModel.showProcessingOptionsSheet = true
-                    }
-                }
-                
-                //viewModel.processFrames(from: 0)
-                 /*
-                  XXX show a UI here which allows the user to choose:
-
-                  - the number of neigbhors
-                  - the pixel threshold
-                  - now many to process at once
-                  - processessing level (mild, strong, etc)
-
-                  with a description of what each one means
-                 */
+                viewModel.shouldShowInitialInstructions = true
             } label: {
                 Text("Process \(unprocessed+horizonCount) frames")
             }

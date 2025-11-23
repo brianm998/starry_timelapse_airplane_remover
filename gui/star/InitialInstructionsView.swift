@@ -65,38 +65,57 @@ struct InitialInstructionsView: View {
     @State private var showCameraMotionInfo = false
     @State private var showProcessingMethodInfo = false
     @State private var showAutoPreservationMethodInfo = false
+
+    @State private var showProcessFramesInfo = false
+    @State private var showNeighborFrameInfo = false
+    @State private var showPixelThresholdInfo = false
+    @State private var showProcessingModeInfo = false
+    
+    @State private var showExtraSettings = false
+
+    @FocusState private var focusedField: FocusedField?
     
     var body: some View {
         @Bindable var viewModel = viewModel
         return
-          ScrollView {
           VStack {
               Text("Choose from the following options to let Star know the best way to process this video.")
                 .lineLimit(nil)
-//                .fixedSize(horizontal: false, vertical: true)
-//                .frame(maxWidth: .infinity, alignment: .center)
+              //                .fixedSize(horizontal: false, vertical: true)
+              //                .frame(maxWidth: .infinity, alignment: .center)
                 .font(.largeTitle)
                 .foregroundColor(.white)
 
               Space(height: 20)
 
-//              ScrollView {
-//                  VStack {
+              ScrollView {
+                  Grid {
+                      self.sceneTypeGridRow
+                      Divider()
+                      self.cameraMotionGridRow
+                      Divider()
+                      self.processingMethodGridRow
+                      Divider()
+                      self.automaticSelectionGridRow
+                        .disabled(processingMethod == .selective)
 
-              Grid {
-                  self.sceneTypeGridRow
-                  Divider()
-                  self.cameraMotionGridRow
-                  Divider()
-                  self.processingMethodGridRow
-                  Divider()
-                  self.automaticSelectionGridRow
-                    .disabled(processingMethod == .selective)
+                      if showExtraSettings {
+                          Divider()
+                          self.cuncurrentProcessingLimitView
+                          Divider()
+                          self.neighborFrameCountView
+                          Divider()
+                          self.pixelThresholdView
+                          Divider()
+                          self.processingModeView
+                      }
+                  }
               }
-
+              
               Space(height: 20)
               
               HStack {
+                  Spacer()
                   Button {
                       viewModel.shouldShowInitialInstructions = false
                   } label: {
@@ -110,6 +129,7 @@ struct InitialInstructionsView: View {
                       }
                   }
                     .buttonStyle(PlainButtonStyle()) // XXX these styles suck
+                    .fixedSize(horizontal: true, vertical: true)
 
                   Button {
                       startProcessing()
@@ -125,14 +145,27 @@ struct InitialInstructionsView: View {
                       }
                   }
                     .buttonStyle(PlainButtonStyle()) // XXX these styles suck
-              }
-                .fixedSize(horizontal: true, vertical: true)
-          }
-            .frame(minWidth: 1000)
-          //  .fixedSize(horizontal: true, vertical: false)
+                    .fixedSize(horizontal: true, vertical: true)
 
+
+                  Spacer()
+                  Button() {
+                      withAnimation {
+                          showExtraSettings = !showExtraSettings
+                      }
+                  } label: {
+                      Text("⚙")
+                        .font(.system(size: 60))
+                        .foregroundColor(showExtraSettings ? .red : .green)
+                        .help(showExtraSettings ? "Hide Extra Settings" : "Show Extra Settings")
+                  }
+                    .buttonStyle(PlainButtonStyle())
+                  Text(showExtraSettings ? "Hide Extra Settings" : "Show Extra Settings")
+                    .foregroundColor(.white)
+              }
           }
-            .frame(maxWidth: 2000)
+          .frame(minWidth: 800)
+          //.frame(maxWidth: 2000)
         //          .fixedSize(horizontal: true, vertical: false)
           .padding(20)
           .background(.gray)
@@ -141,7 +174,6 @@ struct InitialInstructionsView: View {
 
     private var sceneTypeGridRow: some View {
         GridRow {
-            
             HStack(alignment: .top) {
                 HStack {
                     Spacer()
@@ -226,7 +258,6 @@ struct InitialInstructionsView: View {
                       .pickerStyle(.inline)
                       .foregroundColor(.white)
                     //                                .fixedSize(horizontal: false, vertical: true)
-                    
                     Spacer()
                 }
             }
@@ -266,7 +297,9 @@ struct InitialInstructionsView: View {
     }
 
     private var addSpacer: Bool {
-        showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo
+        showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo ||
+        showAutoPreservationMethodInfo || showProcessFramesInfo ||
+        showNeighborFrameInfo || showPixelThresholdInfo || showProcessingModeInfo
     }
 
     private var automaticSelectionGridRow: some View {
@@ -390,6 +423,177 @@ struct InitialInstructionsView: View {
         }
     }
     
+    private var cuncurrentProcessingLimitView: some View {
+        GridRow {
+            HStack {
+                Spacer()
+                EditableNumberOfFramesToProcessConcurrentlyView(
+                  focusedField: $focusedField,
+                  textColor: .white,
+                  alwaysOpen: true
+                )
+                Spacer()
+            }
+
+            Button {
+                withAnimation {
+                    showProcessFramesInfo = !showProcessFramesInfo
+                }
+            } label: {
+                Text("ⓘ")
+                  .font(.title2)
+                  .foregroundColor( showProcessFramesInfo ? .red : .green)
+                  .help(showProcessFramesInfo ? "Hide Processing Limit Information" : "Show Processing Limit Information")
+                
+            }
+              .buttonStyle(PlainButtonStyle())
+        
+            HStack {
+                if showProcessFramesInfo {
+                    
+                    Text("How many frames do we process concurrently?  Number of CPUs is likely too high, as much of the processing has been parallized.  2-5 is a good number here.")
+                      .foregroundColor(.white)
+                      .lineLimit(nil)
+                      .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("Show Info")
+                      .foregroundColor(.white)
+                    if addSpacer { Spacer() }
+                }
+            }
+        }
+
+    }
+
+    private var neighborFrameCountView: some View {
+        GridRow {
+            HStack {
+                Spacer()
+                EditableNumberOfNeighborFrames(
+                  focusedField: $focusedField,
+                  textColor: .white,
+                  alwaysOpen: true
+                )
+                Spacer()
+            }
+            
+            Button {
+                withAnimation {
+                    showNeighborFrameInfo = !showNeighborFrameInfo
+                }
+            } label: {
+                Text("ⓘ")
+                  .font(.title2)
+                  .foregroundColor( showNeighborFrameInfo ? .red : .green)
+                  .help(showNeighborFrameInfo ? "Hide Frame Count Information" : "Show Frame Count Information")
+                
+            }
+              .buttonStyle(PlainButtonStyle())
+            
+            HStack {
+                if showNeighborFrameInfo {
+                    Text("During star alignment, we use this number for aligning and processing neighboring frames.  Lowest possible number is 1, which does work in most cases.  However, 8 is a better option for general use, as it covers the case where neighboring frames have bad pixels at the same location.")
+                      .foregroundColor(.white)
+                      .lineLimit(nil)
+                      .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("Show Info")
+                      .foregroundColor(.white)
+                    if addSpacer { Spacer() }
+
+                }
+            }
+        }
+    }
+
+
+    private var pixelThresholdView: some View {
+        GridRow {
+            HStack {
+                Spacer()
+                EditablePixelThresholdView(
+                  focusedField: $focusedField,
+                  textColor: .white,
+                  alwaysOpen: true
+                )
+                Spacer()
+            }
+            Button {
+                withAnimation {
+                    showPixelThresholdInfo = !showPixelThresholdInfo
+                }
+            } label: {
+                Text("ⓘ")
+                  .font(.title2)
+                  .foregroundColor( showPixelThresholdInfo ? .red : .green)
+                  .help(showPixelThresholdInfo ? "Hide Pixel Threshold Information" : "Show Pixel Threshold Information")
+                
+            }
+              .buttonStyle(PlainButtonStyle())
+            
+            HStack {
+                if showPixelThresholdInfo {
+                    Text("The pixel threshold is a factor used to weed out pixels that are statistically too much brigher than other aligned pixels at the same location.  Lower values like 0.5 get rid of more brighter pixels, higher values like 2.0 will allow more brighter pixels to pass through.  Used for both the subtraction image and for calculating what pixel values to replace airplanes with.")
+                      .lineLimit(nil)
+                      .foregroundColor(.white)
+                      .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("Show Info")
+                      .foregroundColor(.white)
+                    if addSpacer { Spacer() }
+                }
+            }
+        }
+    }
+
+    private var processingModeView: some View {
+        @Bindable var viewModel = viewModel
+        return GridRow {
+            HStack {
+                Text("Processing Mode:")
+                  .foregroundColor(.white)
+                Picker("", selection: $viewModel.detectionType) {
+                    ForEach(DetectionType.allCases, id: \.self) { value in
+                        Text(value.rawValue).tag(value)
+                    }
+                }
+                  .frame(maxWidth: 120)
+                  .onChange(of: viewModel.detectionType) {
+                      Task {
+                          await constants.set(detectionType: viewModel.detectionType)
+
+                          // stick it in user preferences
+                          self.viewModel.userPreferences.processingType = viewModel.detectionType
+                      }
+                  }
+            }
+            Button {
+                withAnimation {
+                    showProcessingModeInfo = !showProcessingModeInfo
+                }
+            } label: {
+                Text("ⓘ")
+                  .font(.title2)
+                  .foregroundColor( showProcessingModeInfo ? .red : .green)
+                  .help(showProcessingModeInfo ? "Hide Processing Information" : "Show Processing Information")
+            }
+              .buttonStyle(PlainButtonStyle())
+            
+            HStack {
+                if showProcessingModeInfo {
+                    Text("Star supports a number of different processing modes for selective processing.  On one end is faster processing and less accuracy, on the other end is slower processing and more touch up work.")
+                      .lineLimit(nil)
+                      .foregroundColor(.white)
+                      .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("Show Info")
+                      .foregroundColor(.white)
+                    if addSpacer { Spacer() }
+                }
+            }
+        }
+    }
+
     private func startProcessing() {
         Log.d("Start")
 
@@ -407,7 +611,6 @@ struct InitialInstructionsView: View {
         viewModel.horizonDetectionEnabled = sceneType == .skyHorizon
         viewModel.shouldShowInitialInstructions = false
 
-
         viewModel.showIgnoreLowerBar = false
 
         if viewModel.horizonDetectionEnabled {
@@ -420,8 +623,8 @@ struct InitialInstructionsView: View {
                     viewModel.renderAllFramesAutomatic()
                     
                 case .selective:
-                    // or show a dialog to tell new users what to do next
-                    viewModel.showProcessingOptionsSheet = true
+                    // render all frames in selective mode
+                    viewModel.processFrames(from: 0)
                 }
             }
         } else {
@@ -434,8 +637,8 @@ struct InitialInstructionsView: View {
                 viewModel.renderAllFramesAutomatic()
                 
             case .selective:
-                // or show a dialog to tell new users what to do next
-                viewModel.showProcessingOptionsSheet = true
+                // render all frames in selective mode
+                viewModel.processFrames(from: 0)
             }
         }
     }
