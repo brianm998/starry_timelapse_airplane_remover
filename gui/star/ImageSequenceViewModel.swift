@@ -1300,14 +1300,14 @@ public final class ImageSequenceViewModel {
         let pixelReplacementMode = config.config().pixelReplacementMethod// ?? .automatic
         
         switch pixelReplacementMode {
-        case .automatic:
-            renderAllFramesAutomatic()
+        case .automatic(let useOutliers): // XXX what about the associated bool?
+            renderAllFramesAutomatic(useOutliers)
         case .selective:
             renderAllFramesSelective()
         }
     }
 
-    func renderAllFramesAutomatic() {
+    func renderAllFramesAutomatic(_ useOutliers: Bool) { // XXX use this arg
         Log.d("renderAllFramesAutomatic")
         self.renderingAllFrames = true
         let frameSaveQueue = self.frameSaveQueue

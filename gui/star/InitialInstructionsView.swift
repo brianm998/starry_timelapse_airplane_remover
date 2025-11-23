@@ -123,7 +123,7 @@ struct InitialInstructionsView: View {
                           Color.white
                             .cornerRadius(20)
 
-                          Text("Cancel")
+                          Text("Close")
                             .font(.title2)
                             .padding(20)
                       }
@@ -616,30 +616,14 @@ struct InitialInstructionsView: View {
         if viewModel.horizonDetectionEnabled {
 
             viewModel.processHorizonForAllFrames() {
-                // after we get horizons for all frames, then either
-                switch processingMethod {
-                case .automatic(let detectOutliers): // XXX use this
-                    // render all frames automatically
-                    viewModel.renderAllFramesAutomatic()
-                    
-                case .selective:
-                    // render all frames in selective mode
-                    viewModel.processFrames(from: 0)
-                }
+                // after we get horizons for all frames, render frames
+                viewModel.renderAllFrames()
             }
         } else {
 
             viewModel.ignoreLowerPixels = 0
 
-            switch processingMethod {
-            case .automatic(let detectOutliers): // XXX use this
-                // render all frames automatically
-                viewModel.renderAllFramesAutomatic()
-                
-            case .selective:
-                // render all frames in selective mode
-                viewModel.processFrames(from: 0)
-            }
+            viewModel.renderAllFrames()
         }
     }
 }

@@ -180,6 +180,20 @@ struct BottomRightView: View {
                 
                 EditableFrameNumberView()
 
+
+                Button() {
+                    withAnimation {
+                        viewModel.shouldShowInitialInstructions = true
+                    }
+                } label: {
+                    Text("⚙")
+                      .font(.system(size: 60))
+                      .foregroundColor(.white)
+                      .help("Show Settings")
+                }
+                  .buttonStyle(PlainButtonStyle())
+
+                
                 ExpandUpButton($viewModel.showFilmstrip)
                 
               .sheet(isPresented: $viewModel.multiChoiceSheetShowing) {
