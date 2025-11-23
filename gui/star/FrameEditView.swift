@@ -144,50 +144,54 @@ struct FrameEditView: View {
     func currentCrosshairCursor() -> NSCursor {
         switch viewModel.selectionMode {
         case .remove:
-            return .removeCrosshair
+            .removeCrosshair
         case .keep:
-            return .keepCrosshair
+            .keepCrosshair
         case .shovel:
-            return .shovelCrosshair
+            .shovelCrosshair
         case .razor:
-            return .razorCrosshair
+            .razorCrosshair
             
         case .trash:
-            return .deleteTrashCrosshair
+            .deleteTrashCrosshair
             
         case .removeFromTrash:
-            return .extractTrashCrosshair
+            .extractTrashCrosshair
         case .information:
-            return .infoCrosshair
+            .infoCrosshair
 
         case .multi:
-            return .multiCrosshair
+            .multiCrosshair
 
+        case .none:
+            .arrow
         }
     }
     
     var currentPointingCursor: NSCursor {
         switch viewModel.selectionMode {
         case .remove:
-            return .removePointing
+            .removePointing
         case .keep:
-            return .keepPointing
+            .keepPointing
         case .shovel:
-            return .shovelPointing
+            .shovelPointing
         case .razor:
-            return .razorPointing
+            .razorPointing
             
         case .trash:
-            return .deleteTrashPointing
+            .deleteTrashPointing
             
         case .removeFromTrash:
-            return .extractTrashPointing
+            .extractTrashPointing
         case .information:
-            return .infoPointing
+            .infoPointing
 
         case .multi:
-            return .multiPointing
+            .multiPointing
 
+        case .none:
+            .arrow
         }
     }
     
@@ -196,6 +200,7 @@ struct FrameEditView: View {
     var selectionDragGesture: some Gesture {
         DragGesture()
           .onChanged { gesture in
+              guard viewModel.doesUseOutliers else { return }
               let location = gesture.location
               if !isDragging { topViewModel.pushCursor(self.currentPointingCursor) }
               isDragging = true
@@ -208,6 +213,7 @@ struct FrameEditView: View {
               Log.v("location \(location)")
           }
           .onEnded { gesture in
+              guard viewModel.doesUseOutliers else { return }
               topViewModel.popCursor()
               isDragging = false
               let end_location = gesture.location
@@ -303,6 +309,10 @@ struct FrameEditView: View {
 
                   case .multi:
                       self.viewModel.multiSelectSheetShowing = true
+
+                  case .none:
+                      // do nothing
+                      break
                   }
               }
          }

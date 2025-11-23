@@ -54,12 +54,10 @@ enum CameraMotion: String, CaseIterable, Identifiable {
 }
 
 struct InitialInstructionsView: View {
-    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    var viewModel: ImageSequenceViewModel
 
-    @State private var processingMethod: PixelReplacementMethod = .automatic(false)
-    @State private var cameraMotion: CameraMotion = .fixed
-    @State private var sceneType: SceneType = .skyHorizon
-    @State private var autoPreservationMode: AutoPreservationMode = .no
+    @State private var pixelReplacementMethod: HighLevelPixelReplacementMethod
+    @State private var autoPreservationMode: AutoPreservationMode
 
     @State private var showSceneTypeInfo = false
     @State private var showCameraMotionInfo = false
@@ -74,15 +72,29 @@ struct InitialInstructionsView: View {
     @State private var showExtraSettings = false
 
     @FocusState private var focusedField: FocusedField?
+
+    init(viewModel: ImageSequenceViewModel) {
+        self.viewModel = viewModel
+
+        // grab that shit from the view model
+        if viewModel.pixelReplacementMethod.usesOutliers {
+            autoPreservationMode = .yes
+        } else {
+            autoPreservationMode = .no
+        }
+        switch viewModel.pixelReplacementMethod {
+        case .automatic(_):
+            pixelReplacementMethod = .automatic
+        case .selective:
+            pixelReplacementMethod = .selective
+        }
+    }
     
     var body: some View {
         @Bindable var viewModel = viewModel
-        return
-          VStack {
+        return VStack {
               Text("Choose from the following options to let Star know the best way to process this video.")
                 .lineLimit(nil)
-              //                .fixedSize(horizontal: false, vertical: true)
-              //                .frame(maxWidth: .infinity, alignment: .center)
                 .font(.largeTitle)
                 .foregroundColor(.white)
 
@@ -97,7 +109,7 @@ struct InitialInstructionsView: View {
                       self.processingMethodGridRow
                       Divider()
                       self.automaticSelectionGridRow
-                        .disabled(processingMethod == .selective)
+                        .disabled(self.pixelReplacementMethod == .selective)
 
                       if showExtraSettings {
                           Divider()
@@ -117,6 +129,7 @@ struct InitialInstructionsView: View {
               HStack {
                   Spacer()
                   Button {
+                      self.applySettings()
                       viewModel.shouldShowInitialInstructions = false
                   } label: {
                       ZStack {
@@ -165,15 +178,13 @@ struct InitialInstructionsView: View {
               }
           }
           .frame(minWidth: 800)
-          //.frame(maxWidth: 2000)
-        //          .fixedSize(horizontal: true, vertical: false)
           .padding(20)
           .background(.gray)
-        //          .cornerRadius(16)
     }
 
     private var sceneTypeGridRow: some View {
-        GridRow {
+        @Bindable var viewModel = viewModel
+        return GridRow {
             HStack(alignment: .top) {
                 HStack {
                     Spacer()
@@ -185,7 +196,7 @@ struct InitialInstructionsView: View {
                     
                 }
                 HStack {
-                    Picker("", selection: $sceneType) {
+                    Picker("", selection: $viewModel.sceneType) {
                         ForEach(SceneType.allCases, id: \.id) { sceneType in
                             Text(sceneType.rawValue).tag(sceneType)
                               .foregroundColor(.white)
@@ -236,7 +247,8 @@ struct InitialInstructionsView: View {
 
      
     private var cameraMotionGridRow: some View {
-        GridRow {
+        @Bindable var viewModel = viewModel
+        return GridRow {
             HStack(alignment: .top) {
                 HStack {
                     Spacer()
@@ -248,7 +260,7 @@ struct InitialInstructionsView: View {
                     }
                 }
                 HStack {
-                    Picker("", selection: $cameraMotion) {
+                    Picker("", selection: $viewModel.cameraMotion) {
                         ForEach(CameraMotion.allCases, id: \.id) { cameraMotion in
                             Text(cameraMotion.rawValue).tag(cameraMotion)
                               .foregroundColor(.white)
@@ -268,7 +280,6 @@ struct InitialInstructionsView: View {
             } label: {
                 Text("ⓘ")
                   .font(.title2)
-                //.font(.largeTitle)
                   .foregroundColor(showCameraMotionInfo ? .red : .green)
                   .help(showCameraMotionInfo ? "Hide Camera Motion Information" : "Show Camera Motion Information")
             }
@@ -363,7 +374,8 @@ struct InitialInstructionsView: View {
     }
     
     private var processingMethodGridRow: some View {
-        GridRow {
+        @Bindable var viewModel = viewModel
+        return GridRow {
             HStack(alignment: .top) {
                 HStack {
                     Spacer()
@@ -375,9 +387,9 @@ struct InitialInstructionsView: View {
                     }
                 }
                 HStack {
-                    Picker("", selection: $processingMethod) {
-                        ForEach(PixelReplacementMethod.allCases, id: \.id) { processingMethod in
-                            Text(processingMethod.titleText).tag(sceneType)
+                    Picker("", selection: $pixelReplacementMethod) {
+                        ForEach(HighLevelPixelReplacementMethod.allCases, id: \.id) { processingMethod in
+                           Text(processingMethod.titleText).tag(viewModel.sceneType)
                               .foregroundColor(.white)
                               .help(processingMethod.helpText)
                         }
@@ -404,7 +416,7 @@ struct InitialInstructionsView: View {
             HStack {
                 if showProcessingMethodInfo {
                     VStack(alignment: .leading) {
-                        ForEach(PixelReplacementMethod.allCases, id: \.id) { processingMethod in
+                        ForEach(HighLevelPixelReplacementMethod.allCases, id: \.id) { processingMethod in
                             Text(processingMethod.titleText)
                               .foregroundColor(.white)
                               .font(.largeTitle)
@@ -500,12 +512,10 @@ struct InitialInstructionsView: View {
                     Text("Show Info")
                       .foregroundColor(.white)
                     if addSpacer { Spacer() }
-
                 }
             }
         }
     }
-
 
     private var pixelThresholdView: some View {
         GridRow {
@@ -594,21 +604,23 @@ struct InitialInstructionsView: View {
         }
     }
 
+    private func applySettings() {
+
+        switch self.pixelReplacementMethod {
+        case .automatic:
+            viewModel.pixelReplacementMethod = .automatic(autoPreservationMode.boolValue)
+        case .selective:
+            viewModel.pixelReplacementMethod = .selective
+        }
+
+        if !viewModel.pixelReplacementMethod.usesOutliers {
+            viewModel.selectionMode = .none
+        }
+    }
+    
     private func startProcessing() {
         Log.d("Start")
-
-        processingMethod = processingMethod.apply(
-          autoPreservationMode: autoPreservationMode
-        )
-        
-        if let config = viewModel.config {
-            var newConfig = config.config()
-            newConfig.pixelReplacementMethod = processingMethod
-            newConfig.horizonDetectionEnabled = sceneType == .skyHorizon
-            newConfig.tripodHeadWasMoving = cameraMotion != .fixed
-            config.update(newConfig)
-        }
-        viewModel.horizonDetectionEnabled = sceneType == .skyHorizon
+        self.applySettings()
         viewModel.shouldShowInitialInstructions = false
 
         viewModel.showIgnoreLowerBar = false

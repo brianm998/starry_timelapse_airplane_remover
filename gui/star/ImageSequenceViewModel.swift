@@ -21,11 +21,25 @@ public enum SelectionMode: String, Equatable, CaseIterable {
     case removeFromTrash
     case multi
     case information
+    case none
     
     var localizedName: LocalizedStringKey {
         LocalizedStringKey(rawValue)
     }
 
+    public static var allCases: [SelectionMode] {
+        [
+          .remove,
+          .keep,
+          .razor,
+          .shovel,
+          .trash,
+          .removeFromTrash,
+          .multi,
+          .information
+        ]
+    }
+    
     var iconName: String {
         switch self {
         case .remove:
@@ -44,6 +58,8 @@ public enum SelectionMode: String, Equatable, CaseIterable {
             return "multi_choice_icon"
         case .information:
             return "info_icon"
+        case .none:
+            return "shovel_icon"
         }
     }
 
@@ -65,6 +81,8 @@ public enum SelectionMode: String, Equatable, CaseIterable {
             return "Multi"
         case .information:
             return "Information"
+        case .none:
+            return "None"
         }
     }
 }
@@ -240,7 +258,7 @@ public final class ImageSequenceViewModel {
 
     // causes tapping an outlier to open a dialog with multiple choices
     var multiChoice = false
-
+    
     var renderingAllFrames = false
     var updatingFrameBatch = false
 
@@ -287,11 +305,49 @@ public final class ImageSequenceViewModel {
         }
     }
     
+    var sceneType: SceneType {
+        get {
+            if horizonDetectionEnabled {
+                .skyHorizon
+            } else {
+                .skyOnly
+            }
+        }
+        set {
+            switch newValue {
+            case .skyOnly:
+                self.horizonDetectionEnabled = false
+            case .skyHorizon:
+                self.horizonDetectionEnabled = true
+            }
+        }
+    }
+    
     var earthAlignedImageCropAmount: Int {
         didSet {
             if let config {
                 var realConfig = config.config()
                 realConfig.earthAlignedImageCropAmount = earthAlignedImageCropAmount
+                config.update(realConfig)
+            }
+        }
+    }
+
+    var pixelReplacementMethod: PixelReplacementMethod = .automatic(false) {
+        didSet {
+            if let config {
+                var realConfig = config.config()
+                realConfig.pixelReplacementMethod = pixelReplacementMethod
+                config.update(realConfig)
+            }
+        }
+    }
+
+    var cameraMotion: CameraMotion = .fixed {
+        didSet {
+            if let config {
+                var realConfig = config.config()
+                realConfig.tripodHeadWasMoving = cameraMotion != .fixed
                 config.update(realConfig)
             }
         }
@@ -443,6 +499,10 @@ public final class ImageSequenceViewModel {
 
         let config = configManager.config()
 
+        if !config.pixelReplacementMethod.usesOutliers {
+            self.selectionMode = .none
+        } 
+        
         self.config = configManager
         
         self.numberOfAlignedNeighborFrames = config.numberAlignedNeighborFrames
@@ -673,30 +733,32 @@ public final class ImageSequenceViewModel {
 
     var windowTitle: String {
         if let sequenceDirname = self.config?.config().imageSequenceDirname {
-            return "Star - \(sequenceDirname)"
+            "Star - \(sequenceDirname)"
         } else {
-            return "Star"
+            "Star"
         }
     }
     
     var selectionColor: Color {
         switch self.selectionMode {
         case .remove:
-            return .red
+            .red
         case .keep:
-            return .green
+            .green
         case .shovel:
-            return .gray
+            .gray
         case .razor:
-            return .yellow
+            .yellow
         case .trash:
-            return .pink
+            .pink
         case .removeFromTrash:
-            return .mint
+            .mint
         case .information:
-            return .blue
+            .blue
         case .multi:
-            return .purple      // XXX ???
+            .purple      // XXX ???
+        case .none:
+            .black
         }
     }
 
@@ -1292,12 +1354,21 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    var doesUseOutliers: Bool {
+        guard let config else {
+            Log.w("missing config")
+            return false
+        }
+        
+        return config.config().pixelReplacementMethod.usesOutliers
+    }
+    
     func renderAllFrames() {
         guard let config else {
             Log.w("cannot render without a config")
             return
         }
-        let pixelReplacementMode = config.config().pixelReplacementMethod// ?? .automatic
+        let pixelReplacementMode = config.config().pixelReplacementMethod
         
         switch pixelReplacementMode {
         case .automatic(let useOutliers): // XXX what about the associated bool?
