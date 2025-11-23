@@ -3,10 +3,11 @@ import StarCore
 
 // this button sets the tool to the given value
 
+// used in StarCommands for keyboard shortcuts
 struct ChangeToolButton: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
-    let tool: SelectionMode
+    let tool: ToolType
     
     var body: some View {
         Button {

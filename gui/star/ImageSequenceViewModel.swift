@@ -11,8 +11,7 @@ public enum VideoPlayMode: String, Equatable, CaseIterable {
     case reverse
 }
 
-// XXX rename this to ToolType
-public enum SelectionMode: String, Equatable, CaseIterable {
+public enum ToolType: String, Equatable, CaseIterable {
     case remove
     case keep
     case razor
@@ -27,7 +26,7 @@ public enum SelectionMode: String, Equatable, CaseIterable {
         LocalizedStringKey(rawValue)
     }
 
-    public static var allCases: [SelectionMode] {
+    public static var allCases: [ToolType] {
         [
           .remove,
           .keep,
@@ -221,7 +220,7 @@ public final class ImageSequenceViewModel {
 
     var selectedOutliers = Set<OutlierGroupTableRow.ID>()
 
-    var selectionMode = SelectionMode.remove {
+    var selectionMode = ToolType.remove {
         didSet {
             if selectionMode == .removeFromTrash {
                 shouldShowTrash = true
