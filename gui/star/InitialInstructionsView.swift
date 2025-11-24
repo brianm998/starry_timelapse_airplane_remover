@@ -14,11 +14,50 @@ import logging
  
  */
 
-enum SceneType: String, CaseIterable, Identifiable {
+public enum HighLevelPixelReplacementMethod: InstructionOption,
+                                             Sendable,
+                                             Codable
+{
+    case automatic
+    case selective
+
+    public var id: Self { self }
+
+    public var titleText: String {
+        switch self {
+        case .automatic:
+            "Auto Clean"
+        case .selective:
+            "Selective Clean"
+        }
+    }
+    
+    public var helpText: String {
+        switch self {
+        case .automatic:
+            "Fully automatic removal of airplanes/satellites; replaces each frame with a clean median composite."
+        case .selective:
+            "Selective Clean – Detects only streak-like outliers and lets you decide which to remove; good for clouds or when you want control."
+        }
+    }
+
+    public var descriptionText: String {
+        switch self {
+        case .automatic:
+            "This mode automatically builds a clean “best version” of every frame using neighboring frames. It removes streaks extremely well when skies are clear. It requires almost no user input and is faster to use, but it can struggle around dawn/dusk and may distort fast-moving clouds."
+        case .selective:
+            "This mode compares each original frame to a clean reference frame and highlights only the differences that look like airplane or satellite streaks. You can review and approve these changes. It works better when clouds are present or when you want to keep certain objects (like meteors). It takes more interaction but gives you finer control."
+        }
+    }
+}
+    
+enum SceneType: String, InstructionOption, Identifiable {
     case skyHorizon = "Sky + Horizon"
     case skyOnly = "Sky Only"
 
     var id: Self { self }
+
+    var titleText: String { self.rawValue }
 
     var helpText: String {
         switch self {
@@ -29,7 +68,7 @@ enum SceneType: String, CaseIterable, Identifiable {
         }
     }
 
-    var description: String {
+    var descriptionText: String {
         switch self {
         case .skyOnly:
             "Choose this option if every frame contains only stars, sky glow, and clouds, with no land features. In this mode, frames are aligned only to the stars, which is faster and avoids unnecessary processing."
@@ -39,11 +78,13 @@ enum SceneType: String, CaseIterable, Identifiable {
     }
 }
 
-enum CameraMotion: String, CaseIterable, Identifiable {
+enum CameraMotion: String, InstructionOption, Identifiable {
     case fixed = "Fixed Camera"
     case moving = "Moving Camera"
 
     var id: Self { self }
+
+    var titleText: String { self.rawValue }
 
     var helpText: String {
         switch self {
@@ -54,7 +95,7 @@ enum CameraMotion: String, CaseIterable, Identifiable {
         }
     }
 
-    var description: String {
+    var descriptionText: String {
         switch self {
         case .fixed:
             "Choose this if the tripod/head stayed in one place all night. This gives the processor a stable reference, allowing more accurate alignment of the horizon."
@@ -193,242 +234,48 @@ struct InitialInstructionsView: View {
           .background(.gray)
     }
 
-    private var sceneTypeGridRow: some View {
-        @Bindable var viewModel = viewModel
-        return GridRow {
-            HStack(alignment: .top) {
-                HStack {
-                    Spacer()
-                    VStack(alignment: .trailing) {
-                        Text("Scene Type:")
-                          .font(.title2)
-                          .foregroundColor(.white)
-                    }
-                    
-                }
-                HStack {
-                    Picker("", selection: $viewModel.sceneType) {
-                        ForEach(SceneType.allCases, id: \.id) { sceneType in
-                            Text(sceneType.rawValue).tag(sceneType)
-                              .foregroundColor(.white)
-                              .help(sceneType.helpText)
-                        }
-                    }
-                      .pickerStyle(.inline)
-                      .foregroundColor(.white)
-                    Spacer()
-                }
-            }
-            
-            Button {
-                withAnimation {
-                    showSceneTypeInfo = !showSceneTypeInfo
-                }
-            } label: {
-                Text("ⓘ")
-                  .font(.title2)
-                  .foregroundColor(showSceneTypeInfo ? .red : .green)
-                  .help(showSceneTypeInfo ? "Hide Scene Type Information" : "Show Scene Type Information")
-                
-            }
-              .buttonStyle(PlainButtonStyle())
-        
-            HStack {
-                if showSceneTypeInfo {
-                    VStack(alignment: .leading) {
-                        ForEach(SceneType.allCases, id: \.id) { sceneType in
-                            Text(sceneType.rawValue)
-                              .foregroundColor(.white)
-                              .font(.largeTitle)
-                            
-                            Text(sceneType.description)
-                              .foregroundColor(.white)
-                              .font(.body)
-                        }
-                    }
-                } else {
-                    Text("Show Info")
-                      .foregroundColor(.white)
-                    if addSpacer { Spacer() }
-                }
-            }
-        }
-    }
-    
-
-     
-    private var cameraMotionGridRow: some View {
-        @Bindable var viewModel = viewModel
-        return GridRow {
-            HStack(alignment: .top) {
-                HStack {
-                    Spacer()
-                    VStack(alignment: .trailing) {
-                        Text("Camera Motion:")
-                          .font(.title2)
-                          .foregroundColor(.white)
-
-                    }
-                }
-                HStack {
-                    Picker("", selection: $viewModel.cameraMotion) {
-                        ForEach(CameraMotion.allCases, id: \.id) { cameraMotion in
-                            Text(cameraMotion.rawValue).tag(cameraMotion)
-                              .foregroundColor(.white)
-                              .help(cameraMotion.helpText)
-                        }
-                    }
-                      .pickerStyle(.inline)
-                      .foregroundColor(.white)
-                    //                                .fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                }
-            }
-            Button {
-                withAnimation {
-                    showCameraMotionInfo = !showCameraMotionInfo
-                }
-            } label: {
-                Text("ⓘ")
-                  .font(.title2)
-                  .foregroundColor(showCameraMotionInfo ? .red : .green)
-                  .help(showCameraMotionInfo ? "Hide Camera Motion Information" : "Show Camera Motion Information")
-            }
-              .buttonStyle(PlainButtonStyle())
-
-            HStack {
-                if showCameraMotionInfo {
-                    VStack(alignment: .leading) {
-                        ForEach(CameraMotion.allCases, id: \.id) { cameraMotion in
-                            Text(cameraMotion.rawValue)
-                              .foregroundColor(.white)
-                              .font(.largeTitle)
-                            
-                            Text(cameraMotion.description)
-                              .foregroundColor(.white)
-                              .font(.body)
-                        }
-                    }
-                } else {
-                    Text("Show Info")
-                      .foregroundColor(.white)
-                    if addSpacer { Spacer() }
-                }
-            }
-        }
-    }
-
     private var addSpacer: Bool {
         showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo ||
         showAutoPreservationMethodInfo || showProcessFramesInfo ||
         showNeighborFrameInfo || showPixelThresholdInfo || showProcessingModeInfo
     }
 
+    private var sceneTypeGridRow: some View {
+        @Bindable var viewModel = viewModel
+        return EnumInstructionGridRow<SceneType>(
+          selection: $viewModel.sceneType,
+          showInfo: $showSceneTypeInfo,
+          addSpacer: { addSpacer },
+          title: "Scene Type:"
+        )        
+    }
+     
+    private var cameraMotionGridRow: some View {
+        @Bindable var viewModel = viewModel
+        return EnumInstructionGridRow<CameraMotion>(
+          selection: $viewModel.cameraMotion,
+          showInfo: $showCameraMotionInfo,
+          addSpacer: { addSpacer },
+          title: "Camera Motion:"
+        )        
+    }
+
     private var automaticSelectionGridRow: some View {
-        GridRow {
-            HStack(alignment: .top) {
-                HStack {
-                    Spacer()
-                    VStack(alignment: .trailing) {
-                        Text("Selective Auto Clean:")
-                          .font(.title2)
-                          .foregroundColor(.white)
-
-                    }
-                }
-                HStack {
-                    Picker("", selection: $autoPreservationMode) {
-                        ForEach(AutoPreservationMode.allCases, id: \.id) { mode in
-                            Text(mode.rawValue).tag(mode)
-                              .foregroundColor(.white)
-                              .help(mode.helpText)
-                        }
-                    }
-                      .pickerStyle(.inline)
-                      .foregroundColor(.white)
-                    Spacer()
-                }
-            }
-            Button {
-                withAnimation {
-                    showAutoPreservationMethodInfo = !showAutoPreservationMethodInfo
-                }
-            } label: {
-                Text("ⓘ")
-                  .font(.title2)
-                //.font(.largeTitle)
-                  .foregroundColor(showAutoPreservationMethodInfo ? .red : .green)
-                  .help(showAutoPreservationMethodInfo ? "Hide Auto Clean Information" : "Show Auto Clean Information")
-            }
-              .buttonStyle(PlainButtonStyle())
-
-            HStack {
-                if showAutoPreservationMethodInfo {
-                    VStack(alignment: .leading) {
-                        ForEach(AutoPreservationMode.allCases, id: \.id) { mode in
-                            Text(mode.rawValue)
-                              .foregroundColor(.white)
-                              .font(.largeTitle)
-                            
-                            Text(mode.description)
-                              .foregroundColor(.white)
-                              .font(.body)
-                        }
-                    }
-                } else {
-                    Text("Show Info")
-                      .foregroundColor(.white)
-                    if addSpacer { Spacer() }
-                }
-            }
-        }
+        EnumInstructionGridRow<AutoPreservationMode>(
+          selection: $autoPreservationMode,
+          showInfo: $showAutoPreservationMethodInfo,
+          addSpacer: { addSpacer },
+          title: "Selective Auto Clean:"
+        )        
     }
     
     private var processingMethodGridRow: some View {
-        @Bindable var viewModel = viewModel
-        return
-          InstructionGridRow(
-            showInfo: $showProcessingMethodInfo,
-            addSpacer: { addSpacer },
-            infoView: {
-                VStack(alignment: .leading) {
-                    ForEach(HighLevelPixelReplacementMethod.allCases, id: \.id) { processingMethod in
-                        Text(processingMethod.titleText)
-                          .foregroundColor(.white)
-                          .font(.largeTitle)
-                        
-                        Text(processingMethod.description)
-                          .foregroundColor(.white)
-                          .font(.body)
-                    }
-                }
-            } 
-          ) {
-            HStack(alignment: .top) {
-                HStack {
-                    Spacer()
-                    VStack(alignment: .trailing) {
-                        Text("Processing Method:")
-                          .font(.title2)
-                          .foregroundColor(.white)
-
-                    }
-                }
-                HStack {
-                    Picker("", selection: $pixelReplacementMethod) {
-                        ForEach(HighLevelPixelReplacementMethod.allCases, id: \.id) { processingMethod in
-                           Text(processingMethod.titleText).tag(viewModel.sceneType)
-                              .foregroundColor(.white)
-                              .help(processingMethod.helpText)
-                        }
-                    }
-                      .pickerStyle(.inline)
-                    //                        .fixedSize(horizontal: false, vertical: true)
-                      .foregroundColor(.white)
-                    Spacer()
-                }
-            }
-        }
+        EnumInstructionGridRow<HighLevelPixelReplacementMethod>(
+          selection: $pixelReplacementMethod,
+          showInfo: $showProcessingMethodInfo,
+          addSpacer: { addSpacer },
+          title: "Processing Method:"
+        )        
     }
     
     private var cuncurrentProcessingLimitView: some View {
@@ -545,6 +392,7 @@ struct InitialInstructionsView: View {
     }
 }
 
+// grid row for not enums
 struct InfoTextInstructionGridRow<Content: View>: View {
     @Binding var showInfo: Bool
     let addSpacer: () -> Bool
@@ -566,6 +414,59 @@ struct InfoTextInstructionGridRow<Content: View>: View {
     }
 }
 
+// grid row for enums
+struct EnumInstructionGridRow<E: InstructionOption>: View {
+    @Binding var selection: E
+    @Binding var showInfo: Bool
+    let addSpacer: () -> Bool
+    let title: String
+
+    var body: some View {
+        InstructionGridRow(
+          showInfo: $showInfo,
+          addSpacer: addSpacer,
+          infoView: {
+              VStack(alignment: .leading) {
+                  ForEach(E.allCases, id: \.id) { item in
+                      Text(item.titleText)
+                        .foregroundColor(.white)
+                        .font(.largeTitle)
+                      Text(item.descriptionText)
+                        .foregroundColor(.white)
+                        .font(.body)
+                  }
+              }
+          },
+          contentView: {
+              HStack(alignment: .top) {
+                  HStack {
+                      Spacer()
+                      VStack(alignment: .trailing) {
+                          Text(title)
+                            .font(.title2)
+                            .foregroundColor(.white)
+                      }
+                  }
+                  HStack {
+                      Picker("", selection: $selection) {
+                          ForEach(E.allCases, id: \.id) { item in
+                              Text(item.titleText)
+                                .tag(item)
+                                .foregroundColor(.white)
+                                .help(item.helpText)
+                          }
+                      }
+                        .pickerStyle(.inline)
+                        .foregroundColor(.white)
+                      Spacer()
+                  }
+                }
+            }
+        )
+    }
+}
+
+
 // base grid row
 struct InstructionGridRow<Content: View, InfoContent: View>: View {
     @Binding var showInfo: Bool
@@ -577,9 +478,9 @@ struct InstructionGridRow<Content: View, InfoContent: View>: View {
         GridRow {
             // --- Column 1 ---
             HStack {
-                Spacer()
+//                Spacer()
                 contentView()
-                Spacer()
+  //              Spacer()
             }
 
             // --- Column 2 ---

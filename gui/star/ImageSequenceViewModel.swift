@@ -315,7 +315,7 @@ public final class ImageSequenceViewModel {
 
     var horizonDetectionEnabled: Bool {
         get {
-            config.config().horizonDetectionEnabled ?? true
+            config.config().horizonDetectionEnabled
         }
         set {
             var realConfig = config.config()
@@ -326,7 +326,7 @@ public final class ImageSequenceViewModel {
 
     var horizonStripWidth: Int {
         get {
-            config.config().horizonStripWidth ?? 200
+            config.config().horizonStripWidth
         }
         set {
             var realConfig = config.config()
@@ -337,7 +337,7 @@ public final class ImageSequenceViewModel {
 
     var useCannyForHorizonDetection: Bool {
         get {
-            config.config().useCannyForHorizonDetection ?? true
+            config.config().useCannyForHorizonDetection
         }
         set {
             var realConfig = config.config()
@@ -348,7 +348,7 @@ public final class ImageSequenceViewModel {
     
     var cannyMinThreshold: Double {
         get {
-            config.config().cannyMinThreshold ?? 80
+            config.config().cannyMinThreshold
         }
         set {
             var realConfig = config.config()
@@ -359,7 +359,7 @@ public final class ImageSequenceViewModel {
     
     var cannyMaxThreshold: Double {
         get {
-            config.config().cannyMaxThreshold ?? 250
+            config.config().cannyMaxThreshold
         }
         set {
             var realConfig = config.config()
@@ -370,7 +370,7 @@ public final class ImageSequenceViewModel {
 
     var cannyUseL2Gradient: Bool {
         get {
-            config.config().cannyUseL2Gradient ?? true
+            config.config().cannyUseL2Gradient
         }
         set {
             var realConfig = config.config()
