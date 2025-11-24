@@ -52,7 +52,46 @@ public enum HighLevelPixelReplacementMethod: InstructionOption,
         }
     }
 }
+
+public enum UseCannyEdgeDetectionForHorizon: InstructionOption,
+                                             Sendable,
+                                             Codable
+{
+    case yes
+    case no
+
+    public var id: Self { self }
+
+    public var titleText: String {
+        switch self {
+        case .yes:
+            "Yes"
+        case .no:
+            "No"
+        }
+    }
+
+    public static let topTitle = "Canny Edge Detection:"
     
+    public var helpText: String {
+        switch self {
+        case .yes:
+            "Use Canny Edge Detection in addition to Otsu's thresholding for doing horizon detection."
+        case .no:
+            "Only use Otsu's tresholding when doing horizon detection."
+        }
+    }
+
+    public var descriptionText: String {
+        switch self {
+        case .yes:
+            "Using Canny Edge Detection can help find horizons that have bright patches below the horizon.  One example is mountains with snow on them.  Otsu's Thresholding can include these brighter areas in the sky.  Using Canny edge detection in addition to Otsu's Thresholding gives better results in this case"
+        case .no:
+            "Using only Otsu's Thresholding for horizon detection can work when the ground is really dark.  This will be a little faster than also doing Canny edge detection."
+        }
+    }
+}
+      
 enum SceneType: String, InstructionOption, Identifiable {
     case skyHorizon = "Sky + Horizon"
     case skyOnly = "Sky Only"
@@ -121,6 +160,7 @@ struct InitialInstructionsView: View {
     @State private var showCameraMotionInfo = false
     @State private var showProcessingMethodInfo = false
     @State private var showAutoPreservationMethodInfo = false
+    @State private var showUseCannyInfo = false
 
     @State private var showProcessFramesInfo = false
     @State private var showNeighborFrameInfo = false
@@ -171,10 +211,12 @@ struct InitialInstructionsView: View {
                       self.cameraMotionGridRow
                       Divider()
                       self.processingMethodGridRow
-                      Divider()
-                      self.automaticSelectionGridRow
 
                       if showExpertSettings {
+                          Divider()
+                          self.automaticSelectionGridRow
+                          Divider()
+                          self.useCannyEdgeDetectionGridRow
                           Divider()
                           self.cuncurrentProcessingLimitView
                           Divider()
@@ -279,6 +321,18 @@ struct InitialInstructionsView: View {
           addSpacer: { addSpacer }
         )        
     }
+
+    private var useCannyEdgeDetectionGridRow: some View {
+        @Bindable var viewModel = viewModel
+        return EnumInstructionGridRow<UseCannyEdgeDetectionForHorizon>(
+          selection: $viewModel.useCannyForHorizonDetection,
+          showInfo: $showUseCannyInfo,
+          addSpacer: { addSpacer }
+        )
+          .disabled(viewModel.sceneType == .skyOnly)
+    }
+    
+
     
     private var cuncurrentProcessingLimitView: some View {
         InfoTextInstructionGridRow(

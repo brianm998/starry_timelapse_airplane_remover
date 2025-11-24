@@ -313,35 +313,39 @@ public final class ImageSequenceViewModel {
         }
     }
 
+
+    private var _horizonDetectionEnabled: Bool
+    
     var horizonDetectionEnabled: Bool {
-        get {
-            config.config().horizonDetectionEnabled
-        }
+        get { _horizonDetectionEnabled }
         set {
+            _horizonDetectionEnabled = newValue
             var realConfig = config.config()
             realConfig.horizonDetectionEnabled = newValue
             config.update(realConfig)
         }
     }
 
+    private var _horizonStripWidth: Int
+
     var horizonStripWidth: Int {
-        get {
-            config.config().horizonStripWidth
-        }
+        get { _horizonStripWidth }
         set {
+            _horizonStripWidth = newValue
             var realConfig = config.config()
             realConfig.horizonStripWidth = newValue
             config.update(realConfig)
         }
     }
 
-    var useCannyForHorizonDetection: Bool {
-        get {
-            config.config().useCannyForHorizonDetection
-        }
+    private var _useCannyForHorizonDetection: UseCannyEdgeDetectionForHorizon
+    
+    var useCannyForHorizonDetection: UseCannyEdgeDetectionForHorizon {
+        get { _useCannyForHorizonDetection }
         set {
+            _useCannyForHorizonDetection = newValue
             var realConfig = config.config()
-            realConfig.useCannyForHorizonDetection = newValue
+            realConfig.useCannyForHorizonDetection = newValue == .yes
             config.update(realConfig)
         }
     }
@@ -368,22 +372,17 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    var _cannyUseL2Gradient: Bool
+    
     var cannyUseL2Gradient: Bool {
-        get {
-            config.config().cannyUseL2Gradient
-        }
+        get { _cannyUseL2Gradient }
         set {
+            _cannyUseL2Gradient = newValue
             var realConfig = config.config()
             realConfig.cannyUseL2Gradient = newValue
             config.update(realConfig)
         }
     }
-    
-
-
-
-
-
 
     var sceneType: SceneType {
         get {
@@ -582,6 +581,11 @@ public final class ImageSequenceViewModel {
         if !config.pixelReplacementMethod.usesOutliers {
             self.selectionMode = .none
         } 
+
+        self._horizonDetectionEnabled = config.horizonDetectionEnabled
+        self._useCannyForHorizonDetection = config.useCannyForHorizonDetection ? .yes : .no
+        self._horizonStripWidth = config.horizonStripWidth
+        self._cannyUseL2Gradient = config.cannyUseL2Gradient
         
         self.config = configManager
 
