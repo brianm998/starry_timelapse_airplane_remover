@@ -1074,8 +1074,8 @@ public final class ImageSequenceViewModel {
               reprocessingType: self.reprocessingType
             )
 
-            let numberOfAlignedImages = await self.numberOfNeighborFrames
-            
+            let numberOfAlignedImages = await self.numberOfAlignedNeighborFrames
+            Log.d("self.numberOfNeighborFrames \(numberOfAlignedImages)")
             await frameToClear.setNumberOfAlignmentImages(numberOfAlignedImages)
 
             try await frameToClear.removeNumberOfAlignedImagesForThisFrameFile()
