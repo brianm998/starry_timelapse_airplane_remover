@@ -291,17 +291,100 @@ public final class ImageSequenceViewModel {
 
     var numberOfFramesToProcessConcurrently: Int
 
-    var numberOfNeighborFrames: Int
-    var numberOfAlignedNeighborFrames: Int
-
-    var horizonDetectionEnabled: Bool {
-        didSet {
+    var numberOfNeighborFrames: Int {
+        get {
+            config.config().numberFinalProcessingNeighborsNeeded
+        }
+        set {
             var realConfig = config.config()
-            realConfig.horizonDetectionEnabled = horizonDetectionEnabled
+            realConfig.numberFinalProcessingNeighborsNeeded = newValue
             config.update(realConfig)
         }
     }
     
+    var numberOfAlignedNeighborFrames: Int {
+        get {
+            config.config().numberAlignedNeighborFrames
+        }
+        set {
+            var realConfig = config.config()
+            realConfig.numberAlignedNeighborFrames = newValue
+            config.update(realConfig)
+        }
+    }
+
+    var horizonDetectionEnabled: Bool {
+        get {
+            config.config().horizonDetectionEnabled ?? true
+        }
+        set {
+            var realConfig = config.config()
+            realConfig.horizonDetectionEnabled = newValue
+            config.update(realConfig)
+        }
+    }
+
+    var horizonStripWidth: Int {
+        get {
+            config.config().horizonStripWidth ?? 200
+        }
+        set {
+            var realConfig = config.config()
+            realConfig.horizonStripWidth = newValue
+            config.update(realConfig)
+        }
+    }
+
+    var useCannyForHorizonDetection: Bool {
+        get {
+            config.config().useCannyForHorizonDetection ?? true
+        }
+        set {
+            var realConfig = config.config()
+            realConfig.useCannyForHorizonDetection = newValue
+            config.update(realConfig)
+        }
+    }
+    
+    var cannyMinThreshold: Double {
+        get {
+            config.config().cannyMinThreshold ?? 80
+        }
+        set {
+            var realConfig = config.config()
+            realConfig.cannyMinThreshold = newValue
+            config.update(realConfig)
+        }
+    }
+    
+    var cannyMaxThreshold: Double {
+        get {
+            config.config().cannyMaxThreshold ?? 250
+        }
+        set {
+            var realConfig = config.config()
+            realConfig.cannyMaxThreshold = newValue
+            config.update(realConfig)
+        }
+    }
+
+    var cannyUseL2Gradient: Bool {
+        get {
+            config.config().cannyUseL2Gradient ?? true
+        }
+        set {
+            var realConfig = config.config()
+            realConfig.cannyUseL2Gradient = newValue
+            config.update(realConfig)
+        }
+    }
+    
+
+
+
+
+
+
     var sceneType: SceneType {
         get {
             if horizonDetectionEnabled {
@@ -321,9 +404,12 @@ public final class ImageSequenceViewModel {
     }
     
     var earthAlignedImageCropAmount: Int {
-        didSet {
+        get {
+            config.config().earthAlignedImageCropAmount ?? Int(IMAGE_HEIGHT!)/2
+        }
+        set {
             var realConfig = config.config()
-            realConfig.earthAlignedImageCropAmount = earthAlignedImageCropAmount
+            realConfig.earthAlignedImageCropAmount = newValue
             config.update(realConfig)
         }
     }
@@ -495,21 +581,14 @@ public final class ImageSequenceViewModel {
         } 
         
         self.config = configManager
-        
-        self.numberOfAlignedNeighborFrames = config.numberAlignedNeighborFrames
 
-        self.numberOfNeighborFrames = config.numberFinalProcessingNeighborsNeeded
-
-        self.horizonDetectionEnabled = config.horizonDetectionEnabled ?? true
-
-        self.earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? 0
+//        self.earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? 0
         
         self.numberOfFramesToProcessConcurrently = await Task { await maxFramesProcessing.getValue() }.value
         
-        if let ignoreLowerPixels = config.ignoreLowerPixels {
-            self.ignoreLowerPixels = CGFloat(ignoreLowerPixels) // XXX need to sync back the other dir
-        }
-            
+        let ignoreLowerPixels = config.ignoreLowerPixels 
+        self.ignoreLowerPixels = CGFloat(ignoreLowerPixels) // XXX need to sync back the other dir
+                    
         Log.d("loaded config \(config.imageSequenceDirname)")
         
         let imageSequence = try ImageSequence(dirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
@@ -1343,9 +1422,7 @@ public final class ImageSequenceViewModel {
     }
 
     var doesUseOutliers: Bool {
-      
-        
-        return config.config().pixelReplacementMethod.usesOutliers
+        config.config().pixelReplacementMethod.usesOutliers
     }
     
     func renderAllFrames() {
@@ -1490,10 +1567,10 @@ public final class ImageSequenceViewModel {
 
         var max = 30
 
-        if let maximum = config.config().maxConcurrentHorizonCalculations
-        {
-            max = maximum
-        }
+        let maximum = config.config().maxConcurrentHorizonCalculations
+        
+        max = maximum
+        
         
         Task {
             try await Task.detached(priority: .medium) { [self] in 

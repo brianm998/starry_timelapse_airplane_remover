@@ -178,7 +178,10 @@ extension PixelatedImage {
     public func horizonMask(
       at frameIndex: Int,
       bottomPercentage: Double = 50,
-      stripWidth: Int = 400
+      stripWidth: Int = 400,
+      useCannyEdgeDetection: Bool = true,
+      cannyMinThreshold: Double = 80,
+      cannyMaxThreshold: Double = 250
     ) async throws -> HorizonMask? {
         
         /*
@@ -261,16 +264,23 @@ extension PixelatedImage {
                 if let no_sky_image = PixelatedImage(from: newElements),
                    let image = no_sky_image.addSky(height: topHeight)
                 {
-                    // find edges on self (source image)
-                    let edges = try self.cannyEdgeDetect(minThreshold: 30, maxThreshold: 150)
-                      .bitwiseNot()
-                      .growDarkRegions(by: 1)
-                    
-                    // combine otsu and canny edge detection into one image
-                    let combined = try image
-                      //.growDarkRegions(by: 2)
-                      .bitwiseAnd(with: edges)
+                    var combined = image
 
+                    if useCannyEdgeDetection {
+                        // find edges on self (source image)
+                        let edges = try self.cannyEdgeDetect(
+                          minThreshold: cannyMinThreshold,
+                          maxThreshold: cannyMaxThreshold
+                        )
+                          .bitwiseNot()
+                          .growDarkRegions(by: 1)
+                        
+                        // combine otsu and canny edge detection into one image
+
+                        combined = try image
+                          .bitwiseAnd(with: edges)
+                    }
+                    
                     // expand the dark areas by one pixel
                     //let grown = try groundOnly.growDarkRegions(by: 1)
 

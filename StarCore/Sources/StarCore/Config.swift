@@ -136,7 +136,7 @@ public struct Config: Codable, Sendable, Transferable {
     public var detectionType: DetectionType
 
     // was the tripod head static, or moving?  Static assumed when not set.
-    public var tripodHeadWasMoving: Bool?
+    public var tripodHeadWasMoving: Bool = false
     
     // the name of the directory containing the input sequence
     public var imageSequenceDirname: String
@@ -183,7 +183,7 @@ public struct Config: Codable, Sendable, Transferable {
 
     // if set outlier groups that are not further than this from the bottom
     // of the image will be ingored
-    public var ignoreLowerPixels: Int?
+    public var ignoreLowerPixels: Int = 0
 
     // XXX try making these larger now that video plays better
     public static let defaultPreviewWidth: Int = 1617 // 1080p in 4/3 aspect ratio
@@ -212,38 +212,52 @@ public struct Config: Codable, Sendable, Transferable {
     public var outlierGroupPaintBorderInnerWallPixels: Double = defaultOutlierGroupPaintBorderInnerWallPixels
 
     // the frame rate of the incoming and outgoing video
-    public var frameRate: FrameRate?
+    public var frameRate: FrameRate = .fps_30
 
     // the codec of the incoming and outgoing video
-    public var codec: FFmpegCodec?
+    public var codec: FFmpegCodec = .prores
 
     // the encoder to use to encode the resulting video
-    public var encoder: FFmpegEncoder?
+    public var encoder: FFmpegEncoder = .prores
 
     // the pixelformat of the incoming and outgoing video
-    public var pixelFormat: FFmpegPixelFormat?
+    public var pixelFormat: FFmpegPixelFormat = .yuv422p14le
 
     // the muxer (container) of the incoming and outgoing video
-    public var muxer: FFmpegMuxer?
+    public var muxer: FFmpegMuxer = .mov
 
     // did the incoming video have an audio track?
-    public var hasAudio: Bool?
+    public var hasAudio: Bool = false
 
     // do horizon processing or not.
     // if not set, defaults to true
-    public var horizonDetectionEnabled: Bool?
+    public var horizonDetectionEnabled: Bool = true
 
     // the max size of each strip used to calculate the horizon image.
     // smaller strips can help reduce noise especially around the edges of the frame
     // too small and the horizon can get calculated wrong
-    public var horizonStripWidth: Int?
+    public var horizonStripWidth: Int = 200
 
+    // should we use canny edge detection along with otsu for horizon detection?
+    // or just otsu?  Defaults to true (use both)
+    public var useCannyForHorizonDetection: Bool = true
+
+    // min threshold for canny edge detection for finding horizons, defaults to 80
+    public var cannyMinThreshold: Double = 80
+
+    // max threshold for canny edge detection for finding horizons, defaults to 200
+    public var cannyMaxThreshold: Double = 200
+
+    // should canny edge detection use the L2 Gradient or edge gradient?
+    // true is for the L2Gradient, which is the default
+    public var cannyUseL2Gradient: Bool = true
+    
     // the vertical bounds of the horizon over the entire image sequence, if known
     public var horizonMinY: Int?
     public var horizonMaxY: Int?
 
     // max number of frames to concurrently horizon calculations on
-    public var maxConcurrentHorizonCalculations: Int? 
+    public var maxConcurrentHorizonCalculations: Int = 20
 
     // how many pixels do we crop off the top of the image when making
     // earth aligned images
@@ -252,11 +266,56 @@ public struct Config: Codable, Sendable, Transferable {
     mutating public func set(videoInfo: VideoInfo) {
         self.frameRate = videoInfo.frameRate
         self.codec = videoInfo.codec
-        self.encoder = videoInfo.encoder
+        self.encoder = videoInfo.encoder ?? .prores
         self.pixelFormat = videoInfo.pixelFormat
         self.muxer = videoInfo.muxer
         self.hasAudio = videoInfo.hasAudio
     }
+
+    public init(from decoder: Decoder) throws {
+        // start with all your initializer defaults
+        self = Config()
+
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+
+        self.outputPath = try c.decodeIfPresent(String.self, forKey: .outputPath) ?? self.outputPath
+        self.pixelReplacementMethod = try c.decodeIfPresent(PixelReplacementMethod.self, forKey: .pixelReplacementMethod) ?? self.pixelReplacementMethod
+        self.detectionType = try c.decodeIfPresent(DetectionType.self, forKey: .detectionType) ?? self.detectionType
+        self.tripodHeadWasMoving = try c.decodeIfPresent(Bool.self, forKey: .tripodHeadWasMoving) ?? self.tripodHeadWasMoving
+
+        self.imageSequenceDirname = try c.decodeIfPresent(String.self, forKey: .imageSequenceDirname) ?? self.imageSequenceDirname
+        self.imageSequencePath = try c.decodeIfPresent(String.self, forKey: .imageSequencePath) ?? self.imageSequencePath
+
+        self.writeOutlierGroupFiles = try c.decodeIfPresent(Bool.self, forKey: .writeOutlierGroupFiles) ?? self.writeOutlierGroupFiles
+        self.writeFramePreviewFiles = try c.decodeIfPresent(Bool.self, forKey: .writeFramePreviewFiles) ?? self.writeFramePreviewFiles
+        self.writeFrameProcessedPreviewFiles = try c.decodeIfPresent(Bool.self, forKey: .writeFrameProcessedPreviewFiles) ?? self.writeFrameProcessedPreviewFiles
+        self.writeFrameThumbnailFiles = try c.decodeIfPresent(Bool.self, forKey: .writeFrameThumbnailFiles) ?? self.writeFrameThumbnailFiles
+
+        self.ignoreLowerPixels = try c.decodeIfPresent(Int.self, forKey: .ignoreLowerPixels) ?? self.ignoreLowerPixels
+
+        self.frameRate = try c.decodeIfPresent(FrameRate.self, forKey: .frameRate) ?? self.frameRate
+        self.codec = try c.decodeIfPresent(FFmpegCodec.self, forKey: .codec) ?? self.codec
+        self.encoder = try c.decodeIfPresent(FFmpegEncoder.self, forKey: .encoder) ?? self.encoder
+        self.pixelFormat = try c.decodeIfPresent(FFmpegPixelFormat.self, forKey: .pixelFormat) ?? self.pixelFormat
+        self.muxer = try c.decodeIfPresent(FFmpegMuxer.self, forKey: .muxer) ?? self.muxer
+        self.hasAudio = try c.decodeIfPresent(Bool.self, forKey: .hasAudio) ?? self.hasAudio
+
+        self.horizonDetectionEnabled = try c.decodeIfPresent(Bool.self, forKey: .horizonDetectionEnabled) ?? self.horizonDetectionEnabled
+        self.horizonStripWidth = try c.decodeIfPresent(Int.self, forKey: .horizonStripWidth) ?? self.horizonStripWidth 
+        self.useCannyForHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useCannyForHorizonDetection) ?? self.useCannyForHorizonDetection
+        self.cannyMinThreshold = try c.decodeIfPresent(Double.self, forKey: .cannyMinThreshold) ?? self.cannyMinThreshold
+        self.cannyMaxThreshold = try c.decodeIfPresent(Double.self, forKey: .cannyMaxThreshold) ?? self.cannyMaxThreshold
+        self.cannyUseL2Gradient = try c.decodeIfPresent(Bool.self, forKey: .cannyUseL2Gradient) ?? self.cannyUseL2Gradient
+
+        self.horizonMinY = try c.decodeIfPresent(Int.self, forKey: .horizonMinY)
+        self.horizonMaxY = try c.decodeIfPresent(Int.self, forKey: .horizonMaxY)
+        self.maxConcurrentHorizonCalculations = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentHorizonCalculations) ?? self.maxConcurrentHorizonCalculations
+
+        self.earthAlignedImageCropAmount = try c.decodeIfPresent(Int.self, forKey: .earthAlignedImageCropAmount)
+
+        self.starVersion = try c.decodeIfPresent(String.self, forKey: .starVersion) ?? self.starVersion
+    }
+
     
     // 0.0.2 added more detail group hough transormation analysis, based upon a data set
     // 0.0.3 included the data set analysis to include group size and fill, and to use histograms

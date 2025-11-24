@@ -128,10 +128,9 @@ public class FullFrameBlobber {
         var minY = 0
         var maxY = imageHeight
 
-        if let ignoreLowerPixels = config.ignoreLowerPixels {
-            maxY = imageHeight - ignoreLowerPixels
-            if maxY < 0 { maxY = 0 }
-        }
+        let ignoreLowerPixels = config.ignoreLowerPixels 
+        maxY = imageHeight - ignoreLowerPixels
+        if maxY < 0 { maxY = 0 }
 
         if let bounds {
             minX = bounds.min.x

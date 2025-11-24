@@ -507,7 +507,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
            let horizonMask = try await original.horizonMask(
              at: frameIndex,
              bottomPercentage: bottomPercentage,
-             stripWidth: config.horizonStripWidth ?? 400
+             stripWidth: config.horizonStripWidth,
+             useCannyEdgeDetection: config.useCannyForHorizonDetection,
+             cannyMinThreshold: config.cannyMinThreshold,
+             cannyMaxThreshold: config.cannyMaxThreshold
            )
         {
             Log.d("frame \(frameIndex) horizon mask image \(horizonMask.image) created")
