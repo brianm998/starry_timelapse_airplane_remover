@@ -414,10 +414,13 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    var pixelReplacementMethod: PixelReplacementMethod = .automatic(false) {
-        didSet {
+    var pixelReplacementMethod: PixelReplacementMethod {
+        get {
+            config.config().pixelReplacementMethod
+        }
+        set {
             var realConfig = config.config()
-            realConfig.pixelReplacementMethod = pixelReplacementMethod
+            realConfig.pixelReplacementMethod = newValue
             config.update(realConfig)
         }
     }

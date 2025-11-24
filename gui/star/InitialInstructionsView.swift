@@ -31,6 +31,8 @@ public enum HighLevelPixelReplacementMethod: InstructionOption,
             "Selective Clean"
         }
     }
+
+    public static let topTitle = "Processing Method:"
     
     public var helpText: String {
         switch self {
@@ -57,6 +59,8 @@ enum SceneType: String, InstructionOption, Identifiable {
 
     var id: Self { self }
 
+    static let topTitle = "Scene Type:"
+    
     var titleText: String { self.rawValue }
 
     var helpText: String {
@@ -84,6 +88,8 @@ enum CameraMotion: String, InstructionOption, Identifiable {
 
     var id: Self { self }
 
+    static let topTitle = "Camera Motion:"
+    
     var titleText: String { self.rawValue }
 
     var helpText: String {
@@ -120,8 +126,14 @@ struct InitialInstructionsView: View {
     @State private var showNeighborFrameInfo = false
     @State private var showPixelThresholdInfo = false
     @State private var showProcessingModeInfo = false
+
+    private var addSpacer: Bool {
+        showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo ||
+        showAutoPreservationMethodInfo || showProcessFramesInfo ||
+        showNeighborFrameInfo || showPixelThresholdInfo || showProcessingModeInfo
+    }
     
-    @State private var showExtraSettings = false
+    @State private var showExpertSettings = false
 
     @FocusState private var focusedField: FocusedField?
 
@@ -161,9 +173,8 @@ struct InitialInstructionsView: View {
                       self.processingMethodGridRow
                       Divider()
                       self.automaticSelectionGridRow
-                        .disabled(self.pixelReplacementMethod == .selective)
 
-                      if showExtraSettings {
+                      if showExpertSettings {
                           Divider()
                           self.cuncurrentProcessingLimitView
                           Divider()
@@ -216,16 +227,16 @@ struct InitialInstructionsView: View {
                   Spacer()
                   Button() {
                       withAnimation {
-                          showExtraSettings = !showExtraSettings
+                          showExpertSettings = !showExpertSettings
                       }
                   } label: {
                       Text("⚙")
                         .font(.system(size: 60))
-                        .foregroundColor(showExtraSettings ? .red : .green)
-                        .help(showExtraSettings ? "Hide Extra Settings" : "Show Extra Settings")
+                        .foregroundColor(showExpertSettings ? .red : .green)
+                        .help(showExpertSettings ? "Hide Expert Settings" : "Show Expert Settings")
                   }
                     .buttonStyle(PlainButtonStyle())
-                  Text(showExtraSettings ? "Hide Extra Settings" : "Show Extra Settings")
+                  Text(showExpertSettings ? "Hide Expert Settings" : "Show Expert Settings")
                     .foregroundColor(.white)
               }
           }
@@ -234,19 +245,12 @@ struct InitialInstructionsView: View {
           .background(.gray)
     }
 
-    private var addSpacer: Bool {
-        showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo ||
-        showAutoPreservationMethodInfo || showProcessFramesInfo ||
-        showNeighborFrameInfo || showPixelThresholdInfo || showProcessingModeInfo
-    }
-
     private var sceneTypeGridRow: some View {
         @Bindable var viewModel = viewModel
         return EnumInstructionGridRow<SceneType>(
           selection: $viewModel.sceneType,
           showInfo: $showSceneTypeInfo,
-          addSpacer: { addSpacer },
-          title: "Scene Type:"
+          addSpacer: { addSpacer }
         )        
     }
      
@@ -255,8 +259,7 @@ struct InitialInstructionsView: View {
         return EnumInstructionGridRow<CameraMotion>(
           selection: $viewModel.cameraMotion,
           showInfo: $showCameraMotionInfo,
-          addSpacer: { addSpacer },
-          title: "Camera Motion:"
+          addSpacer: { addSpacer }
         )        
     }
 
@@ -264,17 +267,16 @@ struct InitialInstructionsView: View {
         EnumInstructionGridRow<AutoPreservationMode>(
           selection: $autoPreservationMode,
           showInfo: $showAutoPreservationMethodInfo,
-          addSpacer: { addSpacer },
-          title: "Selective Auto Clean:"
+          addSpacer: { addSpacer }
         )        
+          .disabled(self.pixelReplacementMethod == .selective)
     }
     
     private var processingMethodGridRow: some View {
         EnumInstructionGridRow<HighLevelPixelReplacementMethod>(
           selection: $pixelReplacementMethod,
           showInfo: $showProcessingMethodInfo,
-          addSpacer: { addSpacer },
-          title: "Processing Method:"
+          addSpacer: { addSpacer }
         )        
     }
     
@@ -336,7 +338,7 @@ struct InitialInstructionsView: View {
             """
         ) {
             HStack {
-                Text("Processing Mode:")
+                Text("Selective Processing Mode:")
                   .foregroundColor(.white)
                 Picker("", selection: $viewModel.detectionType) {
                     ForEach(DetectionType.allCases, id: \.self) { value in
@@ -354,6 +356,7 @@ struct InitialInstructionsView: View {
               }
            }
         }
+          .disabled(autoPreservationMode == .no)
     }
 
     private func applySettings() {
@@ -419,7 +422,6 @@ struct EnumInstructionGridRow<E: InstructionOption>: View {
     @Binding var selection: E
     @Binding var showInfo: Bool
     let addSpacer: () -> Bool
-    let title: String
 
     var body: some View {
         InstructionGridRow(
@@ -442,7 +444,7 @@ struct EnumInstructionGridRow<E: InstructionOption>: View {
                   HStack {
                       Spacer()
                       VStack(alignment: .trailing) {
-                          Text(title)
+                          Text(E.topTitle)
                             .font(.title2)
                             .foregroundColor(.white)
                       }
@@ -477,11 +479,7 @@ struct InstructionGridRow<Content: View, InfoContent: View>: View {
     var body: some View {
         GridRow {
             // --- Column 1 ---
-            HStack {
-//                Spacer()
-                contentView()
-  //              Spacer()
-            }
+            contentView()
 
             // --- Column 2 ---
             Button {
