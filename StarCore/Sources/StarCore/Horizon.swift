@@ -200,18 +200,13 @@ extension PixelatedImage {
          * remove small padding
          */        
 
-        // determine the new height 
-        let bottomHeight = Int(Double(self.height)*bottomPercentage/100)
+        // determine the size of the sky to remove
+        let topHeight = Int(Double(self.height)*bottomPercentage/100)
 
-        // round up
-        let topHeight = Int(Double(Double(self.height)*(100-bottomPercentage)/100)
-                              .rounded(.down))
-
-        Log.d("bottomHeight \(bottomHeight)")
         Log.d("topHeight \(topHeight)")
         
         // crop out the top part
-        guard let bottomCrop = self.bottomCrop(by: bottomHeight) else {
+        guard let bottomCrop = self.bottomCrop(by: topHeight) else {
             Log.w("Unable to bottom crop")
             return nil
         }
@@ -264,7 +259,7 @@ extension PixelatedImage {
                 let (horizonTopY, horizonBottomY) = newElements.combinedHorizonExtents()
 
                 if let no_sky_image = PixelatedImage(from: newElements),
-                   let image = no_sky_image.addSky(height: bottomHeight)
+                   let image = no_sky_image.addSky(height: topHeight)
                 {
                     // find edges on self (source image)
                     let edges = try self.cannyEdgeDetect(minThreshold: 30, maxThreshold: 150)
@@ -289,10 +284,10 @@ extension PixelatedImage {
                     let groundOnly = try shrunk.groundOnly()
                     
                     var _horizonTopY: Int = shrunk.height
-                    if let horizonTopY { _horizonTopY = horizonTopY + topHeight }
+                    if let horizonTopY { _horizonTopY = horizonTopY }
 
                     var _horizonBottomY: Int = 0
-                    if let horizonBottomY { _horizonBottomY = horizonBottomY + topHeight }
+                    if let horizonBottomY { _horizonBottomY = horizonBottomY }
                     
                     return HorizonMask(
                       image: groundOnly,

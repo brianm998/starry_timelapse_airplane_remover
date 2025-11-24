@@ -493,13 +493,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // if not, create 
         let config = await configManager.config()
         // load originalimage
+
+        var bottomPercentage: Double = 50
+        if let cropAmount = config.earthAlignedImageCropAmount {
+            bottomPercentage = Double(cropAmount) / Double(height) * 100
+            Log.i("frame \(frameIndex) calculated bottomPercentage \(bottomPercentage) from cropAmount \(cropAmount)")
+        }
+        
         if let original = try await imageAccessor.load(frameIndex: frameIndex,
                                                        type: .original,
                                                        atSize: .original),
            // calculate horizon mask from original image
            let horizonMask = try await original.horizonMask(
              at: frameIndex,
-             bottomPercentage: config.horizonBottomPercentage ?? 50,
+             bottomPercentage: bottomPercentage,
              stripWidth: config.horizonStripWidth ?? 400
            )
         {
