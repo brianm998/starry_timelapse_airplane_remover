@@ -361,6 +361,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         self.baseFilename = imageSequence.filenames[frameIndex]
 
         let config = await configManager.config()
+        Log.d("config.numberAlignedNeighborFrames \(config.numberAlignedNeighborFrames)")
         setNumberOfAlignmentImages(config.numberAlignedNeighborFrames)
         
         if imageAccessor.imageExists(frameIndex: frameIndex,
@@ -429,7 +430,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             alignmentFrames.append(index)
         }
 
-        //Log.d("frame \(frameIndex) has alignment frames \(alignmentFrames)")
+        Log.d("frame \(frameIndex) has alignment frames \(alignmentFrames)")
     }
 
     public var numberOfAlignedFrames: Int { alignmentFrames.count }
@@ -546,7 +547,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
       PixelatedImage,   // aligned image
       PixelatedImage?   // optional aligned/median merged horizon mask
     ) {
-
         var isEarth = false
         
         switch type {
@@ -711,7 +711,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if let aligned = alignmentResult.aligned {
             goodPixelImage = aligned
         } else if let failed = alignmentResult.failed {
-            goodPixelImage = failed
+            switch config.pixelReplacementMethod {
+            case .automatic(_):
+                // return the frame itself
+                goodPixelImage = originalFrame
+            case .selective:
+                // use the median merged neighbors
+                goodPixelImage = failed
+            }
         } else {
             Log.e("frame \(frameIndex) didn't get either an aligned image or a failed image from alignment results")
             throw "frame \(frameIndex) didn't get either an aligned image or a failed image from alignment results" // XXX handle this better
