@@ -386,7 +386,24 @@ struct InitialInstructionsView: View {
     
     private var processingMethodGridRow: some View {
         @Bindable var viewModel = viewModel
-        return GridRow {
+        return
+          InstructionGridRow(
+            showInfo: $showProcessingMethodInfo,
+            addSpacer: { addSpacer },
+            infoView: {
+                VStack(alignment: .leading) {
+                    ForEach(HighLevelPixelReplacementMethod.allCases, id: \.id) { processingMethod in
+                        Text(processingMethod.titleText)
+                          .foregroundColor(.white)
+                          .font(.largeTitle)
+                        
+                        Text(processingMethod.description)
+                          .foregroundColor(.white)
+                          .font(.body)
+                    }
+                }
+            } 
+          ) {
             HStack(alignment: .top) {
                 HStack {
                     Spacer()
@@ -411,43 +428,11 @@ struct InitialInstructionsView: View {
                     Spacer()
                 }
             }
-            Button {
-                withAnimation {
-                    showProcessingMethodInfo = !showProcessingMethodInfo
-                }
-            } label: {
-                Text("ⓘ")
-                  .font(.title2)
-                //.font(.largeTitle)
-                  .foregroundColor(showProcessingMethodInfo ? .red : .green)
-                  .help(showProcessingMethodInfo ? "Hide Processing Method Information" : "Show Processing Method Information")
-            }
-              .buttonStyle(PlainButtonStyle())
-
-            HStack {
-                if showProcessingMethodInfo {
-                    VStack(alignment: .leading) {
-                        ForEach(HighLevelPixelReplacementMethod.allCases, id: \.id) { processingMethod in
-                            Text(processingMethod.titleText)
-                              .foregroundColor(.white)
-                              .font(.largeTitle)
-                            
-                            Text(processingMethod.description)
-                              .foregroundColor(.white)
-                              .font(.body)
-                        }
-                    }
-                } else {
-                    Text("Show Info")
-                      .foregroundColor(.white)
-                    if addSpacer { Spacer() }
-                }
-            }
         }
     }
     
     private var cuncurrentProcessingLimitView: some View {
-        InstructionGridRow(
+        InfoTextInstructionGridRow(
           showInfo: $showProcessFramesInfo,
           addSpacer: { addSpacer },
           infoText: """
@@ -463,7 +448,7 @@ struct InitialInstructionsView: View {
     }
 
     private var neighborFrameCountView: some View {
-        InstructionGridRow(
+        InfoTextInstructionGridRow(
           showInfo: $showNeighborFrameInfo,
           addSpacer: { addSpacer },
           infoText: """
@@ -479,7 +464,7 @@ struct InitialInstructionsView: View {
     }
 
     private var pixelThresholdView: some View {
-        InstructionGridRow(
+        InfoTextInstructionGridRow(
           showInfo: $showPixelThresholdInfo,
           addSpacer: { addSpacer },
           infoText: """
@@ -496,7 +481,7 @@ struct InitialInstructionsView: View {
 
     private var processingModeView: some View {
         @Bindable var viewModel = viewModel
-        return InstructionGridRow(
+        return InfoTextInstructionGridRow(
           showInfo: $showProcessingModeInfo,
           addSpacer: { addSpacer },
           infoText: """
@@ -560,11 +545,32 @@ struct InitialInstructionsView: View {
     }
 }
 
-
-struct InstructionGridRow<Content: View>: View {
+struct InfoTextInstructionGridRow<Content: View>: View {
     @Binding var showInfo: Bool
     let addSpacer: () -> Bool
     let infoText: String
+    let contentView: () -> Content
+
+    var body: some View {
+        InstructionGridRow(
+          showInfo: $showInfo,
+          addSpacer: addSpacer,
+          infoView: {
+              Text(infoText)
+                .foregroundColor(.white)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
+          },
+          contentView: contentView
+        )
+    }
+}
+
+// base grid row
+struct InstructionGridRow<Content: View, InfoContent: View>: View {
+    @Binding var showInfo: Bool
+    let addSpacer: () -> Bool
+    let infoView: () -> InfoContent
     let contentView: () -> Content
 
     var body: some View {
@@ -590,10 +596,7 @@ struct InstructionGridRow<Content: View>: View {
             // --- Column 3 ---
             HStack {
                 if showInfo {
-                    Text(infoText)
-                        .foregroundColor(.white)
-                        .lineLimit(nil)
-                        .fixedSize(horizontal: false, vertical: true)
+                    infoView()
                 } else {
                     Text("Show Info")
                         .foregroundColor(.white)
