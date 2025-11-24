@@ -207,6 +207,9 @@ extension PixelatedImage {
         let topHeight = Int(Double(Double(self.height)*(100-bottomPercentage)/100)
                               .rounded(.down))
 
+        Log.d("bottomHeight \(bottomHeight)")
+        Log.d("topHeight \(topHeight)")
+        
         // crop out the top part
         guard let bottomCrop = self.bottomCrop(by: bottomHeight) else {
             Log.w("Unable to bottom crop")
@@ -261,7 +264,7 @@ extension PixelatedImage {
                 let (horizonTopY, horizonBottomY) = newElements.combinedHorizonExtents()
 
                 if let no_sky_image = PixelatedImage(from: newElements),
-                   let image = no_sky_image.addSky(height: topHeight)
+                   let image = no_sky_image.addSky(height: bottomHeight)
                 {
                     // find edges on self (source image)
                     let edges = try self.cannyEdgeDetect(minThreshold: 30, maxThreshold: 150)
