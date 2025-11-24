@@ -2,6 +2,17 @@ import SwiftUI
 import StarCore
 import logging
 
+/*
+
+ New items to add:
+
+ - int min/max canny thresholds
+ - bool canny gradient magnitude equation
+
+ - bool use canny for horizon?
+ - int otsu width
+ 
+ */
 
 enum SceneType: String, CaseIterable, Identifiable {
     case skyHorizon = "Sky + Horizon"
@@ -436,129 +447,62 @@ struct InitialInstructionsView: View {
     }
     
     private var cuncurrentProcessingLimitView: some View {
-        GridRow {
-            HStack {
-                Spacer()
-                EditableNumberOfFramesToProcessConcurrentlyView(
-                  focusedField: $focusedField,
-                  textColor: .white,
-                  alwaysOpen: true
-                )
-                Spacer()
-            }
-
-            Button {
-                withAnimation {
-                    showProcessFramesInfo = !showProcessFramesInfo
-                }
-            } label: {
-                Text("ⓘ")
-                  .font(.title2)
-                  .foregroundColor( showProcessFramesInfo ? .red : .green)
-                  .help(showProcessFramesInfo ? "Hide Processing Limit Information" : "Show Processing Limit Information")
-                
-            }
-              .buttonStyle(PlainButtonStyle())
-        
-            HStack {
-                if showProcessFramesInfo {
-                    
-                    Text("How many frames do we process concurrently?  Number of CPUs is likely too high, as much of the processing has been parallized.  2-5 is a good number here.")
-                      .foregroundColor(.white)
-                      .lineLimit(nil)
-                      .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text("Show Info")
-                      .foregroundColor(.white)
-                    if addSpacer { Spacer() }
-                }
-            }
+        InstructionGridRow(
+          showInfo: $showProcessFramesInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            How many frames do we process concurrently?  Number of CPUs is likely too high, as much of the processing has been parallized.  2-5 is a good number here.
+            """
+        ) {
+            EditableNumberOfFramesToProcessConcurrentlyView(
+              focusedField: $focusedField,
+              textColor: .white,
+              alwaysOpen: true
+            )
         }
-
     }
 
     private var neighborFrameCountView: some View {
-        GridRow {
-            HStack {
-                Spacer()
-                EditableNumberOfNeighborFrames(
-                  focusedField: $focusedField,
-                  textColor: .white,
-                  alwaysOpen: true
-                )
-                Spacer()
-            }
-            
-            Button {
-                withAnimation {
-                    showNeighborFrameInfo = !showNeighborFrameInfo
-                }
-            } label: {
-                Text("ⓘ")
-                  .font(.title2)
-                  .foregroundColor( showNeighborFrameInfo ? .red : .green)
-                  .help(showNeighborFrameInfo ? "Hide Frame Count Information" : "Show Frame Count Information")
-                
-            }
-              .buttonStyle(PlainButtonStyle())
-            
-            HStack {
-                if showNeighborFrameInfo {
-                    Text("During star alignment, we use this number for aligning and processing neighboring frames.  Lowest possible number is 1, which does work in most cases.  However, 8 is a better option for general use, as it covers the case where neighboring frames have bad pixels at the same location.")
-                      .foregroundColor(.white)
-                      .lineLimit(nil)
-                      .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text("Show Info")
-                      .foregroundColor(.white)
-                    if addSpacer { Spacer() }
-                }
-            }
+        InstructionGridRow(
+          showInfo: $showNeighborFrameInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            During star alignment, we use this number for aligning and processing neighboring frames.  Lowest possible number is 1, which does work in most cases.  However, 8 is a better option for general use, as it covers the case where neighboring frames have bad pixels at the same location.
+            """
+        ) {
+            EditableNumberOfNeighborFrames(
+              focusedField: $focusedField,
+              textColor: .white,
+              alwaysOpen: true
+            )
         }
     }
 
     private var pixelThresholdView: some View {
-        GridRow {
-            HStack {
-                Spacer()
-                EditablePixelThresholdView(
-                  focusedField: $focusedField,
-                  textColor: .white,
-                  alwaysOpen: true
-                )
-                Spacer()
-            }
-            Button {
-                withAnimation {
-                    showPixelThresholdInfo = !showPixelThresholdInfo
-                }
-            } label: {
-                Text("ⓘ")
-                  .font(.title2)
-                  .foregroundColor( showPixelThresholdInfo ? .red : .green)
-                  .help(showPixelThresholdInfo ? "Hide Pixel Threshold Information" : "Show Pixel Threshold Information")
-                
-            }
-              .buttonStyle(PlainButtonStyle())
-            
-            HStack {
-                if showPixelThresholdInfo {
-                    Text("The pixel threshold is a factor used to weed out pixels that are statistically too much brigher than other aligned pixels at the same location.  Lower values like 0.5 get rid of more brighter pixels, higher values like 2.0 will allow more brighter pixels to pass through.  Used for both the subtraction image and for calculating what pixel values to replace airplanes with.")
-                      .lineLimit(nil)
-                      .foregroundColor(.white)
-                      .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text("Show Info")
-                      .foregroundColor(.white)
-                    if addSpacer { Spacer() }
-                }
-            }
+        InstructionGridRow(
+          showInfo: $showPixelThresholdInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            The pixel threshold is a factor used to weed out pixels that are statistically too much brigher than other aligned pixels at the same location.  Lower values like 0.5 get rid of more brighter pixels, higher values like 2.0 will allow more brighter pixels to pass through.  Used for both the subtraction image and for calculating what pixel values to replace airplanes with.
+            """
+        ) {
+            EditablePixelThresholdView(
+              focusedField: $focusedField,
+              textColor: .white,
+              alwaysOpen: true
+            )
         }
     }
 
     private var processingModeView: some View {
         @Bindable var viewModel = viewModel
-        return GridRow {
+        return InstructionGridRow(
+          showInfo: $showProcessingModeInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            Star supports a number of different processing modes for selective processing.  On one end is faster processing and less accuracy, on the other end is slower processing and more touch up work.
+            """
+        ) {
             HStack {
                 Text("Processing Mode:")
                   .foregroundColor(.white)
@@ -571,36 +515,12 @@ struct InitialInstructionsView: View {
                   .onChange(of: viewModel.detectionType) {
                       Task {
                           await constants.set(detectionType: viewModel.detectionType)
-
+                          
                           // stick it in user preferences
                           self.viewModel.userPreferences.processingType = viewModel.detectionType
                       }
-                  }
-            }
-            Button {
-                withAnimation {
-                    showProcessingModeInfo = !showProcessingModeInfo
-                }
-            } label: {
-                Text("ⓘ")
-                  .font(.title2)
-                  .foregroundColor( showProcessingModeInfo ? .red : .green)
-                  .help(showProcessingModeInfo ? "Hide Processing Information" : "Show Processing Information")
-            }
-              .buttonStyle(PlainButtonStyle())
-            
-            HStack {
-                if showProcessingModeInfo {
-                    Text("Star supports a number of different processing modes for selective processing.  On one end is faster processing and less accuracy, on the other end is slower processing and more touch up work.")
-                      .lineLimit(nil)
-                      .foregroundColor(.white)
-                      .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text("Show Info")
-                      .foregroundColor(.white)
-                    if addSpacer { Spacer() }
-                }
-            }
+              }
+           }
         }
     }
 
@@ -636,6 +556,50 @@ struct InitialInstructionsView: View {
             viewModel.ignoreLowerPixels = 0
 
             viewModel.renderAllFrames()
+        }
+    }
+}
+
+
+struct InstructionGridRow<Content: View>: View {
+    @Binding var showInfo: Bool
+    let addSpacer: () -> Bool
+    let infoText: String
+    let contentView: () -> Content
+
+    var body: some View {
+        GridRow {
+            // --- Column 1 ---
+            HStack {
+                Spacer()
+                contentView()
+                Spacer()
+            }
+
+            // --- Column 2 ---
+            Button {
+                withAnimation { showInfo.toggle() }
+            } label: {
+                Text("ⓘ")
+                    .font(.title2)
+                    .foregroundColor(showInfo ? .red : .green)
+                    .help(showInfo ? "Hide Information" : "Show Information")
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            // --- Column 3 ---
+            HStack {
+                if showInfo {
+                    Text(infoText)
+                        .foregroundColor(.white)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("Show Info")
+                        .foregroundColor(.white)
+                    if addSpacer() { Spacer() }
+                }
+            }
         }
     }
 }
