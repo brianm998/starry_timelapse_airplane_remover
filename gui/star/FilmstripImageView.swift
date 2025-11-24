@@ -109,8 +109,8 @@ struct FilmstripImageView: View {
             }
             Spacer().frame(height: 8)
         }
-          .frame(width: CGFloat((viewModel.config?.config().thumbnailWidth ?? 80) + 8),
-                 height: CGFloat((viewModel.config?.config().thumbnailHeight ?? 50) + 30))
+          .frame(width: CGFloat((viewModel.config.config().thumbnailWidth) + 8),
+                 height: CGFloat((viewModel.config.config().thumbnailHeight) + 30))
         // highlight the selected frame
           .background(viewModel.currentIndex == frameIndex ? Color(white: 0.45) : Color(white: 0.22))
           .onTapGesture {

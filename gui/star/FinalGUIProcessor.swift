@@ -51,7 +51,7 @@ public actor FinalGUIProcessor {
 
         guard let viewModel else { return }
 
-        let pixelReplacementMode = await viewModel.config?.config().pixelReplacementMethod ?? .automatic(false)
+        let pixelReplacementMode = await viewModel.config.config().pixelReplacementMethod ?? .automatic(false)
         
         try? await withThrowingTaskGroup(of: Optional<FrameAirplaneRemover>.self) { taskGroup in
             var semaphores = [AsyncSemaphore?](repeating: nil, count: framesCount)
@@ -138,7 +138,7 @@ public actor FinalGUIProcessor {
 
             numberFramesProcessing = num_processed
 
-            let numNeighbors = await viewModel.config?.config().numberFinalProcessingNeighborsNeeded ?? 1
+            let numNeighbors = await viewModel.config.config().numberFinalProcessingNeighborsNeeded 
 
             /*
 

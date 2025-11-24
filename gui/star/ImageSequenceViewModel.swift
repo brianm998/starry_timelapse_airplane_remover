@@ -105,7 +105,7 @@ fileprivate let frameLoadMonitor = FileSystemMonitor(max: 28) // XXX make this c
 // view model for a sequence of images
 @MainActor @Observable
 public final class ImageSequenceViewModel {
-    var config: ConfigManager?
+    let config: ConfigManager
 
     var userPreferences: UserPreferences = UserPreferences() {
         didSet {
@@ -296,11 +296,9 @@ public final class ImageSequenceViewModel {
 
     var horizonDetectionEnabled: Bool {
         didSet {
-            if let config {
-                var realConfig = config.config()
-                realConfig.horizonDetectionEnabled = horizonDetectionEnabled
-                config.update(realConfig)
-            }
+            var realConfig = config.config()
+            realConfig.horizonDetectionEnabled = horizonDetectionEnabled
+            config.update(realConfig)
         }
     }
     
@@ -324,31 +322,25 @@ public final class ImageSequenceViewModel {
     
     var earthAlignedImageCropAmount: Int {
         didSet {
-            if let config {
-                var realConfig = config.config()
-                realConfig.earthAlignedImageCropAmount = earthAlignedImageCropAmount
-                config.update(realConfig)
-            }
+            var realConfig = config.config()
+            realConfig.earthAlignedImageCropAmount = earthAlignedImageCropAmount
+            config.update(realConfig)
         }
     }
 
     var pixelReplacementMethod: PixelReplacementMethod = .automatic(false) {
         didSet {
-            if let config {
-                var realConfig = config.config()
-                realConfig.pixelReplacementMethod = pixelReplacementMethod
-                config.update(realConfig)
-            }
+            var realConfig = config.config()
+            realConfig.pixelReplacementMethod = pixelReplacementMethod
+            config.update(realConfig)
         }
     }
 
     var cameraMotion: CameraMotion = .fixed {
         didSet {
-            if let config {
-                var realConfig = config.config()
-                realConfig.tripodHeadWasMoving = cameraMotion != .fixed
-                config.update(realConfig)
-            }
+            var realConfig = config.config()
+            realConfig.tripodHeadWasMoving = cameraMotion != .fixed
+            config.update(realConfig)
         }
     }
     
@@ -731,11 +723,8 @@ public final class ImageSequenceViewModel {
     }
 
     var windowTitle: String {
-        if let sequenceDirname = self.config?.config().imageSequenceDirname {
-            "Star - \(sequenceDirname)"
-        } else {
-            "Star"
-        }
+        let sequenceDirname = self.config.config().imageSequenceDirname
+        return "Star - \(sequenceDirname)"
     }
     
     var selectionColor: Color {
@@ -1354,19 +1343,13 @@ public final class ImageSequenceViewModel {
     }
 
     var doesUseOutliers: Bool {
-        guard let config else {
-            Log.w("missing config")
-            return false
-        }
+      
         
         return config.config().pixelReplacementMethod.usesOutliers
     }
     
     func renderAllFrames() {
-        guard let config else {
-            Log.w("cannot render without a config")
-            return
-        }
+      
         let pixelReplacementMode = config.config().pixelReplacementMethod
         
         switch pixelReplacementMode {
@@ -1468,10 +1451,7 @@ public final class ImageSequenceViewModel {
     {
         let totalNumberOfFrames = self.frames.count
         let rawFrameRate = frameRate.rawString
-        guard let config else {
-            errorCallback("No Config!")
-            return
-        }
+        
         let outputPath = config.config().outputPath
         let basename = config.config().basename
 
@@ -1510,8 +1490,7 @@ public final class ImageSequenceViewModel {
 
         var max = 30
 
-        if let config,
-           let maximum = config.config().maxConcurrentHorizonCalculations
+        if let maximum = config.config().maxConcurrentHorizonCalculations
         {
             max = maximum
         }
@@ -1559,13 +1538,11 @@ public final class ImageSequenceViewModel {
                         //self.earthAlignedImageCropAmount = horizonStats.highestTopY - 50
                         
                         //self.showIgnoreLowerBar = false
-                        if let config {
-                            self.ignoreLowerPixels = frameHeight - CGFloat(horizonStats.lowestBottomY)
-                            Log.i("ignoreLowerPixels \(ignoreLowerPixels) = \(frameHeight) - \(horizonStats.lowestBottomY)")
-                            var realConfig = config.config()
-                            realConfig.ignoreLowerPixels = Int(ignoreLowerPixels)
-                            config.update(realConfig)
-                        }
+                        self.ignoreLowerPixels = frameHeight - CGFloat(horizonStats.lowestBottomY)
+                        Log.i("ignoreLowerPixels \(ignoreLowerPixels) = \(frameHeight) - \(horizonStats.lowestBottomY)")
+                        var realConfig = config.config()
+                        realConfig.ignoreLowerPixels = Int(ignoreLowerPixels)
+                        config.update(realConfig)
                     }
                 }
                 

@@ -30,47 +30,38 @@ struct RenderVideoSheetView: View {
     {
         _isVisible = isVisible
         self.viewModel = viewModel
-        if let config = viewModel.config {
-            if let frameRate = config.config().frameRate {
-                _frameRate = State(initialValue: frameRate)
-                _frameRateString = State(initialValue: String(format: "%g", frameRate.rawValue))
-            } else {
-                _frameRate = State(initialValue: viewModel.frameRate)
-                _frameRateString = State(initialValue: String(format: "%g", viewModel.frameRate.rawValue))
-            }
-            
-            if let codec = config.config().codec {
-                _codec = State(initialValue: codec)
-            } else {
-                _codec = State(initialValue: viewModel.codec)
-            }
-            if let encoder = config.config().encoder {
-                _encoder = State(initialValue: encoder)
-            } else {
-                _encoder = State(initialValue: viewModel.encoder)
-            }
-            if let pixelFormat = config.config().pixelFormat {
-                _pixelFormat = State(initialValue: pixelFormat)
-            } else {
-                _pixelFormat = State(initialValue: viewModel.pixelFormat)
-            }
-
-            
-            if let muxer = config.config().muxer {
-                _muxer = State(initialValue: muxer)
-                _videoFilename = State(initialValue: "\(config.config().basename).\(muxer.rawValue)")
-            } else {
-                _muxer = State(initialValue: viewModel.muxer)
-                _videoFilename = State(initialValue: "\(config.config().basename).\(viewModel.muxer.rawValue)")
-            }
+        let config = viewModel.config 
+        if let frameRate = config.config().frameRate {
+            _frameRate = State(initialValue: frameRate)
+            _frameRateString = State(initialValue: String(format: "%g", frameRate.rawValue))
         } else {
-            _videoFilename = State(initialValue: "star-output-video.\(viewModel.muxer.rawValue)")
             _frameRate = State(initialValue: viewModel.frameRate)
             _frameRateString = State(initialValue: String(format: "%g", viewModel.frameRate.rawValue))
+        }
+        
+        if let codec = config.config().codec {
+            _codec = State(initialValue: codec)
+        } else {
             _codec = State(initialValue: viewModel.codec)
+        }
+        if let encoder = config.config().encoder {
+            _encoder = State(initialValue: encoder)
+        } else {
             _encoder = State(initialValue: viewModel.encoder)
+        }
+        if let pixelFormat = config.config().pixelFormat {
+            _pixelFormat = State(initialValue: pixelFormat)
+        } else {
             _pixelFormat = State(initialValue: viewModel.pixelFormat)
+        }
+
+        
+        if let muxer = config.config().muxer {
+            _muxer = State(initialValue: muxer)
+            _videoFilename = State(initialValue: "\(config.config().basename).\(muxer.rawValue)")
+        } else {
             _muxer = State(initialValue: viewModel.muxer)
+            _videoFilename = State(initialValue: "\(config.config().basename).\(viewModel.muxer.rawValue)")
         }
 
         // check to see if encoder, pixelformat and muxer are in the list for this codex,
@@ -167,9 +158,8 @@ struct RenderVideoSheetView: View {
                 Text("Successfully Rendered \(videoFilename)")
                   .font(.title)
                 Button("Reveal In Finder") {
-                    if let configManager = viewModel.config {
-                        revealInFinder(path: "\(configManager.config().outputPath)/\(videoFilename)")
-                    }
+                    let configManager = viewModel.config 
+                    revealInFinder(path: "\(configManager.config().outputPath)/\(videoFilename)")
                 }
                 Button("Dismiss") {
                     self.isVisible = false
@@ -298,11 +288,8 @@ struct RenderVideoSheetView: View {
 
                       let ext = muxer.defaultFileExtension ?? muxer.rawValue
                       
-                      if let config = viewModel.config {
-                          self.videoFilename = "\(config.config().basename).\(ext)"
-                      } else {
-                          self.videoFilename = "star-output-video.\(ext)"
-                      }
+                      let config = viewModel.config 
+                      self.videoFilename = "\(config.config().basename).\(ext)"
                   }
 
                 Text("\(muxer.description) - (.\(muxer.defaultFileExtension ?? muxer.rawValue))")

@@ -163,12 +163,11 @@ public struct IgnoreBarView: View {
               if viewModel.ignoreLowerPixels > viewModel.frameHeight {
                   viewModel.ignoreLowerPixels = viewModel.frameHeight
               }
-              if let configManager = viewModel.config {
-                  // set the final value in the config
-                  var config = configManager.config()
-                  config.ignoreLowerPixels = Int(viewModel.ignoreLowerPixels)
-                  configManager.update(config)
-              }
+              let configManager = viewModel.config 
+              // set the final value in the config
+              var config = configManager.config()
+              config.ignoreLowerPixels = Int(viewModel.ignoreLowerPixels)
+              configManager.update(config)
           }
     }
 
@@ -195,12 +194,11 @@ public struct IgnoreBarView: View {
               if viewModel.earthAlignedImageCropAmount > Int(viewModel.frameHeight) {
                   viewModel.earthAlignedImageCropAmount = Int(viewModel.frameHeight)
               }
-              if let configManager = viewModel.config {
-                  // set the final value in the config
-                  var config = configManager.config()
-                  config.earthAlignedImageCropAmount = Int(viewModel.earthAlignedImageCropAmount)
-                  configManager.update(config)
-              }
+              let configManager = viewModel.config 
+              // set the final value in the config
+              var config = configManager.config()
+              config.earthAlignedImageCropAmount = Int(viewModel.earthAlignedImageCropAmount)
+              configManager.update(config)
           }
     }
 }
