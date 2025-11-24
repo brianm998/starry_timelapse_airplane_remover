@@ -170,7 +170,32 @@ struct InitialInstructionsView: View {
     private var addSpacer: Bool {
         showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo ||
         showAutoPreservationMethodInfo || showProcessFramesInfo ||
-        showNeighborFrameInfo || showPixelThresholdInfo || showProcessingModeInfo
+        showNeighborFrameInfo || showPixelThresholdInfo || showProcessingModeInfo ||
+        showUseCannyInfo
+    }
+    
+    private func showAll() {
+        showCameraMotionInfo = true
+        showSceneTypeInfo = true
+        showProcessingMethodInfo = true
+        showAutoPreservationMethodInfo = true
+        showProcessFramesInfo = true
+        showNeighborFrameInfo = true
+        showPixelThresholdInfo = true
+        showProcessingModeInfo = true
+        showUseCannyInfo = true
+    }
+
+    private func hideAll() {
+        showCameraMotionInfo = false
+        showSceneTypeInfo = false
+        showProcessingMethodInfo = false
+        showAutoPreservationMethodInfo = false
+        showProcessFramesInfo = false
+        showNeighborFrameInfo = false
+        showPixelThresholdInfo = false
+        showProcessingModeInfo = false
+        showUseCannyInfo = false
     }
     
     @State private var showExpertSettings = false
@@ -193,7 +218,7 @@ struct InitialInstructionsView: View {
             pixelReplacementMethod = .selective
         }
     }
-    
+
     var body: some View {
         @Bindable var viewModel = viewModel
         return VStack {
@@ -202,8 +227,40 @@ struct InitialInstructionsView: View {
                 .font(.largeTitle)
                 .foregroundColor(.white)
 
-              Space(height: 20)
+              HStack {
+                  Spacer()
+                  Button {
+                      self.hideAll()
+                  } label: {
+                      ZStack {
+                          Color.white
+                            .cornerRadius(10)
 
+                          Text("Hide Info")
+                            .font(.body)
+                            .padding(10)
+                      }
+                  }
+                    .buttonStyle(PlainButtonStyle()) // XXX these styles suck
+                    .fixedSize(horizontal: true, vertical: true)
+                  Button {
+                      self.showAll()
+                  } label: {
+                      ZStack {
+                          Color.blue
+                            .cornerRadius(10)
+                          Text("Show Info")
+                            .font(.body)
+                            .foregroundColor(.white)
+                            .padding(10)
+                      }
+                  }
+                    .buttonStyle(PlainButtonStyle()) // XXX these styles suck
+                    .fixedSize(horizontal: true, vertical: true)
+              }
+              
+              Space(height: 20)
+              
               ScrollView {
                   Grid {
                       self.sceneTypeGridRow
@@ -392,22 +449,29 @@ struct InitialInstructionsView: View {
             """
         ) {
             HStack {
-                Text("Selective Processing Mode:")
-                  .foregroundColor(.white)
-                Picker("", selection: $viewModel.detectionType) {
-                    ForEach(DetectionType.allCases, id: \.self) { value in
-                        Text(value.rawValue).tag(value)
-                    }
+                HStack {
+                    Spacer()
+                    Text("Selective Processing Mode:")
+                      .font(.title2)
+                      .foregroundColor(.white)
                 }
-                  .frame(maxWidth: 120)
-                  .onChange(of: viewModel.detectionType) {
-                      Task {
-                          await constants.set(detectionType: viewModel.detectionType)
-                          
-                          // stick it in user preferences
-                          self.viewModel.userPreferences.processingType = viewModel.detectionType
+                HStack {
+                    Picker("", selection: $viewModel.detectionType) {
+                        ForEach(DetectionType.allCases, id: \.self) { value in
+                            Text(value.rawValue).tag(value)
+                        }
+                    }
+                      .frame(maxWidth: 120)
+                      .onChange(of: viewModel.detectionType) {
+                          Task {
+                              await constants.set(detectionType: viewModel.detectionType)
+                              
+                              // stick it in user preferences
+                              self.viewModel.userPreferences.processingType = viewModel.detectionType
+                          }
                       }
-              }
+                    Spacer()
+                }
            }
         }
           .disabled(autoPreservationMode == .no)
