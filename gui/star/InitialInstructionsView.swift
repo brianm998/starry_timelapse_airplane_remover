@@ -259,8 +259,6 @@ struct InitialInstructionsView: View {
         showCannyL2GradientView = false
     }
     
-    @State private var showExpertSettings = false
-
     @FocusState private var focusedField: FocusedField?
 
     init(viewModel: ImageSequenceViewModel) {
@@ -330,7 +328,7 @@ struct InitialInstructionsView: View {
                       Divider()
                       self.processingMethodGridRow
 
-                      if showExpertSettings {
+                      if viewModel.showExpertSettings {
                           Divider()
                           self.automaticSelectionGridRow
                           Divider()
@@ -400,14 +398,14 @@ struct InitialInstructionsView: View {
                       Spacer()
                       Button() {
                           withAnimation {
-                              showExpertSettings = !showExpertSettings
+                              viewModel.showExpertSettings.toggle()
                           }
                       } label: {
                           ZStack {
                               Color.blue
                                 .cornerRadius(10)
 
-                              Text(showExpertSettings ? "Hide Expert Settings" : "Show Expert Settings")
+                              Text(viewModel.showExpertSettings ? "Hide Expert Settings" : "Show Expert Settings")
                                 .foregroundColor(.white)
                                 .padding(10)
                           }
@@ -811,9 +809,13 @@ struct InitialInstructionsView: View {
 
         if viewModel.horizonDetectionEnabled {
             Task {
-                await viewModel.processHorizonForAllFrames()
-                // after we get horizons for all frames, render frames
-                viewModel.renderAllFrames()
+                do {
+                    try await viewModel.processHorizonForAllFrames()
+                    // after we get horizons for all frames, render frames
+                    viewModel.renderAllFrames()
+                } catch {
+                    Log.e("ERROR: \(error)")
+                }
             }
         } else {
             viewModel.ignoreLowerPixels = 0

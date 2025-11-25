@@ -56,7 +56,11 @@ public actor FinalGUIProcessor {
         switch await viewModel.reprocessingType {
         case .allHorizons:
             // delete all horizon images first
-            await viewModel.processHorizonForAllFrames(redo: true)
+            do {
+                try await viewModel.processHorizonForAllFrames(redo: true)
+            } catch {
+                Log.e("error: \(error)")
+            }
             return
         default:
             break

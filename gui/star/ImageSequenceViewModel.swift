@@ -417,6 +417,9 @@ public final class ImageSequenceViewModel {
 
     var shouldShowInitialInstructions: Bool = false
 
+    // used in initial instructions view
+    var showExpertSettings = false
+
     var shouldShowTrash: Bool = false
 
     var minimumClassificationSize: Int = 20
@@ -616,7 +619,8 @@ public final class ImageSequenceViewModel {
           imageSequence: imageSequence,
           frameIndexToBaseNameMap: frameIndexToBaseNameMap
         ) { [weak self] frameIndex, image, type, size in
-            Task { @MainActor in 
+            Task { @MainActor in
+                Log.d("frame \(frameIndex) saved image of type \(type) at size \(size)")
                 self?.frames[frameIndex].savedImage(image, ofType: type, atSize: size)
             }
         }
@@ -1550,7 +1554,7 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    func processHorizonForAllFrames(redo: Bool = false) async {
+    func processHorizonForAllFrames(redo: Bool = false) async throws {
         if isFindingAllHorizons { return }
         isFindingAllHorizons = true
 
@@ -1594,27 +1598,27 @@ public final class ImageSequenceViewModel {
                   return results
               }
 
-            if let horizonStats = allBounds.calculateStats() {
-                Log.i("got horizon stats \(horizonStats)")
-
-                
-                await MainActor.run {
-                    // save the height of the portion of the frames that is sky
-                    // account for 50 extra pixels of sky on top of the highest part
-                    //self.earthAlignedImageCropAmount = horizonStats.highestTopY - 50
-                    
-                    //self.showIgnoreLowerBar = false
-                    self.ignoreLowerPixels = frameHeight - CGFloat(horizonStats.lowestBottomY)
-                    Log.i("ignoreLowerPixels \(ignoreLowerPixels) = \(frameHeight) - \(horizonStats.lowestBottomY)")
-                    var realConfig = config.config()
-                    realConfig.ignoreLowerPixels = Int(ignoreLowerPixels)
-                    config.update(realConfig)
-                }
+          if let horizonStats = allBounds.calculateStats() {
+            Log.i("got horizon stats \(horizonStats)")
+            
+            
+            await MainActor.run {
+              // save the height of the portion of the frames that is sky
+              // account for 50 extra pixels of sky on top of the highest part
+              //self.earthAlignedImageCropAmount = horizonStats.highestTopY - 50
+              
+              //self.showIgnoreLowerBar = false
+              self.ignoreLowerPixels = frameHeight - CGFloat(horizonStats.lowestBottomY)
+              Log.i("ignoreLowerPixels \(ignoreLowerPixels) = \(frameHeight) - \(horizonStats.lowestBottomY)")
+              var realConfig = config.config()
+              realConfig.ignoreLowerPixels = Int(ignoreLowerPixels)
+              config.update(realConfig)
             }
+          }
             await MainActor.run {
                 self.isFindingAllHorizons = false
             }
-        }
+        }.value
         /*
          * set a boolean saying we are processing horizon for all frames
          * disbable left panel buttons until that is done
