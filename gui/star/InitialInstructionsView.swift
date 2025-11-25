@@ -281,13 +281,13 @@ struct InitialInstructionsView: View {
                           Divider()
                           self.processingModeView
                           Divider()
-                          self.useCannyEdgeDetectionGridRow
-                          Divider()
                           self.cuncurrentProcessingLimitView
                           Divider()
                           self.neighborFrameCountView
                           Divider()
                           self.pixelThresholdView
+                          Divider()
+                          self.useCannyEdgeDetectionGridRow
                           Divider()
                           self.horizonStripWidthView
                           Divider()
@@ -547,6 +547,7 @@ struct InitialInstructionsView: View {
                 }
             }
         }
+          .disabled(viewModel.sceneType == .skyOnly)
     }
 
     private var cannyMinThresholdView: some View {
@@ -583,6 +584,7 @@ struct InitialInstructionsView: View {
                 }
             }
         }
+          .disabled(viewModel.sceneType == .skyOnly)
     }
     
     private var cannyMaxThresholdView: some View {
@@ -619,6 +621,7 @@ struct InitialInstructionsView: View {
                 }
             }
         }
+          .disabled(viewModel.sceneType == .skyOnly)
     }
 
     private var processingModeView: some View {
