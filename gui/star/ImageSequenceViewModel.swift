@@ -291,97 +291,68 @@ public final class ImageSequenceViewModel {
 
     var numberOfFramesToProcessConcurrently: Int
 
+    // for final processing of outliers
     var numberOfNeighborFrames: Int {
-        get {
-            config.config().numberFinalProcessingNeighborsNeeded
-        }
-        set {
+        didSet {
             var realConfig = config.config()
-            realConfig.numberFinalProcessingNeighborsNeeded = newValue
+            realConfig.numberFinalProcessingNeighborsNeeded = numberOfNeighborFrames
             config.update(realConfig)
         }
     }
     
-    private var _numberOfAlignedNeighborFrames: Int
-    
+    // for alignment
     var numberOfAlignedNeighborFrames: Int {
-        get { _numberOfAlignedNeighborFrames }
-        set {
-            _numberOfAlignedNeighborFrames = newValue
+        didSet {
             var realConfig = config.config()
-            realConfig.numberAlignedNeighborFrames = newValue
+            realConfig.numberAlignedNeighborFrames = numberOfAlignedNeighborFrames
             config.update(realConfig)
         }
     }
 
-    private var _horizonDetectionEnabled: Bool
-    
     var horizonDetectionEnabled: Bool {
-        get { _horizonDetectionEnabled }
-        set {
-            _horizonDetectionEnabled = newValue
+        didSet {
             var realConfig = config.config()
-            realConfig.horizonDetectionEnabled = newValue
+            realConfig.horizonDetectionEnabled = horizonDetectionEnabled
             config.update(realConfig)
         }
     }
-
-    private var _horizonStripWidth: Int
 
     var horizonStripWidth: Int {
-        get { _horizonStripWidth }
-        set {
-            _horizonStripWidth = newValue
+        didSet {
             var realConfig = config.config()
-            realConfig.horizonStripWidth = newValue
+            realConfig.horizonStripWidth = horizonStripWidth
             config.update(realConfig)
         }
     }
 
-    private var _useCannyForHorizonDetection: UseCannyEdgeDetectionForHorizon
-    
     var useCannyForHorizonDetection: UseCannyEdgeDetectionForHorizon {
-        get { _useCannyForHorizonDetection }
-        set {
-            _useCannyForHorizonDetection = newValue
+        didSet {
             var realConfig = config.config()
-            realConfig.useCannyForHorizonDetection = newValue == .yes
+            realConfig.useCannyForHorizonDetection = useCannyForHorizonDetection == .yes
             config.update(realConfig)
         }
     }
     
-    private var _cannyMinThreshold: Double
-
     var cannyMinThreshold: Double {
-        get { _cannyMinThreshold }
-        set {
-            _cannyMinThreshold = newValue
+        didSet {
             var realConfig = config.config()
-            realConfig.cannyMinThreshold = newValue
+            realConfig.cannyMinThreshold = cannyMinThreshold
             config.update(realConfig)
         }
     }
     
-    private var _cannyMaxThreshold: Double
-
     var cannyMaxThreshold: Double {
-        get { _cannyMaxThreshold }
-        set {
-            _cannyMinThreshold = newValue
+        didSet {
             var realConfig = config.config()
-            realConfig.cannyMaxThreshold = newValue
+            realConfig.cannyMaxThreshold = cannyMaxThreshold
             config.update(realConfig)
         }
     }
 
-    var _cannyUseL2Gradient: CannyGradientMethod
-    
     var cannyUseL2Gradient: CannyGradientMethod {
-        get { _cannyUseL2Gradient }
-        set {
-            _cannyUseL2Gradient = newValue
+        didSet {
             var realConfig = config.config()
-            realConfig.cannyUseL2Gradient = newValue.cvArgValue
+            realConfig.cannyUseL2Gradient = cannyUseL2Gradient.cvArgValue
             config.update(realConfig)
         }
     }
@@ -404,30 +375,23 @@ public final class ImageSequenceViewModel {
         }
     }
     
-    private var _earthAlignedImageCropAmount: Int
-    
     var earthAlignedImageCropAmount: Int {
-        get { _earthAlignedImageCropAmount }
-        set {
-            _earthAlignedImageCropAmount = newValue
+        didSet {
             var realConfig = config.config()
-            realConfig.earthAlignedImageCropAmount = newValue
+            realConfig.earthAlignedImageCropAmount = earthAlignedImageCropAmount
             config.update(realConfig)
         }
     }
 
     var pixelReplacementMethod: PixelReplacementMethod {
-        get {
-            config.config().pixelReplacementMethod
-        }
-        set {
+        didSet {
             var realConfig = config.config()
-            realConfig.pixelReplacementMethod = newValue
+            realConfig.pixelReplacementMethod = pixelReplacementMethod
             config.update(realConfig)
         }
     }
 
-    var cameraMotion: CameraMotion = .fixed {
+    var cameraMotion: CameraMotion {
         didSet {
             var realConfig = config.config()
             realConfig.tripodHeadWasMoving = cameraMotion != .fixed
@@ -585,13 +549,17 @@ public final class ImageSequenceViewModel {
             self.selectionMode = .none
         } 
 
-        self._numberOfAlignedNeighborFrames = config.numberAlignedNeighborFrames
-        self._horizonDetectionEnabled = config.horizonDetectionEnabled
-        self._useCannyForHorizonDetection = config.useCannyForHorizonDetection ? .yes : .no
-        self._horizonStripWidth = config.horizonStripWidth
-        self._cannyMinThreshold = config.cannyMinThreshold
-        self._cannyMaxThreshold = config.cannyMaxThreshold
-        self._cannyUseL2Gradient = config.cannyUseL2Gradient ? .L2norm : .L1norm
+        self.numberOfAlignedNeighborFrames = config.numberAlignedNeighborFrames
+        self.horizonDetectionEnabled = config.horizonDetectionEnabled
+        self.useCannyForHorizonDetection = config.useCannyForHorizonDetection ? .yes : .no
+        self.horizonStripWidth = config.horizonStripWidth
+        self.cannyMinThreshold = config.cannyMinThreshold
+        self.cannyMaxThreshold = config.cannyMaxThreshold
+        self.cannyUseL2Gradient = config.cannyUseL2Gradient ? .L2norm : .L1norm
+        self.numberOfNeighborFrames = config.numberFinalProcessingNeighborsNeeded
+        self.pixelReplacementMethod = config.pixelReplacementMethod
+        self.cameraMotion = config.tripodHeadWasMoving ? .fixed : .moving
+        
         self.config = configManager
 
 //        self.earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? 0
@@ -612,7 +580,7 @@ public final class ImageSequenceViewModel {
         IMAGE_WIDTH = Double(imageInfo.imageWidth)
         IMAGE_HEIGHT = Double(imageInfo.imageHeight)
 
-        self._earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? Int(IMAGE_HEIGHT!)/2
+        self.earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? Int(IMAGE_HEIGHT!)/2
         
         self.frameSaveQueue.viewModel = self
         
@@ -1574,72 +1542,94 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    func processHorizonForAllFrames(closure: @escaping () -> Void) {
+    func processHorizonForAllFrames(redo: Bool = false) async {
         if isFindingAllHorizons { return }
         isFindingAllHorizons = true
 
-        var max = 30
+        var max = 40
 
+        // XXX put this in UI config
         let maximum = config.config().maxConcurrentHorizonCalculations
         
         max = maximum
+
+        Log.d("finding all horizons with max \(max)")
         
-        
-        Task {
-            try await Task.detached(priority: .medium) { [self] in 
+        try await Task.detached(priority: .medium) { [self] in 
 
-                // use a semaphore to not do too many at once
+            // use a semaphore to not do too many at once
 
-                let semaphore = AsyncSemaphore(value: max)
-                
-                let allBounds =
-                  try await withThrowingTaskGroup(of: Optional<HorizonBounds>.self) { taskGroup in
+            let semaphore = AsyncSemaphore(value: max)
+            
+            let allBounds =
+              try await withThrowingTaskGroup(of: Optional<HorizonBounds>.self) { taskGroup in
 
-                      for frameViewModel in await self.frames {
-                          taskGroup.addTask {
-                              await semaphore.wait()
-                              if let frame = await frameViewModel.frame {
-                                  let ret = try await frame.loadOrCreateHorizonMask().bounds
-                                  semaphore.signal()
-                                  return ret
-                              } else {
-                                  semaphore.signal()
-                                  return nil
+                  for frameViewModel in await self.frames {
+                      taskGroup.addTask {
+                          await semaphore.wait()
+                          if let frame = await frameViewModel.frame {
+                              if redo {
+                                  // get rid of all the existing horizon images first 
+                                  try? frame.imageAccessor.deleteImage(
+                                    frameIndex: frame.frameIndex,
+                                    ofType: .horizon,
+                                    atSize: .preview
+                                  )
+                                  try? frame.imageAccessor.deleteImage(
+                                    frameIndex: frame.frameIndex,
+                                    ofType: .horizon,
+                                    atSize: .original
+                                  )
+                                  try? frame.imageAccessor.deleteImage(
+                                    frameIndex: frame.frameIndex,
+                                    ofType: .mergedHorizon,
+                                    atSize: .preview
+                                  )
+                                  try? frame.imageAccessor.deleteImage(
+                                    frameIndex: frame.frameIndex,
+                                    ofType: .mergedHorizon,
+                                    atSize: .original
+                                  )
                               }
+                              let ret = try await frame.loadOrCreateHorizonMask().bounds
+                              semaphore.signal()
+                              return ret
+                          } else {
+                              semaphore.signal()
+                              return nil
                           }
                       }
-
-                      var results: [HorizonBounds] = []
-                      
-                      for try await result in taskGroup {
-                          if let result { results.append(result) }
-                      }
-                      
-                      return results
                   }
 
-                if let horizonStats = allBounds.calculateStats() {
-                    Log.i("got horizon stats \(horizonStats)")
+                  var results: [HorizonBounds] = []
+                  
+                  for try await result in taskGroup {
+                      if let result { results.append(result) }
+                  }
+                  
+                  return results
+              }
 
-                    
-                    await MainActor.run {
-                        // save the height of the portion of the frames that is sky
-                        // account for 50 extra pixels of sky on top of the highest part
-                        //self.earthAlignedImageCropAmount = horizonStats.highestTopY - 50
-                        
-                        //self.showIgnoreLowerBar = false
-                        self.ignoreLowerPixels = frameHeight - CGFloat(horizonStats.lowestBottomY)
-                        Log.i("ignoreLowerPixels \(ignoreLowerPixels) = \(frameHeight) - \(horizonStats.lowestBottomY)")
-                        var realConfig = config.config()
-                        realConfig.ignoreLowerPixels = Int(ignoreLowerPixels)
-                        config.update(realConfig)
-                    }
-                }
+            if let horizonStats = allBounds.calculateStats() {
+                Log.i("got horizon stats \(horizonStats)")
+
                 
-            }.value
-            
-            self.isFindingAllHorizons = false
-            closure()
+                await MainActor.run {
+                    // save the height of the portion of the frames that is sky
+                    // account for 50 extra pixels of sky on top of the highest part
+                    //self.earthAlignedImageCropAmount = horizonStats.highestTopY - 50
+                    
+                    //self.showIgnoreLowerBar = false
+                    self.ignoreLowerPixels = frameHeight - CGFloat(horizonStats.lowestBottomY)
+                    Log.i("ignoreLowerPixels \(ignoreLowerPixels) = \(frameHeight) - \(horizonStats.lowestBottomY)")
+                    var realConfig = config.config()
+                    realConfig.ignoreLowerPixels = Int(ignoreLowerPixels)
+                    config.update(realConfig)
+                }
+            }
+            await MainActor.run {
+                self.isFindingAllHorizons = false
+            }
         }
         /*
          * set a boolean saying we are processing horizon for all frames

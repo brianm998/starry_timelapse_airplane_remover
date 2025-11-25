@@ -52,6 +52,15 @@ public actor FinalGUIProcessor {
         guard let viewModel else { return }
 
         let pixelReplacementMode = await viewModel.config.config().pixelReplacementMethod ?? .automatic(false)
+
+        switch await viewModel.reprocessingType {
+        case .horizons:
+            // delete all horizon images first
+            await viewModel.processHorizonForAllFrames(redo: true)
+            return
+        default:
+            break
+        }
         
         try? await withThrowingTaskGroup(of: Optional<FrameAirplaneRemover>.self) { taskGroup in
             var semaphores = [AsyncSemaphore?](repeating: nil, count: framesCount)
@@ -69,6 +78,8 @@ public actor FinalGUIProcessor {
 
                         switch await viewModel.reprocessingType {
                         case .none:
+                            break
+                        case .horizons:
                             break
                         case .alignment:
                             try await viewModel.clearProcessing(of: frame)

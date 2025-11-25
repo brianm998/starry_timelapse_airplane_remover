@@ -766,15 +766,13 @@ struct InitialInstructionsView: View {
         viewModel.showIgnoreLowerBar = false
 
         if viewModel.horizonDetectionEnabled {
-
-            viewModel.processHorizonForAllFrames() {
+            Task {
+                await viewModel.processHorizonForAllFrames()
                 // after we get horizons for all frames, render frames
                 viewModel.renderAllFrames()
             }
         } else {
-
             viewModel.ignoreLowerPixels = 0
-
             viewModel.renderAllFrames()
         }
     }

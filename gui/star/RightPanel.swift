@@ -261,18 +261,21 @@ struct RightPanel: View {
                                 switch viewModel.reprocessingType {
                                 case .none:
                                     Text("Process the next")
+                                case .horizons:
+                                    Text("Re-Process All Horizons")
                                 default:
                                     Text("Re-Process the next")
                                 }
                             }
                               .disabled(viewModel.renderingCurrentFrame)
 
-
-                            EditableNumberOfFramesToProcessView(
-                              focusedField: $focusedField,
-                              textColor: .white,
-                              alwaysOpen: false
-                            )
+                            if viewModel.reprocessingType != .horizons {
+                                EditableNumberOfFramesToProcessView(
+                                  focusedField: $focusedField,
+                                  textColor: .white,
+                                  alwaysOpen: false
+                                )
+                            }
 
                             Picker("", selection: $viewModel.detectionType) {
                                 ForEach(DetectionType.allCases, id: \.self) { value in
