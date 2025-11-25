@@ -242,11 +242,11 @@ public struct Config: Codable, Sendable, Transferable {
     // or just otsu?  Defaults to true (use both)
     public var useCannyForHorizonDetection: Bool = true
 
-    // min threshold for canny edge detection for finding horizons, defaults to 80
-    public var cannyMinThreshold: Double = 80
+    // min threshold for canny edge detection for finding horizons
+    public var cannyMinThreshold: Double = 50
 
-    // max threshold for canny edge detection for finding horizons, defaults to 200
-    public var cannyMaxThreshold: Double = 200
+    // max threshold for canny edge detection for finding horizons
+    public var cannyMaxThreshold: Double = 120
 
     // should canny edge detection use the L2 Gradient or edge gradient?
     // true is for the L2Gradient, which is the default
