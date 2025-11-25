@@ -90,22 +90,24 @@ struct RightPanel: View {
                                 }.frame(maxWidth: 140)
                             }
 
-                            VerticalStarPicker("Tool", selection: $viewModel.selectionMode) { value, isEnabled, isSelected in
-                                HStack {
-                                    Image(value.iconName)
-                                      .resizable()
-                                      .frame(width: 35, height: 35)
-                                    Text(value.displayName)
-                                      .foregroundColor(isSelected ? .black : .white)
-                                      .tag(value)
+                            if viewModel.doesUseOutliers {
+                                VerticalStarPicker("Tool", selection: $viewModel.selectionMode) { value, isEnabled, isSelected in
+                                    HStack {
+                                        Image(value.iconName)
+                                          .resizable()
+                                          .frame(width: 35, height: 35)
+                                        Text(value.displayName)
+                                          .foregroundColor(isSelected ? .black : .white)
+                                          .tag(value)
+                                    }
                                 }
+                                  .help("""
+                                          What happens when outlier groups are selected?
+                                          paint   - they will be marked for painting
+                                          clear   - they will be marked for not painting
+                                          details - they will be shown in the info window
+                                          """)      // XXX does this work here?
                             }
-                              .help("""
-                                      What happens when outlier groups are selected?
-                                      paint   - they will be marked for painting
-                                      clear   - they will be marked for not painting
-                                      details - they will be shown in the info window
-                                      """)      // XXX does this work here?
 
                             Toggle("multi choice", isOn: $viewModel.multiChoice)
                               .foregroundColor(.white)
@@ -183,26 +185,26 @@ struct RightPanel: View {
                                 }
                             }.frame(maxWidth: 100)
 
-                            
-                            // outlier opacity slider
-                            Text("Outlier Group Opacity")
-                              .foregroundColor(.white)
-                            
-                            Slider(value: $viewModel.outlierOpacity, in : 0...1)
-                              .frame(maxWidth: 140, alignment: .bottom)
-                            
-                            Text("Trash Opacity")
-                              .foregroundColor(.white)
-                            
-                            Slider(value: $viewModel.trashOpacity, in : 0...1)
-                              .frame(maxWidth: 140, alignment: .bottom)
-                            
-                            Text("Frame Opacity")
-                              .foregroundColor(.white)
-                            
-                            Slider(value: $viewModel.frameOpacity, in : 0...1)
-                              .frame(maxWidth: 140, alignment: .bottom)
-
+                            if viewModel.doesUseOutliers {
+                                // outlier opacity slider
+                                Text("Outlier Group Opacity")
+                                  .foregroundColor(.white)
+                                
+                                Slider(value: $viewModel.outlierOpacity, in : 0...1)
+                                  .frame(maxWidth: 140, alignment: .bottom)
+                                
+                                Text("Trash Opacity")
+                                  .foregroundColor(.white)
+                                
+                                Slider(value: $viewModel.trashOpacity, in : 0...1)
+                                  .frame(maxWidth: 140, alignment: .bottom)
+                                
+                                Text("Frame Opacity")
+                                  .foregroundColor(.white)
+                                
+                                Slider(value: $viewModel.frameOpacity, in : 0...1)
+                                  .frame(maxWidth: 140, alignment: .bottom)
+                            }
 
                             HStack {
                                 Text("Zoom")
@@ -225,12 +227,6 @@ struct RightPanel: View {
 
                             let frameView = viewModel.currentFrameView
 
-                            EditablePixelThresholdView(
-                              focusedField: $focusedField,
-                              textColor: .white,
-                              alwaysOpen: false
-                            )
-                            
                             EditableNumberOfNeighborFrames(
                               focusedField: $focusedField,
                               textColor: .white,
@@ -255,21 +251,10 @@ struct RightPanel: View {
                                 Task {
                                     if let frame = viewModel.currentFrame {
                                         // XXX reprocess
-                                        switch viewModel.reprocessingType {
-                                        case .none:
-                                            viewModel.processFrames(from: frame.frameIndex,
-                                                                    to: frame.frameIndex+viewModel.numberOfFramesToProcess-1)
-
-                                        default:
-                                            do {
-                                                try await viewModel.clearProcessing(from: frame.frameIndex,
-                                                                                    to: frame.frameIndex+viewModel.numberOfFramesToProcess-1)
-                                            } catch {
-                                                Log.e("error clearing frames: \(error)")
-                                            }
-                                        }
-                                        viewModel.processFrames(from: frame.frameIndex,
-                                                                to: frame.frameIndex+viewModel.numberOfFramesToProcess-1)
+                                        viewModel.processFrames(
+                                          from: frame.frameIndex,
+                                          to: frame.frameIndex+viewModel.numberOfFramesToProcess-1
+                                        )
                                     }
                                 }
                             } label: {
@@ -280,8 +265,7 @@ struct RightPanel: View {
                                     Text("Re-Process the next")
                                 }
                             }
-                              .disabled(//viewModel.isProcessingAllFrames ||
-                                          viewModel.renderingCurrentFrame)
+                              .disabled(viewModel.renderingCurrentFrame)
 
 
                             EditableNumberOfFramesToProcessView(
