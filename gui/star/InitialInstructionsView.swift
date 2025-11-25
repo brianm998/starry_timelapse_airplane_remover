@@ -338,6 +338,8 @@ struct InitialInstructionsView: View {
                           Divider()
                           self.horizonStripWidthView
                           Divider()
+                          self.maxConcurrentHorizonsView
+                          Divider()
                           self.useCannyEdgeDetectionGridRow
                           Divider()
                           self.cannyMinThresholdView
@@ -660,6 +662,43 @@ struct InitialInstructionsView: View {
                       textColor: .white,
                       focusedField: $focusedField,
                       focusField: .cannyMinThreshold,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
+        }
+          .disabled(viewModel.sceneType == .skyOnly)
+    }
+
+    private var maxConcurrentHorizonsView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showCannyMinThresholdView,
+          addSpacer: { addSpacer },
+          infoText: """
+            How many horizon calculations should star do at once?  Can be more than the number of cpus, horizon calculation is pretty quick.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Concurrent Horizon Calculations:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.maxConcurrentHorizonCalculations,
+                      minValue: 1,
+                      maxValue: 300,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .maxConcurrentHorizons,
                       alwaysOpen: true            
                     )
                     Spacer()

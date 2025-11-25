@@ -398,6 +398,14 @@ public final class ImageSequenceViewModel {
             config.update(realConfig)
         }
     }
+
+    var maxConcurrentHorizonCalculations: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.maxConcurrentHorizonCalculations = maxConcurrentHorizonCalculations
+            config.update(realConfig)
+        }
+    }
     
     // the threshold used in goodPixels(thresholdFactor: )
     var pixelThreshold: Double = 1.2
@@ -559,7 +567,7 @@ public final class ImageSequenceViewModel {
         self.numberOfNeighborFrames = config.numberFinalProcessingNeighborsNeeded
         self.pixelReplacementMethod = config.pixelReplacementMethod
         self.cameraMotion = config.tripodHeadWasMoving ? .fixed : .moving
-        
+        self.maxConcurrentHorizonCalculations = config.maxConcurrentHorizonCalculations
         self.config = configManager
 
 //        self.earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? 0
@@ -1546,12 +1554,7 @@ public final class ImageSequenceViewModel {
         if isFindingAllHorizons { return }
         isFindingAllHorizons = true
 
-        var max = 40
-
-        // XXX put this in UI config
-        let maximum = config.config().maxConcurrentHorizonCalculations
-        
-        max = maximum
+        let max = self.maxConcurrentHorizonCalculations
 
         Log.d("finding all horizons with max \(max)")
         
