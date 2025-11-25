@@ -460,12 +460,48 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             Log.w("frame \(frameIndex) unable to load merged horizon mask")
         }
 
-        /*
+        let config = await configManager.config()
+        
+        // this image should have been created during earth alignment
+        if config.tripodHeadWasMoving {
+            Log.w("frame \(frameIndex) unable to calculate merged horizon")
+            return nil
+        }
 
-         update this to do an earth alignment in this case,
-         and return the merged horizon mask from that method 
-         
-         */
+        // with no moving tropod head, earth alignment is not done.
+        let mask = try await self.loadOrCreateHorizonMask()
+        let neighboringHorizons = alignmentFilenames.keys.compactMap {
+            self.imageAccessor.nameForImage(frameIndex: $0,
+                                            ofType: .horizon,
+                                            atSize: .original)
+        }
+        if let mergedHorizon = mask.image.medianMerge(
+             with: neighboringHorizons,
+             outlierThreshold: pixelThreshold)
+        {
+            try await imageAccessor.save(
+              mergedHorizon,
+              frameIndex: frameIndex,
+              as: .mergedHorizon,
+              atSize: .original,
+              overwrite: true
+            )
+            try await imageAccessor.save(
+              mergedHorizon,
+              frameIndex: frameIndex,
+              as: .mergedHorizon,
+              atSize: .preview,
+              overwrite: true
+            )
+            let bounds = mergedHorizon.horizonBounds()
+            return HorizonMask(
+              image: mergedHorizon,
+              horizonTopY: bounds.topY,
+              horizonBottomY: bounds.bottomY
+            )
+        }
+        
+        Log.w("frame \(frameIndex) unable to calculate merged horizon")
         
         return nil
     }
