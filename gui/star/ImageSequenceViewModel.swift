@@ -350,22 +350,24 @@ public final class ImageSequenceViewModel {
         }
     }
     
+    private var _cannyMinThreshold: Double
+
     var cannyMinThreshold: Double {
-        get {
-            config.config().cannyMinThreshold
-        }
+        get { _cannyMinThreshold }
         set {
+            _cannyMinThreshold = newValue
             var realConfig = config.config()
             realConfig.cannyMinThreshold = newValue
             config.update(realConfig)
         }
     }
     
+    private var _cannyMaxThreshold: Double
+
     var cannyMaxThreshold: Double {
-        get {
-            config.config().cannyMaxThreshold
-        }
+        get { _cannyMaxThreshold }
         set {
+            _cannyMinThreshold = newValue
             var realConfig = config.config()
             realConfig.cannyMaxThreshold = newValue
             config.update(realConfig)
@@ -587,6 +589,8 @@ public final class ImageSequenceViewModel {
         self._useCannyForHorizonDetection = config.useCannyForHorizonDetection ? .yes : .no
         self._horizonStripWidth = config.horizonStripWidth
         self._cannyUseL2Gradient = config.cannyUseL2Gradient
+        self._cannyMinThreshold = config.cannyMinThreshold
+        self._cannyMaxThreshold = config.cannyMaxThreshold
         
         self.config = configManager
 

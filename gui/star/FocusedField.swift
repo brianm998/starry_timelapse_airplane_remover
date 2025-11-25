@@ -9,5 +9,8 @@ enum FocusedField: Hashable {
     case numberOfNeighborFrames
     case pixelThreshold
     case maxZoomLevel
+    case horizonStripWidth
+    case cannyMinThreshold
+    case cannyMaxThreshold
 }
 

@@ -6,11 +6,7 @@ import logging
 
  New items to add:
 
- - int min/max canny thresholds
  - bool canny gradient magnitude equation
-
- - bool use canny for horizon?
- - int otsu width
  
  */
 
@@ -166,12 +162,16 @@ struct InitialInstructionsView: View {
     @State private var showNeighborFrameInfo = false
     @State private var showPixelThresholdInfo = false
     @State private var showProcessingModeInfo = false
+    @State private var showHorizonStripInfo = false
+    @State private var showCannyMinThresholdView = false
+    @State private var showCannyMaxThresholdView = false
 
     private var addSpacer: Bool {
         showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo ||
         showAutoPreservationMethodInfo || showProcessFramesInfo ||
         showNeighborFrameInfo || showPixelThresholdInfo || showProcessingModeInfo ||
-        showUseCannyInfo
+        showUseCannyInfo || showHorizonStripInfo || showCannyMinThresholdView ||
+        showCannyMaxThresholdView
     }
     
     private func showAll() {
@@ -183,7 +183,10 @@ struct InitialInstructionsView: View {
         showNeighborFrameInfo = true
         showPixelThresholdInfo = true
         showProcessingModeInfo = true
+        showHorizonStripInfo = true
         showUseCannyInfo = true
+        showCannyMinThresholdView = true
+        showCannyMaxThresholdView = true
     }
 
     private func hideAll() {
@@ -194,8 +197,11 @@ struct InitialInstructionsView: View {
         showProcessFramesInfo = false
         showNeighborFrameInfo = false
         showPixelThresholdInfo = false
+        showHorizonStripInfo = false
         showProcessingModeInfo = false
         showUseCannyInfo = false
+        showCannyMinThresholdView = false
+        showCannyMaxThresholdView = false
     }
     
     @State private var showExpertSettings = false
@@ -273,6 +279,8 @@ struct InitialInstructionsView: View {
                           Divider()
                           self.automaticSelectionGridRow
                           Divider()
+                          self.processingModeView
+                          Divider()
                           self.useCannyEdgeDetectionGridRow
                           Divider()
                           self.cuncurrentProcessingLimitView
@@ -281,7 +289,11 @@ struct InitialInstructionsView: View {
                           Divider()
                           self.pixelThresholdView
                           Divider()
-                          self.processingModeView
+                          self.horizonStripWidthView
+                          Divider()
+                          self.cannyMinThresholdView
+                          Divider()
+                          self.cannyMaxThresholdView
                       }
                   }
               }
@@ -494,6 +506,113 @@ struct InitialInstructionsView: View {
                       textColor: .white,
                       focusedField: $focusedField,
                       focusField: .pixelThreshold,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var horizonStripWidthView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showHorizonStripInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            When Star is calculating the horizon for a frame, the Otsu Thresholding works better when the image is split up into strips of a smaller width than the full image frame.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Horizon Strip Width:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.horizonStripWidth,
+                      minValue: 1,
+                      maxValue: 8000,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .horizonStripWidth,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var cannyMinThresholdView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showCannyMinThresholdView,
+          addSpacer: { addSpacer },
+          infoText: """
+            When Star is calculating the horizon for a frame, the Canny Edge Detection algorithm can be used to help define a better horizon.
+            This value is the min canny threshold.  Lower values give more edges, higher values less.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Canny Min Threshold:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.cannyMinThreshold,
+                      minValue: 1,
+                      maxValue: 300,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .cannyMinThreshold,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+    
+    private var cannyMaxThresholdView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showCannyMaxThresholdView,
+          addSpacer: { addSpacer },
+          infoText: """
+            When Star is calculating the horizon for a frame, the Canny Edge Detection algorithm can be used to help define a better horizon.
+            This value is the max canny threshold.  Lower values give more edges, higher values less.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Canny Max Threshold:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.cannyMaxThreshold,
+                      minValue: 1,
+                      maxValue: 300,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .cannyMaxThreshold,
                       alwaysOpen: true            
                     )
                     Spacer()
