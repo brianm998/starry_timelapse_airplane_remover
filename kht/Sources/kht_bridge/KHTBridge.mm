@@ -40,7 +40,7 @@
   im.convertTo(eightBit,CV_8U);
  
   // run canny edge detection
-  cv::Canny(eightBit, canny, 80, 200);
+  cv::Canny(eightBit, canny, 80, 200, 3, true);
 
   // run the c++ Kernel Hough Transform code, with results in lineList
   kht::run_kht(lineList, canny.ptr(), width, height);
