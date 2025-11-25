@@ -601,7 +601,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         case .starAligned:
             self.set(state: .starAlignment)
         case .earthAligned:
-            if (config.tripodHeadWasMoving ?? false) {
+            if config.tripodHeadWasMoving {
                 self.set(state: .earthAlignment)
             }
         default:
@@ -651,7 +651,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("original frame \(originalFrame.description)")
         
         var horizonMask: HorizonMask? = nil
-        if config.horizonDetectionEnabled ?? true {
+        if config.horizonDetectionEnabled {
             horizonMask = try await loadOrCreateHorizonMask()
             if let horizonMask {
                 Log.d("horizon mask \(horizonMask.image.description)")
@@ -661,7 +661,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         var alignmentResult: AlignmentResult? = nil
         
         if isEarth,
-           !(config.tripodHeadWasMoving ?? false)
+           !config.tripodHeadWasMoving
         {
             Log.d("frame \(frameIndex) not aliging earth, just merging") 
             // don't try to align if we're combining not moving earth,
@@ -1040,7 +1040,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         var horizonMask: HorizonMask? = nil
         var earthAlignedImage: PixelatedImage? = nil
         
-        if config.horizonDetectionEnabled ?? true {
+        if config.horizonDetectionEnabled {
             // only load these if we really need them
             var horizonMaskImage: PixelatedImage? = nil
             (earthAlignedImage, horizonMaskImage) = try await loadOrCreateEarthAlignedImage()
@@ -2106,7 +2106,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let starAlignedImage = try await loadOrCreateStarAlignedImage()
 
         let config = await configManager.config()
-        if config.horizonDetectionEnabled ?? true {
+        if config.horizonDetectionEnabled {
             // with horizon detection, we need to mask the star and earth images
             let (earthAlignedImage, horizonMask) = try await loadOrCreateEarthAlignedImage()
             if let horizonMask {
@@ -2203,7 +2203,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         var imageToSubtract: PixelatedImage? = nil
         
-        if config.horizonDetectionEnabled ?? true {
+        if config.horizonDetectionEnabled {
             Log.d("doing horizon enabled subtraction image")
             // we care about the horizon, so make a composite
             // of the earth and star aligned images, and subtract
