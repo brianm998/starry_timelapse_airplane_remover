@@ -42,7 +42,15 @@ public struct FrameEditImageView: View {
                             ofType: viewModel.frameViewMode,
                             atSize: .preview)
                 {
-                    AsyncImage(url: url) { phase in
+                    let appendedURL = url.appending(
+                        queryItems: [
+                          URLQueryItem(
+                            name: "v",
+                            value: frameViewModel.reloadID.uuidString
+                          )
+                        ]
+                      )
+                    AsyncImage(url: appendedURL) { phase in
                         if let image = phase.image {
                             image
                               .resizable()
