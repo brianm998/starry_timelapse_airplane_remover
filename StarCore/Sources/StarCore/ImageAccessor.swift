@@ -127,7 +127,25 @@ public struct ImageAccessor: Sendable {
                                        atSize: size)
         {
             if FileManager.default.fileExists(atPath: filename) {
-                return URL(fileURLWithPath: filename)
+                var url = URL(fileURLWithPath: filename)
+                // attempt to make this url cache with its modification time
+                // so if the file changes, this url is now invalid
+                
+                if let modDate = try? FileManager.default.attributesOfItem(
+                     atPath: filename
+                   )[.modificationDate] as? Date {
+                    Log.d("appending modDate \(modDate)")
+                    return url.appending(
+                      queryItems: [
+                        URLQueryItem(
+                          name: "t",
+                          value: "\(modDate.timeIntervalSince1970)"
+                        )
+                      ]
+                    )
+                    
+                }
+                return url
             } else {
                 Log.w("file does not exist at \(filename)") // XXX DOH!
             }

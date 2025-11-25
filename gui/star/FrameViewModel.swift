@@ -10,6 +10,8 @@ import Combine
 @MainActor @Observable
 public class FrameViewModel {
 
+    var reloadID = UUID()
+    
     init(_ frameIndex: Int) {
         self.frameIndex = frameIndex
     }
@@ -47,6 +49,7 @@ public class FrameViewModel {
                       .resizable()
                 }
             default:
+                reloadID = UUID()
                 // XXX expand this to the other views
                 // update things so that if the saved FrameViewMode is shown
                 // in this frame, then update the shown image with the saved one
@@ -93,18 +96,23 @@ public class FrameViewModel {
             case .processed:
                 self.processedPreviewImage
             default: 
-                if let frame {
-                    /*
-                    if frame.imageAccessor.imageExists(ofType: type, atSize: .original),
-                       !frame.imageAccessor.imageExists(ofType: .aligned, atSize: .preview)
-                    {
-                        Task.detached {
-                            try? await frame.imageAccessor.writeMissingImage(ofType: .aligned, andSize: .preview)
-                        }
-                    }*/
-
-                    
-                    AsyncImage(url: frame.imageAccessor.urlForImage(frameIndex: frame.frameIndex, ofType: type, atSize: .preview)) { image in
+                if let frame,
+                   let url = frame.imageAccessor.urlForImage(
+                     frameIndex: frame.frameIndex,
+                     ofType: type,
+                     atSize: .preview
+                   )
+                {
+                    AsyncImage(
+                      url: url.appending(
+                        queryItems: [
+                          URLQueryItem(
+                            name: "v",
+                            value: reloadID.uuidString
+                          )
+                        ]
+                      )
+                    ) { image in
                         image.resizable()
                     } placeholder: {
                         initialImage
