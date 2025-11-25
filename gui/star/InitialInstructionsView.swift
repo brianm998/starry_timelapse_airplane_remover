@@ -392,50 +392,113 @@ struct InitialInstructionsView: View {
 
     
     private var cuncurrentProcessingLimitView: some View {
-        InfoTextInstructionGridRow(
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
           showInfo: $showProcessFramesInfo,
           addSpacer: { addSpacer },
           infoText: """
             How many frames do we process concurrently?  Number of CPUs is likely too high, as much of the processing has been parallized.  2-5 is a good number here.
             """
         ) {
-            EditableNumberOfFramesToProcessConcurrentlyView(
-              focusedField: $focusedField,
-              textColor: .white,
-              alwaysOpen: true
-            )
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Max Concurrent Frames:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.numberOfFramesToProcessConcurrently,
+                      minValue: 1,
+                      maxValue: viewModel.imageSequenceSize,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .numberOfFramesToProcessConcurrently,
+                      alwaysOpen: true,
+                      commitAction: { newVal in
+                          // persist to prefs & global
+                          viewModel.userPreferences.concurrentFrames = newVal
+                          Task { await maxFramesProcessing.set(value: newVal) }
+                      }
+                    )
+                    Spacer()
+                }
+            }
         }
     }
 
     private var neighborFrameCountView: some View {
-        InfoTextInstructionGridRow(
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
           showInfo: $showNeighborFrameInfo,
           addSpacer: { addSpacer },
           infoText: """
-            During star alignment, we use this number for aligning and processing neighboring frames.  Lowest possible number is 1, which does work in most cases.  However, 8 is a better option for general use, as it covers the case where neighboring frames have bad pixels at the same location.
+            During star alignment, we use this number for aligning and processing neighboring frames.  Lowest possible number is 1, which does work for many cases in selective processing.  However, 8 is a better option for general use, as it covers the case where neighboring frames have bad pixels at the same location.
+            Giving a value of 8 means that four neighboring frames on each side will be used, except for the edge cases at the ends of the video, where 8 neighbors are still used, but more on one side or the other as necessary.
             """
         ) {
-            EditableNumberOfNeighborFrames(
-              focusedField: $focusedField,
-              textColor: .white,
-              alwaysOpen: true
-            )
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Neighbor Frame Count:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.numberOfAlignedNeighborFrames,
+                      minValue: 1,
+                      maxValue: viewModel.imageSequenceSize,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .numberOfNeighborFrames,
+                      alwaysOpen: true
+                    )
+                    Spacer()   
+                }
+            }
         }
     }
 
     private var pixelThresholdView: some View {
-        InfoTextInstructionGridRow(
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
           showInfo: $showPixelThresholdInfo,
           addSpacer: { addSpacer },
           infoText: """
             The pixel threshold is a factor used to weed out pixels that are statistically too much brigher than other aligned pixels at the same location.  Lower values like 0.5 get rid of more brighter pixels, higher values like 2.0 will allow more brighter pixels to pass through.  Used for both the subtraction image and for calculating what pixel values to replace airplanes with.
             """
         ) {
-            EditablePixelThresholdView(
-              focusedField: $focusedField,
-              textColor: .white,
-              alwaysOpen: true
-            )
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Pixel Threshold:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.pixelThreshold,
+                      minValue: 0.001,
+                      maxValue: 10,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .pixelThreshold,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
         }
     }
 

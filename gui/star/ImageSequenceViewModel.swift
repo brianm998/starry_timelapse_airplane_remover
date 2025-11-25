@@ -302,17 +302,17 @@ public final class ImageSequenceViewModel {
         }
     }
     
+    private var _numberOfAlignedNeighborFrames: Int
+    
     var numberOfAlignedNeighborFrames: Int {
-        get {
-            config.config().numberAlignedNeighborFrames
-        }
+        get { _numberOfAlignedNeighborFrames }
         set {
+            _numberOfAlignedNeighborFrames = newValue
             var realConfig = config.config()
             realConfig.numberAlignedNeighborFrames = newValue
             config.update(realConfig)
         }
     }
-
 
     private var _horizonDetectionEnabled: Bool
     
@@ -582,6 +582,7 @@ public final class ImageSequenceViewModel {
             self.selectionMode = .none
         } 
 
+        self._numberOfAlignedNeighborFrames = config.numberAlignedNeighborFrames
         self._horizonDetectionEnabled = config.horizonDetectionEnabled
         self._useCannyForHorizonDetection = config.useCannyForHorizonDetection ? .yes : .no
         self._horizonStripWidth = config.horizonStripWidth
