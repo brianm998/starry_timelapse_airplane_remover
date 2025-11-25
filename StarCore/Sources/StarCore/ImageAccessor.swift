@@ -23,6 +23,7 @@ You should have received a copy of the GNU General Public License along with sta
 public enum FrameReprocessingType: String, Codable, Equatable, CaseIterable, Sendable {
     case alignment              // redo both alignment and outliers
     case outliers               // redo only outliers
+    case horizons               // redo both individual horizons and merged 
     case none                   // don't redo anything that's already done
 }
 
