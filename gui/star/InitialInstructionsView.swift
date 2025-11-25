@@ -2,13 +2,69 @@ import SwiftUI
 import StarCore
 import logging
 
-/*
+public enum L2GradientMethod: InstructionOption,
+                              Sendable,
+                              Codable
+{
+    case L1norm
+    case L2norm
 
- New items to add:
+    public var id: Self { self }
 
- - bool canny gradient magnitude equation
- 
- */
+    public var titleText: String {
+        switch self {
+        case .L1norm:
+            "L1 Norm"
+        case .L2norm:
+            "L2 Norm"
+        }
+    }
+
+    public var cvArgValue: Bool {
+        switch self {
+        case .L1norm:
+            false
+        case .L2norm:
+            true
+        }
+    }
+    
+    public static let topTitle = "Canny Gradient Method:"
+    
+    public var helpText: String {
+        switch self {
+        case .L1norm:
+            "L1 Norm faster, less accurate"
+        case .L2norm:
+            "L2 Norm more accurate, slightly slower"
+        }
+    }
+
+    public var descriptionText: String {
+        switch self {
+        case .L1norm:
+            """
+              The L1 norm is used for finding edge gradients
+
+                  mag=∣dX∣+∣dY∣
+              
+               - Faster
+               - Less accurate
+               - Historically the original Canny implementation in OpenCV
+            """
+        case .L2norm:
+            """
+              The L2 norm (Euclidean) is used for finding edge gradients
+
+                 mag = √(dX²+dY²)
+              
+               - More accurate edge magnitude
+               - Slightly slower due to square root
+               - Produces cleaner, more precise edges (especially on low-contrast areas)
+              """
+        }
+    }
+}
 
 public enum HighLevelPixelReplacementMethod: InstructionOption,
                                              Sendable,
@@ -165,13 +221,14 @@ struct InitialInstructionsView: View {
     @State private var showHorizonStripInfo = false
     @State private var showCannyMinThresholdView = false
     @State private var showCannyMaxThresholdView = false
+    @State private var showCannyL2GradientView = false
 
     private var addSpacer: Bool {
         showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo ||
         showAutoPreservationMethodInfo || showProcessFramesInfo ||
         showNeighborFrameInfo || showPixelThresholdInfo || showProcessingModeInfo ||
         showUseCannyInfo || showHorizonStripInfo || showCannyMinThresholdView ||
-        showCannyMaxThresholdView
+        showCannyMaxThresholdView || showCannyL2GradientView
     }
     
     private func showAll() {
@@ -187,6 +244,7 @@ struct InitialInstructionsView: View {
         showUseCannyInfo = true
         showCannyMinThresholdView = true
         showCannyMaxThresholdView = true
+        showCannyL2GradientView = true
     }
 
     private func hideAll() {
@@ -202,6 +260,7 @@ struct InitialInstructionsView: View {
         showUseCannyInfo = false
         showCannyMinThresholdView = false
         showCannyMaxThresholdView = false
+        showCannyL2GradientView = false
     }
     
     @State private var showExpertSettings = false
@@ -281,19 +340,21 @@ struct InitialInstructionsView: View {
                           Divider()
                           self.processingModeView
                           Divider()
+                          self.horizonStripWidthView
+                          Divider()
+                          self.useCannyEdgeDetectionGridRow
+                          Divider()
+                          self.cannyMinThresholdView
+                          Divider()
+                          self.cannyMaxThresholdView
+                          Divider()
+                          self.l2GradientGridRow
+                          Divider()
                           self.cuncurrentProcessingLimitView
                           Divider()
                           self.neighborFrameCountView
                           Divider()
                           self.pixelThresholdView
-                          Divider()
-                          self.useCannyEdgeDetectionGridRow
-                          Divider()
-                          self.horizonStripWidthView
-                          Divider()
-                          self.cannyMinThresholdView
-                          Divider()
-                          self.cannyMaxThresholdView
                       }
                   }
               }
@@ -310,7 +371,7 @@ struct InitialInstructionsView: View {
                           Color.white
                             .cornerRadius(20)
 
-                          Text("Close")
+                          Text("Dismiss")
                             .font(.title2)
                             .padding(20)
                       }
@@ -325,7 +386,7 @@ struct InitialInstructionsView: View {
                           Color.blue
                             .cornerRadius(20)
 
-                          Text("Start Processing")
+                          Text("Process Now")
                             .font(.title2)
                             .padding(20)
                             .foregroundColor(.white)
@@ -349,6 +410,11 @@ struct InitialInstructionsView: View {
                     .buttonStyle(PlainButtonStyle())
                   Text(showExpertSettings ? "Hide Expert Settings" : "Show Expert Settings")
                     .foregroundColor(.white)
+                    .onTapGesture {
+                      withAnimation {
+                          showExpertSettings = !showExpertSettings
+                      }
+                    }
               }
           }
           .frame(minWidth: 800)
@@ -364,6 +430,17 @@ struct InitialInstructionsView: View {
           addSpacer: { addSpacer }
         )        
     }
+
+    private var l2GradientGridRow: some View {
+        @Bindable var viewModel = viewModel
+        return EnumInstructionGridRow<L2GradientMethod>(
+          selection: $viewModel.cannyUseL2Gradient,
+          showInfo: $showCannyL2GradientView,
+          addSpacer: { addSpacer },
+          isPrimary: false
+        )        
+          .disabled(viewModel.sceneType == .skyOnly)
+    }
      
     private var cameraMotionGridRow: some View {
         @Bindable var viewModel = viewModel
@@ -378,7 +455,8 @@ struct InitialInstructionsView: View {
         EnumInstructionGridRow<AutoPreservationMode>(
           selection: $autoPreservationMode,
           showInfo: $showAutoPreservationMethodInfo,
-          addSpacer: { addSpacer }
+          addSpacer: { addSpacer },
+          isPrimary: false
         )        
           .disabled(self.pixelReplacementMethod == .selective)
     }
@@ -396,7 +474,8 @@ struct InitialInstructionsView: View {
         return EnumInstructionGridRow<UseCannyEdgeDetectionForHorizon>(
           selection: $viewModel.useCannyForHorizonDetection,
           showInfo: $showUseCannyInfo,
-          addSpacer: { addSpacer }
+          addSpacer: { addSpacer },
+          isPrimary: false
         )
           .disabled(viewModel.sceneType == .skyOnly)
     }
@@ -418,6 +497,7 @@ struct InitialInstructionsView: View {
                     Text("Max Concurrent Frames:")
                       .font(.title2)
                       .foregroundColor(.white)
+                      .opacity(0.6)
                 }
                 HStack {
                     EditableNumberView(
@@ -459,6 +539,7 @@ struct InitialInstructionsView: View {
                     Text("Neighbor Frame Count:")
                       .font(.title2)
                       .foregroundColor(.white)
+                      .opacity(0.6)
                 }
                 HStack {
                     EditableNumberView(
@@ -494,6 +575,7 @@ struct InitialInstructionsView: View {
                     Text("Pixel Threshold:")
                       .font(.title2)
                       .foregroundColor(.white)
+                      .opacity(0.6)
                 }
                 HStack {
                     EditableNumberView(
@@ -529,6 +611,7 @@ struct InitialInstructionsView: View {
                     Text("Horizon Strip Width:")
                       .font(.title2)
                       .foregroundColor(.white)
+                      .opacity(0.6)
                 }
                 HStack {
                     EditableNumberView(
@@ -566,6 +649,7 @@ struct InitialInstructionsView: View {
                     Text("Canny Min Threshold:")
                       .font(.title2)
                       .foregroundColor(.white)
+                      .opacity(0.6)
                 }
                 HStack {
                     EditableNumberView(
@@ -603,6 +687,7 @@ struct InitialInstructionsView: View {
                     Text("Canny Max Threshold:")
                       .font(.title2)
                       .foregroundColor(.white)
+                      .opacity(0.6)
                 }
                 HStack {
                     EditableNumberView(
@@ -639,6 +724,7 @@ struct InitialInstructionsView: View {
                     Text("Selective Processing Mode:")
                       .font(.title2)
                       .foregroundColor(.white)
+                      .opacity(0.6)
                 }
                 HStack {
                     Picker("", selection: $viewModel.detectionType) {
@@ -722,10 +808,24 @@ struct InfoTextInstructionGridRow<Content: View>: View {
 
 // grid row for enums
 struct EnumInstructionGridRow<E: InstructionOption>: View {
+
     @Binding var selection: E
     @Binding var showInfo: Bool
     let addSpacer: () -> Bool
-
+    let isPrimary: Bool
+    
+    init(
+      selection: Binding<E>,
+      showInfo: Binding<Bool>,
+      addSpacer: @escaping () -> Bool,
+      isPrimary: Bool = true
+    ) {
+        self._selection = selection
+        self._showInfo = showInfo
+        self.addSpacer = addSpacer
+        self.isPrimary = isPrimary
+    }
+    
     var body: some View {
         InstructionGridRow(
           showInfo: $showInfo,
@@ -736,6 +836,7 @@ struct EnumInstructionGridRow<E: InstructionOption>: View {
                       Text(item.titleText)
                         .foregroundColor(.white)
                         .font(.largeTitle)
+                      
                       Text(item.descriptionText)
                         .foregroundColor(.white)
                         .font(.body)
@@ -750,6 +851,7 @@ struct EnumInstructionGridRow<E: InstructionOption>: View {
                           Text(E.topTitle)
                             .font(.title2)
                             .foregroundColor(.white)
+                            .opacity(isPrimary ? 1.0 : 0.6)
                       }
                   }
                   HStack {
@@ -759,6 +861,7 @@ struct EnumInstructionGridRow<E: InstructionOption>: View {
                                 .tag(item)
                                 .foregroundColor(.white)
                                 .help(item.helpText)
+                                .opacity(isPrimary ? 1.0 : 0.6)
                           }
                       }
                         .pickerStyle(.inline)
@@ -774,6 +877,8 @@ struct EnumInstructionGridRow<E: InstructionOption>: View {
 
 // base grid row
 struct InstructionGridRow<Content: View, InfoContent: View>: View {
+    @Environment(\.isEnabled) private var isEnabled
+
     @Binding var showInfo: Bool
     let addSpacer: () -> Bool
     let infoView: () -> InfoContent
@@ -783,6 +888,7 @@ struct InstructionGridRow<Content: View, InfoContent: View>: View {
         GridRow {
             // --- Column 1 ---
             contentView()
+              .opacity(isEnabled ? 1.0 : 0.6)
 
             // --- Column 2 ---
             Button {
@@ -801,7 +907,11 @@ struct InstructionGridRow<Content: View, InfoContent: View>: View {
                     infoView()
                 } else {
                     Text("Show Info")
-                        .foregroundColor(.white)
+                      .foregroundColor(.white)
+                      .opacity(isEnabled ? 1.0 : 0.6)
+                      .onTapGesture {
+                          withAnimation { showInfo.toggle() }
+                      }
                     if addSpacer() { Spacer() }
                 }
             }

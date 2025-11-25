@@ -374,14 +374,14 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    var _cannyUseL2Gradient: Bool
+    var _cannyUseL2Gradient: L2GradientMethod
     
-    var cannyUseL2Gradient: Bool {
+    var cannyUseL2Gradient: L2GradientMethod {
         get { _cannyUseL2Gradient }
         set {
             _cannyUseL2Gradient = newValue
             var realConfig = config.config()
-            realConfig.cannyUseL2Gradient = newValue
+            realConfig.cannyUseL2Gradient = newValue.cvArgValue
             config.update(realConfig)
         }
     }
@@ -588,9 +588,9 @@ public final class ImageSequenceViewModel {
         self._horizonDetectionEnabled = config.horizonDetectionEnabled
         self._useCannyForHorizonDetection = config.useCannyForHorizonDetection ? .yes : .no
         self._horizonStripWidth = config.horizonStripWidth
-        self._cannyUseL2Gradient = config.cannyUseL2Gradient
         self._cannyMinThreshold = config.cannyMinThreshold
         self._cannyMaxThreshold = config.cannyMaxThreshold
+        self._cannyUseL2Gradient = config.cannyUseL2Gradient ? .L2norm : .L1norm
         
         self.config = configManager
 
