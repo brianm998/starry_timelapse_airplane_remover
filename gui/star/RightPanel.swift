@@ -275,22 +275,22 @@ struct RightPanel: View {
                                   textColor: .white,
                                   alwaysOpen: false
                                 )
-                            }
 
-                            Picker("", selection: $viewModel.detectionType) {
-                                ForEach(DetectionType.allCases, id: \.self) { value in
-                                    Text(value.rawValue).tag(value)
+                                Picker("", selection: $viewModel.detectionType) {
+                                    ForEach(DetectionType.allCases, id: \.self) { value in
+                                        Text(value.rawValue).tag(value)
+                                    }
                                 }
-                            }
-                              .frame(maxWidth: 120)
-                              .onChange(of: viewModel.detectionType) {
-                                  Task {
-                                      await constants.set(detectionType: viewModel.detectionType)
+                                  .frame(maxWidth: 120)
+                                  .onChange(of: viewModel.detectionType) {
+                                      Task {
+                                          await constants.set(detectionType: viewModel.detectionType)
 
-                                      // stick it in user preferences
-                                      self.viewModel.userPreferences.processingType = viewModel.detectionType
+                                          // stick it in user preferences
+                                          self.viewModel.userPreferences.processingType = viewModel.detectionType
+                                      }
                                   }
-                              }
+                            }
 
                             Button() {
                                 Task {
