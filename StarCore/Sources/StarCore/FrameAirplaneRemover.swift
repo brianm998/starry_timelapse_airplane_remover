@@ -510,7 +510,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
              stripWidth: config.horizonStripWidth,
              useCannyEdgeDetection: config.useCannyForHorizonDetection,
              cannyMinThreshold: config.cannyMinThreshold,
-             cannyMaxThreshold: config.cannyMaxThreshold
+             cannyMaxThreshold: config.cannyMaxThreshold,
+             useL2Gradient: config.cannyUseL2Gradient
            )
         {
             Log.d("frame \(frameIndex) horizon mask image \(horizonMask.image) created")

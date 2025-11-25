@@ -13,7 +13,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (MatWrapper *)cannyEdgeDetect:(MatWrapper *)img
                    minThreshold:(double)minThreshold
-                   maxThreshold:(double)maxThreshold;
+                   maxThreshold:(double)maxThreshold
+                  useL2Gradient:(BOOL)useL2Gradient;
 
 + (MatWrapper *)bitwiseAnd:(MatWrapper *)img withImage:(MatWrapper *)img1;
 

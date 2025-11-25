@@ -453,12 +453,17 @@ extension PixelatedImage {
         }
     }
     
-    public func cannyEdgeDetect(minThreshold: Double, maxThreshold: Double) throws -> PixelatedImage {
+    public func cannyEdgeDetect(
+      minThreshold: Double,
+      maxThreshold: Double,
+      useL2Gradient: Bool
+    ) throws -> PixelatedImage {
         let selfMat = self.mat
         let resultMat = PixelatedImageBridge.cannyEdgeDetect(
           selfMat,
           minThreshold: minThreshold,
-          maxThreshold: maxThreshold
+          maxThreshold: maxThreshold,
+          useL2Gradient: useL2Gradient
         )
         if let ret = PixelatedImage(mat: resultMat) {
             return ret

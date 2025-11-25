@@ -677,6 +677,7 @@ extern cv::Mat ensure8U(const cv::Mat& input);
 + (MatWrapper *)cannyEdgeDetect:(MatWrapper *)img
                    minThreshold:(double)minThreshold
                    maxThreshold:(double)maxThreshold
+                  useL2Gradient:(BOOL)useL2Gradient
 {
   
   @try {
@@ -696,7 +697,12 @@ extern cv::Mat ensure8U(const cv::Mat& input);
       
       // 2. Canny edge detection
       cv::Mat edges;
-      cv::Canny(gray, edges, minThreshold, maxThreshold);
+      cv::Canny(gray,
+                edges,
+                minThreshold,
+                maxThreshold,
+                3,              // Sobel kernel size for finding image gradients
+                useL2Gradient); // gradient magnitude equation
       
       return [[MatWrapper alloc] initWithMat: edges];
     } catch (const cv::Exception &e) {
@@ -780,7 +786,6 @@ extern cv::Mat ensure8U(const cv::Mat& input);
     try {
       cv::Mat input = img.mat;
       cv::Mat input1 = img1.mat;
-  
       cv::Mat gray;
       if (input.channels() == 3)
         cv::cvtColor(input, gray, cv::COLOR_BGR2GRAY);

@@ -181,7 +181,8 @@ extension PixelatedImage {
       stripWidth: Int = 400,
       useCannyEdgeDetection: Bool = true,
       cannyMinThreshold: Double = 80,
-      cannyMaxThreshold: Double = 250
+      cannyMaxThreshold: Double = 250,
+      useL2Gradient: Bool = true,
     ) async throws -> HorizonMask? {
         
         /*
@@ -270,7 +271,8 @@ extension PixelatedImage {
                         // find edges on self (source image)
                         let edges = try self.cannyEdgeDetect(
                           minThreshold: cannyMinThreshold,
-                          maxThreshold: cannyMaxThreshold
+                          maxThreshold: cannyMaxThreshold,
+                          useL2Gradient: useL2Gradient
                         )
                           .bitwiseNot()
                           .growDarkRegions(by: 1)
