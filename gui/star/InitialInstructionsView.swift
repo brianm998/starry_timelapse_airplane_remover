@@ -437,7 +437,7 @@ struct InitialInstructionsView: View {
           addSpacer: { addSpacer },
           isPrimary: false
         )        
-          .disabled(viewModel.sceneType == .skyOnly)
+          .disabled(viewModel.sceneType == .skyOnly || viewModel.useCannyForHorizonDetection == .no)
     }
      
     private var cameraMotionGridRow: some View {
@@ -668,7 +668,7 @@ struct InitialInstructionsView: View {
                 }
             }
         }
-          .disabled(viewModel.sceneType == .skyOnly)
+          .disabled(viewModel.sceneType == .skyOnly || viewModel.useCannyForHorizonDetection == .no)
     }
 
     private var maxConcurrentHorizonsView: some View {
@@ -744,7 +744,7 @@ struct InitialInstructionsView: View {
                 }
             }
         }
-          .disabled(viewModel.sceneType == .skyOnly)
+        .disabled(viewModel.sceneType == .skyOnly || viewModel.useCannyForHorizonDetection == .no)
     }
 
     private var processingModeView: some View {
