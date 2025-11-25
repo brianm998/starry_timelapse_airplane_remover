@@ -374,9 +374,9 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    var _cannyUseL2Gradient: L2GradientMethod
+    var _cannyUseL2Gradient: CannyGradientMethod
     
-    var cannyUseL2Gradient: L2GradientMethod {
+    var cannyUseL2Gradient: CannyGradientMethod {
         get { _cannyUseL2Gradient }
         set {
             _cannyUseL2Gradient = newValue
@@ -404,11 +404,12 @@ public final class ImageSequenceViewModel {
         }
     }
     
+    private var _earthAlignedImageCropAmount: Int
+    
     var earthAlignedImageCropAmount: Int {
-        get {
-            config.config().earthAlignedImageCropAmount ?? Int(IMAGE_HEIGHT!)/2
-        }
+        get { _earthAlignedImageCropAmount }
         set {
+            _earthAlignedImageCropAmount = newValue
             var realConfig = config.config()
             realConfig.earthAlignedImageCropAmount = newValue
             config.update(realConfig)
@@ -591,7 +592,6 @@ public final class ImageSequenceViewModel {
         self._cannyMinThreshold = config.cannyMinThreshold
         self._cannyMaxThreshold = config.cannyMaxThreshold
         self._cannyUseL2Gradient = config.cannyUseL2Gradient ? .L2norm : .L1norm
-        
         self.config = configManager
 
 //        self.earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? 0
@@ -606,21 +606,22 @@ public final class ImageSequenceViewModel {
         let imageSequence = try ImageSequence(dirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
                                               supportedImageFileTypes: config.supportedImageFileTypes)
 
-        self.frameSaveQueue.viewModel = self
-        
         Log.d("loaded image sequence")
-        let callbacks = self.makeCallbacks()
-        
-        let imageSequenceSize = await imageSequence.filenames.count
-        
-        if let imageSequenceSizeClosure = callbacks.imageSequenceSizeClosure {
-            imageSequenceSizeClosure(imageSequenceSize)
-        }
-        
         let imageInfo = try await imageSequence.getImageInfo()
 
         IMAGE_WIDTH = Double(imageInfo.imageWidth)
         IMAGE_HEIGHT = Double(imageInfo.imageHeight)
+
+        self._earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? Int(IMAGE_HEIGHT!)/2
+        
+        self.frameSaveQueue.viewModel = self
+        
+        let callbacks = self.makeCallbacks()
+
+        if let imageSequenceSizeClosure = callbacks.imageSequenceSizeClosure {
+            let imageSequenceSize = await imageSequence.filenames.count
+            imageSequenceSizeClosure(imageSequenceSize)
+        }
         
         Log.d("loaded imageInfo \(imageInfo)")
 
@@ -665,7 +666,7 @@ public final class ImageSequenceViewModel {
         try await imageAccessor.writeMissingImages() { numberSaved in
             Task { @MainActor in
                 numberPreviewsSaved += 1
-                let amountPreviewsSaved = Double(numberPreviewsSaved)/Double(imageSequenceSize)
+                let amountPreviewsSaved = Double(numberPreviewsSaved)/Double(self.imageSequenceSize)
                 closure(numberPreviewsSaved, amountPreviewsSaved, 0, 0)
             }
                 

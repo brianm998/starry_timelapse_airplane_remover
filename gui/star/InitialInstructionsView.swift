@@ -2,9 +2,9 @@ import SwiftUI
 import StarCore
 import logging
 
-public enum L2GradientMethod: InstructionOption,
-                              Sendable,
-                              Codable
+public enum CannyGradientMethod: InstructionOption,
+                                 Sendable,
+                                 Codable
 {
     case L1norm
     case L2norm
@@ -44,8 +44,6 @@ public enum L2GradientMethod: InstructionOption,
         switch self {
         case .L1norm:
             """
-              The L1 norm is used for finding edge gradients
-
                   mag=∣dX∣+∣dY∣
               
                - Faster
@@ -54,8 +52,6 @@ public enum L2GradientMethod: InstructionOption,
             """
         case .L2norm:
             """
-              The L2 norm (Euclidean) is used for finding edge gradients
-
                  mag = √(dX²+dY²)
               
                - More accurate edge magnitude
@@ -433,7 +429,7 @@ struct InitialInstructionsView: View {
 
     private var l2GradientGridRow: some View {
         @Bindable var viewModel = viewModel
-        return EnumInstructionGridRow<L2GradientMethod>(
+        return EnumInstructionGridRow<CannyGradientMethod>(
           selection: $viewModel.cannyUseL2Gradient,
           showInfo: $showCannyL2GradientView,
           addSpacer: { addSpacer },
