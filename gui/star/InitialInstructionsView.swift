@@ -578,6 +578,7 @@ struct InitialInstructionsView: View {
                       value: $viewModel.pixelThreshold,
                       minValue: 0.001,
                       maxValue: 10,
+                      allowDecimal: true,
                       fullTextProvider: { _ in "" },
                       prefixText: "",
                       suffixTextProvider: { _ in "" },
@@ -652,6 +653,7 @@ struct InitialInstructionsView: View {
                       value: $viewModel.cannyMinThreshold,
                       minValue: 1,
                       maxValue: 300,
+                      allowDecimal: true,
                       fullTextProvider: { _ in "" },
                       prefixText: "",
                       suffixTextProvider: { _ in "" },
@@ -690,13 +692,14 @@ struct InitialInstructionsView: View {
                       value: $viewModel.cannyMaxThreshold,
                       minValue: 1,
                       maxValue: 300,
+                      allowDecimal: true,
                       fullTextProvider: { _ in "" },
                       prefixText: "",
                       suffixTextProvider: { _ in "" },
                       textColor: .white,
                       focusedField: $focusedField,
                       focusField: .cannyMaxThreshold,
-                      alwaysOpen: true            
+                      alwaysOpen: true
                     )
                     Spacer()
                 }
