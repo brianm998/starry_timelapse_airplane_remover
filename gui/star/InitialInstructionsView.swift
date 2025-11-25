@@ -360,59 +360,61 @@ struct InitialInstructionsView: View {
               Space(height: 20)
               
               HStack {
-                  Spacer()
-                  Button {
-                      self.applySettings()
-                      viewModel.shouldShowInitialInstructions = false
-                  } label: {
-                      ZStack {
-                          Color.white
-                            .cornerRadius(20)
+                  HStack {
+                      Spacer()
+                      Button {
+                          self.applySettings()
+                          viewModel.shouldShowInitialInstructions = false
+                      } label: {
+                          ZStack {
+                              Color.white
+                                .cornerRadius(20)
 
-                          Text("Dismiss")
-                            .font(.title2)
-                            .padding(20)
+                              Text("Dismiss")
+                                .font(.title2)
+                                .padding(20)
+                          }
                       }
+                        .buttonStyle(PlainButtonStyle()) // XXX these styles suck
+                        .fixedSize(horizontal: true, vertical: true)
                   }
-                    .buttonStyle(PlainButtonStyle()) // XXX these styles suck
-                    .fixedSize(horizontal: true, vertical: true)
 
-                  Button {
-                      startProcessing()
-                  } label: {
-                      ZStack {
-                          Color.blue
-                            .cornerRadius(20)
+                  HStack {
+                      Button {
+                          startProcessing()
+                      } label: {
+                          ZStack {
+                              Color.blue
+                                .cornerRadius(20)
 
-                          Text("Process Now")
-                            .font(.title2)
-                            .padding(20)
-                            .foregroundColor(.white)
+                              Text("Process Now")
+                                .font(.title2)
+                                .padding(20)
+                                .foregroundColor(.white)
+                          }
                       }
+                        .buttonStyle(PlainButtonStyle()) // XXX these styles suck
+                        .fixedSize(horizontal: true, vertical: true)
+
+
+                      Spacer()
+                      Button() {
+                          withAnimation {
+                              showExpertSettings = !showExpertSettings
+                          }
+                      } label: {
+                          ZStack {
+                              Color.blue
+                                .cornerRadius(10)
+
+                              Text(showExpertSettings ? "Hide Expert Settings" : "Show Expert Settings")
+                                .foregroundColor(.white)
+                                .padding(10)
+                          }
+                      }
+                        .buttonStyle(PlainButtonStyle())
+                        .fixedSize(horizontal: true, vertical: true)
                   }
-                    .buttonStyle(PlainButtonStyle()) // XXX these styles suck
-                    .fixedSize(horizontal: true, vertical: true)
-
-
-                  Spacer()
-                  Button() {
-                      withAnimation {
-                          showExpertSettings = !showExpertSettings
-                      }
-                  } label: {
-                      Text("⚙")
-                        .font(.system(size: 60))
-                        .foregroundColor(showExpertSettings ? .red : .green)
-                        .help(showExpertSettings ? "Hide Expert Settings" : "Show Expert Settings")
-                  }
-                    .buttonStyle(PlainButtonStyle())
-                  Text(showExpertSettings ? "Hide Expert Settings" : "Show Expert Settings")
-                    .foregroundColor(.white)
-                    .onTapGesture {
-                      withAnimation {
-                          showExpertSettings = !showExpertSettings
-                      }
-                    }
               }
           }
           .frame(minWidth: 800)

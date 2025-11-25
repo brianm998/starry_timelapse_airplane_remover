@@ -1572,27 +1572,8 @@ public final class ImageSequenceViewModel {
                           await semaphore.wait()
                           if let frame = await frameViewModel.frame {
                               if redo {
-                                  // get rid of all the existing horizon images first 
-                                  try? frame.imageAccessor.deleteImage(
-                                    frameIndex: frame.frameIndex,
-                                    ofType: .horizon,
-                                    atSize: .preview
-                                  )
-                                  try? frame.imageAccessor.deleteImage(
-                                    frameIndex: frame.frameIndex,
-                                    ofType: .horizon,
-                                    atSize: .original
-                                  )
-                                  try? frame.imageAccessor.deleteImage(
-                                    frameIndex: frame.frameIndex,
-                                    ofType: .mergedHorizon,
-                                    atSize: .preview
-                                  )
-                                  try? frame.imageAccessor.deleteImage(
-                                    frameIndex: frame.frameIndex,
-                                    ofType: .mergedHorizon,
-                                    atSize: .original
-                                  )
+                                  // get rid of all the existing horizon images first
+                                  await frame.deleteHorizonImages()
                               }
                               let ret = try await frame.loadOrCreateHorizonMask().bounds
                               semaphore.signal()

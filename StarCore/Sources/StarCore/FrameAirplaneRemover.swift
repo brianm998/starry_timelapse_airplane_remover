@@ -1621,6 +1621,30 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return ret
     }
 
+    public func deleteHorizonImages() {
+        try? self.imageAccessor.deleteImage(
+          frameIndex: self.frameIndex,
+          ofType: .horizon,
+          atSize: .preview
+        )
+        try? self.imageAccessor.deleteImage(
+          frameIndex: self.frameIndex,
+          ofType: .horizon,
+          atSize: .original
+        )
+        try? self.imageAccessor.deleteImage(
+          frameIndex: self.frameIndex,
+          ofType: .mergedHorizon,
+          atSize: .preview
+        )
+        try? self.imageAccessor.deleteImage(
+          frameIndex: self.frameIndex,
+          ofType: .mergedHorizon,
+          atSize: .original
+        )
+
+    }
+    
     public func deleteOutliers() async throws {
         try await outlierGroups?.removeOutliersBinary(from: self.outliersDirname)
         self.outlierGroups = nil

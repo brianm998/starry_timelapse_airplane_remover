@@ -54,7 +54,7 @@ public actor FinalGUIProcessor {
         let pixelReplacementMode = await viewModel.config.config().pixelReplacementMethod ?? .automatic(false)
 
         switch await viewModel.reprocessingType {
-        case .horizons:
+        case .allHorizons:
             // delete all horizon images first
             await viewModel.processHorizonForAllFrames(redo: true)
             return
@@ -79,8 +79,10 @@ public actor FinalGUIProcessor {
                         switch await viewModel.reprocessingType {
                         case .none:
                             break
-                        case .horizons:
+                        case .allHorizons:
                             break
+                        case .horizons:
+                            await frame.deleteHorizonImages()
                         case .alignment:
                             try await viewModel.clearProcessing(of: frame)
                         case .outliers:

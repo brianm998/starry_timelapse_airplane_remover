@@ -261,7 +261,7 @@ struct RightPanel: View {
                                 switch viewModel.reprocessingType {
                                 case .none:
                                     Text("Process the next")
-                                case .horizons:
+                                case .allHorizons:
                                     Text("Re-Process All Horizons")
                                 default:
                                     Text("Re-Process the next")
@@ -269,7 +269,7 @@ struct RightPanel: View {
                             }
                               .disabled(viewModel.renderingCurrentFrame)
 
-                            if viewModel.reprocessingType != .horizons {
+                            if viewModel.reprocessingType != .allHorizons {
                                 EditableNumberOfFramesToProcessView(
                                   focusedField: $focusedField,
                                   textColor: .white,
