@@ -388,10 +388,15 @@ public struct Config: Codable, Sendable, Transferable {
     //       fix bug where outliers got way to large
     //       add memory stats on left panel
     //       add re-processing mode to right panel for easier re-processing
+    // 0.10.0 added automatic as new processing mode
+    //        much improved initial instructions view
+    //        bug fixes
+    //        lots of horizon calculation improvements
+
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.9.1"
+    public static let latestVersion = "0.10.0"
     
     public var basename: String {
         let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)"
