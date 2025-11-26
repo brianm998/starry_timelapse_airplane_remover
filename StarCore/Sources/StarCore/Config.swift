@@ -318,6 +318,11 @@ public struct Config: Codable, Sendable, Transferable {
         self.earthAlignedImageCropAmount = try c.decodeIfPresent(Int.self, forKey: .earthAlignedImageCropAmount)
 
         self.starVersion = try c.decodeIfPresent(String.self, forKey: .starVersion) ?? self.starVersion
+
+        self.numberFinalProcessingNeighborsNeeded = try c.decodeIfPresent(Int.self, forKey: .numberFinalProcessingNeighborsNeeded) ?? self.numberFinalProcessingNeighborsNeeded
+        self.numberAlignedNeighborFrames = try c.decodeIfPresent(Int.self, forKey: .numberAlignedNeighborFrames) ?? self.numberAlignedNeighborFrames
+        self.numberStaticNeighborFrames = try c.decodeIfPresent(Int.self, forKey: .numberStaticNeighborFrames) ?? self.numberStaticNeighborFrames
+        self.supportedImageFileTypes = try c.decodeIfPresent([String].self, forKey: .supportedImageFileTypes) ?? self.supportedImageFileTypes
     }
 
     
