@@ -19,8 +19,7 @@ struct ReProcessCurrentFrameButton: View {
             if let frame = viewModel.currentFrame {
               frame.imageAccessor.deleteAllImages(frameIndex: frame.frameIndex, reprocessingType: viewModel.reprocessingType)
                 viewModel.frameViewMode = .original
-                viewModel.currentFrameView.existingImages = [.original]
-                
+                viewModel.frames[frame.frameIndex].existingImages = [.original]
                 let binaryBlobFilename = await frame.blobBinaryFilename
                 // get rid of the outlier files
                 do {
