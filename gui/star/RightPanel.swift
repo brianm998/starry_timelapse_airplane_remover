@@ -115,8 +115,10 @@ struct RightPanel: View {
                             Toggle("Show Ignore Bar", isOn: $viewModel.showIgnoreLowerBar)
                               .foregroundColor(.white)
                             
-                            Toggle("Show Trash", isOn: $viewModel.shouldShowTrash)
-                              .foregroundColor(.white)
+                            if viewModel.doesUseOutliers {
+                                Toggle("Show Trash", isOn: $viewModel.shouldShowTrash)
+                                  .foregroundColor(.white)
+                            }
 
                             /*
                              XXX for some unknown reason, these grab focus and refuse
