@@ -729,7 +729,7 @@ public final class ImageSequenceViewModel {
     func makeCallbacks() -> Callbacks {
         var callbacks = Callbacks()
 
-        // get the full number of images in the sequcne
+        // get the full number of images in the sequence
         callbacks.imageSequenceSizeClosure = { [weak self] imageSequenceSize in
             guard let self else { return }            
             Task { @MainActor [weak self] in

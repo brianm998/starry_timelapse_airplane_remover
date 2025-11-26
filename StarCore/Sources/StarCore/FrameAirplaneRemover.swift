@@ -481,11 +481,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             return nil
         }
 
-        // XXX need to use 
-        // numberStaticNeighborFrames
-        // to get a different set of neighbor indices
-        // XXX
-        
+        Log.i("frame \(frameIndex) making merged horizon")
+
+        return try await createStaticMergedHorizonMask()
+    }
+
+    public func createStaticMergedHorizonMask() async throws -> HorizonMask? { 
         // with no moving tropod head, earth alignment is not done.
         let mask = try await self.loadOrCreateHorizonMask()
         let neighboringHorizons = staticNeighborFrames.compactMap {
@@ -493,10 +494,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                             ofType: .horizon,
                                             atSize: .original)
         }
+        Log.i("frame \(frameIndex) making merged horizon \(staticNeighborFrames.count) staticNeighborFrames \(neighboringHorizons.count) neighboringHorizons")
+        
         if let mergedHorizon = mask.image.medianMerge(
              with: neighboringHorizons,
              outlierThreshold: pixelThreshold)
         {
+            Log.d("saving merged horizon images")
             try await imageAccessor.save(
               mergedHorizon,
               frameIndex: frameIndex,
@@ -705,14 +709,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         Log.d("original frame \(originalFrame.description)")
         
-        var horizonMask: HorizonMask? = nil
-        if config.horizonDetectionEnabled {
-            horizonMask = try await loadOrCreateHorizonMask()
-            if let horizonMask {
-                Log.d("horizon mask \(horizonMask.image.description)")
-            }
-        }
-
         var alignmentResult: AlignmentResult? = nil
         
         if isEarth,
@@ -727,13 +723,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                  outlierThreshold: pixelThreshold
                )
             {
-                var mergedHorizonMaskImage: PixelatedImage? = nil
-
-                if let horizonMaskImage = horizonMask?.image {
-                    mergedHorizonMaskImage = horizonMaskImage.medianMerge(
-                      with: neighborMaskFilenames,
-                      outlierThreshold: pixelThreshold
-                    )
+                var horizonMask: HorizonMask? = nil
+                if config.horizonDetectionEnabled {
+                    // use static merged horizons  
+                    horizonMask = try await createStaticMergedHorizonMask()
                 }
                 
                 alignmentResult = AlignmentResult(
@@ -741,10 +734,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                   failed: nil,
                   numAligned: neighborFilenames.count + 1,
                   numFailed: 0,
-                  horizonMask: mergedHorizonMaskImage
+                  horizonMask: horizonMask?.image
                 )
             }
         } else {
+            // tripod head is moving or stars, do full alignment
+            var horizonMask: HorizonMask? = nil
+            if config.horizonDetectionEnabled {
+                horizonMask = try await loadOrCreateHorizonMask()
+                if let horizonMask {
+                    Log.d("horizon mask \(horizonMask.image.description)")
+                }
+            }
+
+            
             Log.d("frame \(frameIndex) doing real alignment for earth \(isEarth)")
             // do real alignment
             alignmentResult = originalFrame.align(
@@ -790,6 +793,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         if let mergedHorizon = alignmentResult.horizonMask {
+            Log.d("saving merged horizon images")
             try await imageAccessor.save(
               mergedHorizon,
               frameIndex: frameIndex,
