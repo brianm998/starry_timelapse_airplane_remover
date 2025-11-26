@@ -212,6 +212,7 @@ struct InitialInstructionsView: View {
 
     @State private var showProcessFramesInfo = false
     @State private var showNeighborFrameInfo = false
+    @State private var showStaticNeighborFrameInfo = false
     @State private var showPixelThresholdInfo = false
     @State private var showProcessingModeInfo = false
     @State private var showHorizonStripInfo = false
@@ -224,7 +225,8 @@ struct InitialInstructionsView: View {
         showAutoPreservationMethodInfo || showProcessFramesInfo ||
         showNeighborFrameInfo || showPixelThresholdInfo || showProcessingModeInfo ||
         showUseCannyInfo || showHorizonStripInfo || showCannyMinThresholdView ||
-        showCannyMaxThresholdView || showCannyL2GradientView
+        showCannyMaxThresholdView || showCannyL2GradientView ||
+        showStaticNeighborFrameInfo
     }
     
     private func showAll() {
@@ -234,6 +236,7 @@ struct InitialInstructionsView: View {
         showAutoPreservationMethodInfo = true
         showProcessFramesInfo = true
         showNeighborFrameInfo = true
+        showStaticNeighborFrameInfo = true
         showPixelThresholdInfo = true
         showProcessingModeInfo = true
         showHorizonStripInfo = true
@@ -250,6 +253,7 @@ struct InitialInstructionsView: View {
         showAutoPreservationMethodInfo = false
         showProcessFramesInfo = false
         showNeighborFrameInfo = false
+        showStaticNeighborFrameInfo = false
         showPixelThresholdInfo = false
         showHorizonStripInfo = false
         showProcessingModeInfo = false
@@ -349,6 +353,8 @@ struct InitialInstructionsView: View {
                           self.cuncurrentProcessingLimitView
                           Divider()
                           self.neighborFrameCountView
+                          Divider()
+                          self.staticNeighborFrameCountView
                           Divider()
                           self.pixelThresholdView
                       }
@@ -556,6 +562,45 @@ struct InitialInstructionsView: View {
                 }
             }
         }
+    }
+
+    private var staticNeighborFrameCountView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showStaticNeighborFrameInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            With difficult horizons, star can get better horizon results by merging
+            more neighboring horizons together.
+            Use this field when the camera is not moving, and include as many as you need to get a smoother horizon that doesn't change much between frames.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Static Neighbor Frame Count:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.numberStaticNeighborFrames,
+                      minValue: 1,
+                      maxValue: viewModel.imageSequenceSize,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .numberStaticNeighborFrames,
+                      alwaysOpen: true
+                    )
+                    Spacer()   
+                }
+            }
+        }
+          .disabled(viewModel.cameraMotion != .fixed)
     }
 
     private var pixelThresholdView: some View {

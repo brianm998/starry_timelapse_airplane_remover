@@ -13,5 +13,6 @@ enum FocusedField: Hashable {
     case cannyMinThreshold
     case cannyMaxThreshold
     case maxConcurrentHorizons
+    case numberStaticNeighborFrames
 }
 

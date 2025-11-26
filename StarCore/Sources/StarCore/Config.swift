@@ -166,6 +166,10 @@ public struct Config: Codable, Sendable, Transferable {
     // creating the subtraction image and calculating pixel values during removal
     public var numberAlignedNeighborFrames = 8 // total
 
+    // when camera is not moving, use this value instead of
+    // numberAlignedNeighborFrames for calculating the merged horizon for each frame
+    public var numberStaticNeighborFrames = 16 // total
+    
     // this can stay this way more easily now that star supports video import to .tiff directly
     public var supportedImageFileTypes = [".tif", ".tiff"] // XXX move this out
 

@@ -362,7 +362,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         let config = await configManager.config()
         Log.d("config.numberAlignedNeighborFrames \(config.numberAlignedNeighborFrames)")
-        setNumberOfAlignmentImages(config.numberAlignedNeighborFrames)
+        await self.setNumberOfAlignedFrames()
+        await self.setNumberOfStaticNeighborFrames()
         
         if imageAccessor.imageExists(frameIndex: frameIndex,
                                      ofType: .processed,
@@ -388,15 +389,25 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func set(pixelThreshold: Double) {
         self.pixelThreshold = pixelThreshold
     }
+
+    public func setNumberOfStaticNeighborFrames() async {
+        let config = await configManager.config()
+        self.staticNeighborFrames = calculateNeighborIndices(config.numberStaticNeighborFrames)
+    }
     
-    public func setNumberOfAlignmentImages(_ alignmentNumber: Int) {
+    public func setNumberOfAlignedFrames() async {
+        let config = await configManager.config()
+        self.alignmentFrames = calculateNeighborIndices(config.numberAlignedNeighborFrames)
+    }
+    
+    public func calculateNeighborIndices(_ alignmentNumber: Int) -> [Int] {
         guard let imageSequence else {
             Log.e("cannot set number of alignment images without an image sequence")
-            return
+            return []
         }
         if alignmentNumber < 1 {
             Log.e("invalid alignmentNumbernumberOfImage \(alignmentNumber)")
-            return
+            return []
         }
 
         var halfNumber = alignmentNumber/2
@@ -422,15 +433,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             endFrame = startFrame + alignmentNumber + 1
         }
 
-        alignmentFrames = []
+        var ret: [Int] = []
         
         // calculate the frame indicies of the frames we will use for star alignment
         for index in startFrame..<endFrame {
             if index == frameIndex { continue }
-            alignmentFrames.append(index)
+            ret.append(index)
         }
 
-        Log.d("frame \(frameIndex) has alignment frames \(alignmentFrames)")
+        Log.d("frame \(frameIndex) has alignment frames \(ret)")
+
+        return ret
     }
 
     public var numberOfAlignedFrames: Int { alignmentFrames.count }
@@ -468,9 +481,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             return nil
         }
 
+        // XXX need to use 
+        // numberStaticNeighborFrames
+        // to get a different set of neighbor indices
+        // XXX
+        
         // with no moving tropod head, earth alignment is not done.
         let mask = try await self.loadOrCreateHorizonMask()
-        let neighboringHorizons = alignmentFilenames.keys.compactMap {
+        let neighboringHorizons = staticNeighborFrames.compactMap {
             self.imageAccessor.nameForImage(frameIndex: $0,
                                             ofType: .horizon,
                                             atSize: .original)
@@ -960,6 +978,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     private var alignmentFrames: [Int] = []
+    private var staticNeighborFrames: [Int] = []
     private let baseFilename: String
 
     // the filenames of the original files that we should align with this frame

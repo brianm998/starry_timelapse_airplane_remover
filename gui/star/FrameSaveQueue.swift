@@ -58,10 +58,8 @@ class FrameSaveQueue {
                         await frame.set(pixelThreshold: viewModel.pixelThreshold)
                         // set number of aligned images
 
-                        let numberOfAlignedImages = await viewModel.numberOfAlignedNeighborFrames
-                        Log.d("self.numberOfNeighborFrames \(numberOfAlignedImages)")
-                        await frame.setNumberOfAlignmentImages(numberOfAlignedImages)
-                        
+                        await frame.setNumberOfAlignedFrames()
+                        await frame.setNumberOfStaticNeighborFrames()
                     }
                     
                     try await frame.loadOutliers()
