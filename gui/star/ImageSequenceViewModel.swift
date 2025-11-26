@@ -579,7 +579,7 @@ public final class ImageSequenceViewModel {
         self.cannyUseL2Gradient = config.cannyUseL2Gradient ? .L2norm : .L1norm
         self.numberOfNeighborFrames = config.numberFinalProcessingNeighborsNeeded
         self.pixelReplacementMethod = config.pixelReplacementMethod
-        self.cameraMotion = config.tripodHeadWasMoving ? .fixed : .moving
+        self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.maxConcurrentHorizonCalculations = config.maxConcurrentHorizonCalculations
         self.config = configManager
 
