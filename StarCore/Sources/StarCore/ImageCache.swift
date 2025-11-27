@@ -36,7 +36,7 @@ public final class TimeoutRef<T: AnyObject> {
         Task {
             await globalTimeoutActor.clear(
               boxed.value,
-              afterDelay: 20_000_000_000 // nanoseconds XXX MAKE THIS A PARAMETER
+              afterDelay: 10_000_000_000 // nanoseconds XXX MAKE THIS A PARAMETER
             )
         }
     }
@@ -52,7 +52,8 @@ final class CompletionBox: @unchecked Sendable {
 public actor ImageCache {
 
     // images indexed by filename
-    var cache: [String : TimeoutRef<PixelatedImage>] = [:]
+
+    var cache: [String : TimeoutRef<MatWrapper>] = [:]
 
     var cacheHits: UInt = 0
     var cacheMisses: UInt = 0
@@ -84,7 +85,7 @@ public actor ImageCache {
     public func add(image: PixelatedImage, named filename: String) -> PixelatedImage {
         if image.isEmpty { Log.w("adding empty image to cache") }
         Log.d("caching \(filename)") 
-        cache[filename] = TimeoutRef(image)
+        cache[filename] = TimeoutRef(image.mat)
         return image
     }
     
@@ -93,7 +94,8 @@ public actor ImageCache {
         var imageSizeToCountMap: [Int:Int] = [:]
 
         for (key, weakRef) in cache {
-            if let cachedImage = weakRef.value {
+            if let cachedMat = weakRef.value,
+               let cachedImage = PixelatedImage(mat: cachedMat) {
                 if let count = imageSizeToCountMap[cachedImage.byteCount] {
                     imageSizeToCountMap[cachedImage.byteCount] = count + 1
                 } else {
@@ -109,6 +111,8 @@ public actor ImageCache {
     }
     
     public func loadImage(filename: String) async throws -> PixelatedImage? {
+
+        Log.d("loadImage(filename: \(filename))")
         
         // if there is a pending load for this filename,
         // we will expect a semaphore for it
@@ -135,7 +139,8 @@ public actor ImageCache {
                 log()
                 if let semaphore { semaphore.signal() }
 
-                return cachedImage
+                Log.d("loadImage(filename: \(filename)) returning cached image")
+                return PixelatedImage(mat: cachedImage)
             } else {
                 // weak ref in the cache was nil, remove TimeoutRef holder
                 cache[filename] = nil
@@ -145,6 +150,7 @@ public actor ImageCache {
         // cache miss, load image from filename
         // allowing other cache lookups while we load this image,
         
+        Log.d("loadImage(filename: \(filename)) cache miss")
         // blocking other requests for this same filename by semaphore
         let loadingSemaphore = AsyncSemaphore(value: 0)
         pendingLoads[filename] = loadingSemaphore
@@ -163,7 +169,7 @@ public actor ImageCache {
                 log()
             } else {
                 Log.d("caching \(filename)") 
-                cache[filename] = TimeoutRef(preClone)
+                cache[filename] = TimeoutRef(preClone.mat)
                 ret = preClone // return the clone so ref goes out of scope sooner
                 cacheMisses += 1
                 imageLoadSuccess += 1
