@@ -74,7 +74,7 @@ void growBlack(cv::Mat &img, int pixels)
 // It is good to weed out these bright pixels before taking the median
 // as otherwise areas with lots of bright bad pixels in the same spot across
 // multiple images can sometimes allow the bad pixels to show up at the median 
-MatWrapper * medianImageFromArray(const std::vector<MatWrapper *>& mats, double k) {
+MatWrapper * medianImageFromArray(const std::vector<MatWrapper *>& mats, double k, BOOL includeAll) {
   if (mats.empty()) {
     Log_w(@"given empty mats, returning one too :(");
     return [[MatWrapper alloc] initWithMat: cv::Mat()];
@@ -144,18 +144,21 @@ MatWrapper * medianImageFromArray(const std::vector<MatWrapper *>& mats, double 
                     double std = sqrt(varSum / n);
                     double threshold = mean + k * std; // our threshold
                     
-                    int maxIndex = 0;
+                    int maxIndex = n;
                     int minIndex = 0;
-                    for(int z = 0 ; z < n ; ++z) {
-                      char value = vals[c][z];
-                      if(value == 0) {
-                        minIndex = z + 1;
-                      }
+                    if(!includeAll) {
+                      // maybe use different indices if we don't include all 
+                      for(int z = 0 ; z < n ; ++z) {
+                        char value = vals[c][z];
+                        if(value == 0) {
+                          minIndex = z + 1;
+                        }
                       
-                      if((double)vals[c][z] < threshold) {
-                        maxIndex = z;
-                      } else {
-                        break;
+                        if((double)vals[c][z] < threshold) {
+                          maxIndex = z;
+                        } else {
+                          break;
+                        }
                       }
                     }
                     int index = (minIndex+maxIndex)/2;
@@ -205,19 +208,22 @@ MatWrapper * medianImageFromArray(const std::vector<MatWrapper *>& mats, double 
                     double std = sqrt(varSum / n);
                     double threshold = mean + k * std; // our threshold
 
-                    int maxIndex = 0;
+                    int maxIndex = n;
                     int minIndex = 0;
                     // throw out pixels with value zero at the bottom
                     // throw out pixels with too much statistal variation at the top
-                    for(int z = 0 ; z < n ; ++z) {
-                      uint16_t value = vals[c][z];
-                      if(value == 0) {
-                        minIndex = z + 1;
-                      }
-                      if((double)value < threshold) {
-                        maxIndex = z;
-                      } else {
-                        break;
+                    if(!includeAll) {
+                      // maybe use different indices if we don't include all 
+                      for(int z = 0 ; z < n ; ++z) {
+                        uint16_t value = vals[c][z];
+                        if(value == 0) {
+                          minIndex = z + 1;
+                        }
+                        if((double)value < threshold) {
+                          maxIndex = z;
+                        } else {
+                          break;
+                        }
                       }
                     }
 
@@ -391,17 +397,19 @@ cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Ma
 
 + (id)medianMergeFilenames:(NSArray<NSString*>*)filenames
           outlierThreshold:(double)k
+                includeAll:(BOOL)includeAll
 {
   NSMutableArray<MatWrapper*> * images = [[NSMutableArray<MatWrapper*> alloc] init];
   for(int i = 0 ; i < filenames.count ; i++) {
     [images addObject: [ObjcImageCache loadImage:filenames[i]]];
   }
-  return [ImageAligner medianMerge:images outlierThreshold: k];
+  return [ImageAligner medianMerge:images outlierThreshold:k includeAll:includeAll];
 }
 
 + (id)medianMergeImage:(MatWrapper*)image
          withFilenames:(NSArray<NSString*>*)filenames
       outlierThreshold:(double)k
+            includeAll:(BOOL)includeAll;
 {
   NSMutableArray<MatWrapper*> * images = [[NSMutableArray<MatWrapper*> alloc] init];
   [images addObject: image];
@@ -411,7 +419,9 @@ cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Ma
       [images addObject: image];
     }
   }
-  return [ImageAligner medianMerge:images outlierThreshold: k];
+  return [ImageAligner medianMerge:images
+                  outlierThreshold: k
+                        includeAll: includeAll];
 }
 
 //          MatWrapper * frame = ;
@@ -419,12 +429,13 @@ cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Ma
 // just median merges the frames without any alignment
 + (id)medianMerge:(NSArray<MatWrapper*>*)frames
  outlierThreshold:(double)k
+       includeAll:(BOOL)includeAll
 {
     std::vector<MatWrapper*> array;
     for (size_t i = 0; i < frames.count; ++i) {
       array.push_back(frames[i]);
     }
-    return medianImageFromArray(array, k);
+    return medianImageFromArray(array, k, includeAll);
 }
 
 
@@ -652,6 +663,11 @@ maxCornerDeviation:(double)maxCornerDeviation
     // random logID
     uint32_t logID = arc4random_uniform(1000);
 
+        Log_d(@"%d align frames %@ frameMasks %@ matchMethod %ld maxDeviation %lf maxCornerDeviation %lf invertMask %d maxKeypoints %d k %lf",
+              logID, frameFilenames, frameMaskFilenames, matchMethod, maxDeviation, maxCornerDeviation, invertMask, maxKeypoints, k);
+    //    Log_d(@"%d align frames %@ frameMasks %@ matchMethod %d ",
+    //          logID, frameFilenames, frameMaskFilenames, matchMethod);
+
     // Horizon mask (sky = nonzero, ground = 0)
     MatWrapper * horizonMask;
     if (mask != NULL && !mask.mat.empty()) {
@@ -757,14 +773,14 @@ maxCornerDeviation:(double)maxCornerDeviation
 			    
         for (int ii = range.start; ii < range.end; ++ii) {
           NSUInteger idx = (NSUInteger)ii;
-          //Log_i(@"%d %d top", logID, ii);
+          Log_i(@"%d %d top", logID, ii);
           MatWrapper * frame = [ObjcImageCache loadImage:frameFilenames[idx]];
           MatWrapper * frameHorizon = 0;
           if (frameMaskFilenames.count > idx) {
             frameHorizon = [ObjcImageCache loadImage:frameMaskFilenames[idx]];
           }
           try {
-            //Log_i(@"%d %d loaded", logID, ii);
+            Log_i(@"%d %d loaded", logID, ii);
 
             // make a gray 8 bit image for detection
 
@@ -788,7 +804,7 @@ maxCornerDeviation:(double)maxCornerDeviation
             //cv::imwrite("/tmp/frame_gray_" + std::to_string(idx) + ".tiff", frameGray.mat);
                         
 
-            //Log_i(@"%d %d to gray check", logID, ii);
+            Log_i(@"%d %d to gray check", logID, ii);
 
             std::vector<cv::KeyPoint> kpFrame;
             cv::Mat descFrame;
@@ -799,12 +815,12 @@ maxCornerDeviation:(double)maxCornerDeviation
               // detection mask is a star mask for the sky
               // XXX make the dilate size and threshold value parameters
               localDetectionMask = makeStarMask(frameGray.mat,
-                                                /*dilateSize=*/10, //30,
-                                                /*thresholdVal=*/150);//200);
+                                                /*dilateSize=*/40, //10,
+                                                /*thresholdVal=*/20);//150);
               
               //cv::imwrite("/tmp/star_mask_" + std::to_string(idx) + ".tiff", localDetectionMask.mat);
               
-              //Log_i(@"%d %d made star mask check", logID, ii);
+              Log_i(@"%d %d made star mask check", logID, ii);
             }
 
             // create local detector/matcher/clahe instances so they are thread-local
@@ -825,7 +841,7 @@ maxCornerDeviation:(double)maxCornerDeviation
               if(!sift) sift = cv::SIFT::create(maxKeypoints);
               sift->detectAndCompute(frameGray.mat, localDetectionMask.mat, kpFrame, descFrame);
             }
-            //Log_i(@"%d %d detected and computed check", logID, ii);
+            Log_i(@"%d %d detected and computed check", logID, ii);
 
             frameGray = nil;          // not used past here, allow deallocation
             localDetectionMask = nil;
@@ -909,7 +925,7 @@ maxCornerDeviation:(double)maxCornerDeviation
               }
               break;
             }
-            //Log_i(@"%d %d matcher check", logID, ii);
+            Log_i(@"%d %d matcher check", logID, ii);
 
 		    // after matching the keypoints between the special frame and
 		    // the alignment frame we're iterating over, we next need to
@@ -924,7 +940,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 
             // need at least four points
             if (ptsFrame.size() >= 4) {
-
+              Log_d(@"%d has $zu control points", logID, ptsFrame.size());
               // find homography between the matched keypoints 
                 cv::Mat H = cv::findHomography(ptsFrame, ptsSpecial, cv::RANSAC, 10);
               if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
@@ -964,7 +980,9 @@ maxCornerDeviation:(double)maxCornerDeviation
                 if (acceptWarp) {
                   // if we accept the warp, then actually warp
                   // this frame to fit the special image
-                  //Log_i(@"%d %d accepting warp and warping", logID, ii);
+                  Log_i(@"%d %d accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf",
+                        logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
+                  Log_i(@"%d %d accepting warp and warping", logID, ii);
                   cv::warpPerspective(frame.mat, // the input to warp
                                       warped, // the warped output
                                       H, // the homography to warp with
@@ -974,12 +992,12 @@ maxCornerDeviation:(double)maxCornerDeviation
                                       cv::Scalar(0,0,0,0));
 
 
-                  //cv::imwrite("/tmp/warped_first_" + std::to_string(idx) + ".tiff", warped);
+                  cv::imwrite("/tmp/warped_first_" + std::to_string(idx) + ".tiff", warped);
 
                   
                   if (frameHorizon != NULL) {
                     // warp horizon with same homography as ground
-                    //Log_i(@"%d %d accepting warp and warping horizon", logID, ii);
+                    Log_i(@"%d %d accepting warp and warping horizon", logID, ii);
                     cv::warpPerspective(frameHorizon.mat, warpedHorizon, H,
                                         frameHorizon.mat.size(),
                                         cv::INTER_LINEAR, cv::BORDER_CONSTANT,
@@ -992,6 +1010,9 @@ maxCornerDeviation:(double)maxCornerDeviation
                                   255,
                                   cv::THRESH_BINARY);
                   }
+                } else {
+                  Log_i(@"%d %d NOT accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf",
+                        logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
                 }
               }
             }
@@ -1015,7 +1036,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                 Log_w(@"frame is empty");
               }
             }
-            //Log_i(@"%d %d done", logID, ii);
+            Log_i(@"%d %d done", logID, ii);
 
           } catch (const cv::Exception &e) {
             Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
@@ -1067,10 +1088,10 @@ maxCornerDeviation:(double)maxCornerDeviation
     }
     
     // use median merges
-    MatWrapper * alignedResult = medianImageFromArray(aligned, k);
-    MatWrapper * failedResult = medianImageFromArray(failed, k);
+    MatWrapper * alignedResult = medianImageFromArray(aligned, k, false);
+    MatWrapper * failedResult = medianImageFromArray(failed, k, false);
     
-    MatWrapper * horizonResult = medianImageFromArray(horizons, k);
+    MatWrapper * horizonResult = medianImageFromArray(horizons, k, true);
 
 	if(alignedResult.mat.empty()) {
 	  Log_w(@"alignedResult is empty");

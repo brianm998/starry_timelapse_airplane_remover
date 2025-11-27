@@ -498,7 +498,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         if let mergedHorizon = mask.image.medianMerge(
              with: neighboringHorizons,
-             outlierThreshold: pixelThreshold)
+             outlierThreshold: pixelThreshold,
+             includeAll: true)
         {
             Log.d("saving merged horizon images")
             try await imageAccessor.save(

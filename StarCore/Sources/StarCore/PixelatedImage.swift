@@ -908,12 +908,14 @@ extension PixelatedImage {
 
     public func medianMerge(
       with frames: [String],
-      outlierThreshold: Double = 1.2
+      outlierThreshold: Double = 1.2,
+      includeAll: Bool = false
     ) -> PixelatedImage? {
         if let mat = ImageAligner.medianMergeImage(
              self.mat,
              withFilenames: frames,
-             outlierThreshold: outlierThreshold
+             outlierThreshold: outlierThreshold,
+             includeAll: includeAll
            ) as? MatWrapper
         {
             return PixelatedImage(mat: mat)

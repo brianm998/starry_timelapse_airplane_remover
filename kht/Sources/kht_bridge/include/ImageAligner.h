@@ -20,15 +20,18 @@ typedef NS_ENUM(NSInteger, FeatureMatchMethod) {
 
 + (id)medianMergeImage:(MatWrapper*)image
          withFilenames:(NSArray<NSString*>*)filenames
-      outlierThreshold:(double)k;
+      outlierThreshold:(double)k
+            includeAll:(BOOL)includeAll;
 
 + (id)medianMergeFilenames:(NSArray<NSString*>*)filenames
-          outlierThreshold:(double)k;
+          outlierThreshold:(double)k
+                includeAll:(BOOL)includeAll;
 
 
 // just median merges the frames without any alignment
 + (id)medianMerge:(NSArray<MatWrapper*>*)frames
- outlierThreshold:(double)k;
+ outlierThreshold:(double)k
+       includeAll:(BOOL)includeAll;
 
 // align frames to special frame, with optional mask which shows where to get keypoints from
 // 
