@@ -307,7 +307,7 @@ cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Ma
                     for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
                 }
                 for (int c = 0; c < ch; ++c) {
-                    std::sort(vals[c], vals[c] + n);
+                  // std::sort(vals[c], vals[c] + n);
 
 		    // sort values for this pixel component across images
                     std::sort(vals[c], vals[c] + n);
@@ -558,7 +558,7 @@ MatWrapper * toGray8UWithMask(const cv::Mat& src, const cv::Mat& mask, bool norm
             double scale = (maxVal > 0) ? 255.0 / maxVal : 1.0;
             gray.convertTo(tmp, CV_8U, scale);
         } else {
-            tmp = gray;//.clone(); // we should be able to get rid of this clone as we own grey
+            tmp = gray;
         }
     }
 
