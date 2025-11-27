@@ -571,7 +571,7 @@ struct EditableNumberOfFramesToProcessView: View {
         return EditableNumberView(
             value: $viewModel.numberOfFramesToProcess,
             minValue: 1,
-            maxValue: viewModel.imageSequenceSize,
+            maxValue: viewModel.imageSequenceSize+1,
             fullTextProvider: { "\($0) frames as" },
             // no prefix, so TextField is first
             suffixTextProvider: { $0 == 1 ? "frame as" : "frames as" },
