@@ -295,8 +295,8 @@ cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Ma
         for (int y = 0; y < rows; ++y) {
             const uchar* rowPtrs[n];
             for (int i = 0; i < n; ++i) {
-	      rowPtrs[i] = mats[i].ptr<uchar>(y);
-	    }
+              rowPtrs[i] = mats[i].ptr<uchar>(y);
+            }
             uchar* outRow = output.ptr<uchar>(y);
             const uchar* baseRow = baseMat.ptr<uchar>(y);
 
@@ -312,23 +312,23 @@ cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Ma
 		    // sort values for this pixel component across images
                     std::sort(vals[c], vals[c] + n);
 
-		    uchar baseValue = *(baseRow + x * ch);
+                    uchar baseValue = *(baseRow + x * ch);
 		    /*
 		      find the value which is closest to the base, and use that
 		     */
-		    int best_index = 0;
-		    uchar best_value = 0;
-		    uchar best_diff = 0xFF;
-		      
-		    for(int z = 0 ; z < n ; ++z) {
-		      uchar diff = abs(baseValue - vals[c][z]);
-		      if(diff < best_diff) {
-			best_index = z;
-			best_value = vals[c][z];
-			best_diff = diff;
-		      }
-		    }
-		    
+                    int best_index = 0;
+                    uchar best_value = 0;
+                    uchar best_diff = 0xFF;
+                    
+                    for(int z = 0 ; z < n ; ++z) {
+                      uchar diff = abs(baseValue - vals[c][z]);
+                      if(diff < best_diff) {
+                        best_index = z;
+                        best_value = vals[c][z];
+                        best_diff = diff;
+                      }
+                    }
+                    
                     outRow[x * ch + c] = static_cast<uchar>(vals[c][best_index]);
                 }
             }
@@ -338,8 +338,8 @@ cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Ma
         for (int y = 0; y < rows; ++y) {
             const uint16_t* rowPtrs[n];
             for (int i = 0; i < n; ++i) {
-	      rowPtrs[i] = mats[i].ptr<uint16_t>(y);
-	    }
+              rowPtrs[i] = mats[i].ptr<uint16_t>(y);
+            }
             uint16_t* outRow = output.ptr<uint16_t>(y);
             const uint16_t* baseRow = baseMat.ptr<uint16_t>(y);
 
@@ -362,22 +362,22 @@ cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Ma
 		    // sort values for this pixel component across images
                     std::sort(vals[c], vals[c] + n);
 
-		    uint16_t baseValue = *(baseRow + x * ch);
+                    uint16_t baseValue = *(baseRow + x * ch);
 		    /*
 		      find the value which is closest to the base, and use that
 		     */
-		    int best_index = 0;
-		    uint16_t best_value = 0;
-		    uint16_t best_diff = 0xFFFF;
-		      
-		    for(int z = 0 ; z < n ; ++z) {
-		      uint16_t diff = abs(baseValue - vals[c][z]);
-		      if(diff < best_diff) {
-			best_index = z;
-			best_value = vals[c][z];
-			best_diff = diff;
-		      }
-		    }
+                    int best_index = 0;
+                    uint16_t best_value = 0;
+                    uint16_t best_diff = 0xFFFF;
+                    
+                    for(int z = 0 ; z < n ; ++z) {
+                      uint16_t diff = abs(baseValue - vals[c][z]);
+                      if(diff < best_diff) {
+                        best_index = z;
+                        best_value = vals[c][z];
+                        best_diff = diff;
+                      }
+                    }
 		    
                     outRow[x * ch + c] = static_cast<uint16_t>(vals[c][best_index]);
                 }
