@@ -42,7 +42,7 @@ public actor FinalGUIProcessor {
         
         if let endIndex,
            endIndex >= firstFrameIndex,
-           endIndex <= framesCount
+           endIndex < framesCount
         {
             lastFrameIndex = endIndex
         }
