@@ -287,7 +287,19 @@ public final class ImageSequenceViewModel {
     var number_of_frames: Int = 50
     
     // the frame number of the frame we're currently showing
-    var currentIndex = 0
+    var currentIndex = 0 {
+        didSet {
+            switch self.currentFramePixelReplacementMethod {
+            case .automatic(let useOutliers):
+                self.currentFrameHighLevelPixelReplacementMethod = .automatic
+                self.currentFrameAutoPreservationMode = useOutliers ? .yes : .no
+
+            case .selective:
+                self.currentFrameHighLevelPixelReplacementMethod = .selective
+                self.currentFrameAutoPreservationMode = .no
+            }
+        }
+    }
 
     var numberOfFramesToProcessConcurrently: Int
 
@@ -392,6 +404,7 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    // fallback replacement method if not specified per frame
     var pixelReplacementMethod: PixelReplacementMethod {
         didSet {
             var realConfig = config.config()
@@ -400,12 +413,29 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    var currentFramePixelReplacementMethod: PixelReplacementMethod {
+        getPixelReplacementMethod(forFrame: currentIndex)
+    }
+    
     func getPixelReplacementMethod(forFrame frame: Int) -> PixelReplacementMethod{
         let realConfig = config.config()
         if let value = realConfig.pixelReplacementOverrides[frame] {
             return value
         } else {
             return realConfig.pixelReplacementMethod
+        }
+    }
+
+    var currentFrameHasOverriddenPixelReplacementMethod: Bool {
+        self.hasOverriddenPixelReplacementMethod(forFrame: currentIndex)
+    }
+    
+    func hasOverriddenPixelReplacementMethod(forFrame frame: Int) -> Bool {
+        let realConfig = config.config()
+        if let value = realConfig.pixelReplacementOverrides[frame] {
+            return true
+        } else {
+            return false
         }
     }
     
@@ -1448,15 +1478,42 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    var doesUseOutliers: Bool {
-        config.config().pixelReplacementMethod.usesOutliers
+    var currentFrameUsesOutliers: Bool {
+        switch currentFrameHighLevelPixelReplacementMethod {
+        case .automatic:
+            switch currentFrameAutoPreservationMode {
+            case .yes:
+                true
+            case .no:
+                false
+            }
+        case .selective:
+            true
+        }
+    }
+
+    var currentFrameHighLevelPixelReplacementMethod: HighLevelPixelReplacementMethod = .automatic {
+        didSet {
+            self.set(
+              pixelReplacementMethod: PixelReplacementMethod(
+                highLevelPixelReplacementMethod: currentFrameHighLevelPixelReplacementMethod,
+                autoPreservationMode: currentFrameAutoPreservationMode
+              ),
+              forFrame: currentIndex
+            )
+        }
     }
     
-    var currentFrameUsesOutliers: Bool {
-        false    // XXX FIX THIS
-//        if let currentFrame,
-//           currentFrame.
-        //config.config().pixelReplacementMethod.usesOutliers
+    var currentFrameAutoPreservationMode: AutoPreservationMode = .no  {
+        didSet {
+            self.set(
+              pixelReplacementMethod: PixelReplacementMethod(
+                highLevelPixelReplacementMethod: currentFrameHighLevelPixelReplacementMethod,
+                autoPreservationMode: currentFrameAutoPreservationMode
+              ),
+              forFrame: currentIndex
+            )
+        }
     }
     
     func renderAllFrames() {

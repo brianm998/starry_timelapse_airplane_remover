@@ -780,7 +780,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if let aligned = alignmentResult.aligned {
             goodPixelImage = aligned
         } else if let failed = alignmentResult.failed {
-            switch config.pixelReplacementMethod {
+            switch await self.pixelReplacementMethod {
             case .automatic(_):
                 // return the frame itself
                 goodPixelImage = originalFrame
@@ -1253,6 +1253,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func findOutliers(within bounds: BoundingBox) async throws {
         Log.d("shovel frame \(frameIndex) finding outliers within bounds \(bounds)")
 
+        if outlierGroups == nil {
+            self.outlierGroups = OutlierGroups(frameIndex: self.frameIndex)
+        }
+        
         guard let outlierGroups else {
             Log.e("cannot find outliers without outlier groups")
             return
@@ -1670,6 +1674,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public func promoteDust(in boundingBox: BoundingBox) async throws -> [OutlierGroup] {
+        if outlierGroups == nil {
+            self.outlierGroups = OutlierGroups(frameIndex: self.frameIndex)
+        }
+        
         guard let outlierGroups else { return [] }
         let ret = await outlierGroups.promoteDust(in: boundingBox)
 
@@ -2134,6 +2142,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func userSelectAllOutliers(toShouldRemove shouldRemove: Bool,
                                       overlapping group: OutlierGroup) async -> Bool
     {
+        if outlierGroups == nil {
+            self.outlierGroups = OutlierGroups(frameIndex: self.frameIndex)
+        }
+        
         guard let outlierGroups else { return false }
 
         var didChange = false

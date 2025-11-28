@@ -367,6 +367,8 @@ public struct ImageAccessor: Sendable {
                     return (dir, baseFileName)
                 case .validation:
                     return (dir, baseFileName)
+                case .removeMask:
+                    return (dir, baseFileName)
                 default:
                     return nil  // no full frame images for these other types
                 }

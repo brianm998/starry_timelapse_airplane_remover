@@ -138,7 +138,7 @@ public struct Config: Codable, Sendable, Transferable {
     // indexed by frame number
     public var pixelReplacementOverrides: [Int:PixelReplacementMethod] = [:]
 
-    // used with PixelReplacementMethod.selective
+    // used with PixelReplacementMethod.selective and .automatic(true)
     public var detectionType: DetectionType
 
     // was the tripod head static, or moving?  Static assumed when not set.

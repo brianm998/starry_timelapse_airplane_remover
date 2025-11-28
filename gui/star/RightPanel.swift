@@ -90,7 +90,7 @@ struct RightPanel: View {
                                 }.frame(maxWidth: 140)
                             }
 
-                            if viewModel.doesUseOutliers {
+                            if viewModel.currentFrameUsesOutliers {
                                 VerticalStarPicker("Tool", selection: $viewModel.selectionMode) { value, isEnabled, isSelected in
                                     HStack {
                                         Image(value.iconName)
@@ -115,7 +115,7 @@ struct RightPanel: View {
                             Toggle("Show Ignore Bar", isOn: $viewModel.showIgnoreLowerBar)
                               .foregroundColor(.white)
                             
-                            if viewModel.doesUseOutliers {
+                            if viewModel.currentFrameUsesOutliers {
                                 Toggle("Show Trash", isOn: $viewModel.shouldShowTrash)
                                   .foregroundColor(.white)
                             }
@@ -187,7 +187,7 @@ struct RightPanel: View {
                                 }
                             }.frame(maxWidth: 100)
 
-                            if viewModel.doesUseOutliers {
+                            if viewModel.currentFrameUsesOutliers {
                                 // outlier opacity slider
                                 Text("Outlier Group Opacity")
                                   .foregroundColor(.white)
@@ -227,6 +227,8 @@ struct RightPanel: View {
                             Toggle("show full resolution", isOn: $viewModel.showFullResolution)
                               .foregroundColor(.white)
 
+                            self.pixelReplacementModeView
+                            
                             let frameView = viewModel.currentFrameView
 
                             EditableNumberOfNeighborFrames(
@@ -342,106 +344,47 @@ struct RightPanel: View {
             }
         }
     }
-}
-
-
-import SwiftUI
-/*
-/// A generic “tap to edit” numeric editor supporting Int or Double.
-struct EditableNumberView<Value>: View
-where Value: Numeric & Comparable & LosslessStringConvertible {
-    /// The bound numeric value we’re editing
-    @Binding var value: Value
-    /// Inclusive lower bound for valid inputs
-    let minValue: Value
-    /// Exclusive upper bound for valid inputs
-    let maxValue: Value
-    /// Should decimal points be allowed (for Double)?
-    let allowDecimal: Bool
-    /// How to render the full-text when not editing
-    let fullTextProvider: (Value) -> String
-    /// Optional prefix inside the HStack during editing
-    let prefixText: String?
-    /// Suffix (after the TextField) during editing
-    let suffixTextProvider: (Value) -> String
-    /// Focus state binding and the specific field case
-    let focusedField: FocusState<FocusedField?>.Binding
-    let focusField: FocusedField
-    /// Extra action upon commit
-    let commitAction: (Value) -> Void
-
-    @State private var isEditing = false
-    @State private var editText = ""
-
-    init(value: Binding<Value>,
-         minValue: Value = .zero,
-         maxValue: Value,
-         allowDecimal: Bool = false,
-         fullTextProvider: @escaping (Value) -> String,
-         prefixText: String? = nil,
-         suffixTextProvider: @escaping (Value) -> String,
-         focusedField: FocusState<FocusedField?>.Binding,
-         focusField: FocusedField,
-         commitAction: @escaping (Value) -> Void = { _ in })
-    {
-        self._value = value
-        self.minValue = minValue
-        self.maxValue = maxValue
-        self.allowDecimal = allowDecimal
-        self.fullTextProvider = fullTextProvider
-        self.prefixText = prefixText
-        self.suffixTextProvider = suffixTextProvider
-        self.focusedField = focusedField
-        self.focusField = focusField
-        self.commitAction = commitAction
-    }
-
-    var body: some View {
-        let currentString = String(value)
-
-        if isEditing {
-            HStack {
-                if let prefix = prefixText {
-                    Text(prefix)
-                        .foregroundColor(.white)
-                }
-
-                TextField(currentString, text: $editText)
-                  .focused(focusedField, equals: focusField)
-                  .frame(maxWidth: 60)
-                  .cursor(.arrow)
-                  .onSubmit {
-                      // Filter input based on allowed characters
-                      let allowedChars: CharacterSet = allowDecimal
-                        ? CharacterSet(charactersIn: "0123456789.")
-                        : CharacterSet.decimalDigits
-                      let filtered = String(editText.unicodeScalars
-                                              .filter { allowedChars.contains($0) })
-                      if let newVal = Value(filtered),
-                         newVal >= minValue,
-                         newVal < maxValue {
-                          value = newVal
-                          commitAction(newVal)
-                          isEditing = false
-                          editText = ""
-                      }
-                  }
-                
-                Text(suffixTextProvider(value))
+    
+    var pixelReplacementModeView: some View {
+        @Bindable var viewModel = viewModel
+        return VStack(alignment: .leading) {
+            if viewModel.currentFrameHasOverriddenPixelReplacementMethod {
+                Text("Custom")
+                  .foregroundColor(.white)
+            } else {
+                Text("Default")
                   .foregroundColor(.white)
             }
-        } else {
-            Text(fullTextProvider(value))
+            Text(HighLevelPixelReplacementMethod.topTitle)
               .foregroundColor(.white)
-              .cursor(.iBeam)
-              .onTapGesture {
-                  isEditing = true
-                  focusedField.wrappedValue = focusField
-              }
+            Picker("",
+                   selection: $viewModel.currentFrameHighLevelPixelReplacementMethod)
+            {
+                ForEach(HighLevelPixelReplacementMethod.allCases, id: \.id) { value in
+                    Text(value.titleText)
+                      .foregroundColor(.white)
+                }
+            }
+              .pickerStyle(.inline)
+
+            if viewModel.currentFrameHighLevelPixelReplacementMethod == .automatic {
+                Text(AutoPreservationMode.topTitle)
+                  .foregroundColor(.white)
+                Picker("",
+                       selection: $viewModel.currentFrameAutoPreservationMode)
+                {
+                    ForEach(AutoPreservationMode.allCases, id: \.id) { value in
+                        Text(value.titleText)
+                          .foregroundColor(.white)
+                    }
+                }
+                  .pickerStyle(.inline)
+
+            }
         }
+          .fixedSize(horizontal: true, vertical: false)
     }
 }
- */
 
 struct EditableMaxZoomView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
@@ -462,7 +405,7 @@ struct EditableMaxZoomView: View {
           textColor: textColor,
           focusedField: focusedField,
           focusField: .maxZoomLevel,
-          alwaysOpen: alwaysOpen            
+          alwaysOpen: alwaysOpen
           // no extra commit side‐effects here
         )
           .onAppear {

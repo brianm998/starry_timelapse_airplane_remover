@@ -200,7 +200,7 @@ struct FrameEditView: View {
     var selectionDragGesture: some Gesture {
         DragGesture()
           .onChanged { gesture in
-              guard viewModel.doesUseOutliers else { return }
+              guard viewModel.currentFrameUsesOutliers else { return }
               let location = gesture.location
               if !isDragging { topViewModel.pushCursor(self.currentPointingCursor) }
               isDragging = true
@@ -213,7 +213,7 @@ struct FrameEditView: View {
               Log.v("location \(location)")
           }
           .onEnded { gesture in
-              guard viewModel.doesUseOutliers else { return }
+              guard viewModel.currentFrameUsesOutliers else { return }
               topViewModel.popCursor()
               isDragging = false
               let end_location = gesture.location
