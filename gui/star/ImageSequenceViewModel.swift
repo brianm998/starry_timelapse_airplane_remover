@@ -889,7 +889,7 @@ public final class ImageSequenceViewModel {
         // let outlierTask: Task<Void,Never>?
 
         let acc = frame.imageAccessor
-
+/*
         let prTask = Task.detached {
             await acc.loadImage(frameIndex: frame.frameIndex,
                                 type: .processed,
@@ -901,12 +901,12 @@ public final class ImageSequenceViewModel {
                                 atSize: .preview)?.resizable()
         }
 
+*/
         let otTask = Task.detached {
             await acc.loadImage(frameIndex: frame.frameIndex,
                                 type: .original,
                                 atSize: .thumbnail)
         }
-
         // set list of view modes for this frame
 
         if self.frames[frame.frameIndex].existingImages.count == 0 {
@@ -922,17 +922,17 @@ public final class ImageSequenceViewModel {
 
             self.frames[frame.frameIndex].existingImages = existingImages
         }
-
+/*
         if let image = await prTask.value {
             self.frames[frame.frameIndex].processedPreviewImage = image
         }
         if let image = await opTask.value {
             self.frames[frame.frameIndex].previewImage = image
         }
+*/
         if let image = await otTask.value {
             self.frames[frame.frameIndex].thumbnailImage = image
         }
-
         //Log.d("done refreshing frame \(frame.frameIndex)")
         //if let outlierTask { await outlierTask.value }
     }
@@ -1171,7 +1171,7 @@ public final class ImageSequenceViewModel {
             }
 
             Task { @MainActor in
-                self.currentFrameView.existingImages = existingImages
+                self.frames[frame.frameIndex].existingImages = [.original]
             }
             
             let binaryBlobFilename = await frameToClear.blobBinaryFilename

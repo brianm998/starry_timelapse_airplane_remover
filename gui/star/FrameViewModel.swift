@@ -38,6 +38,7 @@ public class FrameViewModel {
         existingImages.insert(type)
         if size == .preview {
             switch type {
+                /*
             case .processed:
                 if let image = image.nsImage {
                     self.processedPreviewImage = Image(nsImage: image)
@@ -47,7 +48,7 @@ public class FrameViewModel {
                 if let image = image.nsImage {
                     self.previewImage = Image(nsImage: image)
                       .resizable()
-                }
+                }*/
             default:
                 reloadID = UUID()
                 // XXX expand this to the other views
@@ -85,16 +86,18 @@ public class FrameViewModel {
     // we don't keep full resolution images here
 
     var thumbnailImage: Image = initialImage
-    var previewImage: Image = initialImage
-    var processedPreviewImage: Image = initialImage
+//    var previewImage: Image = initialImage
+//    var processedPreviewImage: Image = initialImage
 
     public func previewImage(type: FrameViewMode) -> some View {
         Group {
             switch type {
+                /*
             case .original:
                 self.previewImage
             case .processed:
                 self.processedPreviewImage
+                 */
             default: 
                 if let frame,
                    let url = frame.imageAccessor.urlForImage(
