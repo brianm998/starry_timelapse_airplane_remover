@@ -127,7 +127,7 @@ public struct ImageAccessor: Sendable {
                                        atSize: size)
         {
             if FileManager.default.fileExists(atPath: filename) {
-                var url = URL(fileURLWithPath: filename)
+                let url = URL(fileURLWithPath: filename)
                 // attempt to make this url cache with its modification time
                 // so if the file changes, this url is now invalid
                 
@@ -372,7 +372,7 @@ public struct ImageAccessor: Sendable {
                 }
             case .preview:
                 return (dir, "\(baseFileName).jpg")
-
+                
             case .thumbnail:
                 return (dir, "\(baseFileName).jpg")
             }

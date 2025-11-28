@@ -102,16 +102,17 @@ public struct Config: Codable, Sendable, Transferable {
         return config
     }
 
-    public init(outputPath: String?,
-                pixelReplacementMethod: PixelReplacementMethod = .automatic(false),
-                detectionType: DetectionType = .strong,
-                imageSequenceName: String,
-                imageSequencePath: String,
-                writeOutlierGroupFiles: Bool,
-                writeFramePreviewFiles: Bool,
-                writeFrameProcessedPreviewFiles: Bool,
-                writeFrameThumbnailFiles: Bool)
-    {
+    public init(
+      outputPath: String?,
+      pixelReplacementMethod: PixelReplacementMethod = .automatic(false),
+      detectionType: DetectionType = .strong,
+      imageSequenceName: String,
+      imageSequencePath: String,
+      writeOutlierGroupFiles: Bool,
+      writeFramePreviewFiles: Bool,
+      writeFrameProcessedPreviewFiles: Bool,
+      writeFrameThumbnailFiles: Bool
+    ) {
         if let outputPath {
             self.outputPath = outputPath
         } else {
@@ -130,7 +131,12 @@ public struct Config: Codable, Sendable, Transferable {
     // the base dir under which to create dir(s) for output sequence(s)
     public var outputPath: String
 
+    // the default pixel replement method for this sequence
     public var pixelReplacementMethod: PixelReplacementMethod
+
+    // any frame specific overrides to the default pixel replacement method 
+    // indexed by frame number
+    public var pixelReplacementOverrides: [Int:PixelReplacementMethod] = [:]
 
     // used with PixelReplacementMethod.selective
     public var detectionType: DetectionType
@@ -284,6 +290,7 @@ public struct Config: Codable, Sendable, Transferable {
 
         self.outputPath = try c.decodeIfPresent(String.self, forKey: .outputPath) ?? self.outputPath
         self.pixelReplacementMethod = try c.decodeIfPresent(PixelReplacementMethod.self, forKey: .pixelReplacementMethod) ?? self.pixelReplacementMethod
+        self.pixelReplacementOverrides = try c.decodeIfPresent([Int:PixelReplacementMethod].self, forKey: .pixelReplacementOverrides) ?? self.pixelReplacementOverrides        
         self.detectionType = try c.decodeIfPresent(DetectionType.self, forKey: .detectionType) ?? self.detectionType
         self.tripodHeadWasMoving = try c.decodeIfPresent(Bool.self, forKey: .tripodHeadWasMoving) ?? self.tripodHeadWasMoving
 

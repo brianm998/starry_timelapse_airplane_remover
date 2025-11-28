@@ -11,8 +11,11 @@ import Combine
 public class FrameViewModel {
 
     var reloadID = UUID()
+
+    let config: ConfigManager
     
-    init(_ frameIndex: Int) {
+    init(_ config: ConfigManager, _ frameIndex: Int) {
+        self.config = config
         self.frameIndex = frameIndex
     }
 

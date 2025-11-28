@@ -2215,8 +2215,19 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
+    public var pixelReplacementMethod: PixelReplacementMethod {
+        get async {
+            let config = await configManager.config()
+            if let override = config.pixelReplacementOverrides[self.frameIndex] {
+                return override
+            } else {
+                return config.pixelReplacementMethod
+            }
+        }
+    }
+    
     // used by PixelReplacementMode.automatic
-    public func finishAuto() async throws {
+    public func finishAuto(useOutliers: Bool) async throws { // XXX use arg
         let finalImage = try await createAutoProcessedImage()
         
         self.set(state: .loadingImages1)

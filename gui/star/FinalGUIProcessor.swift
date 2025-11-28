@@ -51,8 +51,6 @@ public actor FinalGUIProcessor {
 
         guard let viewModel else { return }
 
-        let pixelReplacementMode = await viewModel.config.config().pixelReplacementMethod ?? .automatic(false)
-
         switch await viewModel.reprocessingType {
         case .allHorizons:
             // delete all horizon images first
@@ -94,10 +92,10 @@ public actor FinalGUIProcessor {
                             try await frame.deleteOutliers()
                         }
 
-                        switch pixelReplacementMode {
+                        switch await frame.pixelReplacementMethod {
 
-                        case .automatic:
-                            try await frame.finishAuto()
+                        case .automatic(let useOutliers):
+                            try await frame.finishAuto(useOutliers: useOutliers)
                             break
 
 

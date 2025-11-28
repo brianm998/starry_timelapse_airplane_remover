@@ -400,6 +400,30 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    func getPixelReplacementMethod(forFrame frame: Int) -> PixelReplacementMethod{
+        let realConfig = config.config()
+        if let value = realConfig.pixelReplacementOverrides[frame] {
+            return value
+        } else {
+            return realConfig.pixelReplacementMethod
+        }
+    }
+    
+    func set(pixelReplacementMethod: PixelReplacementMethod, forFrame frame: Int) {
+        pixelReplacementOverrides[frame] = pixelReplacementMethod
+        var realConfig = config.config()
+        realConfig.pixelReplacementOverrides = pixelReplacementOverrides
+        config.update(realConfig)
+    }
+    
+    var pixelReplacementOverrides: [Int:PixelReplacementMethod] {
+        didSet {
+            var realConfig = config.config()
+            realConfig.pixelReplacementOverrides = pixelReplacementOverrides
+            config.update(realConfig)
+        }
+    }
+
     var cameraMotion: CameraMotion {
         didSet {
             var realConfig = config.config()
@@ -579,6 +603,7 @@ public final class ImageSequenceViewModel {
         self.cannyUseL2Gradient = config.cannyUseL2Gradient ? .L2norm : .L1norm
         self.numberOfNeighborFrames = config.numberFinalProcessingNeighborsNeeded
         self.pixelReplacementMethod = config.pixelReplacementMethod
+        self.pixelReplacementOverrides = config.pixelReplacementOverrides
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.maxConcurrentHorizonCalculations = config.maxConcurrentHorizonCalculations
         self.config = configManager
@@ -875,7 +900,7 @@ public final class ImageSequenceViewModel {
     
     func set(numberOfFrames: Int) {
         self.frames = [FrameViewModel](count: numberOfFrames) {
-            i in FrameViewModel(i)
+            i in FrameViewModel(config, i)
         }
     }
     
@@ -1427,20 +1452,14 @@ public final class ImageSequenceViewModel {
         config.config().pixelReplacementMethod.usesOutliers
     }
     
-    func renderAllFrames() {
-      
-        let pixelReplacementMode = config.config().pixelReplacementMethod
-        
-        switch pixelReplacementMode {
-        case .automatic(let useOutliers): // XXX what about the associated bool?
-            renderAllFramesAutomatic(useOutliers)
-        case .selective:
-            renderAllFramesSelective()
-        }
+    var currentFrameUsesOutliers: Bool {
+        false    // XXX FIX THIS
+//        if let currentFrame,
+//           currentFrame.
+        //config.config().pixelReplacementMethod.usesOutliers
     }
-
-    func renderAllFramesAutomatic(_ useOutliers: Bool) { // XXX use this arg
-        Log.d("renderAllFramesAutomatic")
+    
+    func renderAllFrames() {
         self.renderingAllFrames = true
         let frameSaveQueue = self.frameSaveQueue
         Task {
@@ -1454,51 +1473,27 @@ public final class ImageSequenceViewModel {
                             taskGroup.addTask() {
                                 await semaphore.wait()
                                 await counter.increase()
-                                
-                                try await frame.finishAuto()
-                                
-                                await self.refresh(frame: frame)
-                                await counter.decrease()
-                                if !(await counter.isMoreThanZero()) {
-                                    await MainActor.run {
-                                        self.renderingAllFrames = false
+
+                                switch await frame.pixelReplacementMethod {
+                                case .selective:
+                                    try await frameSaveQueue.saveNow(frame: frame) {
+                                        await self.refresh(frame: frame)
+
+                                        await counter.decrease()
+                                        if !(await counter.isMoreThanZero()) {
+                                            await MainActor.run {
+                                                self.renderingAllFrames = false
+                                            }
+                                        }
+                                        semaphore.signal()
                                     }
-                                }
-                                semaphore.signal()
-                            }
-                        }
-                    }
-                }
-                
-                try await taskGroup.waitForAll()
-            }
-        }
-    }
 
-    func renderAllFramesSelective() {
-        //  let foobar = viewModel
-        self.renderingAllFrames = true
-        let frameSaveQueue = self.frameSaveQueue
-        Task {
-            let semaphore = AsyncSemaphore(value: self.numberOfFramesToProcessConcurrently)
-            try await withThrowingTaskGroup(of: Void.self) { taskGroup in
-            //try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
-                /// does this break things when saving thousands of frames at once?
-
-                let counter = CountActor()
-                for frameView in self.frames {
-                    if let frame = frameView.frame {
-                        if await frame.processingState() == .userModified {
-                            taskGroup.addTask() {
-                                await semaphore.wait()
-                                await counter.increase()
-                                try await frameSaveQueue.saveNow(frame: frame) {
+                                case .automatic(let useOutilers):
+                                    try await frame.finishAuto(
+                                      useOutliers: useOutilers
+                                    )
+                                    
                                     await self.refresh(frame: frame)
-                                    /*
-                                     if frame.frameIndex == self.currentIndex {
-                                     refreshCurrentFrame()
-                                     }
-                                     */
                                     await counter.decrease()
                                     if !(await counter.isMoreThanZero()) {
                                         await MainActor.run {
