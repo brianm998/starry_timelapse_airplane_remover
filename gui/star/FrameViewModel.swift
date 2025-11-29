@@ -27,7 +27,7 @@ public class FrameViewModel {
 
     var outliersLoaded: OutlierLoadingState = .unloaded
 
-    var outlierLoadIndex = 0           // used to indicate when we've reloaded outliers
+    var outlierLoadIndex = 0 // used to indicate when we've reloaded outliers
     
     private var cancelBag = Set<AnyCancellable>()
 
@@ -68,8 +68,12 @@ public class FrameViewModel {
 
             cancelBag.removeAll()
             if let frame {
-                Task {
-                    await frame.set(observer: frameObserver)
+                Task.detached {
+                    await frame.set(observer: self.frameObserver)
+                    try await frame.loadOutliers(loadOnly: true)
+                    Task { @MainActor in
+                        await self.setOutlierGroups()
+                    }
                 }
             }
         }

@@ -1504,6 +1504,8 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    // update the PixelReplacementMethod for the current frame
+    // from the two vars above
     private func updatePixelReplacementMethod() {
         self.set(
           pixelReplacementMethod: PixelReplacementMethod(

@@ -37,10 +37,6 @@ struct StarCommands: Commands {
                   .keyboardShortcut("r", modifiers: [])
                 RenderAllFramesButton()
                   .environment(viewModel)
-                LoadAllOutliersButton(loadingType: .fromCurrentFrame)
-                  .environment(viewModel)
-                LoadAllOutliersButton(loadingType: .all)
-                  .environment(viewModel)
             }
             
             // this is really just here to enable keyboard shortcuts 

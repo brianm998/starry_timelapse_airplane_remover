@@ -77,8 +77,8 @@ public actor FinalGUIProcessor {
 
                     taskGroup.addTask() {
                         await semaphore.wait()
-
-                        switch await viewModel.reprocessingType {
+                        let reprocessingType = await viewModel.reprocessingType
+                        switch reprocessingType {
                         case .none:
                             break
                         case .allHorizons:
@@ -100,7 +100,7 @@ public actor FinalGUIProcessor {
 
 
                         case .selective:
-                            if await !frame.processingState().isReadyForInterframeProcessing {
+                            if await !frame.processingState().isReadyForInterframeProcessing || reprocessingType == .outliers {
                                 // this frame needs to have outliers found
 
                                 // pause when the final processer has more than this many
