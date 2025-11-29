@@ -1494,25 +1494,78 @@ public final class ImageSequenceViewModel {
 
     var currentFrameHighLevelPixelReplacementMethod: HighLevelPixelReplacementMethod = .automatic {
         didSet {
-            self.set(
-              pixelReplacementMethod: PixelReplacementMethod(
-                highLevelPixelReplacementMethod: currentFrameHighLevelPixelReplacementMethod,
-                autoPreservationMode: currentFrameAutoPreservationMode
-              ),
-              forFrame: currentIndex
-            )
+            self.updatePixelReplacementMethod()
         }
     }
     
     var currentFrameAutoPreservationMode: AutoPreservationMode = .no  {
         didSet {
-            self.set(
-              pixelReplacementMethod: PixelReplacementMethod(
-                highLevelPixelReplacementMethod: currentFrameHighLevelPixelReplacementMethod,
-                autoPreservationMode: currentFrameAutoPreservationMode
-              ),
-              forFrame: currentIndex
-            )
+            self.updatePixelReplacementMethod()
+        }
+    }
+
+    private func updatePixelReplacementMethod() {
+        self.set(
+          pixelReplacementMethod: PixelReplacementMethod(
+            highLevelPixelReplacementMethod: currentFrameHighLevelPixelReplacementMethod,
+            autoPreservationMode: currentFrameAutoPreservationMode
+          ),
+          forFrame: currentIndex
+        )
+        // check to see if the star alignment was bad,
+        // and we're moving to using outliers
+        // if so, delete the star aligned image, we need to redo it
+        if self.currentFrameUsesOutliers,
+           let currentFrame = self.currentFrame
+        { 
+            if let results = currentFrameView.frameObserver.starAlignmentResults {
+                if results.numberAligned == 0 {
+                    Log.i("frame \(currentIndex) removing star aligned images on update of pixel replacement method")
+                    try? currentFrame.imageAccessor.deleteImage(
+                      frameIndex: currentIndex,
+                      ofType: .starAligned,
+                      atSize: .original
+                    )
+                    try? currentFrame.imageAccessor.deleteImage(
+                      frameIndex: currentIndex,
+                      ofType: .starAligned,
+                      atSize: .preview
+                    )
+                    try? currentFrame.imageAccessor.deleteImage(
+                      frameIndex: currentIndex,
+                      ofType: .subtraction,
+                      atSize: .original
+                    )
+                    try? currentFrame.imageAccessor.deleteImage(
+                      frameIndex: currentIndex,
+                      ofType: .subtraction,
+                      atSize: .preview
+                    )
+                }
+            } else {
+                // no results, assume bad alignment
+                Log.i("frame \(currentIndex) removing star aligned images on update of pixel replacement method")
+                try? currentFrame.imageAccessor.deleteImage(
+                  frameIndex: currentIndex,
+                  ofType: .starAligned,
+                  atSize: .original
+                )
+                try? currentFrame.imageAccessor.deleteImage(
+                  frameIndex: currentIndex,
+                  ofType: .starAligned,
+                  atSize: .preview
+                )
+                try? currentFrame.imageAccessor.deleteImage(
+                  frameIndex: currentIndex,
+                  ofType: .subtraction,
+                  atSize: .original
+                )
+                try? currentFrame.imageAccessor.deleteImage(
+                  frameIndex: currentIndex,
+                  ofType: .subtraction,
+                  atSize: .preview
+                )
+            }
         }
     }
     
