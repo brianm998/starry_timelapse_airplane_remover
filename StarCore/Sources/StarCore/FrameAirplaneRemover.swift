@@ -488,6 +488,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func createStaticMergedHorizonMask() async throws -> HorizonMask? { 
         // with no moving tropod head, earth alignment is not done.
+
+        self.set(state: .mergingHorizon)
+        
         let mask = try await self.loadOrCreateHorizonMask()
         let neighboringHorizons = staticNeighborFrames.compactMap {
             self.imageAccessor.nameForImage(frameIndex: $0,

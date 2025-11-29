@@ -35,6 +35,7 @@ public enum FrameProcessingState: Int,
     case unprocessed
     case horizonDetection
     case horizonDetected
+    case mergingHorizon
     case earthAlignment    
     case creatingEarthAlignedFrame
     case starAlignment    
@@ -75,289 +76,297 @@ public enum FrameProcessingState: Int,
     public var message: String {
         switch self {
         case .unprocessed:
-            return "unprocessed"
+            "unprocessed"
         case .horizonDetection:
-            return "finding horizon"
+            "finding horizon"
+        case .mergingHorizon:
+            "merging horizon"
         case .horizonDetected:
-            return "horizon found"
+            "horizon found"
         case .starAlignment:
-            return "aligning stars"
+            "aligning stars"
         case .earthAlignment:
-            return "aligning earth"
+            "aligning earth"
         case .creatingStarAlignedFrame:
-            return "creating star aligned frame"
+            "creating star aligned frame"
         case .creatingEarthAlignedFrame:
-            return "creating earth aligned frame"
+            "creating earth aligned frame"
         case .subtractingNeighbor:
-            return "subtracting aligned stars"
+            "subtracting aligned stars"
         case .assemblingPixels:
-            return "assembling pixels"
+            "assembling pixels"
         case .sortingPixels:
-            return "sorting pixels"
+            "sorting pixels"
         case .detectingBlobs:
-            return "detecting blobs"
+            "detecting blobs"
 
         case .filter1:
-            return "filter 1"
+            "filter 1"
         case .filter2:
-            return "filter 2"
+            "filter 2"
         case .filter3:
-            return "filter 3"
+            "filter 3"
         case .filter4:
-            return "filter 4"
+            "filter 4"
         case .filter5:
-            return "filter 5"
+            "filter 5"
         case .filter6:
-            return "filter 6"
+            "filter 6"
         case .filter7:
-            return "filter 7"
+            "filter 7"
         case .filter8:
-            return "filter 8"
+            "filter 8"
             
         case .firstClassification:
-            return "first classification"
+            "first classification"
 
         case .readyForInterFrameProcessing: // XXX not covered in progress monitor
-            return "ready for inter frame processing"
+            "ready for inter frame processing"
         case .secondClassification:
-            return "second classification"
+            "second classification"
         case .outlierProcessingComplete:
-            return "ready to finish"
+            "ready to finish"
         case .finishing:
-            return "finishing"
+            "finishing"
         case .userModified:
-            return "classified"
+            "classified"
 
             // XXX what happens here ???
             
         case .writingOutlierValues:
-            return "writing classification values"
+            "writing classification values"
         case .waitingToLoadImages:
-            return "waiting to load images"
+            "waiting to load images"
         case .loadingImages:
-            return "loading images"
+            "loading images"
         case .loadingImages1:
-            return "loading images 1"
+            "loading images 1"
         case .creatingRemovalMask:
-            return "creating removal mask"
+            "creating removal mask"
         case .assemblingProcessedFrame:
-            return "calculating processed frame"
+            "calculating processed frame"
         case .writingOutputFile:
-            return "writing to disk"
+            "writing to disk"
         case .complete:
-            return "complete"
+            "complete"
         }
     }
 
     public var isReadyForInterframeProcessing: Bool {
         switch self {
         case .unprocessed:
-            return false
+            false
         case .horizonDetection:
-            return false
+            false
+        case .mergingHorizon:
+            false
         case .horizonDetected:
-            return false
+            false
         case .starAlignment:
-            return false
+            false
         case .earthAlignment:
-            return false
+            false
         case .creatingStarAlignedFrame:
-            return false
+            false
         case .creatingEarthAlignedFrame:
-            return false
+            false
         case .subtractingNeighbor:
-            return false
+            false
         case .assemblingPixels:
-            return false
+            false
         case .sortingPixels:
-            return false
+            false
         case .detectingBlobs:
-            return false
+            false
         case .filter1:
-            return false
+            false
         case .filter2:
-            return false
+            false
         case .filter3:
-            return false
+            false
         case .filter4:
-            return false
+            false
         case .filter5:
-            return false
+            false
         case .filter6:
-            return false
+            false
         case .filter7:
-            return false
+            false
         case .filter8:
-            return false
+            false
         case .firstClassification:
-            return false
+            false
         case .readyForInterFrameProcessing:
-            return true
+            true
         case .secondClassification:
-            return true
+            true
         case .outlierProcessingComplete:
-            return true
+            true
         case .finishing:
-            return true
+            true
         case .writingOutlierValues:
-            return true
+            true
         case .userModified:
-            return true
+            true
         case .waitingToLoadImages:
-            return true
+            true
         case .loadingImages:
-            return true
+            true
         case .loadingImages1:
-            return true
+            true
         case .creatingRemovalMask:
-            return true
+            true
         case .assemblingProcessedFrame:
-            return true
+            true
         case .writingOutputFile:
-            return true
+            true
         case .complete:
-            return true
+            true
         }
     }
 
     public var shortString: String {
         switch self {
         case .unprocessed:
-            return "unprocessed"
+            "unprocessed"
         case .horizonDetection:
-            return "horizon"
+            "horizon"
+        case .mergingHorizon:
+            "horizon"
         case .horizonDetected:
-            return "horizon"
+            "horizon"
         case .starAlignment:
-            return "star align"
+            "star align"
         case .earthAlignment:
-            return "earth align"
+            "earth align"
         case .creatingStarAlignedFrame:
-            return "combine star align"
+            "combine star align"
         case .creatingEarthAlignedFrame:
-            return "combine earth align"
+            "combine earth align"
         case .subtractingNeighbor:
-            return "subtract"
+            "subtract"
         case .assemblingPixels:
-            return "assemble"
+            "assemble"
         case .sortingPixels:
-            return "sorting"
+            "sorting"
         case .detectingBlobs:
-            return "blob detection"
+            "blob detection"
         case .filter1:
-            return "filter 1"
+            "filter 1"
         case .filter2:
-            return "filter 2"
+            "filter 2"
         case .filter3:
-            return "filter 3"
+            "filter 3"
         case .filter4:
-            return "filter 4"
+            "filter 4"
         case .filter5:
-            return "filter 5"
+            "filter 5"
         case .filter6:
-            return "filter 6"
+            "filter 6"
         case .filter7:
-            return "filter 7"
+            "filter 7"
         case .filter8:
-            return "filter 8"
+            "filter 8"
         case .firstClassification:
-            return "class 1"
+            "class 1"
         case .readyForInterFrameProcessing:
-            return "inter"
+            "inter"
         case .secondClassification:
-            return "class 2"
+            "class 2"
         case .outlierProcessingComplete:
-            return "ready to finish"
+            "ready to finish"
         case .finishing:
-            return "finishing"
+            "finishing"
         case .writingOutlierValues:
-            return "write values"
+            "write values"
         case .userModified:
-            return "classified"
+            "classified"
         case .waitingToLoadImages:
-            return "waiting to load"
+            "waiting to load"
         case .loadingImages:
-            return "loading 1"
+            "loading 1"
         case .loadingImages1:
-            return "loading 2"
+            "loading 2"
         case .creatingRemovalMask:
-            return "removal mask"
+            "removal mask"
         case .assemblingProcessedFrame:
-            return "removal"
+            "removal"
         case .writingOutputFile:
-            return "writing"
+            "writing"
         case .complete:
-            return ""
+            ""
         }
     }
     public var color: Color {
         switch self {
         case .unprocessed:
-            return .red
+            .red
         case .horizonDetection:
-            return .blue
+            .blue
+        case .mergingHorizon:
+            .cyan
         case .horizonDetected:
-            return .green
+            .green
         case .starAlignment:
-            return .yellow
+            .yellow
         case .earthAlignment:
-            return .cyan
+            .cyan
         case .creatingStarAlignedFrame:
-            return .cyan
+            .cyan
         case .creatingEarthAlignedFrame:
-            return .purple
+            .purple
         case .subtractingNeighbor:
-            return .orange
+            .orange
         case .assemblingPixels:
-            return .blue
+            .blue
         case .sortingPixels:
-            return .cyan
+            .cyan
         case .detectingBlobs:
-            return .yellow
+            .yellow
         case .filter1:
-            return .yellow
+            .yellow
         case .filter2:
-            return .yellow
+            .yellow
         case .filter3:
-            return .yellow
+            .yellow
         case .filter4:
-            return .yellow
+            .yellow
         case .filter5:
-            return .yellow
+            .yellow
         case .filter6:
-            return .yellow
+            .yellow
         case .filter7:
-            return .yellow
+            .yellow
         case .filter8:
-            return .yellow
+            .yellow
         case .firstClassification:
-            return .yellow
+            .yellow
         case .readyForInterFrameProcessing:
-            return .yellow
+            .yellow
         case .secondClassification:
-            return .yellow
+            .yellow
         case .outlierProcessingComplete:
-            return .yellow
+            .yellow
         case .finishing:
-            return .yellow
+            .yellow
         case .writingOutlierValues:
-            return .yellow
+            .yellow
         case .userModified:
-            return .yellow
+            .yellow
         case .waitingToLoadImages:
-            return .yellow
+            .yellow
         case .loadingImages:
-            return .yellow
+            .yellow
         case .loadingImages1:
-            return .yellow
+            .yellow
         case .creatingRemovalMask:
-            return .yellow
+            .yellow
         case .assemblingProcessedFrame:
-            return .yellow
+            .yellow
         case .writingOutputFile:
-            return .yellow
+            .yellow
         case .complete:
-            return .green
+            .green
         }
     }
 }
