@@ -267,6 +267,8 @@ public actor FinalGUIProcessor {
 // process frames that are ready for inter frame processing
 // apply decision tree to outliers
 // render processed output file
+
+// XXX selective only
 fileprivate func finalProcess(atIndex currentIndex: Int,
                               frames: [FrameViewModel],
                               viewModel: ImageSequenceViewModel) async
@@ -299,7 +301,7 @@ fileprivate func finalProcess(atIndex currentIndex: Int,
         Log.d("frame \(frame.frameIndex) saveNow for real")
         do {
             try await frame.loadOutliers()
-            try await frame.finish()
+            try await frame.finishSelective()
             await frame.changesHandled()
         } catch {
             Log.e("frame \(frame.frameIndex) frame save error: \(error)")

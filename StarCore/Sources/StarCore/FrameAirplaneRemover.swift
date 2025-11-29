@@ -1034,9 +1034,18 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         try await loadOutliers()
     }
 
+    public func finish() async throws {
+        switch await self.pixelReplacementMethod {
+        case .automatic(let useOutliers):
+            try await self.finishAuto(useOutliers: useOutliers)
+        case .selective:
+            try await self.finishSelective()
+        }
+    }
+    
     // run after shouldRemove has been set for each group, 
     // does the final removing and then writes out the output files
-    public func finish() async throws {
+    public func finishSelective() async throws {
         Log.d("frame \(self.frameIndex) starting to finish")
         
         mkdir(await self.outliersDirname)
@@ -2224,6 +2233,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         } else {
             // without horizon detection, just return the star aligned image
             return starAlignedImage
+        }
+    }
+
+    public var usesOutliers: Bool {
+        get async {
+            await self.pixelReplacementMethod.usesOutliers
         }
     }
 

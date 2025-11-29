@@ -167,49 +167,50 @@ public struct FrameEditImageView: View {
                   .opacity(1.0-viewModel.frameOpacity)
                   .allowsHitTesting(false)
                 
-                ZStack() {
-                    // in edit mode, show outliers groups
-
-                    // trash goes below
-                    if let trashImage = frameViewModel.trashImage {
-                        if self.viewModel.shouldShowTrash {
-                            trashImage
-                              .renderingMode(.template) 
-                              .foregroundColor(.yellow)
-                              .opacity(viewModel.trashOpacity)
-                              .allowsHitTesting(false)
-                        }
-                    }
-
-                    // then small outliers in single images by state
-                    if let smallPositiveOutlierImage = frameViewModel.positiveOutlierImage {
-                        smallPositiveOutlierImage
-                          .renderingMode(.template) 
-                          .foregroundColor(.red)
-                          .allowsHitTesting(false)
-                    }
-                    
-                    if let smallNegativeOutlierImage = frameViewModel.negativeOutlierImage {
-                        smallNegativeOutlierImage
-                          .renderingMode(.template) 
-                          .foregroundColor(.green)
-                          .allowsHitTesting(false)
-                    }
-                    
-                    // then the outliers that have view models
-                    if let outlierViews = frameViewModel.outlierViews {
-                        // put the smaller boxes first, for easier hover and tap
-                        let sorted = outlierViews.sorted() {
-                            $0.group.bounds.size > $1.group.bounds.size
-                        }
-                        ForEach(sorted) { outlierViewModel in
-                            if outlierViewModel.group.size > 40 { // XXX use a constant here
-                                OutlierGroupView(groupViewModel: outlierViewModel)
-                                  .id(outlierViewModel.group.id)
+                if viewModel.currentFrameUsesOutliers {
+                    ZStack() {
+                        // in edit mode, show outliers groups
+                        // trash goes below
+                        if let trashImage = frameViewModel.trashImage {
+                            if self.viewModel.shouldShowTrash {
+                                trashImage
+                                  .renderingMode(.template) 
+                                  .foregroundColor(.yellow)
+                                  .opacity(viewModel.trashOpacity)
+                                  .allowsHitTesting(false)
                             }
                         }
-                    }
-                }.opacity(viewModel.outlierOpacity)
+
+                        // then small outliers in single images by state
+                        if let smallPositiveOutlierImage = frameViewModel.positiveOutlierImage {
+                            smallPositiveOutlierImage
+                              .renderingMode(.template) 
+                              .foregroundColor(.red)
+                              .allowsHitTesting(false)
+                        }
+                        
+                        if let smallNegativeOutlierImage = frameViewModel.negativeOutlierImage {
+                            smallNegativeOutlierImage
+                              .renderingMode(.template) 
+                              .foregroundColor(.green)
+                              .allowsHitTesting(false)
+                        }
+                        
+                        // then the outliers that have view models
+                        if let outlierViews = frameViewModel.outlierViews {
+                            // put the smaller boxes first, for easier hover and tap
+                            let sorted = outlierViews.sorted() {
+                                $0.group.bounds.size > $1.group.bounds.size
+                            }
+                            ForEach(sorted) { outlierViewModel in
+                                if outlierViewModel.group.size > 40 { // XXX use a constant here
+                                    OutlierGroupView(groupViewModel: outlierViewModel)
+                                      .id(outlierViewModel.group.id)
+                                }
+                            }
+                        }
+                    }.opacity(viewModel.outlierOpacity)
+                }
                 
                 if viewModel.showIgnoreLowerBar {
                     IgnoreBarView()

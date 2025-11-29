@@ -106,7 +106,8 @@ struct FrameEditView: View {
                 }
             }
         }
-    }    
+    }
+
     var imageView: some View {
         ZStack() {
             // the main image shown
