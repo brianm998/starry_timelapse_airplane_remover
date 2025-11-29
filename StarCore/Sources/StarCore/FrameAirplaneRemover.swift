@@ -1344,6 +1344,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             Log.w("Not loading twice")
             return
         }
+
+        var shouldLoadOnly = loadOnly
+
+        // only load if we're not using outliers
+        let makeOutliersIfMissing = await self.usesOutliers
+
+        if !makeOutliersIfMissing { shouldLoadOnly = true }
+        
         isLoadingOutliers = true
         if self.outlierGroups == nil {
             // nil outlier groups means that we haven't tried to get outliers for this frame yet

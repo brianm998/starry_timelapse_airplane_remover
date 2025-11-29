@@ -23,7 +23,7 @@ public enum FrameViewMode: String,
     case subtraction            // the result of subtracting a star aligned neighbor frame
     case blobs                  // blobs detected from the subtraction frame
     case validation             // an image of exactly what pixels have been identified as unwanted
-    case removeMask              // the remove mask created from the validation image
+    case removeMask             // the remove mask created from the validation image
     case processed              // the final processed image, 
                                 // the remove mask is used as a layer mask for the aligned neighbor 
  
