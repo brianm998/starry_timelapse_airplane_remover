@@ -17,6 +17,29 @@ struct FilmstripImageView: View {
                 Text("\(frameIndex)").foregroundColor(.white)
                   .layoutPriority(8)
                 Spacer()
+
+                switch viewModel.getPixelReplacementMethod(forFrame: frameIndex) {
+                case .automatic(let useOutliers):
+                    if useOutliers {
+                        AutoSelectiveIcon()
+                          .padding(2)
+                          .foregroundColor(.gray)
+                          .shadow(radius: 1)
+                          .help("This frame uses Auto Select")
+                    } else {
+                        AutoIcon()
+                          .padding(2)
+                          .foregroundColor(.gray)
+                          .shadow(radius: 1)
+                          .help("This frame uses Automatic mode")
+                    }
+                case .selective:
+                    SelectiveIcon()
+                      .padding(2)
+                      .foregroundColor(.gray)
+                      .shadow(radius: 1)
+                      .help("This frame uses Selective mode")
+                }
                 
                 switch frameView.outliersLoaded {
                 case .unloaded:
@@ -119,3 +142,40 @@ struct FilmstripImageView: View {
     }
 }
 
+struct AutoIcon: View {
+    var body: some View {
+        ZStack {
+            Image(systemName: "sparkle")
+                .font(.system(size: 8, weight: .regular))
+        }
+    }
+}
+
+struct SelectiveIcon: View {
+    let width: CGFloat = 8
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(lineWidth: 1)
+                .frame(width: width, height: width)
+
+            // Filled half (left)
+            Circle()
+                .frame(width: width, height: width)
+                .clipShape(Rectangle().offset(x: -5))
+        }
+    }
+}
+
+struct AutoSelectiveIcon: View {
+    var body: some View {
+        ZStack {
+            Image(systemName: "sparkle")
+                .font(.system(size: 8, weight: .regular))
+
+            Circle()
+                .frame(width: 3, height: 3)
+                .offset(x: 5, y: 5) // adjust to fit your corner
+        }
+    }
+}
