@@ -17,6 +17,7 @@ public class FrameViewModel {
     init(_ config: ConfigManager, _ frameIndex: Int) {
         self.config = config
         self.frameIndex = frameIndex
+        self.pixelReplacementMethod = config.config().pixelReplacementMethod
     }
 
     var existingImages: Set<FrameViewMode> = []
@@ -25,6 +26,8 @@ public class FrameViewModel {
 
     var frameState: FrameProcessingState?
 
+    var pixelReplacementMethod: PixelReplacementMethod
+    
     var outliersLoaded: OutlierLoadingState = .unloaded
 
     var outlierLoadIndex = 0 // used to indicate when we've reloaded outliers

@@ -131,8 +131,8 @@ enum SceneType: String, InstructionOption, Identifiable {
 }
 
 enum CameraMotion: String, InstructionOption, Identifiable {
-    case fixed = "Fixed Camera"
-    case moving = "Moving Camera"
+    case fixed = "Fixed"
+    case moving = "Moving"
 
     var id: Self { self }
 

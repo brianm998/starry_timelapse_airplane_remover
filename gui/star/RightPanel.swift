@@ -90,24 +90,36 @@ struct RightPanel: View {
                                 }.frame(maxWidth: 140)
                             }
 
-                            if viewModel.currentFrameUsesOutliers {
-                                VerticalStarPicker("Tool", selection: $viewModel.selectionMode) { value, isEnabled, isSelected in
-                                    HStack {
+                            VerticalStarPicker("Tool", selection: $viewModel.selectionMode) { value, isEnabled, isSelected in
+                                HStack {
+                                    if isEnabled {
                                         Image(value.iconName)
                                           .resizable()
                                           .frame(width: 35, height: 35)
-                                        Text(value.displayName)
-                                          .foregroundColor(isSelected ? .black : .white)
-                                          .tag(value)
+                                    } else {
+                                        Image(value.iconName)
+                                          .resizable()
+                                          .renderingMode(.template)
+                                          .foregroundColor(.gray)
+                                          .frame(width: 35, height: 35)
                                     }
+                                    Text(value.displayName)
+                                      .foregroundColor(isSelected ?
+                                                         .black :
+                                                         isEnabled ? 
+                                                         .white :
+                                                         .gray)
+                                      .tag(value)
                                 }
-                                  .help("""
-                                          What happens when outlier groups are selected?
-                                          paint   - they will be marked for painting
-                                          clear   - they will be marked for not painting
-                                          details - they will be shown in the info window
-                                          """)      // XXX does this work here?
                             }
+                              .disabled(!viewModel.currentFrameUsesOutliers)
+                              .help("""
+                                      What happens when outlier groups are selected?
+                                      paint   - they will be marked for painting
+                                      clear   - they will be marked for not painting
+                                      details - they will be shown in the info window
+                                      """)      // XXX does this work here?
+
 
                             Toggle("multi choice", isOn: $viewModel.multiChoice)
                               .foregroundColor(.white)
@@ -115,10 +127,9 @@ struct RightPanel: View {
                             Toggle("Show Ignore Bar", isOn: $viewModel.showIgnoreLowerBar)
                               .foregroundColor(.white)
                             
-                            if viewModel.currentFrameUsesOutliers {
-                                Toggle("Show Trash", isOn: $viewModel.shouldShowTrash)
-                                  .foregroundColor(.white)
-                            }
+                            Toggle("Show Trash", isOn: $viewModel.shouldShowTrash)
+                              .foregroundColor(.white)
+                              .disabled(!viewModel.currentFrameUsesOutliers)
 
                             /*
                              XXX for some unknown reason, these grab focus and refuse
@@ -187,7 +198,8 @@ struct RightPanel: View {
                                 }
                             }.frame(maxWidth: 100)
 
-                            if viewModel.currentFrameUsesOutliers {
+
+                            VStack(alignment: .leading) {
                                 // outlier opacity slider
                                 Text("Outlier Group Opacity")
                                   .foregroundColor(.white)
@@ -207,6 +219,8 @@ struct RightPanel: View {
                                 Slider(value: $viewModel.frameOpacity, in : 0...1)
                                   .frame(maxWidth: 140, alignment: .bottom)
                             }
+                              .disabled(!viewModel.currentFrameUsesOutliers)
+
 
                             HStack {
                                 Text("Zoom")
@@ -355,32 +369,55 @@ struct RightPanel: View {
                 Text("Default")
                   .foregroundColor(.white)
             }
-            Text(HighLevelPixelReplacementMethod.topTitle)
-              .foregroundColor(.white)
-            Picker("",
+            Picker("Clean:",
                    selection: $viewModel.currentFrameHighLevelPixelReplacementMethod)
             {
                 ForEach(HighLevelPixelReplacementMethod.allCases, id: \.id) { value in
-                    Text(value.titleText)
-                      .foregroundColor(.white)
+                    HStack {
+                        switch value {
+                        case .automatic:
+                            AutoIcon()
+                              .foregroundColor(.white)
+                            Text("Automatic")
+                              .foregroundColor(.white)
+                            
+                        case .selective:
+                            SelectiveIcon()
+                              .foregroundColor(.white)
+                            Text("Selective")
+                              .foregroundColor(.white)
+                        }
+                    }
                 }
             }
+              .foregroundColor(.white)
               .pickerStyle(.inline)
 
-            if viewModel.currentFrameHighLevelPixelReplacementMethod == .automatic {
-                Text(AutoPreservationMode.topTitle)
-                  .foregroundColor(.white)
-                Picker("",
-                       selection: $viewModel.currentFrameAutoPreservationMode)
-                {
-                    ForEach(AutoPreservationMode.allCases, id: \.id) { value in
+//            Text(AutoPreservationMode.topTitle)
+//              .foregroundColor(.white)
+            Picker("Auto Select",
+                   selection: $viewModel.currentFrameAutoPreservationMode)
+            {
+                ForEach(AutoPreservationMode.allCases, id: \.id) { value in
+                    HStack {
+                        switch value {
+                        case .yes:
+                            AutoSelectiveIcon()
+                              .foregroundColor(.white)
+                        case .no:
+                            AutoIcon()
+                              .foregroundColor(.white)
+                        }
                         Text(value.titleText)
                           .foregroundColor(.white)
                     }
                 }
-                  .pickerStyle(.inline)
-
             }
+              .foregroundColor(.white)
+              .pickerStyle(.inline)
+              .disabled(viewModel.currentFrameHighLevelPixelReplacementMethod != .automatic)
+
+
         }
           .fixedSize(horizontal: true, vertical: false)
     }

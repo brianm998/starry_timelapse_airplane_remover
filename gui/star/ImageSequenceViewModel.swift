@@ -410,6 +410,13 @@ public final class ImageSequenceViewModel {
             var realConfig = config.config()
             realConfig.pixelReplacementMethod = pixelReplacementMethod
             config.update(realConfig)
+
+            // Update All Frame View Models
+            for frame in frames {
+                frame.pixelReplacementMethod = getPixelReplacementMethod(
+                  forFrame: frame.frameIndex
+                )
+            }
         }
     }
 
@@ -417,7 +424,7 @@ public final class ImageSequenceViewModel {
         getPixelReplacementMethod(forFrame: currentIndex)
     }
     
-    func getPixelReplacementMethod(forFrame frame: Int) -> PixelReplacementMethod{
+    func getPixelReplacementMethod(forFrame frame: Int) -> PixelReplacementMethod {
         let realConfig = config.config()
         if let value = realConfig.pixelReplacementOverrides[frame] {
             return value
@@ -778,6 +785,24 @@ public final class ImageSequenceViewModel {
             await doublyLink(frames: frames)
 
             self.initialLoadInProgress = false
+        }
+
+        // Update All Frame View Models
+        for frame in frames {
+            frame.pixelReplacementMethod = getPixelReplacementMethod(
+              forFrame: frame.frameIndex
+            )
+            if frame.frameIndex == currentIndex {
+                switch frame.pixelReplacementMethod {
+                case .automatic(let useOutliers): 
+                    currentFrameHighLevelPixelReplacementMethod = .automatic
+                    currentFrameAutoPreservationMode = useOutliers ? .yes : .no
+
+                case .selective:
+                    currentFrameHighLevelPixelReplacementMethod = .selective
+                    currentFrameAutoPreservationMode = .no
+                }
+            }
         }
     }
 
@@ -1507,13 +1532,18 @@ public final class ImageSequenceViewModel {
     // update the PixelReplacementMethod for the current frame
     // from the two vars above
     private func updatePixelReplacementMethod() {
-        self.set(
-          pixelReplacementMethod: PixelReplacementMethod(
+        let method = PixelReplacementMethod(
             highLevelPixelReplacementMethod: currentFrameHighLevelPixelReplacementMethod,
             autoPreservationMode: currentFrameAutoPreservationMode
-          ),
+          )
+        self.set(
+          pixelReplacementMethod: method,
           forFrame: currentIndex
         )
+
+        // update frame view model 
+        currentFrameView.pixelReplacementMethod = method
+        
         // check to see if the star alignment was bad,
         // and we're moving to using outliers
         // if so, delete the star aligned image, we need to redo it

@@ -85,24 +85,28 @@ public struct VerticalStarPicker<Selection, Content: View> : View
             }
             VStack(alignment: .leading) {
                 ForEach(Selection.allCases, id: \.self) { value in
-                    if value == selection {
-                        content(value, isEnabled, true)
-                          .padding(4)
-                          .background(.white)
-                          .cornerRadius(5)
-                          .onTapGesture { _ in
-                              selection = value
-                          }
-                    } else {
-                        content(value, isEnabled, false)
-                          .padding(4)
-                          .onTapGesture { _ in
-                              selection = value
-                          }
+                    ZStack(alignment: .leading) {
+                        if value == selection {
+                            Color.white
+                              .cornerRadius(5)
+                              .opacity(0.6)
+                        }
+
+                        HStack {
+                            content(value, isEnabled, value == selection)
+                              .padding(4)
+                              .onTapGesture { _ in
+                                  selection = value
+                              }
+                            Spacer()
+                        }
+                          .fixedSize(horizontal: false, vertical: false)
                     }
                 }
             }
+              .fixedSize(horizontal: true, vertical: false)
               .background(Color(red: foobar, green: foobar, blue: foobar2))
+              .opacity(isEnabled ? 1.0 : 0.8)
               .cornerRadius(5)
         }
     }    

@@ -340,22 +340,26 @@ struct LeftPanel: View {
             VerticalLimitedSelectionPicker(selection: $viewModel.frameViewMode) { value, isEnabled in
                 let shouldShow = (!viewModel.showAllFrameViewModes && (value == .original || value == .processed)) || viewModel.showAllFrameViewModes
                 if shouldShow {
-                    if viewModel.currentFrameView.hasImage(type: value) {
+                    let hasImage = viewModel.currentFrameView.hasImage(type: value)
+                    let color: Color =
+                      hasImage ?
+                      isEnabled ? .black : .yellow :
+                      .gray
+
+                    HStack {
                         Text(value.longName)
-                          .foregroundColor(isEnabled ? .black : .yellow)
+                          .foregroundColor(color)
                           .padding(4)
                           .onTapGesture { _ in
-                              viewModel.frameViewMode = value
+                              if hasImage {
+                                  viewModel.frameViewMode = value
+                              }
                           }
-                    } else {
-                        Text(value.longName)
-                          .foregroundColor(/*isEnabled ? .white : */ .gray)
-                          .padding(4)
+                        Spacer()
                     }
-//                } else {
-//                    Group { }
                 }
             }
+              .fixedSize(horizontal: true, vertical: false)
               .background(Color(red: foobar, green: foobar, blue: foobar2))
               .opacity(1.0)
               .disabled(viewModel.videoPlaying)
