@@ -1204,7 +1204,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             Log.e("frame \(frameIndex) Cannot selective finish without a successful or failed star alignment image")
             throw "frame \(frameIndex) Cannot selective finish without a successful or failed star alignment image"
         }
-        let format = image.clone.imageData // make a copy
+        let format = image.imageData
 
         switch format {
         case .thirtyTwoBit(_):
@@ -1828,6 +1828,40 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     // Mark - Removal
 
+    // this is the inverse of removeAirplanes, it replaces them in the auto image
+    internal func replaceAirplanes(
+      image: PixelatedImage,
+      toData data: inout ImageBuffer<UInt16>,
+      originalImage: PixelatedImage,
+    ) async throws {
+
+        let (shouldRemove, alphaLevels, alphaYAxis) = try await computeRemovalMask()
+
+        if shouldRemove {
+            self.set(state: .assemblingProcessedFrame)
+            for y in 0 ..< height {
+                if alphaYAxis[y] == 0 { continue }
+                for x in 0 ..< width {
+                    var alpha = alphaLevels[y*width+x]
+                    if alpha > 0 {
+                        if alpha > 1 { alpha = 1 }
+
+
+                        self.updatePixel(
+                          x: x, y: y,
+                          alpha: alpha,
+                          toData: &data,
+                          image: image,
+                          with: originalImage.readPixel(atX: x, andY: y)
+                        )
+                    }
+                }
+            }
+        } else {
+            Log.i("frame \(frameIndex) NOT removing bad pixels")
+        }
+    }
+    
     /*
      Logic about removing undesired elements from the image.
 
@@ -1878,9 +1912,63 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             Log.v("no outliers, not removing")
             return
         }
-        
+
+
+        let (shouldRemove, alphaLevels, alphaYAxis) = try await computeRemovalMask()
+
+        if shouldRemove {
+            Log.i("frame \(frameIndex) removing bad pixels")
+            self.set(state: .assemblingProcessedFrame)
+            
+            // then actually remove each non zero alpha pixel,
+            // replacing it with one calculated from other frames
+            for y in 0 ..< height {
+                if alphaYAxis[y] == 0 { continue }
+                for x in 0 ..< width {
+                    var alpha = alphaLevels[y*width+x]
+                    if alpha > 0 {
+                        if alpha > 1 { alpha = 1 }
+
+                        updatePixel(
+                          x: x,
+                          y: y,
+                          alpha: alpha,
+                          toData: &data,
+                          image: image,
+                          starAlignedImage: starAlignedImage,
+                          earthAlignedImage: earthAlignedImage,
+                          horizonMask: expendedHorizonMaskImage
+                        )
+                        /*
+
+                         // test paint the expected alpha levels as colors
+                         
+                         var paintPixel = Pixel()
+                         paintPixel.blue = 0xFFFF
+                         paintPixel.green = UInt16(Double(0xFFFF)*alpha)
+                         paint(x: x, y: y, why: reason, alpha: alpha,
+                         toData: &data,
+                         image: image,
+                         paintPixel: paintPixel)
+                         */
+
+                    }
+                }
+            }
+        } else {
+            Log.i("frame \(frameIndex) NOT removing bad pixels")
+        }
+    }
+
+    internal func computeRemovalMask() async throws -> (Bool, [Double], [UInt8]) {
         self.set(state: .creatingRemovalMask)
 
+        // remove every outlier in the list with pixels from the adjecent frames
+        guard let outlierGroups = outlierGroups else {
+            Log.e("cannot remove pixels without outlier groups")
+            return (false, [], [])
+        }
+        
         // the alpha level to apply to each pixel in the image
         // indexed by y*width+x
         // this is esentially a layer mask for the frame, 
@@ -1983,49 +2071,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         if shouldRemove {
-            Log.i("frame \(frameIndex) removing bad pixels")
-            self.set(state: .assemblingProcessedFrame)
-            
-            // then actually remove each non zero alpha pixel,
-            // replacing it with one calculated from other frames
-            for y in 0 ..< height {
-                if alphaYAxis[y] == 0 { continue }
-                for x in 0 ..< width {
-                    var alpha = alphaLevels[y*width+x]
-                    if alpha > 0 {
-                        if alpha > 1 { alpha = 1 }
-
-                        updatePixel(
-                          x: x,
-                          y: y,
-                          alpha: alpha,
-                          toData: &data,
-                          image: image,
-                          starAlignedImage: starAlignedImage,
-                          earthAlignedImage: earthAlignedImage,
-                          horizonMask: expendedHorizonMaskImage
-                        )
-                        /*
-
-                         // test paint the expected alpha levels as colors
-                         
-                         var paintPixel = Pixel()
-                         paintPixel.blue = 0xFFFF
-                         paintPixel.green = UInt16(Double(0xFFFF)*alpha)
-                         paint(x: x, y: y, why: reason, alpha: alpha,
-                         toData: &data,
-                         image: image,
-                         paintPixel: paintPixel)
-                         */
-
-                    }
-                }
-            }
+            return (shouldRemove, alphaLevels, alphaYAxis)
         } else {
-            Log.i("frame \(frameIndex) NOT removing bad pixels")
+            return (shouldRemove, [], [])
         }
     }
-
+    
     // remove a selected outlier pixel with data from pixels from adjecent frames
     // this uses a pre-computed image of all 'good' pixels merged from a number
     // of star-aligned neighbor frames
@@ -2385,34 +2436,151 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
     
     // used by PixelReplacementMode.automatic
-    public func finishAuto(useOutliers: Bool) async throws { // XXX use arg
-        Log.d("CRAP 1")
-        let finalImage = try await createAutoProcessedImage()
-        Log.d("CRAP 2")
-        
-        self.set(state: .loadingImages1)
-        try await imageAccessor.saveFinal(
-          finalImage, 
-          frameIndex: frameIndex,
-          as: .processed,
-          atSize: .preview,
-          overwrite: false
-        )
-        try await imageAccessor.saveFinal(
-          finalImage, 
-          frameIndex: frameIndex,
-          as: .processed,
-          atSize: .original,
-          overwrite: false
-        )
-        try await imageAccessor.saveFinal(
-          finalImage,
-          frameIndex: frameIndex,
-          as: .processed,
-          atSize: .thumbnail,
-          overwrite: false
-        )
-        self.set(state: .complete)
+    public func finishAuto(useOutliers: Bool) async throws {
+        let autoProcessedImage = try await createAutoProcessedImage()
+
+        if useOutliers {
+            // if using outliers, 
+            let originalImage =
+              try await imageAccessor.load(
+                frameIndex: frameIndex,
+                type: .original,
+                atSize: .original
+              )
+            guard let originalImage else {
+                Log.e("cannot finish without original image")
+                return
+            }
+
+            mkdir(await self.outliersDirname)
+            
+            await self.writeOutliersRemoveReasons()
+
+            self.set(state: .finishing)
+
+            let config = await configManager.config()
+            
+            if config.writeOutlierClassificationValues {
+                // THIS MOFO IS SLOW
+                self.set(state: .writingOutlierValues)
+
+                Log.d("frame \(self.frameIndex) finish 1")
+                // write out the classifier feature data for this data point
+                try await self.writeOutlierValuesCSV()
+            }
+
+            Log.d("frame \(self.frameIndex) finish 2")
+            if !self.writeOutputFiles {
+                Log.d("frame \(self.frameIndex) not writing output files")
+                self.set(state: .complete)
+                if let completion { await completion() }
+                return
+            }
+            
+            Log.i("frame \(self.frameIndex) finishing")
+
+            let format = autoProcessedImage.imageData
+
+            switch format {
+            case .thirtyTwoBit(_):
+                fatalError("frame \(self.frameIndex) cannot load 32 bit image here now")
+                
+            case .eightBit(_):
+                Log.e("8 bit not supported here now")
+            case .sixteenBit(let outputData):
+                Log.d("frame \(self.frameIndex) replacing airplanes")
+
+                // copy the outputData to a new Buffer
+                var newImageBuffer = ImageBuffer<UInt16>(
+                  pointer: outputData,
+                  width: autoProcessedImage.width,
+                  height: autoProcessedImage.height,
+                  components: autoProcessedImage.componentsPerPixel
+                )
+                
+                try await self.replaceAirplanes(
+                  image: autoProcessedImage,
+                  toData: &newImageBuffer,
+                  originalImage: originalImage
+                )
+
+                if let processedImage = newImageBuffer.image {
+                    // write frame out as processed versions
+                    do {
+                        Log.d("frame \(self.frameIndex) processed file")
+                        try await imageAccessor.saveFinal(
+                          processedImage,
+                          frameIndex: frameIndex,
+                          as: .processed,
+                          atSize: .original,
+                          overwrite: true
+                        )
+                        Log.d("frame \(self.frameIndex) writing processed preview")
+                        try await imageAccessor.saveFinal(
+                          processedImage,
+                          frameIndex: frameIndex,
+                          as: .processed,
+                          atSize: .preview,
+                          overwrite: true
+                        )
+                    } catch {
+                        // XXX for some reason this error gets missed if we don't catch it here :(
+                        Log.d("frame \(self.frameIndex) ERROR \(error)")
+
+                    }
+                    if let outlierGroups {
+                        Log.d("frame \(self.frameIndex) getting validating image")
+                        if let validationImage = await outlierGroups.validationImage() {
+                            Log.d("frame \(self.frameIndex) writing validated image")
+                            try await imageAccessor.saveFinal(
+                              validationImage,
+                              frameIndex: frameIndex,
+                              as: .validation,
+                              atSize: .original,
+                              overwrite: false
+                            )
+                            Log.d("frame \(self.frameIndex) writing validated preview")
+                            try await imageAccessor.saveFinal(
+                              validationImage,
+                              frameIndex: frameIndex,
+                              as: .validation,
+                              atSize: .preview,
+                              overwrite: false
+                            )
+                        } else {
+                            Log.w("frame \(self.frameIndex) cannot create validation image")
+                        }
+                    }
+                    Log.d("frame \(self.frameIndex) done writing output files")
+                }
+            }
+        } else {
+            // if not using outliers, then save the auto processed image as
+            // complete 
+            self.set(state: .loadingImages1)
+            try await imageAccessor.saveFinal(
+              autoProcessedImage, 
+              frameIndex: frameIndex,
+              as: .processed,
+              atSize: .preview,
+              overwrite: false
+            )
+            try await imageAccessor.saveFinal(
+              autoProcessedImage, 
+              frameIndex: frameIndex,
+              as: .processed,
+              atSize: .original,
+              overwrite: false
+            )
+            try await imageAccessor.saveFinal(
+              autoProcessedImage,
+              frameIndex: frameIndex,
+              as: .processed,
+              atSize: .thumbnail,
+              overwrite: false
+            )
+            self.set(state: .complete)
+        }
     }
     
     // Mark - Subtraction
