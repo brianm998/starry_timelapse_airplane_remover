@@ -476,6 +476,16 @@ public struct Config: Codable, Sendable, Transferable {
             case .thumbnail:
                 return nil
             }
+        case .failedStarAligned:
+            switch size {
+            case .original:
+                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-failed-aligned"
+
+            case .preview:
+                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-failed-aligned-previews"
+            case .thumbnail:
+                return nil
+            }
         case .earthAligned:
             switch size {
             case .original:
@@ -558,6 +568,7 @@ public struct Config: Codable, Sendable, Transferable {
         var ret: [String] = []
         
         if let dir = self.dirForImage(ofType: .starAligned) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .failedStarAligned) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .earthAligned) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .horizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .mergedHorizon) { ret.append(dir) }
@@ -568,6 +579,7 @@ public struct Config: Codable, Sendable, Transferable {
         if self.writeFramePreviewFiles {
             if let dir = self.dirForImage(ofType: .original, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .starAligned, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .failedStarAligned, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .earthAligned, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .horizon, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .mergedHorizon, atSize: .preview) { ret.append(dir) }

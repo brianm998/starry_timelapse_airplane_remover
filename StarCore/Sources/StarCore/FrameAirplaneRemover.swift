@@ -76,10 +76,15 @@ public class FrameObserver {
 
     public var starAlignmentResults: FrameAlignmentResults?
     public var earthAlignmentResults: FrameAlignmentResults?
+
+    public var pixelReplacementMethod: PixelReplacementMethod?
     
     // XXX stick more here, like state
 
-
+    public func set(pixelReplacementMethod: PixelReplacementMethod) {
+        self.pixelReplacementMethod = pixelReplacementMethod
+    }
+    
     public func set(starAlignmentResults: FrameAlignmentResults) {
         self.starAlignmentResults = starAlignmentResults
     }
@@ -602,22 +607,31 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     
     // uses opencv2 for dark ground specific detection logic
     private func loadOrCreateEarthAlignedImage() async throws -> (
-      PixelatedImage,           // earth aligned image
+      PixelatedImage?,          // earth aligned image
+      PixelatedImage?,           // failed alignment image
       PixelatedImage? // aligned/median merged horizon mask should be present
     ) {
         try await loadOrCreateAlignedImage(of: .earthAligned)
     }
     
     // uses opencv2 for SIFT fast, accurate image alignment
-    private func loadOrCreateStarAlignedImage() async throws -> PixelatedImage {
-        let (image, _) = try await loadOrCreateAlignedImage(of: .starAligned)
-        return image
+    private func loadOrCreateStarAlignedImage() async throws -> (
+      PixelatedImage?,            // aligned image
+      PixelatedImage?             // failed alignment image
+    ) {
+        let (image, failed, _) = try await loadOrCreateAlignedImage(
+          of: .starAligned,
+          withFailedType: .failedStarAligned
+        )
+        return (image, failed)
     }
     
     private func loadOrCreateAlignedImage(
-      of type: FrameViewMode
+      of type: FrameViewMode,
+      withFailedType failedType: FrameViewMode? = nil
     ) async throws -> (
-      PixelatedImage,   // aligned image
+      PixelatedImage?,   // aligned image
+      PixelatedImage?,   //failed aligned image
       PixelatedImage?   // optional aligned/median merged horizon mask
     ) {
         var isEarth = false
@@ -652,9 +666,31 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }                
             
-            return (alignedFrame, horizonMask?.image)
+            return (alignedFrame, nil, horizonMask?.image)
+            
+        } else if let failedType,
+                  let failedFrame = try await imageAccessor.load(
+                    frameIndex: frameIndex,
+                    type: failedType,
+                    atSize: .original
+                  )
+        {
+            let horizonMask = try await self.loadMergedHorizonMask()
+            var results: FrameAlignmentResults? = nil
+            if isEarth {
+                results = await self.readNumberOfEarthAlignedImagesForThisFrame()
+                if let results {
+                    await observer?.set(earthAlignmentResults: results)
+                }
+            } else {
+                results = await self.readNumberOfStarAlignedImagesForThisFrame()
+                if let results {
+                    await observer?.set(starAlignmentResults: results)
+                }
+            }                
+            
+            return (nil, failedFrame, horizonMask?.image)
         }
-
         // with no saved aligned frame, first load or create the set of aligned frames
         // that we used to create the final aligned frame
 
@@ -779,21 +815,51 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             break
         }
 
-        var goodPixelImage: PixelatedImage? = nil
+        var alignedImage: PixelatedImage? = nil
+        var failedAlignImage: PixelatedImage? = nil
+        
         if let aligned = alignmentResult.aligned {
-            goodPixelImage = aligned
-        } else if let failed = alignmentResult.failed {
-            switch await self.pixelReplacementMethod {
-            case .automatic(_):
-                // return the frame itself
-                goodPixelImage = originalFrame
-            case .selective:
-                // use the median merged neighbors
-                goodPixelImage = failed
-            }
+            alignedImage = aligned
+            // write out the successfully aligned images
+            try await imageAccessor.save(
+              aligned,
+              frameIndex: frameIndex,
+              as: type,
+              atSize: .original,
+              overwrite: true
+            )
+
+            try await imageAccessor.save(
+              aligned,
+              frameIndex: frameIndex,
+              as: type,
+              atSize: .preview,
+              overwrite: true
+            )
+        } else if let failed = alignmentResult.failed,
+                  let failedType
+        {
+            // if we have no successfully aligned image,
+            // and do have a failed image, and have been asked to
+            // save them, write them out
+            failedAlignImage = failed
+            try await imageAccessor.save(
+              failed,
+              frameIndex: frameIndex,
+              as: failedType,
+              atSize: .original,
+              overwrite: true
+            )
+
+            try await imageAccessor.save(
+              failed,
+              frameIndex: frameIndex,
+              as: failedType,
+              atSize: .preview,
+              overwrite: true
+            )
         } else {
             Log.e("frame \(frameIndex) didn't get either an aligned image or a failed image from alignment results")
-            throw "frame \(frameIndex) didn't get either an aligned image or a failed image from alignment results" // XXX handle this better
         }
 
         if let mergedHorizon = alignmentResult.horizonMask {
@@ -814,22 +880,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             )
         }
         
-        try await imageAccessor.save(
-          goodPixelImage!,
-          frameIndex: frameIndex,
-          as: type,
-          atSize: .original,
-          overwrite: true
-        )
-
-        try await imageAccessor.save(
-          goodPixelImage!,
-          frameIndex: frameIndex,
-          as: type,
-          atSize: .preview,
-          overwrite: true
-        )
-
         // keep track of the number of alignment images used
         // so we can make sure it's the same as the desired amount later
 
@@ -848,7 +898,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             break
         }
 
-        return (goodPixelImage!, alignmentResult.horizonMask)
+        return (alignedImage, failedAlignImage, alignmentResult.horizonMask)
     }    
 
     let numberOfStarAlignedImagesFilename = "number_of_star_aligned_images.json"
@@ -972,7 +1022,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func readNumberOfEarthAlignedImagesForThisFrame() async -> FrameAlignmentResults? {
         await readAlignmentResults(from: numberOfEarthAlignedImagesFilename)
     }
-        
+
+    public func deleteAllProcessedImages() {
+        for viewMode in FrameViewMode.allCases {
+            if viewMode == .original { continue }
+
+            try? imageAccessor.deleteImage(frameIndex: frameIndex,
+                                           ofType: viewMode,
+                                           atSize: .original)
+
+            try? imageAccessor.deleteImage(frameIndex: frameIndex,
+                                           ofType: viewMode,
+                                           atSize: .preview)
+            
+        }
+    }
     public func removeSubtractionImages() {
         // get rid of the subtraction here image too,
         // as it is a product of the star aligned images
@@ -1112,11 +1176,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         var horizonMask: HorizonMask? = nil
         var earthAlignedImage: PixelatedImage? = nil
+        var failedAlignedImage: PixelatedImage? = nil
         
         if config.horizonDetectionEnabled {
             // only load these if we really need them
             var horizonMaskImage: PixelatedImage? = nil
-            (earthAlignedImage, horizonMaskImage) = try await loadOrCreateEarthAlignedImage()
+            (earthAlignedImage, failedAlignedImage, horizonMaskImage) =
+              try await loadOrCreateEarthAlignedImage()
             if let horizonMaskImage {
                 horizonMask = HorizonMask(horizonMaskImage)
             } else {
@@ -1124,9 +1190,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 horizonMask = try await loadOrCreateHorizonMask()
             }
         }
-        
-        let starAlignedImage = try await loadOrCreateStarAlignedImage()
 
+        Log.d("FUCK 1")
+        let (starAlignedImage, failedStarAlignedImage) =
+          try await loadOrCreateStarAlignedImage()
+        Log.d("FUCK 2")
+
+        var skyAlignedImage: PixelatedImage? = starAlignedImage
+        if skyAlignedImage == nil {
+            skyAlignedImage = failedStarAlignedImage
+        }
+        guard let skyAlignedImage else {
+            Log.e("frame \(frameIndex) Cannot selective finish without a successful or failed star alignment image")
+            throw "frame \(frameIndex) Cannot selective finish without a successful or failed star alignment image"
+        }
         let format = image.clone.imageData // make a copy
 
         switch format {
@@ -1149,7 +1226,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             try await self.removeAirplanes(
               image: image,
               toData: &newImageBuffer,
-              starAlignedImage: starAlignedImage,
+              starAlignedImage: skyAlignedImage,
               earthAlignedImage: earthAlignedImage,
               horizonMask: horizonMask
             )
@@ -1375,7 +1452,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
             } else if !loadOnly {
                 // potentially recalculate the alignment image if necessary
+                Log.d("FUCK 1")
                 let _ = try await self.loadOrCreateStarAlignedImage()
+                Log.d("FUCK 2")
                 
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
                 Log.d("frame \(frameIndex) calculating outliers")
@@ -2220,30 +2299,62 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
      rid of even the small distant satellites that move slowly through the sky.
      */
     func createAutoProcessedImage() async throws -> PixelatedImage {
-        let starAlignedImage = try await loadOrCreateStarAlignedImage()
+        Log.d("FUCK 1")
+        let (starAlignedImage, failedStarImage) =
+          try await loadOrCreateStarAlignedImage()
+        Log.d("FUCK 2")
 
+        var skyImage: PixelatedImage? = starAlignedImage
+        if skyImage == nil {
+            // if we don't have a successful sky alignment image,
+            // the original looks best for auto processed,
+            // load that here
+            skyImage = try await imageAccessor.load(
+              frameIndex: frameIndex,
+              type: .original,
+              atSize: .original)
+        }
+
+        guard let skyImage else {
+            let msg = "frame \(frameIndex) cannot create auto processed image without a star aligned image or an original image"
+            Log.e(msg)
+            throw msg
+        }
+        
         let config = await configManager.config()
         if config.horizonDetectionEnabled {
             // with horizon detection, we need to mask the star and earth images
-            let (earthAlignedImage, horizonMask) = try await loadOrCreateEarthAlignedImage()
-            if let horizonMask {
-                // this merged horizon mask should have been created right above
-                return try starAlignedImage.apply(
-                  mask: horizonMask,
-                  with: earthAlignedImage
-                )
+            let (earthAlignedImage, failedAlignment, horizonMask) =
+              try await loadOrCreateEarthAlignedImage()
+
+            var earthImage: PixelatedImage? = earthAlignedImage
+            if  earthImage == nil {
+                 earthImage = failedAlignment
+            }
+            
+            if let earthImage {
+                if let horizonMask {
+                    // this merged horizon mask should have been created right above
+                    return try skyImage.apply(
+                      mask: horizonMask,
+                      with: earthImage
+                    )
+                } else {
+                    // but if not, fallback to the non-merged one, which is better than nothing
+                    Log.w("frame \(frameIndex) falling back to non-merged horizon mask")
+                    let horizonMask = try await loadOrCreateHorizonMask()
+                    return try skyImage.apply(
+                      mask: horizonMask.image,
+                      with: earthImage
+                    )
+                }
             } else {
-                // but if not, fallback to the non-merged one, which is better than nothing
-                Log.w("frame \(frameIndex) falling back to non-merged horizon mask")
-                let horizonMask = try await loadOrCreateHorizonMask()
-                return try starAlignedImage.apply(
-                  mask: horizonMask.image,
-                  with: earthAlignedImage
-                )
+                // no earth aligned image, fall back to sky
+                return skyImage
             }
         } else {
             // without horizon detection, just return the star aligned image
-            return starAlignedImage
+            return skyImage
         }
     }
 
@@ -2263,10 +2374,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
     }
+
+    public func set(pixelReplacementMethod: PixelReplacementMethod) async {
+        var config = await configManager.config()
+        config.pixelReplacementOverrides[self.frameIndex] = pixelReplacementMethod
+        await MainActor.run {
+            configManager.update(config)
+        }
+        await observer?.set(pixelReplacementMethod: pixelReplacementMethod)
+    }
     
     // used by PixelReplacementMode.automatic
     public func finishAuto(useOutliers: Bool) async throws { // XXX use arg
+        Log.d("CRAP 1")
         let finalImage = try await createAutoProcessedImage()
+        Log.d("CRAP 2")
         
         self.set(state: .loadingImages1)
         try await imageAccessor.saveFinal(
@@ -2322,9 +2444,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // load or create the aligned frame
 
         Log.d("frame \(frameIndex) loadOrCreateStarAlignedImage")
-        let starAlignedImage = try await loadOrCreateStarAlignedImage()
+        let (starAlignedImage, failedStarAlignment) =
+          try await loadOrCreateStarAlignedImage()
         Log.d("frame \(frameIndex) loadedOrCreatedStarAlignedImage")
 
+        var skyImage: PixelatedImage? = starAlignedImage
+        if skyImage == nil {
+            skyImage = failedStarAlignment
+        }
+        guard let skyImage else {
+            let msg = "frame \(frameIndex) cannot create subtraction image without either a successful or failed alignment image"
+            Log.e(msg)
+            throw msg
+        }
+        
         let config = await configManager.config()
 
         var subtractionImage: PixelatedImage! = nil
@@ -2343,25 +2476,36 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // of the earth and star aligned images, and subtract
             // that from the image instead of just the star aligned image
 
-            let (earthAlignedImage, horizonMask) = try await loadOrCreateEarthAlignedImage()
+            let (earthAlignedImage, failedAlignmentImage, horizonMask) =
+              try await loadOrCreateEarthAlignedImage()
 
-            if let horizonMask {
-                imageToSubtract = try starAlignedImage.apply(
-                  mask: horizonMask,
-                  with: earthAlignedImage
-                )
+            var earthImage = earthAlignedImage
+            if earthImage == nil {
+                earthImage = failedAlignmentImage
+            }
+
+            if let earthImage {
+                if let horizonMask {
+                    imageToSubtract = try skyImage.apply(
+                      mask: horizonMask,
+                      with: earthImage
+                    )
+                } else {
+                    // fall back to non merged horizon mask if we have to
+                    imageToSubtract = try skyImage.apply(
+                      mask: try await self.loadOrCreateHorizonMask().image,
+                      with: earthImage
+                    )
+                }
             } else {
-                // fall back to non merged horizon mask if we have to
-                imageToSubtract = try starAlignedImage.apply(
-                  mask: try await self.loadOrCreateHorizonMask().image,
-                  with: earthAlignedImage
-                )
+                // with no earth image to use, fall back to the sky
+                imageToSubtract = skyImage
             }
             
         } else {
             // with no horizon to worry about, just subtract the star aligned image
             
-            imageToSubtract = starAlignedImage
+            imageToSubtract = skyImage
         }
 
 

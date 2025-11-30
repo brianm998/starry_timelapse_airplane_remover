@@ -1630,10 +1630,22 @@ public final class ImageSequenceViewModel {
                                         semaphore.signal()
                                     }
 
-                                case .automatic(let useOutilers):
+                                case .automatic(let useOutliers):
                                     try await frame.finishAuto(
-                                      useOutliers: useOutilers
+                                      useOutliers: useOutliers
                                     )
+
+
+                                    if useOutliers {
+                                        if await frame.getOutlierGroups() == nil {
+                                            try await frame.loadOutliers()
+                                            Task { @MainActor in
+                                                let frameView = self.frames[frame.frameIndex]
+                                                frameView.outlierViews = nil
+                                                await frameView.setOutlierGroups()
+                                            }
+                                        }
+                                    }
                                     
                                     await self.refresh(frame: frame)
                                     await counter.decrease()

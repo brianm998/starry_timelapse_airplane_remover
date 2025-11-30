@@ -19,13 +19,14 @@ public enum FrameViewMode: String,
     case horizon                // computed horizon mask
     case mergedHorizon          // median merged and maybe aligned horizon mask from neighbors
     case starAligned            // star aligned neighbor frame
+    case failedStarAligned      // failed star aligned neighbor frame
     case earthAligned           // earth aligned neighbor frame
     case subtraction            // the result of subtracting a star aligned neighbor frame
     case blobs                  // blobs detected from the subtraction frame
     case validation             // an image of exactly what pixels have been identified as unwanted
     case removeMask             // the remove mask created from the validation image
     case processed              // the final processed image, 
-                                // the remove mask is used as a layer mask for the aligned neighbor 
+                                // the remove mask is used as a layer mask for the aligned neighbor
  
     public var localizedName: LocalizedStringKey {
         LocalizedStringKey(rawValue)
@@ -47,6 +48,8 @@ public enum FrameViewMode: String,
             "processed"
         case .starAligned:
             "starAligned"
+        case .failedStarAligned:
+            "failedStarAligned"
         case .earthAligned:
             "earthAligned"
         case .horizon:
@@ -74,6 +77,8 @@ public enum FrameViewMode: String,
             "earth aligned frame"
         case .starAligned:
             "star aligned frame"
+        case .failedStarAligned:
+            "failed star align frame"
         case .horizon:
             "horizon mask"
         case .mergedHorizon:

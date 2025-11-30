@@ -79,6 +79,11 @@ public actor FinalGUIProcessor {
                         await semaphore.wait()
                         let reprocessingType = await viewModel.reprocessingType
                         switch reprocessingType {
+                        case .everything:
+                            await frame.deleteAllProcessedImages()
+                            try? await frame.deleteOutliers()
+                            try? await viewModel.clearProcessing(of: frame)
+                            
                         case .none:
                             break
                         case .allHorizons:
@@ -96,8 +101,16 @@ public actor FinalGUIProcessor {
 
                         case .automatic(let useOutliers):
                             try await frame.finishAuto(useOutliers: useOutliers)
-                            break
-
+                            if useOutliers {
+                                if await frame.getOutlierGroups() == nil {
+                                    try await frame.loadOutliers()
+                                    Task { @MainActor in
+                                         let frameView = viewModel.frames[frame.frameIndex]
+                                         frameView.outlierViews = nil
+                                         await frameView.setOutlierGroups()
+                                    }
+                                }
+                            }
 
                         case .selective:
                             if await !frame.processingState().isReadyForInterframeProcessing || reprocessingType == .outliers {

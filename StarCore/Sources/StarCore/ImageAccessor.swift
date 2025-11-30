@@ -21,6 +21,7 @@ You should have received a copy of the GNU General Public License along with sta
 // logic for loading different kinds of images
 
 public enum FrameReprocessingType: String, Codable, Equatable, CaseIterable, Sendable {
+    case everything             // redo everything, delete all existing work files
     case alignment              // redo both alignment and outliers
     case outliers               // redo only outliers
     case horizons               // redo individual horizons
@@ -232,7 +233,8 @@ public struct ImageAccessor: Sendable {
                         }
                     }
                 } else {
-                    Log.w("no filename for type \(imageType) at size \(size)")
+                    Log.w("load \(frameIndex) no filename for type \(imageType) at size \(size)")
+                    return nil
                 }
             } catch let error as NSError {
                 if error.code == -1001 {
