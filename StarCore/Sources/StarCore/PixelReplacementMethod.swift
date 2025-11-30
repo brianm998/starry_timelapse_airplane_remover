@@ -51,13 +51,13 @@ public enum HighLevelPixelReplacementMethod: InstructionOption,
     public var titleText: String {
         switch self {
         case .automatic:
-            "Auto Clean"
+            "Automatic"
         case .selective:
-            "Selective Clean"
+            "Selective"
         }
     }
 
-    public static let topTitle = "Processing Method:"
+    public static let topTitle = "Clean Mode:"
     
     public var helpText: String {
         switch self {
