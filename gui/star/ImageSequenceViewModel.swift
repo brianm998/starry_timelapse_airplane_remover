@@ -469,6 +469,14 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    var horizonVerticalShiftAmount: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.horizonVerticalShiftAmount = horizonVerticalShiftAmount
+            config.update(realConfig)
+        }
+    }
+    
     var maxConcurrentHorizonCalculations: Int {
         didSet {
             var realConfig = config.config()
@@ -643,6 +651,7 @@ public final class ImageSequenceViewModel {
         self.pixelReplacementOverrides = config.pixelReplacementOverrides
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.maxConcurrentHorizonCalculations = config.maxConcurrentHorizonCalculations
+        self.horizonVerticalShiftAmount = config.horizonVerticalShiftAmount
         self.config = configManager
 
 //        self.earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? 0

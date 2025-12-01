@@ -1019,8 +1019,12 @@ extension PixelatedImage {
         )
     }
 
+    // move image up vertically by some number of pixels
     public func shiftImageUp(by pixels: Int) -> PixelatedImage? {
-        let result = PixelatedImageBridge.shiftImageUp(self.mat, shiftPixels: Int32(pixels))
+        let result = PixelatedImageBridge.shiftImageUp(
+          self.mat,
+          shiftPixels: Int32(pixels)
+        )
         return PixelatedImage(mat: result)
     }
     

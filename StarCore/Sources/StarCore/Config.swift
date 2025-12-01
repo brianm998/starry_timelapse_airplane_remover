@@ -269,6 +269,10 @@ public struct Config: Codable, Sendable, Transferable {
     // max number of frames to concurrently horizon calculations on
     public var maxConcurrentHorizonCalculations: Int = 20
 
+    // when doing auto aligned outputs, how far to shift up the horizon mask
+    // when doing a final composite image.
+    public var horizonVerticalShiftAmount: Int = 8
+    
     // how many pixels do we crop off the top of the image when making
     // earth aligned images
     public var earthAlignedImageCropAmount: Int?
@@ -321,7 +325,8 @@ public struct Config: Codable, Sendable, Transferable {
         self.horizonMinY = try c.decodeIfPresent(Int.self, forKey: .horizonMinY)
         self.horizonMaxY = try c.decodeIfPresent(Int.self, forKey: .horizonMaxY)
         self.maxConcurrentHorizonCalculations = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentHorizonCalculations) ?? self.maxConcurrentHorizonCalculations
-
+        self.horizonVerticalShiftAmount = try c.decodeIfPresent(Int.self, forKey: .horizonVerticalShiftAmount) ?? self.horizonVerticalShiftAmount
+        
         self.earthAlignedImageCropAmount = try c.decodeIfPresent(Int.self, forKey: .earthAlignedImageCropAmount)
 
         self.starVersion = try c.decodeIfPresent(String.self, forKey: .starVersion) ?? self.starVersion

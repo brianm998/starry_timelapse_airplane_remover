@@ -180,6 +180,7 @@ struct InitialInstructionsView: View {
     @State private var showCannyMinThresholdView = false
     @State private var showCannyMaxThresholdView = false
     @State private var showCannyL2GradientView = false
+    @State private var showHorizonVerticalShiftAmountView = false
 
     private var addSpacer: Bool {
         showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo ||
@@ -187,7 +188,7 @@ struct InitialInstructionsView: View {
         showNeighborFrameInfo || showPixelThresholdInfo || showProcessingModeInfo ||
         showUseCannyInfo || showHorizonStripInfo || showCannyMinThresholdView ||
         showCannyMaxThresholdView || showCannyL2GradientView ||
-        showStaticNeighborFrameInfo
+        showStaticNeighborFrameInfo || showHorizonVerticalShiftAmountView
     }
     
     private func showAll() {
@@ -205,6 +206,7 @@ struct InitialInstructionsView: View {
         showCannyMinThresholdView = true
         showCannyMaxThresholdView = true
         showCannyL2GradientView = true
+        showHorizonVerticalShiftAmountView = true
     }
 
     private func hideAll() {
@@ -222,6 +224,7 @@ struct InitialInstructionsView: View {
         showCannyMinThresholdView = false
         showCannyMaxThresholdView = false
         showCannyL2GradientView = false
+        showHorizonVerticalShiftAmountView = false
     }
     
     @FocusState private var focusedField: FocusedField?
@@ -310,6 +313,8 @@ struct InitialInstructionsView: View {
                           self.cannyMaxThresholdView
                           Divider()
                           self.l2GradientGridRow
+                          Divider()
+                          self.horizonVerticalShiftAmountView
                           Divider()
                           self.cuncurrentProcessingLimitView
                           Divider()
@@ -751,6 +756,46 @@ struct InitialInstructionsView: View {
             }
         }
         .disabled(viewModel.sceneType == .skyOnly || viewModel.useCannyForHorizonDetection == .no)
+    }
+
+    private var horizonVerticalShiftAmountView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showHorizonVerticalShiftAmountView,
+          addSpacer: { addSpacer },
+          infoText: """
+            This value is used with Automatic Clean Mode.
+            In short, any positive, non zero value here causes Star to scoot the horizon mask up by the given number of pixels before composting the star and earth aligned images for the final result.  The result is that more of the pixels close to the horizon are taken from the earth aligned image.
+            The star aligned image doesn't always have the best horizon, as it is aligned with the stars, and the median horizon value may not be steady like is wanted for a video.  The downside is that rising or setting stars will appear to disappear this many pixels before they hit the horizon, as the earth aligned images typically have few if any stars in the sky.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Horizon Shift:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.horizonVerticalShiftAmount,
+                      minValue: 0,
+                      maxValue: 300,
+                      allowDecimal: true,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .horizonVerticalShiftAmount,
+                      alwaysOpen: true
+                    )
+                    Spacer()
+                }
+            }
+        }
+        .disabled(viewModel.sceneType == .skyOnly || viewModel.pixelReplacementMethod == .selective)
     }
 
     private var processingModeView: some View {
