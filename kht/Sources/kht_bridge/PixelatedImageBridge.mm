@@ -674,12 +674,50 @@ extern cv::Mat ensure8U(const cv::Mat& input);
   return nil;
 }
 
++ (MatWrapper *)shiftImageUp:(MatWrapper *) input
+                 shiftPixels:(int)shiftPixels
+{
+  @try {
+    try {
+      // Ensure a positive shift
+      if (shiftPixels <= 0)
+        return input;
+
+      cv::Mat src = input.mat;
+  
+      // Limit shift so it never exceeds the image height
+      int shift = std::min(shiftPixels, src.rows);
+
+      // Create destination Mat of same size/type
+      cv::Mat dst(src.size(), src.type());
+
+      // Region that will be filled with the shifted image
+      // dst[0 : rows-shift] = src[shift : rows]
+      cv::Mat dstTop    = dst.rowRange(0, src.rows - shift);
+      cv::Mat srcBottom = src.rowRange(shift, src.rows);
+      srcBottom.copyTo(dstTop);
+
+      // Fill the bottom 'shift' rows with the last existing row of src
+      cv::Mat lastRow = src.row(src.rows - 1);
+      for (int r = src.rows - shift; r < src.rows; r++) {
+        lastRow.copyTo(dst.row(r));
+      }
+
+      return [[MatWrapper alloc] initWithMat: dst];
+    } catch (const cv::Exception &e) {
+      Log_e(@"OpenCV Exception: %s", e.what());
+    }
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception: %@", exception);
+  }
+  return nil;
+}
+
 + (MatWrapper *)cannyEdgeDetect:(MatWrapper *)img
                    minThreshold:(double)minThreshold
                    maxThreshold:(double)maxThreshold
                   useL2Gradient:(BOOL)useL2Gradient
 {
-  
   @try {
     try {
       cv::Mat input = img.mat;

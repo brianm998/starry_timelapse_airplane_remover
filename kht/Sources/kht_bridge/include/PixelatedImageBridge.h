@@ -16,6 +16,9 @@ NS_ASSUME_NONNULL_BEGIN
                    maxThreshold:(double)maxThreshold
                   useL2Gradient:(BOOL)useL2Gradient;
 
++ (MatWrapper *)shiftImageUp:(MatWrapper *) input
+                 shiftPixels:(int)shiftPixels;
+
 + (MatWrapper *)bitwiseAnd:(MatWrapper *)img withImage:(MatWrapper *)img1;
 
 + (MatWrapper *)bitwiseNot:(MatWrapper *)img;

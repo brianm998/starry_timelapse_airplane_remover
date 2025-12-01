@@ -1018,6 +1018,11 @@ extension PixelatedImage {
           horizonMask: alignedHorizonMask
         )
     }
+
+    public func shiftImageUp(by pixels: Int) -> PixelatedImage? {
+        let result = PixelatedImageBridge.shiftImageUp(self.mat, shiftPixels: Int32(pixels))
+        return PixelatedImage(mat: result)
+    }
     
     // raises the mask by the given amount, creating a gradient
     // areas that were non zero and within borderAmount of the border

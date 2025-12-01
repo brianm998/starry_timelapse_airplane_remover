@@ -1191,10 +1191,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
 
-        Log.d("FUCK 1")
         let (starAlignedImage, failedStarAlignedImage) =
           try await loadOrCreateStarAlignedImage()
-        Log.d("FUCK 2")
 
         var skyAlignedImage: PixelatedImage? = starAlignedImage
         if skyAlignedImage == nil {
@@ -1452,9 +1450,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
             } else if !loadOnly {
                 // potentially recalculate the alignment image if necessary
-                Log.d("FUCK 1")
                 let _ = try await self.loadOrCreateStarAlignedImage()
-                Log.d("FUCK 2")
                 
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
                 Log.d("frame \(frameIndex) calculating outliers")
@@ -2350,10 +2346,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
      rid of even the small distant satellites that move slowly through the sky.
      */
     func createAutoProcessedImage() async throws -> PixelatedImage {
-        Log.d("FUCK 1")
         let (starAlignedImage, failedStarImage) =
           try await loadOrCreateStarAlignedImage()
-        Log.d("FUCK 2")
 
         var skyImage: PixelatedImage? = starAlignedImage
         if skyImage == nil {
@@ -2384,20 +2378,32 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
             
             if let earthImage {
-                if let horizonMask {
+                // XXX make new parameter for horizon vertical extension
+                // use it here to move the horizon mask up by that many pixels
+                if let horizonMask,
+                   let highHorizon = horizonMask.shiftImageUp(by: 8)
+                {
                     // this merged horizon mask should have been created right above
                     return try skyImage.apply(
-                      mask: horizonMask,
+                      mask: highHorizon,
                       with: earthImage
                     )
                 } else {
                     // but if not, fallback to the non-merged one, which is better than nothing
                     Log.w("frame \(frameIndex) falling back to non-merged horizon mask")
                     let horizonMask = try await loadOrCreateHorizonMask()
-                    return try skyImage.apply(
-                      mask: horizonMask.image,
-                      with: earthImage
-                    )
+                    if let highHorizon = horizonMask.image.shiftImageUp(by: 8) {
+                        return try skyImage.apply(
+                          mask: highHorizon,
+                          with: earthImage
+                        )
+                    } else {
+                        // we can't extend the horizon, just use what we have
+                        return try skyImage.apply(
+                          mask: horizonMask.image,
+                          with: earthImage
+                        )
+                    }
                 }
             } else {
                 // no earth aligned image, fall back to sky
