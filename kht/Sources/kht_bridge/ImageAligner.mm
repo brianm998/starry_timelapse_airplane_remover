@@ -516,7 +516,8 @@ MatWrapper * createGradientMaskIntoSky(const cv::Mat &binaryMask, int gradientDi
 // Convert image to 8-bit grayscale, normalize only within mask area
 MatWrapper * toGray8UWithMask(const cv::Mat& src, const cv::Mat& mask, bool normalize = true) {
     if (src.empty()) {
-        throw std::runtime_error("Input image is empty!");
+        Log_e(@"Input image is empty!");
+        return nil;
     }
 
     cv::Mat gray;
@@ -653,6 +654,7 @@ maxCornerDeviation:(double)maxCornerDeviation
      maxKeypoints:(int)maxKeypoints
  outlierThreshold:(double)k
 {
+  @try {
   try {
     // how far vertically to extend the horizon mask when inverted
     int horizonExtension = 100; // XXX make this a parameter?
@@ -663,8 +665,8 @@ maxCornerDeviation:(double)maxCornerDeviation
     // random logID
     uint32_t logID = arc4random_uniform(1000);
 
-        Log_d(@"%d align frames %@ frameMasks %@ matchMethod %ld maxDeviation %lf maxCornerDeviation %lf invertMask %d maxKeypoints %d k %lf",
-              logID, frameFilenames, frameMaskFilenames, matchMethod, maxDeviation, maxCornerDeviation, invertMask, maxKeypoints, k);
+    Log_d(@"%d align frames %@ frameMasks %@ matchMethod %ld maxDeviation %lf maxCornerDeviation %lf invertMask %d maxKeypoints %d k %lf",
+          logID, frameFilenames, frameMaskFilenames, matchMethod, maxDeviation, maxCornerDeviation, invertMask, maxKeypoints, k);
     //    Log_d(@"%d align frames %@ frameMasks %@ matchMethod %d ",
     //          logID, frameFilenames, frameMaskFilenames, matchMethod);
 
@@ -757,8 +759,10 @@ maxCornerDeviation:(double)maxCornerDeviation
 
     // Preallocate per-index result storage to avoid push_back from many threads
     const size_t n = frameFilenames.count;
+
     std::vector<MatWrapper *> resultMats(n);       // will hold warped (success) or original (failure)
     std::vector<MatWrapper *> alignedHorizonMats(n); // will hold warped (success) or original (failure) aligned horizon mats
+
     std::vector<char>    resultSuccess(n, 0); // 1 if accepted warp, 0 otherwise
 
 	Log_i(@"%d, about to align in parallel", logID);
@@ -775,6 +779,10 @@ maxCornerDeviation:(double)maxCornerDeviation
           NSUInteger idx = (NSUInteger)ii;
           Log_i(@"%d %d top", logID, ii);
           MatWrapper * frame = [ObjcImageCache loadImage:frameFilenames[idx]];
+          if (frame == nil) {
+            Log_e(@"%d frame is nil, logID");
+            continue;
+          }
           MatWrapper * frameHorizon = 0;
           if (frameMaskFilenames.count > idx) {
             frameHorizon = [ObjcImageCache loadImage:frameMaskFilenames[idx]];
@@ -794,7 +802,7 @@ maxCornerDeviation:(double)maxCornerDeviation
             }
 
             //cv::imwrite("/tmp/horizon_b_" + std::to_string(idx) + ".tiff", horizon);
-            
+
             MatWrapper * frameGray = toGray8UWithMask(frame.mat,
                                                       //horizonMask.mat,
                                                       horizon,
@@ -802,7 +810,6 @@ maxCornerDeviation:(double)maxCornerDeviation
                                                       true);
 
             //cv::imwrite("/tmp/frame_gray_" + std::to_string(idx) + ".tiff", frameGray.mat);
-                        
 
             Log_i(@"%d %d to gray check", logID, ii);
 
@@ -851,6 +858,7 @@ maxCornerDeviation:(double)maxCornerDeviation
               // failed early: no descriptors
               resultSuccess[idx] = 0;
               resultMats[idx] = frame;
+              CFRetain((__bridge CFTypeRef)frame);
               continue;
             }
 
@@ -992,7 +1000,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                                       cv::Scalar(0,0,0,0));
 
 
-                  cv::imwrite("/tmp/warped_first_" + std::to_string(idx) + ".tiff", warped);
+                  //cv::imwrite("/tmp/warped_first_" + std::to_string(idx) + ".tiff", warped);
 
                   
                   if (frameHorizon != NULL) {
@@ -1023,15 +1031,24 @@ maxCornerDeviation:(double)maxCornerDeviation
                 //cv::cvtColor(warped, warped, cv::COLOR_BGRA2BGR);
               }
               resultSuccess[idx] = 1;
-              resultMats[idx] = [[MatWrapper alloc] initWithMat: warped];
+
+              MatWrapper *wrappedWarp = [[MatWrapper alloc] initWithMat: warped];
+              resultMats[idx] = wrappedWarp;
+              CFRetain((__bridge CFTypeRef)wrappedWarp);
+
               alignedHorizonMats[idx] = [[MatWrapper alloc] initWithMat: warpedHorizon];
+              if (alignedHorizonMats[idx] != NULL)
+                CFRetain((__bridge CFTypeRef)alignedHorizonMats[idx]);
+    
               if(warped.empty()) {
                 Log_w(@"warped is empty");
               }
             } else {
               resultSuccess[idx] = 0;
               resultMats[idx] = frame;
+              CFRetain((__bridge CFTypeRef)frame);
               alignedHorizonMats[idx] = frameHorizon;
+              if (frameHorizon != NULL) CFRetain((__bridge CFTypeRef)frameHorizon);
               if(frame.mat.empty()) {
                 Log_w(@"frame is empty");
               }
@@ -1043,14 +1060,17 @@ maxCornerDeviation:(double)maxCornerDeviation
             // On exception mark as failed and store original
             resultSuccess[idx] = 0;
             resultMats[idx] = frame;
+            CFRetain((__bridge CFTypeRef)frame);
           } catch (const std::exception &e) {
             Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
             resultSuccess[idx] = 0;
             resultMats[idx] = frame;
+            CFRetain((__bridge CFTypeRef)frame);
           } catch (...) {
             Log_e(@"Unknown Error");
             resultSuccess[idx] = 0;
             resultMats[idx] = frame;
+            CFRetain((__bridge CFTypeRef)frame);
           }
         }
       });
@@ -1066,14 +1086,17 @@ maxCornerDeviation:(double)maxCornerDeviation
     BOOL hasHorizon = NO;
     
     for (size_t i = 0; i < n; ++i) {
-      if(resultMats[i].mat.empty()) {
-        Log_w(@"FUCK");
+      //      if(resultMats[i].mat.empty()) { // XXX HERE
+      //        Log_w(@"FUCK");
+      //      }
+      if (resultMats[i] != nil) {
+        if (resultSuccess[i]) {
+          aligned.push_back(resultMats[i]);
+        } else {
+          failed.push_back(resultMats[i]);
+        }
       }
-      if (resultSuccess[i]) {
-        aligned.push_back(resultMats[i]);
-      } else {
-        failed.push_back(resultMats[i]);
-      }
+      
       if (alignedHorizonMats[i] != NULL && !alignedHorizonMats[i].mat.empty()) {
         horizons.push_back(alignedHorizonMats[i]);
         hasHorizon = YES;
@@ -1086,11 +1109,14 @@ maxCornerDeviation:(double)maxCornerDeviation
 	if(aligned.size() != 0) {
       aligned.push_back(special);
     }
+
+    Log_d(@"we have %d aligned and %d failed merges", aligned.size(), failed.size());
     
     // use median merges
     MatWrapper * alignedResult = medianImageFromArray(aligned, k, false);
     MatWrapper * failedResult = medianImageFromArray(failed, k, false);
-    
+
+    // XXX set frame state to .mergingHorizon
     MatWrapper * horizonResult = medianImageFromArray(horizons, k, true);
 
 	if(alignedResult.mat.empty()) {
@@ -1106,14 +1132,33 @@ maxCornerDeviation:(double)maxCornerDeviation
     resultObj.failed = failedResult;
     resultObj.numFailed = failed.size();
     resultObj.horizonMask = horizonResult;
+
+
+    // CFRelease temporary objects
+    for (size_t i = 0; i < n; ++i) {
+      if (resultMats[i] != NULL) {
+        CFRelease((__bridge CFTypeRef)resultMats[i]);
+        resultMats[i] = NULL;
+      }
+      if (alignedHorizonMats[i] != NULL) {
+        CFRelease((__bridge CFTypeRef)alignedHorizonMats[i]);
+        alignedHorizonMats[i] = NULL;
+      }
+    }    
     return resultObj;
 
   } catch (const cv::Exception &e) {
+    Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
     return [NSString stringWithUTF8String:e.what()];
   } catch (const std::exception &e) {
+    Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
     return [NSString stringWithUTF8String:e.what()];
   } catch (...) {
+    Log_e(@"Unknown Error");
     return @"Unknown Exception";
+  }
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception: %@", exception);
   }
 }
 
