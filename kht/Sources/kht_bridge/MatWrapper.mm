@@ -113,6 +113,10 @@ static inline NSImage* NSImageFromCvMat(const cv::Mat& mat) {
 }
 @end
 
+bool isROI(const cv::Mat& m) {
+    return m.data != m.datastart;
+}
+
 bool matOwnsData(const cv::Mat& m) {
     return m.u != nullptr;
 }
@@ -159,13 +163,7 @@ static NSUInteger _totalInstances = 0;
     Log_w(@"init with empty mat");
   }
   if (self) {
-    if(matOwnsData(mat)) {
-      // this mat owns its data, just do a shallow copy
-      _mat = mat;               // shallow copy (refcount increment)
-    } else {
-      // this mat DOES NOT own its data, we need to clone it
       _mat = mat.clone();       // copy mat memory into new buffer for us to hold
-    }
   }
 
   NSUInteger count = _mat.step[0] * _mat.rows;
@@ -271,7 +269,7 @@ static NSUInteger _totalInstances = 0;
 
     // Crop using ROI
     // clone ensures a new Mat is returned
-    return [[MatWrapper alloc] initWithMat: self.mat(roi)/*.clone()*/]; 
+    return [[MatWrapper alloc] initWithMat: self.mat(roi).clone()]; 
 }
 
 - (MatWrapper *)addWhiteRowsOnTop:(int)rows {
