@@ -110,6 +110,8 @@ MatWrapper * medianImageFromArray(const std::vector<MatWrapper *>& mats, double 
 
     cv::Mat output(rows, cols, first.mat.type());
 
+    int vals[4][n]; // up to 4 channels, up to n mats
+    
     if (depth == CV_8U) {
         // 8-bit per channel
         for (int y = 0; y < rows; ++y) {
@@ -118,7 +120,6 @@ MatWrapper * medianImageFromArray(const std::vector<MatWrapper *>& mats, double 
             uchar* outRow = output.ptr<uchar>(y);
 
             for (int x = 0; x < cols; ++x) {
-                int vals[4][n]; // up to 4 channels, up to n mats
                 for (int i = 0; i < n; ++i) {
                     const uchar* pix = rowPtrs[i] + x * ch; // bytes-per-pixel = ch * 1
                     for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
@@ -175,7 +176,6 @@ MatWrapper * medianImageFromArray(const std::vector<MatWrapper *>& mats, double 
             uint16_t* outRow = output.ptr<uint16_t>(y);
 
             for (int x = 0; x < cols; ++x) {
-                int vals[4][n]; // use int for sorting/safety
                 for (int i = 0; i < n; ++i) {
                     const uint16_t* pix = rowPtrs[i] + x * ch; // element-per-pixel = ch (uint16_t)
                     for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
@@ -290,6 +290,8 @@ cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Ma
 
     cv::Mat output(rows, cols, first.type());
 
+    int vals[4][n]; // up to 4 channels, up to n mats
+
     if (depth == CV_8U) {
         // 8-bit per channel
         for (int y = 0; y < rows; ++y) {
@@ -301,7 +303,6 @@ cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Ma
             const uchar* baseRow = baseMat.ptr<uchar>(y);
 
             for (int x = 0; x < cols; ++x) {
-                int vals[4][n]; // up to 4 channels, up to n mats
                 for (int i = 0; i < n; ++i) {
                     const uchar* pix = rowPtrs[i] + x * ch; // bytes-per-pixel = ch * 1
                     for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
@@ -344,7 +345,6 @@ cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Ma
             const uint16_t* baseRow = baseMat.ptr<uint16_t>(y);
 
             for (int x = 0; x < cols; ++x) {
-                int vals[4][n]; // use int for sorting/safety
                 for (int i = 0; i < n; ++i) {
                     const uint16_t* pix = rowPtrs[i] + x * ch; // element-per-pixel = ch (uint16_t)
                     for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
@@ -794,10 +794,11 @@ maxCornerDeviation:(double)maxCornerDeviation
 
             // make a gray 8 bit image for detection
 
-            cv::Mat horizon = horizonMask.mat.clone();
+            cv::Mat horizon = horizonMask.mat
 
             //cv::imwrite("/tmp/horizon_a_" + std::to_string(idx) + ".tiff", horizon);
             if (!invertMask) {
+              horizon = horizon.clone()
               // attempt to exclude the horizon from the sky area
               // so key points are not detected there 
               growBlack(horizon, 100); // XXX make this a parameter
