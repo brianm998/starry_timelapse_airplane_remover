@@ -183,7 +183,7 @@ struct BottomRightView: View {
 
                 Button() {
                     withAnimation {
-                        viewModel.shouldShowInitialInstructions = true
+                        viewModel.shouldShowProcessingSettings = true
                     }
                 } label: {
                     Text("⚙")
