@@ -590,7 +590,22 @@ maxCornerDeviation:(double)maxCornerDeviation
     std::vector<char>    resultSuccess(n, 0); // 1 if accepted warp, 0 otherwise
 
 	Log_i(@"%d, about to align in parallel", logID);
-	
+
+    // preload frames and masks
+    std::vector<MatWrapper*> preloadedFrames;
+    std::vector<MatWrapper*> preloadedMasks;
+    preloadedFrames.resize(n);
+    preloadedMasks.resize(n);
+
+    for (size_t i = 0; i < n; ++i) {
+      preloadedFrames[i] = [ObjcImageCache loadImage:frameFilenames[i]];
+      if (frameMaskFilenames.count > i)
+        preloadedMasks[i] = [ObjcImageCache loadImage:frameMaskFilenames[i]];
+      else
+        preloadedMasks[i] = nullptr;
+      // Optionally CFRetain if you need to hold them past ObjC scope
+    }
+    
     // We will run the heavy loop in parallel with OpenCV
     // for some reason this doesn't seem to really end up in parallel, not sure why
     cv::parallel_for_(cv::Range(0, (int)n), [&](const cv::Range &range) {
@@ -602,14 +617,14 @@ maxCornerDeviation:(double)maxCornerDeviation
         for (int ii = range.start; ii < range.end; ++ii) {
           NSUInteger idx = (NSUInteger)ii;
           Log_i(@"%d %d top", logID, ii);
-          MatWrapper * frame = [ObjcImageCache loadImage:frameFilenames[idx]];
+          MatWrapper * frame = preloadedFrames[idx];
           if (frame == nil) {
             Log_e(@"%d frame is nil, logID");
             continue;
           }
           MatWrapper * frameHorizon = 0;
           if (frameMaskFilenames.count > idx) {
-            frameHorizon = [ObjcImageCache loadImage:frameMaskFilenames[idx]];
+            frameHorizon = preloadedMasks[idx];
           }
           try {
             Log_i(@"%d %d loaded", logID, ii);
