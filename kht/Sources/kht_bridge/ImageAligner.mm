@@ -66,6 +66,7 @@ void growBlack(cv::Mat &img, int pixels)
 @implementation AlignmentResult
 @end
 
+// Median Merge Logic:
 // merges the provided vector of cv::Mat images with median brightness per channel
 // throws out 99% or more of airplane and satellite signal
 // gives a pretty clear horizon
@@ -73,322 +74,143 @@ void growBlack(cv::Mat &img, int pixels)
 // smaller weeds out more bright pixels, larger weeds out less.
 // It is good to weed out these bright pixels before taking the median
 // as otherwise areas with lots of bright bad pixels in the same spot across
-// multiple images can sometimes allow the bad pixels to show up at the median 
-MatWrapper * medianImageFromArray(const std::vector<MatWrapper *>& mats, double k, BOOL includeAll) {
-  if (mats.empty()) {
-    Log_w(@"given empty mats, returning one too :(");
-    return [[MatWrapper alloc] initWithMat: cv::Mat()];
-  }
+// multiple images can sometimes allow the bad pixels to show up at the median
 
-    // grab first image to read its characteristics
-    MatWrapper * first = mats[0];
-
-    // image height
-    int rows = first.mat.rows;
-
-    // image width
-    int cols = first.mat.cols;
-
-    // channels per pixel
-    int ch   = first.mat.channels();
-
-    // size of each channel
-    int depth = first.mat.depth();
-
-    // how many incoming images we're dealing with
-    int n    = static_cast<int>(mats.size());
-
-    // basic validation
-    for (int i = 1; i < n; ++i) {
-      if (mats[i].mat.rows != rows || mats[i].mat.cols != cols || mats[i].mat.type() != first.mat.type()) {
-            throw std::runtime_error("All mats must have same size and type");
-        }
-    }
-    if (ch != 1 && ch != 3 && ch != 4) {
-        throw std::runtime_error("Unsupported channel count");
-    }
-
-    cv::Mat output(rows, cols, first.mat.type());
-
-    int vals[4][n]; // up to 4 channels, up to n mats
-    
-    if (depth == CV_8U) {
-        // 8-bit per channel
-        for (int y = 0; y < rows; ++y) {
-            const uchar* rowPtrs[n];
-            for (int i = 0; i < n; ++i) rowPtrs[i] = mats[i].mat.ptr<uchar>(y);
-            uchar* outRow = output.ptr<uchar>(y);
-
-            for (int x = 0; x < cols; ++x) {
-                for (int i = 0; i < n; ++i) {
-                    const uchar* pix = rowPtrs[i] + x * ch; // bytes-per-pixel = ch * 1
-                    for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
-                }
-                for (int c = 0; c < ch; ++c) {
-                    std::sort(vals[c], vals[c] + n);
-
-                    // sort values for this pixel component across images
-                    std::sort(vals[c], vals[c] + n);
-
-                    // calculate mean intensity for this channel
-                    double sum = 0;
-                    for(int z = 0 ; z < n ; ++z) {
-                      sum += (double)vals[c][z];
-                    }
-                    double mean = sum / n; // mean intensity for this channel
-                    
-                    double varSum = 0.0;
-                    for(int z = 0 ; z < n ; ++z) {
-                      double d = (double)vals[c][z] - mean;
-                      varSum += d * d;
-                    }
-                    double std = sqrt(varSum / n);
-                    double threshold = mean + k * std; // our threshold
-                    
-                    int maxIndex = n;
-                    int minIndex = 0;
-                    if(!includeAll) {
-                      // maybe use different indices if we don't include all 
-                      for(int z = 0 ; z < n ; ++z) {
-                        char value = vals[c][z];
-                        if(value == 0) {
-                          minIndex = z + 1;
-                        }
-                      
-                        if((double)vals[c][z] < threshold) {
-                          maxIndex = z;
-                        } else {
-                          break;
-                        }
-                      }
-                    }
-                    int index = (minIndex+maxIndex)/2;
-                    if(index >= n) { index = n - 1; }
-                    outRow[x * ch + c] = static_cast<uchar>(vals[c][index]);
-                }
-            }
-        }
-    } else if (depth == CV_16U) {
-        // 16-bit per channel
-        for (int y = 0; y < rows; ++y) {
-            const uint16_t* rowPtrs[n];
-            for (int i = 0; i < n; ++i) rowPtrs[i] = mats[i].mat.ptr<uint16_t>(y);
-            uint16_t* outRow = output.ptr<uint16_t>(y);
-
-            for (int x = 0; x < cols; ++x) {
-                for (int i = 0; i < n; ++i) {
-                    const uint16_t* pix = rowPtrs[i] + x * ch; // element-per-pixel = ch (uint16_t)
-                    for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
-                }
-                for (int c = 0; c < ch; ++c) {
-                   /*
-		      apply statistics here to weed bright outliers
-
-		      1. calculcate mean intensity
-		      2. standard deviation to get threshold
-		      3. see what index the threshold appears at
-		      4. divide that number by 2 instead of n to get the median
-		    */
-
-		    // sort values for this pixel component across images
-                    std::sort(vals[c], vals[c] + n);
-
-                    // calculate mean intensity for this channel
-                    double sum = 0;
-                    for(int z = 0 ; z < n ; ++z) {
-                      sum += (double)vals[c][z];
-                    }
-                    double mean = sum / n; // mean intensity for this channel
-		    
-                    double varSum = 0.0;
-                    for(int z = 0 ; z < n ; ++z) {
-                      double d = (double)vals[c][z] - mean;
-                      varSum += d * d;
-                    }
-                    double std = sqrt(varSum / n);
-                    double threshold = mean + k * std; // our threshold
-
-                    int maxIndex = n;
-                    int minIndex = 0;
-                    // throw out pixels with value zero at the bottom
-                    // throw out pixels with too much statistal variation at the top
-                    if(!includeAll) {
-                      // maybe use different indices if we don't include all 
-                      for(int z = 0 ; z < n ; ++z) {
-                        uint16_t value = vals[c][z];
-                        if(value == 0) {
-                          minIndex = z + 1;
-                        }
-                        if((double)value < threshold) {
-                          maxIndex = z;
-                        } else {
-                          break;
-                        }
-                      }
-                    }
-
-                    // choose the median between the given bounds
-                    int index = (minIndex+maxIndex)/2;
-
-                    // make sure we don't overrun
-                    if(index >= n) { index = n - 1; }
-
-                    // actual set the output pixel to the given value
-                    outRow[x * ch + c] = static_cast<uint16_t>(vals[c][index]);
-                }
-            }
-        }
+template <typename T>
+static inline T clamp_cast_int(int v) {
+    if constexpr (std::is_same_v<T, uchar>) {
+        return static_cast<uchar>(std::clamp(v, 0, 255));
     } else {
-      throw std::runtime_error("Unsupported element depth (only CV_8U and CV_16U implemented)");
+        return static_cast<uint16_t>(std::clamp(v, 0, 65535));
     }
-
-    if(output.empty()) {
-      Log_w(@"empty mat");
-    }
-    printMatInfo(output, "image align output");
-    
-    return [[MatWrapper alloc] initWithMat: output];
 }
 
-// tries to match the base mat from the aligned mats
-// preserves too much bad signal, but does keep clouds in the right place
-cv::Mat matchingImageFromArray(const cv::Mat & baseMat, const std::vector<cv::Mat>& mats, double k) {
-    if (mats.empty()) return cv::Mat();
+// -----------------------------------------------------------------------------
+// Core median logic applied to either CV_8U or CV_16U using templates
+// -----------------------------------------------------------------------------
+template <typename T>
+static void medianMergeTyped(
+    cv::Mat &output,
+    const std::vector<MatWrapper*>& mats,
+    double k,
+    bool includeAll,
+    int rows,
+    int cols,
+    int ch
+) {
+    const int n = static_cast<int>(mats.size());
+    std::vector<int> vals(n);
 
-    // grab first image to read its characteristics
-    const cv::Mat& first = mats[0];
+    for (int y = 0; y < rows; ++y) {
+        const T* rowPtrs[n];
+        for (int i = 0; i < n; ++i)
+          rowPtrs[i] = mats[i].mat.ptr<T>(y);
 
-    // image height
-    int rows = first.rows;
+        T* outRow = output.ptr<T>(y);
 
-    // image width
-    int cols = first.cols;
+        for (int x = 0; x < cols; ++x) {
 
-    // channels per pixel
-    int ch   = first.channels();
+            for (int c = 0; c < ch; ++c) {
 
-    // size of each channel
-    int depth = first.depth();
+                // gather values
+                for (int i = 0; i < n; ++i) {
+                    vals[i] = rowPtrs[i][x * ch + c];
+                }
 
-    // how many incoming images we're dealing with
-    int n    = static_cast<int>(mats.size());
+                // sort
+                std::sort(vals.begin(), vals.end());
 
-    // basic validation
+                // compute mean
+                double sum = 0;
+                for (int v : vals) sum += v;
+                double mean = sum / n;
 
-    if (baseMat.rows != rows || baseMat.cols != cols || baseMat.type() != first.type()) {
-      throw std::runtime_error("base mat must be the same size as the first vector mat");
+                // compute stddev
+                double var = 0.0;
+                for (int v : vals) {
+                    double d = v - mean;
+                    var += d * d;
+                }
+                double stddev = std::sqrt(var / n);
+
+                double threshold = mean + k * stddev;
+
+                // determine usable min/max indices
+                int minIndex = 0;
+                int maxIndex = n;
+
+                if (!includeAll) {
+                    for (int z = 0; z < n; ++z) {
+                        int v = vals[z];
+
+                        if (v == 0)
+                            minIndex = z + 1;
+
+                        if (v < threshold)
+                            maxIndex = z;
+                        else
+                            break;
+                    }
+                }
+
+                // choose median within the reduced range
+                int idx = (minIndex + maxIndex) / 2;
+                if (idx >= n) idx = n - 1;
+
+                outRow[x * ch + c] = clamp_cast_int<T>(vals[idx]);
+            }
+        }
     }
-    
+}
+
+// -----------------------------------------------------------------------------
+// Public entry point
+// -----------------------------------------------------------------------------
+MatWrapper* medianImageFromArray(const std::vector<MatWrapper*>& mats,
+                                 double k,
+                                 BOOL includeAll)
+{
+    if (mats.empty()) {
+        Log_w(@"given empty mats, returning empty");
+        return [[MatWrapper alloc] initWithMat:cv::Mat()];
+    }
+
+    const cv::Mat& first = mats[0].mat;
+    const int rows = first.rows;
+    const int cols = first.cols;
+    const int ch   = first.channels();
+    const int depth = first.depth();
+    const int n     = (int)mats.size();
+
+    // Validate dimensions/types
     for (int i = 1; i < n; ++i) {
-        if (mats[i].rows != rows || mats[i].cols != cols || mats[i].type() != first.type()) {
+        const cv::Mat& m = mats[i].mat;
+        if (m.rows != rows || m.cols != cols || m.type() != first.type()) {
             throw std::runtime_error("All mats must have same size and type");
         }
     }
-    if (ch != 1 && ch != 3 && ch != 4) {
+    if (ch != 1 && ch != 3 && ch != 4)
         throw std::runtime_error("Unsupported channel count");
-    }
 
     cv::Mat output(rows, cols, first.type());
 
-    int vals[4][n]; // up to 4 channels, up to n mats
-
+    // Dispatch to correct typed implementation
     if (depth == CV_8U) {
-        // 8-bit per channel
-        for (int y = 0; y < rows; ++y) {
-            const uchar* rowPtrs[n];
-            for (int i = 0; i < n; ++i) {
-              rowPtrs[i] = mats[i].ptr<uchar>(y);
-            }
-            uchar* outRow = output.ptr<uchar>(y);
-            const uchar* baseRow = baseMat.ptr<uchar>(y);
-
-            for (int x = 0; x < cols; ++x) {
-                for (int i = 0; i < n; ++i) {
-                    const uchar* pix = rowPtrs[i] + x * ch; // bytes-per-pixel = ch * 1
-                    for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
-                }
-                for (int c = 0; c < ch; ++c) {
-                  // std::sort(vals[c], vals[c] + n);
-
-		    // sort values for this pixel component across images
-                    std::sort(vals[c], vals[c] + n);
-
-                    uchar baseValue = *(baseRow + x * ch);
-		    /*
-		      find the value which is closest to the base, and use that
-		     */
-                    int best_index = 0;
-                    uchar best_value = 0;
-                    uchar best_diff = 0xFF;
-                    
-                    for(int z = 0 ; z < n ; ++z) {
-                      uchar diff = abs(baseValue - vals[c][z]);
-                      if(diff < best_diff) {
-                        best_index = z;
-                        best_value = vals[c][z];
-                        best_diff = diff;
-                      }
-                    }
-                    
-                    outRow[x * ch + c] = static_cast<uchar>(vals[c][best_index]);
-                }
-            }
-        }
-    } else if (depth == CV_16U) {
-        // 16-bit per channel
-        for (int y = 0; y < rows; ++y) {
-            const uint16_t* rowPtrs[n];
-            for (int i = 0; i < n; ++i) {
-              rowPtrs[i] = mats[i].ptr<uint16_t>(y);
-            }
-            uint16_t* outRow = output.ptr<uint16_t>(y);
-            const uint16_t* baseRow = baseMat.ptr<uint16_t>(y);
-
-            for (int x = 0; x < cols; ++x) {
-                for (int i = 0; i < n; ++i) {
-                    const uint16_t* pix = rowPtrs[i] + x * ch; // element-per-pixel = ch (uint16_t)
-                    for (int c = 0; c < ch; ++c) vals[c][i] = pix[c];
-                }
-                for (int c = 0; c < ch; ++c) {
-                   /*
-		      apply statistics here to weed bright outliers
-
-		      1. calculcate mean intensity
-		      2. standard deviation to get threshold
-		      3. see what index the threshold appears at
-		      4. divide that number by 2 instead of n to get the median
-		    */
-
-		    // sort values for this pixel component across images
-                    std::sort(vals[c], vals[c] + n);
-
-                    uint16_t baseValue = *(baseRow + x * ch);
-		    /*
-		      find the value which is closest to the base, and use that
-		     */
-                    int best_index = 0;
-                    uint16_t best_value = 0;
-                    uint16_t best_diff = 0xFFFF;
-                    
-                    for(int z = 0 ; z < n ; ++z) {
-                      uint16_t diff = abs(baseValue - vals[c][z]);
-                      if(diff < best_diff) {
-                        best_index = z;
-                        best_value = vals[c][z];
-                        best_diff = diff;
-                      }
-                    }
-		    
-                    outRow[x * ch + c] = static_cast<uint16_t>(vals[c][best_index]);
-                }
-            }
-        }
-    } else {
-        throw std::runtime_error("Unsupported element depth (only CV_8U and CV_16U implemented)");
+        medianMergeTyped<uchar>(output, mats, k, includeAll, rows, cols, ch);
+    }
+    else if (depth == CV_16U) {
+        medianMergeTyped<uint16_t>(output, mats, k, includeAll, rows, cols, ch);
+    }
+    else {
+        throw std::runtime_error("Unsupported depth (only CV_8U and CV_16U supported)");
     }
 
-    return output;
+    printMatInfo(output, "image align output");
+
+    return [[MatWrapper alloc] initWithMat:output];
 }
+
+
 
 
 
@@ -794,11 +616,11 @@ maxCornerDeviation:(double)maxCornerDeviation
 
             // make a gray 8 bit image for detection
 
-            cv::Mat horizon = horizonMask.mat
+            cv::Mat horizon = horizonMask.mat;
 
             //cv::imwrite("/tmp/horizon_a_" + std::to_string(idx) + ".tiff", horizon);
             if (!invertMask) {
-              horizon = horizon.clone()
+              horizon = horizon.clone();
               // attempt to exclude the horizon from the sky area
               // so key points are not detected there 
               growBlack(horizon, 100); // XXX make this a parameter
