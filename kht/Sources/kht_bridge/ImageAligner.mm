@@ -482,7 +482,7 @@ maxCornerDeviation:(double)maxCornerDeviation
     int horizonExtension = 100; // XXX make this a parameter?
 
     // how many threads opencv can use
-    cv::setNumThreads(36);    // XXX make this a parameter?
+    //    cv::setNumThreads(36);    // XXX make this a parameter?
 
     // random logID
     uint32_t logID = arc4random_uniform(1000);
@@ -605,6 +605,9 @@ maxCornerDeviation:(double)maxCornerDeviation
         preloadedMasks[i] = nullptr;
       // Optionally CFRetain if you need to hold them past ObjC scope
     }
+
+    int oldThreads = cv::getNumThreads();   // remember current setting
+    cv::setNumThreads(1);                    // disable internal parallelism
     
     // We will run the heavy loop in parallel with OpenCV
     // for some reason this doesn't seem to really end up in parallel, not sure why
@@ -917,6 +920,8 @@ maxCornerDeviation:(double)maxCornerDeviation
         }
       });
 
+    cv::setNumThreads(oldThreads);           // restore
+ 
     // Gather aligned and failed in the same shape as original function
     std::vector<MatWrapper*> aligned;
     std::vector<MatWrapper*> failed;
