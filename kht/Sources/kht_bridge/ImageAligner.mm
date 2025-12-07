@@ -619,7 +619,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 			    
         for (int ii = range.start; ii < range.end; ++ii) {
           NSUInteger idx = (NSUInteger)ii;
-          Log_i(@"%d %d top", logID, ii);
+          //Log_i(@"%d %d top", logID, ii);
           MatWrapper * frame = preloadedFrames[idx];
           if (frame == nil) {
             Log_e(@"%d frame is nil, logID");
@@ -630,7 +630,7 @@ maxCornerDeviation:(double)maxCornerDeviation
             frameHorizon = preloadedMasks[idx];
           }
           try {
-            Log_i(@"%d %d loaded", logID, ii);
+            //Log_i(@"%d %d loaded", logID, ii);
 
             // make a gray 8 bit image for detection
 
@@ -654,7 +654,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 
             //cv::imwrite("/tmp/frame_gray_" + std::to_string(idx) + ".tiff", frameGray.mat);
 
-            Log_i(@"%d %d to gray check", logID, ii);
+            //Log_i(@"%d %d to gray check", logID, ii);
 
             std::vector<cv::KeyPoint> kpFrame;
             cv::Mat descFrame;
@@ -670,7 +670,7 @@ maxCornerDeviation:(double)maxCornerDeviation
               
               //cv::imwrite("/tmp/star_mask_" + std::to_string(idx) + ".tiff", localDetectionMask.mat);
               
-              Log_i(@"%d %d made star mask check", logID, ii);
+              //Log_i(@"%d %d made star mask check", logID, ii);
             }
 
             // create local detector/matcher/clahe instances so they are thread-local
@@ -691,7 +691,7 @@ maxCornerDeviation:(double)maxCornerDeviation
               if(!sift) sift = cv::SIFT::create(maxKeypoints);
               sift->detectAndCompute(frameGray.mat, localDetectionMask.mat, kpFrame, descFrame);
             }
-            Log_i(@"%d %d detected and computed check", logID, ii);
+            //Log_i(@"%d %d detected and computed check", logID, ii);
 
             frameGray.mat.release();
             frameGray = nil;          // not used past here, allow deallocation
@@ -778,7 +778,7 @@ maxCornerDeviation:(double)maxCornerDeviation
               }
               break;
             }
-            Log_i(@"%d %d matcher check", logID, ii);
+            //Log_i(@"%d %d matcher check", logID, ii);
 
 		    // after matching the keypoints between the special frame and
 		    // the alignment frame we're iterating over, we next need to
@@ -793,7 +793,7 @@ maxCornerDeviation:(double)maxCornerDeviation
 
             // need at least four points
             if (ptsFrame.size() >= 4) {
-              Log_d(@"%d has $zu control points", logID, ptsFrame.size());
+              //Log_d(@"%d has $zu control points", logID, ptsFrame.size());
               // find homography between the matched keypoints 
                 cv::Mat H = cv::findHomography(ptsFrame, ptsSpecial, cv::RANSAC, 10);
               if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
@@ -833,9 +833,8 @@ maxCornerDeviation:(double)maxCornerDeviation
                 if (acceptWarp) {
                   // if we accept the warp, then actually warp
                   // this frame to fit the special image
-                  Log_i(@"%d %d accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf",
-                        logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
-                  Log_i(@"%d %d accepting warp and warping", logID, ii);
+                  //Log_i(@"%d %d accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf", logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
+                  //Log_i(@"%d %d accepting warp and warping", logID, ii);
                   cv::warpPerspective(frame.mat, // the input to warp
                                       warped, // the warped output
                                       H, // the homography to warp with
@@ -850,7 +849,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                   
                   if (frameHorizon != NULL) {
                     // warp horizon with same homography as ground
-                    Log_i(@"%d %d accepting warp and warping horizon", logID, ii);
+                    //Log_i(@"%d %d accepting warp and warping horizon", logID, ii);
                     cv::warpPerspective(frameHorizon.mat, warpedHorizon, H,
                                         frameHorizon.mat.size(),
                                         cv::INTER_LINEAR, cv::BORDER_CONSTANT,
@@ -864,8 +863,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                                   cv::THRESH_BINARY);
                   }
                 } else {
-                  Log_i(@"%d %d NOT accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf",
-                        logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
+                  //Log_i(@"%d %d NOT accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf", logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
                 }
               }
             }
@@ -898,7 +896,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                 Log_w(@"frame is empty");
               }
             }
-            Log_i(@"%d %d done", logID, ii);
+            //Log_i(@"%d %d done", logID, ii);
 
           } catch (const cv::Exception &e) {
             Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
