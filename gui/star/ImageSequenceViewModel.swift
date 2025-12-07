@@ -726,13 +726,15 @@ public final class ImageSequenceViewModel {
         
         
         var numberPreviewsSaved = 0
-        try await imageAccessor.writeMissingImages() { numberSaved in
-            Task { @MainActor in
-                numberPreviewsSaved += 1
-                let amountPreviewsSaved = Double(numberPreviewsSaved)/Double(self.imageSequenceSize)
-                closure(numberPreviewsSaved, amountPreviewsSaved, 0, 0)
-            }
+        Task {
+            try await imageAccessor.writeMissingImages() { numberSaved in
+                Task { @MainActor in
+                    numberPreviewsSaved += 1
+                    let amountPreviewsSaved = Double(numberPreviewsSaved)/Double(self.imageSequenceSize)
+                    closure(numberPreviewsSaved, amountPreviewsSaved, 0, 0)
+                }
                 
+            }
         }
         Log.d("done with make missing previews")
 //        Log.d("make missing thumbnails")

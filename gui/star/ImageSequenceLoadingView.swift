@@ -43,6 +43,7 @@ struct ImageSequenceLoadingView: View {
                       Text("\(viewModel.numberExtracted) frames extracted")
                           .foregroundColor(.white)
                     }
+                    /*
                 } else if viewModel.amountPreviewsSaved != 1.0 {
                     CircularProgressView(progress: $viewModel.amountPreviewsSaved)
                       .frame(maxWidth: 500, maxHeight: 500)
@@ -58,7 +59,7 @@ struct ImageSequenceLoadingView: View {
                     } else {
                       Text("\(viewModel.numberPreviewsSaved) previews created")
                           .foregroundColor(.white)
-                    }
+                    }*/
                 } else {
                     CircularProgressView(progress: $viewModel.amountLoaded)
                       .frame(maxWidth: 500, maxHeight: 500)
