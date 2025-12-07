@@ -159,7 +159,7 @@ enum CameraMotion: String, InstructionOption, Identifiable {
     }
 }
 
-struct InitialInstructionsView: View {
+struct ProcessingSettingsView: View {
     var viewModel: ImageSequenceViewModel
 
     @State private var pixelReplacementMethod: HighLevelPixelReplacementMethod

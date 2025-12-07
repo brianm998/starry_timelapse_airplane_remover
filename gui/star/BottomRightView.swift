@@ -222,7 +222,7 @@ struct BottomRightView: View {
                                        viewModel: viewModel)
               }
               .sheet(isPresented: $viewModel.shouldShowInitialInstructions) {
-                  InitialInstructionsView(viewModel: viewModel)
+                  ProcessingSettingsView(viewModel: viewModel)
               }
             } else {
                 Spacer()

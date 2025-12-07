@@ -12,6 +12,7 @@
 		D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBC299736730001CD0C /* ViewModel.swift */; };
 		D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */; };
 		D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBE299736730001CD0C /* OutlierGroupView.swift */; };
+		D324257F2EE5030100CEF78F /* ProcessingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D324257E2EE5030100CEF78F /* ProcessingSettingsView.swift */; };
 		D326F57C2E510DC1008E71A2 /* OldZoomableModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = D326F57B2E510DC1008E71A2 /* OldZoomableModifier.swift */; };
 		D326F57E2E5274F3008E71A2 /* 11_30_2024-fx3-aurora-topaz-star.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = D326F57D2E5274F3008E71A2 /* 11_30_2024-fx3-aurora-topaz-star.mp4 */; };
 		D32F6DAA2A4D17CF00704870 /* ScrubSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DA92A4D17CF00704870 /* ScrubSliderView.swift */; };
@@ -69,7 +70,6 @@
 		D3B29CB12B2FE5BE00754C10 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CB02B2FE5BE00754C10 /* StarCore */; };
 		D3B3730A2D50857400B56342 /* ProcessRemainingFramesButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B373092D50857400B56342 /* ProcessRemainingFramesButton.swift */; };
 		D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */; };
-		D3CD86792CF5815100D2D53F /* InitialInstructionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3CD86782CF5815100D2D53F /* InitialInstructionsView.swift */; };
 		D3D7F0FC2A2BE10D00658862 /* StarCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */; };
 		D3DC07FC2C077DEB0031A3AE /* EditableFrameNumberView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3DC07FB2C077DEA0031A3AE /* EditableFrameNumberView.swift */; };
 		D3E67E1A2E3E63E000A97C28 /* ffmpeg in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3E67DE22E3E5DE300A97C28 /* ffmpeg */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
@@ -128,6 +128,7 @@
 		D31F9FBC299736730001CD0C /* ViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewModel.swift; sourceTree = "<group>"; };
 		D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameSaveQueue.swift; sourceTree = "<group>"; };
 		D31F9FBE299736730001CD0C /* OutlierGroupView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupView.swift; sourceTree = "<group>"; };
+		D324257E2EE5030100CEF78F /* ProcessingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessingSettingsView.swift; sourceTree = "<group>"; };
 		D326F57B2E510DC1008E71A2 /* OldZoomableModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OldZoomableModifier.swift; sourceTree = "<group>"; };
 		D326F57D2E5274F3008E71A2 /* 11_30_2024-fx3-aurora-topaz-star.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "11_30_2024-fx3-aurora-topaz-star.mp4"; sourceTree = "<group>"; };
 		D32F6DA92A4D17CF00704870 /* ScrubSliderView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ScrubSliderView.swift; sourceTree = "<group>"; };
@@ -185,7 +186,6 @@
 		D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UserPreferences.swift; sourceTree = "<group>"; };
 		D3B373092D50857400B56342 /* ProcessRemainingFramesButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRemainingFramesButton.swift; sourceTree = "<group>"; };
 		D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupTable.swift; sourceTree = "<group>"; };
-		D3CD86782CF5815100D2D53F /* InitialInstructionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InitialInstructionsView.swift; sourceTree = "<group>"; };
 		D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StarCommands.swift; sourceTree = "<group>"; };
 		D3DC07FB2C077DEA0031A3AE /* EditableFrameNumberView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EditableFrameNumberView.swift; sourceTree = "<group>"; };
 		D3E67DE22E3E5DE300A97C28 /* ffmpeg */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ffmpeg; sourceTree = "<group>"; };
@@ -289,6 +289,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D324257E2EE5030100CEF78F /* ProcessingSettingsView.swift */,
 				D397FEF82E96005500680C78 /* NewReleaseSheetView.swift */,
 				D35A284A2E50E176007121E6 /* Zoomable */,
 				D35A28452E4FC8AE007121E6 /* FinderStyleDropZone.swift */,
@@ -305,7 +306,6 @@
 				D35618712D24CCF80001814D /* OutlierWindowView.swift */,
 				D35618722D24CCF80001814D /* OutlierWindowViewModel.swift */,
 				D35309442D0DE4F200C4AFFF /* BlobProcessingView.swift */,
-				D3CD86782CF5815100D2D53F /* InitialInstructionsView.swift */,
 				D3A0D3AF2CF3AEB800FD2E9E /* FinalGUIProcessor.swift */,
 				D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */,
 				D3FBFA262CEAC0FF00A23FC6 /* InfoDialogView.swift */,
@@ -572,6 +572,7 @@
 				D33FFC122A2CF92900F38194 /* VideoPlaybackButtons.swift in Sources */,
 				D32F6DAA2A4D17CF00704870 /* ScrubSliderView.swift in Sources */,
 				D386FA13298B617300878B56 /* ContentView.swift in Sources */,
+				D324257F2EE5030100CEF78F /* ProcessingSettingsView.swift in Sources */,
 				D32F6DB92A4E6FCE00704870 /* BottomLeftView.swift in Sources */,
 				D32F6DB62A4D330C00704870 /* StarApp.swift in Sources */,
 				D35618732D24CCF80001814D /* OutlierWindowViewModel.swift in Sources */,
@@ -610,7 +611,6 @@
 				D392EB6D2E16C6940020E16A /* Space.swift in Sources */,
 				D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */,
 				D3A0D3B02CF3AEB800FD2E9E /* FinalGUIProcessor.swift in Sources */,
-				D3CD86792CF5815100D2D53F /* InitialInstructionsView.swift in Sources */,
 				D35A284B2E50E176007121E6 /* ZoomableModifier.swift in Sources */,
 				D35A284C2E50E176007121E6 /* ZoomableView.swift in Sources */,
 				D32F6DBA2A4E6FCE00704870 /* BottomRightView.swift in Sources */,
