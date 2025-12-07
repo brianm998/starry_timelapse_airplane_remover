@@ -221,8 +221,11 @@ struct BottomRightView: View {
                   RenderVideoSheetView(isVisible: $viewModel.renderVideoSheetShowing,
                                        viewModel: viewModel)
               }
-              .sheet(isPresented: $viewModel.shouldShowInitialInstructions) {
+              .sheet(isPresented: $viewModel.shouldShowProcessingSettings) {
                   ProcessingSettingsView(viewModel: viewModel)
+              }
+              .sheet(isPresented: $viewModel.shouldShowInitialInstructions) {
+                  StartupView()
               }
             } else {
                 Spacer()

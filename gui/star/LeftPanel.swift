@@ -166,7 +166,7 @@ struct LeftPanel: View {
             let horizonCount = viewModel.frameStateMap[.horizonDetected]?.count ?? 0
 
             Button() {
-                viewModel.shouldShowInitialInstructions = true
+                viewModel.shouldShowProcessingSettings = true
             } label: {
                 Text("Process \(unprocessed+horizonCount) frames")
             }

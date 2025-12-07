@@ -334,7 +334,7 @@ struct ProcessingSettingsView: View {
                       Spacer()
                       Button {
                           self.applySettings()
-                          viewModel.shouldShowInitialInstructions = false
+                          viewModel.shouldShowProcessingSettings = false
                       } label: {
                           ZStack {
                               Color.white
@@ -854,24 +854,11 @@ struct ProcessingSettingsView: View {
     private func startProcessing() {
         Log.d("Start")
         self.applySettings()
-        viewModel.shouldShowInitialInstructions = false
+        viewModel.shouldShowProcessingSettings = false
 
         viewModel.showIgnoreLowerBar = false
 
-        if viewModel.horizonDetectionEnabled {
-            Task {
-                do {
-                    try await viewModel.processHorizonForAllFrames()
-                    // after we get horizons for all frames, render frames
-                    viewModel.renderAllFrames()
-                } catch {
-                    Log.e("ERROR: \(error)")
-                }
-            }
-        } else {
-            viewModel.ignoreLowerPixels = 0
-            viewModel.renderAllFrames()
-        }
+        viewModel.processAll()
     }
 }
 

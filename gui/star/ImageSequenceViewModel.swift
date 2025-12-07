@@ -495,6 +495,8 @@ public final class ImageSequenceViewModel {
 
     var shouldShowInitialInstructions: Bool = false
 
+    var shouldShowProcessingSettings: Bool = false
+
     // used in initial instructions view
     var showExpertSettings = false
 
@@ -965,6 +967,23 @@ public final class ImageSequenceViewModel {
     func set(numberOfFrames: Int) {
         self.frames = [FrameViewModel](count: numberOfFrames) {
             i in FrameViewModel(config, i)
+        }
+    }
+
+    func processAll() {
+        if self.horizonDetectionEnabled {
+            Task {
+                do {
+                    try await self.processHorizonForAllFrames()
+                    // after we get horizons for all frames, render frames
+                    self.renderAllFrames()
+                } catch {
+                    Log.e("ERROR: \(error)")
+                }
+            }
+        } else {
+            self.ignoreLowerPixels = 0
+            self.renderAllFrames()
         }
     }
     
