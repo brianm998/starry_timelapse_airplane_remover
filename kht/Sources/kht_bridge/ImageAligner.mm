@@ -752,7 +752,9 @@ maxCornerDeviation:(double)maxCornerDeviation
                                  descSpecial);
     }
 
+    detectionMask.mat.release();
     detectionMask = nil;        // done with these, allow deallocation
+    specialGray.mat.release();
     specialGray = nil;
     
     kpSpecial.shrink_to_fit();
@@ -850,7 +852,9 @@ maxCornerDeviation:(double)maxCornerDeviation
             }
             Log_i(@"%d %d detected and computed check", logID, ii);
 
+            frameGray.mat.release();
             frameGray = nil;          // not used past here, allow deallocation
+            localDetectionMask.mat.release();
             localDetectionMask = nil;
             
 		    // if we got nothing, then fail fast
