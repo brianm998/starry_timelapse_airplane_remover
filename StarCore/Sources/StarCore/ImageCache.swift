@@ -72,8 +72,12 @@ public actor ImageCache {
 
             Task { 
                 do {
-                    let image = try await self.loadImage(filename: name) 
-                    box.completion(image?.mat)
+                    let image = try await self.loadImage(filename: name)
+                    if let m = image?.mat {
+                        box.completion(m/*.clone()*/)
+                    } else {
+                        box.completion(nil)
+                    }
                 } catch {
                     Log.e("image load error: \(error)")
                     box.completion(nil)
