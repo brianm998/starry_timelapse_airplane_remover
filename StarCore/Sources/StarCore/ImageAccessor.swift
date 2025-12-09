@@ -361,6 +361,8 @@ public struct ImageAccessor: Sendable {
                     return (dir, baseFileName)
                 case .starAligned:
                     return (dir, baseFileName)
+                case .failedStarAligned:
+                    return (dir, baseFileName)
                 case .earthAligned:
                     return (dir, baseFileName)
                 case .original:
