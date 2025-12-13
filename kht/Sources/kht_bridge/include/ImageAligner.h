@@ -2,11 +2,17 @@
 #import "MatWrapper.h"
 
 @interface AlignmentResult : NSObject
-@property(nonatomic, strong) MatWrapper *aligned;   // warped frame
+@property(nonatomic, strong) MatWrapper *alignedMat;   // warped frame
 @property(nonatomic, assign) int numAligned;
-@property(nonatomic, strong) MatWrapper *failed;    // fallback/original frame
+@property(nonatomic, strong) MatWrapper *failedMat;    // fallback/original frame
 @property(nonatomic, assign) int numFailed;
 @property(nonatomic, strong) MatWrapper *horizonMask; // median merged horizonMask
+
+-(AlignmentResult*)initWithAlignedMat:(MatWrapper *)alignedMat
+                           numAligned:(int)numAligned
+                            failedMat:(MatWrapper *)failedMat
+                            numFailed:(int)numFailed
+                          horizonMask:(MatWrapper *)horizonMask;
 @end
 
 

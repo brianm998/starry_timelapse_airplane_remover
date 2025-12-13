@@ -64,6 +64,19 @@ void growBlack(cv::Mat &img, int pixels)
 
 
 @implementation AlignmentResult
+-(AlignmentResult*)initWithAlignedMat:(MatWrapper *)alignedMat
+                           numAligned:(int)foo
+                            failedMat:(MatWrapper *)bar
+                            numFailed:(int)baz
+                          horizonMask:(MatWrapper *)boo
+{
+  self.alignedMat = alignedMat;
+  self.numAligned = foo;
+  self.failedMat = bar;
+  self.numFailed = baz;
+  self.horizonMask = boo;
+  return self;
+}
 @end
 
 // Median Merge Logic:
@@ -622,7 +635,7 @@ maxCornerDeviation:(double)maxCornerDeviation
           //Log_i(@"%d %d top", logID, ii);
           MatWrapper * frame = preloadedFrames[idx];
           if (frame == nil) {
-            Log_e(@"%d frame is nil, logID");
+            Log_e(@"%d frame is nil", logID);
             continue;
           }
           MatWrapper * frameHorizon = 0;
@@ -955,7 +968,7 @@ maxCornerDeviation:(double)maxCornerDeviation
       aligned.push_back(special);
     }
 
-    Log_d(@"we have %d aligned and %d failed merges", aligned.size(), failed.size());
+    Log_d(@"we have %zu aligned and %zu failed merges", aligned.size(), failed.size());
     
     // use median merges
     MatWrapper * alignedResult = medianImageFromArray(aligned, k, false);
@@ -972,9 +985,9 @@ maxCornerDeviation:(double)maxCornerDeviation
 	}
 	
     AlignmentResult *resultObj = [AlignmentResult new];
-    resultObj.aligned = alignedResult;
+    resultObj.alignedMat = alignedResult;
     resultObj.numAligned = aligned.size();
-    resultObj.failed = failedResult;
+    resultObj.failedMat = failedResult;
     resultObj.numFailed = failed.size();
     resultObj.horizonMask = horizonResult;
 

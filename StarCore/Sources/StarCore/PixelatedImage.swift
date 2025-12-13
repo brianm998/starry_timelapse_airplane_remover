@@ -893,19 +893,7 @@ extension PixelatedImage {
     }
 }
 
-// holds the results of trying to align N number of frames with another base image
-// aligned is a per pixel median of all properly aligned frames
-// failed is a per pixel median of all frames which were not able to be aligned 
-public struct AlignmentResult {
-    public let aligned: PixelatedImage?
-    public let failed: PixelatedImage?
-    public let numAligned: Int
-    public let numFailed: Int
-    public let horizonMask: PixelatedImage?
-}
-
 extension PixelatedImage {
-
     public func medianMerge(
       with frames: [String],
       outlierThreshold: Double = 1.2,
@@ -934,7 +922,7 @@ extension PixelatedImage {
       invertMask: Bool = false, // use zero values instead of non zero values for the mask
       maxKeypoints: Int32 = 1000,       // XXX expose this and maxDeviation as parameters to user
       outlierThreshold: Double = 1.2
-    ) -> AlignmentResult {
+    ) -> AlignmentResult? {
         
         var maskMat: MatWrapper? = nil
         if let mask {
@@ -966,57 +954,12 @@ extension PixelatedImage {
             if let error = result as? String {
                 Log.e("error: \(error)")
             } else if let result = result as? kht_bridge.AlignmentResult {
-                Log.d("align \(self.mat)")
-                Log.d("got result \(result)")
-                if let mat = result.aligned {
-                    // assumes self and processedMat have same bits per pixel, num components, etc.
-                    if !mat.isEmpty {
-                        aligned = PixelatedImage(mat: mat)
-                    } else {
-                        Log.w("mat was empty :(")
-                    }
-                } else {
-                    Log.w("no mat")
-                }
-
-                if let mat = result.failed {
-                    // assumes self and processedMat have same bits per pixel, num components, etc.
-                    if !mat.isEmpty {
-                        failed = PixelatedImage(mat: mat)
-                    } else {
-                        Log.w("mat was empty :(")
-                    }
-                } else {
-                    Log.w("no mat")
-                }
-
-                if let mat = result.horizonMask {
-                    if !mat.isEmpty {
-                        alignedHorizonMask = PixelatedImage(mat: mat)
-                    } else {
-                        Log.w("mat was empty :(")
-                    }
-                } else {
-                    Log.w("no mat")
-                }
-
-                numAligned = Int(result.numAligned)
-                numFailed = Int(result.numFailed)
-                Log.d("numAligned \(numAligned) numFailed \(numFailed)")
+                return result
             } else {
                 Log.e("cannot handle aligned result \(result)")
             }
         }
-
-        Log.d("align \(self.mat)")
-        
-        return AlignmentResult(
-          aligned: aligned,
-          failed: failed,
-          numAligned: numAligned,
-          numFailed: numFailed,
-          horizonMask: alignedHorizonMask
-        )
+        return nil
     }
 
     // move image up vertically by some number of pixels
@@ -1175,4 +1118,29 @@ extension MatWrapper {
     }
 }
 
+extension AlignmentResult {
+    var aligned: PixelatedImage? {
+        if !self.alignedMat.isEmpty {
+            PixelatedImage(mat: self.alignedMat)
+        } else {
+            nil
+        }
+    }
+
+    var failed: PixelatedImage? {
+        if !self.failedMat.isEmpty {
+            PixelatedImage(mat: self.failedMat)
+        } else {
+            nil
+        }
+    }
+
+    var horizon: PixelatedImage? {
+        if !self.horizonMask.isEmpty {
+            PixelatedImage(mat: self.horizonMask)
+        } else {
+            nil
+        }
+    }
+}
 
