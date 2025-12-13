@@ -120,7 +120,7 @@ public actor UpdatableProgressMonitor {
             let myValue = self.value
             self.value += 1
             return {
-                await updatable.log(name: "processingState \(processingState.rawValue)",
+                await updatable.log(name: "processingState \(processingState.shortString)",
                                     message: self.padding + progressBar(length: self.numConcurrentRenders,
                                                                      progress: progress) +
                                       " \(group.count) frames \(processingState.message)",
@@ -139,7 +139,7 @@ public actor UpdatableProgressMonitor {
 
         value = 0
         
-        if let update = progressLine(for: .starAlignment) {
+        if let update = progressLine(for: .starAlignment(.one)) {
             updates.append(update)
         }
         

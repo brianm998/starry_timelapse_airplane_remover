@@ -608,8 +608,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // uses opencv2 for dark ground specific detection logic
     private func loadOrCreateEarthAlignedImage() async throws -> (
       PixelatedImage?,          // earth aligned image
-      PixelatedImage?,           // failed alignment image
-      PixelatedImage? // aligned/median merged horizon mask should be present
+      PixelatedImage?,          // failed alignment image
+      PixelatedImage?           // aligned/median merged horizon mask should be present
     ) {
         try await loadOrCreateAlignedImage(of: .earthAligned)
     }
@@ -632,7 +632,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     ) async throws -> (
       PixelatedImage?,   // aligned image
       PixelatedImage?,   //failed aligned image
-      PixelatedImage?   // optional aligned/median merged horizon mask
+      PixelatedImage?   // optional aligned resulting containing median merged horizon mask
     ) {
         var isEarth = false
         
@@ -668,28 +668,39 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             
             return (alignedFrame, nil, horizonMask?.image)
             
-        } else if let failedType,
-                  let failedFrame = try await imageAccessor.load(
-                    frameIndex: frameIndex,
-                    type: failedType,
-                    atSize: .original
-                  )
-        {
-            let horizonMask = try await self.loadMergedHorizonMask()
-            var results: FrameAlignmentResults? = nil
-            if isEarth {
-                results = await self.readNumberOfEarthAlignedImagesForThisFrame()
-                if let results {
-                    await observer?.set(earthAlignmentResults: results)
+        } else {
+            Log.d("frame \(frameIndex) unable to load image of type \(type)")
+            if let failedType {
+                if let failedFrame = try await imageAccessor.load(
+                     frameIndex: frameIndex,
+                     type: failedType,
+                     atSize: .original
+                   )
+                {
+                    Log.d("frame \(frameIndex) trying to load image of type \(failedType) because we were unable to load image of type \(type)")
+                    let horizonMask = try await self.loadMergedHorizonMask()
+                    var results: FrameAlignmentResults? = nil
+                    if isEarth {
+                        results = await self.readNumberOfEarthAlignedImagesForThisFrame()
+                        if let results {
+                            await observer?.set(earthAlignmentResults: results)
+                        }
+                    } else {
+                        results = await self.readNumberOfStarAlignedImagesForThisFrame()
+                        if let results {
+                            await observer?.set(starAlignmentResults: results)
+                        }
+                    }                
+                    Log.d("frame \(frameIndex) successfully loaded image of type \(failedType)")
+                    
+                    return (nil, failedFrame, horizonMask?.image)
+
+                } else {
+                    Log.w("frame \(frameIndex) unable to load image of failed type \(failedType) when missing image of type \(type)")
                 }
             } else {
-                results = await self.readNumberOfStarAlignedImagesForThisFrame()
-                if let results {
-                    await observer?.set(starAlignmentResults: results)
-                }
-            }                
-            
-            return (nil, failedFrame, horizonMask?.image)
+                Log.w("frame \(frameIndex) no failed type to load when missing image of type \(type)")
+            }
         }
         // with no saved aligned frame, first load or create the set of aligned frames
         // that we used to create the final aligned frame
@@ -698,10 +709,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         switch type {
         case .starAligned:
-            self.set(state: .starAlignment)
+            self.set(state: .starAlignment(.one))
         case .earthAligned:
             if config.tripodHeadWasMoving {
-                self.set(state: .earthAlignment)
+                self.set(state: .earthAlignment(.one))
             }
         default:
             break

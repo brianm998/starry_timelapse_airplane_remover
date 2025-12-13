@@ -24,9 +24,32 @@ public enum LoopReturn: Sendable {
     case `break`
 }
 
-public enum FrameProcessingState: Int,
+@objc public enum AlignmentState: Int,
                                   CaseIterable,
+                                  Equatable,
+                                  Hashable,
                                   Codable,
+                                  Sendable,
+                                  Identifiable
+{
+    public var id: Self { self }
+    
+    case one
+    case two
+    // XXX
+
+    var description: String {
+        switch self {
+        case .one:
+            "one"
+        case .two:
+            "two"
+        }
+    }
+}
+
+public enum FrameProcessingState: Codable,
+                                  Hashable,
                                   Sendable,
                                   Identifiable
 {
@@ -36,9 +59,9 @@ public enum FrameProcessingState: Int,
     case horizonDetection
     case horizonDetected
     case mergingHorizon
-    case earthAlignment    
+    case earthAlignment(AlignmentState)
     case creatingEarthAlignedFrame
-    case starAlignment    
+    case starAlignment(AlignmentState)
     case creatingStarAlignedFrame
     case subtractingNeighbor
     case assemblingPixels
@@ -73,6 +96,50 @@ public enum FrameProcessingState: Int,
     case writingOutputFile
     case complete
 
+    public static let allCases: [FrameProcessingState] =
+      [
+        .unprocessed,
+        .horizonDetection,
+        .horizonDetected,
+        .mergingHorizon,
+        .earthAlignment(.one),
+        .creatingEarthAlignedFrame,
+        .starAlignment(.one),
+        .creatingStarAlignedFrame,
+        .subtractingNeighbor,
+        .assemblingPixels,
+        .sortingPixels,
+        .detectingBlobs,
+
+        .filter1,
+        .filter2,
+        .filter3,
+        .filter4,
+        .filter5,
+        .filter6,
+        .filter7,
+        .filter8,
+        
+        .firstClassification,
+
+        .readyForInterFrameProcessing,
+        .secondClassification,
+        .outlierProcessingComplete,
+        .finishing,
+
+        .userModified,
+
+        .writingOutlierValues,
+
+        .waitingToLoadImages,
+        .loadingImages,
+        .loadingImages1,
+        .creatingRemovalMask,
+        .assemblingProcessedFrame,
+        .writingOutputFile,
+        .complete
+      ]
+    
     public var message: String {
         switch self {
         case .unprocessed:
@@ -83,10 +150,10 @@ public enum FrameProcessingState: Int,
             "merging horizon"
         case .horizonDetected:
             "horizon found"
-        case .starAlignment:
-            "aligning stars"
-        case .earthAlignment:
-            "aligning earth"
+        case .starAlignment(let state):
+            "aligning stars \(state)"
+        case .earthAlignment(let state):
+            "aligning earth \(state)"
         case .creatingStarAlignedFrame:
             "creating star aligned frame"
         case .creatingEarthAlignedFrame:

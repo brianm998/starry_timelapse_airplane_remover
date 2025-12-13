@@ -172,6 +172,10 @@ public struct Config: Codable, Sendable, Transferable {
     // creating the subtraction image and calculating pixel values during removal
     public var numberAlignedNeighborFrames = 8 // total
 
+    // if we're using automatic clean mode, and get less alignment frames than this,
+    // fall back to selective instead
+    public var minAlignmentFrames = 4
+
     // when camera is not moving, use this value instead of
     // numberAlignedNeighborFrames for calculating the merged horizon for each frame
     public var numberStaticNeighborFrames = 16 // total
@@ -333,6 +337,7 @@ public struct Config: Codable, Sendable, Transferable {
 
         self.numberFinalProcessingNeighborsNeeded = try c.decodeIfPresent(Int.self, forKey: .numberFinalProcessingNeighborsNeeded) ?? self.numberFinalProcessingNeighborsNeeded
         self.numberAlignedNeighborFrames = try c.decodeIfPresent(Int.self, forKey: .numberAlignedNeighborFrames) ?? self.numberAlignedNeighborFrames
+        self.minAlignmentFrames = try c.decodeIfPresent(Int.self, forKey: .minAlignmentFrames) ?? self.minAlignmentFrames
         self.numberStaticNeighborFrames = try c.decodeIfPresent(Int.self, forKey: .numberStaticNeighborFrames) ?? self.numberStaticNeighborFrames
         self.supportedImageFileTypes = try c.decodeIfPresent([String].self, forKey: .supportedImageFileTypes) ?? self.supportedImageFileTypes
     }
