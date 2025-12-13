@@ -173,6 +173,7 @@ struct ProcessingSettingsView: View {
 
     @State private var showProcessFramesInfo = false
     @State private var showNeighborFrameInfo = false
+    @State private var showMinAlignmentFramesInfo = false
     @State private var showStaticNeighborFrameInfo = false
     @State private var showPixelThresholdInfo = false
     @State private var showProcessingModeInfo = false
@@ -188,7 +189,8 @@ struct ProcessingSettingsView: View {
         showNeighborFrameInfo || showPixelThresholdInfo || showProcessingModeInfo ||
         showUseCannyInfo || showHorizonStripInfo || showCannyMinThresholdView ||
         showCannyMaxThresholdView || showCannyL2GradientView ||
-        showStaticNeighborFrameInfo || showHorizonVerticalShiftAmountView
+        showStaticNeighborFrameInfo || showHorizonVerticalShiftAmountView ||
+        showMinAlignmentFramesInfo
     }
     
     private func showAll() {
@@ -198,6 +200,7 @@ struct ProcessingSettingsView: View {
         showAutoPreservationMethodInfo = true
         showProcessFramesInfo = true
         showNeighborFrameInfo = true
+        showMinAlignmentFramesInfo = true
         showStaticNeighborFrameInfo = true
         showPixelThresholdInfo = true
         showProcessingModeInfo = true
@@ -216,6 +219,7 @@ struct ProcessingSettingsView: View {
         showAutoPreservationMethodInfo = false
         showProcessFramesInfo = false
         showNeighborFrameInfo = false
+        showMinAlignmentFramesInfo = false        
         showStaticNeighborFrameInfo = false
         showPixelThresholdInfo = false
         showHorizonStripInfo = false
@@ -319,6 +323,8 @@ struct ProcessingSettingsView: View {
                           self.cuncurrentProcessingLimitView
                           Divider()
                           self.neighborFrameCountView
+                          Divider()
+                          self.minAlignmentFramesView
                           Divider()
                           self.staticNeighborFrameCountView
                           Divider()
@@ -522,6 +528,42 @@ struct ProcessingSettingsView: View {
                       textColor: .white,
                       focusedField: $focusedField,
                       focusField: .numberOfNeighborFrames,
+                      alwaysOpen: true
+                    )
+                    Spacer()   
+                }
+            }
+        }
+    }
+
+    private var minAlignmentFramesView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showMinAlignmentFramesInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            If star or earth alignment fails by less than this number of frames and we're using automatic clean mode, fall back to selective clean, as results will be better.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Min Alignment Frames:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.minAlignmentFrames,
+                      minValue: 1,
+                      maxValue: viewModel.imageSequenceSize,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .minAlignmentFrames,
                       alwaysOpen: true
                     )
                     Spacer()   
