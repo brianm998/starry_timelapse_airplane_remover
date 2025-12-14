@@ -11,11 +11,11 @@
 @property(nonatomic, assign) int numFailed;
 @property(nonatomic, strong, nullable) MatWrapper *horizonMask; // median merged horizonMask
 
--(AlignmentResult*)initWithAlignedMat:(nullable MatWrapper *)alignedMat
-                           numAligned:(int)numAligned
-                            failedMat:(nullable MatWrapper *)failedMat
-                            numFailed:(int)numFailed
-                          horizonMask:(nullable MatWrapper *)horizonMask;
+-(AlignmentResult* _Nonnull)initWithAlignedMat:(nullable MatWrapper *)alignedMat
+                                    numAligned:(int)numAligned
+                                     failedMat:(nullable MatWrapper *)failedMat
+                                     numFailed:(int)numFailed
+                                   horizonMask:(nullable MatWrapper *)horizonMask;
 @end
 
 
