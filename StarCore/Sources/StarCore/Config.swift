@@ -562,7 +562,37 @@ public struct Config: Codable, Sendable, Transferable {
             case .thumbnail:
                 return nil
             }
-        case .processed:
+        case .autoProcessed:
+            switch size {
+            case .original:
+                return "\(self.outputPath)/\(self.basename)-auto-processed"
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-auto-processed-previews"
+            case .thumbnail:
+                return nil
+            }
+
+        case .autoSelectiveProcessed:
+            switch size {
+            case .original:
+                return "\(self.outputPath)/\(self.basename)-auto-selective-processed"
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-auto-selective-processed-previews"
+            case .thumbnail:
+                return nil
+            }
+
+        case .selectiveProcessed:
+            switch size {
+            case .original:
+                return "\(self.outputPath)/\(self.basename)-selective-processed"
+            case .preview:
+                return "\(self.outputPath)/\(self.basename)-selective-processed-previews"
+            case .thumbnail:
+                return nil
+            }
+
+        case .final:
             switch size {
             case .original:
                 return "\(self.outputPath)/\(self.basename)"
@@ -584,7 +614,11 @@ public struct Config: Codable, Sendable, Transferable {
         if let dir = self.dirForImage(ofType: .mergedHorizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .subtraction) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .validation) { ret.append(dir) }
-        if let dir = self.dirForImage(ofType: .processed) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .autoProcessed) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .autoSelectiveProcessed) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .selectiveProcessed) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .final) { ret.append(dir) }
+        
         
         if self.writeFramePreviewFiles {
             if let dir = self.dirForImage(ofType: .original, atSize: .preview) { ret.append(dir) }
@@ -602,9 +636,11 @@ public struct Config: Codable, Sendable, Transferable {
             if let dir = self.dirForImage(ofType: .original, atSize: .thumbnail) { ret.append(dir) }
         }
         if self.writeFrameProcessedPreviewFiles {
-            if let dir = self.dirForImage(ofType: .processed, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .final, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .autoProcessed, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .autoSelectiveProcessed, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .selectiveProcessed, atSize: .preview) { ret.append(dir) }
         }
-        Log.d("FUCKING dirs to make: \(ret)")
         return ret
     }
 }

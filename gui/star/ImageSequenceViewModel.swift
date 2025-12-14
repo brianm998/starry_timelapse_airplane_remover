@@ -247,7 +247,7 @@ public final class ImageSequenceViewModel {
 
     var previousInteractionMode: InteractionMode = .scrub
 
-    var previousFrameViewMode = FrameViewMode.processed
+    var previousFrameViewMode = FrameViewMode.final
 
     // should we show full resolution images on the main frame?
     // faster low res previews otherwise
@@ -952,7 +952,7 @@ public final class ImageSequenceViewModel {
     }
 
     // enum for how we show each frame
-    var frameViewMode = FrameViewMode.processed {
+    var frameViewMode = FrameViewMode.final {
         didSet {
             previousFrameViewMode = oldValue
         }
@@ -1028,7 +1028,7 @@ public final class ImageSequenceViewModel {
 /*
         let prTask = Task.detached {
             await acc.loadImage(frameIndex: frame.frameIndex,
-                                type: .processed,
+                                type: .final,
                                 atSize: .preview)?.resizable()
         }
         let opTask = Task.detached {

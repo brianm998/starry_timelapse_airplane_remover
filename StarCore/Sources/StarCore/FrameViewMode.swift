@@ -25,7 +25,10 @@ public enum FrameViewMode: String,
     case blobs                  // blobs detected from the subtraction frame
     case validation             // an image of exactly what pixels have been identified as unwanted
     case removeMask             // the remove mask created from the validation image
-    case processed              // the final processed image, 
+    case autoProcessed          // .automatic(false) CleanMode
+    case autoSelectiveProcessed // .autoamtic(true) CleanMode
+    case selectiveProcessed     // .selective CleanMode
+    case final              // the final processed image, 
                                 // the remove mask is used as a layer mask for the aligned neighbor
  
     public var localizedName: LocalizedStringKey {
@@ -44,8 +47,14 @@ public enum FrameViewMode: String,
             "rmask"
         case .validation:
             "valid"
-        case .processed:
-            "processed"
+        case .autoProcessed:
+            "autoProcessed"
+        case .autoSelectiveProcessed:
+            "autoSelectiveProcessed"
+        case .selectiveProcessed:
+            "selectiveProcessed"
+        case .final:
+            "final"
         case .starAligned:
             "starAligned"
         case .failedStarAligned:
@@ -71,8 +80,14 @@ public enum FrameViewMode: String,
             "computed removal mask"
         case .validation:
             "validation data"
-        case .processed:
-            "processed frame"
+        case .autoProcessed:
+            "auto processed"
+        case .autoSelectiveProcessed:
+            "auto processed with selection"
+        case .selectiveProcessed:
+            "selective processed"
+        case .final:
+            "final processed frame"
         case .earthAligned:
             "earth aligned frame"
         case .starAligned:

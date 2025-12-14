@@ -55,7 +55,7 @@ struct BottomLeftView: View {
                       .foregroundColor(.white)
                     
                     LimitedSelectionPicker(selection: $viewModel.frameViewMode) { value, isEnabled in
-                        if value == .original || value == .processed {
+                        if value == .original || value == .final {
                             if viewModel.currentFrameView.hasImage(type: value) {
                                 Text(value.shortName)
                                   .foregroundColor(isEnabled ? .black : .yellow)

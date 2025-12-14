@@ -371,7 +371,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         await self.setNumberOfStaticNeighborFrames()
         
         if imageAccessor.imageExists(frameIndex: frameIndex,
-                                     ofType: .processed,
+                                     ofType: .final,
                                      atSize: .original)
         {
             self.state = .complete
@@ -1257,7 +1257,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     try await imageAccessor.saveFinal(
                       processedImage,
                       frameIndex: frameIndex,
-                      as: .processed,
+                      as: .final,
                       atSize: .original,
                       overwrite: true
                     )
@@ -1265,7 +1265,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     try await imageAccessor.saveFinal(
                       processedImage,
                       frameIndex: frameIndex,
-                      as: .processed,
+                      as: .final,
                       atSize: .preview,
                       overwrite: true
                     )
@@ -2565,7 +2565,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         try await imageAccessor.saveFinal(
                           processedImage,
                           frameIndex: frameIndex,
-                          as: .processed,
+                          as: .final,
                           atSize: .original,
                           overwrite: true
                         )
@@ -2573,7 +2573,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         try await imageAccessor.saveFinal(
                           processedImage,
                           frameIndex: frameIndex,
-                          as: .processed,
+                          as: .final,
                           atSize: .preview,
                           overwrite: true
                         )
@@ -2615,21 +2615,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             try await imageAccessor.saveFinal(
               autoProcessedImage, 
               frameIndex: frameIndex,
-              as: .processed,
+              as: .final,
               atSize: .preview,
               overwrite: false
             )
             try await imageAccessor.saveFinal(
               autoProcessedImage, 
               frameIndex: frameIndex,
-              as: .processed,
+              as: .final,
               atSize: .original,
               overwrite: false
             )
             try await imageAccessor.saveFinal(
               autoProcessedImage,
               frameIndex: frameIndex,
-              as: .processed,
+              as: .final,
               atSize: .thumbnail,
               overwrite: false
             )

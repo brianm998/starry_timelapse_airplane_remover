@@ -367,7 +367,13 @@ public struct ImageAccessor: Sendable {
                     return (dir, baseFileName)
                 case .original:
                     return (dir, baseFileName)
-                case .processed:
+                case .final:
+                    return (dir, baseFileName)
+                case .autoProcessed:
+                    return (dir, baseFileName)
+                case .selectiveProcessed:
+                    return (dir, baseFileName)
+                case .autoSelectiveProcessed:
                     return (dir, baseFileName)
                 case .validation:
                     return (dir, baseFileName)
