@@ -27,38 +27,38 @@ typedef NS_ENUM(NSInteger, FeatureMatchMethod) {
 
 @interface ImageAligner : NSObject
 
-+ (id)medianMergeImage:(MatWrapper*)image
-         withFilenames:(NSArray<NSString*>*)filenames
-      outlierThreshold:(double)k
-            includeAll:(BOOL)includeAll;
++ (id _Nonnull)medianMergeImage:(MatWrapper* _Nonnull)image
+                  withFilenames:(NSArray<NSString*>* _Nonnull)filenames
+               outlierThreshold:(double)k
+                     includeAll:(BOOL)includeAll;
 
-+ (id)medianMergeFilenames:(NSArray<NSString*>*)filenames
-          outlierThreshold:(double)k
-                includeAll:(BOOL)includeAll;
++ (id _Nonnull)medianMergeFilenames:(NSArray<NSString*>* _Nonnull)filenames
+                   outlierThreshold:(double)k
+                         includeAll:(BOOL)includeAll;
 
 
 // just median merges the frames without any alignment
-+ (id)medianMerge:(NSArray<MatWrapper*>*)frames
- outlierThreshold:(double)k
-       includeAll:(BOOL)includeAll;
++ (id _Nonnull)medianMerge:(NSArray<MatWrapper*>* _Nonnull)frames
+          outlierThreshold:(double)k
+                includeAll:(BOOL)includeAll;
 
 // align frames to special frame, with optional mask which shows where to get keypoints from
 // 
-+ (id)alignFrames:(MatWrapper *)special
-           frames:(NSArray<NSString *> *)frameFilenames
-       frameMasks:(NSArray<NSString *> *)frameMaskFilenames
-      matchMethod:(FeatureMatchMethod)matchMethod
-             mask:(MatWrapper *)mask // assumed to be zero for ground, non-zero for sky
++ (id _Nullable)alignFrames:(MatWrapper * _Nonnull)special
+                     frames:(NSArray<NSString *> * _Nonnull)frameFilenames
+                 frameMasks:(NSArray<NSString *> * _Nonnull)frameMaskFilenames
+                matchMethod:(FeatureMatchMethod)matchMethod
+                       mask:(MatWrapper * _Nullable)mask // assumed to be zero for ground, non-zero for sky
      maxDeviation:(double)maxDeviation
 maxCornerDeviation:(double)maxCornerDeviation
        invertMask:(BOOL)invertMask
      maxKeypoints:(int)maxKeypoints
  outlierThreshold:(double)k;
 
-+(MatWrapper * _Nonnull)createGradientMaskIntoSky:(MatWrapper*)binaryMask
++(MatWrapper * _Nonnull)createGradientMaskIntoSky:(MatWrapper* _Nonnull)binaryMask
                                  gradientDistance:(int)gradientDistance;
 
-+(MatWrapper * _Nonnull)createGradientMaskIntoGround:(MatWrapper*)binaryMask
-                           gradientDistance:(int)gradientDistance;
++(MatWrapper * _Nonnull)createGradientMaskIntoGround:(MatWrapper* _Nonnull)binaryMask
+                                    gradientDistance:(int)gradientDistance;
 
 @end
