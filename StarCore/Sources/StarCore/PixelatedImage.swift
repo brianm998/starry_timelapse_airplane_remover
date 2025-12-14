@@ -929,13 +929,6 @@ extension PixelatedImage {
             maskMat = mask.mat
         }
 
-        var aligned: PixelatedImage? = nil
-        var failed: PixelatedImage? = nil
-        var numAligned: Int = 0
-        var numFailed: Int = 0
-        var alignedHorizonMask: PixelatedImage? = nil
-
-        
         Log.d("align \(self.mat)")
         
         if let result = ImageAligner.alignFrames(
@@ -975,30 +968,24 @@ extension PixelatedImage {
     // areas that were non zero and within borderAmount of the border
     // will be part of the gradient
     public func raiseMaskBy(_ borderAmount: Int) -> PixelatedImage? {
-        let matWrapper = self.mat
-        if let result = ImageAligner.createGradientMask(
-             intoSky: matWrapper,
-             gradientDistance: Int32(borderAmount))
-        {
-            return PixelatedImage(mat: result)
-        } else {
-            return nil
-        }
+        PixelatedImage(
+          mat: ImageAligner.createGradientMask(
+            intoSky: self.mat,
+            gradientDistance: Int32(borderAmount)
+          )
+        )
     }
     
     // raises the mask by the given amount, creating a gradient
     // areas that were non zero and within borderAmount of the border
     // will be part of the gradient
     public func raiseLoweredBy(_ borderAmount: Int) -> PixelatedImage? {
-        let matWrapper = self.mat
-        if let result = ImageAligner.createGradientMask(
-             intoGround: matWrapper,
-             gradientDistance: Int32(borderAmount))
-        {
-            return PixelatedImage(mat: result)
-        } else {
-            return nil
-        }
+        PixelatedImage(
+          mat: ImageAligner.createGradientMask(
+            intoGround: self.mat,
+            gradientDistance: Int32(borderAmount)
+          )
+        )
     }
     
     public func horizonBounds() -> HorizonBounds {
