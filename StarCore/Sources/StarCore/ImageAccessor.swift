@@ -260,7 +260,6 @@ public struct ImageAccessor: Sendable {
 
     // ln a processed type to .final
     public func linkFinal(
-      _ image: PixelatedImage,
       frameIndex: Int,
       as type: FrameViewMode,
       atSize size: ImageDisplaySize

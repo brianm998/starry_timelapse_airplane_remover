@@ -64,6 +64,16 @@ public class FrameViewModel {
 
             cancelBag.removeAll()
             if let frame {
+                for type in FrameViewMode.allCases {
+                    if frame.imageAccessor.imageExists(
+                         frameIndex: frame.frameIndex,
+                         ofType: type,
+                         atSize: .original
+                       )
+                    {
+                        existingImages.insert(type)
+                    }
+                }
                 Task.detached {
                     await frame.set(observer: self.frameObserver)
                     try await frame.loadOutliers(loadOnly: true)

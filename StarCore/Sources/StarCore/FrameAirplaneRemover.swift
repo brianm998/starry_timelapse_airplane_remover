@@ -145,6 +145,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         self.observer = observer
 
         Task {
+            await observer.set(cleanMethod: cleanMethod)
             if let results = await self.readNumberOfEarthAlignedImagesForThisFrame() {
                 Log.d("frame \(frameIndex) setting number of earth alignments \(results)")
                 await observer.set(earthAlignmentResults: results)
@@ -369,6 +370,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("config.numberAlignedNeighborFrames \(config.numberAlignedNeighborFrames)")
         await self.setNumberOfAlignedFrames()
         await self.setNumberOfStaticNeighborFrames()
+        await self.set(cleanMethod: config.cleanMethod(for: frameIndex))
         
         if imageAccessor.imageExists(frameIndex: frameIndex,
                                      ofType: .final,
@@ -1272,14 +1274,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
                     // link to final here
                     try imageAccessor.linkFinal(
-                      processedImage,
                       frameIndex: frameIndex,
                       as: .selectiveProcessed,
                       atSize: .original
                     )
 
                     try imageAccessor.linkFinal(
-                      processedImage,
                       frameIndex: frameIndex,
                       as: .selectiveProcessed,
                       atSize: .preview
@@ -2500,6 +2500,100 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             configManager.update(config)
         }
         await observer?.set(cleanMethod: cleanMethod)
+
+        // after setting the clean mode on a frame, we need to
+        // 1. check to see if there is a processed type for this method
+        // 2. create one if not
+        // 3. link to the final image
+
+        var processMode: FrameViewMode = .autoProcessed
+        
+        do {
+            switch cleanMethod {
+            case .automatic(let usesOutliers):
+                if usesOutliers {
+                    if let filename = imageAccessor.nameForImage(
+                         frameIndex: frameIndex,
+                         ofType: .autoSelectiveProcessed,
+                         atSize: .original
+                       )
+                    {
+                        if FileManager.default.fileExists(atPath: filename) {
+                            try imageAccessor.linkFinal(
+                              frameIndex: frameIndex,
+                              as: .autoSelectiveProcessed,
+                              atSize: .original
+                            )
+                            try imageAccessor.linkFinal(
+                              frameIndex: frameIndex,
+                              as: .autoSelectiveProcessed,
+                              atSize: .preview
+                            )
+                        } else {
+                            // no file exists
+                            try await self.finishAuto(useOutliers: true)
+                        }
+                    }
+                } else {
+                    // doesn't use outliers
+                    if let filename = imageAccessor.nameForImage(
+                         frameIndex: frameIndex,
+                         ofType: .autoProcessed,
+                         atSize: .original
+                       )
+                    {
+                        if FileManager.default.fileExists(atPath: filename) {
+                            try imageAccessor.linkFinal(
+                              frameIndex: frameIndex,
+                              as: .autoProcessed,
+                              atSize: .original
+                            )
+                            try imageAccessor.linkFinal(
+                              frameIndex: frameIndex,
+                              as: .autoProcessed,
+                              atSize: .preview
+                            )
+                        } else {
+                            // no file exists
+                            try await self.finishAuto(useOutliers: false)
+                        }
+                    }
+                }
+            case .selective:
+                if let filename = imageAccessor.nameForImage(
+                     frameIndex: frameIndex,
+                     ofType: .selectiveProcessed,
+                     atSize: .original
+                   )
+                {
+                    if FileManager.default.fileExists(atPath: filename) {
+                        try imageAccessor.linkFinal(
+                          frameIndex: frameIndex,
+                          as: .selectiveProcessed,
+                          atSize: .original
+                        )
+                        try imageAccessor.linkFinal(
+                          frameIndex: frameIndex,
+                          as: .selectiveProcessed,
+                          atSize: .preview
+                        )
+                    } else {
+                        // no file exists
+
+                        try await self.loadOutliers()
+
+                        self.set(state: .secondClassification)
+
+                        // 3. classify outliers
+                        await self.applyDecisionTreeToAllOutliers(includingTrash: true)
+
+                        try await self.finishSelective()
+                    }
+                }
+            }
+        } catch {
+            Log.e("error frame \(frameIndex): \(error)")
+        }
     }
     
     // used by PixelReplacementMode.automatic
@@ -2596,14 +2690,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
                         // link to final here
                         try imageAccessor.linkFinal(
-                          processedImage,
                           frameIndex: frameIndex,
                           as: .autoSelectiveProcessed,
                           atSize: .original
                         )
 
                         try imageAccessor.linkFinal(
-                          processedImage,
                           frameIndex: frameIndex,
                           as: .autoSelectiveProcessed,
                           atSize: .preview
@@ -2661,14 +2753,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             // link to final here
             try imageAccessor.linkFinal(
-              autoProcessedImage,
               frameIndex: frameIndex,
               as: .autoProcessed,
               atSize: .original
             )
 
             try imageAccessor.linkFinal(
-              autoProcessedImage,
               frameIndex: frameIndex,
               as: .autoProcessed,
               atSize: .preview

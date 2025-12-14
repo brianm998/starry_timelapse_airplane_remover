@@ -138,6 +138,14 @@ public struct Config: Codable, Sendable, Transferable {
     // indexed by frame number
     public var pixelReplacementOverrides: [Int:CleanMethod] = [:]
 
+    public func cleanMethod(for frameIndex: Int) -> CleanMethod {
+        if let method = pixelReplacementOverrides[frameIndex] {
+            method
+        } else {
+            cleanMethod
+        }
+    }
+    
     // used with CleanMethod.selective and .automatic(true)
     public var detectionType: DetectionType
 

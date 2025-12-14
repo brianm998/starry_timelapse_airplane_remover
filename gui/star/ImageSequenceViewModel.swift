@@ -472,6 +472,8 @@ public final class ImageSequenceViewModel {
         // update the frame view model
         frames[frameIndex].frameObserver.set(cleanMethod: cleanMethod)
 
+        Task { await frames[frameIndex].frame?.set(cleanMethod: cleanMethod) }
+        
         // update local overrides
         pixelReplacementOverrides[frameIndex] = cleanMethod
 
@@ -1045,32 +1047,22 @@ public final class ImageSequenceViewModel {
         }
         // set list of view modes for this frame
 
-        if self.frames[frame.frameIndex].existingImages.count == 0 {
-            var existingImages: Set<FrameViewMode> = []
-            for type in FrameViewMode.allCases {
-                if acc.imageExists(frameIndex: frame.frameIndex,
-                                   ofType: type,
-                                   atSize: .preview)
-                {
-                    existingImages.insert(type)
-                }
+        var existingImages: Set<FrameViewMode> = []
+        for type in FrameViewMode.allCases {
+            if acc.imageExists(frameIndex: frame.frameIndex,
+                               ofType: type,
+                               atSize: .original)
+            {
+                existingImages.insert(type)
             }
+        }
 
-            self.frames[frame.frameIndex].existingImages = existingImages
-        }
-/*
-        if let image = await prTask.value {
-            self.frames[frame.frameIndex].processedPreviewImage = image
-        }
-        if let image = await opTask.value {
-            self.frames[frame.frameIndex].previewImage = image
-        }
-*/
+        self.frames[frame.frameIndex].existingImages = existingImages
+
         if let image = await otTask.value {
             self.frames[frame.frameIndex].thumbnailImage = image
         }
         //Log.d("done refreshing frame \(frame.frameIndex)")
-        //if let outlierTask { await outlierTask.value }
     }
 
   func append(frame: FrameAirplaneRemover) async {
@@ -1290,24 +1282,20 @@ public final class ImageSequenceViewModel {
                 self.frameViewMode = .original
             }
 
-            var existingImages: Set<FrameViewMode> = [.original]
-            
-            if frameToClear.imageAccessor.imageExists(frameIndex: frameToClear.frameIndex,
-                                                      ofType: .starAligned,
-                                                      atSize: .original)
-            {
-                existingImages.insert(.starAligned)
-            }
-
-            if frameToClear.imageAccessor.imageExists(frameIndex: frameToClear.frameIndex,
-                                                      ofType: .subtraction,
-                                                      atSize: .original)
-            {
-                existingImages.insert(.subtraction)
+            var existingImages: Set<FrameViewMode> = []
+            for type in FrameViewMode.allCases {
+                if frame.imageAccessor.imageExists(
+                     frameIndex: frame.frameIndex,
+                     ofType: type,
+                     atSize: .original
+                   )
+                {
+                    existingImages.insert(type)
+                }
             }
 
             Task { @MainActor in
-                self.frames[frame.frameIndex].existingImages = [.original]
+                self.frames[frame.frameIndex].existingImages = existingImages
             }
             
             let binaryBlobFilename = await frameToClear.blobBinaryFilename
