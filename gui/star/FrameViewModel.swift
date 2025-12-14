@@ -19,9 +19,9 @@ public class FrameViewModel {
         self.frameIndex = frameIndex
         let overrides = config.config().pixelReplacementOverrides
         if let overriddenValue = overrides[frameIndex] {
-            self.defaultPixelReplacementMethod = overriddenValue
+            self.defaultCleanMethod = overriddenValue
         } else {
-            self.defaultPixelReplacementMethod = config.config().pixelReplacementMethod
+            self.defaultCleanMethod = config.config().cleanMethod
         }
     }
 
@@ -31,11 +31,11 @@ public class FrameViewModel {
 
     var frameState: FrameProcessingState?
 
-    let defaultPixelReplacementMethod: PixelReplacementMethod
+    let defaultCleanMethod: CleanMethod
 
-    var pixelReplacementMethod: PixelReplacementMethod {
+    var cleanMethod: CleanMethod {
         get {
-            frameObserver.pixelReplacementMethod ?? defaultPixelReplacementMethod
+            frameObserver.cleanMethod ?? defaultCleanMethod
         }
     }
     

@@ -289,25 +289,25 @@ public final class ImageSequenceViewModel {
     // the frame number of the frame we're currently showing
     var currentIndex = 0 {
         didSet {
-            if let method = self.frames[currentIndex].frameObserver.pixelReplacementMethod {
+            if let method = self.frames[currentIndex].frameObserver.cleanMethod {
                 switch method {
                 case .automatic(let useOutliers):
-                    self._currentFrameHighLevelPixelReplacementMethod = .automatic
+                    self._currentFrameHighLevelCleanMethod = .automatic
                     self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
                     
                 case .selective:
-                    self._currentFrameHighLevelPixelReplacementMethod = .selective
+                    self._currentFrameHighLevelCleanMethod = .selective
                     self._currentFrameAutoPreservationMode = .no
                 }
                  
             } else {
-                switch self.currentFramePixelReplacementMethod {
+                switch self.currentFrameCleanMethod {
                 case .automatic(let useOutliers):
-                    self._currentFrameHighLevelPixelReplacementMethod = .automatic
+                    self._currentFrameHighLevelCleanMethod = .automatic
                     self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
 
                 case .selective:
-                    self._currentFrameHighLevelPixelReplacementMethod = .selective
+                    self._currentFrameHighLevelCleanMethod = .selective
                     self._currentFrameAutoPreservationMode = .no
                 }
             }
@@ -426,15 +426,15 @@ public final class ImageSequenceViewModel {
     }
 
     // fallback replacement method if not specified per frame
-    var pixelReplacementMethod: PixelReplacementMethod {
+    var cleanMethod: CleanMethod {
         didSet {
             var realConfig = config.config()
-            realConfig.pixelReplacementMethod = pixelReplacementMethod
+            realConfig.cleanMethod = cleanMethod
             config.update(realConfig)
 
             // Update All Frame View Models
             for frame in frames {
-              frame.frameObserver.set(pixelReplacementMethod: getPixelReplacementMethod(
+              frame.frameObserver.set(cleanMethod: getCleanMethod(
                   forFrame: frame.frameIndex
                 )
                                       )
@@ -442,24 +442,24 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    var currentFramePixelReplacementMethod: PixelReplacementMethod {
-        getPixelReplacementMethod(forFrame: currentIndex)
+    var currentFrameCleanMethod: CleanMethod {
+        getCleanMethod(forFrame: currentIndex)
     }
     
-    func getPixelReplacementMethod(forFrame frame: Int) -> PixelReplacementMethod {
+    func getCleanMethod(forFrame frame: Int) -> CleanMethod {
         let realConfig = config.config()
         if let value = realConfig.pixelReplacementOverrides[frame] {
             return value
         } else {
-            return realConfig.pixelReplacementMethod
+            return realConfig.cleanMethod
         }
     }
 
-    var currentFrameHasOverriddenPixelReplacementMethod: Bool {
-        self.hasOverriddenPixelReplacementMethod(forFrame: currentIndex)
+    var currentFrameHasOverriddenCleanMethod: Bool {
+        self.hasOverriddenCleanMethod(forFrame: currentIndex)
     }
     
-    func hasOverriddenPixelReplacementMethod(forFrame frame: Int) -> Bool {
+    func hasOverriddenCleanMethod(forFrame frame: Int) -> Bool {
         let realConfig = config.config()
         if let value = realConfig.pixelReplacementOverrides[frame] {
             return true
@@ -468,12 +468,12 @@ public final class ImageSequenceViewModel {
         }
     }
     
-    func set(pixelReplacementMethod: PixelReplacementMethod, forFrame frameIndex: Int) {
+    func set(cleanMethod: CleanMethod, forFrame frameIndex: Int) {
         // update the frame view model
-        frames[frameIndex].frameObserver.set(pixelReplacementMethod: pixelReplacementMethod)
+        frames[frameIndex].frameObserver.set(cleanMethod: cleanMethod)
 
         // update local overrides
-        pixelReplacementOverrides[frameIndex] = pixelReplacementMethod
+        pixelReplacementOverrides[frameIndex] = cleanMethod
 
         // update the config too
         var realConfig = config.config()
@@ -481,7 +481,7 @@ public final class ImageSequenceViewModel {
         config.update(realConfig)
     }
     
-    var pixelReplacementOverrides: [Int:PixelReplacementMethod] {
+    var pixelReplacementOverrides: [Int:CleanMethod] {
         didSet {
             var realConfig = config.config()
             realConfig.pixelReplacementOverrides = pixelReplacementOverrides
@@ -664,7 +664,7 @@ public final class ImageSequenceViewModel {
 
         let config = configManager.config()
 
-        if !config.pixelReplacementMethod.usesOutliers {
+        if !config.cleanMethod.usesOutliers {
             self.selectionMode = .none
         } 
 
@@ -678,7 +678,7 @@ public final class ImageSequenceViewModel {
         self.cannyMaxThreshold = config.cannyMaxThreshold
         self.cannyUseL2Gradient = config.cannyUseL2Gradient ? .L2norm : .L1norm
         self.numberOfNeighborFrames = config.numberFinalProcessingNeighborsNeeded
-        self.pixelReplacementMethod = config.pixelReplacementMethod
+        self.cleanMethod = config.cleanMethod
         self.pixelReplacementOverrides = config.pixelReplacementOverrides
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.maxConcurrentHorizonCalculations = config.maxConcurrentHorizonCalculations
@@ -832,13 +832,13 @@ public final class ImageSequenceViewModel {
         // Update All Frame View Models
         for frame in frames {
             if frame.frameIndex == currentIndex {
-                switch frame.pixelReplacementMethod {
+                switch frame.cleanMethod {
                 case .automatic(let useOutliers): 
-                    currentFrameHighLevelPixelReplacementMethod = .automatic
+                    currentFrameHighLevelCleanMethod = .automatic
                     currentFrameAutoPreservationMode = useOutliers ? .yes : .no
 
                 case .selective:
-                    currentFrameHighLevelPixelReplacementMethod = .selective
+                    currentFrameHighLevelCleanMethod = .selective
                     currentFrameAutoPreservationMode = .no
                 }
             }
@@ -1560,7 +1560,7 @@ public final class ImageSequenceViewModel {
     }
 
     var currentFrameUsesOutliers: Bool {
-        switch currentFrameHighLevelPixelReplacementMethod {
+        switch currentFrameHighLevelCleanMethod {
         case .automatic:
             switch currentFrameAutoPreservationMode {
             case .yes:
@@ -1573,27 +1573,27 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    var currentFrameHighLevelPixelReplacementMethod: HighLevelPixelReplacementMethod = .automatic {
+    var currentFrameHighLevelCleanMethod: HighLevelCleanMethod = .automatic {
         didSet {
-            self.updatePixelReplacementMethod()
+            self.updateCleanMethod()
         }
     }
     
     var currentFrameAutoPreservationMode: AutoPreservationMode = .no  {
         didSet {
-            self.updatePixelReplacementMethod()
+            self.updateCleanMethod()
         }
     }
 
-    // update the PixelReplacementMethod for the current frame
+    // update the CleanMethod for the current frame
     // from the two vars above
-    private func updatePixelReplacementMethod() {
-        let method = PixelReplacementMethod(
-            highLevelPixelReplacementMethod: currentFrameHighLevelPixelReplacementMethod,
+    private func updateCleanMethod() {
+        let method = CleanMethod(
+            highLevelCleanMethod: currentFrameHighLevelCleanMethod,
             autoPreservationMode: currentFrameAutoPreservationMode
           )
         self.set(
-          pixelReplacementMethod: method,
+          cleanMethod: method,
           forFrame: currentIndex
         )
     }
@@ -1613,7 +1613,7 @@ public final class ImageSequenceViewModel {
                                 await semaphore.wait()
                                 await counter.increase()
 
-                                switch await frame.pixelReplacementMethod {
+                                switch await frame.cleanMethod {
                                 case .selective:
                                     try await frameSaveQueue.saveNow(frame: frame) {
                                         await self.refresh(frame: frame)

@@ -79,7 +79,7 @@ public struct Config: Codable, Sendable, Transferable {
 
     public init() {
         self.outputPath = "."
-        self.pixelReplacementMethod = .automatic(false)
+        self.cleanMethod = .automatic(false)
         self.detectionType = .strong
         //self.numConcurrentRenders = 0
         self.imageSequenceDirname = ""
@@ -104,7 +104,7 @@ public struct Config: Codable, Sendable, Transferable {
 
     public init(
       outputPath: String?,
-      pixelReplacementMethod: PixelReplacementMethod = .automatic(false),
+      cleanMethod: CleanMethod = .automatic(false),
       detectionType: DetectionType = .strong,
       imageSequenceName: String,
       imageSequencePath: String,
@@ -118,7 +118,7 @@ public struct Config: Codable, Sendable, Transferable {
         } else {
             self.outputPath = "."
         }
-        self.pixelReplacementMethod = pixelReplacementMethod
+        self.cleanMethod = cleanMethod
         self.detectionType = detectionType
         self.imageSequenceDirname = imageSequenceName
         self.imageSequencePath = imageSequencePath
@@ -132,13 +132,13 @@ public struct Config: Codable, Sendable, Transferable {
     public var outputPath: String
 
     // the default pixel replement method for this sequence
-    public var pixelReplacementMethod: PixelReplacementMethod
+    public var cleanMethod: CleanMethod
 
     // any frame specific overrides to the default pixel replacement method 
     // indexed by frame number
-    public var pixelReplacementOverrides: [Int:PixelReplacementMethod] = [:]
+    public var pixelReplacementOverrides: [Int:CleanMethod] = [:]
 
-    // used with PixelReplacementMethod.selective and .automatic(true)
+    // used with CleanMethod.selective and .automatic(true)
     public var detectionType: DetectionType
 
     // was the tripod head static, or moving?  Static assumed when not set.
@@ -297,8 +297,8 @@ public struct Config: Codable, Sendable, Transferable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
 
         self.outputPath = try c.decodeIfPresent(String.self, forKey: .outputPath) ?? self.outputPath
-        self.pixelReplacementMethod = try c.decodeIfPresent(PixelReplacementMethod.self, forKey: .pixelReplacementMethod) ?? self.pixelReplacementMethod
-        self.pixelReplacementOverrides = try c.decodeIfPresent([Int:PixelReplacementMethod].self, forKey: .pixelReplacementOverrides) ?? self.pixelReplacementOverrides        
+        self.cleanMethod = try c.decodeIfPresent(CleanMethod.self, forKey: .cleanMethod) ?? self.cleanMethod
+        self.pixelReplacementOverrides = try c.decodeIfPresent([Int:CleanMethod].self, forKey: .pixelReplacementOverrides) ?? self.pixelReplacementOverrides        
         self.detectionType = try c.decodeIfPresent(DetectionType.self, forKey: .detectionType) ?? self.detectionType
         self.tripodHeadWasMoving = try c.decodeIfPresent(Bool.self, forKey: .tripodHeadWasMoving) ?? self.tripodHeadWasMoving
 

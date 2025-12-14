@@ -97,7 +97,7 @@ public actor FinalGUIProcessor {
                             try await frame.deleteOutliers()
                         }
 
-                        switch await frame.pixelReplacementMethod {
+                        switch await frame.cleanMethod {
 
                         case .automatic(let useOutliers):
                             try await frame.finishAuto(useOutliers: useOutliers)

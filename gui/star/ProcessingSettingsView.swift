@@ -162,7 +162,7 @@ enum CameraMotion: String, InstructionOption, Identifiable {
 struct ProcessingSettingsView: View {
     var viewModel: ImageSequenceViewModel
 
-    @State private var pixelReplacementMethod: HighLevelPixelReplacementMethod
+    @State private var cleanMethod: HighLevelCleanMethod
     @State private var autoPreservationMode: AutoPreservationMode
 
     @State private var showSceneTypeInfo = false
@@ -237,16 +237,16 @@ struct ProcessingSettingsView: View {
         self.viewModel = viewModel
 
         // grab that shit from the view model
-        if viewModel.pixelReplacementMethod.usesOutliers {
+        if viewModel.cleanMethod.usesOutliers {
             autoPreservationMode = .yes
         } else {
             autoPreservationMode = .no
         }
-        switch viewModel.pixelReplacementMethod {
+        switch viewModel.cleanMethod {
         case .automatic(_):
-            pixelReplacementMethod = .automatic
+            cleanMethod = .automatic
         case .selective:
-            pixelReplacementMethod = .selective
+            cleanMethod = .selective
         }
     }
 
@@ -434,12 +434,12 @@ struct ProcessingSettingsView: View {
           addSpacer: { addSpacer },
           isPrimary: false
         )        
-          .disabled(self.pixelReplacementMethod == .selective)
+          .disabled(self.cleanMethod == .selective)
     }
     
     private var processingMethodGridRow: some View {
-        EnumInstructionGridRow<HighLevelPixelReplacementMethod>(
-          selection: $pixelReplacementMethod,
+        EnumInstructionGridRow<HighLevelCleanMethod>(
+          selection: $cleanMethod,
           showInfo: $showProcessingMethodInfo,
           addSpacer: { addSpacer }
         )        
@@ -837,7 +837,7 @@ struct ProcessingSettingsView: View {
                 }
             }
         }
-        .disabled(viewModel.sceneType == .skyOnly || viewModel.pixelReplacementMethod == .selective)
+        .disabled(viewModel.sceneType == .skyOnly || viewModel.cleanMethod == .selective)
     }
 
     private var processingModeView: some View {
@@ -881,14 +881,14 @@ struct ProcessingSettingsView: View {
 
     private func applySettings() {
 
-        switch self.pixelReplacementMethod {
+        switch self.cleanMethod {
         case .automatic:
-            viewModel.pixelReplacementMethod = .automatic(autoPreservationMode.boolValue)
+            viewModel.cleanMethod = .automatic(autoPreservationMode.boolValue)
         case .selective:
-            viewModel.pixelReplacementMethod = .selective
+            viewModel.cleanMethod = .selective
         }
 
-        if !viewModel.pixelReplacementMethod.usesOutliers {
+        if !viewModel.cleanMethod.usesOutliers {
             viewModel.selectionMode = .none
         }
     }

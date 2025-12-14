@@ -2,10 +2,10 @@ import Foundation
 
 // An enum that determines our top level processing mode
 
-public enum PixelReplacementMethod: Identifiable,
-                                    Hashable,
-                                    Sendable,
-                                    Codable
+public enum CleanMethod: Identifiable,
+                         Hashable,
+                         Sendable,
+                         Codable
 {
     case automatic(Bool)
     case selective
@@ -22,10 +22,10 @@ public enum PixelReplacementMethod: Identifiable,
     }
 
     public init(
-      highLevelPixelReplacementMethod: HighLevelPixelReplacementMethod,
+      highLevelCleanMethod: HighLevelCleanMethod,
       autoPreservationMode: AutoPreservationMode
     ) {
-        switch highLevelPixelReplacementMethod {
+        switch highLevelCleanMethod {
         case .selective:
             self = .selective
         case .automatic:
@@ -39,7 +39,7 @@ public enum PixelReplacementMethod: Identifiable,
     }
 }
 
-public enum HighLevelPixelReplacementMethod: InstructionOption,
+public enum HighLevelCleanMethod: InstructionOption,
                                              Sendable,
                                              Codable
 {

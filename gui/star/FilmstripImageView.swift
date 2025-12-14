@@ -70,7 +70,7 @@ struct FilmstripImageView: View {
                 
                 // pixel replacement method indication on top right
                 // XXX This needs to be tracked in the FrameViewModel 
-                switch frameView.pixelReplacementMethod {
+                switch frameView.cleanMethod {
                 case .automatic(let useOutliers):
                     if useOutliers {
                         AutoSelectiveIcon()

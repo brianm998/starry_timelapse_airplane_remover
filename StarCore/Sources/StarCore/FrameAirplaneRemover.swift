@@ -77,12 +77,12 @@ public class FrameObserver {
     public var starAlignmentResults: FrameAlignmentResults?
     public var earthAlignmentResults: FrameAlignmentResults?
 
-    public var pixelReplacementMethod: PixelReplacementMethod?
+    public var cleanMethod: CleanMethod?
     
     // XXX stick more here, like state
 
-    public func set(pixelReplacementMethod: PixelReplacementMethod) {
-        self.pixelReplacementMethod = pixelReplacementMethod
+    public func set(cleanMethod: CleanMethod) {
+        self.cleanMethod = cleanMethod
     }
     
     public func set(starAlignmentResults: FrameAlignmentResults) {
@@ -1114,7 +1114,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public func finish() async throws {
-        switch await self.pixelReplacementMethod {
+        switch await self.cleanMethod {
         case .automatic(let useOutliers):
             try await self.finishAuto(useOutliers: useOutliers)
         case .selective:
@@ -2352,7 +2352,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     private func fallbackToSelective() async throws {
         
         // 1. set mode to selective
-        await self.set(pixelReplacementMethod: .selective)
+        await self.set(cleanMethod: .selective)
 
         // 2. check for outliers either in ram or on disk, create if missing
         try await self.loadOutliers()
@@ -2462,28 +2462,28 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public var usesOutliers: Bool {
         get async {
-            await self.pixelReplacementMethod.usesOutliers
+            await self.cleanMethod.usesOutliers
         }
     }
 
-    public var pixelReplacementMethod: PixelReplacementMethod {
+    public var cleanMethod: CleanMethod {
         get async {
             let config = await configManager.config()
             if let override = config.pixelReplacementOverrides[self.frameIndex] {
                 return override
             } else {
-                return config.pixelReplacementMethod
+                return config.cleanMethod
             }
         }
     }
 
-    public func set(pixelReplacementMethod: PixelReplacementMethod) async {
+    public func set(cleanMethod: CleanMethod) async {
         var config = await configManager.config()
-        config.pixelReplacementOverrides[self.frameIndex] = pixelReplacementMethod
+        config.pixelReplacementOverrides[self.frameIndex] = cleanMethod
         await MainActor.run {
             configManager.update(config)
         }
-        await observer?.set(pixelReplacementMethod: pixelReplacementMethod)
+        await observer?.set(cleanMethod: cleanMethod)
     }
     
     // used by PixelReplacementMode.automatic

@@ -191,7 +191,7 @@ struct RemovalView: View {
     @State private var removeSatellites: Bool = true
     @State private var removeMeteors: Bool = true
 
-    private var pixelReplacementMethod: PixelReplacementMethod {
+    private var cleanMethod: CleanMethod {
         if removeAirplanes {
             if removeSatellites {
                 if removeMeteors {
@@ -233,7 +233,7 @@ struct RemovalView: View {
 
     private var descriptionText: String {
 
-        switch pixelReplacementMethod {
+        switch cleanMethod {
         case .automatic(let usesOutliers):
             if usesOutliers {
                 "Star will run in auto mode, replacing all bad pixels.  It will then do further processing on every frame to then allow users to select removed pixels to return to their original state.  You will have to go into each frame and select any signals you want to keep, Star cannot currently tell the difference between airplanes satellites and meteors"
@@ -305,7 +305,7 @@ struct RemovalView: View {
                 Button {
                     withAnimation {
                         viewModel.shouldShowInitialInstructions = false
-                        viewModel.pixelReplacementMethod = self.pixelReplacementMethod
+                        viewModel.cleanMethod = self.cleanMethod
                         viewModel.showIgnoreLowerBar = false
 
                         viewModel.processAll()

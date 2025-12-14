@@ -362,7 +362,7 @@ struct RightPanel: View {
     var pixelReplacementModeView: some View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .leading) {
-            if viewModel.currentFrameHasOverriddenPixelReplacementMethod {
+            if viewModel.currentFrameHasOverriddenCleanMethod {
                 Text("Custom")
                   .foregroundColor(.white)
             } else {
@@ -370,9 +370,9 @@ struct RightPanel: View {
                   .foregroundColor(.white)
             }
             Picker("Clean:",
-                   selection: $viewModel.currentFrameHighLevelPixelReplacementMethod)
+                   selection: $viewModel.currentFrameHighLevelCleanMethod)
             {
-                ForEach(HighLevelPixelReplacementMethod.allCases, id: \.id) { value in
+                ForEach(HighLevelCleanMethod.allCases, id: \.id) { value in
                     HStack {
                         switch value {
                         case .automatic:
@@ -415,7 +415,7 @@ struct RightPanel: View {
             }
               .foregroundColor(.white)
               .pickerStyle(.inline)
-              .disabled(viewModel.currentFrameHighLevelPixelReplacementMethod != .automatic)
+              .disabled(viewModel.currentFrameHighLevelCleanMethod != .automatic)
 
 
         }
