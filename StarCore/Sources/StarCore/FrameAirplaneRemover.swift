@@ -618,7 +618,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         )
     }
     
-    private func loadOrCreateAlignedImage(
+    fileprivate func loadOrCreateAlignedImage(
       of type: FrameViewMode,
       withFailedType failedType: FrameViewMode? = nil
     ) async throws -> AlignmentResult {
@@ -2348,6 +2348,23 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             await self.updateCombineSubjects()
         }
     }
+
+    private func fallbackToSelective() async throws {
+        
+        // 1. set mode to selective
+        await self.set(pixelReplacementMethod: .selective)
+
+        // 2. check for outliers either in ram or on disk, create if missing
+        try await self.loadOutliers()
+
+        self.set(state: .secondClassification)
+
+        // 3. classify outliers
+        await self.applyDecisionTreeToAllOutliers(includingTrash: true)
+
+        // 4. render that image and return it here
+        try await self.finish()
+    }
     
     // Mark - Auto Mode Logic
 
@@ -2361,11 +2378,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
      If the sky contains little to no clouds, this approach can work, and gets
      rid of even the small distant satellites that move slowly through the sky.
      */
-    func createAutoProcessedImage() async throws -> PixelatedImage {
+    func createAutoProcessedImage() async throws -> PixelatedImage? {
         let result = try await loadOrCreateStarAlignedImage()
         let starAlignedImage = result.aligned
         let failedStarImage = result.failed
 
+        let config = await configManager.config()
+        
+        if result.numAligned < config.minAlignmentFrames {
+            // fall back to selective clean here because alignment was not good enough
+            Log.i("frame \(frameIndex) falling back to selective because \(result.numAligned) < \(config.minAlignmentFrames)")
+            try await fallbackToSelective() // finishSelective() is called here
+            return nil          
+        }
+        
         var skyImage: PixelatedImage? = starAlignedImage
         if skyImage == nil {
             // if we don't have a successful sky alignment image,
@@ -2383,7 +2409,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             throw msg
         }
         
-        let config = await configManager.config()
         if config.horizonDetectionEnabled {
             // with horizon detection, we need to mask the star and earth images
 
@@ -2463,8 +2488,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     
     // used by PixelReplacementMode.automatic
     public func finishAuto(useOutliers: Bool) async throws {
-        let autoProcessedImage = try await createAutoProcessedImage()
-
+        guard let autoProcessedImage = try await createAutoProcessedImage() else {
+            // we were unable to finish auto because of bad alignment, so we
+            // finished selective instead  
+            return
+        }
         if useOutliers {
             // if using outliers, 
             let originalImage =
@@ -2608,7 +2636,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             self.set(state: .complete)
         }
     }
-    
+
+
     // Mark - Subtraction
 
     /*
