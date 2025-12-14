@@ -55,10 +55,10 @@ maxCornerDeviation:(double)maxCornerDeviation
      maxKeypoints:(int)maxKeypoints
  outlierThreshold:(double)k;
 
-+(MatWrapper *)createGradientMaskIntoSky:(MatWrapper*)binaryMask
-                        gradientDistance:(int)gradientDistance;
++(MatWrapper * _Nonnull)createGradientMaskIntoSky:(MatWrapper*)binaryMask
+                                 gradientDistance:(int)gradientDistance;
 
-+(MatWrapper *)createGradientMaskIntoGround:(MatWrapper*)binaryMask
++(MatWrapper * _Nonnull)createGradientMaskIntoGround:(MatWrapper*)binaryMask
                            gradientDistance:(int)gradientDistance;
 
 @end
