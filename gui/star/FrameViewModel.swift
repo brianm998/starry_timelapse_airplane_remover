@@ -51,28 +51,10 @@ public class FrameViewModel {
     
     let frameIndex: Int
 
-    func savedImage(_ image: PixelatedImage, ofType type: FrameViewMode, atSize size: ImageDisplaySize) {
+    func savedImage(ofType type: FrameViewMode, atSize size: ImageDisplaySize) {
         existingImages.insert(type)
         if size == .preview {
-            switch type {
-                /*
-            case .processed:
-                if let image = image.nsImage {
-                    self.processedPreviewImage = Image(nsImage: image)
-                      .resizable()
-                }
-            case .original:
-                if let image = image.nsImage {
-                    self.previewImage = Image(nsImage: image)
-                      .resizable()
-                }*/
-            default:
-                reloadID = UUID()
-                // XXX expand this to the other views
-                // update things so that if the saved FrameViewMode is shown
-                // in this frame, then update the shown image with the saved one
-                 break
-            }
+            reloadID = UUID()
         }
     }
     

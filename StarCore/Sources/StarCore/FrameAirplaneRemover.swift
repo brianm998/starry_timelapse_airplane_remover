@@ -1167,7 +1167,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         guard let image = image
         else { throw "couldn't load original file for finishing" }
-        
+        /*
         if self.writeOutputFiles {
             self.set(state: .loadingImages1)
             try await imageAccessor.saveFinal(
@@ -1184,7 +1184,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               atSize: .thumbnail,
               overwrite: false
             )
-        }
+        }*/
 
         var horizonMask: HorizonMask? = nil
         var earthAlignedImage: PixelatedImage? = nil
@@ -1257,7 +1257,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     try await imageAccessor.saveFinal(
                       processedImage,
                       frameIndex: frameIndex,
-                      as: .final,
+                      as: .selectiveProcessed,
                       atSize: .original,
                       overwrite: true
                     )
@@ -1265,10 +1265,26 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     try await imageAccessor.saveFinal(
                       processedImage,
                       frameIndex: frameIndex,
-                      as: .final,
+                      as: .selectiveProcessed,
                       atSize: .preview,
                       overwrite: true
                     )
+
+                    // link to final here
+                    try imageAccessor.linkFinal(
+                      processedImage,
+                      frameIndex: frameIndex,
+                      as: .selectiveProcessed,
+                      atSize: .original
+                    )
+
+                    try imageAccessor.linkFinal(
+                      processedImage,
+                      frameIndex: frameIndex,
+                      as: .selectiveProcessed,
+                      atSize: .preview
+                    )
+                    
                 } catch {
                     // XXX for some reason this error gets missed if we don't catch it here :(
                     Log.d("frame \(self.frameIndex) ERROR \(error)")
@@ -2565,7 +2581,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         try await imageAccessor.saveFinal(
                           processedImage,
                           frameIndex: frameIndex,
-                          as: .final,
+                          as: .autoSelectiveProcessed,
                           atSize: .original,
                           overwrite: true
                         )
@@ -2573,10 +2589,26 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         try await imageAccessor.saveFinal(
                           processedImage,
                           frameIndex: frameIndex,
-                          as: .final,
+                          as: .autoSelectiveProcessed,
                           atSize: .preview,
                           overwrite: true
                         )
+
+                        // link to final here
+                        try imageAccessor.linkFinal(
+                          processedImage,
+                          frameIndex: frameIndex,
+                          as: .autoSelectiveProcessed,
+                          atSize: .original
+                        )
+
+                        try imageAccessor.linkFinal(
+                          processedImage,
+                          frameIndex: frameIndex,
+                          as: .autoSelectiveProcessed,
+                          atSize: .preview
+                        )
+
                     } catch {
                         // XXX for some reason this error gets missed if we don't catch it here :(
                         Log.d("frame \(self.frameIndex) ERROR \(error)")
@@ -2615,24 +2647,41 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             try await imageAccessor.saveFinal(
               autoProcessedImage, 
               frameIndex: frameIndex,
-              as: .final,
+              as: .autoProcessed,
               atSize: .preview,
               overwrite: false
             )
             try await imageAccessor.saveFinal(
               autoProcessedImage, 
               frameIndex: frameIndex,
-              as: .final,
+              as: .autoProcessed,
               atSize: .original,
               overwrite: false
             )
+
+            // link to final here
+            try imageAccessor.linkFinal(
+              autoProcessedImage,
+              frameIndex: frameIndex,
+              as: .autoProcessed,
+              atSize: .original
+            )
+
+            try imageAccessor.linkFinal(
+              autoProcessedImage,
+              frameIndex: frameIndex,
+              as: .autoProcessed,
+              atSize: .preview
+            )
+            
+            /*
             try await imageAccessor.saveFinal(
               autoProcessedImage,
               frameIndex: frameIndex,
               as: .final,
               atSize: .thumbnail,
               overwrite: false
-            )
+            )*/
             self.set(state: .complete)
         }
     }

@@ -730,10 +730,10 @@ public final class ImageSequenceViewModel {
           config: configManager.config(),
           imageSequence: imageSequence,
           frameIndexToBaseNameMap: frameIndexToBaseNameMap
-        ) { [weak self] frameIndex, image, type, size in
+        ) { [weak self] frameIndex, type, size in
             Task { @MainActor in
                 Log.d("frame \(frameIndex) saved image of type \(type) at size \(size)")
-                self?.frames[frameIndex].savedImage(image, ofType: type, atSize: size)
+                self?.frames[frameIndex].savedImage(ofType: type, atSize: size)
             }
         }
 

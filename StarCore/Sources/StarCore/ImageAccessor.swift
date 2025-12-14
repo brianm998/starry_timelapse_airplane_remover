@@ -40,14 +40,13 @@ public struct ImageAccessor: Sendable {
     let config: Config
     let frameIndexToBaseNameMap: [Int: String]
     let imageSequence: ImageSequence
-    let imageSavedClosure: (@Sendable (Int, PixelatedImage, FrameViewMode, ImageDisplaySize) -> Void)?
+    let imageSavedClosure: (@Sendable (Int, FrameViewMode, ImageDisplaySize) -> Void)?
     
     public init(
       config: Config,
       imageSequence: ImageSequence,
       frameIndexToBaseNameMap: [Int: String],
       imageSavedClosure: (@Sendable (Int,
-                                     PixelatedImage,
                                      FrameViewMode,
                                      ImageDisplaySize
                           ) -> Void
@@ -258,6 +257,34 @@ public struct ImageAccessor: Sendable {
         }
         return nil
     }
+
+    // ln a processed type to .final
+    public func linkFinal(
+      _ image: PixelatedImage,
+      frameIndex: Int,
+      as type: FrameViewMode,
+      atSize size: ImageDisplaySize
+    ) throws {
+        if let fromName = nameForImage(
+            frameIndex: frameIndex,
+            ofType: type,
+            atSize: size
+           ),
+           let toName = nameForImage(
+            frameIndex: frameIndex,
+            ofType: .final,
+            atSize: size
+           )
+        {
+            try createHardLinkReplacingDestination(
+              from: fromName,
+              to: toName
+            )
+            imageSavedClosure?(frameIndex, .final, size)
+        } else {
+            throw "cannot link: either name for \(type) or name for .final doesn't exist"
+        }
+    }
     
     // save using the file system monitor
     public func saveFinal(_ image: PixelatedImage,
@@ -320,7 +347,7 @@ public struct ImageAccessor: Sendable {
                     {
                         downScaled.saveJpeg(withQuality: 60, filename: filename)
                     }
-                    imageSavedClosure?(frameIndex, image, type, size)
+                    imageSavedClosure?(frameIndex, type, size)
                 }
             } else {
                 Log.w("no place to save image of type \(type) at size \(size)")
@@ -627,3 +654,39 @@ public struct ImageAccessor: Sendable {
     }
 }
     
+import Foundation
+
+func createHardLinkReplacingDestination(from sourcePath: String,
+                                        to destinationPath: String) throws
+{
+    let fileManager = FileManager.default
+
+    // If destination exists, remove it first
+    if fileManager.fileExists(atPath: destinationPath) {
+        do {
+            try fileManager.removeItem(atPath: destinationPath)
+        } catch {
+            throw NSError(
+                domain: NSCocoaErrorDomain,
+                code: CocoaError.fileWriteNoPermission.rawValue,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Failed to remove existing destination file: \(error.localizedDescription)"
+                ]
+            )
+        }
+    }
+
+    // Create hard link (POSIX)
+    let result = link(sourcePath, destinationPath)
+    if result != 0 {
+        throw NSError(
+            domain: NSPOSIXErrorDomain,
+            code: Int(errno),
+            userInfo: [
+                NSLocalizedDescriptionKey: String(cString: strerror(errno))
+            ]
+        )
+    }
+}
+
