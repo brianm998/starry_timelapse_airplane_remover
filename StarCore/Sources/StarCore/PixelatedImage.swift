@@ -171,7 +171,7 @@ public final class PixelatedImage: Sendable {
                  line: Int = #line)
     {
         //Log.d("init from mat [\(mat.cols), \(mat.rows)]")
-
+        if mat.isEmpty { return nil }
         self.file = file
         self.function = function
         self.line = line
@@ -1120,24 +1120,30 @@ extension MatWrapper {
 
 extension AlignmentResult {
     var aligned: PixelatedImage? {
-        if !self.alignedMat.isEmpty {
-            PixelatedImage(mat: self.alignedMat)
+        if let mat = self.alignedMat,
+           !mat.isEmpty
+        {
+            PixelatedImage(mat: mat)
         } else {
             nil
         }
     }
 
     var failed: PixelatedImage? {
-        if !self.failedMat.isEmpty {
-            PixelatedImage(mat: self.failedMat)
+        if let mat = self.failedMat,
+           !mat.isEmpty
+        {
+            PixelatedImage(mat: mat)
         } else {
             nil
         }
     }
 
     var horizon: PixelatedImage? {
-        if !self.horizonMask.isEmpty {
-            PixelatedImage(mat: self.horizonMask)
+        if let mat = self.horizonMask,
+           !mat.isEmpty
+        {
+            PixelatedImage(mat: mat)
         } else {
             nil
         }
