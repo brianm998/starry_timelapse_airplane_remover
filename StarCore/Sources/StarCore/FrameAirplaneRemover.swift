@@ -370,7 +370,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("config.numberAlignedNeighborFrames \(config.numberAlignedNeighborFrames)")
         await self.setNumberOfAlignedFrames()
         await self.setNumberOfStaticNeighborFrames()
-        await self.set(cleanMethod: config.cleanMethod(for: frameIndex))
+        await self.set(
+          cleanMethod: config.cleanMethod(for: frameIndex),
+          process: false
+        )
         
         if imageAccessor.imageExists(frameIndex: frameIndex,
                                      ofType: .final,
@@ -2493,13 +2496,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public func set(cleanMethod: CleanMethod) async {
+    public func set(cleanMethod: CleanMethod, process: Bool = true) async {
         var config = await configManager.config()
         config.pixelReplacementOverrides[self.frameIndex] = cleanMethod
         await MainActor.run {
             configManager.update(config)
         }
         await observer?.set(cleanMethod: cleanMethod)
+
+        if !process { return }
 
         // after setting the clean mode on a frame, we need to
         // 1. check to see if there is a processed type for this method
