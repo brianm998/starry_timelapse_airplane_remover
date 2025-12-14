@@ -64,11 +64,11 @@ void growBlack(cv::Mat &img, int pixels)
 
 
 @implementation AlignmentResult
--(AlignmentResult*)initWithAlignedMat:(MatWrapper *)alignedMat
+-(AlignmentResult*)initWithAlignedMat:(nullable MatWrapper *)alignedMat
                            numAligned:(int)foo
-                            failedMat:(MatWrapper *)bar
+                            failedMat:(nullable MatWrapper *)bar
                             numFailed:(int)baz
-                          horizonMask:(MatWrapper *)boo
+                          horizonMask:(nullable MatWrapper *)boo
 {
   self.alignedMat = alignedMat;
   self.numAligned = foo;
