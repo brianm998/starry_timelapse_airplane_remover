@@ -289,14 +289,27 @@ public final class ImageSequenceViewModel {
     // the frame number of the frame we're currently showing
     var currentIndex = 0 {
         didSet {
-            switch self.currentFramePixelReplacementMethod {
-            case .automatic(let useOutliers):
-                self.currentFrameHighLevelPixelReplacementMethod = .automatic
-                self.currentFrameAutoPreservationMode = useOutliers ? .yes : .no
+            if let method = self.frames[currentIndex].frameObserver.pixelReplacementMethod {
+                switch method {
+                case .automatic(let useOutliers):
+                    self._currentFrameHighLevelPixelReplacementMethod = .automatic
+                    self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
+                    
+                case .selective:
+                    self._currentFrameHighLevelPixelReplacementMethod = .selective
+                    self._currentFrameAutoPreservationMode = .no
+                }
+                 
+            } else {
+                switch self.currentFramePixelReplacementMethod {
+                case .automatic(let useOutliers):
+                    self._currentFrameHighLevelPixelReplacementMethod = .automatic
+                    self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
 
-            case .selective:
-                self.currentFrameHighLevelPixelReplacementMethod = .selective
-                self.currentFrameAutoPreservationMode = .no
+                case .selective:
+                    self._currentFrameHighLevelPixelReplacementMethod = .selective
+                    self._currentFrameAutoPreservationMode = .no
+                }
             }
         }
     }
@@ -421,9 +434,10 @@ public final class ImageSequenceViewModel {
 
             // Update All Frame View Models
             for frame in frames {
-                frame.pixelReplacementMethod = getPixelReplacementMethod(
+              frame.frameObserver.set(pixelReplacementMethod: getPixelReplacementMethod(
                   forFrame: frame.frameIndex
                 )
+                                      )
             }
         }
     }
@@ -454,8 +468,14 @@ public final class ImageSequenceViewModel {
         }
     }
     
-    func set(pixelReplacementMethod: PixelReplacementMethod, forFrame frame: Int) {
-        pixelReplacementOverrides[frame] = pixelReplacementMethod
+    func set(pixelReplacementMethod: PixelReplacementMethod, forFrame frameIndex: Int) {
+        // update the frame view model
+        frames[frameIndex].frameObserver.set(pixelReplacementMethod: pixelReplacementMethod)
+
+        // update local overrides
+        pixelReplacementOverrides[frameIndex] = pixelReplacementMethod
+
+        // update the config too
         var realConfig = config.config()
         realConfig.pixelReplacementOverrides = pixelReplacementOverrides
         config.update(realConfig)
@@ -811,9 +831,6 @@ public final class ImageSequenceViewModel {
 
         // Update All Frame View Models
         for frame in frames {
-            frame.pixelReplacementMethod = getPixelReplacementMethod(
-              forFrame: frame.frameIndex
-            )
             if frame.frameIndex == currentIndex {
                 switch frame.pixelReplacementMethod {
                 case .automatic(let useOutliers): 
@@ -1579,9 +1596,6 @@ public final class ImageSequenceViewModel {
           pixelReplacementMethod: method,
           forFrame: currentIndex
         )
-
-        // update frame view model 
-        currentFrameView.pixelReplacementMethod = method
     }
     
     func renderAllFrames() {

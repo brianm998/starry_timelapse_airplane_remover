@@ -17,7 +17,12 @@ public class FrameViewModel {
     init(_ config: ConfigManager, _ frameIndex: Int) {
         self.config = config
         self.frameIndex = frameIndex
-        self.pixelReplacementMethod = config.config().pixelReplacementMethod
+        let overrides = config.config().pixelReplacementOverrides
+        if let overriddenValue = overrides[frameIndex] {
+            self.defaultPixelReplacementMethod = overriddenValue
+        } else {
+            self.defaultPixelReplacementMethod = config.config().pixelReplacementMethod
+        }
     }
 
     var existingImages: Set<FrameViewMode> = []
@@ -26,7 +31,13 @@ public class FrameViewModel {
 
     var frameState: FrameProcessingState?
 
-    var pixelReplacementMethod: PixelReplacementMethod
+    let defaultPixelReplacementMethod: PixelReplacementMethod
+
+    var pixelReplacementMethod: PixelReplacementMethod {
+        get {
+            frameObserver.pixelReplacementMethod ?? defaultPixelReplacementMethod
+        }
+    }
     
     var outliersLoaded: OutlierLoadingState = .unloaded
 
