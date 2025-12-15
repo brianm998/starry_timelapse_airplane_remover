@@ -217,6 +217,18 @@ public struct FrameEditImageView: View {
                 }
             }
         }
+          .onChange(of: self.viewModel.frames[self.viewModel.currentIndex].frameObserver.numberOfUndecidedOutliers) {
+              maybeLoadOutliers()
+          }
+          .onChange(of: self.viewModel.frames[self.viewModel.currentIndex].frameObserver.numberOfNegativeOutliers) {
+              maybeLoadOutliers()
+          }
+          .onChange(of: self.viewModel.frames[self.viewModel.currentIndex].frameObserver.numberOfPositiveOutliers) {
+              maybeLoadOutliers()
+          }
+          .onChange(of: viewModel.frames[self.viewModel.currentIndex].frameObserver.numberOfUndecidedOutliers) {
+              maybeLoadOutliers()
+          }
           .onChange(of: viewModel.currentIndex, initial: true) {
               maybeLoadOutliers()
           }
