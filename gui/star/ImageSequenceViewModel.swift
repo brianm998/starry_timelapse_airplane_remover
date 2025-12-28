@@ -428,17 +428,20 @@ public final class ImageSequenceViewModel {
     // fallback replacement method if not specified per frame
     var cleanMethod: CleanMethod {
         didSet {
+            Log.d("didSet cleanMethod \(cleanMethod)")
             var realConfig = config.config()
             realConfig.cleanMethod = cleanMethod
             config.update(realConfig)
 
             // Update All Frame View Models
             for frame in frames {
-              frame.frameObserver.set(cleanMethod: getCleanMethod(
-                  forFrame: frame.frameIndex
+                frame.frameObserver.set(
+                  cleanMethod: getCleanMethod(
+                    forFrame: frame.frameIndex
+                  )
                 )
-                                      )
             }
+            Log.d("didSet cleanMethod \(cleanMethod) done")
         }
     }
 
@@ -651,11 +654,17 @@ public final class ImageSequenceViewModel {
         
     }
 
+    public func disable() {
+        self.appNapDisabler.end()
+    }
+    
     deinit {
         Log.i("DEINIT")         // XXX not always called :(
     }
     
     private var matInstancesTask: Task<Void,Never>? = nil
+
+    private var appNapDisabler: AppNapDisabler
     
     init(
       with configManager: ConfigManager,
@@ -664,6 +673,8 @@ public final class ImageSequenceViewModel {
         self.trashLevel = await constants.getTrashLevel()
         self.smallTrashMax = await constants.getSmallTrashMax()
 
+        self.appNapDisabler = AppNapDisabler()
+        
         let config = configManager.config()
 
         if !config.cleanMethod.usesOutliers {
@@ -739,6 +750,8 @@ public final class ImageSequenceViewModel {
             }
         }
 
+        self.appNapDisabler.begin()
+        
         Log.d("make missing previews")
 
         self.finalProcessor = FinalGUIProcessor(self)
@@ -758,6 +771,7 @@ public final class ImageSequenceViewModel {
         
         var numberPreviewsSaved = 0
         Task {
+            Log.d("writing missing images")
             try await imageAccessor.writeMissingImages() { numberSaved in
                 Task { @MainActor in
                     numberPreviewsSaved += 1
@@ -1001,17 +1015,22 @@ public final class ImageSequenceViewModel {
     }
 
     func processAll() {
+        Log.d("processAll")
         if self.horizonDetectionEnabled {
+            Log.d("processAll horizonDetectionEnabled")
             Task {
                 do {
                     try await self.processHorizonForAllFrames()
+                    Log.d("processAll got horizons")
                     // after we get horizons for all frames, render frames
                     self.renderAllFrames()
+                    Log.d("processAll rendered all frames")
                 } catch {
                     Log.e("ERROR: \(error)")
                 }
             }
         } else {
+            Log.d("processAll NO horizonDetection")
             self.ignoreLowerPixels = 0
             self.renderAllFrames()
         }
@@ -1576,29 +1595,39 @@ public final class ImageSequenceViewModel {
     // update the CleanMethod for the current frame
     // from the two vars above
     private func updateCleanMethod() {
-        let method = CleanMethod(
+        let newMethod = CleanMethod(
             highLevelCleanMethod: currentFrameHighLevelCleanMethod,
             autoPreservationMode: currentFrameAutoPreservationMode
-          )
-        self.set(
-          cleanMethod: method,
-          forFrame: currentIndex
         )
+        let oldMethod = getCleanMethod(forFrame: currentIndex)
+        if oldMethod != newMethod {
+            self.set(
+              cleanMethod: newMethod,
+              forFrame: currentIndex
+            )
+            // XXX show outliers if necessary
+        }
     }
     
     func renderAllFrames() {
+        Log.d("renderAllFrames")
         self.renderingAllFrames = true
         let frameSaveQueue = self.frameSaveQueue
         Task {
+            Log.d("renderAllFrames Task")
             let semaphore = AsyncSemaphore(value: self.numberOfFramesToProcessConcurrently)
             try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+                Log.d("renderAllFrames TaskGroup")
 
                 let counter = CountActor()
                 for frameView in self.frames {
                     if let frame = frameView.frame {
                         if await frame.processingState() != .complete {
+                            Log.d("frame \(frame.frameIndex) rendering")
                             taskGroup.addTask() {
+                                Log.d("frame \(frame.frameIndex) rendering pre semaphore")
                                 await semaphore.wait()
+                                Log.d("frame \(frame.frameIndex) rendering post semaphor")
                                 await counter.increase()
 
                                 switch await frame.cleanMethod {
@@ -1642,7 +1671,11 @@ public final class ImageSequenceViewModel {
                                     semaphore.signal()
                                 }
                             }
+                        } else {
+                            Log.d("renderAllFrames FOO")
                         }
+                    } else {
+                        Log.d("renderAllFrames FOO")
                     }
                 }
                 
@@ -1715,8 +1748,11 @@ public final class ImageSequenceViewModel {
               try await withThrowingTaskGroup(of: Optional<HorizonBounds>.self) { taskGroup in
 
                   for frameViewModel in await self.frames {
+                      Log.d("frame \(frameViewModel.frameIndex) about to create task for horizon")
                       taskGroup.addTask {
+                          Log.d("frame \(frameViewModel.frameIndex) in task for horizon waiting for semaphore")
                           await semaphore.wait()
+                          Log.d("frame \(frameViewModel.frameIndex) in task for horizon got semaphore")
                           if let frame = await frameViewModel.frame {
                               if redo {
                                   // get rid of all the existing horizon images first
@@ -1726,6 +1762,7 @@ public final class ImageSequenceViewModel {
                               semaphore.signal()
                               return ret
                           } else {
+                              Log.d("frame \(frameViewModel.frameIndex) in task for horizon no frame")
                               semaphore.signal()
                               return nil
                           }
@@ -1762,6 +1799,10 @@ public final class ImageSequenceViewModel {
                 self.isFindingAllHorizons = false
             }
         }.value
+
+        Log.d("done all horizons with max \(max)")
+
+        
         /*
          * set a boolean saying we are processing horizon for all frames
          * disbable left panel buttons until that is done
@@ -1785,3 +1826,24 @@ public actor CountActor {
 }
 
 
+final class AppNapDisabler {
+    private var activity: NSObjectProtocol?
+
+    func begin() {
+        activity = ProcessInfo.processInfo.beginActivity(
+            options: [
+                .userInitiated,
+                .idleSystemSleepDisabled,
+                .suddenTerminationDisabled
+            ],
+            reason: "Long-running video processing"
+        )
+    }
+
+    func end() {
+        if let activity {
+            ProcessInfo.processInfo.endActivity(activity)
+            self.activity = nil
+        }
+    }
+}
