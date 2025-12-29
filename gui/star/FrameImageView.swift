@@ -10,14 +10,12 @@ public struct FrameImageView: View {
     @State private var size: CGSize = .zero
     
     public var body: some View {
-        let frameView = self.viewModel.frames[self.viewModel.currentIndex]
-        return 
-          ZStack {
-              frameView.previewImage(type: viewModel.frameViewMode)
-                .aspectRatio(viewModel.frameSize, contentMode: .fit)
-                .readSize() { size in
-                    self.size = size
-                }
+        self.viewModel.frames[self.viewModel.currentIndex].previewImage(
+          type: viewModel.frameViewMode
+        )
+          .aspectRatio(viewModel.frameSize, contentMode: .fit)
+          .readSize() { size in
+              self.size = size
           }
     }
 }
