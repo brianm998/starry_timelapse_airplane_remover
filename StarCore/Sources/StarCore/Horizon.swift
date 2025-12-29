@@ -182,7 +182,7 @@ extension PixelatedImage {
       useCannyEdgeDetection: Bool = true,
       cannyMinThreshold: Double = 80,
       cannyMaxThreshold: Double = 250,
-      useL2Gradient: Bool = true,
+      useL2Gradient: Bool = true
     ) async throws -> HorizonMask? {
         
         /*
