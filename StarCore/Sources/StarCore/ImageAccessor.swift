@@ -562,7 +562,7 @@ public struct ImageAccessor: Sendable {
             // nop
             Log.i("found previews and thumbnails for end of sequence, did nothing")
         } else {
-            try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+//            try await withThrowingTaskGroup(of: Void.self) { taskGroup in
                 for frameIndex in 0..<imageSequenceSize {
                     Log.d("frame \(frameIndex) checking for missing images")
                     guard let filename = self.nameForImage(
@@ -587,7 +587,7 @@ public struct ImageAccessor: Sendable {
                     let thumbnailExists = FileManager.default.fileExists(atPath: thumbnailFilename)
                     if !previewExists || !thumbnailExists {
                         Log.d("frame \(frameIndex) is missing images")
-                        taskGroup.addTask() { [self] in
+//                        taskGroup.addTask() { [self] in
                             Log.d("making missing image for frame \(frameIndex)")
                             try await self.writeMissingImages(
                               frameIndex: frameIndex,
@@ -599,12 +599,12 @@ public struct ImageAccessor: Sendable {
                             )
                             closure(frameIndex)
                             //                            return
-                        }
+//                        }
                     } else {
                         closure(frameIndex)
                     }
-                }
-                try await taskGroup.waitForAll()
+//                }
+//                try await taskGroup.waitForAll()
             }
         }
     }
