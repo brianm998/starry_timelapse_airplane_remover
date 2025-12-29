@@ -156,48 +156,74 @@ public final class ViewModel {
     func startup(withConfigFile jsonConfigFilename: String) async throws {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = jsonConfigFilename
-        let imageSequenceViewModel = try await ImageSequenceViewModel(withConfig: jsonConfigFilename) { [weak self] numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
+
+        numberLoaded = 0
+        amountLoaded = 0.0
+        numberPreviewsSaved = 0
+        amountPreviewsSaved = 0.0
+
+        let imageSequenceViewModel = try await ImageSequenceViewModel(
+          withConfig: jsonConfigFilename
+        ) { [weak self]
+            numberPreviewsSaved,
+            amountPreviewsSaved,
+            numberLoaded,
+            amountLoaded in
+            
             guard let self else { return }
+            
             Task { @MainActor in
-                self.amountLoaded = amountLoaded
-                self.numberLoaded = numberLoaded
-                self.numberPreviewsSaved = numberPreviewsSaved
-                self.amountPreviewsSaved = amountPreviewsSaved
+                if amountLoaded != 0 {
+                    self.amountLoaded = amountLoaded
+                }
+                if numberLoaded != 0 {
+                    self.numberLoaded = numberLoaded
+                }
+                if numberPreviewsSaved != 0 {
+                    self.numberPreviewsSaved = numberPreviewsSaved
+                }
+                if amountPreviewsSaved != 0 {
+                    self.amountPreviewsSaved = amountPreviewsSaved
+                }
             }
         }
         imageSequence = imageSequenceViewModel
         imageSequenceViewModel.userPreferences = userPreferences
         isLoadingImageSequence = false
         loadingImageSequenceFilename = nil
-        numberLoaded = 0
-        amountLoaded = 0.0
-        numberPreviewsSaved = 0
-        amountPreviewsSaved = 0.0
-
         self.userPreferences.justOpened(filename: jsonConfigFilename) // make sure this works
     }
 
     func startup(withConfig config: ConfigManager) async throws {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = config.config().imageSequenceDirname
+
+        numberLoaded = 0
+        amountLoaded = 0.0
+        numberPreviewsSaved = 0
+        amountPreviewsSaved = 0.0
+        
         let imageSequenceViewModel = try await ImageSequenceViewModel(with: config) { [weak self] numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
             guard let self else { return }
             Task { @MainActor in
-                self.amountLoaded = amountLoaded
-                self.numberLoaded = numberLoaded
-                self.numberPreviewsSaved = numberPreviewsSaved
-                self.amountPreviewsSaved = amountPreviewsSaved
+                if amountLoaded != 0 {
+                    self.amountLoaded = amountLoaded
+                }
+                if numberLoaded != 0 {
+                    self.numberLoaded = numberLoaded
+                }
+                if numberPreviewsSaved != 0 {
+                    self.numberPreviewsSaved = numberPreviewsSaved
+                }
+                if amountPreviewsSaved != 0 {
+                    self.amountPreviewsSaved = amountPreviewsSaved
+                }
             }
         }
         imageSequence = imageSequenceViewModel
         imageSequenceViewModel.userPreferences = userPreferences
         loadingImageSequenceFilename = nil
         isLoadingImageSequence = false
-        numberLoaded = 0
-        amountLoaded = 0.0
-        numberPreviewsSaved = 0
-        amountPreviewsSaved = 0.0
-
         // just opened handled in InitialView where we know the full path
     }
 
@@ -208,26 +234,34 @@ public final class ViewModel {
         loadingImageSequenceFilename = imageSequenceDirname
 
         // XXX check to see if we should create previews here
+        numberLoaded = 0
+        amountLoaded = 0.0
+        numberPreviewsSaved = 0
+        amountPreviewsSaved = 0.0
+
         
         let imageSequenceViewModel =
           try await ImageSequenceViewModel(withNewImageSequence: imageSequenceDirname, and: videoInfo)
         { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
             Task { @MainActor in
-                self.amountLoaded = amountLoaded
-                self.numberLoaded = numberLoaded
-                self.numberPreviewsSaved = numberPreviewsSaved
-                self.amountPreviewsSaved = amountPreviewsSaved
+                if amountLoaded != 0 {
+                    self.amountLoaded = amountLoaded
+                }
+                if numberLoaded != 0 {
+                    self.numberLoaded = numberLoaded
+                }
+                if numberPreviewsSaved != 0 {
+                    self.numberPreviewsSaved = numberPreviewsSaved
+                }
+                if amountPreviewsSaved != 0 {
+                    self.amountPreviewsSaved = amountPreviewsSaved
+                }
             }
         }
         imageSequence = imageSequenceViewModel
         imageSequenceViewModel.userPreferences = userPreferences
         isLoadingImageSequence = false
         loadingImageSequenceFilename = nil
-        numberLoaded = 0
-        amountLoaded = 0.0
-        numberPreviewsSaved = 0
-        amountPreviewsSaved = 0.0
-
         if let configManager = imageSequence?.config {
             let config = configManager.config()
             configManager.save()
