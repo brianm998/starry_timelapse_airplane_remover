@@ -206,7 +206,7 @@ public struct ImageAccessor: Sendable {
                                                atSize: size)
                 {
                     if FileManager.default.fileExists(atPath: filename),
-                       let image = try? await imageCache.loadImage(filename: filename)
+                       let image = await imageCache.loadImage(filename: filename)
                     {
                         Log.d("filename \(filename) exists, returning \(image.description)")
                         return image
@@ -226,7 +226,8 @@ public struct ImageAccessor: Sendable {
                                )
                             {
                                 Log.d("created filename \(filename), returning \(image.description)")
-                                return await imageCache.add(image: image, named: filename)
+                                await imageCache.add(image: image, named: filename)
+                                return image
                             }
                             return nil
                         }
@@ -543,6 +544,7 @@ public struct ImageAccessor: Sendable {
     }
 
     public func writeMissingImages(_ closure: @Sendable @escaping (Int) -> Void) async throws {
+        Log.d("write missing images")
         let imageSequenceSize = imageSequence.filenames.count
         if self.imageExists(frameIndex: 0,
                             ofType: .original,
@@ -558,9 +560,11 @@ public struct ImageAccessor: Sendable {
                             atSize: .thumbnail)
         {
             // nop
+            Log.i("found previews and thumbnails for end of sequence, did nothing")
         } else {
             try await withThrowingTaskGroup(of: Void.self) { taskGroup in
                 for frameIndex in 0..<imageSequenceSize {
+                    Log.d("frame \(frameIndex) checking for missing images")
                     guard let filename = self.nameForImage(
                             frameIndex: frameIndex,
                             ofType: .original,
@@ -577,10 +581,12 @@ public struct ImageAccessor: Sendable {
                             atSize: .thumbnail
                           )
                     else { continue }
+                    Log.d("frame \(frameIndex) got names for missing images: \(previewFilename) \(thumbnailFilename)")
 
                     let previewExists = FileManager.default.fileExists(atPath: previewFilename)
                     let thumbnailExists = FileManager.default.fileExists(atPath: thumbnailFilename)
                     if !previewExists || !thumbnailExists {
+                        Log.d("frame \(frameIndex) is missing images")
                         taskGroup.addTask() { [self] in
                             Log.d("making missing image for frame \(frameIndex)")
                             try await self.writeMissingImages(
@@ -611,11 +617,13 @@ public struct ImageAccessor: Sendable {
       previewExists: Bool,
       thumbnailExists: Bool
     ) async throws {
+        Log.d("frame \(frameIndex) writeMissingImages")
         if let fullResImage = try await load(
              frameIndex: frameIndex,
              type: .original,
              atSize: .original)
         {
+            Log.d("frame \(frameIndex) writeMissingImages loaded full res image")
             if !previewExists {
                 if let previewSize = sizeOf(.preview)
                 {
