@@ -2,100 +2,13 @@ import SwiftUI
 import StarCore
 import logging
 
-// the red bar showing what part of the frame to ignore
-public struct IgnoreBarView: View {
+// the blue line above where the horizon is
+
+public struct HorizonBarView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     public var body: some View {
         ZStack {
-            // red background
-            Rectangle()
-              .background(.red)
-              .opacity(0.3)
-              .frame(width: viewModel.frameWidth,
-                     height: viewModel.ignoreLowerPixels)
-              .offset(y: viewModel.frameHeight/2 - viewModel.ignoreLowerPixels/2)
-              .cursor(.disappearingItem)
-              .onTapGesture { viewModel.showIgnoreLowerBar = false }
-
-            // draw an X
-            Path { path in
-                path.addLines([CGPoint(x: 0,
-                                       y: self.viewModel.frameHeight-self.viewModel.ignoreLowerPixels),
-                               CGPoint(x: self.viewModel.frameWidth,
-                                       y: self.viewModel.frameHeight-self.viewModel.ignoreLowerPixels)])
-                path.closeSubpath()
-                path.addLines([CGPoint(x: 0, y: self.viewModel.frameHeight),
-                               CGPoint(x: self.viewModel.frameWidth,
-                                       y: self.viewModel.frameHeight-self.viewModel.ignoreLowerPixels)])
-                path.closeSubpath()
-                path.addLines([CGPoint(x: self.viewModel.frameWidth,
-                                       y: self.viewModel.frameHeight),
-                               CGPoint(x: 0,
-                                       y: self.viewModel.frameHeight-self.viewModel.ignoreLowerPixels)])
-                path.closeSubpath()
-            }
-              .stroke(.white, lineWidth: viewModel.lineWidth*2)
-              .opacity(0.4)
-              .cursor(.disappearingItem)
-              .onTapGesture { viewModel.showIgnoreLowerBar = false }
-
-            
-            // arrow on the right
-            Image(systemName: "chevron.left")
-              .resizable()
-              .foregroundColor(.orange)
-              .frame(width: viewModel.arrowLength, height: viewModel.arrowHeight) 
-              .offset(x: (viewModel.frameWidth+viewModel.arrowLength)/2,
-                      y: viewModel.frameHeight/2 - viewModel.ignoreLowerPixels)
-              .highPriorityGesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.arrowHeight/2))
-              .cursor(.resizeUpDown)
-
-            // arrow on the left
-            Image(systemName: "chevron.right")
-              .resizable()
-              .foregroundColor(.orange)
-              .frame(width: viewModel.arrowLength, height: viewModel.arrowHeight) 
-              .offset(x: -(viewModel.frameWidth+viewModel.arrowLength)/2,
-                      y: viewModel.frameHeight/2 - viewModel.ignoreLowerPixels)
-              .highPriorityGesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.arrowHeight/2))
-              .cursor(.resizeUpDown)
-
-            // orange line at the top for gestures
-            Rectangle()
-              .opacity(0.4)
-              .background(.orange)
-              .frame(width: viewModel.frameWidth,
-                     height: viewModel.lineWidth*4)
-              .offset(y: viewModel.frameHeight/2 + viewModel.lineWidth/2 - viewModel.ignoreLowerPixels)
-
-            // larger clear selectable area for gesture
-            Rectangle()
-              .background(.clear)
-              .opacity(0.00001)
-              .frame(width: viewModel.frameWidth,
-                     height: viewModel.lineWidth*20)
-              .offset(y: viewModel.frameHeight/2 + viewModel.lineWidth/2 - viewModel.ignoreLowerPixels)
-              .highPriorityGesture(self.ignoreLowerPixelsGesture(adjustment: viewModel.lineWidth*4))
-              .cursor(.resizeUpDown)
-
-            // Text on the top
-            if viewModel.ignoreLowerPixels > viewModel.frameHeight/11 {
-                Text("This area will not be processed")
-                  .foregroundColor(.red)
-                  .font(.system(size: viewModel.frameHeight/12))
-                  .offset(y: viewModel.frameHeight/2 - viewModel.ignoreLowerPixels/2)
-                  .cursor(.disappearingItem)
-                  .onTapGesture { viewModel.showIgnoreLowerBar = false }
-            }
-
-            // earth crop bar 
-
-            
-            // earthAlignedImageCropAmount
-            // viewModel.frameHeight/2 - viewModel.ignoreLowerPixels
-
-            
             // arrow on the right
             Image(systemName: "chevron.left")
               .resizable()
@@ -138,37 +51,6 @@ public struct IgnoreBarView: View {
 
             
         }        
-    }
-    
-    func ignoreLowerPixelsGesture(adjustment: CGFloat) -> some Gesture {
-        DragGesture() 
-          .onChanged { gesture in
-              let offset = viewModel.frameHeight/2 - gesture.location.y
-              Log.d("gesture.location.y \(gesture.location.y) viewModel.frameHeight \(viewModel.frameHeight) viewModel.ignoreLowerPixels \(viewModel.ignoreLowerPixels) offset \(offset)")
-              if viewModel.ignoreLowerPixels + offset > 0 {
-                  viewModel.ignoreLowerPixels = offset + adjustment
-              } 
-              if viewModel.ignoreLowerPixels > viewModel.frameHeight {
-                  viewModel.ignoreLowerPixels = viewModel.frameHeight
-              }
-          }
-          .onEnded { gesture in
-              //Log.d("gesture.location.y \(gesture.location.y)")
-              let offset = viewModel.frameHeight/2 - gesture.location.y
-              if viewModel.ignoreLowerPixels + offset > 0 {
-                  viewModel.ignoreLowerPixels = offset + adjustment
-              } else {
-                  viewModel.ignoreLowerPixels = 0
-              }
-              if viewModel.ignoreLowerPixels > viewModel.frameHeight {
-                  viewModel.ignoreLowerPixels = viewModel.frameHeight
-              }
-              let configManager = viewModel.config 
-              // set the final value in the config
-              var config = configManager.config()
-              config.ignoreLowerPixels = Int(viewModel.ignoreLowerPixels)
-              configManager.update(config)
-          }
     }
 
     func earthCropAmountGesture(adjustment: CGFloat) -> some Gesture {

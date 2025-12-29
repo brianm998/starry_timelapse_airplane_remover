@@ -894,13 +894,14 @@ struct ProcessingSettingsView: View {
     }
     
     private func startProcessing() {
-        Log.d("Start")
+        Log.d("Starting processing")
         self.applySettings()
         viewModel.shouldShowProcessingSettings = false
-
-        viewModel.showIgnoreLowerBar = false
+        Log.d("settings applied")
+        viewModel.showHorizonBar = false
 
         viewModel.processAll()
+        Log.d("process all done")
     }
 }
 

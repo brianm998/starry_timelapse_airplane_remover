@@ -18,42 +18,6 @@ public struct FrameImageView: View {
                 .readSize() { size in
                     self.size = size
                 }
-              
-              if viewModel.showIgnoreLowerBar {
-                  self.ignoreBar
-              }
           }
-    }
-
-    var ignoreBar: some View {
-        let barHeight = viewModel.ignoreLowerPixels/viewModel.frameHeight*size.height
-        
-        return ZStack {
-            Rectangle()
-              .background(.red)
-              .opacity(0.3)
-
-            // draw an X
-            Path { path in
-                // line on top
-                path.addLines([CGPoint(x: 0, y: 0),
-                               CGPoint(x: self.size.width, y: 0)])
-                path.closeSubpath()
-                
-                path.addLines([CGPoint(x: 0, y: 0),
-                               CGPoint(x: self.size.width, y: barHeight)])
-                path.closeSubpath()
-                
-                path.addLines([CGPoint(x: self.size.width, y: 0),
-                               CGPoint(x: 0, y: barHeight)])
-                path.closeSubpath()
-            }
-              .stroke(.white, lineWidth: 1)
-              .opacity(0.4)
-
-        }
-          .frame(width: size.width, height: barHeight)
-          .offset(y: size.height/2 - barHeight/2)
-        
     }
 }

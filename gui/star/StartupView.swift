@@ -306,7 +306,7 @@ struct RemovalView: View {
                     withAnimation {
                         viewModel.shouldShowInitialInstructions = false
                         viewModel.cleanMethod = self.cleanMethod
-                        viewModel.showIgnoreLowerBar = false
+                        viewModel.showHorizonBar = false
 
                         viewModel.processAll()
                     }

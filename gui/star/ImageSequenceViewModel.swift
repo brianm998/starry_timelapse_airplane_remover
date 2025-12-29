@@ -235,7 +235,7 @@ public final class ImageSequenceViewModel {
 
     var isRenderingVideo = false
     
-    var showIgnoreLowerBar = false
+    var showHorizonBar = false
     
     var ignoreLowerPixels: CGFloat = 0
 
@@ -626,7 +626,7 @@ public final class ImageSequenceViewModel {
             config.set(videoInfo: videoInfo)
         }
         
-        config.ignoreLowerPixels = 200
+        config.ignoreLowerPixels = 0
         
         let configFilename = "\(config.basename)-config.json"
         
@@ -639,7 +639,7 @@ public final class ImageSequenceViewModel {
         }
         self.interactionMode = .edit
         self.shouldShowInitialInstructions = true
-        self.showIgnoreLowerBar = true
+        self.showHorizonBar = true
         self.frameViewMode = .original
         if let videoInfo {
             self.frameRate = videoInfo.frameRate
@@ -770,17 +770,19 @@ public final class ImageSequenceViewModel {
         
         
         var numberPreviewsSaved = 0
-        Task {
-            Log.d("writing missing images")
-            try await imageAccessor.writeMissingImages() { numberSaved in
-                Task { @MainActor in
-                    numberPreviewsSaved += 1
-                    let amountPreviewsSaved = Double(numberPreviewsSaved)/Double(self.imageSequenceSize)
-                    closure(numberPreviewsSaved, amountPreviewsSaved, 0, 0)
-                }
-                
+
+        Task(priority: .utility) { [imageAccessor] in
+          Log.d("writing missing images")
+          try await imageAccessor.writeMissingImages() { numberSaved in
+              Task { @MainActor in 
+                  numberPreviewsSaved += 1
+                  //Log.d("numberSaved \(numberSaved) numberPreviewsSaved \(numberPreviewsSaved)")
+                  let amountPreviewsSaved = Double(numberPreviewsSaved)/Double(self.imageSequenceSize)
+                  closure(numberPreviewsSaved, amountPreviewsSaved, 0, 0)
+              }
             }
         }
+        
         Log.d("done with make missing previews")
 //        Log.d("make missing thumbnails")
 //        try await imageAccessor.writeMissingImages(atSize: .thumbnail)
@@ -1787,12 +1789,12 @@ public final class ImageSequenceViewModel {
               // account for 50 extra pixels of sky on top of the highest part
               //self.earthAlignedImageCropAmount = horizonStats.highestTopY - 50
               
-              //self.showIgnoreLowerBar = false
-              self.ignoreLowerPixels = frameHeight - CGFloat(horizonStats.lowestBottomY)
+              //self.showHorizonBar = false
+                //self.ignoreLowerPixels = frameHeight - CGFloat(horizonStats.lowestBottomY)
               Log.i("ignoreLowerPixels \(ignoreLowerPixels) = \(frameHeight) - \(horizonStats.lowestBottomY)")
-              var realConfig = config.config()
-              realConfig.ignoreLowerPixels = Int(ignoreLowerPixels)
-              config.update(realConfig)
+              //var realConfig = config.config()
+              //realConfig.ignoreLowerPixels = Int(ignoreLowerPixels)
+              //config.update(realConfig)
             }
           }
             await MainActor.run {
@@ -1809,7 +1811,7 @@ public final class ImageSequenceViewModel {
          * actually process them all
          * change FrameAirplaneRemover to not load horizon unless it really needs it
          * add number of horizon images to process at once to this view
-         * set showIgnoreLowerBar = true after getting the right value for it
+         * set showHorizonBar = true after getting the right value for it
          * make sure we show that action is happening in the GUI somewhere
          */
     }

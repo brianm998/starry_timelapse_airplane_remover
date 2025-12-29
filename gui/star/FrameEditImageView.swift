@@ -212,8 +212,8 @@ public struct FrameEditImageView: View {
                     }.opacity(viewModel.outlierOpacity)
                 }
                 
-                if viewModel.showIgnoreLowerBar {
-                    IgnoreBarView()
+                if viewModel.showHorizonBar {
+                    HorizonBarView()
                 }
             }
         }
