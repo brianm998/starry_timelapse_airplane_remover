@@ -367,7 +367,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         self.baseFilename = imageSequence.filenames[frameIndex]
 
         let config = await configManager.config()
-        Log.d("config.numberAlignedNeighborFrames \(config.numberAlignedNeighborFrames)")
+        //Log.d("config.numberAlignedNeighborFrames \(config.numberAlignedNeighborFrames)")
         await self.setNumberOfAlignedFrames()
         await self.setNumberOfStaticNeighborFrames()
         await self.set(
@@ -645,6 +645,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
              atSize: .original
            )
         {
+            Log.d("frame \(frameIndex) loaded aligned frame")
+            
             let horizonMask = try await self.loadMergedHorizonMask()
             var results: FrameAlignmentResults? = nil
             if isEarth {
@@ -689,7 +691,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                             await observer?.set(starAlignmentResults: results)
                         }
                     }                
-                    Log.d("frame \(frameIndex) successfully loaded image of type \(failedType)")
+                    Log.d("frame \(frameIndex) successfully loaded failed image of type \(failedType)")
                     
                     return AlignmentResult(
                       alignedMat: nil,
@@ -708,6 +710,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // with no saved aligned frame, first load or create the set of aligned frames
         // that we used to create the final aligned frame
 
+        Log.i("frame \(frameIndex) creating aligned image of type \(type)")
+        
         let config = await configManager.config()
 
         switch type {
@@ -731,7 +735,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         if originalFrame.isEmpty { Log.w("EMPTY IMAGE") }
 
-        Log.d("original frame \(originalFrame.description)")
+        Log.d("frame \(frameIndex) original frame \(originalFrame.description)")
 
         var neighborFilenames: [String] = []
         var neighborMaskFilenames: [String] = []
@@ -745,7 +749,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             {
                 neighborFilenames.append(filename)
             } else {
-                Log.w("unable to get filename for original image at frame index \(neighborIndex)")
+                Log.w("frame \(frameIndex) unable to get filename for original image at frame index \(neighborIndex)")
             }
 
             if isEarth,
@@ -757,11 +761,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             {
                 neighborMaskFilenames.append(filename)
             } else {
-                Log.w("unable to get filename mask original image at frame index \(neighborIndex)")
+                Log.w("frame \(frameIndex) unable to get filename mask original image at frame index \(neighborIndex)")
             }
         }
 
-        Log.d("original frame \(originalFrame.description)")
+        Log.d("frame \(frameIndex) original frame \(originalFrame.description)")
         
         var alignmentResult: AlignmentResult? = nil
         
@@ -814,7 +818,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               outlierThreshold: pixelThreshold
             )
         }
-
+        Log.i("frame \(frameIndex) got alignment result \(alignmentResult) for type \(type)")
         guard let alignmentResult else {
             Log.e("frame \(frameIndex) got no alignment result")
             return AlignmentResult(
@@ -2402,10 +2406,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
      rid of even the small distant satellites that move slowly through the sky.
      */
     func createAutoProcessedImage() async throws -> PixelatedImage? {
+        Log.i("frame \(frameIndex) creating auto processed image")
         let result = try await loadOrCreateStarAlignedImage()
         let starAlignedImage = result.aligned
         let failedStarImage = result.failed
 
+        Log.i("frame \(frameIndex) got result \(result) for star aligned image")
+        
         let config = await configManager.config()
         
         if result.numAligned < config.minAlignmentFrames {
