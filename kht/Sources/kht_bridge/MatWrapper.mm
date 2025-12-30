@@ -396,15 +396,24 @@ static NSUInteger _totalInstances = 0;
 }
 
 + (nullable MatWrapper*)loadFromFilename:(NSString*)filename {
-    cv::Mat img = cv::imread(std::string([filename UTF8String]), cv::IMREAD_UNCHANGED);
-    if (img.empty()) {
+  @try {
+    try {
+      cv::Mat img = cv::imread(std::string([filename UTF8String]), cv::IMREAD_UNCHANGED);
+      if (img.empty()) {
         Log_w(@"Failed to load image from filename %@", filename);
         return nil;
-    } else {
+      } else {
         Log_d(@"Loaded from filename %@", filename);
-    }
+      }
 
-    return [[MatWrapper alloc] initWithMat: img];
+      return [[MatWrapper alloc] initWithMat: img];
+    } catch (const cv::Exception &e) {
+      Log_e(@"OpenCV Exception: %s", e.what());
+    }
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception: %@", exception);
+  }
+  return nil;
 }
 
 - (void)writeTo:(NSString*)filename {
