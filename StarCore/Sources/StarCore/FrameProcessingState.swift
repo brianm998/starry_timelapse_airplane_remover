@@ -151,9 +151,11 @@ public enum FrameProcessingState: Codable,
         case .horizonDetected:
             "horizon found"
         case .starAlignment(let state):
-            "aligning stars \(state)"
+            "aligning stars"
+            //"aligning stars \(state)"
         case .earthAlignment(let state):
-            "aligning earth \(state)"
+            "aligning earth"
+            //"aligning earth \(state)"
         case .creatingStarAlignedFrame:
             "creating star aligned frame"
         case .creatingEarthAlignedFrame:
