@@ -721,6 +721,18 @@ maxCornerDeviation:(double)maxCornerDeviation
               resultSuccess[idx] = 0;
               resultMats[idx] = frame;
               CFRetain((__bridge CFTypeRef)frame);
+              Log_e(@"%d descFrame or descSpecial is empty");
+
+              AlignmentWarpInfo *info =
+                [[AlignmentWarpInfo alloc] initWithHomography:nil
+                                                    deviation:-3
+                                           maxCornerDeviation:-3
+                                                     accepted:false
+                                                   frameIndex:idx];
+
+              warpInfos[idx] = info;
+              CFRetain((__bridge CFTypeRef)info);
+              
               continue;
             }
 
@@ -816,7 +828,13 @@ maxCornerDeviation:(double)maxCornerDeviation
                 if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
                   H.convertTo(H, CV_64F);
                 }
-              
+
+                // save alignment warp info for this frame
+                MatWrapper *HWrapper = nil;
+                if (!H.empty()) {
+                  HWrapper = [[MatWrapper alloc] initWithMat:H];
+                }
+
                 if (!H.empty() && H.rows == 3 && H.cols == 3) {
                   // Check warp quality with two checks
 
@@ -842,12 +860,6 @@ maxCornerDeviation:(double)maxCornerDeviation
                                              (double)cv::norm(projectedCorners[i] - corners[i]));
                   }
 
-
-                  // save alignment warp info for this frame
-                  MatWrapper *HWrapper = nil;
-                  if (!H.empty()) {
-                    HWrapper = [[MatWrapper alloc] initWithMat:H];
-                  }
 
                   AlignmentWarpInfo *info =
                     [[AlignmentWarpInfo alloc] initWithHomography:HWrapper
@@ -898,9 +910,42 @@ maxCornerDeviation:(double)maxCornerDeviation
                                     cv::THRESH_BINARY);
                     }
                   } else {
+
+                    AlignmentWarpInfo *info =
+                      [[AlignmentWarpInfo alloc] initWithHomography:HWrapper
+                                                          deviation:deviation
+                                                 maxCornerDeviation:maxCornerDist
+                                                           accepted:false
+                                                         frameIndex:idx];
+
+                    warpInfos[idx] = info;
+                    CFRetain((__bridge CFTypeRef)info);
+
                     //Log_i(@"%d %d NOT accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf", logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
                   }
+                } else {
+                  // no homography found
+                  AlignmentWarpInfo *info =
+                    [[AlignmentWarpInfo alloc] initWithHomography:nil
+                                                        deviation:-1
+                                               maxCornerDeviation:-1
+                                                         accepted:false
+                                                       frameIndex:idx];
+
+                  warpInfos[idx] = info;
+                  CFRetain((__bridge CFTypeRef)info);
                 }
+            } else {
+              // not enough points
+              AlignmentWarpInfo *info =
+                [[AlignmentWarpInfo alloc] initWithHomography:nil
+                                                    deviation:-2
+                                           maxCornerDeviation:-2
+                                                     accepted:false
+                                                   frameIndex:idx];
+
+              warpInfos[idx] = info;
+              CFRetain((__bridge CFTypeRef)info);
             }
 
             if (acceptWarp) {
@@ -965,7 +1010,7 @@ maxCornerDeviation:(double)maxCornerDeviation
     
     aligned.reserve(n);
     failed.reserve(n);
-
+    
     BOOL hasHorizon = NO;
     
     for (size_t i = 0; i < n; ++i) {
@@ -981,11 +1026,16 @@ maxCornerDeviation:(double)maxCornerDeviation
       }
 
       if (warpInfos[i]) {
+        Log_i(@"%d, have warp info", i);
         if (warpInfos[i].accepted) {
+          Log_i(@"%d, have accepted warp info", i);
           [alignedInfos addObject:warpInfos[i]];
         } else {
+          Log_i(@"%d, have failed warp info", i);
           [failedInfos addObject:warpInfos[i]];
         }
+      } else {
+        Log_i(@"%d, NO warp info", i);
       }
       
       if (alignedHorizonMats[i] != NULL && !alignedHorizonMats[i].mat.empty()) {
