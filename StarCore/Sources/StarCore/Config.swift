@@ -422,11 +422,12 @@ public struct Config: Codable, Sendable, Transferable {
     //        much improved initial instructions view
     //        bug fixes
     //        lots of horizon calculation improvements
+    // 0.10.1 save full image alignment info
 
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.10.0"
+    public static let latestVersion = "0.10.1"
     
     public var basename: String {
         let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)"
