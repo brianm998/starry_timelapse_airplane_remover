@@ -818,7 +818,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         guard let alignmentResult else {
             Log.e("frame \(frameIndex) got no alignment result")
-            throw "frame \(frameIndex) got no alignment result"
+            return AlignmentResult(
+              alignedMat: nil,
+              numAligned: 0,
+              failedMat: nil, 
+              numFailed: 0,
+              horizonMask: nil
+            )
         }
         
         switch type {
