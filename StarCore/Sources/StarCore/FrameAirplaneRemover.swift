@@ -23,10 +23,10 @@ You should have received a copy of the GNU General Public License along with sta
 // the first pass is done upon init, finding and pruning outlier groups
 
 public struct FrameAlignmentResults: Codable, Sendable {
-    public let numberAligned: Int
-    public let numberFailed: Int
+    public let numberAligned: [AlignmentWarpInfoCodable]
+    public let numberFailed: [AlignmentWarpInfoCodable]
 
-    public var total: Int { numberAligned + numberFailed }
+    public var total: Int { numberAligned.count + numberFailed.count }
 }
 
 public enum FrameSavingState: Sendable {
@@ -905,16 +905,19 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // keep track of the number of alignment images used
         // so we can make sure it's the same as the desired amount later
 
+        let alignedWarps = alignmentResult.alignedWarps.map { $0.toCodable() }
+        let failedWarps = alignmentResult.failedWarps.map { $0.toCodable() }
+        
         switch type {
         case .starAligned:
             try self.write(
-              numberOfStarAlignedImagesForThisFrame: Int(alignmentResult.numAligned),
-              andFailures: Int(alignmentResult.numFailed)
+              numberOfStarAlignedImagesForThisFrame: alignedWarps,
+              andFailures: failedWarps
             )
         case .earthAligned:
             try self.write(
-              numberOfEarthAlignedImagesForThisFrame: Int(alignmentResult.numAligned),
-              andFailures: Int(alignmentResult.numFailed)
+              numberOfEarthAlignedImagesForThisFrame: alignedWarps,
+              andFailures: failedWarps
             )
         default:
             break
@@ -926,8 +929,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     let numberOfStarAlignedImagesFilename = "number_of_star_aligned_images.json"
     
     private func write(
-      numberOfStarAlignedImagesForThisFrame: Int,
-      andFailures failures: Int
+      numberOfStarAlignedImagesForThisFrame: [AlignmentWarpInfoCodable],
+      andFailures failures: [AlignmentWarpInfoCodable]
     ) throws {
         if let results = try write(
              success: numberOfStarAlignedImagesForThisFrame,
@@ -939,15 +942,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             Task { await observer.set(starAlignmentResults: results) }
         }
     }
-    
+
     private func write(
-      success: Int,
-      andFailures: Int,
+      success: [AlignmentWarpInfoCodable],
+      andFailures: [AlignmentWarpInfoCodable],
       to filename: String
     ) throws -> FrameAlignmentResults? {
-        if let dirname = imageAccessor.dirForImage(ofType: .starAligned,
-                                                   atSize: .original)
-        {
+        if let dirname = imageAccessor.dirForImage(
+          ofType: .starAligned,
+          atSize: .original
+        ) {
             let dirname = "\(dirname)/\(frameIndex)"
             StarCore.mkdir(dirname)
             // write a text file with
@@ -1027,8 +1031,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     let numberOfEarthAlignedImagesFilename = "number_of_earth_aligned_images.json"
 
     private func write(
-      numberOfEarthAlignedImagesForThisFrame: Int,
-      andFailures failures: Int
+      numberOfEarthAlignedImagesForThisFrame: [AlignmentWarpInfoCodable],
+      andFailures failures: [AlignmentWarpInfoCodable]
     ) throws {
         if let results = try write(
              success: numberOfEarthAlignedImagesForThisFrame,
@@ -1459,9 +1463,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             Log.w("Not loading twice")
             return
         }
-
-        // only load if we're not using outliers
-        let makeOutliersIfMissing = await self.usesOutliers
 
         isLoadingOutliers = true
         if self.outlierGroups == nil {
@@ -3423,4 +3424,63 @@ private extension PixelatedImage {
 public extension AlignmentResult {
     var numAligned: Int { alignedWarps.count }
     var numFailed: Int { failedWarps.count }
+}
+
+/// Swift-only, JSON-safe representation
+public struct AlignmentWarpInfoCodable: Codable, Sendable {
+    /// Row-major 3x3 homography (length = 9)
+    let homography: [Double]?
+
+    let deviation: Double
+    let maxCornerDeviation: Double
+    let accepted: Bool
+    let frameIndex: Int
+}
+
+public extension AlignmentWarpInfo {
+
+    func toCodable() -> AlignmentWarpInfoCodable {
+        let homographyArray: [Double]?
+
+        if let wrapper = homography,
+           let values = wrapper.homographyValues() {
+            homographyArray = values.map { $0.doubleValue }
+        } else {
+            homographyArray = nil
+        }
+
+        return AlignmentWarpInfoCodable(
+            homography: homographyArray,
+            deviation: deviation,
+            maxCornerDeviation: maxCornerDeviation,
+            accepted: accepted,
+            frameIndex: Int(frameIndex)
+        )
+    }
+}
+
+public extension AlignmentWarpInfo {
+
+    /// Reconstruct from Codable representation
+    convenience init(from codable: AlignmentWarpInfoCodable) {
+        let homographyWrapper: MatWrapper?
+
+        if let h = codable.homography {
+            precondition(h.count == 9, "Homography must have 9 elements")
+
+            homographyWrapper = h.withUnsafeBufferPointer { buffer in
+                MatWrapper(homographyValues: buffer.baseAddress!)
+            }
+        } else {
+            homographyWrapper = nil
+        }
+
+        self.init(
+            homography: homographyWrapper,
+            deviation: codable.deviation,
+            maxCornerDeviation: codable.maxCornerDeviation,
+            accepted: codable.accepted,
+            frameIndex: UInt(codable.frameIndex)
+        )
+    }
 }

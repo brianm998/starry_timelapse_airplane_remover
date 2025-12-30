@@ -65,11 +65,20 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (BOOL)ownsData;
 
+- (double)atDoubleRow:(int)row col:(int)col;
+
+
 - (NSArray<ObjcImageMatrixElement*>*)splitWithTileWidth:(int)tileWidth
                                              tileHeight:(int)tileHeight
                                          overlapPercent:(double)overlapPercent;
 
 + (MatWrapper*)combineFromMatrixElements:(NSArray<ObjcImageMatrixElement*>*)elements;
+
+/// Returns 9 doubles (row-major) if this is a 3x3 CV_64F matrix
+/// Returns nil otherwise
+- (nullable NSArray<NSNumber *> *)homographyValues;
+
++ (instancetype)wrapperWithHomographyValues:(const double *)values;
 
 - (instancetype)initWithWidth:(NSInteger)width
                        height:(NSInteger)height

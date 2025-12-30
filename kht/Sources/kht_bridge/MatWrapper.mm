@@ -140,9 +140,38 @@ static NSUInteger _totalInstances = 0;
   _totalBytes = totalBytes;
 }
 
+- (NSArray<NSNumber *> *)homographyValues {
+    if (_mat.empty() || _mat.rows != 3 || _mat.cols != 3 || _mat.type() != CV_64F) {
+        return nil;
+    }
+
+    NSMutableArray<NSNumber *> *values = [NSMutableArray arrayWithCapacity:9];
+
+    for (int r = 0; r < 3; r++) {
+        for (int c = 0; c < 3; c++) {
+            [values addObject:@(_mat.at<double>(r, c))];
+        }
+    }
+
+    return values;
+}
 
 
++ (instancetype)wrapperWithHomographyValues:(const double *)values {
+    cv::Mat H(3, 3, CV_64F);
 
+    for (int r = 0, i = 0; r < 3; r++) {
+        for (int c = 0; c < 3; c++, i++) {
+            H.at<double>(r, c) = values[i];
+        }
+    }
+
+    return [[MatWrapper alloc] initWithMat:H];
+}
+
+- (double)atDoubleRow:(int)row col:(int)col {
+    return _mat.at<double>(row, col);
+}
 
 - (BOOL)ownsData {
   return matOwnsData(_mat);
