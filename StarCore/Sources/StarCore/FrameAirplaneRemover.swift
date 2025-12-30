@@ -661,12 +661,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             
             return AlignmentResult(
               alignedMat: alignedFrame.mat,
-              numAligned: Int32(results?.numberAligned ?? 0),
+              alignedWarps: [],// XXX Int32(results?.numberAligned ?? 0),
               failedMat: nil,   // XXX load the failed mat too
-              numFailed: Int32(results?.numberFailed ?? 0),
+              failedWarps: [], // XXX Int32(results?.numberFailed ?? 0),
               horizonMask: horizonMask?.image.mat
             )
-            
         } else {
             Log.d("frame \(frameIndex) unable to load image of type \(type)")
             if let failedType {
@@ -694,9 +693,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     
                     return AlignmentResult(
                       alignedMat: nil,
-                      numAligned: Int32(results?.numberAligned ?? 0),
+                      alignedWarps: [],// XXX Int32(results?.numberAligned ?? 0),
                       failedMat: failedFrame.mat, 
-                      numFailed: Int32(results?.numberFailed ?? 0),
+                      failedWarps: [], //XXXInt32(results?.numberFailed ?? 0),
                       horizonMask: horizonMask?.image.mat
                     )
                 } else {
@@ -786,9 +785,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 
                 alignmentResult = AlignmentResult(
                   alignedMat: mergedImage.mat,
-                  numAligned: Int32(neighborFilenames.count + 1),
+                  alignedWarps: [], // XXXInt32(neighborFilenames.count + 1),
                   failedMat: nil,
-                  numFailed: 0,
+                  failedWarps: [], // XXX 0,
                   horizonMask: horizonMask?.image.mat
                 )
             }
@@ -820,9 +819,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             Log.e("frame \(frameIndex) got no alignment result")
             return AlignmentResult(
               alignedMat: nil,
-              numAligned: 0,
-              failedMat: nil, 
-              numFailed: 0,
+              alignedWarps: [], // XXX 0,
+              failedMat: originalFrame.mat, 
+              failedWarps: [], // XXX 1,
               horizonMask: nil
             )
         }
@@ -836,8 +835,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             break
         }
 
-        var alignedImage: PixelatedImage? = nil
-        var failedAlignImage: PixelatedImage? = nil
+        var alignedImage: PixelatedImage? = nil     // XXX written to but not read :(
+        var failedAlignImage: PixelatedImage? = nil // XXX written to but not read :(
         
         if let aligned = alignmentResult.aligned {
             alignedImage = aligned
@@ -1461,13 +1460,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             return
         }
 
-        var shouldLoadOnly = loadOnly
-
         // only load if we're not using outliers
         let makeOutliersIfMissing = await self.usesOutliers
 
-        if !makeOutliersIfMissing { shouldLoadOnly = true }
-        
         isLoadingOutliers = true
         if self.outlierGroups == nil {
             // nil outlier groups means that we haven't tried to get outliers for this frame yet
@@ -2526,8 +2521,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // 2. create one if not
         // 3. link to the final image
 
-        var processMode: FrameViewMode = .autoProcessed
-        
         do {
             switch cleanMethod {
             case .automatic(let usesOutliers):
@@ -3426,3 +3419,8 @@ private extension PixelatedImage {
 }
 
 */
+
+public extension AlignmentResult {
+    var numAligned: Int { alignedWarps.count }
+    var numFailed: Int { failedWarps.count }
+}

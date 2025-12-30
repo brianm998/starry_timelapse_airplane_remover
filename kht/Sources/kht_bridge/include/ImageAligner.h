@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import "AlignmentWarpInfo.h"
 #import "MatWrapper.h"
 
 // holds the results of trying to align N number of frames with another base image
@@ -6,15 +7,19 @@
 // failed is a per pixel median of all frames which were not able to be aligned
 @interface AlignmentResult : NSObject
 @property(nonatomic, strong, nullable) MatWrapper *alignedMat;   // warped frame
-@property(nonatomic, assign) int numAligned;
+
 @property(nonatomic, strong, nullable) MatWrapper *failedMat;    // fallback/original frame
-@property(nonatomic, assign) int numFailed;
+
 @property(nonatomic, strong, nullable) MatWrapper *horizonMask; // median merged horizonMask
+/// Warp metadata
+@property(nonatomic, strong) NSArray<AlignmentWarpInfo *> * _Nonnull alignedWarps;
+@property(nonatomic, strong) NSArray<AlignmentWarpInfo *> * _Nonnull failedWarps;
+
 
 -(AlignmentResult* _Nonnull)initWithAlignedMat:(nullable MatWrapper *)alignedMat
-                                    numAligned:(int)numAligned
+                                  alignedWarps:(NSArray<AlignmentWarpInfo *> * _Nonnull)alignedWarps
                                      failedMat:(nullable MatWrapper *)failedMat
-                                     numFailed:(int)numFailed
+                                   failedWarps:(NSArray<AlignmentWarpInfo *> * _Nonnull)failedWarps
                                    horizonMask:(nullable MatWrapper *)horizonMask;
 @end
 

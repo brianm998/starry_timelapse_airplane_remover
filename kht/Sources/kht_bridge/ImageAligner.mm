@@ -64,17 +64,18 @@ void growBlack(cv::Mat &img, int pixels)
 
 
 @implementation AlignmentResult
+
 -(AlignmentResult* _Nonnull)initWithAlignedMat:(nullable MatWrapper *)alignedMat
-                                    numAligned:(int)foo
-                                     failedMat:(nullable MatWrapper *)bar
-                                     numFailed:(int)baz
-                                   horizonMask:(nullable MatWrapper *)boo
+                                  alignedWarps:(NSArray<AlignmentWarpInfo *> *)alignedWarps
+                                     failedMat:(nullable MatWrapper *)failedMat
+                                   failedWarps:(NSArray<AlignmentWarpInfo *> *)failedWarps
+                                   horizonMask:(nullable MatWrapper *)horizonMask
 {
   self.alignedMat = alignedMat;
-  self.numAligned = foo;
-  self.failedMat = bar;
-  self.numFailed = baz;
-  self.horizonMask = boo;
+  self.alignedWarps = alignedWarps;
+  self.failedMat = failedMat;
+  self.failedWarps = failedWarps;
+  self.horizonMask = horizonMask;
   return self;
 }
 @end
@@ -602,6 +603,9 @@ maxCornerDeviation:(double)maxCornerDeviation
 
     std::vector<char>    resultSuccess(n, 0); // 1 if accepted warp, 0 otherwise
 
+    // holds warp information
+    std::vector<AlignmentWarpInfo *> warpInfos(n, nullptr);
+
 	Log_i(@"%d, about to align in parallel", logID);
 
     // preload frames and masks
@@ -809,76 +813,94 @@ maxCornerDeviation:(double)maxCornerDeviation
               //Log_d(@"%d has $zu control points", logID, ptsFrame.size());
               // find homography between the matched keypoints 
                 cv::Mat H = cv::findHomography(ptsFrame, ptsSpecial, cv::RANSAC, 10);
-              if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
-                H.convertTo(H, CV_64F);
-              }
-
-              if (!H.empty() && H.rows == 3 && H.cols == 3) {
-			    // Check warp quality with two checks
-
-			    // first check is simple, max deviation
-                cv::Mat I = cv::Mat::eye(3, 3, H.type());
-                double deviation = cv::norm(H - I, cv::NORM_L2);
-
-			    // second check makes sure all four corners aren't very far away
-			    // we're aligning images from a timelapse video here, so even with
-			    // a moving camera we shouldn't need very much frame to frame adjustement
-                std::vector<cv::Point2f> corners = {
-                  {0, 0},
-                  {(float)frame.cols, 0},
-                  {(float)frame.cols, (float)frame.rows},
-                  {0, (float)frame.rows}
-                };
-                std::vector<cv::Point2f> projectedCorners;
-                cv::perspectiveTransform(corners, projectedCorners, H);
-
-                double maxCornerDist = 0.0;
-                for (size_t i = 0; i < corners.size(); i++) {
-                  maxCornerDist = std::max(maxCornerDist,
-                                           (double)cv::norm(projectedCorners[i] - corners[i]));
+                if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
+                  H.convertTo(H, CV_64F);
                 }
+              
+                if (!H.empty() && H.rows == 3 && H.cols == 3) {
+                  // Check warp quality with two checks
 
-			    // accept the warp only if our values are within range
-                acceptWarp =
-                  (deviation < maxDeviation) &&
-                  (maxCornerDist < maxCornerDeviation);
+                  // first check is simple, max deviation
+                  cv::Mat I = cv::Mat::eye(3, 3, H.type());
+                  double deviation = cv::norm(H - I, cv::NORM_L2);
 
-                if (acceptWarp) {
-                  // if we accept the warp, then actually warp
-                  // this frame to fit the special image
-                  //Log_i(@"%d %d accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf", logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
-                  //Log_i(@"%d %d accepting warp and warping", logID, ii);
-                  cv::warpPerspective(frame.mat, // the input to warp
-                                      warped, // the warped output
-                                      H, // the homography to warp with
-                                      frame.mat.size(),
-                                      cv::INTER_LINEAR,
-                                      cv::BORDER_CONSTANT,
-                                      cv::Scalar(0,0,0,0));
+                  // second check makes sure all four corners aren't very far away
+                  // we're aligning images from a timelapse video here, so even with
+                  // a moving camera we shouldn't need very much frame to frame adjustement
+                  std::vector<cv::Point2f> corners = {
+                    {0, 0},
+                    {(float)frame.cols, 0},
+                    {(float)frame.cols, (float)frame.rows},
+                    {0, (float)frame.rows}
+                  };
+                  std::vector<cv::Point2f> projectedCorners;
+                  cv::perspectiveTransform(corners, projectedCorners, H);
+
+                  double maxCornerDist = 0.0;
+                  for (size_t i = 0; i < corners.size(); i++) {
+                    maxCornerDist = std::max(maxCornerDist,
+                                             (double)cv::norm(projectedCorners[i] - corners[i]));
+                  }
 
 
-                  //cv::imwrite("/tmp/warped_first_" + std::to_string(idx) + ".tiff", warped);
+                  // save alignment warp info for this frame
+                  MatWrapper *HWrapper = nil;
+                  if (!H.empty()) {
+                    HWrapper = [[MatWrapper alloc] initWithMat:H];
+                  }
+
+                  AlignmentWarpInfo *info =
+                    [[AlignmentWarpInfo alloc] initWithHomography:HWrapper
+                                                        deviation:deviation
+                                               maxCornerDeviation:maxCornerDist
+                                                         accepted:acceptWarp
+                                                       frameIndex:idx];
+
+                  warpInfos[idx] = info;
+                  CFRetain((__bridge CFTypeRef)info);
 
                   
-                  if (frameHorizon != NULL) {
-                    // warp horizon with same homography as ground
-                    //Log_i(@"%d %d accepting warp and warping horizon", logID, ii);
-                    cv::warpPerspective(frameHorizon.mat, warpedHorizon, H,
-                                        frameHorizon.mat.size(),
-                                        cv::INTER_LINEAR, cv::BORDER_CONSTANT,
+                  // accept the warp only if our values are within range
+                  acceptWarp =
+                    (deviation < maxDeviation) &&
+                    (maxCornerDist < maxCornerDeviation);
+
+                  if (acceptWarp) {
+                    // if we accept the warp, then actually warp
+                    // this frame to fit the special image
+                    //Log_i(@"%d %d accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf", logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
+                    //Log_i(@"%d %d accepting warp and warping", logID, ii);
+                    cv::warpPerspective(frame.mat, // the input to warp
+                                        warped, // the warped output
+                                        H, // the homography to warp with
+                                        frame.mat.size(),
+                                        cv::INTER_LINEAR,
+                                        cv::BORDER_CONSTANT,
                                         cv::Scalar(0,0,0,0));
 
-                    // threshold so all values are 0 or 0xFF
-                    cv::threshold(warpedHorizon,
-                                  warpedHorizon,
-                                  128, // mid
-                                  255,
-                                  cv::THRESH_BINARY);
+
+                    //cv::imwrite("/tmp/warped_first_" + std::to_string(idx) + ".tiff", warped);
+
+                  
+                    if (frameHorizon != NULL) {
+                      // warp horizon with same homography as ground
+                      //Log_i(@"%d %d accepting warp and warping horizon", logID, ii);
+                      cv::warpPerspective(frameHorizon.mat, warpedHorizon, H,
+                                          frameHorizon.mat.size(),
+                                          cv::INTER_LINEAR, cv::BORDER_CONSTANT,
+                                          cv::Scalar(0,0,0,0));
+
+                      // threshold so all values are 0 or 0xFF
+                      cv::threshold(warpedHorizon,
+                                    warpedHorizon,
+                                    128, // mid
+                                    255,
+                                    cv::THRESH_BINARY);
+                    }
+                  } else {
+                    //Log_i(@"%d %d NOT accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf", logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
                   }
-                } else {
-                  //Log_i(@"%d %d NOT accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf", logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
                 }
-              }
             }
 
             if (acceptWarp) {
@@ -938,6 +960,9 @@ maxCornerDeviation:(double)maxCornerDeviation
     std::vector<MatWrapper*> failed;
     std::vector<MatWrapper*> horizons;
 
+    NSMutableArray<AlignmentWarpInfo *> *alignedInfos = [NSMutableArray array];
+    NSMutableArray<AlignmentWarpInfo *> *failedInfos  = [NSMutableArray array];
+    
     aligned.reserve(n);
     failed.reserve(n);
 
@@ -952,6 +977,14 @@ maxCornerDeviation:(double)maxCornerDeviation
           aligned.push_back(resultMats[i]);
         } else {
           failed.push_back(resultMats[i]);
+        }
+      }
+
+      if (warpInfos[i]) {
+        if (warpInfos[i].accepted) {
+          [alignedInfos addObject:warpInfos[i]];
+        } else {
+          [failedInfos addObject:warpInfos[i]];
         }
       }
       
@@ -986,11 +1019,10 @@ maxCornerDeviation:(double)maxCornerDeviation
 	
     AlignmentResult *resultObj = [AlignmentResult new];
     resultObj.alignedMat = alignedResult;
-    resultObj.numAligned = aligned.size();
+    resultObj.alignedWarps = alignedInfos;
     resultObj.failedMat = failedResult;
-    resultObj.numFailed = failed.size();
+    resultObj.failedWarps  = failedInfos;
     resultObj.horizonMask = horizonResult;
-
 
     // CFRelease temporary objects
     for (size_t i = 0; i < n; ++i) {
@@ -1002,7 +1034,15 @@ maxCornerDeviation:(double)maxCornerDeviation
         CFRelease((__bridge CFTypeRef)alignedHorizonMats[i]);
         alignedHorizonMats[i] = NULL;
       }
-    }    
+    }
+
+    for (size_t i = 0; i < n; ++i) {
+      if (warpInfos[i]) {
+        CFRelease((__bridge CFTypeRef)warpInfos[i]);
+        warpInfos[i] = nullptr;
+      }
+    }
+
     return resultObj;
 
   } catch (const cv::Exception &e) {
