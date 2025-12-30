@@ -721,7 +721,7 @@ maxCornerDeviation:(double)maxCornerDeviation
               resultSuccess[idx] = 0;
               resultMats[idx] = frame;
               CFRetain((__bridge CFTypeRef)frame);
-              Log_e(@"%d descFrame or descSpecial is empty");
+              Log_e(@"%d descFrame or descSpecial is empty", logID);
 
               AlignmentWarpInfo *info =
                 [[AlignmentWarpInfo alloc] initWithHomography:nil
@@ -860,7 +860,13 @@ maxCornerDeviation:(double)maxCornerDeviation
                                              (double)cv::norm(projectedCorners[i] - corners[i]));
                   }
 
+                  
+                  // accept the warp only if our values are within range
+                  acceptWarp =
+                    (deviation < maxDeviation) &&
+                    (maxCornerDist < maxCornerDeviation);
 
+                  // keep track of warp info 
                   AlignmentWarpInfo *info =
                     [[AlignmentWarpInfo alloc] initWithHomography:HWrapper
                                                         deviation:deviation
@@ -871,11 +877,6 @@ maxCornerDeviation:(double)maxCornerDeviation
                   warpInfos[idx] = info;
                   CFRetain((__bridge CFTypeRef)info);
 
-                  
-                  // accept the warp only if our values are within range
-                  acceptWarp =
-                    (deviation < maxDeviation) &&
-                    (maxCornerDist < maxCornerDeviation);
 
                   if (acceptWarp) {
                     // if we accept the warp, then actually warp
@@ -1026,16 +1027,11 @@ maxCornerDeviation:(double)maxCornerDeviation
       }
 
       if (warpInfos[i]) {
-        Log_i(@"%d, have warp info", i);
         if (warpInfos[i].accepted) {
-          Log_i(@"%d, have accepted warp info", i);
           [alignedInfos addObject:warpInfos[i]];
         } else {
-          Log_i(@"%d, have failed warp info", i);
           [failedInfos addObject:warpInfos[i]];
         }
-      } else {
-        Log_i(@"%d, NO warp info", i);
       }
       
       if (alignedHorizonMats[i] != NULL && !alignedHorizonMats[i].mat.empty()) {
@@ -1051,7 +1047,8 @@ maxCornerDeviation:(double)maxCornerDeviation
       aligned.push_back(special);
     }
 
-    Log_d(@"we have %zu aligned and %zu failed merges", aligned.size(), failed.size());
+    Log_d(@"we have %zu aligned and %zu failed merges %zu alignedInfos %zu failedInfos",
+          aligned.size(), failed.size(), alignedInfos.count, failedInfos.count);
     
     // use median merges
     MatWrapper * alignedResult = medianImageFromArray(aligned, k, false);
