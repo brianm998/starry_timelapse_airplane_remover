@@ -142,11 +142,11 @@ struct BottomRightView: View {
                 VStack(alignment: .trailing) {
                     if let results = frameView.frameObserver.starAlignmentResults {
                         Text("star \(results.numberAligned)/\(results.total)")
-                          .foregroundColor(results.numberAligned == results.total ? .white : .red)
+                        .foregroundColor(results.numberAligned.count == results.total ? .white : .red)
                     }
                     if let results = frameView.frameObserver.earthAlignmentResults {
                         Text("earth \(results.numberAligned)/\(results.total)")
-                          .foregroundColor(results.numberAligned == results.total ? .white : .red)
+                        .foregroundColor(results.numberAligned.count == results.total ? .white : .red)
                     }
                 }
                 
