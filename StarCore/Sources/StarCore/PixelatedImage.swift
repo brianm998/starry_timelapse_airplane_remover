@@ -913,6 +913,7 @@ extension PixelatedImage {
     }
     
     public func align(
+      frameIndex: Int,
       frameFilenames: [String],
       frameMaskFilenames: [String],
       frameIndices: [Int],      // parallel frameIndex values for the above 
@@ -934,6 +935,7 @@ extension PixelatedImage {
         
         if let result = ImageAligner.alignFrames(
              self.mat,
+             frameIndex: Int32(frameIndex),
              frames: frameFilenames,
              frameMasks: frameMaskFilenames,
              frameIndices: frameIndices.map { NSNumber(value: $0) },

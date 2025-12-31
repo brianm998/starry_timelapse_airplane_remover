@@ -458,14 +458,17 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
     cv::threshold(gray, thresh, thresholdVal, 255, cv::THRESH_BINARY);
     // Dilate to give SIFT some gradients around stars
     if (dilateSize > 0) {
-        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE,
-                          cv::Size(2*dilateSize+1, 2*dilateSize+1));
+      cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE,
+                                                 cv::Size(2*dilateSize+1,
+                                                          2*dilateSize+1));
         cv::dilate(thresh, mask, kernel);
     } else {
         mask = thresh;
     }
     return [[MatWrapper alloc] initWithMat: mask];
 }
+
+const bool writeImages = false;
 
 /***
  * Main alignment method. 
@@ -480,9 +483,10 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
  * Uses different logic for sky and earth alignment, invertMask governs that. 
  */
 + (id)alignFrames:(MatWrapper *)special
+       frameIndex:(int)frameIndex // frame index of special
            frames:(NSArray<NSString *> *)frameFilenames
        frameMasks:(NSArray<NSString *> *)frameMaskFilenames
-     frameIndices:(NSArray<NSNumber *> * _Nonnull)frameIndices
+     frameIndices:(NSArray<NSNumber *> * _Nonnull)frameIndices // frame indicies of frames
       matchMethod:(FeatureMatchMethod)matchMethod
              mask:(MatWrapper *)mask // assumed to be zero for ground, non-zero for sky
      maxDeviation:(double)maxDeviation
@@ -535,7 +539,20 @@ maxCornerDeviation:(double)maxCornerDeviation
     MatWrapper * specialGray = toGray8UWithMask(special.mat,
                                                 horizonMask.mat,
                                                 true);
-
+    
+    if(writeImages) {
+      if(invertMask) {
+        cv::imwrite("/tmp/special_gray_earth_frame_" +
+                    std::to_string(frameIndex) + ".tiff",
+                    specialGray.mat);
+      } else {
+        cv::imwrite("/tmp/special_gray_sky_frame_" +
+                    std::to_string(frameIndex) +
+                    ".tiff",
+                    specialGray.mat);
+      }
+    }
+    
     // default to deteting with the horizon mask as is
     MatWrapper * detectionMask = horizonMask;
 
@@ -546,8 +563,8 @@ maxCornerDeviation:(double)maxCornerDeviation
       // dilate further to expand keypoint detection area
       // threshold is 0..0xFF for what is considered bright
       detectionMask = makeStarMask(specialGray.mat,
-                                   /*dilateSize=*/30,
-                                   /*thresholdVal=*/200);
+                                   /*dilateSize=*/20,     // XXX make parameter
+                                   /*thresholdVal=*/100); // XXX make parameter
     }
 
     // Detector and matcher (we'll compute kpSpecial & descSpecial once, reused read-only)
@@ -589,6 +606,21 @@ maxCornerDeviation:(double)maxCornerDeviation
                                  descSpecial);
     }
 
+    if(writeImages) {
+      // save detectionMask.mat if desired
+      if(invertMask) {
+        cv::imwrite("/tmp/detectionMask_earth_frame_" +
+                    std::to_string(frameIndex) +
+                    ".tiff",
+                    detectionMask.mat);
+      } else {
+        cv::imwrite("/tmp/detectionMask_sky_frame_" +
+                    std::to_string(frameIndex) +
+                    ".tiff",
+                    detectionMask.mat);
+      }
+    }
+    
     detectionMask.mat.release();
     detectionMask = nil;        // done with these, allow deallocation
     specialGray.mat.release();
@@ -655,11 +687,13 @@ maxCornerDeviation:(double)maxCornerDeviation
             cv::Mat horizon = horizonMask.mat;
 
             //cv::imwrite("/tmp/horizon_a_" + std::to_string(idx) + ".tiff", horizon);
+
+
             if (!invertMask) {
               horizon = horizon.clone();
               // attempt to exclude the horizon from the sky area
               // so key points are not detected there 
-              growBlack(horizon, 100); // XXX make this a parameter
+              growBlack(horizon, 40); // XXX make this a parameter
             }
 
             //cv::imwrite("/tmp/horizon_b_" + std::to_string(idx) + ".tiff", horizon);
@@ -670,7 +704,23 @@ maxCornerDeviation:(double)maxCornerDeviation
                                                       //horizonWrapper.mat,
                                                       true);
 
-            //cv::imwrite("/tmp/frame_gray_" + std::to_string(idx) + ".tiff", frameGray.mat);
+            if(writeImages) {
+              if(invertMask) {
+                cv::imwrite("/tmp/frame_gray_earth_frame_" +
+                            std::to_string(frameIndex) + 
+                            "_neighbor_" +
+                            std::to_string(frameIndices[idx].integerValue) + 
+                            ".tiff",
+                            frameGray.mat);
+              } else {
+                cv::imwrite("/tmp/frame_gray_sky_frame_" +
+                            std::to_string(frameIndex) +
+                            "_neighbor_" +
+                            std::to_string(frameIndices[idx].integerValue) + 
+                            ".tiff",
+                            frameGray.mat);
+              }
+            }
 
             //Log_i(@"%d %d to gray check", logID, ii);
 
@@ -683,8 +733,8 @@ maxCornerDeviation:(double)maxCornerDeviation
               // detection mask is a star mask for the sky
               // XXX make the dilate size and threshold value parameters
               localDetectionMask = makeStarMask(frameGray.mat,
-                                                /*dilateSize=*/40, //10,
-                                                /*thresholdVal=*/20);//150);
+                                                /*dilateSize=*/20,    // XXX make parameter
+                                                /*thresholdVal=*/20); // XXX make parameter
               
               //cv::imwrite("/tmp/star_mask_" + std::to_string(idx) + ".tiff", localDetectionMask.mat);
               
@@ -709,6 +759,26 @@ maxCornerDeviation:(double)maxCornerDeviation
               if(!sift) sift = cv::SIFT::create(maxKeypoints);
               sift->detectAndCompute(frameGray.mat, localDetectionMask.mat, kpFrame, descFrame);
             }
+
+            // XXX save localDetectionMask.mat if desired
+            if(writeImages) {
+              if(invertMask) {
+                cv::imwrite("/tmp/detectionMask_earth_frame_" +
+                            std::to_string(frameIndex) +
+                            "_neighbor_" +
+                            std::to_string(frameIndices[idx].integerValue) + 
+                            ".tiff",
+                            localDetectionMask.mat);
+              } else {
+                cv::imwrite("/tmp/detectionMask_sky_frame_" +
+                            std::to_string(frameIndex) +
+                            "_neighbor_" +
+                            std::to_string(frameIndices[idx].integerValue) + 
+                            ".tiff",
+                            localDetectionMask.mat);
+              }
+            }
+            
             //Log_i(@"%d %d detected and computed check", logID, ii);
 
             frameGray.mat.release();

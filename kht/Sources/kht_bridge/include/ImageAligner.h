@@ -50,6 +50,7 @@ typedef NS_ENUM(NSInteger, FeatureMatchMethod) {
 // align frames to special frame, with optional mask which shows where to get keypoints from
 // 
 + (id _Nullable)alignFrames:(MatWrapper * _Nonnull)special
+                 frameIndex:(int)frameIndex // frame index of special
                      frames:(NSArray<NSString *> * _Nonnull)frameFilenames
                  frameMasks:(NSArray<NSString *> * _Nonnull)frameMaskFilenames
                frameIndices:(NSArray<NSNumber *> * _Nonnull)frameIndices

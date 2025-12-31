@@ -811,6 +811,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             Log.d("frame \(frameIndex) doing real alignment for earth \(isEarth)")
             // do real alignment
             alignmentResult = originalFrame.align(
+              frameIndex: frameIndex,
               frameFilenames: neighborFilenames,
               frameMaskFilenames: neighborMaskFilenames,
               frameIndices: neighborIndices,
