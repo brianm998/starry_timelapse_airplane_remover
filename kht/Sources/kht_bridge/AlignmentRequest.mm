@@ -12,6 +12,7 @@
                        invertMask:(BOOL)invertMask
                      maxKeypoints:(int)maxKeypoints
                  outlierThreshold:(double)k
+                 writeDebugImages:(BOOL)writeDebugImages
 {
 
   self.baseImage = baseImage;
@@ -26,6 +27,7 @@
   self.invertMask = invertMask;
   self.maxKeypoints = maxKeypoints;
   self.k = k;
+  self.writeDebugImages = writeDebugImages;
 
   return self;
 }

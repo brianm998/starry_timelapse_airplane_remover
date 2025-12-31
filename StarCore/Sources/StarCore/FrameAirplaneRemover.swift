@@ -834,7 +834,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               maxCornerDeviation: 70, // similar to max deviation, but for the corners
               invertMask: isEarth,       // earth is zero in mask
               maxKeypoints: 2000,         // XXX hardcoded constant
-              outlierThreshold: pixelThreshold
+              outlierThreshold: pixelThreshold,
+              writeDebugImages: false
             )
             
             if let result = ImageAligner.align(with: request) {

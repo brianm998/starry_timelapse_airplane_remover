@@ -16,20 +16,22 @@
 @property(nonatomic, assign) double maxDeviation;
 @property(nonatomic, assign) double maxCornerDeviation;
 @property(nonatomic, assign) BOOL invertMask;
+@property(nonatomic, assign) BOOL writeDebugImages;
 @property(nonatomic, assign) int maxKeypoints;
 @property(nonatomic, assign) double k;
 
 - (instancetype _Nonnull)initWithBaseImage:(MatWrapper * _Nonnull)baseImage
-                              frameIndex:(int)frameIndex // frame index of baseImage
+                                frameIndex:(int)frameIndex // frame index of baseImage
   
-                               neighbors:(NSArray<AlignmentNeighborInfo*> * _Nonnull)neighbors
-                             matchMethod:(FeatureMatchMethod)matchMethod
-                                    mask:(MatWrapper * _Nullable)mask // assumed to be zero for ground, non-zero for sky
-                            maxDeviation:(double)maxDeviation
-                      maxCornerDeviation:(double)maxCornerDeviation
-                              invertMask:(BOOL)invertMask
-                            maxKeypoints:(int)maxKeypoints
-                        outlierThreshold:(double)k;
+                                 neighbors:(NSArray<AlignmentNeighborInfo*> * _Nonnull)neighbors
+                               matchMethod:(FeatureMatchMethod)matchMethod
+                                      mask:(MatWrapper * _Nullable)mask // assumed to be zero for ground, non-zero for sky
+                              maxDeviation:(double)maxDeviation
+                        maxCornerDeviation:(double)maxCornerDeviation
+                                invertMask:(BOOL)invertMask
+                              maxKeypoints:(int)maxKeypoints
+                          outlierThreshold:(double)k
+                          writeDebugImages:(BOOL)writeDebugImages;
 
 @end
 

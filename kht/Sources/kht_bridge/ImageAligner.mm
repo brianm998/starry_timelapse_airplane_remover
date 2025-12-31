@@ -449,8 +449,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
     return [[MatWrapper alloc] initWithMat: mask];
 }
 
-const bool writeImages = false; // XXX do this next
-
 /***
  * Main alignment method. 
  *
@@ -470,12 +468,6 @@ const bool writeImages = false; // XXX do this next
   int frameIndex = request.frameIndex; // frame index of baseImage
 
   NSArray<AlignmentNeighborInfo*> * neighbors = request.neighbors;
-  
-  /*
-           frames:(NSArray<NSString *> *)frameFilenames
-       frameMasks:(NSArray<NSString *> *)frameMaskFilenames
-     frameIndices:(NSArray<NSNumber *> * _Nonnull)frameIndices // frame indicies of frames
-  */
   
   FeatureMatchMethod matchMethod = request.matchMethod;
   
@@ -532,7 +524,7 @@ const bool writeImages = false; // XXX do this next
                                                 horizonMask.mat,
                                                 true);
     
-    if(writeImages) {
+    if(request.writeDebugImages) {
       if(invertMask) {
         cv::imwrite("/tmp/baseImage_gray_earth_frame_" +
                     std::to_string(frameIndex) + ".tiff",
@@ -598,7 +590,7 @@ const bool writeImages = false; // XXX do this next
                                  descBaseImage);
     }
 
-    if(writeImages) {
+    if(request.writeDebugImages) {
       // save detectionMask.mat if desired
       if(invertMask) {
         cv::imwrite("/tmp/detectionMask_earth_frame_" +
@@ -696,7 +688,7 @@ const bool writeImages = false; // XXX do this next
                                                       //horizonWrapper.mat,
                                                       true);
 
-            if(writeImages) {
+            if(request.writeDebugImages) {
               if(invertMask) {
                 cv::imwrite("/tmp/frame_gray_earth_frame_" +
                             std::to_string(frameIndex) + 
@@ -753,7 +745,7 @@ const bool writeImages = false; // XXX do this next
             }
 
             // XXX save localDetectionMask.mat if desired
-            if(writeImages) {
+            if(request.writeDebugImages) {
               if(invertMask) {
                 cv::imwrite("/tmp/detectionMask_earth_frame_" +
                             std::to_string(frameIndex) +
