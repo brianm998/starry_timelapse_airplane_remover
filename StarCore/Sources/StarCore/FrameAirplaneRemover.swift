@@ -825,7 +825,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // do real alignment
 
             let request = AlignmentRequest(
-              special: originalFrame.mat,
+              baseImage: originalFrame.mat,
               frameIndex: Int32(frameIndex),
               neighbors: neighbors,
               matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,

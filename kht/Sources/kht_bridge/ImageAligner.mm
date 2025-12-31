@@ -209,9 +209,6 @@ MatWrapper* medianImageFromArray(const std::vector<MatWrapper*>& mats,
 }
 
 
-
-
-
 @implementation ImageAligner
 
 
@@ -435,7 +432,7 @@ MatWrapper * toGray8U(MatWrapper * src) {
 }
 
 
-// Helper: compute star mask from special frame
+// Helper: compute star mask from baseImage frame
 static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int thresholdVal = 200) {
     cv::Mat mask, thresh;
     // Threshold for bright spots (stars)
@@ -452,12 +449,12 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
     return [[MatWrapper alloc] initWithMat: mask];
 }
 
-const bool writeImages = false;
+const bool writeImages = false; // XXX do this next
 
 /***
  * Main alignment method. 
  *
- * Aligns array of 'frames' to 'special'.
+ * Aligns array of 'frames' to 'baseImage'.
  * The 'mask' is a binary mask with zero for the ground and non-zero for the sky
  * 
  * Returns an AlignmentResult with:
@@ -469,8 +466,8 @@ const bool writeImages = false;
 
 + (id _Nullable)alignWithRequest:(AlignmentRequest * _Nonnull)request {
 
-  MatWrapper * special = request.special;
-  int frameIndex = request.frameIndex; // frame index of special
+  MatWrapper * baseImage = request.baseImage;
+  int frameIndex = request.frameIndex; // frame index of baseImage
 
   NSArray<AlignmentNeighborInfo*> * neighbors = request.neighbors;
   
@@ -514,7 +511,7 @@ const bool writeImages = false;
     } else {
       // if no horizon mask is passed, assume a fully white mask (all pixels)
       horizonMask = [[MatWrapper alloc]
-                      initWithMat:cv::Mat(special.mat.size(), CV_8U, cv::Scalar(255))];
+                      initWithMat:cv::Mat(baseImage.mat.size(), CV_8U, cv::Scalar(255))];
     }
 
     //cv::imwrite("/tmp/horizon_start.tiff", horizonMask.mat);
@@ -530,21 +527,21 @@ const bool writeImages = false;
       horizonMask = createGradientMaskIntoSky(horizonMask.mat, horizonExtension);
     }
 
-    // Prepare grayscale special frame with the horizon mask
-    MatWrapper * specialGray = toGray8UWithMask(special.mat,
+    // Prepare grayscale baseImage frame with the horizon mask
+    MatWrapper * baseImageGray = toGray8UWithMask(baseImage.mat,
                                                 horizonMask.mat,
                                                 true);
     
     if(writeImages) {
       if(invertMask) {
-        cv::imwrite("/tmp/special_gray_earth_frame_" +
+        cv::imwrite("/tmp/baseImage_gray_earth_frame_" +
                     std::to_string(frameIndex) + ".tiff",
-                    specialGray.mat);
+                    baseImageGray.mat);
       } else {
-        cv::imwrite("/tmp/special_gray_sky_frame_" +
+        cv::imwrite("/tmp/baseImage_gray_sky_frame_" +
                     std::to_string(frameIndex) +
                     ".tiff",
-                    specialGray.mat);
+                    baseImageGray.mat);
       }
     }
     
@@ -552,53 +549,53 @@ const bool writeImages = false;
     MatWrapper * detectionMask = horizonMask;
 
     if (!invertMask) {
-      // Build star mask for special frame when doing sky
+      // Build star mask for baseImage frame when doing sky
       // the star mask restricts keypoint detection to near bright spots in the sky
 
       // dilate further to expand keypoint detection area
       // threshold is 0..0xFF for what is considered bright
-      detectionMask = makeStarMask(specialGray.mat,
+      detectionMask = makeStarMask(baseImageGray.mat,
                                    /*dilateSize=*/20,     // XXX make parameter
                                    /*thresholdVal=*/100); // XXX make parameter
     }
 
-    // Detector and matcher (we'll compute kpSpecial & descSpecial once, reused read-only)
-    std::vector<cv::KeyPoint> kpSpecial;
-    cv::Mat descSpecial;
+    // Detector and matcher (we'll compute kpBaseImage & descBaseImage once, reused read-only)
+    std::vector<cv::KeyPoint> kpBaseImage;
+    cv::Mat descBaseImage;
 
-    // first detect keypoints in the special frame we're aligning to
+    // first detect keypoints in the baseImage frame we're aligning to
     if (invertMask) {
       // not used for sky, only for earth
       cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(4.0, cv::Size(8,8));
 	  
-      // ground: create a processed special image for detection
+      // ground: create a processed baseImage image for detection
       // apply extra processing to pull up dark details to help
       // find more keypoints in the dark ground 
-      cv::Mat specialProcessed;
+      cv::Mat baseImageProcessed;
 
       // Apply Contrast Limited Adaptive Histogram Equalization
-      clahe->apply(specialGray.mat, specialProcessed);
+      clahe->apply(baseImageGray.mat, baseImageProcessed);
 
       // apply gamma correction to brighten the shadows only
-      specialProcessed.convertTo(specialProcessed, CV_32F, 1.0/255.0);
-      cv::pow(specialProcessed, 0.5, specialProcessed);
-      specialProcessed.convertTo(specialProcessed, CV_8U, 255.0);
+      baseImageProcessed.convertTo(baseImageProcessed, CV_32F, 1.0/255.0);
+      cv::pow(baseImageProcessed, 0.5, baseImageProcessed);
+      baseImageProcessed.convertTo(baseImageProcessed, CV_8U, 255.0);
 
       cv::Ptr<cv::AKAZE> akazeBase = cv::AKAZE::create();
       akazeBase->setThreshold(1e-5);
 
       // run advanced kaze to detect and compute keypoints in the ground
-      akazeBase->detectAndCompute(specialProcessed,
+      akazeBase->detectAndCompute(baseImageProcessed,
                                   detectionMask.mat,
-                                  kpSpecial,
-                                  descSpecial);
+                                  kpBaseImage,
+                                  descBaseImage);
     } else {
       // sky: use SIFT
       cv::Ptr<cv::SIFT> siftBase = cv::SIFT::create(maxKeypoints);
-      siftBase->detectAndCompute(specialGray.mat,
+      siftBase->detectAndCompute(baseImageGray.mat,
                                  detectionMask.mat,
-                                 kpSpecial,
-                                 descSpecial);
+                                 kpBaseImage,
+                                 descBaseImage);
     }
 
     if(writeImages) {
@@ -618,10 +615,10 @@ const bool writeImages = false;
     
     detectionMask.mat.release();
     detectionMask = nil;        // done with these, allow deallocation
-    specialGray.mat.release();
-    specialGray = nil;
+    baseImageGray.mat.release();
+    baseImageGray = nil;
     
-    kpSpecial.shrink_to_fit();
+    kpBaseImage.shrink_to_fit();
 
     // Preallocate per-index result storage to avoid push_back from many threads
     const size_t n = neighbors.count;
@@ -782,12 +779,12 @@ const bool writeImages = false;
             localDetectionMask = nil;
             
 		    // if we got nothing, then fail fast
-            if (descFrame.empty() || descSpecial.empty()) {
+            if (descFrame.empty() || descBaseImage.empty()) {
               // failed early: no descriptors
               resultSuccess[idx] = 0;
               resultMats[idx] = frame;
               CFRetain((__bridge CFTypeRef)frame);
-              Log_e(@"%d descFrame or descSpecial is empty", logID);
+              Log_e(@"%d descFrame or descBaseImage is empty", logID);
 
               AlignmentWarpInfo *info =
                 [[AlignmentWarpInfo alloc]
@@ -806,10 +803,10 @@ const bool writeImages = false;
               continue;
             }
 
-		    // we have keypoints to match between the special frame
-		    // and the special frame we're iterating on
+		    // we have keypoints to match between the baseImage frame
+		    // and the baseImage frame we're iterating on
 	    
-            std::vector<cv::Point2f> ptsFrame, ptsSpecial;
+            std::vector<cv::Point2f> ptsFrame, ptsBaseImage;
             std::vector<std::vector<cv::DMatch>> knnMatches;
             std::vector<cv::DMatch> matches;
             double cutoff = 0;
@@ -823,7 +820,7 @@ const bool writeImages = false;
 		    case FeatureMatchMethodBruteForce:
               // brute force method
 		      
-              matcher.match(descFrame, descSpecial, matches);
+              matcher.match(descFrame, descBaseImage, matches);
 
               minDist = std::numeric_limits<double>::max();
               for (auto &m : matches) {
@@ -834,7 +831,7 @@ const bool writeImages = false;
               for (auto &m : matches) {
                 if (m.distance <= cutoff) {
                   ptsFrame.push_back(kpFrame[m.queryIdx].pt);
-                  ptsSpecial.push_back(kpSpecial[m.trainIdx].pt);
+                  ptsBaseImage.push_back(kpBaseImage[m.trainIdx].pt);
                 }
               }
               break;
@@ -843,14 +840,14 @@ const bool writeImages = false;
 		    case FeatureMatchMethodKNNLowes:
               // kNN + Lowe's Ratio Test
 
-              matcher.knnMatch(descFrame, descSpecial, knnMatches, 2);
+              matcher.knnMatch(descFrame, descBaseImage, knnMatches, 2);
               for (size_t i = 0; i < knnMatches.size(); i++) {
                 if (knnMatches[i].size() == 2) {
                   const cv::DMatch &m1 = knnMatches[i][0];
                   const cv::DMatch &m2 = knnMatches[i][1];
                   if (m1.distance < 0.75 * m2.distance) {
                     ptsFrame.push_back(kpFrame[m1.queryIdx].pt);
-                    ptsSpecial.push_back(kpSpecial[m1.trainIdx].pt);
+                    ptsBaseImage.push_back(kpBaseImage[m1.trainIdx].pt);
                   }
                 }
               }
@@ -860,18 +857,18 @@ const bool writeImages = false;
 		    case FeatureMatchMethodFLANN:
 		      // FLANN based matcher
 		      // Convert to CV_32F because FLANN requires float descriptors
-              cv::Mat descFrame32f, descSpecial32f;
+              cv::Mat descFrame32f, descBaseImage32f;
               descFrame.convertTo(descFrame32f, CV_32F);
-              descSpecial.convertTo(descSpecial32f, CV_32F);
+              descBaseImage.convertTo(descBaseImage32f, CV_32F);
               cv::FlannBasedMatcher flann;
-              flann.knnMatch(descFrame32f, descSpecial32f, knnMatches, 2);
+              flann.knnMatch(descFrame32f, descBaseImage32f, knnMatches, 2);
               for (size_t i = 0; i < knnMatches.size(); i++) {
                 if (knnMatches[i].size() == 2) {
                   const cv::DMatch &m1 = knnMatches[i][0];
                   const cv::DMatch &m2 = knnMatches[i][1];
                   if (m1.distance < 0.75 * m2.distance) {
                     ptsFrame.push_back(kpFrame[m1.queryIdx].pt);
-                    ptsSpecial.push_back(kpSpecial[m1.trainIdx].pt);
+                    ptsBaseImage.push_back(kpBaseImage[m1.trainIdx].pt);
                   }
                 }
               }
@@ -879,7 +876,7 @@ const bool writeImages = false;
             }
             //Log_i(@"%d %d matcher check", logID, ii);
 
-		    // after matching the keypoints between the special frame and
+		    // after matching the keypoints between the baseImage frame and
 		    // the alignment frame we're iterating over, we next need to
 		    // check how good a fit we got from the match.
 		    // only accept the warp if it's between provided boundaries
@@ -894,7 +891,7 @@ const bool writeImages = false;
             if (ptsFrame.size() >= 4) {
               //Log_d(@"%d has $zu control points", logID, ptsFrame.size());
               // find homography between the matched keypoints 
-                cv::Mat H = cv::findHomography(ptsFrame, ptsSpecial, cv::RANSAC, 10);
+                cv::Mat H = cv::findHomography(ptsFrame, ptsBaseImage, cv::RANSAC, 10);
                 if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
                   H.convertTo(H, CV_64F);
                 }
@@ -945,7 +942,7 @@ const bool writeImages = false;
                                 accepted:acceptWarp
                           alignmentState:AlignmentStateObjCHomographySuccess
                        neighborKeyPoints:ptsFrame.size()
-                          frameKeyPoints:ptsSpecial.size()
+                          frameKeyPoints:ptsBaseImage.size()
                               frameIndex:neighbors[idx].frameIndex];
 
                   warpInfos[idx] = info;
@@ -954,7 +951,7 @@ const bool writeImages = false;
 
                   if (acceptWarp) {
                     // if we accept the warp, then actually warp
-                    // this frame to fit the special image
+                    // this frame to fit the baseImage image
                     //Log_i(@"%d %d accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf", logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
                     //Log_i(@"%d %d accepting warp and warping", logID, ii);
                     cv::warpPerspective(frame.mat, // the input to warp
@@ -994,7 +991,7 @@ const bool writeImages = false;
                                   accepted:false
                             alignmentState:AlignmentStateObjCHomographySuccess
                          neighborKeyPoints:ptsFrame.size()
-                            frameKeyPoints:ptsSpecial.size()
+                            frameKeyPoints:ptsBaseImage.size()
                                 frameIndex:neighbors[idx].frameIndex];
 
                     warpInfos[idx] = info;
@@ -1012,7 +1009,7 @@ const bool writeImages = false;
                                 accepted:false
                           alignmentState:AlignmentStateObjCNoHomographyFound
                        neighborKeyPoints:0
-                          frameKeyPoints:ptsSpecial.size()
+                          frameKeyPoints:ptsBaseImage.size()
                               frameIndex:neighbors[idx].frameIndex];
 
                   warpInfos[idx] = info;
@@ -1028,7 +1025,7 @@ const bool writeImages = false;
                             accepted:false
                       alignmentState:AlignmentStateObjCNotEnoughKeypoints
                    neighborKeyPoints:0
-                      frameKeyPoints:ptsSpecial.size()
+                      frameKeyPoints:ptsBaseImage.size()
                           frameIndex:neighbors[idx].frameIndex];
 
               warpInfos[idx] = info;
@@ -1130,7 +1127,7 @@ const bool writeImages = false;
     
     // include the original image in the median merge too
 	if(aligned.size() != 0) {
-      aligned.push_back(special);
+      aligned.push_back(baseImage);
     }
 
     Log_d(@"we have %zu aligned and %zu failed merges %zu alignedInfos %zu failedInfos",

@@ -7,8 +7,8 @@
 
 @interface AlignmentRequest : NSObject
 
-@property(nonatomic, strong, nonnull) MatWrapper *special; // the frame being aligned to
-@property(nonatomic, assign) int frameIndex;               // frame index of special
+@property(nonatomic, strong, nonnull) MatWrapper *baseImage; // the frame being aligned to
+@property(nonatomic, assign) int frameIndex;               // frame index of baseImage
 @property(nonatomic, strong, nonnull) NSArray<AlignmentNeighborInfo *> * neighbors;
 @property(nonatomic, assign) FeatureMatchMethod matchMethod;
 @property(nonatomic, strong, nullable) MatWrapper * mask; // assumed to be zero for ground, non-zero for sky
@@ -19,8 +19,8 @@
 @property(nonatomic, assign) int maxKeypoints;
 @property(nonatomic, assign) double k;
 
-- (instancetype _Nonnull)initWithSpecial:(MatWrapper * _Nonnull)special
-                              frameIndex:(int)frameIndex // frame index of special
+- (instancetype _Nonnull)initWithBaseImage:(MatWrapper * _Nonnull)baseImage
+                              frameIndex:(int)frameIndex // frame index of baseImage
   
                                neighbors:(NSArray<AlignmentNeighborInfo*> * _Nonnull)neighbors
                              matchMethod:(FeatureMatchMethod)matchMethod
