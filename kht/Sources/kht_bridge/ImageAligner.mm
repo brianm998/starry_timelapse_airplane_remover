@@ -724,11 +724,15 @@ maxCornerDeviation:(double)maxCornerDeviation
               Log_e(@"%d descFrame or descSpecial is empty", logID);
 
               AlignmentWarpInfo *info =
-                [[AlignmentWarpInfo alloc] initWithHomography:nil
-                                                    deviation:-3
-                                           maxCornerDeviation:-3
-                                                     accepted:false
-                                                   frameIndex:idx];
+                [[AlignmentWarpInfo alloc]
+                  initWithHomography:nil
+                           deviation:0
+                  maxCornerDeviation:0
+                            accepted:false
+                      alignmentState:AlignmentStateObjCUnableToDetectKeypoints
+                   neighborKeyPoints:0
+                      frameKeyPoints:0
+                          frameIndex:idx];
 
               warpInfos[idx] = info;
               CFRetain((__bridge CFTypeRef)info);
@@ -868,11 +872,15 @@ maxCornerDeviation:(double)maxCornerDeviation
 
                   // keep track of warp info 
                   AlignmentWarpInfo *info =
-                    [[AlignmentWarpInfo alloc] initWithHomography:HWrapper
-                                                        deviation:deviation
-                                               maxCornerDeviation:maxCornerDist
-                                                         accepted:acceptWarp
-                                                       frameIndex:idx];
+                    [[AlignmentWarpInfo alloc]
+                      initWithHomography:HWrapper
+                               deviation:deviation
+                      maxCornerDeviation:maxCornerDist
+                                accepted:acceptWarp
+                          alignmentState:AlignmentStateObjCHomographySuccess
+                       neighborKeyPoints:ptsFrame.size()
+                          frameKeyPoints:ptsSpecial.size()
+                              frameIndex:idx];
 
                   warpInfos[idx] = info;
                   CFRetain((__bridge CFTypeRef)info);
@@ -913,11 +921,15 @@ maxCornerDeviation:(double)maxCornerDeviation
                   } else {
 
                     AlignmentWarpInfo *info =
-                      [[AlignmentWarpInfo alloc] initWithHomography:HWrapper
-                                                          deviation:deviation
-                                                 maxCornerDeviation:maxCornerDist
-                                                           accepted:false
-                                                         frameIndex:idx];
+                      [[AlignmentWarpInfo alloc]
+                        initWithHomography:HWrapper
+                                 deviation:deviation
+                        maxCornerDeviation:maxCornerDist
+                                  accepted:false
+                            alignmentState:AlignmentStateObjCHomographySuccess
+                         neighborKeyPoints:ptsFrame.size()
+                            frameKeyPoints:ptsSpecial.size()
+                                frameIndex:idx];
 
                     warpInfos[idx] = info;
                     CFRetain((__bridge CFTypeRef)info);
@@ -927,11 +939,15 @@ maxCornerDeviation:(double)maxCornerDeviation
                 } else {
                   // no homography found
                   AlignmentWarpInfo *info =
-                    [[AlignmentWarpInfo alloc] initWithHomography:nil
-                                                        deviation:-1
-                                               maxCornerDeviation:-1
-                                                         accepted:false
-                                                       frameIndex:idx];
+                    [[AlignmentWarpInfo alloc]
+                      initWithHomography:nil
+                               deviation:0
+                      maxCornerDeviation:0
+                                accepted:false
+                          alignmentState:AlignmentStateObjCNoHomographyFound
+                       neighborKeyPoints:0
+                          frameKeyPoints:ptsSpecial.size()
+                              frameIndex:idx];
 
                   warpInfos[idx] = info;
                   CFRetain((__bridge CFTypeRef)info);
@@ -939,11 +955,15 @@ maxCornerDeviation:(double)maxCornerDeviation
             } else {
               // not enough points
               AlignmentWarpInfo *info =
-                [[AlignmentWarpInfo alloc] initWithHomography:nil
-                                                    deviation:-2
-                                           maxCornerDeviation:-2
-                                                     accepted:false
-                                                   frameIndex:idx];
+                [[AlignmentWarpInfo alloc]
+                  initWithHomography:nil
+                           deviation:0
+                  maxCornerDeviation:0
+                            accepted:false
+                      alignmentState:AlignmentStateObjCNotEnoughKeypoints
+                   neighborKeyPoints:0
+                      frameKeyPoints:ptsSpecial.size()
+                          frameIndex:idx];
 
               warpInfos[idx] = info;
               CFRetain((__bridge CFTypeRef)info);

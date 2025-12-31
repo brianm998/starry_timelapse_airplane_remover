@@ -3441,6 +3441,9 @@ public struct AlignmentWarpInfoCodable: Codable, Sendable {
     let deviation: Double
     let maxCornerDeviation: Double
     let accepted: Bool
+    let alignmentState: AlignmentState
+    let neighborKeyPoints: Int
+    let frameKeyPoints: Int
     let frameIndex: Int
 }
 
@@ -3461,6 +3464,9 @@ public extension AlignmentWarpInfo {
             deviation: deviation,
             maxCornerDeviation: maxCornerDeviation,
             accepted: accepted,
+            alignmentState: AlignmentState(objcState: alignmentState) ?? .unknown,
+            neighborKeyPoints: Int(neighborKeyPoints),
+            frameKeyPoints: Int(frameKeyPoints),
             frameIndex: Int(frameIndex)
         )
     }
@@ -3487,6 +3493,9 @@ public extension AlignmentWarpInfo {
             deviation: codable.deviation,
             maxCornerDeviation: codable.maxCornerDeviation,
             accepted: codable.accepted,
+            alignmentState: codable.alignmentState.objcValue ?? AlignmentStateObjC.unknown,
+            neighborKeyPoints: Int32(codable.neighborKeyPoints),
+            frameKeyPoints: Int32(codable.frameKeyPoints),
             frameIndex: UInt(codable.frameIndex)
         )
     }

@@ -24,7 +24,7 @@ public enum LoopReturn: Sendable {
     case `break`
 }
 
-@objc public enum AlignmentState: Int,
+@objc public enum AlignmentStep: Int,
                                   CaseIterable,
                                   Equatable,
                                   Hashable,
@@ -59,9 +59,9 @@ public enum FrameProcessingState: Codable,
     case horizonDetection
     case horizonDetected
     case mergingHorizon
-    case earthAlignment(AlignmentState)
+    case earthAlignment(AlignmentStep)
     case creatingEarthAlignedFrame
-    case starAlignment(AlignmentState)
+    case starAlignment(AlignmentStep)
     case creatingStarAlignedFrame
     case subtractingNeighbor
     case assemblingPixels
