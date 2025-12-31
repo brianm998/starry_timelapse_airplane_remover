@@ -638,14 +638,14 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
           for (int ii = range.start; ii < range.end; ++ii) {
             NSUInteger idx = (NSUInteger)ii;
             //Log_i(@"%d %d top", logID, ii);
-            MatWrapper * frame = preloadedFrames[idx];
-            if (frame == nil) {
-              Log_e(@"%d frame is nil", logID);
+            MatWrapper * neighbor = preloadedFrames[idx];
+            if (neighbor == nil) {
+              Log_e(@"%d neighbor is nil", logID);
               continue;
             }
-            MatWrapper * frameHorizon = 0;
+            MatWrapper * neighborHorizon = 0;
             if (preloadedMasks[idx] != nil) {
-              frameHorizon = preloadedMasks[idx];
+              neighborHorizon = preloadedMasks[idx];
             }
             try {
               //Log_i(@"%d %d loaded", logID, ii);
@@ -666,7 +666,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 
               //cv::imwrite("/tmp/horizon_b_" + std::to_string(idx) + ".tiff", horizon);
 
-              MatWrapper * frameGray = toGray8UWithMask(frame.mat,
+              MatWrapper * neighborGray = toGray8UWithMask(neighbor.mat,
                                                         //horizonMask.mat,
                                                         horizon,
                                                         //horizonWrapper.mat,
@@ -674,33 +674,33 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 
               if(request.writeDebugImages) {
                 if(request.alignmentType == AlignmentTypeEarth) {
-                  cv::imwrite("/tmp/frame_gray_earth_frame_" +
+                  cv::imwrite("/tmp/neighbor_gray_earth_frame_" +
                               std::to_string(request.frameIndex) + 
                               "_neighbor_" +
                               std::to_string(request.neighbors[idx].frameIndex) + 
                               ".tiff",
-                              frameGray.mat);
+                              neighborGray.mat);
                 } else {
-                  cv::imwrite("/tmp/frame_gray_sky_frame_" +
+                  cv::imwrite("/tmp/neighbor_gray_sky_frame_" +
                               std::to_string(request.frameIndex) +
                               "_neighbor_" +
                               std::to_string(request.neighbors[idx].frameIndex) + 
                               ".tiff",
-                              frameGray.mat);
+                              neighborGray.mat);
                 }
               }
 
               //Log_i(@"%d %d to gray check", logID, ii);
 
-              std::vector<cv::KeyPoint> kpFrame;
-              cv::Mat descFrame;
+              std::vector<cv::KeyPoint> kpNeighbor;
+              cv::Mat descNeighbor;
 
               MatWrapper * localDetectionMask = horizonMask;
 
               if (request.alignmentType == AlignmentTypeSky) {
                 // detection mask is a star mask for the sky
                 // XXX make the dilate size and threshold value parameters
-                localDetectionMask = makeStarMask(frameGray.mat,
+                localDetectionMask = makeStarMask(neighborGray.mat,
                                                   /*dilateSize=*/20,    // XXX make parameter
                                                   /*thresholdVal=*/20); // XXX make parameter
               
@@ -714,18 +714,18 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                 // ground: AKAZE + CLAHE + gamma
                 if(!clahe) clahe = cv::createCLAHE(4.0, cv::Size(8,8));
                 cv::Mat claheOut;
-                clahe->apply(frameGray.mat, claheOut);
+                clahe->apply(neighborGray.mat, claheOut);
                 claheOut.convertTo(claheOut, CV_32F, 1.0/255.0);
                 cv::pow(claheOut, 0.5, claheOut);
                 claheOut.convertTo(claheOut, CV_8U, 255.0);
 
                 if(!akaze) akaze = cv::AKAZE::create();
                 akaze->setThreshold(1e-5);
-                akaze->detectAndCompute(claheOut, localDetectionMask.mat, kpFrame, descFrame);
+                akaze->detectAndCompute(claheOut, localDetectionMask.mat, kpNeighbor, descNeighbor);
               } else {
                 // sky: SIFT
                 if(!sift) sift = cv::SIFT::create(request.maxKeypoints);
-                sift->detectAndCompute(frameGray.mat, localDetectionMask.mat, kpFrame, descFrame);
+                sift->detectAndCompute(neighborGray.mat, localDetectionMask.mat, kpNeighbor, descNeighbor);
               }
 
               // XXX save localDetectionMask.mat if desired
@@ -749,18 +749,18 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
             
               //Log_i(@"%d %d detected and computed check", logID, ii);
 
-              frameGray.mat.release();
-              frameGray = nil;          // not used past here, allow deallocation
+              neighborGray.mat.release();
+              neighborGray = nil;          // not used past here, allow deallocation
               localDetectionMask.mat.release();
               localDetectionMask = nil;
             
               // if we got nothing, then fail fast
-              if (descFrame.empty() || descBaseImage.empty()) {
+              if (descNeighbor.empty() || descBaseImage.empty()) {
                 // failed early: no descriptors
                 resultSuccess[idx] = 0;
-                resultMats[idx] = frame;
-                CFRetain((__bridge CFTypeRef)frame);
-                Log_e(@"%d descFrame or descBaseImage is empty", logID);
+                resultMats[idx] = neighbor;
+                CFRetain((__bridge CFTypeRef)neighbor);
+                Log_e(@"%d descNeighbor or descBaseImage is empty", logID);
 
                 AlignmentWarpInfo *info =
                   [[AlignmentWarpInfo alloc]
@@ -780,9 +780,9 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               }
 
               // we have keypoints to match between the baseImage frame
-              // and the baseImage frame we're iterating on
+              // and the neighbor frame we're iterating on
 	    
-              std::vector<cv::Point2f> ptsFrame, ptsBaseImage;
+              std::vector<cv::Point2f> ptsNeighbor, ptsBaseImage;
               std::vector<std::vector<cv::DMatch>> knnMatches;
               std::vector<cv::DMatch> matches;
               double cutoff = 0;
@@ -796,7 +796,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               case FeatureMatchMethodBruteForce:
                 // brute force method
 		      
-                matcher.match(descFrame, descBaseImage, matches);
+                matcher.match(descNeighbor, descBaseImage, matches);
 
                 minDist = std::numeric_limits<double>::max();
                 for (auto &m : matches) {
@@ -806,7 +806,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 
                 for (auto &m : matches) {
                   if (m.distance <= cutoff) {
-                    ptsFrame.push_back(kpFrame[m.queryIdx].pt);
+                    ptsNeighbor.push_back(kpNeighbor[m.queryIdx].pt);
                     ptsBaseImage.push_back(kpBaseImage[m.trainIdx].pt);
                   }
                 }
@@ -816,13 +816,13 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               case FeatureMatchMethodKNNLowes:
                 // kNN + Lowe's Ratio Test
 
-                matcher.knnMatch(descFrame, descBaseImage, knnMatches, 2);
+                matcher.knnMatch(descNeighbor, descBaseImage, knnMatches, 2);
                 for (size_t i = 0; i < knnMatches.size(); i++) {
                   if (knnMatches[i].size() == 2) {
                     const cv::DMatch &m1 = knnMatches[i][0];
                     const cv::DMatch &m2 = knnMatches[i][1];
                     if (m1.distance < 0.75 * m2.distance) {
-                      ptsFrame.push_back(kpFrame[m1.queryIdx].pt);
+                      ptsNeighbor.push_back(kpNeighbor[m1.queryIdx].pt);
                       ptsBaseImage.push_back(kpBaseImage[m1.trainIdx].pt);
                     }
                   }
@@ -833,17 +833,17 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               case FeatureMatchMethodFLANN:
                 // FLANN based matcher
                 // Convert to CV_32F because FLANN requires float descriptors
-                cv::Mat descFrame32f, descBaseImage32f;
-                descFrame.convertTo(descFrame32f, CV_32F);
+                cv::Mat descNeighbor32f, descBaseImage32f;
+                descNeighbor.convertTo(descNeighbor32f, CV_32F);
                 descBaseImage.convertTo(descBaseImage32f, CV_32F);
                 cv::FlannBasedMatcher flann;
-                flann.knnMatch(descFrame32f, descBaseImage32f, knnMatches, 2);
+                flann.knnMatch(descNeighbor32f, descBaseImage32f, knnMatches, 2);
                 for (size_t i = 0; i < knnMatches.size(); i++) {
                   if (knnMatches[i].size() == 2) {
                     const cv::DMatch &m1 = knnMatches[i][0];
                     const cv::DMatch &m2 = knnMatches[i][1];
                     if (m1.distance < 0.75 * m2.distance) {
-                      ptsFrame.push_back(kpFrame[m1.queryIdx].pt);
+                      ptsNeighbor.push_back(kpNeighbor[m1.queryIdx].pt);
                       ptsBaseImage.push_back(kpBaseImage[m1.trainIdx].pt);
                     }
                   }
@@ -853,7 +853,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               //Log_i(@"%d %d matcher check", logID, ii);
 
               // after matching the keypoints between the baseImage frame and
-              // the alignment frame we're iterating over, we next need to
+              // the neibhgor frame we're iterating over, we next need to
               // check how good a fit we got from the match.
               // only accept the warp if it's between provided boundaries
               // otherwise widly off erroneous matches can creep in
@@ -864,15 +864,15 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               cv::Mat warpedHorizon;
 
               // need at least four points
-              if (ptsFrame.size() >= 4) {
-                //Log_d(@"%d has $zu control points", logID, ptsFrame.size());
+              if (ptsNeighbor.size() >= 4) {
+                //Log_d(@"%d has $zu control points", logID, ptsNeighbor.size());
                 // find homography between the matched keypoints 
-                  cv::Mat H = cv::findHomography(ptsFrame, ptsBaseImage, cv::RANSAC, 10);
+                  cv::Mat H = cv::findHomography(ptsNeighbor, ptsBaseImage, cv::RANSAC, 10);
                 if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
                   H.convertTo(H, CV_64F);
                 }
 
-                // save alignment warp info for this frame
+                // save alignment warp info for this neighbor
                 MatWrapper *HWrapper = nil;
                 if (!H.empty()) {
                   HWrapper = [[MatWrapper alloc] initWithMat:H];
@@ -890,9 +890,9 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                   // a moving camera we shouldn't need very much frame to frame adjustement
                   std::vector<cv::Point2f> corners = {
                     {0, 0},
-                    {(float)frame.cols, 0},
-                    {(float)frame.cols, (float)frame.rows},
-                    {0, (float)frame.rows}
+                    {(float)neighbor.cols, 0},
+                    {(float)neighbor.cols, (float)neighbor.rows},
+                    {0, (float)neighbor.rows}
                   };
                   std::vector<cv::Point2f> projectedCorners;
                   cv::perspectiveTransform(corners, projectedCorners, H);
@@ -917,7 +917,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                          maxCornerDeviation:maxCornerDist
                                    accepted:acceptWarp
                              alignmentState:AlignmentStateObjCHomographySuccess
-                          neighborKeyPoints:ptsFrame.size()
+                          neighborKeyPoints:ptsNeighbor.size()
                              frameKeyPoints:ptsBaseImage.size()
                                  frameIndex:request.neighbors[idx].frameIndex];
 
@@ -930,10 +930,10 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                     // this frame to fit the baseImage image
                     //Log_i(@"%d %d accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf", logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
                     //Log_i(@"%d %d accepting warp and warping", logID, ii);
-                    cv::warpPerspective(frame.mat, // the input to warp
+                    cv::warpPerspective(neighbor.mat, // the input to warp
                                         warped, // the warped output
                                         H, // the homography to warp with
-                                        frame.mat.size(),
+                                        neighbor.mat.size(),
                                         cv::INTER_LINEAR,
                                         cv::BORDER_CONSTANT,
                                         cv::Scalar(0,0,0,0));
@@ -942,11 +942,11 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                     //cv::imwrite("/tmp/warped_first_" + std::to_string(idx) + ".tiff", warped);
 
                   
-                    if (frameHorizon != NULL) {
+                    if (neighborHorizon != NULL) {
                       // warp horizon with same homography as ground
                       //Log_i(@"%d %d accepting warp and warping horizon", logID, ii);
-                      cv::warpPerspective(frameHorizon.mat, warpedHorizon, H,
-                                          frameHorizon.mat.size(),
+                      cv::warpPerspective(neighborHorizon.mat, warpedHorizon, H,
+                                          neighborHorizon.mat.size(),
                                           cv::INTER_LINEAR, cv::BORDER_CONSTANT,
                                           cv::Scalar(0,0,0,0));
 
@@ -966,7 +966,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                         maxCornerDeviation:maxCornerDist
                                   accepted:false
                             alignmentState:AlignmentStateObjCHomographySuccess
-                         neighborKeyPoints:ptsFrame.size()
+                         neighborKeyPoints:ptsNeighbor.size()
                             frameKeyPoints:ptsBaseImage.size()
                                 frameIndex:request.neighbors[idx].frameIndex];
 
@@ -1028,12 +1028,12 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                 }
               } else {
                 resultSuccess[idx] = 0;
-                resultMats[idx] = frame;
-                CFRetain((__bridge CFTypeRef)frame);
-                alignedHorizonMats[idx] = frameHorizon;
-                if (frameHorizon != NULL) CFRetain((__bridge CFTypeRef)frameHorizon);
-                if(frame.mat.empty()) {
-                  Log_w(@"frame is empty");
+                resultMats[idx] = neighbor;
+                CFRetain((__bridge CFTypeRef)neighbor);
+                alignedHorizonMats[idx] = neighborHorizon;
+                if (neighborHorizon != NULL) CFRetain((__bridge CFTypeRef)neighborHorizon);
+                if(neighbor.mat.empty()) {
+                  Log_w(@"neighbor is empty");
                 }
               }
               //Log_i(@"%d %d done", logID, ii);
@@ -1042,18 +1042,18 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
               // On exception mark as failed and store original
               resultSuccess[idx] = 0;
-              resultMats[idx] = frame;
-              CFRetain((__bridge CFTypeRef)frame);
+              resultMats[idx] = neighbor;
+              CFRetain((__bridge CFTypeRef)neighbor);
             } catch (const std::exception &e) {
               Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
               resultSuccess[idx] = 0;
-              resultMats[idx] = frame;
-              CFRetain((__bridge CFTypeRef)frame);
+              resultMats[idx] = neighbor;
+              CFRetain((__bridge CFTypeRef)neighbor);
             } catch (...) {
               Log_e(@"Unknown Error");
               resultSuccess[idx] = 0;
-              resultMats[idx] = frame;
-              CFRetain((__bridge CFTypeRef)frame);
+              resultMats[idx] = neighbor;
+              CFRetain((__bridge CFTypeRef)neighbor);
             }
           }
         });
