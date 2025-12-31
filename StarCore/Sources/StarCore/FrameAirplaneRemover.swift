@@ -627,8 +627,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
       of type: FrameViewMode,
       withFailedType failedType: FrameViewMode? = nil
     ) async throws -> AlignmentResult {
-        var isEarth = false
-
         var alignmentType: AlignmentType = .sky
         
         switch type {
@@ -834,7 +832,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
             
-            Log.d("frame \(frameIndex) doing real alignment for earth \(isEarth)")
+            Log.d("frame \(frameIndex) doing real alignment for type \(alignmentType)")
             // do real alignment
 
             let request = AlignmentRequest(
