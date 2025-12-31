@@ -13,6 +13,12 @@
                      maxKeypoints:(int)maxKeypoints
                  outlierThreshold:(double)k
                  writeDebugImages:(BOOL)writeDebugImages
+           groundHorizonExtension:(int)groundHorizonExtension
+              skyHorizonExtension:(int)skyHorizonExtension
+              baseImageDilateSize:(int)baseImageDilateSize
+          baseImageThresholdValue:(int)baseImageThresholdValue
+               neighborDilateSize:(int)neighborDilateSize
+           neighborThresholdValue:(int)neighborThresholdValue
 {
 
   self.baseImage = baseImage;
@@ -28,7 +34,13 @@
   self.maxKeypoints = maxKeypoints;
   self.k = k;
   self.writeDebugImages = writeDebugImages;
+  self.skyHorizonExtension = skyHorizonExtension;
 
+  self.groundHorizonExtension = groundHorizonExtension;
+  self.baseImageDilateSize = baseImageDilateSize;
+  self.baseImageThresholdValue = baseImageThresholdValue;
+  self.neighborDilateSize = neighborDilateSize;
+  self.neighborThresholdValue = neighborThresholdValue;
   return self;
 }
 @end

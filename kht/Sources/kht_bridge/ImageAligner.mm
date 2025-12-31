@@ -452,22 +452,21 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 /***
  * Main alignment method. 
  *
- * Aligns array of 'frames' to 'baseImage'.
+ * Aligns array of 'neighbors' to 'baseImage'.
  * The 'mask' is a binary mask with zero for the ground and non-zero for the sky
  * 
  * Returns an AlignmentResult with:
  *  - a list of properly aligned frames
  *  - a list of frames where alignment was not successful
  *
- * Uses different logic for sky and earth alignment, invertMask governs that. 
+ * Uses different logic for sky and earth alignment, alignmentType governs that.
+ *
+ * returns string errors when there is a problem
  */
 + (id _Nullable)alignWithRequest:(AlignmentRequest * _Nonnull)request {
 
   @try {
     try {
-      // how far vertically to extend the horizon mask when inverted
-      int horizonExtension = 100; // XXX make this a parameter?
-
       // how many threads opencv can use
       //    cv::setNumThreads(36);    // XXX make this a parameter?
 
@@ -500,7 +499,8 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 
         // for the ground, we make the horizon mask include a bit above the horizon,
         // which leads to better keypoints down the road
-        horizonMask = createGradientMaskIntoSky(horizonMask.mat, horizonExtension);
+        horizonMask = createGradientMaskIntoSky(horizonMask.mat,
+                                                request.groundHorizonExtension);
       }
 
       // Prepare grayscale baseImage frame with the horizon mask
@@ -531,8 +531,8 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
         // dilate further to expand keypoint detection area
         // threshold is 0..0xFF for what is considered bright
         detectionMask = makeStarMask(baseImageGray.mat,
-                                     /*dilateSize=*/20,     // XXX make parameter
-                                     /*thresholdVal=*/100); // XXX make parameter
+                                     request.baseImageDilateSize,
+                                     request.baseImageDilateSize);
       }
 
       // Detector and matcher (we'll compute kpBaseImage & descBaseImage once, reused read-only)
@@ -661,7 +661,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                 horizon = horizon.clone();
                 // attempt to exclude the horizon from the sky area
                 // so key points are not detected there 
-                growBlack(horizon, 40); // XXX make this a parameter
+                growBlack(horizon, request.skyHorizonExtension);
               }
 
               //cv::imwrite("/tmp/horizon_b_" + std::to_string(idx) + ".tiff", horizon);
@@ -699,10 +699,9 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 
               if (request.alignmentType == AlignmentTypeSky) {
                 // detection mask is a star mask for the sky
-                // XXX make the dilate size and threshold value parameters
                 localDetectionMask = makeStarMask(neighborGray.mat,
-                                                  /*dilateSize=*/20,    // XXX make parameter
-                                                  /*thresholdVal=*/20); // XXX make parameter
+                                                  request.neighborDilateSize,
+                                                  request.neighborThresholdValue);
               
                 //cv::imwrite("/tmp/star_mask_" + std::to_string(idx) + ".tiff", localDetectionMask.mat);
               
@@ -728,8 +727,8 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                 sift->detectAndCompute(neighborGray.mat, localDetectionMask.mat, kpNeighbor, descNeighbor);
               }
 
-              // XXX save localDetectionMask.mat if desired
               if(request.writeDebugImages) {
+                // save localDetectionMask.mat if desired
                 if(request.alignmentType == AlignmentTypeEarth) {
                   cv::imwrite("/tmp/detectionMask_earth_frame_" +
                               std::to_string(request.frameIndex) +
@@ -910,7 +909,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                     (maxCornerDist < request.maxCornerDeviation);
 
                   // keep track of warp info 
-                       AlignmentWarpInfo *info =
+                  AlignmentWarpInfo *info =
                        [[AlignmentWarpInfo alloc]
                          initWithHomography:HWrapper
                                   deviation:deviation
@@ -1160,6 +1159,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
     }
   } @catch (NSException *exception) {
     Log_e(@"Objective-C Exception: %@", exception);
+    return [NSString stringWithFormat:@"Objective-C Exception: %@", exception];
   }
 }
 

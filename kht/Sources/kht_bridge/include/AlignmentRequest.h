@@ -19,6 +19,12 @@
 @property(nonatomic, assign) AlignmentType alignmentType;
 @property(nonatomic, assign) BOOL writeDebugImages;
 @property(nonatomic, assign) int maxKeypoints;
+@property(nonatomic, assign) int groundHorizonExtension;
+@property(nonatomic, assign) int skyHorizonExtension;
+@property(nonatomic, assign) int baseImageDilateSize;
+@property(nonatomic, assign) int baseImageThresholdValue;
+@property(nonatomic, assign) int neighborDilateSize;
+@property(nonatomic, assign) int neighborThresholdValue;
 @property(nonatomic, assign) double k;
 
 - (instancetype _Nonnull)initWithBaseImage:(MatWrapper * _Nonnull)baseImage
@@ -32,7 +38,13 @@
                              alignmentType:(AlignmentType)alignmentType
                               maxKeypoints:(int)maxKeypoints
                           outlierThreshold:(double)k
-                          writeDebugImages:(BOOL)writeDebugImages;
+                          writeDebugImages:(BOOL)writeDebugImages
+                    groundHorizonExtension:(int)groundHorizonExtension
+                       skyHorizonExtension:(int)skyHorizonExtension
+                       baseImageDilateSize:(int)baseImageDilateSize
+                   baseImageThresholdValue:(int)baseImageThresholdValue
+                        neighborDilateSize:(int)neighborDilateSize
+                    neighborThresholdValue:(int)neighborThresholdValue;
 
 @end
 

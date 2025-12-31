@@ -846,7 +846,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               alignmentType: alignmentType,       // earth is zero in mask
               maxKeypoints: 2000,         // XXX hardcoded constant
               outlierThreshold: pixelThreshold,
-              writeDebugImages: false
+              writeDebugImages: false,
+              groundHorizonExtension: 100, // extend the horizon for ground by this amount to get more keypoints
+              skyHorizonExtension: 60,
+              baseImageDilateSize: 20,
+              baseImageThresholdValue: 100,
+              neighborDilateSize: 20,
+              neighborThresholdValue: 20
             )
             
             if let result = ImageAligner.align(with: request) {
