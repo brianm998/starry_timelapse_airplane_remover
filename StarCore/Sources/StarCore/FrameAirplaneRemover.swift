@@ -841,18 +841,18 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               neighbors: neighbors,
               matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
               mask: horizonMask?.image.mat,
-              maxDeviation: 45, // maximum warping deviation from identity (GUESSED)
-              maxCornerDeviation: 70, // similar to max deviation, but for the corners
+              maxDeviation: config.alignmentMaxDeviation, // maximum warping deviation from identity
+              maxCornerDeviation: config.alignmentMaxCornerDeviation, // similar to max deviation, but for the corners
               alignmentType: alignmentType,       // earth is zero in mask
-              maxKeypoints: 2000,         // XXX hardcoded constant
+              maxKeypoints: Int32(config.alignmentMaxKeypoints), 
               outlierThreshold: pixelThreshold,
-              writeDebugImages: false,
-              groundHorizonExtension: 100, // extend the horizon for ground by this amount to get more keypoints
-              skyHorizonExtension: 60,
-              baseImageDilateSize: 20,
-              baseImageThresholdValue: 100,
-              neighborDilateSize: 20,
-              neighborThresholdValue: 20
+              writeDebugImages: config.alignmentWriteDebugImages,
+              groundHorizonExtension: Int32(config.alignmentGroundHorizonExtension), // extend the horizon for ground by this amount to get more keypoints
+              skyHorizonExtension: Int32(config.alignmentSkyHorizonExtension),
+              baseImageDilateSize: Int32(config.alignmentBaseImageDilateSize),
+              baseImageThresholdValue: Int32(config.alignmentBaseImageThresholdValue),
+              neighborDilateSize: Int32(config.alignmentNeighborDilateSize),
+              neighborThresholdValue: Int32(config.alignmentNeighborThresholdValue)
             )
             
             if let result = ImageAligner.align(with: request) {

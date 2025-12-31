@@ -289,6 +289,17 @@ public struct Config: Codable, Sendable, Transferable {
     // earth aligned images
     public var earthAlignedImageCropAmount: Int?
     
+    public var alignmentMaxDeviation: Double = 45 // maximum warping deviation from identity (GUESSED)
+    public var alignmentMaxCornerDeviation: Double = 70 // similar to max deviation but for the corners
+    public var alignmentMaxKeypoints: Int = 2000
+    public var alignmentWriteDebugImages: Bool = false
+    public var alignmentGroundHorizonExtension: Int = 100 // extend the horizon for ground by this amount to get more keypoints
+    public var alignmentSkyHorizonExtension: Int = 40
+    public var alignmentBaseImageDilateSize: Int = 20
+    public var alignmentBaseImageThresholdValue: Int = 100
+    public var alignmentNeighborDilateSize: Int = 20
+    public var alignmentNeighborThresholdValue: Int = 20
+    
     mutating public func set(videoInfo: VideoInfo) {
         self.frameRate = videoInfo.frameRate
         self.codec = videoInfo.codec
@@ -340,6 +351,22 @@ public struct Config: Codable, Sendable, Transferable {
         self.horizonVerticalShiftAmount = try c.decodeIfPresent(Int.self, forKey: .horizonVerticalShiftAmount) ?? self.horizonVerticalShiftAmount
         
         self.earthAlignedImageCropAmount = try c.decodeIfPresent(Int.self, forKey: .earthAlignedImageCropAmount)
+
+        
+
+        self.alignmentMaxDeviation = try c.decodeIfPresent(Double.self, forKey: .alignmentMaxDeviation) ?? self.alignmentMaxDeviation
+        self.alignmentMaxCornerDeviation = try c.decodeIfPresent(Double.self, forKey: .alignmentMaxCornerDeviation) ?? self.alignmentMaxCornerDeviation
+        self.alignmentMaxKeypoints = try c.decodeIfPresent(Int.self, forKey: .alignmentMaxKeypoints) ?? self.alignmentMaxKeypoints
+        self.alignmentWriteDebugImages = try c.decodeIfPresent(Bool.self, forKey: .alignmentWriteDebugImages) ?? self.alignmentWriteDebugImages
+        self.alignmentGroundHorizonExtension = try c.decodeIfPresent(Int.self, forKey: .alignmentGroundHorizonExtension) ?? self.alignmentGroundHorizonExtension
+        self.alignmentSkyHorizonExtension = try c.decodeIfPresent(Int.self, forKey: .alignmentSkyHorizonExtension) ?? self.alignmentSkyHorizonExtension
+        self.alignmentBaseImageDilateSize = try c.decodeIfPresent(Int.self, forKey: .alignmentBaseImageDilateSize) ?? self.alignmentBaseImageDilateSize
+        self.alignmentBaseImageThresholdValue = try c.decodeIfPresent(Int.self, forKey: .alignmentBaseImageThresholdValue) ?? self.alignmentBaseImageThresholdValue
+        self.alignmentNeighborDilateSize = try c.decodeIfPresent(Int.self, forKey: .alignmentNeighborDilateSize) ?? self.alignmentNeighborDilateSize
+        self.alignmentNeighborThresholdValue = try c.decodeIfPresent(Int.self, forKey: .alignmentNeighborThresholdValue) ?? self.alignmentNeighborThresholdValue
+        
+        
+        
 
         self.starVersion = try c.decodeIfPresent(String.self, forKey: .starVersion) ?? self.starVersion
 
