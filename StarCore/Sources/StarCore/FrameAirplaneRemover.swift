@@ -739,8 +739,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         var neighborFilenames: [String] = []
         var neighborMaskFilenames: [String] = []
+        var neighborIndices: [Int] = []
         
         for neighborIndex in alignmentFilenames.keys {
+            neighborIndices.append(neighborIndex)
             if let filename = self.imageAccessor.nameForImage(
                  frameIndex: neighborIndex,
                  ofType: .original,
@@ -811,6 +813,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             alignmentResult = originalFrame.align(
               frameFilenames: neighborFilenames,
               frameMaskFilenames: neighborMaskFilenames,
+              frameIndices: neighborIndices,
               masked: horizonMask?.image,
               matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
               invertMask: isEarth,       // earth is zero in mask

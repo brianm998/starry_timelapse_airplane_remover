@@ -482,6 +482,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 + (id)alignFrames:(MatWrapper *)special
            frames:(NSArray<NSString *> *)frameFilenames
        frameMasks:(NSArray<NSString *> *)frameMaskFilenames
+     frameIndices:(NSArray<NSNumber *> * _Nonnull)frameIndices
       matchMethod:(FeatureMatchMethod)matchMethod
              mask:(MatWrapper *)mask // assumed to be zero for ground, non-zero for sky
      maxDeviation:(double)maxDeviation
@@ -732,7 +733,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                       alignmentState:AlignmentStateObjCUnableToDetectKeypoints
                    neighborKeyPoints:0
                       frameKeyPoints:0
-                          frameIndex:idx];
+                          frameIndex:frameIndices[idx].integerValue];
 
               warpInfos[idx] = info;
               CFRetain((__bridge CFTypeRef)info);
@@ -880,7 +881,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                           alignmentState:AlignmentStateObjCHomographySuccess
                        neighborKeyPoints:ptsFrame.size()
                           frameKeyPoints:ptsSpecial.size()
-                              frameIndex:idx];
+                              frameIndex:frameIndices[idx].integerValue];
 
                   warpInfos[idx] = info;
                   CFRetain((__bridge CFTypeRef)info);
@@ -929,7 +930,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                             alignmentState:AlignmentStateObjCHomographySuccess
                          neighborKeyPoints:ptsFrame.size()
                             frameKeyPoints:ptsSpecial.size()
-                                frameIndex:idx];
+                                frameIndex:frameIndices[idx].integerValue];
 
                     warpInfos[idx] = info;
                     CFRetain((__bridge CFTypeRef)info);
@@ -947,7 +948,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                           alignmentState:AlignmentStateObjCNoHomographyFound
                        neighborKeyPoints:0
                           frameKeyPoints:ptsSpecial.size()
-                              frameIndex:idx];
+                              frameIndex:frameIndices[idx].integerValue];
 
                   warpInfos[idx] = info;
                   CFRetain((__bridge CFTypeRef)info);
@@ -963,7 +964,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                       alignmentState:AlignmentStateObjCNotEnoughKeypoints
                    neighborKeyPoints:0
                       frameKeyPoints:ptsSpecial.size()
-                          frameIndex:idx];
+                          frameIndex:frameIndices[idx].integerValue];
 
               warpInfos[idx] = info;
               CFRetain((__bridge CFTypeRef)info);

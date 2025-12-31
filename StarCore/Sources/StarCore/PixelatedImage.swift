@@ -915,6 +915,7 @@ extension PixelatedImage {
     public func align(
       frameFilenames: [String],
       frameMaskFilenames: [String],
+      frameIndices: [Int],      // parallel frameIndex values for the above 
       masked mask: PixelatedImage? = nil,
       matchMethod: FeatureMatchMethod, // .knnLowes or .FLANN or .bruteForce
       maxDeviation: Double = 45, // maximum warping deviation from identity (GUESSED)
@@ -935,6 +936,7 @@ extension PixelatedImage {
              self.mat,
              frames: frameFilenames,
              frameMasks: frameMaskFilenames,
+             frameIndices: frameIndices.map { NSNumber(value: $0) },
              matchMethod: matchMethod,//.knnLowes, // .knnLowes or .FLANN or .bruteForce
              mask: maskMat,
              maxDeviation: maxDeviation,

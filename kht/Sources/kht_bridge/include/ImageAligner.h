@@ -52,13 +52,14 @@ typedef NS_ENUM(NSInteger, FeatureMatchMethod) {
 + (id _Nullable)alignFrames:(MatWrapper * _Nonnull)special
                      frames:(NSArray<NSString *> * _Nonnull)frameFilenames
                  frameMasks:(NSArray<NSString *> * _Nonnull)frameMaskFilenames
+               frameIndices:(NSArray<NSNumber *> * _Nonnull)frameIndices
                 matchMethod:(FeatureMatchMethod)matchMethod
                        mask:(MatWrapper * _Nullable)mask // assumed to be zero for ground, non-zero for sky
-     maxDeviation:(double)maxDeviation
-maxCornerDeviation:(double)maxCornerDeviation
-       invertMask:(BOOL)invertMask
-     maxKeypoints:(int)maxKeypoints
- outlierThreshold:(double)k;
+               maxDeviation:(double)maxDeviation
+         maxCornerDeviation:(double)maxCornerDeviation
+                 invertMask:(BOOL)invertMask
+               maxKeypoints:(int)maxKeypoints
+           outlierThreshold:(double)k;
 
 +(MatWrapper * _Nonnull)createGradientMaskIntoSky:(MatWrapper* _Nonnull)binaryMask
                                  gradientDistance:(int)gradientDistance;
