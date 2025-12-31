@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #import "FeatureMatchMethod.h"
+#import "AlignmentType.h"
 #import "AlignmentNeighborInfo.h"
 #import "MatWrapper.h"
 
@@ -15,7 +16,7 @@
 
 @property(nonatomic, assign) double maxDeviation;
 @property(nonatomic, assign) double maxCornerDeviation;
-@property(nonatomic, assign) BOOL invertMask;
+@property(nonatomic, assign) AlignmentType alignmentType;
 @property(nonatomic, assign) BOOL writeDebugImages;
 @property(nonatomic, assign) int maxKeypoints;
 @property(nonatomic, assign) double k;
@@ -28,7 +29,7 @@
                                       mask:(MatWrapper * _Nullable)mask // assumed to be zero for ground, non-zero for sky
                               maxDeviation:(double)maxDeviation
                         maxCornerDeviation:(double)maxCornerDeviation
-                                invertMask:(BOOL)invertMask
+                             alignmentType:(AlignmentType)alignmentType
                               maxKeypoints:(int)maxKeypoints
                           outlierThreshold:(double)k
                           writeDebugImages:(BOOL)writeDebugImages;

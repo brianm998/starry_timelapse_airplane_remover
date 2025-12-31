@@ -475,7 +475,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
       uint32_t logID = arc4random_uniform(1000);
 
       Log_d(@"%d align neighbors %@ matchMethod %ld maxDeviation %lf maxCornerDeviation %lf invertMask %d maxKeypoints %d k %lf",
-            logID, request.neighbors, request.matchMethod, request.maxDeviation, request.maxCornerDeviation, request.invertMask, request.maxKeypoints, request.k);
+            logID, request.neighbors, request.matchMethod, request.maxDeviation, request.maxCornerDeviation, request.alignmentType == AlignmentTypeEarth, request.maxKeypoints, request.k);
       //    Log_d(@"%d align frames %@ frameMasks %@ matchMethod %d ",
       //          logID, frameFilenames, frameMaskFilenames, matchMethod);
 
@@ -494,7 +494,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 
       horizonMask = toGray8U(horizonMask);
 
-      if (request.invertMask) {
+      if (request.alignmentType == AlignmentTypeEarth) {
         // invert the mask to apply to the ground instead of the sky
         cv::bitwise_not(horizonMask.mat, horizonMask.mat);
 
@@ -509,7 +509,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                                                     true);
     
       if(request.writeDebugImages) {
-        if(request.invertMask) {
+        if(request.alignmentType == AlignmentTypeEarth) {
           cv::imwrite("/tmp/baseImage_gray_earth_frame_" +
                       std::to_string(request.frameIndex) + ".tiff",
                       baseImageGray.mat);
@@ -524,7 +524,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
       // default to deteting with the horizon mask as is
       MatWrapper * detectionMask = horizonMask;
 
-      if (!request.invertMask) {
+      if (request.alignmentType == AlignmentTypeSky) {
         // Build star mask for baseImage frame when doing sky
         // the star mask restricts keypoint detection to near bright spots in the sky
 
@@ -540,7 +540,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
       cv::Mat descBaseImage;
 
       // first detect keypoints in the baseImage frame we're aligning to
-      if (request.invertMask) {
+      if (request.alignmentType == AlignmentTypeEarth) {
         // not used for sky, only for earth
         cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(4.0, cv::Size(8,8));
 	  
@@ -576,7 +576,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 
       if(request.writeDebugImages) {
         // save detectionMask.mat if desired
-        if(request.invertMask) {
+        if(request.alignmentType == AlignmentTypeEarth) {
           cv::imwrite("/tmp/detectionMask_earth_frame_" +
                       std::to_string(request.frameIndex) +
                       ".tiff",
@@ -657,11 +657,11 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               //cv::imwrite("/tmp/horizon_a_" + std::to_string(idx) + ".tiff", horizon);
 
 
-              if (!request.invertMask) {
+              if (request.alignmentType == AlignmentTypeSky) {
                 horizon = horizon.clone();
                 // attempt to exclude the horizon from the sky area
                 // so key points are not detected there 
-                     growBlack(horizon, 40); // XXX make this a parameter
+                growBlack(horizon, 40); // XXX make this a parameter
               }
 
               //cv::imwrite("/tmp/horizon_b_" + std::to_string(idx) + ".tiff", horizon);
@@ -673,7 +673,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                                                         true);
 
               if(request.writeDebugImages) {
-                if(request.invertMask) {
+                if(request.alignmentType == AlignmentTypeEarth) {
                   cv::imwrite("/tmp/frame_gray_earth_frame_" +
                               std::to_string(request.frameIndex) + 
                               "_neighbor_" +
@@ -697,7 +697,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 
               MatWrapper * localDetectionMask = horizonMask;
 
-              if (!request.invertMask) {
+              if (request.alignmentType == AlignmentTypeSky) {
                 // detection mask is a star mask for the sky
                 // XXX make the dilate size and threshold value parameters
                 localDetectionMask = makeStarMask(frameGray.mat,
@@ -710,7 +710,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               }
 
               // create local detector/matcher/clahe instances so they are thread-local
-              if (request.invertMask) {
+              if (request.alignmentType == AlignmentTypeEarth) {
                 // ground: AKAZE + CLAHE + gamma
                 if(!clahe) clahe = cv::createCLAHE(4.0, cv::Size(8,8));
                 cv::Mat claheOut;
@@ -730,7 +730,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 
               // XXX save localDetectionMask.mat if desired
               if(request.writeDebugImages) {
-                if(request.invertMask) {
+                if(request.alignmentType == AlignmentTypeEarth) {
                   cv::imwrite("/tmp/detectionMask_earth_frame_" +
                               std::to_string(request.frameIndex) +
                               "_neighbor_" +

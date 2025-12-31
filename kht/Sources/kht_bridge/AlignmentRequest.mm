@@ -9,7 +9,7 @@
                              mask:(MatWrapper * _Nullable)mask // assumed to be zero for ground, non-zero for sky
                      maxDeviation:(double)maxDeviation
                maxCornerDeviation:(double)maxCornerDeviation
-                       invertMask:(BOOL)invertMask
+                    alignmentType:(AlignmentType)alignmentType
                      maxKeypoints:(int)maxKeypoints
                  outlierThreshold:(double)k
                  writeDebugImages:(BOOL)writeDebugImages
@@ -24,7 +24,7 @@
 
   self.maxDeviation = maxDeviation;
   self.maxCornerDeviation = maxCornerDeviation;
-  self.invertMask = invertMask;
+  self.alignmentType = alignmentType;
   self.maxKeypoints = maxKeypoints;
   self.k = k;
   self.writeDebugImages = writeDebugImages;

@@ -628,12 +628,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
       withFailedType failedType: FrameViewMode? = nil
     ) async throws -> AlignmentResult {
         var isEarth = false
+
+        var alignmentType: AlignmentType = .sky
         
         switch type {
         case .starAligned:
-            isEarth = false
+            alignmentType = .sky
         case .earthAligned:
-            isEarth = true
+            alignmentType = .earth
         default:
             throw "unable to loadOrCreateAlignedImage of type \(type)"
         }
@@ -649,17 +651,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             
             let horizonMask = try await self.loadMergedHorizonMask()
             var results: FrameAlignmentResults? = nil
-            if isEarth {
+            switch alignmentType {
+            case .earth:
                 results = await self.readNumberOfEarthAlignedImagesForThisFrame()
                 if let results {
                     await observer?.set(earthAlignmentResults: results)
                 }
-            } else {
+            case .sky:
                 results = await self.readNumberOfStarAlignedImagesForThisFrame()
                 if let results {
                     await observer?.set(starAlignmentResults: results)
                 }
-            }                
+            default:
+                break
+            }
+
+            // XXX load this result from file too
             
             return AlignmentResult(
               alignedMat: alignedFrame.mat,
@@ -680,16 +687,19 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     Log.d("frame \(frameIndex) trying to load image of type \(failedType) because we were unable to load image of type \(type)")
                     let horizonMask = try await self.loadMergedHorizonMask()
                     var results: FrameAlignmentResults? = nil
-                    if isEarth {
+                    switch alignmentType {
+                    case .earth:
                         results = await self.readNumberOfEarthAlignedImagesForThisFrame()
                         if let results {
                             await observer?.set(earthAlignmentResults: results)
                         }
-                    } else {
+                    case .sky:
                         results = await self.readNumberOfStarAlignedImagesForThisFrame()
                         if let results {
                             await observer?.set(starAlignmentResults: results)
                         }
+                    default:
+                        break
                     }                
                     Log.d("frame \(frameIndex) successfully loaded failed image of type \(failedType)")
                     
@@ -746,7 +756,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                  atSize: .original
                )
             {
-                if isEarth {
+                switch alignmentType {
+                case .earth:
                     if let maskFilename = self.imageAccessor.nameForImage(
                          frameIndex: neighborIndex,
                          ofType: .horizon,
@@ -763,7 +774,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     } else {
                         Log.w("frame \(frameIndex) unable to get filename mask original image at frame index \(neighborIndex)")
                     }
-                } else {
+                case .sky:
                     neighbors.append(
                       AlignmentNeighborInfo(
                         filename: filename,
@@ -771,6 +782,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         frameIndex: Int32(neighborIndex)
                       )
                     )
+                default:
+                    break
                 }
             } else {
                 Log.w("frame \(frameIndex) unable to get filename for original image at frame index \(neighborIndex)")
@@ -781,7 +794,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         var alignmentResult: AlignmentResult? = nil
         
-        if isEarth,
+        if alignmentType == .earth,
            !config.tripodHeadWasMoving
         {
             Log.d("frame \(frameIndex) not aliging earth, just merging") 
@@ -832,7 +845,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               mask: horizonMask?.image.mat,
               maxDeviation: 45, // maximum warping deviation from identity (GUESSED)
               maxCornerDeviation: 70, // similar to max deviation, but for the corners
-              invertMask: isEarth,       // earth is zero in mask
+              alignmentType: alignmentType,       // earth is zero in mask
               maxKeypoints: 2000,         // XXX hardcoded constant
               outlierThreshold: pixelThreshold,
               writeDebugImages: false
