@@ -509,6 +509,87 @@ public final class ImageSequenceViewModel {
             config.update(realConfig)
         }
     }
+
+
+    public var alignmentMaxDeviation: Double {
+        didSet {
+            var realConfig = config.config()
+            realConfig.alignmentMaxDeviation = alignmentMaxDeviation
+            config.update(realConfig)
+        }
+    }
+
+    public var alignmentMaxCornerDeviation: Double {
+        didSet {
+            var realConfig = config.config()
+            realConfig.alignmentMaxCornerDeviation = alignmentMaxCornerDeviation
+            config.update(realConfig)
+        }
+    }
+    
+    public var alignmentMaxKeypoints: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.alignmentMaxKeypoints = alignmentMaxKeypoints
+            config.update(realConfig)
+        }
+    }
+    
+    public var alignmentWriteDebugImages: Bool {
+        didSet {
+            var realConfig = config.config()
+            realConfig.alignmentWriteDebugImages = alignmentWriteDebugImages
+            config.update(realConfig)
+        }
+    }
+    
+    public var alignmentGroundHorizonExtension: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.alignmentGroundHorizonExtension = alignmentGroundHorizonExtension
+            config.update(realConfig)
+        }
+    }
+    
+    public var alignmentSkyHorizonExtension: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.alignmentSkyHorizonExtension = alignmentSkyHorizonExtension
+            config.update(realConfig)
+        }
+    }
+    
+    public var alignmentBaseImageDilateSize: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.alignmentBaseImageDilateSize = alignmentBaseImageDilateSize
+            config.update(realConfig)
+        }
+    }
+    
+    public var alignmentBaseImageThresholdValue: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.alignmentBaseImageThresholdValue = alignmentBaseImageThresholdValue
+            config.update(realConfig)
+        }
+    }
+    
+    public var alignmentNeighborDilateSize: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.alignmentNeighborDilateSize = alignmentNeighborDilateSize
+            config.update(realConfig)
+        }
+    }
+    
+    public var alignmentNeighborThresholdValue: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.alignmentNeighborThresholdValue = alignmentNeighborThresholdValue
+            config.update(realConfig)
+        }
+    }
     
     var maxConcurrentHorizonCalculations: Int {
         didSet {
@@ -696,6 +777,18 @@ public final class ImageSequenceViewModel {
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.maxConcurrentHorizonCalculations = config.maxConcurrentHorizonCalculations
         self.horizonVerticalShiftAmount = config.horizonVerticalShiftAmount
+        self.alignmentMaxDeviation = config.alignmentMaxDeviation
+
+        self.alignmentMaxCornerDeviation = config.alignmentMaxCornerDeviation 
+        self.alignmentMaxKeypoints = config.alignmentMaxKeypoints
+        self.alignmentWriteDebugImages = config.alignmentWriteDebugImages
+        self.alignmentGroundHorizonExtension = config.alignmentGroundHorizonExtension
+        self.alignmentSkyHorizonExtension = config.alignmentSkyHorizonExtension
+        self.alignmentBaseImageDilateSize = config.alignmentBaseImageDilateSize
+        self.alignmentBaseImageThresholdValue = config.alignmentBaseImageThresholdValue
+        self.alignmentNeighborDilateSize = config.alignmentNeighborDilateSize
+        self.alignmentNeighborThresholdValue = config.alignmentNeighborThresholdValue
+
         self.config = configManager
 
 //        self.earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? 0
