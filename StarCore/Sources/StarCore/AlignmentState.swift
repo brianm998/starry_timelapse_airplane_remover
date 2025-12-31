@@ -6,6 +6,7 @@ public enum AlignmentState: Int, Codable, CaseIterable, Sendable {
     case notEnoughKeypoints
     case noHomographyFound
     case homographySuccess
+    case noAlignment
     case unknown
 
     // MARK: - Init from Objective-C enum

@@ -6,7 +6,8 @@ typedef NS_ENUM(NSInteger, AlignmentStateObjC) {
     AlignmentStateObjCNotEnoughKeypoints      = 1,
     AlignmentStateObjCNoHomographyFound       = 2,
     AlignmentStateObjCHomographySuccess       = 3,
-    AlignmentStateObjCUnknown                 = 4,
+    AlignmentStateObjCNoAlignment             = 4,
+    AlignmentStateObjCUnknown                 = 5,
 };
 
 @interface AlignmentWarpInfo : NSObject
@@ -42,5 +43,8 @@ typedef NS_ENUM(NSInteger, AlignmentStateObjC) {
                           neighborKeyPoints:(int)neighborKeyPoints
                              frameKeyPoints:(int)frameKeyPoints
                                  frameIndex:(NSUInteger)frameIndex;
+
+- (instancetype _Nonnull)initForNoWarpWithFrameIndex:(NSUInteger)frameIndex;
+
 
 @end

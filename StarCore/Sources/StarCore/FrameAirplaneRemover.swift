@@ -801,9 +801,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 
                 alignmentResult = AlignmentResult(
                   alignedMat: mergedImage.mat,
-                  alignedWarps: [], // XXXInt32(neighborFilenames.count + 1),
+                  alignedWarps: neighbors.map {
+                      AlignmentWarpInfo(
+                        forNoWarpWithFrameIndex: UInt($0.frameIndex)
+                      )
+                  },
                   failedMat: nil,
-                  failedWarps: [], // XXX 0,
+                  failedWarps: [], 
                   horizonMask: horizonMask?.image.mat
                 )
             }
@@ -816,7 +820,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     Log.d("horizon mask \(horizonMask.image.description)")
                 }
             }
-
             
             Log.d("frame \(frameIndex) doing real alignment for earth \(isEarth)")
             // do real alignment

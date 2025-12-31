@@ -25,4 +25,18 @@
     return self;
 }
 
+- (instancetype _Nonnull)initForNoWarpWithFrameIndex:(NSUInteger)frameIndex {
+    if ((self = [super init])) {
+        _homography = nil;
+        _deviation = 0;
+        _maxCornerDeviation = 0;
+        _accepted = true;
+        _frameIndex = frameIndex;
+        _alignmentState = AlignmentStateObjCNoAlignment;
+        _neighborKeyPoints = 0;
+        _frameKeyPoints = 0;
+    }
+    return self;
+}
+
 @end
