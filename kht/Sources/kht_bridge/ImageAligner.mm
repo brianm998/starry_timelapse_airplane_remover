@@ -62,70 +62,7 @@ void growBlack(cv::Mat &img, int pixels)
     cv::erode(img, img, kernel);
 }
 
-@implementation AlignmentNeighborInfo
 
-
-- (AlignmentNeighborInfo * _Nonnull)initWithFilename:(NSString * _Nonnull)filename
-                                        maskFilename:(NSString * _Nullable)maskFilename
-                                          frameIndex:(int)frameIndex
-{
-  self.filename = filename;
-  self.maskFilename = maskFilename;
-  self.frameIndex = frameIndex;
-  return self;
-}
-
-@end
-
-
-@implementation AlignmentRequest
-
-- (instancetype)initWithSpecial:(MatWrapper * _Nonnull)special
-                     frameIndex:(int)frameIndex // frame index of special
-                      neighbors:(NSArray<AlignmentNeighborInfo*> * _Nonnull)neighbors
-                    matchMethod:(FeatureMatchMethod)matchMethod
-                           mask:(MatWrapper * _Nullable)mask // assumed to be zero for ground, non-zero for sky
-                   maxDeviation:(double)maxDeviation
-             maxCornerDeviation:(double)maxCornerDeviation
-                     invertMask:(BOOL)invertMask
-                   maxKeypoints:(int)maxKeypoints
-               outlierThreshold:(double)k
-{
-
-  self.special = special;
-
-  self.frameIndex = frameIndex;
-  self.neighbors = neighbors;
-  self.matchMethod = matchMethod;
-  self.mask = mask;
-
-  self.maxDeviation = maxDeviation;
-  self.maxCornerDeviation = maxCornerDeviation;
-  self.invertMask = invertMask;
-  self.maxKeypoints = maxKeypoints;
-  self.k = k;
-
-  return self;
-}
-@end
-
-
-@implementation AlignmentResult
-
--(AlignmentResult* _Nonnull)initWithAlignedMat:(nullable MatWrapper *)alignedMat
-                                  alignedWarps:(NSArray<AlignmentWarpInfo *> *)alignedWarps
-                                     failedMat:(nullable MatWrapper *)failedMat
-                                   failedWarps:(NSArray<AlignmentWarpInfo *> *)failedWarps
-                                   horizonMask:(nullable MatWrapper *)horizonMask
-{
-  self.alignedMat = alignedMat;
-  self.alignedWarps = alignedWarps;
-  self.failedMat = failedMat;
-  self.failedWarps = failedWarps;
-  self.horizonMask = horizonMask;
-  return self;
-}
-@end
 
 // Median Merge Logic:
 // merges the provided vector of cv::Mat images with median brightness per channel
