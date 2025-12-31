@@ -8,3 +8,15 @@
                                    
 + (MatWrapper * _Nullable)loadImage:(NSString * _Nonnull)filename;
 @end
+
+
+
+/*
+
+  Make one of these for setting AlignmentState from the FrameProcessingState
+
+  make it so that the ImageAligner can update the state more often to see what is
+  taking up so much ram sometimes
+
+
+ */
