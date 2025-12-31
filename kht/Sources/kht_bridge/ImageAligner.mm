@@ -62,6 +62,53 @@ void growBlack(cv::Mat &img, int pixels)
     cv::erode(img, img, kernel);
 }
 
+@implementation AlignmentNeighborInfo
+
+
+- (AlignmentNeighborInfo * _Nonnull)initWithFilename:(NSString * _Nonnull)filename
+                                        maskFilename:(NSString * _Nullable)maskFilename
+                                          frameIndex:(int)frameIndex
+{
+  self.filename = filename;
+  self.maskFilename = maskFilename;
+  self.frameIndex = frameIndex;
+  return self;
+}
+
+@end
+
+
+@implementation AlignmentRequest
+
+- (instancetype)initWithSpecial:(MatWrapper * _Nonnull)special
+                     frameIndex:(int)frameIndex // frame index of special
+                      neighbors:(NSArray<AlignmentNeighborInfo*> * _Nonnull)neighbors
+                    matchMethod:(FeatureMatchMethod)matchMethod
+                           mask:(MatWrapper * _Nullable)mask // assumed to be zero for ground, non-zero for sky
+                   maxDeviation:(double)maxDeviation
+             maxCornerDeviation:(double)maxCornerDeviation
+                     invertMask:(BOOL)invertMask
+                   maxKeypoints:(int)maxKeypoints
+               outlierThreshold:(double)k
+{
+
+  self.special = special;
+
+  self.frameIndex = frameIndex;
+  self.neighbors = neighbors;
+  self.matchMethod = matchMethod;
+  self.mask = mask;
+
+  self.maxDeviation = maxDeviation;
+  self.maxCornerDeviation = maxCornerDeviation;
+  self.invertMask = invertMask;
+  self.maxKeypoints = maxKeypoints;
+  self.k = k;
+
+  return self;
+}
+@end
+
 
 @implementation AlignmentResult
 
@@ -482,19 +529,30 @@ const bool writeImages = false;
  *
  * Uses different logic for sky and earth alignment, invertMask governs that. 
  */
-+ (id)alignFrames:(MatWrapper *)special
-       frameIndex:(int)frameIndex // frame index of special
+
++ (id _Nullable)alignWithRequest:(AlignmentRequest * _Nonnull)request {
+
+  MatWrapper * special = request.special;
+  int frameIndex = request.frameIndex; // frame index of special
+
+  NSArray<AlignmentNeighborInfo*> * neighbors = request.neighbors;
+  
+  /*
            frames:(NSArray<NSString *> *)frameFilenames
        frameMasks:(NSArray<NSString *> *)frameMaskFilenames
      frameIndices:(NSArray<NSNumber *> * _Nonnull)frameIndices // frame indicies of frames
-      matchMethod:(FeatureMatchMethod)matchMethod
-             mask:(MatWrapper *)mask // assumed to be zero for ground, non-zero for sky
-     maxDeviation:(double)maxDeviation
-maxCornerDeviation:(double)maxCornerDeviation
-       invertMask:(BOOL)invertMask // true when processing ground, false for sky
-     maxKeypoints:(int)maxKeypoints
- outlierThreshold:(double)k
-{
+  */
+  
+  FeatureMatchMethod matchMethod = request.matchMethod;
+  
+  MatWrapper * mask = request.mask; // assumed to be zero for ground, non-zero for sky
+  double maxDeviation = request.maxDeviation;
+  double maxCornerDeviation = request.maxCornerDeviation;
+  
+  BOOL invertMask = request.invertMask; // true when processing ground, false for sky
+  int maxKeypoints = request.maxKeypoints;
+  double k = request.k;          // outlierThreshold
+
   @try {
   try {
     // how far vertically to extend the horizon mask when inverted
@@ -506,8 +564,8 @@ maxCornerDeviation:(double)maxCornerDeviation
     // random logID
     uint32_t logID = arc4random_uniform(1000);
 
-    Log_d(@"%d align frames %@ frameMasks %@ matchMethod %ld maxDeviation %lf maxCornerDeviation %lf invertMask %d maxKeypoints %d k %lf",
-          logID, frameFilenames, frameMaskFilenames, matchMethod, maxDeviation, maxCornerDeviation, invertMask, maxKeypoints, k);
+    Log_d(@"%d align neighbors %@ matchMethod %ld maxDeviation %lf maxCornerDeviation %lf invertMask %d maxKeypoints %d k %lf",
+          logID, neighbors, matchMethod, maxDeviation, maxCornerDeviation, invertMask, maxKeypoints, k);
     //    Log_d(@"%d align frames %@ frameMasks %@ matchMethod %d ",
     //          logID, frameFilenames, frameMaskFilenames, matchMethod);
 
@@ -629,7 +687,7 @@ maxCornerDeviation:(double)maxCornerDeviation
     kpSpecial.shrink_to_fit();
 
     // Preallocate per-index result storage to avoid push_back from many threads
-    const size_t n = frameFilenames.count;
+    const size_t n = neighbors.count;
 
     std::vector<MatWrapper *> resultMats(n);       // will hold warped (success) or original (failure)
     std::vector<MatWrapper *> alignedHorizonMats(n); // will hold warped (success) or original (failure) aligned horizon mats
@@ -648,9 +706,9 @@ maxCornerDeviation:(double)maxCornerDeviation
     preloadedMasks.resize(n);
 
     for (size_t i = 0; i < n; ++i) {
-      preloadedFrames[i] = [ObjcImageCache loadImage:frameFilenames[i]];
-      if (frameMaskFilenames.count > i)
-        preloadedMasks[i] = [ObjcImageCache loadImage:frameMaskFilenames[i]];
+      preloadedFrames[i] = [ObjcImageCache loadImage:neighbors[i].filename];
+      if (neighbors[i].maskFilename != nil)
+        preloadedMasks[i] = [ObjcImageCache loadImage:neighbors[i].maskFilename];
       else
         preloadedMasks[i] = nullptr;
       // Optionally CFRetain if you need to hold them past ObjC scope
@@ -676,7 +734,7 @@ maxCornerDeviation:(double)maxCornerDeviation
             continue;
           }
           MatWrapper * frameHorizon = 0;
-          if (frameMaskFilenames.count > idx) {
+          if (preloadedMasks[idx] != nil) {
             frameHorizon = preloadedMasks[idx];
           }
           try {
@@ -709,14 +767,14 @@ maxCornerDeviation:(double)maxCornerDeviation
                 cv::imwrite("/tmp/frame_gray_earth_frame_" +
                             std::to_string(frameIndex) + 
                             "_neighbor_" +
-                            std::to_string(frameIndices[idx].integerValue) + 
+                            std::to_string(neighbors[idx].frameIndex) + 
                             ".tiff",
                             frameGray.mat);
               } else {
                 cv::imwrite("/tmp/frame_gray_sky_frame_" +
                             std::to_string(frameIndex) +
                             "_neighbor_" +
-                            std::to_string(frameIndices[idx].integerValue) + 
+                            std::to_string(neighbors[idx].frameIndex) + 
                             ".tiff",
                             frameGray.mat);
               }
@@ -766,14 +824,14 @@ maxCornerDeviation:(double)maxCornerDeviation
                 cv::imwrite("/tmp/detectionMask_earth_frame_" +
                             std::to_string(frameIndex) +
                             "_neighbor_" +
-                            std::to_string(frameIndices[idx].integerValue) + 
+                            std::to_string(neighbors[idx].frameIndex) + 
                             ".tiff",
                             localDetectionMask.mat);
               } else {
                 cv::imwrite("/tmp/detectionMask_sky_frame_" +
                             std::to_string(frameIndex) +
                             "_neighbor_" +
-                            std::to_string(frameIndices[idx].integerValue) + 
+                            std::to_string(neighbors[idx].frameIndex) + 
                             ".tiff",
                             localDetectionMask.mat);
               }
@@ -803,7 +861,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                       alignmentState:AlignmentStateObjCUnableToDetectKeypoints
                    neighborKeyPoints:0
                       frameKeyPoints:0
-                          frameIndex:frameIndices[idx].integerValue];
+                          frameIndex:neighbors[idx].frameIndex];
 
               warpInfos[idx] = info;
               CFRetain((__bridge CFTypeRef)info);
@@ -951,7 +1009,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                           alignmentState:AlignmentStateObjCHomographySuccess
                        neighborKeyPoints:ptsFrame.size()
                           frameKeyPoints:ptsSpecial.size()
-                              frameIndex:frameIndices[idx].integerValue];
+                              frameIndex:neighbors[idx].frameIndex];
 
                   warpInfos[idx] = info;
                   CFRetain((__bridge CFTypeRef)info);
@@ -1000,7 +1058,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                             alignmentState:AlignmentStateObjCHomographySuccess
                          neighborKeyPoints:ptsFrame.size()
                             frameKeyPoints:ptsSpecial.size()
-                                frameIndex:frameIndices[idx].integerValue];
+                                frameIndex:neighbors[idx].frameIndex];
 
                     warpInfos[idx] = info;
                     CFRetain((__bridge CFTypeRef)info);
@@ -1018,7 +1076,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                           alignmentState:AlignmentStateObjCNoHomographyFound
                        neighborKeyPoints:0
                           frameKeyPoints:ptsSpecial.size()
-                              frameIndex:frameIndices[idx].integerValue];
+                              frameIndex:neighbors[idx].frameIndex];
 
                   warpInfos[idx] = info;
                   CFRetain((__bridge CFTypeRef)info);
@@ -1034,7 +1092,7 @@ maxCornerDeviation:(double)maxCornerDeviation
                       alignmentState:AlignmentStateObjCNotEnoughKeypoints
                    neighborKeyPoints:0
                       frameKeyPoints:ptsSpecial.size()
-                          frameIndex:frameIndices[idx].integerValue];
+                          frameIndex:neighbors[idx].frameIndex];
 
               warpInfos[idx] = info;
               CFRetain((__bridge CFTypeRef)info);

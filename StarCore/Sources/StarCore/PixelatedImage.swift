@@ -912,53 +912,6 @@ extension PixelatedImage {
         }
     }
     
-    public func align(
-      frameIndex: Int,
-      frameFilenames: [String],
-      frameMaskFilenames: [String],
-      frameIndices: [Int],      // parallel frameIndex values for the above 
-      masked mask: PixelatedImage? = nil,
-      matchMethod: FeatureMatchMethod, // .knnLowes or .FLANN or .bruteForce
-      maxDeviation: Double = 45, // maximum warping deviation from identity (GUESSED)
-      maxCornerDeviation: Double = 70, // similar to max deviation, but for the corners
-      invertMask: Bool = false, // use zero values instead of non zero values for the mask
-      maxKeypoints: Int32 = 1000,       // XXX expose this and maxDeviation as parameters to user
-      outlierThreshold: Double = 1.2
-    ) -> AlignmentResult? {
-        
-        var maskMat: MatWrapper? = nil
-        if let mask {
-            maskMat = mask.mat
-        }
-
-        Log.d("align \(self.mat)")
-        
-        if let result = ImageAligner.alignFrames(
-             self.mat,
-             frameIndex: Int32(frameIndex),
-             frames: frameFilenames,
-             frameMasks: frameMaskFilenames,
-             frameIndices: frameIndices.map { NSNumber(value: $0) },
-             matchMethod: matchMethod,//.knnLowes, // .knnLowes or .FLANN or .bruteForce
-             mask: maskMat,
-             maxDeviation: maxDeviation,
-             maxCornerDeviation: maxCornerDeviation,
-             invertMask: invertMask,
-             maxKeypoints: maxKeypoints,
-             outlierThreshold: outlierThreshold
-           )
-        {
-            if let error = result as? String {
-                Log.e("error: \(error)")
-            } else if let result = result as? kht_bridge.AlignmentResult {
-                return result
-            } else {
-                Log.e("cannot handle aligned result \(result)")
-            }
-        }
-        return nil
-    }
-
     // move image up vertically by some number of pixels
     public func shiftImageUp(by pixels: Int) -> PixelatedImage? {
         let result = PixelatedImageBridge.shiftImageUp(

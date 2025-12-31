@@ -737,33 +737,43 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         Log.d("frame \(frameIndex) original frame \(originalFrame.description)")
 
-        var neighborFilenames: [String] = []
-        var neighborMaskFilenames: [String] = []
-        var neighborIndices: [Int] = []
+        var neighbors: [AlignmentNeighborInfo] = []
         
         for neighborIndex in alignmentFilenames.keys {
-            neighborIndices.append(neighborIndex)
             if let filename = self.imageAccessor.nameForImage(
                  frameIndex: neighborIndex,
                  ofType: .original,
                  atSize: .original
                )
             {
-                neighborFilenames.append(filename)
+                if isEarth {
+                    if let maskFilename = self.imageAccessor.nameForImage(
+                         frameIndex: neighborIndex,
+                         ofType: .horizon,
+                         atSize: .original
+                       )
+                    {
+                        neighbors.append(
+                          AlignmentNeighborInfo(
+                            filename: filename,
+                            maskFilename: maskFilename,
+                            frameIndex: Int32(neighborIndex)
+                          )
+                        )
+                    } else {
+                        Log.w("frame \(frameIndex) unable to get filename mask original image at frame index \(neighborIndex)")
+                    }
+                } else {
+                    neighbors.append(
+                      AlignmentNeighborInfo(
+                        filename: filename,
+                        maskFilename: nil,
+                        frameIndex: Int32(neighborIndex)
+                      )
+                    )
+                }
             } else {
                 Log.w("frame \(frameIndex) unable to get filename for original image at frame index \(neighborIndex)")
-            }
-
-            if isEarth,
-               let filename = self.imageAccessor.nameForImage(
-                 frameIndex: neighborIndex,
-                 ofType: .horizon,
-                 atSize: .original
-               )
-            {
-                neighborMaskFilenames.append(filename)
-            } else {
-                Log.w("frame \(frameIndex) unable to get filename mask original image at frame index \(neighborIndex)")
             }
         }
 
@@ -779,7 +789,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // just median merge them all
             
             if let mergedImage = originalFrame.medianMerge(
-                 with: neighborFilenames,
+                 with: neighbors.map { $0.filename },
                  outlierThreshold: pixelThreshold
                )
             {
@@ -810,17 +820,29 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             
             Log.d("frame \(frameIndex) doing real alignment for earth \(isEarth)")
             // do real alignment
-            alignmentResult = originalFrame.align(
-              frameIndex: frameIndex,
-              frameFilenames: neighborFilenames,
-              frameMaskFilenames: neighborMaskFilenames,
-              frameIndices: neighborIndices,
-              masked: horizonMask?.image,
+
+            let request = AlignmentRequest(
+              special: originalFrame.mat,
+              frameIndex: Int32(frameIndex),
+              neighbors: neighbors,
               matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
+              mask: horizonMask?.image.mat,
+              maxDeviation: 45, // maximum warping deviation from identity (GUESSED)
+              maxCornerDeviation: 70, // similar to max deviation, but for the corners
               invertMask: isEarth,       // earth is zero in mask
               maxKeypoints: 2000,         // XXX hardcoded constant
               outlierThreshold: pixelThreshold
             )
+            
+            if let result = ImageAligner.align(with: request) {
+                if let error = result as? String {
+                    Log.e("error: \(error)")
+                } else if let result = result as? kht_bridge.AlignmentResult {
+                    alignmentResult = result
+                } else {
+                    Log.e("cannot handle aligned result \(result)")
+                }
+            }
         }
         Log.i("frame \(frameIndex) got alignment result \(alignmentResult) for type \(type)")
         guard let alignmentResult else {
