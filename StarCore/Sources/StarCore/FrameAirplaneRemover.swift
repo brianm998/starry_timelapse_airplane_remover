@@ -1283,7 +1283,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             Log.e("frame \(frameIndex) Cannot selective finish without a successful or failed star alignment image")
             throw "frame \(frameIndex) Cannot selective finish without a successful or failed star alignment image"
         }
-        let format = image.imageData
+        let format = image.ensure16Bits.imageData
 
         switch format {
         case .thirtyTwoBit(_):
@@ -1291,6 +1291,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 
         case .eightBit(_):
             Log.e("8 bit not supported here now")
+            
         case .sixteenBit(let outputData):
             Log.d("frame \(self.frameIndex) removing airplanes")
 
@@ -2713,7 +2714,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             
             Log.i("frame \(self.frameIndex) finishing")
 
-            let format = autoProcessedImage.imageData
+            let format = autoProcessedImage.ensure16Bits.imageData
 
             switch format {
             case .thirtyTwoBit(_):

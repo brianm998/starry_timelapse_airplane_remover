@@ -217,11 +217,12 @@ public class AbstractBlobProcessor {
         do {
             // try to load the image subtraction from a pre-processed file
 
-            if let image = try await imageAccessor.load(frameIndex: frameIndex,
+            if var image = try await imageAccessor.load(frameIndex: frameIndex,
                                                         type: .subtraction,
                                                         atSize: .original)
             {
                 Log.d("frame \(frameIndex) loaded subtraction image")
+                image = image.ensure16Bits
                 subtractionImage = image
                 switch image.imageData {
                 case .sixteenBit(let buffer):
@@ -247,10 +248,12 @@ public class AbstractBlobProcessor {
         Log.d("frame \(frameIndex)")
         if subtractionImage == nil {        
             Log.d("frame \(frameIndex) creating subtraction image") 
-            let image = try await frame.loadOrCreateSubtractionImage()
+            var image = try await frame.loadOrCreateSubtractionImage()
             Log.d("frame \(frameIndex) created subtraction image") 
+            image = image.ensure16Bits
             subtractionImage = image
             switch image.imageData {
+
             case .sixteenBit(let buffer):
                 subtractionArray = Array(buffer)
             case .eightBit(_):

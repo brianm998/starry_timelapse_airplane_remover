@@ -1034,6 +1034,14 @@ extension PixelatedImage {
     }
 
     public var description: String { "PixelatedImage: \(self.mat)" }
+
+    public var ensure16Bits: PixelatedImage {
+        if self.mat.is16Bits() {
+            return self
+        } else {
+            return PixelatedImage(mat: self.mat.ensure16Bits()) ?? self
+        }
+    }
 }
     
 extension MatWrapper: @unchecked @retroactive Sendable {}
