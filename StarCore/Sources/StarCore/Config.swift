@@ -189,6 +189,8 @@ public struct Config: Codable, Sendable, Transferable {
     public var numberStaticNeighborFrames = 16 // total
     
     // this can stay this way more easily now that star supports video import to .tiff directly
+
+    // really this should be filtered with cv::haveImageReader("image.exr"); 
     public var supportedImageFileTypes = [".tif", ".tiff", "jpg", "jpeg", "png", "bmp", "ndr", "ppm", "pgm", "pdm"]
 
     // XXX use this to try to avoid running out of memory somehow
@@ -450,11 +452,14 @@ public struct Config: Codable, Sendable, Transferable {
     //        bug fixes
     //        lots of horizon calculation improvements
     // 0.10.1 save full image alignment info
+    //        add alignment params to config and UI
+    //        add support for jpeg and other file types
+    // 0.10.2 fix bug with loading 8 bit images (scale to 16 bit for now)
 
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.10.1"
+    public static let latestVersion = "0.10.2"
     
     public var basename: String {
         let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)"
