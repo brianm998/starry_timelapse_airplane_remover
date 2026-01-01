@@ -435,7 +435,14 @@ static NSUInteger _totalInstances = 0;
         Log_d(@"Loaded from filename %@", filename);
       }
 
-      return [[MatWrapper alloc] initWithMat: img];
+      if(img.depth() == CV_16U) {
+        return [[MatWrapper alloc] initWithMat: img];
+      } else {
+        // ensure that we load as 16 bit
+        cv::Mat img16;
+        img.convertTo(img16, CV_16U, 256.0);
+        return [[MatWrapper alloc] initWithMat: img16];
+      }
     } catch (const cv::Exception &e) {
       Log_e(@"OpenCV Exception: %s", e.what());
     }
