@@ -198,8 +198,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     
     nonisolated public let width: Int
     nonisolated public let height: Int
-    nonisolated public let bytesPerPixel: Int
-    nonisolated public let bytesPerRow: Int
+    nonisolated public let componentsPerPixel: Int
     nonisolated public let frameIndex: Int
 
     // populated by pruning
@@ -335,7 +334,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public init(with configManager: ConfigManager,
                 width: Int,
                 height: Int,
-                bytesPerPixel: Int,
+                componentsPerPixel: Int,
                 callbacks: Callbacks,
                 imageSequence: ImageSequence,
                 atIndex frameIndex: Int,
@@ -359,8 +358,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         self.width = width
         self.height = height
 
-        self.bytesPerPixel = bytesPerPixel
-        self.bytesPerRow = width*bytesPerPixel
+        self.componentsPerPixel = componentsPerPixel
 
         // call directly in init becuase didSet() isn't called from here :P
        
@@ -1230,8 +1228,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                      atSize: .original))
         }
 
-        guard let image = image
+        guard var image = image
         else { throw "couldn't load original file for finishing" }
+        
+        image = image.ensure16Bits
+        
         /*
         if self.writeOutputFiles {
             self.set(state: .loadingImages1)
@@ -1259,8 +1260,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // only load these if we really need them
             var horizonMaskImage: PixelatedImage? = nil
             let result = try await loadOrCreateEarthAlignedImage()
-            earthAlignedImage = result.aligned
-            failedAlignedImage = result.failed
+            earthAlignedImage = result.aligned?.ensure16Bits
+            failedAlignedImage = result.failed?.ensure16Bits
             horizonMaskImage = result.horizon
               
             if let horizonMaskImage {
@@ -1275,15 +1276,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let starAlignedImage = alignmentResult.aligned
         let failedStarAlignedImage = alignmentResult.failed
 
-        var skyAlignedImage: PixelatedImage? = starAlignedImage
+        var skyAlignedImage: PixelatedImage? = starAlignedImage?.ensure16Bits
         if skyAlignedImage == nil {
-            skyAlignedImage = failedStarAlignedImage
+            skyAlignedImage = failedStarAlignedImage?.ensure16Bits
         }
         guard let skyAlignedImage else {
             Log.e("frame \(frameIndex) Cannot selective finish without a successful or failed star alignment image")
             throw "frame \(frameIndex) Cannot selective finish without a successful or failed star alignment image"
         }
-        let format = image.ensure16Bits.imageData
+        let format = image.imageData
 
         switch format {
         case .thirtyTwoBit(_):
@@ -2209,7 +2210,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         if horizonMask.isMax(atX: x, andY: y) {
             // we are in the sky
-            //Log.d("frame \(frameIndex) updating pixel [\(x), \(y)] as earth aligned")
+            //Log.d("frame \(frameIndex) updating pixel [\(x), \(y)] as sky aligned")
             self.updatePixel(
               x: x, y: y,
               alpha: alpha,
@@ -2239,25 +2240,28 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     {
         var overwritingPixel = overwritingPixel
         let op = image.readPixel(atX: x, andY: y)
+
+        //Log.d("frame \(frameIndex) updating pixel @ (\(x), \(y)) from \(op) to \(overwritingPixel) with alpha \(alpha)")
         
         if alpha < 1 {
             // merge in original value
             overwritingPixel = Pixel(merging: overwritingPixel, with: op, atAlpha: alpha)
+            //Log.d("frame \(frameIndex) updating pixel @ (\(x), \(y)) overwritingPixel is now \(overwritingPixel) after merge with alpha \(alpha)")
         }
 
         // the is the place in the image data to write to
-        let offset = (Int(y) * bytesPerRow/2) + (Int(x) * bytesPerPixel/2)
+        let offset = (Int(y) * image.bytesPerRow/2) + (Int(x) * image.bytesPerPixel/2)
 
         // actually remove that airplane like thing in the image data
-        if self.bytesPerPixel == 2 {
+        if self.componentsPerPixel == 1 {
             // one componant per pixel, binary 16 bit image
             data[offset] = overwritingPixel.red
-        } else if self.bytesPerPixel == 6 {
+        } else if self.componentsPerPixel == 3 {
             // three componants per pixel, RGB 16 bit image
             data[offset] = overwritingPixel.red
             data[offset+1] = overwritingPixel.green
             data[offset+2] = overwritingPixel.blue
-        } else if self.bytesPerPixel == 8 {
+        } else if self.componentsPerPixel == 4 {
             // four componants per pixel, RGBA 16 bit image
             data[offset] = overwritingPixel.red
             data[offset+1] = overwritingPixel.green

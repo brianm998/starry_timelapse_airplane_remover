@@ -35,6 +35,7 @@ public struct ImageInfo: Sendable {
     public let imageHeight: Int
     public let imageBytesPerPixel: Int // XXX bad name
     public let imageBitsPerComponent: Int
+    public let componentsPerPixel: Int
     public let fileExtension: String
 }
 
@@ -50,6 +51,7 @@ public actor ImageSequence {
                          imageHeight: testImage.height,
                          imageBytesPerPixel: testImage.bytesPerPixel,
                          imageBitsPerComponent: testImage.bitsPerComponent,
+                         componentsPerPixel: testImage.componentsPerPixel,
                          fileExtension: fileExtension)
     }
     

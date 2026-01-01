@@ -902,7 +902,7 @@ public final class ImageSequenceViewModel {
                         try await FrameAirplaneRemover(with: configManager,
                                                        width: imageInfo.imageWidth,
                                                        height: imageInfo.imageHeight,
-                                                       bytesPerPixel: imageInfo.imageBytesPerPixel,
+                                                       componentsPerPixel: imageInfo.componentsPerPixel,
                                                        callbacks: callbacks,
                                                        imageSequence: imageSequence,
                                                        atIndex: frameIndex,

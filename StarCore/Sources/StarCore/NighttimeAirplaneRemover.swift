@@ -315,7 +315,8 @@ public actor NighttimeAirplaneRemover {
         Log.d("startup hook starting")
         if imageWidth == nil ||
            imageHeight == nil ||
-           imageBytesPerPixel == nil
+           imageBytesPerPixel == nil ||
+           componentsPerPixel == nil
         {
             Log.d("loading first frame to get sizes")
             do {
@@ -323,6 +324,7 @@ public actor NighttimeAirplaneRemover {
                 imageWidth = imageInfo.imageWidth
                 imageHeight = imageInfo.imageHeight
                 imageBytesPerPixel = imageInfo.imageBytesPerPixel
+                componentsPerPixel = imageInfo.componentsPerPixel
 
                 // in OutlierGroup.swift
                 IMAGE_WIDTH = Double(imageInfo.imageWidth)
@@ -367,7 +369,7 @@ public actor NighttimeAirplaneRemover {
         let frame = try await FrameAirplaneRemover(with: configManager,
                                                    width: imageWidth!,
                                                    height: imageHeight!,
-                                                   bytesPerPixel: imageBytesPerPixel!,
+                                                   componentsPerPixel: componentsPerPixel!,
                                                    callbacks: callbacks,
                                                    imageSequence: imageSequence,
                                                    atIndex: index,
@@ -390,6 +392,7 @@ public actor NighttimeAirplaneRemover {
     public var imageWidth: Int?
     public var imageHeight: Int?
     public var imageBytesPerPixel: Int? // XXX bad name
+    public var componentsPerPixel: Int?
 
     func resultHook(with result: FrameAirplaneRemover) async {
 
