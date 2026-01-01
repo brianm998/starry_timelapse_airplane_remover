@@ -1316,8 +1316,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             Log.d("frame \(self.frameIndex) updating image")
             
-            if let processedImage = newImageBuffer.image {
+            if var processedImage = newImageBuffer.image {
                 // write frame out as processed versions
+
+                if config.imageBitsPerComponent == 8 {
+                    Log.d("making output image 8 bits per component")
+                    // make sure we save the image as 8 bits per component
+                    processedImage = processedImage.ensure8Bits   
+                }
                 do {
                     Log.d("frame \(self.frameIndex) processed file")
                     try await imageAccessor.saveFinal(
@@ -1429,7 +1435,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let config = await configManager.config()
         let dirname = "\(config.outlierOutputDirname)/\(frameIndex)"
 
-        return try await OutlierGroups(at: frameIndex, fromOutlierDir: dirname)
+        return try await OutlierGroups(
+          at: frameIndex,
+          fromOutlierDir: dirname,
+          config: config
+        )
     }
     
     // re-runs outlier detection within bounds with current settings
@@ -1437,7 +1447,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("shovel frame \(frameIndex) finding outliers within bounds \(bounds)")
 
         if outlierGroups == nil {
-            self.outlierGroups = OutlierGroups(frameIndex: self.frameIndex)
+            self.outlierGroups = OutlierGroups(
+              frameIndex: self.frameIndex,
+              config: await configManager.config()
+            )
         }
         
         guard let outlierGroups else {
@@ -1543,7 +1556,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
                 Log.d("frame \(frameIndex) calculating outliers")
-                self.initializeEmptyOutlierGroups()
+                await self.initializeEmptyOutlierGroups()
 
                 Log.i("calculating outlier groups for frame \(frameIndex)")
                 // find outlying bright pixels between frames,
@@ -1560,8 +1573,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         isLoadingOutliers = false
     }
 
-    public func initializeEmptyOutlierGroups() {
-        self.outlierGroups = OutlierGroups(frameIndex: frameIndex)
+    public func initializeEmptyOutlierGroups() async {
+        self.outlierGroups = OutlierGroups(
+          frameIndex: frameIndex,
+          config: await configManager.config()
+        )
     }
     
     public func foreachOutlierGroup(includingTrash: Bool,
@@ -1859,7 +1875,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func promoteDust(in boundingBox: BoundingBox) async throws -> [OutlierGroup] {
         if outlierGroups == nil {
-            self.outlierGroups = OutlierGroups(frameIndex: self.frameIndex)
+            self.outlierGroups = OutlierGroups(
+              frameIndex: self.frameIndex,
+              config: await configManager.config()
+            )
         }
         
         guard let outlierGroups else { return [] }
@@ -2378,7 +2397,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                       overlapping group: OutlierGroup) async -> Bool
     {
         if outlierGroups == nil {
-            self.outlierGroups = OutlierGroups(frameIndex: self.frameIndex)
+            self.outlierGroups = OutlierGroups(
+              frameIndex: self.frameIndex,
+              config: await configManager.config()
+            )
         }
         
         guard let outlierGroups else { return false }

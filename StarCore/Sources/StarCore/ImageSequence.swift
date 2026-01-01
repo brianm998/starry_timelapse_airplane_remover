@@ -34,6 +34,8 @@ public struct ImageInfo: Sendable {
     public let imageWidth: Int
     public let imageHeight: Int
     public let imageBytesPerPixel: Int // XXX bad name
+    public let imageBitsPerComponent: Int
+    public let fileExtension: String
 }
 
 // allows loading and caching of frames of an image sequence
@@ -41,10 +43,14 @@ public actor ImageSequence {
 
     public func getImageInfo() async throws -> ImageInfo {
         if self.filenames.count == 0 { throw "no images found"}
-        let testImage = try await self.getImage(withName: self.filenames[0]).image()
+        let filename = self.filenames[0]
+        let fileExtension = filename.components(separatedBy: ".").last ?? ".tiff" // XXX
+        let testImage = try await self.getImage(withName: filename).image()
         return ImageInfo(imageWidth: testImage.width,
                          imageHeight: testImage.height,
-                         imageBytesPerPixel: testImage.bytesPerPixel)
+                         imageBytesPerPixel: testImage.bytesPerPixel,
+                         imageBitsPerComponent: testImage.bitsPerComponent,
+                         fileExtension: fileExtension)
     }
     
     public init(dirname: String,

@@ -809,10 +809,16 @@ public final class ImageSequenceViewModel {
         Log.d("loaded image sequence")
         let imageInfo = try await imageSequence.getImageInfo()
 
+        // still needed by the decision trees :(
         IMAGE_WIDTH = Double(imageInfo.imageWidth)
         IMAGE_HEIGHT = Double(imageInfo.imageHeight)
 
-        self.earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? Int(IMAGE_HEIGHT!)/2
+        // most everything else uses the config for image sizes now
+        var updatedConfig = self.config.config()
+        updatedConfig.set(imageInfo: imageInfo)
+        self.config.update(updatedConfig)
+        
+        self.earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? Int(imageInfo.imageHeight)/2
         
         self.frameSaveQueue.viewModel = self
         
@@ -1795,9 +1801,10 @@ public final class ImageSequenceViewModel {
     {
         let totalNumberOfFrames = self.frames.count
         let rawFrameRate = frameRate.rawString
-        
-        let outputPath = config.config().outputPath
-        let basename = config.config().basename
+
+        let realConfig = config.config()
+        let outputPath = realConfig.outputPath
+        let basename = realConfig.basename
 
         /*
          # this is what the timelapse render daemon uses:
@@ -1811,7 +1818,7 @@ public final class ImageSequenceViewModel {
                   arguments: [ "-y",                  // overwrite
                     "-framerate", rawFrameRate,       // frame rate
                     "-pattern_type", "glob", "-i",    // input image glob
-                    "\(outputPath)/\(basename)/*.tiff", // input images
+                    "\(outputPath)/\(basename)/*.\(realConfig.fileExtension)", // input images
                     "-c:v", encoder.rawValue,         // encoder
                     "-pix_fmt", pixelFormat.rawValue, // pixel format
                     "-f", muxer.rawValue,             // muxer

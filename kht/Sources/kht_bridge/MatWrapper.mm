@@ -438,6 +438,20 @@ static NSUInteger _totalInstances = 0;
   }
 }
 
+- (BOOL)is8Bits {
+  return _mat.depth() == CV_8U;
+}
+
+- (MatWrapper *)ensure8Bits {
+  if(_mat.depth() != CV_8U) {
+    cv::Mat img8;
+    _mat.convertTo(img8, CV_8U, 1.0/256.0);
+    return [[MatWrapper alloc] initWithMat: img8];
+  } else {
+    return self;
+  }
+}
+
 + (nullable MatWrapper*)loadFromFilename:(NSString*)filename {
   @try {
     try {

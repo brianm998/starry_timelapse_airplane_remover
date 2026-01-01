@@ -71,6 +71,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (MatWrapper *)ensure16Bits;
 
+- (BOOL)is8Bits;
+
+- (MatWrapper *)ensure8Bits;
+
 
 - (NSArray<ObjcImageMatrixElement*>*)splitWithTileWidth:(int)tileWidth
                                              tileHeight:(int)tileHeight

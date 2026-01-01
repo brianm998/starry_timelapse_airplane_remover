@@ -19,8 +19,7 @@ import logging
 
 public actor OutlierGroups {
 
-    let height = Int(IMAGE_HEIGHT!)
-    let width = Int(IMAGE_WIDTH!)
+    public let config: Config
     
     public let frameIndex: Int
     // outliers which have been selected through the first round as looking acceptable
@@ -167,10 +166,10 @@ public actor OutlierGroups {
     }
 
     public func calculateOutlierImageData() {
-        self.outlierImageData = [UInt16](repeating: 0, count: width*height)
+        self.outlierImageData = [UInt16](repeating: 0, count: config.imageWidth*config.imageHeight)
         for (id, group) in members {
             for pixel in group.pixelSet {
-                let index = pixel.y*width+pixel.x
+                let index = pixel.y*config.imageWidth+pixel.x
                 if index >= 0,
                    index < outlierImageData.count
                 {
@@ -180,7 +179,7 @@ public actor OutlierGroups {
         }
         for (id, group) in trash {
             for pixel in group.pixelSet {
-                let index = pixel.y*width+pixel.x
+                let index = pixel.y*config.imageWidth+pixel.x
                 if index >= 0,
                    index < outlierImageData.count
                 {
@@ -190,10 +189,13 @@ public actor OutlierGroups {
         }
     }
     
-    public init(frameIndex: Int,
-                members: [UInt16: OutlierGroup] = [:],
-                trash: [UInt16: OutlierGroup] = [:])
-    {
+    public init(
+      frameIndex: Int,
+      members: [UInt16: OutlierGroup] = [:],
+      trash: [UInt16: OutlierGroup] = [:],
+      config: Config
+    ) {
+        self.config = config
         self.frameIndex = frameIndex
         self.members = members
         self.trash = trash
@@ -230,10 +232,13 @@ public actor OutlierGroups {
     }
 
     // uses the newer binary blob format
-    public init(at frameIndex: Int,
-                fromOutlierDir outlierDir: String) async throws
-    {
+    public init(
+      at frameIndex: Int,
+      fromOutlierDir outlierDir: String,
+      config: Config
+    ) async throws {
         self.frameIndex = frameIndex
+        self.config = config
         let blobBinaryLoader = BlobBinaryLoader()
         let blobs = try await blobBinaryLoader.load(from: outlierDir, with: frameIndex)
         Log.i("frame \(frameIndex) loaded \(blobs.count) blobs")
@@ -268,7 +273,7 @@ public actor OutlierGroups {
         var ret: [UInt16: OutlierGroup] = [:]
 
         for pixel in group.pixelSet {
-            let index = pixel.y * width + pixel.x
+            let index = pixel.y * config.imageWidth + pixel.x
             let outlierId = outlierImageData[index]
             if outlierId != 0 {
                 ret[outlierId] = members[outlierId]
@@ -294,15 +299,15 @@ public actor OutlierGroups {
 
         if minX < 0 { minX = 0 }
         if minY < 0 { minY = 0 }
-        if maxX >= width { maxX = width - 1 }
-        if maxY >= height { maxY = height - 1 }
+        if maxX >= config.imageWidth { maxX = config.imageWidth - 1 }
+        if maxY >= config.imageHeight { maxY = config.imageHeight - 1 }
 
         for y in minY...maxY {
 //            if let outlierYAxisImageData,
 //               outlierYAxisImageData[y] == 0 { continue }
             
             for x in minX...maxX {
-                let index = y * width + x
+                let index = y * config.imageWidth + x
                 let outlierId = outlierImageData[index]
                 if outlierId != 0,
                    outlierId != group.id,
@@ -484,8 +489,8 @@ public actor OutlierGroups {
     public func validationImageData() async -> ImageBuffer<UInt8> {
         // create base image data array
         var baseData = ImageBuffer<UInt8>(
-          width: Int(IMAGE_WIDTH!),
-          height: Int(IMAGE_HEIGHT!)
+          width: Int(config.imageWidth),
+          height: Int(config.imageHeight)
         )
 
         // write into this array from the pixels in this group
@@ -520,11 +525,11 @@ public actor OutlierGroups {
                             
                             for imageX in imageXBase - padding ... imageXBase + padding {
                                 if imageX < 0 { continue }
-                                if imageX >= Int(IMAGE_WIDTH!) { continue }
+                                if imageX >= Int(config.imageWidth) { continue }
                                 for imageY in imageYBase - padding ... imageYBase + padding {
                                     if imageY < 0 { continue }
-                                    if imageY >= Int(IMAGE_HEIGHT!) { continue }
-                                    baseData[imageY*Int(IMAGE_WIDTH!)+imageX] = 0xFF
+                                    if imageY >= Int(config.imageHeight) { continue }
+                                    baseData[imageY*Int(config.imageWidth)+imageX] = 0xFF
                                 }
                             }
                         }

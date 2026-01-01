@@ -301,6 +301,12 @@ public struct Config: Codable, Sendable, Transferable {
     public var alignmentBaseImageThresholdValue: Int = 100
     public var alignmentNeighborDilateSize: Int = 20
     public var alignmentNeighborThresholdValue: Int = 20
+
+    public var imageWidth: Int = 0
+    public var imageHeight: Int = 0
+    public var imageBytesPerPixel: Int = 0
+    public var imageBitsPerComponent: Int = 0
+    public var fileExtension: String = "tiff"
     
     mutating public func set(videoInfo: VideoInfo) {
         self.frameRate = videoInfo.frameRate
@@ -309,6 +315,14 @@ public struct Config: Codable, Sendable, Transferable {
         self.pixelFormat = videoInfo.pixelFormat
         self.muxer = videoInfo.muxer
         self.hasAudio = videoInfo.hasAudio
+    }
+
+    mutating public func set(imageInfo: ImageInfo) {
+        self.imageWidth = imageInfo.imageWidth
+        self.imageHeight = imageInfo.imageHeight
+        self.imageBytesPerPixel = imageInfo.imageBytesPerPixel
+        self.imageBitsPerComponent = imageInfo.imageBitsPerComponent
+        self.fileExtension = imageInfo.fileExtension
     }
 
     public init(from decoder: Decoder) throws {

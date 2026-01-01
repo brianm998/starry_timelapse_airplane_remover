@@ -1042,6 +1042,14 @@ extension PixelatedImage {
             return PixelatedImage(mat: self.mat.ensure16Bits()) ?? self
         }
     }
+
+    public var ensure8Bits: PixelatedImage {
+        if self.mat.is8Bits() {
+            return self
+        } else {
+            return PixelatedImage(mat: self.mat.ensure8Bits()) ?? self
+        }
+    }
 }
     
 extension MatWrapper: @unchecked @retroactive Sendable {}
