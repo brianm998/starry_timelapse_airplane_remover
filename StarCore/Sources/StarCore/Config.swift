@@ -189,7 +189,7 @@ public struct Config: Codable, Sendable, Transferable {
     public var numberStaticNeighborFrames = 16 // total
     
     // this can stay this way more easily now that star supports video import to .tiff directly
-    public var supportedImageFileTypes = [".tif", ".tiff"] // XXX move this out
+    public var supportedImageFileTypes = [".tif", ".tiff", "jpg", "jpeg", "png", "bmp", "ndr", "ppm", "pgm", "pdm"]
 
     // XXX use this to try to avoid running out of memory somehow
     // maybe determine megapixels of images, and guestimate usage and
