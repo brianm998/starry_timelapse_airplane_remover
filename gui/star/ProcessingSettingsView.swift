@@ -177,11 +177,31 @@ struct ProcessingSettingsView: View {
     @State private var showStaticNeighborFrameInfo = false
     @State private var showPixelThresholdInfo = false
     @State private var showProcessingModeInfo = false
-    @State private var showHorizonStripInfo = false
     @State private var showCannyMinThresholdView = false
     @State private var showCannyMaxThresholdView = false
     @State private var showCannyL2GradientView = false
     @State private var showHorizonVerticalShiftAmountView = false
+
+    @State private var showHorizonStripInfo = false
+
+    @State private var showHorizonSettingsInfo = false
+    @State private var showHorizonSettings = false
+
+    @State private var showAlignmentSettingsInfo = false
+    @State private var showAlignmentSettings = false
+
+    @State private var showAlignmentMaxDeviationInfo = false
+    @State private var showAlignmentMaxCornerDeviationInfo = false
+
+    @State private var showAlignmentMaxKeypointsInfo = false
+    @State private var showAlignmentGroundHorizonExtensionInfo = false
+    @State private var showAlignmentSkyHorizonExtensionInfo = false
+    @State private var showAlignmentBaseImageDilateSizeInfo = false
+    @State private var showAlignmentBaseImageThresholdValueInfo = false
+    @State private var showAlignmentNeighborDilateSizeInfo = false
+    @State private var showAlignmentNeighborThresholdValueInfo = false
+
+    @State private var showAlignmentWriteDebugImagesInfo = false
 
     private var addSpacer: Bool {
         showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo ||
@@ -190,7 +210,18 @@ struct ProcessingSettingsView: View {
         showUseCannyInfo || showHorizonStripInfo || showCannyMinThresholdView ||
         showCannyMaxThresholdView || showCannyL2GradientView ||
         showStaticNeighborFrameInfo || showHorizonVerticalShiftAmountView ||
-        showMinAlignmentFramesInfo
+        showMinAlignmentFramesInfo || showAlignmentSettingsInfo ||
+        showHorizonSettingsInfo ||
+        showAlignmentMaxDeviationInfo ||
+        showAlignmentMaxCornerDeviationInfo ||
+        showAlignmentMaxKeypointsInfo ||
+        showAlignmentGroundHorizonExtensionInfo ||
+        showAlignmentSkyHorizonExtensionInfo ||
+        showAlignmentBaseImageDilateSizeInfo ||
+        showAlignmentBaseImageThresholdValueInfo ||
+        showAlignmentNeighborDilateSizeInfo ||
+        showAlignmentNeighborThresholdValueInfo ||
+        showAlignmentWriteDebugImagesInfo
     }
     
     private func showAll() {
@@ -205,11 +236,23 @@ struct ProcessingSettingsView: View {
         showPixelThresholdInfo = true
         showProcessingModeInfo = true
         showHorizonStripInfo = true
+        showHorizonSettingsInfo = true
         showUseCannyInfo = true
         showCannyMinThresholdView = true
         showCannyMaxThresholdView = true
         showCannyL2GradientView = true
         showHorizonVerticalShiftAmountView = true
+        showAlignmentSettingsInfo = true
+        showAlignmentMaxDeviationInfo = true
+        showAlignmentMaxCornerDeviationInfo = true
+        showAlignmentMaxKeypointsInfo = true
+        showAlignmentGroundHorizonExtensionInfo = true
+        showAlignmentSkyHorizonExtensionInfo = true
+        showAlignmentBaseImageDilateSizeInfo = true
+        showAlignmentBaseImageThresholdValueInfo = true
+        showAlignmentNeighborDilateSizeInfo = true
+        showAlignmentNeighborThresholdValueInfo = true
+        showAlignmentWriteDebugImagesInfo = true
     }
 
     private func hideAll() {
@@ -223,12 +266,24 @@ struct ProcessingSettingsView: View {
         showStaticNeighborFrameInfo = false
         showPixelThresholdInfo = false
         showHorizonStripInfo = false
+        showHorizonSettingsInfo = false
         showProcessingModeInfo = false
         showUseCannyInfo = false
         showCannyMinThresholdView = false
         showCannyMaxThresholdView = false
         showCannyL2GradientView = false
         showHorizonVerticalShiftAmountView = false
+        showAlignmentSettingsInfo = false
+        showAlignmentMaxDeviationInfo = false
+        showAlignmentMaxCornerDeviationInfo = false
+        showAlignmentMaxKeypointsInfo = false
+        showAlignmentGroundHorizonExtensionInfo = false
+        showAlignmentSkyHorizonExtensionInfo = false
+        showAlignmentBaseImageDilateSizeInfo = false
+        showAlignmentBaseImageThresholdValueInfo = false
+        showAlignmentNeighborDilateSizeInfo = false
+        showAlignmentNeighborThresholdValueInfo = false
+        showAlignmentWriteDebugImagesInfo = false
     }
     
     @FocusState private var focusedField: FocusedField?
@@ -306,29 +361,60 @@ struct ProcessingSettingsView: View {
                           Divider()
                           self.processingModeView
                           Divider()
-                          self.horizonStripWidthView
-                          Divider()
-                          self.maxConcurrentHorizonsView
-                          Divider()
-                          self.useCannyEdgeDetectionGridRow
-                          Divider()
-                          self.cannyMinThresholdView
-                          Divider()
-                          self.cannyMaxThresholdView
-                          Divider()
-                          self.l2GradientGridRow
-                          Divider()
-                          self.horizonVerticalShiftAmountView
-                          Divider()
                           self.cuncurrentProcessingLimitView
                           Divider()
-                          self.neighborFrameCountView
+                          Grid {
+                              self.alignmentSettingsView
+                              if showAlignmentSettings {
+                                  Divider()
+                                  self.neighborFrameCountView
+                                  Divider()
+                                  self.minAlignmentFramesView
+                                  Divider()
+                                  self.staticNeighborFrameCountView
+                                  Divider()
+                                  self.pixelThresholdView
+                                  Divider()
+                                  self.alignmentMaxDeviationView
+                                  Divider()
+                                  self.alignmentMaxCornerDeviationView
+                                  Divider()
+                                  self.alignmentMaxKeypointsView
+                                  Divider()
+                                  self.alignmentGroundHorizonExtensionView
+                                  Divider()
+                                  self.alignmentSkyHorizonExtensionView
+                                  Divider()
+                                  self.alignmentBaseImageDilateSizeView
+                                  Divider()
+                                  self.alignmentBaseImageThresholdValueView
+                                  Divider()
+                                  self.alignmentNeighborDilateSizeView
+                                  Divider()
+                                  self.alignmentNeighborThresholdValueView
+                                  Divider()
+                                  self.alignmentWriteDebugImagesViewValueView
+                              }
+                          }
                           Divider()
-                          self.minAlignmentFramesView
-                          Divider()
-                          self.staticNeighborFrameCountView
-                          Divider()
-                          self.pixelThresholdView
+                          Grid {
+                              self.horizonSettingsView
+                              if showHorizonSettings {
+                                  self.horizonStripWidthView // XXX start horizon
+                                  Divider()
+                                  self.maxConcurrentHorizonsView
+                                  Divider()
+                                  self.useCannyEdgeDetectionGridRow
+                                  Divider()
+                                  self.cannyMinThresholdView
+                                  Divider()
+                                  self.cannyMaxThresholdView
+                                  Divider()
+                                  self.l2GradientGridRow
+                                  Divider()
+                                  self.horizonVerticalShiftAmountView // XXX end horizon
+                              }
+                          }
                       }
                   }
               }
@@ -648,6 +734,408 @@ struct ProcessingSettingsView: View {
         }
     }
 
+    private var alignmentGroundHorizonExtensionView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showAlignmentGroundHorizonExtensionInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            XXX fill this in
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Ground Horizon Extension:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.alignmentGroundHorizonExtension,
+                      minValue: 0,
+                      maxValue: 10000,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .alignmentGroundHorizonExtension,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var alignmentSkyHorizonExtensionView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showAlignmentSkyHorizonExtensionInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            XXX fill this in
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Sky Horizon Extension:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.alignmentSkyHorizonExtension,
+                      minValue: 0,
+                      maxValue: 10000,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .alignmentSkyHorizonExtension,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var alignmentMaxKeypointsView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showAlignmentMaxKeypointsInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            XXX fill this in
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Max Keypoints:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.alignmentMaxKeypoints,
+                      minValue: 4,
+                      maxValue: 10000,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .alignmentMaxKeypoints,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var alignmentWriteDebugImagesViewValueView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showAlignmentWriteDebugImagesInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            XXX fill this in
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Write Debug Images:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    Space(width: 10)
+                    Toggle(isOn: $viewModel.alignmentWriteDebugImages) {
+                        Text("")
+                    }
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var alignmentNeighborThresholdValueView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showAlignmentNeighborThresholdValueInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            XXX fill this in
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Max Keypoints:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.alignmentNeighborThresholdValue,
+                      minValue: 4,
+                      maxValue: 10000,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .alignmentNeighborThresholdValue,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var alignmentNeighborDilateSizeView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showAlignmentNeighborDilateSizeInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            XXX fill this in
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("neighbor dilate size:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.alignmentNeighborDilateSize,
+                      minValue: 4,
+                      maxValue: 10000,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .alignmentNeighborDilateSize,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var alignmentBaseImageThresholdValueView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showAlignmentBaseImageThresholdValueInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            XXX fill this in
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("base image threshold:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.alignmentBaseImageThresholdValue,
+                      minValue: 4,
+                      maxValue: 10000,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .alignmentBaseImageThresholdValue,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var alignmentBaseImageDilateSizeView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showAlignmentBaseImageDilateSizeInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            XXX fill this in
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("base image dilation size:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.alignmentBaseImageDilateSize,
+                      minValue: 4,
+                      maxValue: 10000,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .alignmentBaseImageDilateSize,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+
+    // XXX
+    private var alignmentMaxDeviationView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showAlignmentMaxDeviationInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            XXX fill this in
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Max Deviation:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.alignmentMaxDeviation,
+                      minValue: 0.001,
+                      maxValue: 10000,
+                      allowDecimal: true,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .alignmentMaxDeviation,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var alignmentMaxCornerDeviationView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showAlignmentMaxCornerDeviationInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            XXX fill this in
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Max Corner Deviation:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.alignmentMaxCornerDeviation,
+                      minValue: 0.001,
+                      maxValue: 10000,
+                      allowDecimal: true,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .alignmentMaxCornerDeviation,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var alignmentSettingsView: some View {
+        @Bindable var viewModel = viewModel
+        
+        return InfoTextInstructionGridRow(
+          showInfo: $showAlignmentSettingsInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            Settings that control how alignments are calculated
+            """
+        ) {
+            HStack {
+                Text("Alignment Settings")
+                  .font(.title2)
+                  .foregroundColor(.white)
+                  .opacity(0.6)
+
+                ExpandDownButton($showAlignmentSettings)
+                
+                Spacer()
+            }
+        }
+    }
+    
+    private var horizonSettingsView: some View {
+        @Bindable var viewModel = viewModel
+        
+        return InfoTextInstructionGridRow(
+          showInfo: $showHorizonSettingsInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            Settings that control how horizons are detected
+            """
+        ) {
+            HStack {
+                Text("Horizon Settings")
+                  .font(.title2)
+                  .foregroundColor(.white)
+                  .opacity(0.6)
+
+                ExpandDownButton($showHorizonSettings)
+                
+                Spacer()
+            }
+        }
+    }
+    
     private var horizonStripWidthView: some View {
         @Bindable var viewModel = viewModel
         return InfoTextInstructionGridRow(

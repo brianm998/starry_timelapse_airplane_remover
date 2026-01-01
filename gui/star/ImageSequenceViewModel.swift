@@ -777,18 +777,21 @@ public final class ImageSequenceViewModel {
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.maxConcurrentHorizonCalculations = config.maxConcurrentHorizonCalculations
         self.horizonVerticalShiftAmount = config.horizonVerticalShiftAmount
-        self.alignmentMaxDeviation = config.alignmentMaxDeviation
 
+        self.alignmentMaxDeviation = config.alignmentMaxDeviation
         self.alignmentMaxCornerDeviation = config.alignmentMaxCornerDeviation 
+
         self.alignmentMaxKeypoints = config.alignmentMaxKeypoints
-        self.alignmentWriteDebugImages = config.alignmentWriteDebugImages
         self.alignmentGroundHorizonExtension = config.alignmentGroundHorizonExtension
         self.alignmentSkyHorizonExtension = config.alignmentSkyHorizonExtension
         self.alignmentBaseImageDilateSize = config.alignmentBaseImageDilateSize
         self.alignmentBaseImageThresholdValue = config.alignmentBaseImageThresholdValue
+        //
         self.alignmentNeighborDilateSize = config.alignmentNeighborDilateSize
         self.alignmentNeighborThresholdValue = config.alignmentNeighborThresholdValue
-
+        self.alignmentWriteDebugImages = config.alignmentWriteDebugImages
+        //
+        
         self.config = configManager
 
 //        self.earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? 0
