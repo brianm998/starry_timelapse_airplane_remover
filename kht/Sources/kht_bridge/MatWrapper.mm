@@ -424,6 +424,20 @@ static NSUInteger _totalInstances = 0;
   return nil;
 }
 
+- (BOOL)is16Bits {
+  return _mat.depth() == CV_16U;
+}
+
+- (MatWrapper *)ensure16Bits {
+  if(_mat.depth() != CV_16U) {
+    cv::Mat img16;
+    _mat.convertTo(img16, CV_16U, 256.0);
+    return [[MatWrapper alloc] initWithMat: img16];
+  } else {
+    return self;
+  }
+}
+
 + (nullable MatWrapper*)loadFromFilename:(NSString*)filename {
   @try {
     try {
@@ -435,14 +449,7 @@ static NSUInteger _totalInstances = 0;
         Log_d(@"Loaded from filename %@", filename);
       }
 
-      if(img.depth() == CV_16U) {
-        return [[MatWrapper alloc] initWithMat: img];
-      } else {
-        // ensure that we load as 16 bit
-        cv::Mat img16;
-        img.convertTo(img16, CV_16U, 256.0);
-        return [[MatWrapper alloc] initWithMat: img16];
-      }
+      return [[MatWrapper alloc] initWithMat: img];
     } catch (const cv::Exception &e) {
       Log_e(@"OpenCV Exception: %s", e.what());
     }
