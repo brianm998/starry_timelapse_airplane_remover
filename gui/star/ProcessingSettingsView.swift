@@ -184,12 +184,6 @@ struct ProcessingSettingsView: View {
 
     @State private var showHorizonStripInfo = false
 
-    @State private var showHorizonSettingsInfo = false
-    @State private var showHorizonSettings = false
-
-    @State private var showAlignmentSettingsInfo = false
-    @State private var showAlignmentSettings = false
-
     @State private var showAlignmentMaxDeviationInfo = false
     @State private var showAlignmentMaxCornerDeviationInfo = false
 
@@ -210,8 +204,7 @@ struct ProcessingSettingsView: View {
         showUseCannyInfo || showHorizonStripInfo || showCannyMinThresholdView ||
         showCannyMaxThresholdView || showCannyL2GradientView ||
         showStaticNeighborFrameInfo || showHorizonVerticalShiftAmountView ||
-        showMinAlignmentFramesInfo || showAlignmentSettingsInfo ||
-        showHorizonSettingsInfo ||
+        showMinAlignmentFramesInfo ||
         showAlignmentMaxDeviationInfo ||
         showAlignmentMaxCornerDeviationInfo ||
         showAlignmentMaxKeypointsInfo ||
@@ -236,13 +229,11 @@ struct ProcessingSettingsView: View {
         showPixelThresholdInfo = true
         showProcessingModeInfo = true
         showHorizonStripInfo = true
-        showHorizonSettingsInfo = true
         showUseCannyInfo = true
         showCannyMinThresholdView = true
         showCannyMaxThresholdView = true
         showCannyL2GradientView = true
         showHorizonVerticalShiftAmountView = true
-        showAlignmentSettingsInfo = true
         showAlignmentMaxDeviationInfo = true
         showAlignmentMaxCornerDeviationInfo = true
         showAlignmentMaxKeypointsInfo = true
@@ -266,14 +257,12 @@ struct ProcessingSettingsView: View {
         showStaticNeighborFrameInfo = false
         showPixelThresholdInfo = false
         showHorizonStripInfo = false
-        showHorizonSettingsInfo = false
         showProcessingModeInfo = false
         showUseCannyInfo = false
         showCannyMinThresholdView = false
         showCannyMaxThresholdView = false
         showCannyL2GradientView = false
         showHorizonVerticalShiftAmountView = false
-        showAlignmentSettingsInfo = false
         showAlignmentMaxDeviationInfo = false
         showAlignmentMaxCornerDeviationInfo = false
         showAlignmentMaxKeypointsInfo = false
@@ -363,10 +352,8 @@ struct ProcessingSettingsView: View {
                           Divider()
                           self.cuncurrentProcessingLimitView
                           Divider()
-                          Grid {
-                              self.alignmentSettingsView
-                              if showAlignmentSettings {
-                                  Divider()
+                          DisclosureGroup {
+                              Grid {
                                   self.neighborFrameCountView
                                   Divider()
                                   self.minAlignmentFramesView
@@ -395,12 +382,18 @@ struct ProcessingSettingsView: View {
                                   Divider()
                                   self.alignmentWriteDebugImagesViewValueView
                               }
+                          } label: {
+                              Text("Alignment Settings") 
+                                .font(.title2)
+                                .foregroundColor(.white)
+                                .opacity(0.6)
                           }
+                          .tint(.primary)
+
                           Divider()
-                          Grid {
-                              self.horizonSettingsView
-                              if showHorizonSettings {
-                                  self.horizonStripWidthView // XXX start horizon
+                          DisclosureGroup {
+                              Grid {
+                                  self.horizonStripWidthView
                                   Divider()
                                   self.maxConcurrentHorizonsView
                                   Divider()
@@ -412,9 +405,15 @@ struct ProcessingSettingsView: View {
                                   Divider()
                                   self.l2GradientGridRow
                                   Divider()
-                                  self.horizonVerticalShiftAmountView // XXX end horizon
+                                  self.horizonVerticalShiftAmountView
                               }
+                          } label: {
+                              Text("Horizon Settings") 
+                                .font(.title2)
+                                .foregroundColor(.white)
+                                .opacity(0.6)
                           }
+                          .tint(.secondary)
                       }
                   }
               }
@@ -740,7 +739,7 @@ struct ProcessingSettingsView: View {
           showInfo: $showAlignmentGroundHorizonExtensionInfo,
           addSpacer: { addSpacer },
           infoText: """
-            XXX fill this in
+            Specify a number of pixels to extend the horizon by when aligning the ground.  This can help to make sure that the horizon itself is included in the area to find keypoints.
             """
         ) {
             HStack {
@@ -776,7 +775,7 @@ struct ProcessingSettingsView: View {
           showInfo: $showAlignmentSkyHorizonExtensionInfo,
           addSpacer: { addSpacer },
           infoText: """
-            XXX fill this in
+            Specify a number of pixels to extend the horizon by when aligning the sky.  This can help to avoid finding keypoints on the horizon itself, which moves differently than the sky does throughout videos.
             """
         ) {
             HStack {
@@ -812,7 +811,7 @@ struct ProcessingSettingsView: View {
           showInfo: $showAlignmentMaxKeypointsInfo,
           addSpacer: { addSpacer },
           infoText: """
-            XXX fill this in
+            Specify the maximum number of keypoints that should be considered by the alignment code.  Setting a lower value may speed things up but give worse alignment results.
             """
         ) {
             HStack {
@@ -848,7 +847,7 @@ struct ProcessingSettingsView: View {
           showInfo: $showAlignmentWriteDebugImagesInfo,
           addSpacer: { addSpacer },
           infoText: """
-            XXX fill this in
+            Turn this on to write out temporary alignment images to help debug what is going on if something is not right.  The files end up in /tmp.
             """
         ) {
             HStack {
@@ -876,13 +875,13 @@ struct ProcessingSettingsView: View {
           showInfo: $showAlignmentNeighborThresholdValueInfo,
           addSpacer: { addSpacer },
           infoText: """
-            XXX fill this in
+            The Star alignment algorithm computes a mask for keypoint detection in neighbor frames when aligning them to a base image.  When computing this mask, in addition to discarding the ground, the sky is thresholded by this value.  What that means is only areas this bright or brighter will be scanned for keypoints.  This helps focus keypoint detection on the bright stars, and avoid clouds and other atmospheric phenomenon.  Lower values will give more key points on neighboring frames during alignment.  Max value is 255.
             """
         ) {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Max Keypoints:")
+                    Text("Neighbor Image Threshold:")
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -890,8 +889,8 @@ struct ProcessingSettingsView: View {
                 HStack {
                     EditableNumberView(
                       value: $viewModel.alignmentNeighborThresholdValue,
-                      minValue: 4,
-                      maxValue: 10000,
+                      minValue: 1,
+                      maxValue: 255,
                       fullTextProvider: { _ in "" },
                       prefixText: "",
                       suffixTextProvider: { _ in "" },
@@ -912,13 +911,13 @@ struct ProcessingSettingsView: View {
           showInfo: $showAlignmentNeighborDilateSizeInfo,
           addSpacer: { addSpacer },
           infoText: """
-            XXX fill this in
+            The Star alignment algorithm computes a mask for keypoint detection each neighboring frame.  When computing this mask, in addition to discarding the ground, the sky is thresholded by this value.  After thresholding, star will then dilate, or expand, the mask to include the given amount of pixels around the thresholded pixels.  This allows for the keypoint detection to see more of the transition of intensity, which can help keypoint detection.
             """
         ) {
             HStack {
                 HStack {
                     Spacer()
-                    Text("neighbor dilate size:")
+                    Text("Neighbor Dilation Size:")
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -948,13 +947,13 @@ struct ProcessingSettingsView: View {
           showInfo: $showAlignmentBaseImageThresholdValueInfo,
           addSpacer: { addSpacer },
           infoText: """
-            XXX fill this in
+            The Star alignment algorithm computes a mask for keypoint detection in the base image.  When computing this mask, in addition to discarding the ground, the sky is thresholded by this value.  What that means is only areas this bright or brighter will be scanned for keypoints.  This helps focus keypoint detection on the bright stars, and avoid clouds and other atmospheric phenomenon.  Lower values will give more key points on the base image during alignment.  Max value is 255.
             """
         ) {
             HStack {
                 HStack {
                     Spacer()
-                    Text("base image threshold:")
+                    Text("Base Image Threshold:")
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -962,8 +961,8 @@ struct ProcessingSettingsView: View {
                 HStack {
                     EditableNumberView(
                       value: $viewModel.alignmentBaseImageThresholdValue,
-                      minValue: 4,
-                      maxValue: 10000,
+                      minValue: 1,
+                      maxValue: 255,
                       fullTextProvider: { _ in "" },
                       prefixText: "",
                       suffixTextProvider: { _ in "" },
@@ -984,13 +983,13 @@ struct ProcessingSettingsView: View {
           showInfo: $showAlignmentBaseImageDilateSizeInfo,
           addSpacer: { addSpacer },
           infoText: """
-            XXX fill this in
+            The Star alignment algorithm computes a mask for keypoint detection in the base image.  When computing this mask, in addition to discarding the ground, the sky is thresholded by this value.  After thresholding, star will then dilate, or expand, the mask to include the given amount of pixels around the thresholded pixels.  This allows for the keypoint detection to see more of the transition of intensity, which can help keypoint detection.
             """
         ) {
             HStack {
                 HStack {
                     Spacer()
-                    Text("base image dilation size:")
+                    Text("Base Image Dilation Size:")
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1014,15 +1013,13 @@ struct ProcessingSettingsView: View {
         }
     }
 
-
-    // XXX
     private var alignmentMaxDeviationView: some View {
         @Bindable var viewModel = viewModel
         return InfoTextInstructionGridRow(
           showInfo: $showAlignmentMaxDeviationInfo,
           addSpacer: { addSpacer },
           infoText: """
-            XXX fill this in
+            This parameter is used to weed out poorly aligned frames, it is assumed that frames that have max warping more than this have been badly aligned.  
             """
         ) {
             HStack {
@@ -1059,7 +1056,7 @@ struct ProcessingSettingsView: View {
           showInfo: $showAlignmentMaxCornerDeviationInfo,
           addSpacer: { addSpacer },
           infoText: """
-            XXX fill this in
+            This parameter is used to weed out poorly aligned frames, it is assumed that frames that have corner warping more than this have been badly aligned.  
             """
         ) {
             HStack {
@@ -1090,52 +1087,6 @@ struct ProcessingSettingsView: View {
         }
     }
 
-    private var alignmentSettingsView: some View {
-        @Bindable var viewModel = viewModel
-        
-        return InfoTextInstructionGridRow(
-          showInfo: $showAlignmentSettingsInfo,
-          addSpacer: { addSpacer },
-          infoText: """
-            Settings that control how alignments are calculated
-            """
-        ) {
-            HStack {
-                Text("Alignment Settings")
-                  .font(.title2)
-                  .foregroundColor(.white)
-                  .opacity(0.6)
-
-                ExpandDownButton($showAlignmentSettings)
-                
-                Spacer()
-            }
-        }
-    }
-    
-    private var horizonSettingsView: some View {
-        @Bindable var viewModel = viewModel
-        
-        return InfoTextInstructionGridRow(
-          showInfo: $showHorizonSettingsInfo,
-          addSpacer: { addSpacer },
-          infoText: """
-            Settings that control how horizons are detected
-            """
-        ) {
-            HStack {
-                Text("Horizon Settings")
-                  .font(.title2)
-                  .foregroundColor(.white)
-                  .opacity(0.6)
-
-                ExpandDownButton($showHorizonSettings)
-                
-                Spacer()
-            }
-        }
-    }
-    
     private var horizonStripWidthView: some View {
         @Bindable var viewModel = viewModel
         return InfoTextInstructionGridRow(
