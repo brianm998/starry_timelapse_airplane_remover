@@ -159,6 +159,7 @@ struct StarApp: App {
     public static let blobProcessingStepsWindowName = "blobProcessingStepsWindow"
     public static let debugWindowName = "debugWindow"
     public static let mainWindowName = "mainWindow"
+    public static let alignmentWindowName = "alignmentWindowName"
     
     init() {
         // maybe move this elsewhere
@@ -209,6 +210,11 @@ struct StarApp: App {
               .environment(viewModel)
         }
 
+        WindowGroup(id: StarApp.alignmentWindowName) {
+            AlignmentWindowView()
+              .environment(viewModel)
+        }
+
         WindowGroup(id: StarApp.outlierGroupTableWindowName) {
             OutlierWindowView()
               .environment(viewModel)
@@ -247,6 +253,12 @@ struct StarApp: App {
                     openWindow(id: StarApp.outlierGroupTableWindowName) 
                 }
                   .keyboardShortcut("o", modifiers: [.option])
+
+                Button("Alignment Information Window") {
+                    openWindow(id: StarApp.alignmentWindowName) 
+                }
+                .keyboardShortcut("a", modifiers: [.option])
+
                 Button("Debug Window") {
                     openWindow(id: StarApp.debugWindowName) 
                 }

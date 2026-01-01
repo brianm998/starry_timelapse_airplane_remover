@@ -468,8 +468,8 @@ public struct Config: Codable, Sendable, Transferable {
     // 0.10.1 save full image alignment info
     //        add alignment params to config and UI
     //        add support for jpeg and other file types
-    // 0.10.2 fix bug with loading 8 bit images (scale to 16 bit for now)
-
+    // 0.10.2 a lot of small 8 bit image fixes
+    //        added alignment info window
     
     public var starVersion = Config.latestVersion
 

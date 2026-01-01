@@ -662,13 +662,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 break
             }
 
-            // XXX load this result from file too
-            
             return AlignmentResult(
               alignedMat: alignedFrame.mat,
-              alignedWarps: [],// XXX Int32(results?.numberAligned ?? 0),
+              alignedWarps: results?.numberAligned.map { AlignmentWarpInfo(from: $0) } ?? [],
               failedMat: nil,   // XXX load the failed mat too
-              failedWarps: [], // XXX Int32(results?.numberFailed ?? 0),
+              failedWarps: results?.numberFailed.map { AlignmentWarpInfo(from: $0) } ?? [],
               horizonMask: horizonMask?.image.mat
             )
         } else {
@@ -698,12 +696,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         break
                     }                
                     Log.d("frame \(frameIndex) successfully loaded failed image of type \(failedType)")
-                    
+
                     return AlignmentResult(
                       alignedMat: nil,
-                      alignedWarps: [],// XXX Int32(results?.numberAligned ?? 0),
+                      alignedWarps: results?.numberAligned.map { AlignmentWarpInfo(from: $0) } ?? [],
                       failedMat: failedFrame.mat, 
-                      failedWarps: [], //XXXInt32(results?.numberFailed ?? 0),
+                      failedWarps: results?.numberFailed.map { AlignmentWarpInfo(from: $0) } ?? [],
                       horizonMask: horizonMask?.image.mat
                     )
                 } else {
@@ -886,7 +884,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         var alignedImage: PixelatedImage? = nil     // XXX written to but not read :(
         var failedAlignImage: PixelatedImage? = nil // XXX written to but not read :(
-        
+
         if let aligned = alignmentResult.aligned {
             alignedImage = aligned
             // write out the successfully aligned images
@@ -3510,15 +3508,15 @@ public extension AlignmentResult {
 /// Swift-only, JSON-safe representation
 public struct AlignmentWarpInfoCodable: Codable, Sendable {
     /// Row-major 3x3 homography (length = 9)
-    let homography: [Double]?
+    public let homography: [Double]?
 
-    let deviation: Double
-    let maxCornerDeviation: Double
-    let accepted: Bool
-    let alignmentState: AlignmentState
-    let neighborKeyPoints: Int
-    let frameKeyPoints: Int
-    let frameIndex: Int
+    public let deviation: Double
+    public let maxCornerDeviation: Double
+    public let accepted: Bool
+    public let alignmentState: AlignmentState
+    public let neighborKeyPoints: Int
+    public let frameKeyPoints: Int
+    public let frameIndex: Int
 }
 
 public extension AlignmentWarpInfo {

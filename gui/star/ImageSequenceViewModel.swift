@@ -899,18 +899,20 @@ public final class ImageSequenceViewModel {
                 taskGroup.addTask() {
                     let basename = removePath(fromString: filename)
                     let frame = try await frameLoadMonitor.load() {
-                        try await FrameAirplaneRemover(with: configManager,
-                                                       width: imageInfo.imageWidth,
-                                                       height: imageInfo.imageHeight,
-                                                       componentsPerPixel: imageInfo.componentsPerPixel,
-                                                       callbacks: callbacks,
-                                                       imageSequence: imageSequence,
-                                                       atIndex: frameIndex,
-                                                       outputFilename: "\(config.outputPath)/\(config.basename)",
-                                                       baseName: basename,
-                                                       fullyProcess: false,
-                                                       writeOutputFiles: true,
-                                                       imageAccessor: imageAccessor)
+                        try await FrameAirplaneRemover(
+                          with: configManager,
+                          width: imageInfo.imageWidth,
+                          height: imageInfo.imageHeight,
+                          componentsPerPixel: imageInfo.componentsPerPixel,
+                          callbacks: callbacks,
+                          imageSequence: imageSequence,
+                          atIndex: frameIndex,
+                          outputFilename: "\(config.outputPath)/\(config.basename)",
+                          baseName: basename,
+                          fullyProcess: false,
+                          writeOutputFiles: true,
+                          imageAccessor: imageAccessor
+                        )
                     }
                     if let callback = callbacks.frameCheckClosure { 
                         await MainActor.run {
@@ -921,7 +923,10 @@ public final class ImageSequenceViewModel {
                 }
             }
 
-            var incomingFrames = await [FrameAirplaneRemover?](repeating: nil, count: imageSequence.filenames.count)
+            var incomingFrames = await [FrameAirplaneRemover?](
+              repeating: nil,
+              count: imageSequence.filenames.count
+            )
 
             var numberOfLoadedFrames = 0
             
@@ -1096,6 +1101,28 @@ public final class ImageSequenceViewModel {
         if currentIndex < 0 { currentIndex = 0 }
         if currentIndex >= frames.count { currentIndex = frames.count - 1 }
         return frames[currentIndex]
+    }
+
+    var starAlignmentInfo: [[AlignmentWarpInfoCodable]] {
+        var ret: [[AlignmentWarpInfoCodable]] = []
+
+        for frame in frames {
+            if let results = frame.frameObserver.starAlignmentResults {
+                ret.append(results.numberAligned + results.numberFailed)
+            }
+        }
+        return ret
+    }
+    
+    var earthAlignmentInfo: [[AlignmentWarpInfoCodable]] {
+        var ret: [[AlignmentWarpInfoCodable]] = []
+
+        for frame in frames {
+            if let results = frame.frameObserver.earthAlignmentResults {
+                ret.append(results.numberAligned + results.numberFailed)
+            }
+        }
+        return ret
     }
     
     var currentFrame: FrameAirplaneRemover? {

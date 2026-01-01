@@ -62,6 +62,7 @@
 		D392EB682E1395CB0020E16A /* DebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D392EB672E1395CB0020E16A /* DebugView.swift */; };
 		D392EB6D2E16C6940020E16A /* Space.swift in Sources */ = {isa = PBXBuildFile; fileRef = D392EB6C2E16C6940020E16A /* Space.swift */; };
 		D39728C42F05C2D200F1CBC2 /* ExpandDownButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39728C32F05C2D200F1CBC2 /* ExpandDownButton.swift */; };
+		D39728C62F06CC5400F1CBC2 /* AlignmentWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39728C52F06CC5400F1CBC2 /* AlignmentWindowView.swift */; };
 		D397FEF92E96005500680C78 /* NewReleaseSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D397FEF82E96005500680C78 /* NewReleaseSheetView.swift */; };
 		D39EEDF42C027AD800DD5BC4 /* ClearUndecidedButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39EEDF32C027AD700DD5BC4 /* ClearUndecidedButton.swift */; };
 		D3A0D3AE2CF383DF00FD2E9E /* ExpandUpButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */; };
@@ -183,6 +184,7 @@
 		D392EB672E1395CB0020E16A /* DebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugView.swift; sourceTree = "<group>"; };
 		D392EB6C2E16C6940020E16A /* Space.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Space.swift; sourceTree = "<group>"; };
 		D39728C32F05C2D200F1CBC2 /* ExpandDownButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpandDownButton.swift; sourceTree = "<group>"; };
+		D39728C52F06CC5400F1CBC2 /* AlignmentWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlignmentWindowView.swift; sourceTree = "<group>"; };
 		D397FEF82E96005500680C78 /* NewReleaseSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewReleaseSheetView.swift; sourceTree = "<group>"; };
 		D39EEDF32C027AD700DD5BC4 /* ClearUndecidedButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ClearUndecidedButton.swift; sourceTree = "<group>"; };
 		D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpandUpButton.swift; sourceTree = "<group>"; };
@@ -293,6 +295,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D39728C52F06CC5400F1CBC2 /* AlignmentWindowView.swift */,
 				D39728C32F05C2D200F1CBC2 /* ExpandDownButton.swift */,
 				D3C5ACA52F02FDF600DD1DD9 /* HorizonBarView.swift */,
 				D32425802EE5075000CEF78F /* StartupView.swift */,
@@ -607,6 +610,7 @@
 				D392EB0C2E0AFE320020E16A /* CursorView.swift in Sources */,
 				D39728C42F05C2D200F1CBC2 /* ExpandDownButton.swift in Sources */,
 				D3E6804B2E424B0700A97C28 /* FocusedField.swift in Sources */,
+				D39728C62F06CC5400F1CBC2 /* AlignmentWindowView.swift in Sources */,
 				D3FBFA0C2CE1B18700A23FC6 /* StarPicker.swift in Sources */,
 				D3FBFA102CE25CAA00A23FC6 /* LeftPanel.swift in Sources */,
 				D3DC07FC2C077DEB0031A3AE /* EditableFrameNumberView.swift in Sources */,
@@ -811,7 +815,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.10.1;
+				MARKETING_VERSION = 0.10.2;
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -854,7 +858,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.10.1;
+				MARKETING_VERSION = 0.10.2;
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -886,7 +890,7 @@
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 12.5;
-				MARKETING_VERSION = 0.10.1;
+				MARKETING_VERSION = 0.10.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -905,7 +909,7 @@
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 12.5;
-				MARKETING_VERSION = 0.10.1;
+				MARKETING_VERSION = 0.10.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -922,7 +926,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.10.1;
+				MARKETING_VERSION = 0.10.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -939,7 +943,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.10.1;
+				MARKETING_VERSION = 0.10.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
