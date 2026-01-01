@@ -625,7 +625,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
       }
 
       int oldThreads = cv::getNumThreads();   // remember current setting
-      cv::setNumThreads(1);                    // disable internal parallelism
+      //cv::setNumThreads(1);                    // disable internal parallelism
     
       // We will run the heavy loop in parallel with OpenCV
       // for some reason this doesn't seem to really end up in parallel, not sure why
