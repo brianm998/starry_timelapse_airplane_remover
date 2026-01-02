@@ -7,6 +7,9 @@ import Charts
 struct AlignmentWindowView: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
 
+    @State private var showStarDeviation = true
+    @State private var showEarthDeviation = true
+    
     var body: some View {
 
         return ZStack {
@@ -19,24 +22,45 @@ struct AlignmentWindowView: View {
                 }
             }
         }
-          .navigationTitle("Star Alignment Info Window")
+          .padding(20)
+          .navigationTitle("Star Alignment Info")
     }
         
     func mainView(_ viewModel: ImageSequenceViewModel) -> some View {
         @Bindable var viewModel = viewModel
-        return VStack {
-            if let results = viewModel.currentFrameView.frameObserver.starAlignmentResults {
-                AlignmentDeviationChart(
-                  goodFrames: viewModel.goodStarAlignmentInfo,
-                  badFrames: viewModel.badStarAlignmentInfo
-                )
-                  .environment(viewModel)
+        return HStack {
+            self.controlsView
+
+            VStack(alignment: .leading) {
+                if showStarDeviation,
+                   let results = viewModel.currentFrameView.frameObserver.starAlignmentResults {
+                    Text("Deviation in Star Alignment")
+                    AlignmentDeviationChart(
+                      goodFrames: viewModel.goodStarAlignmentInfo,
+                      badFrames: viewModel.badStarAlignmentInfo
+                    )
+                      .environment(viewModel)
+                }
+                if showEarthDeviation,
+                   let results = viewModel.currentFrameView.frameObserver.earthAlignmentResults {
+                    Text("Deviation in Earth Alignment")
+                    AlignmentDeviationChart(
+                      goodFrames: viewModel.goodEarthAlignmentInfo,
+                      badFrames: viewModel.badEarthAlignmentInfo
+                    )
+                      .environment(viewModel)
+                }
             }
-            /*
-            if let results = viewModel.currentFrameView.frameObserver.earthAlignmentResults {
-                AlignmentDeviationChart(frames: viewModel.earthAlignmentInfo)
-                  .environment(viewModel)
-            }*/
+        }
+    }
+
+    private var controlsView: some View {
+        VStack(alignment: .leading) {
+            Space(height: 60)
+            Text("Show:")
+            Toggle("Star Deviation", isOn: $showStarDeviation)
+            Toggle("Earth Deviation", isOn: $showEarthDeviation)
+            Spacer()
         }
     }
 }
@@ -149,6 +173,7 @@ struct AlignmentDeviationChart: View {
                   }
             }
         }
+          .chartPlotStyle { $0.clipped() }
           .onChange(of: viewModel.currentIndex) { 
               ensureVisible(frame: viewModel.currentIndex)
           }
