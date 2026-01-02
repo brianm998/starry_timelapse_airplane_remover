@@ -110,7 +110,7 @@ struct AlignmentDeviationChart: View {
                         )
                       )
                       .interpolationMethod(.linear)
-                      .opacity(point.isGood ? 1.0 : 0.4)
+                      .opacity(point.isGood ? 1.0 : 0.4) // XXX doesn't work
                 }
             }
 
@@ -248,7 +248,7 @@ struct AlignmentDeviationChart: View {
         let lower = max(0, xDomain.lowerBound + delta)
         let upper = min(maxFrame, lower + (xDomain.count - 1))
 
-        xDomain = lower ... upper
+        if lower < upper { xDomain = lower ... upper }
     }
     
     var oldBody: some View {
