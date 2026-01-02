@@ -93,8 +93,40 @@ struct AlignmentWindowView: View {
             Toggle("Earth Keypoints", isOn: $showEarthKeypoints)
             Toggle("Good Points", isOn: $showGoodPoints)
             Toggle("Bad Points", isOn: $showBadPoints)
+            Divider()
+              .fixedSize(horizontal: true, vertical: false)
             Spacer()
+            Text("Legend")
+            OffsetLegendView(offsets: allVisibleOffsets)
         }
+    }
+
+    var allVisibleOffsets: [Int] {
+        var offsets = Set<Int>()
+
+        func collect(from frames: [[AlignmentWarpInfoCodable]]) {
+            for (base, neighbors) in frames.enumerated() {
+                for n in neighbors {
+                    let offset = n.frameIndex - base
+                    if offset != 0 {
+                        offsets.insert(offset)
+                    }
+                }
+            }
+        }
+        if let viewModel = viewModel.imageSequence {
+            if showStarDeviation || showStarKeypoints {
+                collect(from: viewModel.goodStarAlignmentInfo)
+                collect(from: viewModel.badStarAlignmentInfo)
+            }
+
+            if showEarthDeviation || showEarthKeypoints {
+                collect(from: viewModel.goodEarthAlignmentInfo)
+                collect(from: viewModel.badEarthAlignmentInfo)
+            }
+        }
+
+        return offsets.sorted()
     }
 }
 
@@ -165,12 +197,8 @@ struct AlignmentKeypointsChart: View {
                           x: .value("Frame", point.baseFrame),
                           y: .value("KeyPoints", point.keyPoints)
                         )
-                          .foregroundStyle(
-                            by: .value(
-                              "Neighbor",
-                              group.offset > 0 ? "+\(group.offset)" : "\(group.offset)"
-                            )
-                          )
+                        .foregroundStyle(Color.byOffset(group.offset))
+                        .foregroundStyle(by: .value("Neighbor Offset", group.offset))
                           .interpolationMethod(.linear)
                           .opacity(point.isGood ? 1.0 : 0.4) // XXX doesn't work
                     }
@@ -184,12 +212,16 @@ struct AlignmentKeypointsChart: View {
                       x: .value("Frame", point.baseFrame),
                       y: .value("KeyPoints", point.keyPoints)
                     )
+                    .foregroundStyle(Color.byOffset(point.offset))
+
+//                      .foregroundStyle(by: .value("Neighbor Offset", point.offset))
+                    /*
                       .foregroundStyle(
                         by: .value(
                           "Neighbor",
                           point.offset > 0 ? "+\(point.offset)" : "\(point.offset)"
                         )
-                      )
+                      )*/
                       .opacity(0.5)
                       .symbolSize(20)
                 }
@@ -238,7 +270,7 @@ struct AlignmentKeypointsChart: View {
 //          .chartYScale(domain: 0 ... maxVisibleDeviation)
           .chartXAxisLabel("Frame Index")
           .chartYAxisLabel("Number of Key Points")
-          .chartLegend(position: .trailing)
+          .chartLegend(.hidden)
           //.chartYScale(domain: symmetricDomain())
           .chartOverlay { proxy in
               GeometryReader { geo in
@@ -446,12 +478,8 @@ struct AlignmentDeviationChart: View {
                           x: .value("Frame", point.baseFrame),
                           y: .value("Deviation", point.signedDeviation)
                         )
-                          .foregroundStyle(
-                            by: .value(
-                              "Neighbor",
-                              group.offset > 0 ? "+\(group.offset)" : "\(group.offset)"
-                            )
-                          )
+                          .foregroundStyle(Color.byOffset(point.offset))
+                          .foregroundStyle(by: .value("Neighbor Offset", group.offset))
                           .interpolationMethod(.linear)
                           .opacity(point.isGood ? 1.0 : 0.4) // XXX doesn't work
                     }
@@ -465,12 +493,15 @@ struct AlignmentDeviationChart: View {
                       x: .value("Frame", point.baseFrame),
                       y: .value("Deviation", point.signedDeviation)
                     )
+                      .foregroundStyle(Color.byOffset(point.offset))
+                      //.foregroundStyle(by: .value("Neighbor Offset", point.offset))
+                    /*
                       .foregroundStyle(
                         by: .value(
                           "Neighbor",
                           point.offset > 0 ? "+\(point.offset)" : "\(point.offset)"
                         )
-                      )
+                      )*/
                       .opacity(0.5)
                       .symbolSize(20)
                 }
@@ -519,7 +550,7 @@ struct AlignmentDeviationChart: View {
           .chartYScale(domain: -maxVisibleDeviation ... maxVisibleDeviation)
           .chartXAxisLabel("Frame Index")
           .chartYAxisLabel("Deviation")
-          .chartLegend(position: .trailing)
+          .chartLegend(.hidden)
           .chartYScale(domain: symmetricDomain())
           .chartOverlay { proxy in
               GeometryReader { geo in
@@ -847,5 +878,48 @@ private extension AlignmentKeypointsChart {
                 .fill(.background)
                 .shadow(radius: 3)
         )
+    }
+}
+
+struct OffsetLegendView: View {
+    let offsets: [Int]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Neighbor Offset")
+                .font(.caption.bold())
+
+            ForEach(offsets, id: \.self) { offset in
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(color(for: offset))
+                        .frame(width: 16, height: 3)
+
+                    Text(offset > 0 ? "+\(offset)" : "\(offset)")
+                        .font(.caption.monospacedDigit())
+                }
+            }
+        }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(.background)
+                .shadow(radius: 2)
+        )
+    }
+
+    private func color(for offset: Int) -> Color {
+        // MUST match chart mapping
+        Color.byOffset(offset)
+    }
+}
+
+extension Color {
+    static func byOffset(_ offset: Int) -> Color {
+        let palette: [Color] = [
+            .blue, .green, .orange, .purple,
+            .pink, .teal, .indigo, .brown
+        ]
+        return palette[(abs(offset) - 1) % palette.count]
     }
 }
