@@ -126,7 +126,8 @@ struct InitialView: View {
     }
 
     func handleDrop(providers: [NSItemProvider]) -> Bool {
-        for provider in providers {
+        if providers.count == 1 {
+            let provider = providers[0]
             _ = provider.loadObject(ofClass: NSPasteboard.PasteboardType.self) {
                 pasteboardItem, _ in
                 if let pasteboardItem {
@@ -138,8 +139,10 @@ struct InitialView: View {
                         
                         var isDir: ObjCBool = false
                         
-                        if FileManager.default.fileExists(atPath: url.path,
-                                                          isDirectory: &isDir) {
+                        if FileManager.default.fileExists(
+                             atPath: url.path,
+                             isDirectory: &isDir
+                           ) {
                             if isDir.boolValue {
                                 // startup with a new sequence dir
                                 Task { @MainActor in
@@ -161,7 +164,32 @@ struct InitialView: View {
                                     }
                                 }
                             } else {
-                                // XXX handle video drops here
+
+                                /*
+
+                                 see if this is a supported image file type and
+                                 don't act like it is a video
+                                 
+                                 */
+
+                                if let fileExtension = url.path.components(separatedBy: ".").last {
+                                    if fileExtension == "jpeg" ||
+                                       fileExtension == "jpg" ||
+                                       fileExtension == "tiff" ||
+                                       fileExtension == "tif" // XXX this could be better :(
+                                    {
+                                        // single image drops are not videos, and
+                                        // also not an image sequence
+
+                                        // startup with a new sequence dir
+                                        Task { @MainActor in
+                                            startupWithSequenceDir(url.deletingLastPathComponent().path())
+                                        }
+                                        return
+                                    }
+                                }
+                                
+                                // handle video drops 
                                 Task { @MainActor in
                                     startupWithVideoToProcess(url.path)
                                     //self.handle(error: "Unsupported file type \(url.path)")
@@ -171,6 +199,22 @@ struct InitialView: View {
                             Task { @MainActor in
                                 self.handle(error: "File does not exist: \(url.path)")
                             }
+                        }
+                    }
+                }
+            }
+        } else if providers.count > 1  {
+
+            // more than one file dropped.
+            // grab the dirname and assume an image sequence
+
+            _ = providers[0].loadObject(ofClass: NSPasteboard.PasteboardType.self) {
+                pasteboardItem, _ in
+                if let pasteboardItem {
+                    if let url = URL(string: pasteboardItem.rawValue) {
+                        // startup with a new sequence dir
+                        Task { @MainActor in
+                            startupWithSequenceDir(url.deletingLastPathComponent().path())
                         }
                     }
                 }
