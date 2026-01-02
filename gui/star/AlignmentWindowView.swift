@@ -29,10 +29,11 @@ struct AlignmentWindowView: View {
                 AlignmentDeviationChart(frames: viewModel.starAlignmentInfo)
                   .environment(viewModel)
             }
+            /*
             if let results = viewModel.currentFrameView.frameObserver.earthAlignmentResults {
                 AlignmentDeviationChart(frames: viewModel.earthAlignmentInfo)
                   .environment(viewModel)
-            }
+            }*/
         }
     }
 }
@@ -42,6 +43,7 @@ struct DeviationPoint: Identifiable {
     let baseFrame: Int
     let offset: Int          // neighbor.frameIndex - baseFrame
     let signedDeviation: Double
+    let keyPoints: Int
 }
 
 struct AlignmentDeviationChart: View {
@@ -54,11 +56,22 @@ struct AlignmentDeviationChart: View {
     @State private var hoveredFrame: Int?
     @State private var hoveredOffset: Int?
 
+
+    @State private var xDomain: ClosedRange<Int>
     
+    init(frames: [[AlignmentWarpInfoCodable]]) {
+        self.frames = frames
+
+        let maxFrame = max(frames.count - 1, 0)
+        _xDomain = State(initialValue: 0 ... maxFrame)
+     }
+     
     private var points: [DeviationPoint] {
         makeDeviationPoints(frames: frames)
     }
 
+    let maxVisibleDeviation: Double = 50.0 // tune this
+    
     var body: some View {
         Chart {
             // === Lines ===
@@ -113,6 +126,11 @@ struct AlignmentDeviationChart: View {
                   }
             }
         }
+          .onChange(of: viewModel.currentIndex) { 
+              ensureVisible(frame: viewModel.currentIndex)
+          }
+          .chartXScale(domain: xDomain)
+          .chartYScale(domain: -maxVisibleDeviation ... maxVisibleDeviation)
           .chartXAxisLabel("Frame Index")
           .chartYAxisLabel("Deviation")
           .chartLegend(position: .trailing)
@@ -122,6 +140,26 @@ struct AlignmentDeviationChart: View {
                   Rectangle()
                     .fill(.clear)
                     .contentShape(Rectangle())
+                    .onTapGesture {
+                        if let hoveredFrame {
+                            viewModel.currentIndex = hoveredFrame
+                        }
+                    }
+                    .simultaneousGesture(
+                      DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            pan(by: value.translation.width)
+                        }
+                    )
+                    .simultaneousGesture(
+                      MagnificationGesture()
+                        .onChanged { scale in
+                            zoom(scale: scale)
+                        }
+                        .onEnded { _ in
+                            lastMagnification = 1.0
+                        }
+                    )
                     .onContinuousHover { phase in
                         switch phase {
                         case .active(let location):
@@ -140,6 +178,56 @@ struct AlignmentDeviationChart: View {
           .frame(minHeight: 320)
     }
 
+    private func ensureVisible(frame: Int) {
+        guard !xDomain.contains(frame) else { return }
+
+        let span = xDomain.upperBound - xDomain.lowerBound
+        let lower = max(0, frame - span / 2)
+        let upper = min(frames.count - 1, lower + span)
+
+        xDomain = lower ... upper
+    }
+
+    @State private var lastMagnification: CGFloat = 1.0
+
+    private func zoom(scale: CGFloat) {
+        let delta = scale / lastMagnification
+        lastMagnification = scale
+
+        let center = (xDomain.lowerBound + xDomain.upperBound) / 2
+        let currentSpan = xDomain.upperBound - xDomain.lowerBound
+        guard delta != 0 else { return }
+        var newSpan = max(10, Int(Double(currentSpan) / Double(delta)))
+
+        if newSpan > frames.count { newSpan = frames.count }
+        if newSpan < 20 { newSpan = 20 }
+        
+        let maxFrame = frames.count - 1
+        let half = newSpan / 2
+
+        let lower = max(0, center - half)
+        let upper = min(maxFrame, center + half)
+
+        xDomain = lower ... upper
+    }
+
+    
+    private func pan(by translation: CGFloat) {
+        let span = xDomain.upperBound - xDomain.lowerBound
+        let delta = Int(Double(translation) * Double(span) / 300.0)
+
+        shiftDomain(by: -delta)
+    }
+
+    private func shiftDomain(by delta: Int) {
+        let maxFrame = frames.count - 1
+
+        let lower = max(0, xDomain.lowerBound + delta)
+        let upper = min(maxFrame, lower + (xDomain.count - 1))
+
+        xDomain = lower ... upper
+    }
+    
     var oldBody: some View {
         Chart {
             ForEach(points) { point in
@@ -190,7 +278,8 @@ struct AlignmentDeviationChart: View {
                   DeviationPoint(
                     baseFrame: baseFrameIndex,
                     offset: offset,
-                    signedDeviation: signedDeviation
+                    signedDeviation: signedDeviation,
+                    keyPoints: neighbor.neighborKeyPoints
                   )
                 )
             }
@@ -233,6 +322,12 @@ private extension AlignmentDeviationChart {
             $0.baseFrame == frame && $0.offset == offset
         }?.signedDeviation ?? 0
     }
+
+    func keyPointsAt(frame: Int, offset: Int) -> Int {
+        points.first {
+            $0.baseFrame == frame && $0.offset == offset
+        }?.keyPoints ?? 0
+    }
 }
 
 
@@ -240,6 +335,7 @@ private extension AlignmentDeviationChart {
 
     func tooltipView(frame: Int, offset: Int) -> some View {
         let deviation = deviationAt(frame: frame, offset: offset)
+        let keypoints = keyPointsAt(frame: frame, offset: offset)
 
         return VStack(alignment: .leading, spacing: 4) {
             Text("Frame \(frame)")
@@ -249,6 +345,9 @@ private extension AlignmentDeviationChart {
                 .font(.caption)
 
             Text(String(format: "Deviation: %.3f", deviation))
+                .font(.caption.monospacedDigit())
+
+            Text("Keypoints: \(keypoints)")
                 .font(.caption.monospacedDigit())
         }
         .padding(8)
