@@ -182,7 +182,7 @@ public struct Config: Codable, Sendable, Transferable {
 
     // if we're using automatic clean mode, and get less alignment frames than this,
     // fall back to selective instead
-    public var minAlignmentFrames = 4
+    public var minAlignmentFrames = 2
 
     // when camera is not moving, use this value instead of
     // numberAlignedNeighborFrames for calculating the merged horizon for each frame
@@ -190,7 +190,8 @@ public struct Config: Codable, Sendable, Transferable {
     
     // this can stay this way more easily now that star supports video import to .tiff directly
 
-    // really this should be filtered with cv::haveImageReader("image.exr"); 
+    // really this should be filtered with cv::haveImageReader("image.exr");
+    // and it is not specific to an image sequence, move it elsewhere
     public var supportedImageFileTypes = [".tif", ".tiff", "jpg", "jpeg", "png", "bmp", "ndr", "ppm", "pgm", "pdm"]
 
     // XXX use this to try to avoid running out of memory somehow
@@ -291,8 +292,6 @@ public struct Config: Codable, Sendable, Transferable {
     // earth aligned images
     public var earthAlignedImageCropAmount: Int?
     
-    public var alignmentMaxDeviation: Double = 45 // maximum warping deviation from identity (GUESSED)
-    public var alignmentMaxCornerDeviation: Double = 70 // similar to max deviation but for the corners
     public var alignmentMaxKeypoints: Int = 2000
     public var alignmentWriteDebugImages: Bool = false
     public var alignmentGroundHorizonExtension: Int = 100 // extend the horizon for ground by this amount to get more keypoints
@@ -368,10 +367,6 @@ public struct Config: Codable, Sendable, Transferable {
         
         self.earthAlignedImageCropAmount = try c.decodeIfPresent(Int.self, forKey: .earthAlignedImageCropAmount)
 
-        
-
-        self.alignmentMaxDeviation = try c.decodeIfPresent(Double.self, forKey: .alignmentMaxDeviation) ?? self.alignmentMaxDeviation
-        self.alignmentMaxCornerDeviation = try c.decodeIfPresent(Double.self, forKey: .alignmentMaxCornerDeviation) ?? self.alignmentMaxCornerDeviation
         self.alignmentMaxKeypoints = try c.decodeIfPresent(Int.self, forKey: .alignmentMaxKeypoints) ?? self.alignmentMaxKeypoints
         self.alignmentWriteDebugImages = try c.decodeIfPresent(Bool.self, forKey: .alignmentWriteDebugImages) ?? self.alignmentWriteDebugImages
         self.alignmentGroundHorizonExtension = try c.decodeIfPresent(Int.self, forKey: .alignmentGroundHorizonExtension) ?? self.alignmentGroundHorizonExtension

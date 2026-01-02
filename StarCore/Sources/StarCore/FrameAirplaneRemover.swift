@@ -855,11 +855,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 } else if let results = result as? [kht_bridge.AlignmentWarpInfo] {
                     Log.d("got \(results.count) warp infos back from alignment")
                     // do the calculations here to figure out which alignments are ok
-
-                    // XXX these two are not used anymore
-                    let maxDeviation = config.alignmentMaxDeviation // maximum warping deviation from identity
-                    let maxCornerDeviation = config.alignmentMaxCornerDeviation // similar to max deviation, but for the corners
-                    // XXX 
                     
                     let outlierThreshold = pixelThreshold
                     /*
@@ -890,8 +885,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         for alignment in results {
                             let frameDistance = abs(self.frameIndex-Int(alignment.frameIndex))
                             let alignmentSlope = alignment.deviation/Double(frameDistance)
-                            if alignmentSlope < medianSlope * 1.5,
-                               alignmentSlope > medianSlope / 1.5
+                            if alignmentSlope < medianSlope * 1.25, // XXX tweak this number
+                               alignmentSlope > medianSlope / 1.25
                             {
                                 // rough estimate
                                 goodWarps.append(alignment)
