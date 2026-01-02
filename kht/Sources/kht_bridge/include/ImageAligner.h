@@ -19,9 +19,9 @@
 
 
 // just median merges the frames without any alignment
-+ (id _Nonnull)medianMerge:(NSArray<MatWrapper*>* _Nonnull)frames
-          outlierThreshold:(double)k
-                includeAll:(BOOL)includeAll;
++ (MatWrapper* _Nonnull)medianMerge:(NSArray<MatWrapper*>* _Nonnull)frames
+                   outlierThreshold:(double)k
+                         includeAll:(BOOL)includeAll;
 
 // align frames to special frame, with optional mask which shows where to get keypoints from
 

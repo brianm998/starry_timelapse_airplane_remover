@@ -831,17 +831,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             Log.d("frame \(frameIndex) doing real alignment for type \(alignmentType)")
             // do real alignment
 
+            
             let request = AlignmentRequest(
               baseImage: originalFrame.mat,
               frameIndex: Int32(frameIndex),
               neighbors: neighbors,
               matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
               mask: horizonMask?.image.mat,
-              maxDeviation: config.alignmentMaxDeviation, // maximum warping deviation from identity
-              maxCornerDeviation: config.alignmentMaxCornerDeviation, // similar to max deviation, but for the corners
               alignmentType: alignmentType,       // earth is zero in mask
               maxKeypoints: Int32(config.alignmentMaxKeypoints), 
-              outlierThreshold: pixelThreshold,
               writeDebugImages: config.alignmentWriteDebugImages,
               groundHorizonExtension: Int32(config.alignmentGroundHorizonExtension), // extend the horizon for ground by this amount to get more keypoints
               skyHorizonExtension: Int32(config.alignmentSkyHorizonExtension),
@@ -854,8 +852,105 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             if let result = ImageAligner.align(with: request) {
                 if let error = result as? String {
                     Log.e("error: \(error)")
-                } else if let result = result as? kht_bridge.AlignmentResult {
-                    alignmentResult = result
+                } else if let results = result as? [kht_bridge.AlignmentWarpInfo] {
+                    Log.d("got \(results.count) warp infos back from alignment")
+                    // do the calculations here to figure out which alignments are ok
+
+                    // XXX these two are not used anymore
+                    let maxDeviation = config.alignmentMaxDeviation // maximum warping deviation from identity
+                    let maxCornerDeviation = config.alignmentMaxCornerDeviation // similar to max deviation, but for the corners
+                    // XXX 
+                    
+                    let outlierThreshold = pixelThreshold
+                    /*
+
+                     Logic here is to attempt to determine a median slope for all
+                     alignments, relative to their frame distance from this frame
+
+                     If we can get a median slope, then we can use that to try to throw
+                     out aliments which deviate too much from the median slope
+                     */
+
+                    var slopes: [Double] = []
+                    
+                    for alignment in results {
+                        let frameDistance = abs(self.frameIndex-Int(alignment.frameIndex))
+                        slopes.append(alignment.deviation/Double(frameDistance))
+                    }
+
+                    var goodWarps: [AlignmentWarpInfo] = []
+                    var badWarps: [AlignmentWarpInfo] = []
+
+                    slopes.sort(by: { $0 < $1 })
+                    
+                    let medianIndex = slopes.count/2
+                    if medianIndex < slopes.count {
+                        let medianSlope = slopes[medianIndex]
+                        Log.d("frame \(frameIndex) got medianSlope \(medianSlope)")
+                        for alignment in results {
+                            let frameDistance = abs(self.frameIndex-Int(alignment.frameIndex))
+                            let alignmentSlope = alignment.deviation/Double(frameDistance)
+                            if alignmentSlope < medianSlope * 1.5,
+                               alignmentSlope > medianSlope / 1.5
+                            {
+                                // rough estimate
+                                goodWarps.append(alignment)
+                            } else {
+                                badWarps.append(alignment)
+                            }
+                        }
+                    } else {
+                        Log.d("frame \(frameIndex) has NO medianSlope :(")
+                        // ALL FAIL :(
+                        // here we don't know the median, so all are bad :(
+                        badWarps = results
+                    }
+
+                    var failedResult: MatWrapper? = nil
+                    var alignedResult: MatWrapper? = nil
+                    var horizonResult: MatWrapper? = nil
+                    
+                    if badWarps.count > 0 {
+                        Log.d("frame \(frameIndex) has \(badWarps.count) bad warps")
+                        let badFrames = badWarps.compactMap { $0.warpedFrame }
+                        if badFrames.count > 0 {
+                            failedResult = ImageAligner.medianMerge(
+                              badFrames,
+                              outlierThreshold: pixelThreshold,
+                              includeAll:false
+                            )
+                        }
+                    }
+
+                    if goodWarps.count > 0 {
+                        Log.d("frame \(frameIndex) has \(goodWarps.count) good warps")
+                        // median merge them, and any horizon masks
+                        let goodFrames = goodWarps.compactMap { $0.warpedFrame }
+
+                        if goodFrames.count > 0  {
+                            alignedResult = ImageAligner.medianMerge(
+                              goodFrames,
+                              outlierThreshold: pixelThreshold,
+                              includeAll:false
+                            )
+                        }
+
+                        let goodHorizons = goodWarps.compactMap { $0.warpedHorizon }
+                        if goodHorizons.count > 0 {
+                            horizonResult = ImageAligner.medianMerge(
+                              goodHorizons,
+                              outlierThreshold: pixelThreshold,
+                              includeAll: true
+                            )
+                        }
+                    }
+                     alignmentResult = AlignmentResult(
+                       alignedMat: alignedResult,
+                       alignedWarps: goodWarps,
+                       failedMat: failedResult,
+                       failedWarps: badWarps, 
+                       horizonMask: horizonResult
+                     )
                 } else {
                     Log.e("cannot handle aligned result \(result)")
                 }
@@ -3512,7 +3607,6 @@ public struct AlignmentWarpInfoCodable: Codable, Sendable {
 
     public let deviation: Double
     public let maxCornerDeviation: Double
-    public let accepted: Bool
     public let alignmentState: AlignmentState
     public let neighborKeyPoints: Int
     public let frameKeyPoints: Int
@@ -3535,7 +3629,6 @@ public extension AlignmentWarpInfo {
             homography: homographyArray,
             deviation: deviation,
             maxCornerDeviation: maxCornerDeviation,
-            accepted: accepted,
             alignmentState: AlignmentState(objcState: alignmentState) ?? .unknown,
             neighborKeyPoints: Int(neighborKeyPoints),
             frameKeyPoints: Int(frameKeyPoints),
@@ -3561,14 +3654,15 @@ public extension AlignmentWarpInfo {
         }
 
         self.init(
-            homography: homographyWrapper,
-            deviation: codable.deviation,
-            maxCornerDeviation: codable.maxCornerDeviation,
-            accepted: codable.accepted,
-            alignmentState: codable.alignmentState.objcValue ?? AlignmentStateObjC.unknown,
-            neighborKeyPoints: Int32(codable.neighborKeyPoints),
-            frameKeyPoints: Int32(codable.frameKeyPoints),
-            frameIndex: UInt(codable.frameIndex)
+          homography: homographyWrapper,
+          warpedFrame: nil,
+          warpedHorizon: nil,
+          deviation: codable.deviation,
+          maxCornerDeviation: codable.maxCornerDeviation,
+          alignmentState: codable.alignmentState.objcValue ?? AlignmentStateObjC.unknown,
+          neighborKeyPoints: Int32(codable.neighborKeyPoints),
+          frameKeyPoints: Int32(codable.frameKeyPoints),
+          frameIndex: UInt(codable.frameIndex)
         )
     }
 }

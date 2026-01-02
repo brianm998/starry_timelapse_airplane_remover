@@ -1103,23 +1103,53 @@ public final class ImageSequenceViewModel {
         return frames[currentIndex]
     }
 
-    var starAlignmentInfo: [[AlignmentWarpInfoCodable]] {
+    var goodStarAlignmentInfo: [[AlignmentWarpInfoCodable]] {
         var ret: [[AlignmentWarpInfoCodable]] = []
 
         for frame in frames {
             if let results = frame.frameObserver.starAlignmentResults {
-                ret.append(results.numberAligned + results.numberFailed)
+                ret.append(results.numberAligned)
+            } else {
+                ret.append([])
             }
         }
         return ret
     }
     
-    var earthAlignmentInfo: [[AlignmentWarpInfoCodable]] {
+    var badStarAlignmentInfo: [[AlignmentWarpInfoCodable]] {
+        var ret: [[AlignmentWarpInfoCodable]] = []
+
+        for frame in frames {
+            if let results = frame.frameObserver.starAlignmentResults {
+                ret.append(results.numberFailed)
+            } else {
+                ret.append([])
+            }
+        }
+        return ret
+    }
+
+    var goodEarthAlignmentInfo: [[AlignmentWarpInfoCodable]] {
         var ret: [[AlignmentWarpInfoCodable]] = []
 
         for frame in frames {
             if let results = frame.frameObserver.earthAlignmentResults {
-                ret.append(results.numberAligned + results.numberFailed)
+                ret.append(results.numberAligned)
+            } else {
+                ret.append([])
+            }
+        }
+        return ret
+    }
+    
+    var badEarthAlignmentInfo: [[AlignmentWarpInfoCodable]] {
+        var ret: [[AlignmentWarpInfoCodable]] = []
+
+        for frame in frames {
+            if let results = frame.frameObserver.earthAlignmentResults {
+                ret.append(results.numberFailed)
+            } else {
+                ret.append([])
             }
         }
         return ret

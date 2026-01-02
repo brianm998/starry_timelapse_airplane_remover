@@ -14,8 +14,6 @@
 @property(nonatomic, assign) FeatureMatchMethod matchMethod;
 @property(nonatomic, strong, nullable) MatWrapper * mask; // assumed to be zero for ground, non-zero for sky
 
-@property(nonatomic, assign) double maxDeviation;
-@property(nonatomic, assign) double maxCornerDeviation;
 @property(nonatomic, assign) AlignmentType alignmentType;
 @property(nonatomic, assign) BOOL writeDebugImages;
 @property(nonatomic, assign) int maxKeypoints;
@@ -25,7 +23,6 @@
 @property(nonatomic, assign) int baseImageThresholdValue;
 @property(nonatomic, assign) int neighborDilateSize;
 @property(nonatomic, assign) int neighborThresholdValue;
-@property(nonatomic, assign) double k;
 
 - (instancetype _Nonnull)initWithBaseImage:(MatWrapper * _Nonnull)baseImage
                                 frameIndex:(int)frameIndex // frame index of baseImage
@@ -33,11 +30,8 @@
                                  neighbors:(NSArray<AlignmentNeighborInfo*> * _Nonnull)neighbors
                                matchMethod:(FeatureMatchMethod)matchMethod
                                       mask:(MatWrapper * _Nullable)mask // assumed to be zero for ground, non-zero for sky
-                              maxDeviation:(double)maxDeviation
-                        maxCornerDeviation:(double)maxCornerDeviation
                              alignmentType:(AlignmentType)alignmentType
                               maxKeypoints:(int)maxKeypoints
-                          outlierThreshold:(double)k
                           writeDebugImages:(BOOL)writeDebugImages
                     groundHorizonExtension:(int)groundHorizonExtension
                        skyHorizonExtension:(int)skyHorizonExtension

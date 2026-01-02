@@ -4,9 +4,10 @@
 @implementation AlignmentWarpInfo
 
 - (instancetype)initWithHomography:(MatWrapper *)homography
+                       warpedFrame:(nullable MatWrapper *)warpedFrame
+                     warpedHorizon:(nullable MatWrapper *)warpedHorizon
                          deviation:(double)deviation
                 maxCornerDeviation:(double)maxCornerDeviation
-                          accepted:(BOOL)accepted
                     alignmentState:(AlignmentStateObjC)alignmentState
                  neighborKeyPoints:(int)neighborKeyPoints
                     frameKeyPoints:(int)frameKeyPoints
@@ -14,9 +15,10 @@
 {
     if ((self = [super init])) {
         _homography = homography;
+        _warpedFrame = warpedFrame;
+        _warpedHorizon = warpedHorizon;
         _deviation = deviation;
         _maxCornerDeviation = maxCornerDeviation;
-        _accepted = accepted;
         _frameIndex = frameIndex;
         _alignmentState = alignmentState;
         _neighborKeyPoints = neighborKeyPoints;
@@ -28,9 +30,9 @@
 - (instancetype _Nonnull)initForNoWarpWithFrameIndex:(NSUInteger)frameIndex {
     if ((self = [super init])) {
         _homography = nil;
+        _warpedFrame = nil;
         _deviation = 0;
         _maxCornerDeviation = 0;
-        _accepted = true;
         _frameIndex = frameIndex;
         _alignmentState = AlignmentStateObjCNoAlignment;
         _neighborKeyPoints = 0;

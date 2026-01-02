@@ -241,10 +241,8 @@ MatWrapper* medianImageFromArray(const std::vector<MatWrapper*>& mats,
                         includeAll: includeAll];
 }
 
-//          MatWrapper * frame = ;
-
 // just median merges the frames without any alignment
-+ (id)medianMerge:(NSArray<MatWrapper*>*)frames
++ (MatWrapper* _Nonnull)medianMerge:(NSArray<MatWrapper*>* _Nonnull)frames
  outlierThreshold:(double)k
        includeAll:(BOOL)includeAll
 {
@@ -455,13 +453,11 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
  * Aligns array of 'neighbors' to 'baseImage'.
  * The 'mask' is a binary mask with zero for the ground and non-zero for the sky
  * 
- * Returns an AlignmentResult with:
- *  - a list of properly aligned frames
- *  - a list of frames where alignment was not successful
+ * Returns NSMutableArray<AlignmentWarpInfo *> *warps
+ *
+ * returns string errors when there is a problem, or maybe nil
  *
  * Uses different logic for sky and earth alignment, alignmentType governs that.
- *
- * returns string errors when there is a problem
  */
 + (id _Nullable)alignWithRequest:(AlignmentRequest * _Nonnull)request {
 
@@ -473,8 +469,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
       // random logID
       uint32_t logID = arc4random_uniform(1000);
 
-      Log_d(@"%d align neighbors %@ matchMethod %ld maxDeviation %lf maxCornerDeviation %lf invertMask %d maxKeypoints %d k %lf",
-            logID, request.neighbors, request.matchMethod, request.maxDeviation, request.maxCornerDeviation, request.alignmentType == AlignmentTypeEarth, request.maxKeypoints, request.k);
+      //Log_d(@"%d align neighbors %@ matchMethod %ld maxDeviation %lf maxCornerDeviation %lf invertMask %d maxKeypoints %d k %lf", logID, request.neighbors, request.matchMethod, request.maxDeviation, request.maxCornerDeviation, request.alignmentType == AlignmentTypeEarth, request.maxKeypoints, request.k);
       //    Log_d(@"%d align frames %@ frameMasks %@ matchMethod %d ",
       //          logID, frameFilenames, frameMaskFilenames, matchMethod);
 
@@ -599,11 +594,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
       // Preallocate per-index result storage to avoid push_back from many threads
       const size_t n = request.neighbors.count;
 
-      std::vector<MatWrapper *> resultMats(n);       // will hold warped (success) or original (failure)
-      std::vector<MatWrapper *> alignedHorizonMats(n); // will hold warped (success) or original (failure) aligned horizon mats
-
-      std::vector<char>    resultSuccess(n, 0); // 1 if accepted warp, 0 otherwise
-
       // holds warp information
       std::vector<AlignmentWarpInfo *> warpInfos(n, nullptr);
 
@@ -624,7 +614,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
         // Optionally CFRetain if you need to hold them past ObjC scope
       }
 
-      int oldThreads = cv::getNumThreads();   // remember current setting
+      //int oldThreads = cv::getNumThreads();   // remember current setting
       //cv::setNumThreads(1);                    // disable internal parallelism
     
       // We will run the heavy loop in parallel with OpenCV
@@ -756,17 +746,16 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               // if we got nothing, then fail fast
               if (descNeighbor.empty() || descBaseImage.empty()) {
                 // failed early: no descriptors
-                resultSuccess[idx] = 0;
-                resultMats[idx] = neighbor;
                 CFRetain((__bridge CFTypeRef)neighbor);
                 Log_e(@"%d descNeighbor or descBaseImage is empty", logID);
 
                 AlignmentWarpInfo *info =
                   [[AlignmentWarpInfo alloc]
                     initWithHomography:nil
+                           warpedFrame:nil
+                         warpedHorizon:nil
                              deviation:0
                     maxCornerDeviation:0
-                              accepted:false
                         alignmentState:AlignmentStateObjCUnableToDetectKeypoints
                      neighborKeyPoints:0
                         frameKeyPoints:0
@@ -902,19 +891,45 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                                              (double)cv::norm(projectedCorners[i] - corners[i]));
                   }
 
-                  
-                  // accept the warp only if our values are within range
-                  acceptWarp =
-                    (deviation < request.maxDeviation) &&
-                    (maxCornerDist < request.maxCornerDeviation);
+                  // if we accept the warp, then actually warp
+                  // this frame to fit the baseImage image
+                  //Log_i(@"%d %d accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf", logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
+                  //Log_i(@"%d %d accepting warp and warping", logID, ii);
+                  cv::warpPerspective(neighbor.mat, // the input to warp
+                                      warped, // the warped output
+                                      H, // the homography to warp with
+                                      neighbor.mat.size(),
+                                      cv::INTER_LINEAR,
+                                      cv::BORDER_CONSTANT,
+                                      cv::Scalar(0,0,0,0));
+
+
+                  //cv::imwrite("/tmp/warped_first_" + std::to_string(idx) + ".tiff", warped);
+
+                  if (neighborHorizon != NULL) {
+                    // warp horizon with same homography as ground
+                    //Log_i(@"%d %d accepting warp and warping horizon", logID, ii);
+                    cv::warpPerspective(neighborHorizon.mat, warpedHorizon, H,
+                                        neighborHorizon.mat.size(),
+                                        cv::INTER_LINEAR, cv::BORDER_CONSTANT,
+                                        cv::Scalar(0,0,0,0));
+
+                    // threshold so all values are 0 or 0xFF
+                    cv::threshold(warpedHorizon,
+                                  warpedHorizon,
+                                  128, // mid
+                                  255,
+                                  cv::THRESH_BINARY);
+                  }
 
                   // keep track of warp info 
                   AlignmentWarpInfo *info =
                        [[AlignmentWarpInfo alloc]
                          initWithHomography:HWrapper
+                                warpedFrame:[[MatWrapper alloc] initWithMat: warped]
+                              warpedHorizon:neighborHorizon == NULL ? nil : [[MatWrapper alloc] initWithMat: warpedHorizon]
                                   deviation:deviation
                          maxCornerDeviation:maxCornerDist
-                                   accepted:acceptWarp
                              alignmentState:AlignmentStateObjCHomographySuccess
                           neighborKeyPoints:ptsNeighbor.size()
                              frameKeyPoints:ptsBaseImage.size()
@@ -923,65 +938,15 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                   warpInfos[idx] = info;
                   CFRetain((__bridge CFTypeRef)info);
 
-
-                  if (acceptWarp) {
-                    // if we accept the warp, then actually warp
-                    // this frame to fit the baseImage image
-                    //Log_i(@"%d %d accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf", logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
-                    //Log_i(@"%d %d accepting warp and warping", logID, ii);
-                    cv::warpPerspective(neighbor.mat, // the input to warp
-                                        warped, // the warped output
-                                        H, // the homography to warp with
-                                        neighbor.mat.size(),
-                                        cv::INTER_LINEAR,
-                                        cv::BORDER_CONSTANT,
-                                        cv::Scalar(0,0,0,0));
-
-
-                    //cv::imwrite("/tmp/warped_first_" + std::to_string(idx) + ".tiff", warped);
-
-                  
-                    if (neighborHorizon != NULL) {
-                      // warp horizon with same homography as ground
-                      //Log_i(@"%d %d accepting warp and warping horizon", logID, ii);
-                      cv::warpPerspective(neighborHorizon.mat, warpedHorizon, H,
-                                          neighborHorizon.mat.size(),
-                                          cv::INTER_LINEAR, cv::BORDER_CONSTANT,
-                                          cv::Scalar(0,0,0,0));
-
-                      // threshold so all values are 0 or 0xFF
-                      cv::threshold(warpedHorizon,
-                                    warpedHorizon,
-                                    128, // mid
-                                    255,
-                                    cv::THRESH_BINARY);
-                    }
-                  } else {
-
-                    AlignmentWarpInfo *info =
-                      [[AlignmentWarpInfo alloc]
-                        initWithHomography:HWrapper
-                                 deviation:deviation
-                        maxCornerDeviation:maxCornerDist
-                                  accepted:false
-                            alignmentState:AlignmentStateObjCHomographySuccess
-                         neighborKeyPoints:ptsNeighbor.size()
-                            frameKeyPoints:ptsBaseImage.size()
-                                frameIndex:request.neighbors[idx].frameIndex];
-
-                    warpInfos[idx] = info;
-                    CFRetain((__bridge CFTypeRef)info);
-
-                    //Log_i(@"%d %d NOT accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf", logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
-                  }
                 } else {
                   // no homography found
                   AlignmentWarpInfo *info =
                     [[AlignmentWarpInfo alloc]
                       initWithHomography:nil
+                             warpedFrame:nil
+                           warpedHorizon:nil
                                deviation:0
                       maxCornerDeviation:0
-                                accepted:false
                           alignmentState:AlignmentStateObjCNoHomographyFound
                        neighborKeyPoints:0
                           frameKeyPoints:ptsBaseImage.size()
@@ -995,9 +960,10 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                 AlignmentWarpInfo *info =
                   [[AlignmentWarpInfo alloc]
                     initWithHomography:nil
+                           warpedFrame:nil
+                         warpedHorizon:nil
                              deviation:0
                     maxCornerDeviation:0
-                              accepted:false
                         alignmentState:AlignmentStateObjCNotEnoughKeypoints
                      neighborKeyPoints:0
                         frameKeyPoints:ptsBaseImage.size()
@@ -1007,137 +973,28 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                 CFRetain((__bridge CFTypeRef)info);
               }
 
-              if (acceptWarp) {
-                if (warped.channels() == 4) {
-                  // force no alpha (still necessary?)
-                  //cv::cvtColor(warped, warped, cv::COLOR_BGRA2BGR);
-                }
-                resultSuccess[idx] = 1;
-
-                MatWrapper *wrappedWarp = [[MatWrapper alloc] initWithMat: warped];
-                resultMats[idx] = wrappedWarp;
-                CFRetain((__bridge CFTypeRef)wrappedWarp);
-
-                alignedHorizonMats[idx] = [[MatWrapper alloc] initWithMat: warpedHorizon];
-                if (alignedHorizonMats[idx] != NULL)
-                  CFRetain((__bridge CFTypeRef)alignedHorizonMats[idx]);
-    
-                if(warped.empty()) {
-                  Log_w(@"warped is empty");
-                }
-              } else {
-                resultSuccess[idx] = 0;
-                resultMats[idx] = neighbor;
-                CFRetain((__bridge CFTypeRef)neighbor);
-                alignedHorizonMats[idx] = neighborHorizon;
-                if (neighborHorizon != NULL) CFRetain((__bridge CFTypeRef)neighborHorizon);
-                if(neighbor.mat.empty()) {
-                  Log_w(@"neighbor is empty");
-                }
-              }
-              //Log_i(@"%d %d done", logID, ii);
-
             } catch (const cv::Exception &e) {
               Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
               // On exception mark as failed and store original
-              resultSuccess[idx] = 0;
-              resultMats[idx] = neighbor;
               CFRetain((__bridge CFTypeRef)neighbor);
             } catch (const std::exception &e) {
               Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
-              resultSuccess[idx] = 0;
-              resultMats[idx] = neighbor;
               CFRetain((__bridge CFTypeRef)neighbor);
             } catch (...) {
               Log_e(@"Unknown Error");
-              resultSuccess[idx] = 0;
-              resultMats[idx] = neighbor;
               CFRetain((__bridge CFTypeRef)neighbor);
             }
           }
         });
 
-      cv::setNumThreads(oldThreads);           // restore
- 
-      // Gather aligned and failed in the same shape as original function
-      std::vector<MatWrapper*> aligned;
-      std::vector<MatWrapper*> failed;
-      std::vector<MatWrapper*> horizons;
+      //cv::setNumThreads(oldThreads);           // restore
 
-      NSMutableArray<AlignmentWarpInfo *> *alignedInfos = [NSMutableArray array];
-      NSMutableArray<AlignmentWarpInfo *> *failedInfos  = [NSMutableArray array];
-    
-      aligned.reserve(n);
-      failed.reserve(n);
-    
-      BOOL hasHorizon = NO;
-    
+      NSMutableArray<AlignmentWarpInfo *> *warps = [NSMutableArray array];
       for (size_t i = 0; i < n; ++i) {
-        if (resultMats[i] != nil) {
-          if (resultSuccess[i]) {
-            aligned.push_back(resultMats[i]);
-          } else {
-            failed.push_back(resultMats[i]);
-          }
-        }
-
-        if (warpInfos[i]) {
-          if (warpInfos[i].accepted) {
-            [alignedInfos addObject:warpInfos[i]];
-          } else {
-            [failedInfos addObject:warpInfos[i]];
-          }
-        }
+        if (warpInfos[i]) [warps addObject:warpInfos[i]];
+      }
       
-        if (alignedHorizonMats[i] != NULL && !alignedHorizonMats[i].mat.empty()) {
-          horizons.push_back(alignedHorizonMats[i]);
-          hasHorizon = YES;
-        }
-      }
-
-      if(hasHorizon) horizons.push_back(horizonMask); 
-    
-      // include the original image in the median merge too
-      if(aligned.size() != 0) {
-        aligned.push_back(request.baseImage);
-      }
-
-      Log_d(@"we have %zu aligned and %zu failed merges %zu alignedInfos %zu failedInfos",
-            aligned.size(), failed.size(), alignedInfos.count, failedInfos.count);
-    
-      // use median merges
-      MatWrapper * alignedResult = medianImageFromArray(aligned, request.k, false);
-      MatWrapper * failedResult = medianImageFromArray(failed, request.k, false);
-
-      // XXX set frame state to .mergingHorizon
-      MatWrapper * horizonResult = medianImageFromArray(horizons, request.k, true);
-
-      if(alignedResult.mat.empty()) {
-        Log_w(@"alignedResult is empty");
-      }
-      if(failedResult.mat.empty()) {
-        Log_w(@"failedResult is empty");
-      }
-	
-      AlignmentResult *resultObj = [AlignmentResult new];
-      resultObj.alignedMat = alignedResult;
-      resultObj.alignedWarps = alignedInfos;
-      resultObj.failedMat = failedResult;
-      resultObj.failedWarps  = failedInfos;
-      resultObj.horizonMask = horizonResult;
-
       // CFRelease temporary objects
-      for (size_t i = 0; i < n; ++i) {
-        if (resultMats[i] != NULL) {
-          CFRelease((__bridge CFTypeRef)resultMats[i]);
-          resultMats[i] = NULL;
-        }
-        if (alignedHorizonMats[i] != NULL) {
-          CFRelease((__bridge CFTypeRef)alignedHorizonMats[i]);
-          alignedHorizonMats[i] = NULL;
-        }
-      }
-
       for (size_t i = 0; i < n; ++i) {
         if (warpInfos[i]) {
           CFRelease((__bridge CFTypeRef)warpInfos[i]);
@@ -1145,7 +1002,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
         }
       }
 
-      return resultObj;
+      return warps;
 
     } catch (const cv::Exception &e) {
       Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);

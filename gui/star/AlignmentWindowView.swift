@@ -26,7 +26,10 @@ struct AlignmentWindowView: View {
         @Bindable var viewModel = viewModel
         return VStack {
             if let results = viewModel.currentFrameView.frameObserver.starAlignmentResults {
-                AlignmentDeviationChart(frames: viewModel.starAlignmentInfo)
+                AlignmentDeviationChart(
+                  goodFrames: viewModel.goodStarAlignmentInfo,
+                  badFrames: viewModel.badStarAlignmentInfo
+                )
                   .environment(viewModel)
             }
             /*
@@ -44,51 +47,71 @@ struct DeviationPoint: Identifiable {
     let offset: Int          // neighbor.frameIndex - baseFrame
     let signedDeviation: Double
     let keyPoints: Int
+    let isGood: Bool
 }
 
 struct AlignmentDeviationChart: View {
 
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
-    let frames: [[AlignmentWarpInfoCodable]]
-
+    let goodFrames: [[AlignmentWarpInfoCodable]]
+    let badFrames: [[AlignmentWarpInfoCodable]]
 
     @State private var hoveredFrame: Int?
     @State private var hoveredOffset: Int?
 
-
     @State private var xDomain: ClosedRange<Int>
     
-    init(frames: [[AlignmentWarpInfoCodable]]) {
-        self.frames = frames
+    init(
+      goodFrames: [[AlignmentWarpInfoCodable]],
+      badFrames: [[AlignmentWarpInfoCodable]]
+    ) {
+        self.goodFrames = goodFrames
+        self.badFrames = badFrames
 
-        let maxFrame = max(frames.count - 1, 0)
+        let maxFrame = max(goodFrames.count - 1, 0)
         _xDomain = State(initialValue: 0 ... maxFrame)
      }
      
     private var points: [DeviationPoint] {
-        makeDeviationPoints(frames: frames)
+        makeDeviationPoints(
+          goodFrames: goodFrames,
+          badFrames: badFrames
+        )
     }
 
+    private var pointsByOffset: [(offset: Int, points: [DeviationPoint])] {
+        Dictionary(grouping: points, by: \.offset)
+          .map { offset, pts in
+              (
+                offset: offset,
+                points: pts.sorted { $0.baseFrame < $1.baseFrame }
+              )
+          }
+          .sorted { $0.offset < $1.offset }
+    }
+
+    
     let maxVisibleDeviation: Double = 50.0 // tune this
     
     var body: some View {
         Chart {
             // === Lines ===
-            ForEach(points) { point in
-                LineMark(
-                  x: .value("Frame", point.baseFrame),
-                  y: .value("Deviation", point.signedDeviation)
-                )
-                  .foregroundStyle(
-                    by: .value(
-                      "Neighbor",
-                      point.offset > 0
-                        ? "+\(point.offset)"
-                        : "\(point.offset)"
+            ForEach(pointsByOffset, id: \.offset) { group in
+                ForEach(group.points) { point in
+                    LineMark(
+                      x: .value("Frame", point.baseFrame),
+                      y: .value("Deviation", point.signedDeviation)
                     )
-                  )
-                  .interpolationMethod(.linear)
+                      .foregroundStyle(
+                        by: .value(
+                          "Neighbor",
+                          group.offset > 0 ? "+\(group.offset)" : "\(group.offset)"
+                        )
+                      )
+                      .interpolationMethod(.linear)
+                      .opacity(point.isGood ? 1.0 : 0.4)
+                }
             }
 
             // === Current frame indicator ===
@@ -183,7 +206,7 @@ struct AlignmentDeviationChart: View {
 
         let span = xDomain.upperBound - xDomain.lowerBound
         let lower = max(0, frame - span / 2)
-        let upper = min(frames.count - 1, lower + span)
+        let upper = min(goodFrames.count - 1, lower + span)
 
         xDomain = lower ... upper
     }
@@ -199,10 +222,10 @@ struct AlignmentDeviationChart: View {
         guard delta != 0 else { return }
         var newSpan = max(10, Int(Double(currentSpan) / Double(delta)))
 
-        if newSpan > frames.count { newSpan = frames.count }
+        if newSpan > goodFrames.count { newSpan = goodFrames.count }
         if newSpan < 20 { newSpan = 20 }
         
-        let maxFrame = frames.count - 1
+        let maxFrame = goodFrames.count - 1
         let half = newSpan / 2
 
         let lower = max(0, center - half)
@@ -220,7 +243,7 @@ struct AlignmentDeviationChart: View {
     }
 
     private func shiftDomain(by delta: Int) {
-        let maxFrame = frames.count - 1
+        let maxFrame = goodFrames.count - 1
 
         let lower = max(0, xDomain.lowerBound + delta)
         let upper = min(maxFrame, lower + (xDomain.count - 1))
@@ -261,12 +284,13 @@ struct AlignmentDeviationChart: View {
     }
     
     func makeDeviationPoints(
-      frames: [[AlignmentWarpInfoCodable]]
+      goodFrames: [[AlignmentWarpInfoCodable]],
+      badFrames: [[AlignmentWarpInfoCodable]]
     ) -> [DeviationPoint] {
 
         var points: [DeviationPoint] = []
 
-        for (baseFrameIndex, neighbors) in frames.enumerated() {
+        for (baseFrameIndex, neighbors) in goodFrames.enumerated() {
             for neighbor in neighbors {
                 let offset = neighbor.frameIndex - baseFrameIndex
                 guard offset != 0 else { continue }
@@ -279,7 +303,28 @@ struct AlignmentDeviationChart: View {
                     baseFrame: baseFrameIndex,
                     offset: offset,
                     signedDeviation: signedDeviation,
-                    keyPoints: neighbor.neighborKeyPoints
+                    keyPoints: neighbor.neighborKeyPoints,
+                    isGood: true
+                  )
+                )
+            }
+        }
+
+        for (baseFrameIndex, neighbors) in badFrames.enumerated() {
+            for neighbor in neighbors {
+                let offset = neighbor.frameIndex - baseFrameIndex
+                guard offset != 0 else { continue }
+
+                let signedDeviation =
+                  offset > 0 ? neighbor.deviation : -neighbor.deviation
+
+                points.append(
+                  DeviationPoint(
+                    baseFrame: baseFrameIndex,
+                    offset: offset,
+                    signedDeviation: signedDeviation,
+                    keyPoints: neighbor.neighborKeyPoints,
+                    isGood: false
                   )
                 )
             }
@@ -328,6 +373,12 @@ private extension AlignmentDeviationChart {
             $0.baseFrame == frame && $0.offset == offset
         }?.keyPoints ?? 0
     }
+
+    func isGoodAt(frame: Int, offset: Int) -> Bool {
+        points.first {
+            $0.baseFrame == frame && $0.offset == offset
+        }?.isGood ?? false
+    }
 }
 
 
@@ -336,7 +387,8 @@ private extension AlignmentDeviationChart {
     func tooltipView(frame: Int, offset: Int) -> some View {
         let deviation = deviationAt(frame: frame, offset: offset)
         let keypoints = keyPointsAt(frame: frame, offset: offset)
-
+        let isGood = isGoodAt(frame: frame, offset: offset)
+        
         return VStack(alignment: .leading, spacing: 4) {
             Text("Frame \(frame)")
                 .font(.caption.bold())
@@ -345,7 +397,8 @@ private extension AlignmentDeviationChart {
                 .font(.caption)
 
             Text(String(format: "Deviation: %.3f", deviation))
-                .font(.caption.monospacedDigit())
+              .font(.caption.monospacedDigit())
+              .foregroundColor(isGood ? .green : .red)
 
             Text("Keypoints: \(keypoints)")
                 .font(.caption.monospacedDigit())
