@@ -184,9 +184,6 @@ struct ProcessingSettingsView: View {
 
     @State private var showHorizonStripInfo = false
 
-    @State private var showAlignmentMaxDeviationInfo = false
-    @State private var showAlignmentMaxCornerDeviationInfo = false
-
     @State private var showAlignmentMaxKeypointsInfo = false
     @State private var showAlignmentGroundHorizonExtensionInfo = false
     @State private var showAlignmentSkyHorizonExtensionInfo = false
@@ -205,8 +202,6 @@ struct ProcessingSettingsView: View {
         showCannyMaxThresholdView || showCannyL2GradientView ||
         showStaticNeighborFrameInfo || showHorizonVerticalShiftAmountView ||
         showMinAlignmentFramesInfo ||
-        showAlignmentMaxDeviationInfo ||
-        showAlignmentMaxCornerDeviationInfo ||
         showAlignmentMaxKeypointsInfo ||
         showAlignmentGroundHorizonExtensionInfo ||
         showAlignmentSkyHorizonExtensionInfo ||
@@ -234,8 +229,6 @@ struct ProcessingSettingsView: View {
         showCannyMaxThresholdView = true
         showCannyL2GradientView = true
         showHorizonVerticalShiftAmountView = true
-        showAlignmentMaxDeviationInfo = true
-        showAlignmentMaxCornerDeviationInfo = true
         showAlignmentMaxKeypointsInfo = true
         showAlignmentGroundHorizonExtensionInfo = true
         showAlignmentSkyHorizonExtensionInfo = true
@@ -263,8 +256,6 @@ struct ProcessingSettingsView: View {
         showCannyMaxThresholdView = false
         showCannyL2GradientView = false
         showHorizonVerticalShiftAmountView = false
-        showAlignmentMaxDeviationInfo = false
-        showAlignmentMaxCornerDeviationInfo = false
         showAlignmentMaxKeypointsInfo = false
         showAlignmentGroundHorizonExtensionInfo = false
         showAlignmentSkyHorizonExtensionInfo = false
@@ -361,10 +352,6 @@ struct ProcessingSettingsView: View {
                                   self.staticNeighborFrameCountView
                                   Divider()
                                   self.pixelThresholdView
-                                  Divider()
-                                  self.alignmentMaxDeviationView
-                                  Divider()
-                                  self.alignmentMaxCornerDeviationView
                                   Divider()
                                   self.alignmentMaxKeypointsView
                                   Divider()
@@ -1005,80 +992,6 @@ struct ProcessingSettingsView: View {
                       textColor: .white,
                       focusedField: $focusedField,
                       focusField: .alignmentBaseImageDilateSize,
-                      alwaysOpen: true            
-                    )
-                    Spacer()
-                }
-            }
-        }
-    }
-
-    private var alignmentMaxDeviationView: some View {
-        @Bindable var viewModel = viewModel
-        return InfoTextInstructionGridRow(
-          showInfo: $showAlignmentMaxDeviationInfo,
-          addSpacer: { addSpacer },
-          infoText: """
-            This parameter is used to weed out poorly aligned frames, it is assumed that frames that have max warping more than this have been badly aligned.  
-            """
-        ) {
-            HStack {
-                HStack {
-                    Spacer()
-                    Text("Max Deviation:")
-                      .font(.title2)
-                      .foregroundColor(.white)
-                      .opacity(0.6)
-                }
-                HStack {
-                    EditableNumberView(
-                      value: $viewModel.alignmentMaxDeviation,
-                      minValue: 0.001,
-                      maxValue: 10000,
-                      allowDecimal: true,
-                      fullTextProvider: { _ in "" },
-                      prefixText: "",
-                      suffixTextProvider: { _ in "" },
-                      textColor: .white,
-                      focusedField: $focusedField,
-                      focusField: .alignmentMaxDeviation,
-                      alwaysOpen: true            
-                    )
-                    Spacer()
-                }
-            }
-        }
-    }
-
-    private var alignmentMaxCornerDeviationView: some View {
-        @Bindable var viewModel = viewModel
-        return InfoTextInstructionGridRow(
-          showInfo: $showAlignmentMaxCornerDeviationInfo,
-          addSpacer: { addSpacer },
-          infoText: """
-            This parameter is used to weed out poorly aligned frames, it is assumed that frames that have corner warping more than this have been badly aligned.  
-            """
-        ) {
-            HStack {
-                HStack {
-                    Spacer()
-                    Text("Max Corner Deviation:")
-                      .font(.title2)
-                      .foregroundColor(.white)
-                      .opacity(0.6)
-                }
-                HStack {
-                    EditableNumberView(
-                      value: $viewModel.alignmentMaxCornerDeviation,
-                      minValue: 0.001,
-                      maxValue: 10000,
-                      allowDecimal: true,
-                      fullTextProvider: { _ in "" },
-                      prefixText: "",
-                      suffixTextProvider: { _ in "" },
-                      textColor: .white,
-                      focusedField: $focusedField,
-                      focusField: .alignmentMaxCornerDeviation,
                       alwaysOpen: true            
                     )
                     Spacer()

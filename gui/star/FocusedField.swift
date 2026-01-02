@@ -23,7 +23,5 @@ enum FocusedField: Hashable {
     case alignmentNeighborThresholdValue
     case alignmentGroundHorizonExtension
     case alignmentSkyHorizonExtension
-    case alignmentMaxDeviation
-    case alignmentMaxCornerDeviation
 }
 

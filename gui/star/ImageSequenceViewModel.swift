@@ -511,22 +511,6 @@ public final class ImageSequenceViewModel {
     }
 
 
-    public var alignmentMaxDeviation: Double {
-        didSet {
-            var realConfig = config.config()
-            realConfig.alignmentMaxDeviation = alignmentMaxDeviation
-            config.update(realConfig)
-        }
-    }
-
-    public var alignmentMaxCornerDeviation: Double {
-        didSet {
-            var realConfig = config.config()
-            realConfig.alignmentMaxCornerDeviation = alignmentMaxCornerDeviation
-            config.update(realConfig)
-        }
-    }
-    
     public var alignmentMaxKeypoints: Int {
         didSet {
             var realConfig = config.config()
@@ -777,9 +761,6 @@ public final class ImageSequenceViewModel {
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.maxConcurrentHorizonCalculations = config.maxConcurrentHorizonCalculations
         self.horizonVerticalShiftAmount = config.horizonVerticalShiftAmount
-
-        self.alignmentMaxDeviation = config.alignmentMaxDeviation
-        self.alignmentMaxCornerDeviation = config.alignmentMaxCornerDeviation 
 
         self.alignmentMaxKeypoints = config.alignmentMaxKeypoints
         self.alignmentGroundHorizonExtension = config.alignmentGroundHorizonExtension
