@@ -10,6 +10,12 @@ struct AlignmentWindowView: View {
     @State private var showStarDeviation = true
     @State private var showEarthDeviation = true
     
+    @State private var showStarKeypoints = true
+    @State private var showEarthKeypoints = true
+
+    @State private var showGoodPoints = true
+    @State private var showBadPoints = true
+    
     var body: some View {
 
         return ZStack {
@@ -31,27 +37,50 @@ struct AlignmentWindowView: View {
         return HStack {
             self.controlsView
 
-            VStack(alignment: .leading) {
-                if showStarDeviation,
-                   let results = viewModel.currentFrameView.frameObserver.starAlignmentResults {
-                    Text("Deviation in Star Alignment")
-                    AlignmentDeviationChart(
-                      goodFrames: viewModel.goodStarAlignmentInfo,
-                      badFrames: viewModel.badStarAlignmentInfo
-                    )
-                      .environment(viewModel)
-                }
-                if showEarthDeviation,
-                   let results = viewModel.currentFrameView.frameObserver.earthAlignmentResults {
-                    Text("Deviation in Earth Alignment")
-                    AlignmentDeviationChart(
-                      goodFrames: viewModel.goodEarthAlignmentInfo,
-                      badFrames: viewModel.badEarthAlignmentInfo
-                    )
-                      .environment(viewModel)
+            ScrollView {
+                VStack(alignment: .leading) {
+                    if let results = viewModel.currentFrameView.frameObserver.starAlignmentResults {
+                        if showStarDeviation {
+                            Text("Deviation in Star Alignment")
+                            AlignmentDeviationChart(
+                              goodFrames: viewModel.goodStarAlignmentInfo,
+                              badFrames: viewModel.badStarAlignmentInfo,
+                              showGoodPoints: $showGoodPoints,
+                              showBadPoints: $showBadPoints
+                            )
+                        }
+                        if showStarKeypoints {
+                            AlignmentKeypointsChart(
+                              goodFrames: viewModel.goodStarAlignmentInfo,
+                              badFrames: viewModel.badStarAlignmentInfo,
+                              showGoodPoints: $showGoodPoints,
+                              showBadPoints: $showBadPoints
+                            )
+                        }
+                    }
+                    if let results = viewModel.currentFrameView.frameObserver.earthAlignmentResults {
+                        if showEarthDeviation {
+                            Text("Deviation in Earth Alignment")
+                            AlignmentDeviationChart(
+                              goodFrames: viewModel.goodEarthAlignmentInfo,
+                              badFrames: viewModel.badEarthAlignmentInfo,
+                              showGoodPoints: $showGoodPoints,
+                              showBadPoints: $showBadPoints
+                            )
+                        }
+                        if showEarthKeypoints {
+                            AlignmentKeypointsChart(
+                              goodFrames: viewModel.goodEarthAlignmentInfo,
+                              badFrames: viewModel.badEarthAlignmentInfo,
+                              showGoodPoints: $showGoodPoints,
+                              showBadPoints: $showBadPoints
+                            )
+                        }
+                    }
                 }
             }
         }
+          .environment(viewModel)
     }
 
     private var controlsView: some View {
@@ -59,7 +88,11 @@ struct AlignmentWindowView: View {
             Space(height: 60)
             Text("Show:")
             Toggle("Star Deviation", isOn: $showStarDeviation)
+            Toggle("Star Keypoints", isOn: $showStarKeypoints)
             Toggle("Earth Deviation", isOn: $showEarthDeviation)
+            Toggle("Earth Keypoints", isOn: $showEarthKeypoints)
+            Toggle("Good Points", isOn: $showGoodPoints)
+            Toggle("Bad Points", isOn: $showBadPoints)
             Spacer()
         }
     }
@@ -74,12 +107,14 @@ struct DeviationPoint: Identifiable {
     let isGood: Bool
 }
 
-struct AlignmentDeviationChart: View {
-
+struct AlignmentKeypointsChart: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
     let goodFrames: [[AlignmentWarpInfoCodable]]
     let badFrames: [[AlignmentWarpInfoCodable]]
+
+    @Binding var showGoodPoints: Bool
+    @Binding var showBadPoints: Bool
 
     @State private var hoveredFrame: Int?
     @State private var hoveredOffset: Int?
@@ -88,8 +123,291 @@ struct AlignmentDeviationChart: View {
     
     init(
       goodFrames: [[AlignmentWarpInfoCodable]],
-      badFrames: [[AlignmentWarpInfoCodable]]
+      badFrames: [[AlignmentWarpInfoCodable]],
+      showGoodPoints: Binding<Bool>,
+      showBadPoints: Binding<Bool>
     ) {
+        self._showGoodPoints = showGoodPoints
+        self._showBadPoints = showBadPoints
+        self.goodFrames = goodFrames
+        self.badFrames = badFrames
+
+        let maxFrame = max(goodFrames.count - 1, 0)
+        _xDomain = State(initialValue: 0 ... maxFrame)
+     }
+     
+    private var points: [DeviationPoint] {
+        makeKeyframePoints(
+          goodFrames: goodFrames,
+          badFrames: badFrames
+        )
+    }
+
+    private var pointsByOffset: [(offset: Int, points: [DeviationPoint])] {
+        Dictionary(grouping: points, by: \.offset)
+          .map { offset, pts in
+              (
+                offset: offset,
+                points: pts.sorted { $0.baseFrame < $1.baseFrame }
+              )
+          }
+          .sorted { $0.offset < $1.offset }
+    }
+
+    
+    var body: some View {
+        Chart {
+            // === Lines ===
+            if showGoodPoints {
+                ForEach(pointsByOffset, id: \.offset) { group in
+                    ForEach(group.points.filter(\.isGood)) { point in
+                        LineMark(
+                          x: .value("Frame", point.baseFrame),
+                          y: .value("KeyPoints", point.keyPoints)
+                        )
+                          .foregroundStyle(
+                            by: .value(
+                              "Neighbor",
+                              group.offset > 0 ? "+\(group.offset)" : "\(group.offset)"
+                            )
+                          )
+                          .interpolationMethod(.linear)
+                          .opacity(point.isGood ? 1.0 : 0.4) // XXX doesn't work
+                    }
+                }
+            }
+
+            // BAD: translucent dots
+            if showBadPoints {
+                ForEach(points.filter { !$0.isGood }) { point in
+                    PointMark(
+                      x: .value("Frame", point.baseFrame),
+                      y: .value("KeyPoints", point.keyPoints)
+                    )
+                      .foregroundStyle(
+                        by: .value(
+                          "Neighbor",
+                          point.offset > 0 ? "+\(point.offset)" : "\(point.offset)"
+                        )
+                      )
+                      .opacity(0.5)
+                      .symbolSize(20)
+                }
+            }
+            
+            // === Current frame indicator ===
+            RuleMark(
+              x: .value("Current Frame", viewModel.currentIndex)
+            )
+              .lineStyle(StrokeStyle(lineWidth: 2))
+              .foregroundStyle(.red)
+              .annotation(position: .top, alignment: .leading) {
+                  Text("Current")
+                    .font(.caption)
+                    .foregroundColor(.red)
+              }
+
+            // === Hover indicator ===
+            if let hoveredFrame, let hoveredOffset {
+                RuleMark(
+                  x: .value("Hover Frame", hoveredFrame)
+                )
+                  .foregroundStyle(.gray.opacity(0.4))
+
+                PointMark(
+                  x: .value("Frame", hoveredFrame),
+                  y: .value(
+                    "Deviation",
+                    keyPointsAt(frame: hoveredFrame, offset: hoveredOffset)
+                  )
+                )
+                  .symbolSize(60)
+                  .annotation(position: .top) {
+                      tooltipView(
+                        frame: hoveredFrame,
+                        offset: hoveredOffset
+                      )
+                  }
+            }
+        }
+          .chartPlotStyle { $0.clipped() }
+          .onChange(of: viewModel.currentIndex) { 
+              ensureVisible(frame: viewModel.currentIndex)
+          }
+          .chartXScale(domain: xDomain)
+//          .chartYScale(domain: 0 ... maxVisibleDeviation)
+          .chartXAxisLabel("Frame Index")
+          .chartYAxisLabel("Number of Key Points")
+          .chartLegend(position: .trailing)
+          //.chartYScale(domain: symmetricDomain())
+          .chartOverlay { proxy in
+              GeometryReader { geo in
+                  Rectangle()
+                    .fill(.clear)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if let hoveredFrame {
+                            viewModel.currentIndex = hoveredFrame
+                        }
+                    }
+                    .simultaneousGesture(
+                      DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            pan(by: value.translation.width)
+                        }
+                    )
+                    .simultaneousGesture(
+                      MagnificationGesture()
+                        .onChanged { scale in
+                            zoom(scale: scale)
+                        }
+                        .onEnded { _ in
+                            lastMagnification = 1.0
+                        }
+                    )
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case .active(let location):
+                            updateHover(
+                              location: location,
+                              proxy: proxy,
+                              geometry: geo
+                            )
+                        case .ended:
+                            hoveredFrame = nil
+                            hoveredOffset = nil
+                        }
+                    }
+              }
+          }
+          .frame(minHeight: 320)
+    }
+    
+    @State private var lastMagnification: CGFloat = 1.0
+
+    private func zoom(scale: CGFloat) {
+        let delta = scale / lastMagnification
+        lastMagnification = scale
+
+        let center = (xDomain.lowerBound + xDomain.upperBound) / 2
+        let currentSpan = xDomain.upperBound - xDomain.lowerBound
+        guard delta != 0 else { return }
+        var newSpan = max(10, Int(Double(currentSpan) / Double(delta)))
+
+        if newSpan > goodFrames.count { newSpan = goodFrames.count }
+        if newSpan < 20 { newSpan = 20 }
+        
+        let maxFrame = goodFrames.count - 1
+        let half = newSpan / 2
+
+        let lower = max(0, center - half)
+        let upper = min(maxFrame, center + half)
+
+        xDomain = lower ... upper
+    }
+
+    
+    private func pan(by translation: CGFloat) {
+        let span = xDomain.upperBound - xDomain.lowerBound
+        let delta = Int(Double(translation) * Double(span) / 300.0)
+
+        shiftDomain(by: -delta)
+    }
+
+    private func shiftDomain(by delta: Int) {
+        let maxFrame = goodFrames.count - 1
+
+        let lower = max(0, xDomain.lowerBound + delta)
+        let upper = min(maxFrame, lower + (xDomain.count - 1))
+
+        if lower < upper { xDomain = lower ... upper }
+    }
+    
+    func makeKeyframePoints(
+      goodFrames: [[AlignmentWarpInfoCodable]],
+      badFrames: [[AlignmentWarpInfoCodable]]
+    ) -> [DeviationPoint] {
+
+        var points: [DeviationPoint] = []
+
+        for (baseFrameIndex, neighbors) in goodFrames.enumerated() {
+            for neighbor in neighbors {
+                let offset = neighbor.frameIndex - baseFrameIndex
+                guard offset != 0 else { continue }
+
+                let signedDeviation =
+                  offset > 0 ? neighbor.deviation : -neighbor.deviation
+
+                points.append(
+                  DeviationPoint(
+                    baseFrame: baseFrameIndex,
+                    offset: offset,
+                    signedDeviation: signedDeviation,
+                    keyPoints: neighbor.neighborKeyPoints,
+                    isGood: true
+                  )
+                )
+            }
+        }
+
+        for (baseFrameIndex, neighbors) in badFrames.enumerated() {
+            for neighbor in neighbors {
+                let offset = neighbor.frameIndex - baseFrameIndex
+                guard offset != 0 else { continue }
+
+                let signedDeviation =
+                  offset > 0 ? neighbor.deviation : -neighbor.deviation
+
+                points.append(
+                  DeviationPoint(
+                    baseFrame: baseFrameIndex,
+                    offset: offset,
+                    signedDeviation: signedDeviation,
+                    keyPoints: neighbor.neighborKeyPoints,
+                    isGood: false
+                  )
+                )
+            }
+        }
+
+        return points
+    }
+
+    private func ensureVisible(frame: Int) {
+        guard !xDomain.contains(frame) else { return }
+
+        let span = xDomain.upperBound - xDomain.lowerBound
+        let lower = max(0, frame - span / 2)
+        let upper = min(goodFrames.count - 1, lower + span)
+
+        xDomain = lower ... upper
+    }
+
+}
+
+struct AlignmentDeviationChart: View {
+
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+
+    let goodFrames: [[AlignmentWarpInfoCodable]]
+    let badFrames: [[AlignmentWarpInfoCodable]]
+
+    @Binding var showGoodPoints: Bool
+    @Binding var showBadPoints: Bool
+
+    @State private var hoveredFrame: Int?
+    @State private var hoveredOffset: Int?
+
+    @State private var xDomain: ClosedRange<Int>
+    
+    init(
+      goodFrames: [[AlignmentWarpInfoCodable]],
+      badFrames: [[AlignmentWarpInfoCodable]],
+      showGoodPoints: Binding<Bool>,
+      showBadPoints: Binding<Bool>
+    ) {
+        self._showGoodPoints = showGoodPoints
+        self._showBadPoints = showBadPoints
         self.goodFrames = goodFrames
         self.badFrames = badFrames
 
@@ -121,37 +439,41 @@ struct AlignmentDeviationChart: View {
     var body: some View {
         Chart {
             // === Lines ===
-            ForEach(pointsByOffset, id: \.offset) { group in
-                ForEach(group.points.filter(\.isGood)) { point in
-                    LineMark(
+            if showGoodPoints {
+                ForEach(pointsByOffset, id: \.offset) { group in
+                    ForEach(group.points.filter(\.isGood)) { point in
+                        LineMark(
+                          x: .value("Frame", point.baseFrame),
+                          y: .value("Deviation", point.signedDeviation)
+                        )
+                          .foregroundStyle(
+                            by: .value(
+                              "Neighbor",
+                              group.offset > 0 ? "+\(group.offset)" : "\(group.offset)"
+                            )
+                          )
+                          .interpolationMethod(.linear)
+                          .opacity(point.isGood ? 1.0 : 0.4) // XXX doesn't work
+                    }
+                }
+            }
+                
+            // BAD: translucent dots
+            if showBadPoints {
+                ForEach(points.filter { !$0.isGood }) { point in
+                    PointMark(
                       x: .value("Frame", point.baseFrame),
                       y: .value("Deviation", point.signedDeviation)
                     )
                       .foregroundStyle(
                         by: .value(
                           "Neighbor",
-                          group.offset > 0 ? "+\(group.offset)" : "\(group.offset)"
+                          point.offset > 0 ? "+\(point.offset)" : "\(point.offset)"
                         )
                       )
-                      .interpolationMethod(.linear)
-                      .opacity(point.isGood ? 1.0 : 0.4) // XXX doesn't work
+                      .opacity(0.5)
+                      .symbolSize(20)
                 }
-            }
-
-            // BAD: translucent dots
-            ForEach(points.filter { !$0.isGood }) { point in
-                PointMark(
-                  x: .value("Frame", point.baseFrame),
-                  y: .value("Deviation", point.signedDeviation)
-                )
-                  .foregroundStyle(
-                    by: .value(
-                      "Neighbor",
-                      point.offset > 0 ? "+\(point.offset)" : "\(point.offset)"
-                    )
-                  )
-                  .opacity(0.5)
-                  .symbolSize(20)
             }
             
             // === Current frame indicator ===
@@ -440,6 +762,81 @@ private extension AlignmentDeviationChart {
             Text(String(format: "Deviation: %.3f", deviation))
               .font(.caption.monospacedDigit())
               .foregroundColor(isGood ? .green : .red)
+
+            Text("Keypoints: \(keypoints)")
+                .font(.caption.monospacedDigit())
+        }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(.background)
+                .shadow(radius: 3)
+        )
+    }
+}
+
+//
+
+private extension AlignmentKeypointsChart {
+
+    func updateHover(
+        location: CGPoint,
+        proxy: ChartProxy,
+        geometry: GeometryProxy
+    ) {
+        let plotOrigin = geometry[proxy.plotAreaFrame].origin
+        let relativeX = location.x - plotOrigin.x
+        let relativeY = location.y - plotOrigin.y
+
+        guard
+            let frame: Int = proxy.value(atX: relativeX),
+            let keypoints: Double = proxy.value(atY: relativeY)
+        else { return }
+
+        // Find closest offset at this frame
+        let candidates = points.filter { $0.baseFrame == frame }
+
+        guard let closest = candidates.min(by: {
+            abs($0.keyPoints - Int(keypoints)) <
+            abs($1.keyPoints - Int(keypoints))
+        }) else { return }
+
+        hoveredFrame = frame
+        hoveredOffset = closest.offset
+    }
+
+    func deviationAt(frame: Int, offset: Int) -> Double {
+        points.first {
+            $0.baseFrame == frame && $0.offset == offset
+        }?.signedDeviation ?? 0
+    }
+
+    func keyPointsAt(frame: Int, offset: Int) -> Int {
+        points.first {
+            $0.baseFrame == frame && $0.offset == offset
+        }?.keyPoints ?? 0
+    }
+
+    func isGoodAt(frame: Int, offset: Int) -> Bool {
+        points.first {
+            $0.baseFrame == frame && $0.offset == offset
+        }?.isGood ?? false
+    }
+}
+
+
+private extension AlignmentKeypointsChart {
+
+    func tooltipView(frame: Int, offset: Int) -> some View {
+        let keypoints = keyPointsAt(frame: frame, offset: offset)
+        let isGood = isGoodAt(frame: frame, offset: offset)
+        
+        return VStack(alignment: .leading, spacing: 4) {
+            Text("Frame \(frame)")
+                .font(.caption.bold())
+
+            Text("Neighbor offset: \(offset > 0 ? "+" : "")\(offset)")
+                .font(.caption)
 
             Text("Keypoints: \(keypoints)")
                 .font(.caption.monospacedDigit())
