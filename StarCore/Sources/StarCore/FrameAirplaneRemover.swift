@@ -22,20 +22,6 @@ You should have received a copy of the GNU General Public License along with sta
 
 // the first pass is done upon init, finding and pruning outlier groups
 
-public struct FrameAlignmentResults: Codable, Sendable {
-    public let numberAligned: [AlignmentWarpInfoCodable]
-    public let numberFailed: [AlignmentWarpInfoCodable]
-
-    public var total: Int { numberAligned.count + numberFailed.count }
-}
-
-public enum FrameSavingState: Sendable {
-    case notSaving
-    case inPurgatory
-    case savePending
-    case saving
-}
-
 public let finalMonitor = FileSystemMonitor(max: 32)
 
 public let classificationTimingDataHolder = ClassificationTimingDataHolder()
@@ -64,62 +50,6 @@ public actor ClassificationTimingDataHolder {
     }
 }
 
-@MainActor
-@Observable
-public class FrameObserver {
-    public init() { }
-
-    public var numberOfPositiveOutliers: Int? 
-    public var numberOfNegativeOutliers: Int? 
-    public var numberOfUndecidedOutliers: Int?
-    public var numberOfTrashOutliers: Int?
-
-    public var starAlignmentResults: FrameAlignmentResults?
-    public var earthAlignmentResults: FrameAlignmentResults?
-
-    public var cleanMethod: CleanMethod?
-    
-    // XXX stick more here, like state
-
-    public func set(cleanMethod: CleanMethod) {
-        self.cleanMethod = cleanMethod
-    }
-    
-    public func set(starAlignmentResults: FrameAlignmentResults) {
-        self.starAlignmentResults = starAlignmentResults
-    }
-
-    public func set(earthAlignmentResults: FrameAlignmentResults) {
-        self.earthAlignmentResults = earthAlignmentResults
-    }
-    
-    public func set(numberOfPositiveOutliers: Int) {
-        self.numberOfPositiveOutliers = numberOfPositiveOutliers
-    }
-
-    public func set(numberOfNegativeOutliers: Int) {
-        self.numberOfNegativeOutliers = numberOfNegativeOutliers
-    }
-
-    public func set(numberOfUndecidedOutliers: Int) {
-        self.numberOfUndecidedOutliers = numberOfUndecidedOutliers
-    }
-
-    public func set(numberOfTrashOutliers: Int) {
-        self.numberOfTrashOutliers = numberOfTrashOutliers
-    }
-    
-    func set(numberOfPositiveOutliers: Int,
-             numberOfNegativeOutliers: Int,
-             numberOfUndecidedOutliers: Int,
-             numberOfTrashOutliers: Int)
-    {
-        self.numberOfPositiveOutliers = numberOfPositiveOutliers
-        self.numberOfNegativeOutliers = numberOfNegativeOutliers
-        self.numberOfUndecidedOutliers = numberOfUndecidedOutliers
-        self.numberOfTrashOutliers = numberOfTrashOutliers
-    }
-}
 
 final public actor FrameAirplaneRemover: Equatable, Hashable {
 
@@ -855,7 +785,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 } else if let results = result as? [kht_bridge.AlignmentWarpInfo] {
                     Log.d("got \(results.count) warp infos back from alignment")
                     // do the calculations here to figure out which alignments are ok
-                    
+
                     let outlierThreshold = pixelThreshold
                     /*
 
@@ -3595,69 +3525,3 @@ public extension AlignmentResult {
     var numFailed: Int { failedWarps.count }
 }
 
-/// Swift-only, JSON-safe representation
-public struct AlignmentWarpInfoCodable: Codable, Sendable {
-    /// Row-major 3x3 homography (length = 9)
-    public let homography: [Double]?
-
-    public let deviation: Double
-    public let maxCornerDeviation: Double
-    public let alignmentState: AlignmentState
-    public let neighborKeyPoints: Int
-    public let frameKeyPoints: Int
-    public let frameIndex: Int
-}
-
-public extension AlignmentWarpInfo {
-
-    func toCodable() -> AlignmentWarpInfoCodable {
-        let homographyArray: [Double]?
-
-        if let wrapper = homography,
-           let values = wrapper.homographyValues() {
-            homographyArray = values.map { $0.doubleValue }
-        } else {
-            homographyArray = nil
-        }
-
-        return AlignmentWarpInfoCodable(
-            homography: homographyArray,
-            deviation: deviation,
-            maxCornerDeviation: maxCornerDeviation,
-            alignmentState: AlignmentState(objcState: alignmentState) ?? .unknown,
-            neighborKeyPoints: Int(neighborKeyPoints),
-            frameKeyPoints: Int(frameKeyPoints),
-            frameIndex: Int(frameIndex)
-        )
-    }
-}
-
-public extension AlignmentWarpInfo {
-
-    /// Reconstruct from Codable representation
-    convenience init(from codable: AlignmentWarpInfoCodable) {
-        let homographyWrapper: MatWrapper?
-
-        if let h = codable.homography {
-            precondition(h.count == 9, "Homography must have 9 elements")
-
-            homographyWrapper = h.withUnsafeBufferPointer { buffer in
-                MatWrapper(homographyValues: buffer.baseAddress!)
-            }
-        } else {
-            homographyWrapper = nil
-        }
-
-        self.init(
-          homography: homographyWrapper,
-          warpedFrame: nil,
-          warpedHorizon: nil,
-          deviation: codable.deviation,
-          maxCornerDeviation: codable.maxCornerDeviation,
-          alignmentState: codable.alignmentState.objcValue ?? AlignmentStateObjC.unknown,
-          neighborKeyPoints: Int32(codable.neighborKeyPoints),
-          frameKeyPoints: Int32(codable.frameKeyPoints),
-          frameIndex: UInt(codable.frameIndex)
-        )
-    }
-}
