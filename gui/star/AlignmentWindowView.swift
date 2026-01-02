@@ -122,7 +122,7 @@ struct AlignmentDeviationChart: View {
         Chart {
             // === Lines ===
             ForEach(pointsByOffset, id: \.offset) { group in
-                ForEach(group.points) { point in
+                ForEach(group.points.filter(\.isGood)) { point in
                     LineMark(
                       x: .value("Frame", point.baseFrame),
                       y: .value("Deviation", point.signedDeviation)
@@ -138,6 +138,22 @@ struct AlignmentDeviationChart: View {
                 }
             }
 
+            // BAD: translucent dots
+            ForEach(points.filter { !$0.isGood }) { point in
+                PointMark(
+                  x: .value("Frame", point.baseFrame),
+                  y: .value("Deviation", point.signedDeviation)
+                )
+                  .foregroundStyle(
+                    by: .value(
+                      "Neighbor",
+                      point.offset > 0 ? "+\(point.offset)" : "\(point.offset)"
+                    )
+                  )
+                  .opacity(0.5)
+                  .symbolSize(20)
+            }
+            
             // === Current frame indicator ===
             RuleMark(
               x: .value("Current Frame", viewModel.currentIndex)
