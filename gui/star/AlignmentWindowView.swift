@@ -35,8 +35,6 @@ struct AlignmentWindowView: View {
     func mainView(_ viewModel: ImageSequenceViewModel) -> some View {
         @Bindable var viewModel = viewModel
         return HStack {
-            self.controlsView
-
             ScrollView {
                 VStack(alignment: .leading) {
                     if let results = viewModel.currentFrameView.frameObserver.starAlignmentResults {
@@ -79,6 +77,7 @@ struct AlignmentWindowView: View {
                     }
                 }
             }
+            self.controlsView
         }
           .environment(viewModel)
     }
@@ -136,6 +135,7 @@ struct DeviationPoint: Identifiable {
     let offset: Int          // neighbor.frameIndex - baseFrame
     let signedDeviation: Double
     let keyPoints: Int
+    let alignmentState: AlignmentState
     let isGood: Bool
 }
 
@@ -376,6 +376,7 @@ struct AlignmentKeypointsChart: View {
                     offset: offset,
                     signedDeviation: signedDeviation,
                     keyPoints: neighbor.neighborKeyPoints,
+                    alignmentState: neighbor.alignmentState,
                     isGood: true
                   )
                 )
@@ -396,6 +397,7 @@ struct AlignmentKeypointsChart: View {
                     offset: offset,
                     signedDeviation: signedDeviation,
                     keyPoints: neighbor.neighborKeyPoints,
+                    alignmentState: neighbor.alignmentState,
                     isGood: false
                   )
                 )
@@ -698,6 +700,7 @@ struct AlignmentDeviationChart: View {
                     offset: offset,
                     signedDeviation: signedDeviation,
                     keyPoints: neighbor.neighborKeyPoints,
+                    alignmentState: neighbor.alignmentState,
                     isGood: true
                   )
                 )
@@ -718,6 +721,7 @@ struct AlignmentDeviationChart: View {
                     offset: offset,
                     signedDeviation: signedDeviation,
                     keyPoints: neighbor.neighborKeyPoints,
+                    alignmentState: neighbor.alignmentState,
                     isGood: false
                   )
                 )
@@ -773,6 +777,12 @@ private extension AlignmentDeviationChart {
             $0.baseFrame == frame && $0.offset == offset
         }?.isGood ?? false
     }
+
+    func alignmentStateAt(frame: Int, offset: Int) -> AlignmentState {
+        points.first {
+            $0.baseFrame == frame && $0.offset == offset
+        }?.alignmentState ?? .unknown
+    }
 }
 
 
@@ -782,6 +792,7 @@ private extension AlignmentDeviationChart {
         let deviation = deviationAt(frame: frame, offset: offset)
         let keypoints = keyPointsAt(frame: frame, offset: offset)
         let isGood = isGoodAt(frame: frame, offset: offset)
+        let alignmentState = alignmentStateAt(frame: frame, offset: offset)
         
         return VStack(alignment: .leading, spacing: 4) {
             Text("Frame \(frame)")
@@ -795,7 +806,10 @@ private extension AlignmentDeviationChart {
               .foregroundColor(isGood ? .green : .red)
 
             Text("Keypoints: \(keypoints)")
-                .font(.caption.monospacedDigit())
+              .font(.caption.monospacedDigit())
+
+            Text("Aligned: \(alignmentState)")
+              .font(.caption.monospacedDigit())
         }
         .padding(8)
         .background(
