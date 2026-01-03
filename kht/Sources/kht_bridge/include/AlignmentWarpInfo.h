@@ -6,8 +6,9 @@ typedef NS_ENUM(NSInteger, AlignmentStateObjC) {
     AlignmentStateObjCNotEnoughKeypoints      = 1,
     AlignmentStateObjCNoHomographyFound       = 2,
     AlignmentStateObjCHomographySuccess       = 3,
-    AlignmentStateObjCNoAlignment             = 4,
-    AlignmentStateObjCUnknown                 = 5,
+    AlignmentStateObjCUsedExistingHomography  = 4,
+    AlignmentStateObjCNoAlignment             = 5,
+    AlignmentStateObjCUnknown                 = 6,
 };
 
 @interface AlignmentWarpInfo : NSObject

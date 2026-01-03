@@ -1048,7 +1048,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                                 warpedFrame:[[MatWrapper alloc] initWithMat: warped]
                               warpedHorizon:maskFilename == nil ? nil : [[MatWrapper alloc] initWithMat: warpedMask]
                                   deviation:deviation
-                             alignmentState:AlignmentStateObjCHomographySuccess
+                             alignmentState:AlignmentStateObjCUsedExistingHomography
                           neighborKeyPoints:0
                              frameKeyPoints:0
                                  frameIndex:request.neighbors[i].frameIndex];
