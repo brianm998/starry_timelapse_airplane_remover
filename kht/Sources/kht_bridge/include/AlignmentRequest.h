@@ -23,6 +23,7 @@
 @property(nonatomic, assign) int baseImageThresholdValue;
 @property(nonatomic, assign) int neighborDilateSize;
 @property(nonatomic, assign) int neighborThresholdValue;
+@property(nonatomic, strong, nullable) NSDictionary<NSNumber *, MatWrapper *> *homography;
 
 - (instancetype _Nonnull)initWithBaseImage:(MatWrapper * _Nonnull)baseImage
                                 frameIndex:(int)frameIndex // frame index of baseImage
@@ -38,7 +39,8 @@
                        baseImageDilateSize:(int)baseImageDilateSize
                    baseImageThresholdValue:(int)baseImageThresholdValue
                         neighborDilateSize:(int)neighborDilateSize
-                    neighborThresholdValue:(int)neighborThresholdValue;
+                    neighborThresholdValue:(int)neighborThresholdValue
+                                homography:(NSDictionary<NSNumber *, MatWrapper *> * _Nullable)homography;
 
 @end
 

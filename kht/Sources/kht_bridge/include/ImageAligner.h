@@ -28,6 +28,9 @@
 // main alignment method
 + (id _Nullable)alignWithRequest:(AlignmentRequest * _Nonnull)request;
 
+// doesn't compute homography, expects it
++ (id _Nullable)alignWithExistingHomographyRequest:(AlignmentRequest * _Nonnull)request;
+
 +(MatWrapper * _Nonnull)createGradientMaskIntoSky:(MatWrapper* _Nonnull)binaryMask
                                  gradientDistance:(int)gradientDistance;
 

@@ -16,6 +16,7 @@
           baseImageThresholdValue:(int)baseImageThresholdValue
                neighborDilateSize:(int)neighborDilateSize
            neighborThresholdValue:(int)neighborThresholdValue
+                       homography:(NSDictionary<NSNumber *, MatWrapper *> *)homography
 {
   self.baseImage = baseImage;
   self.frameIndex = frameIndex;
@@ -31,6 +32,7 @@
   self.baseImageThresholdValue = baseImageThresholdValue;
   self.neighborDilateSize = neighborDilateSize;
   self.neighborThresholdValue = neighborThresholdValue;
+  self.homography = homography;
   return self;
 }
 @end

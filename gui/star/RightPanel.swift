@@ -184,8 +184,17 @@ struct RightPanel: View {
                                   self.focusedField = nil
                               }
 
-*/                            
-                            Toggle("Only Unclassified", isOn: $viewModel.classifyOnlyUnclassified)
+                             */
+                            Toggle(
+                              "Fix Bad Alignment", // XXX ???
+                              isOn: $viewModel.useExistingHomography
+                            )
+                              .foregroundColor(.red)
+                            
+                            Toggle(
+                              "Only Unclassified",
+                              isOn: $viewModel.classifyOnlyUnclassified
+                            )
                               .foregroundColor(.orange)
                             
                             // frame rate 

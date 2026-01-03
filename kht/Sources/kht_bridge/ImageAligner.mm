@@ -460,12 +460,16 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
  * Uses different logic for sky and earth alignment, alignmentType governs that.
  */
 + (id _Nullable)alignWithRequest:(AlignmentRequest * _Nonnull)request {
-
   @try {
     try {
       // how many threads opencv can use
       //    cv::setNumThreads(36);    // XXX make this a parameter?
 
+      if(request.homography != nil) {
+        // use passed homography
+        return [ImageAligner alignWithExistingHomographyRequest:request];
+      }
+      
       // random logID
       uint32_t logID = arc4random_uniform(1000);
 
@@ -854,7 +858,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               if (ptsNeighbor.size() >= 4) {
                 //Log_d(@"%d has $zu control points", logID, ptsNeighbor.size());
                 // find homography between the matched keypoints 
-                  cv::Mat H = cv::findHomography(ptsNeighbor, ptsBaseImage, cv::RANSAC, 10);
+                cv::Mat H = cv::findHomography(ptsNeighbor, ptsBaseImage, cv::RANSAC, 10);
                 if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
                   H.convertTo(H, CV_64F);
                 }
@@ -978,6 +982,79 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
           CFRelease((__bridge CFTypeRef)warpInfos[i]);
           warpInfos[i] = nullptr;
         }
+      }
+
+      return warps;
+
+    } catch (const cv::Exception &e) {
+      Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
+      return [NSString stringWithUTF8String:e.what()];
+    } catch (const std::exception &e) {
+      Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
+      return [NSString stringWithUTF8String:e.what()];
+    } catch (...) {
+      Log_e(@"Unknown Error");
+      return @"Unknown Exception";
+    }
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception: %@", exception);
+    return [NSString stringWithFormat:@"Objective-C Exception: %@", exception];
+  }
+}
+
+// just warps with the given homography 
++ (id _Nullable)alignWithExistingHomographyRequest:(AlignmentRequest * _Nonnull)request {
+  @try {
+    try {
+      NSMutableArray<AlignmentWarpInfo *> *warps = [NSMutableArray array];
+      const size_t n = request.neighbors.count;
+      for (size_t i = 0; i < n; ++i) {
+        MatWrapper * neighbor = [ObjcImageCache loadImage:request.neighbors[i].filename];
+        int offset = request.neighbors[i].frameIndex - request.frameIndex;
+        cv::Mat H;
+        cv::Mat warped;
+        cv::Mat warpedMask;
+        NSNumber * key = [NSNumber numberWithInt: offset];
+        if([request.homography objectForKey: key] != nil) {
+            MatWrapper * homography = [request.homography objectForKey: key];
+            cv::warpPerspective(neighbor.mat, // the input to warp
+                                warped, // the warped output
+                                homography.mat, // the homography to warp with
+                                neighbor.mat.size(),
+                                cv::INTER_LINEAR,
+                                cv::BORDER_CONSTANT,
+                                cv::Scalar(0,0,0,0));
+
+
+            NSString * maskFilename = request.neighbors[i].maskFilename;
+            if(maskFilename != nil) {
+              MatWrapper * mask = [ObjcImageCache loadImage:maskFilename];
+              cv::warpPerspective(mask.mat, // the input to warp
+                                  warpedMask, // the warped output
+                                  homography.mat, // the homography to warp with
+                                  mask.mat.size(),
+                                  cv::INTER_LINEAR,
+                                  cv::BORDER_CONSTANT,
+                                  cv::Scalar(0,0,0,0));
+            }
+
+            // check max deviation
+            cv::Mat I = cv::Mat::eye(3, 3, homography.mat.type());
+            double deviation = cv::norm(homography.mat - I, cv::NORM_L2);
+            
+            AlignmentWarpInfo *info =
+              [[AlignmentWarpInfo alloc]
+                         initWithHomography:homography
+                                warpedFrame:[[MatWrapper alloc] initWithMat: warped]
+                              warpedHorizon:maskFilename == nil ? nil : [[MatWrapper alloc] initWithMat: warpedMask]
+                                  deviation:deviation
+                             alignmentState:AlignmentStateObjCHomographySuccess
+                          neighborKeyPoints:0
+                             frameKeyPoints:0
+                                 frameIndex:request.neighbors[i].frameIndex];
+
+            [warps addObject:info];
+          }
       }
 
       return warps;

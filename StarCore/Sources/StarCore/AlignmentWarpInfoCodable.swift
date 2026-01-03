@@ -10,5 +10,21 @@ public struct AlignmentWarpInfoCodable: Codable, Sendable {
     public let neighborKeyPoints: Int
     public let frameKeyPoints: Int
     public let frameIndex: Int
+
 }
 
+
+
+public func homographyDeviation(_ h: [Double]) -> Double {
+    // Frobenius norm of (H - I)
+    let I: [Double] = [
+      1, 0, 0,
+      0, 1, 0,
+      0, 0, 1
+    ]
+
+    return zip(h, I)
+      .map { ($0 - $1) * ($0 - $1) }
+      .reduce(0, +)
+      .squareRoot()
+}

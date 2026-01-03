@@ -285,6 +285,10 @@ public final class ImageSequenceViewModel {
     var selectionEnd: CGPoint?
     
     var number_of_frames: Int = 50
+
+    // instead of finding keypoints and matching them to product homography,
+    // use the best existing homography for this sequence instead
+    var useExistingHomography = false
     
     // the frame number of the frame we're currently showing
     var currentIndex = 0 {
@@ -1096,7 +1100,7 @@ public final class ImageSequenceViewModel {
         }
         return ret
     }
-    
+
     var badStarAlignmentInfo: [[AlignmentWarpInfoCodable]] {
         var ret: [[AlignmentWarpInfoCodable]] = []
 
@@ -1401,7 +1405,11 @@ public final class ImageSequenceViewModel {
             // XXX a crude version of the FinalProcessor, could be better
             Log.d("processAllFrames 1")
 
-            await finalProcessor?.processFrames(from: startIndex, to: endIndex)
+            await finalProcessor?.processFrames(
+              from: startIndex,
+              to: endIndex,
+              usingExistingHomography: self.useExistingHomography
+            )
 
             await MainActor.run {
                 self.isProcessingFrames = false
@@ -1788,9 +1796,9 @@ public final class ImageSequenceViewModel {
 
                                 case .automatic(let useOutliers):
                                     try await frame.finishAuto(
-                                      useOutliers: useOutliers
+                                      useOutliers: useOutliers,
+                                      usingExistingHomography: self.useExistingHomography
                                     )
-
 
                                     if useOutliers {
                                         if await frame.getOutlierGroups() == nil {

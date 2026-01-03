@@ -16,7 +16,11 @@ public actor FinalGUIProcessor {
         self.viewModel = viewModel
     }
 
-    func processFrames(from startIndex: Int? = nil, to endIndex: Int? = nil) async {
+    func processFrames(
+      from startIndex: Int? = nil,
+      to endIndex: Int? = nil,
+      usingExistingHomography: Bool = false
+    ) async {
         if viewModel == nil { return }
         Log.d("processing frames from \(startIndex) to \(endIndex)")
 
@@ -100,7 +104,10 @@ public actor FinalGUIProcessor {
                         switch await frame.cleanMethod {
 
                         case .automatic(let useOutliers):
-                            try await frame.finishAuto(useOutliers: useOutliers)
+                            try await frame.finishAuto(
+                              useOutliers: useOutliers,
+                              usingExistingHomography: usingExistingHomography
+                            )
                             if useOutliers {
                                 if await frame.getOutlierGroups() == nil {
                                     try await frame.loadOutliers()

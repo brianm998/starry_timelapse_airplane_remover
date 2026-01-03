@@ -68,6 +68,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
     }
+
+    public func getObserver() -> FrameObserver? { observer }
     
     public weak var observer: FrameObserver?
 
@@ -537,6 +539,58 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             throw "cannot create horizon mask"
         }
     }
+
+
+    // returns the homography with median deviation for each frame offset 
+    var medianGoodStarAlignmentHomography: [NSNumber:MatWrapper] { // indexed by frame offset
+        get async {
+            var records: [NSNumber:[[Double]]] = [:]
+
+            var firstFrame = self
+            while await firstFrame.getPreviousFrame() != nil {
+                if let prev = await firstFrame.getPreviousFrame() {
+                    firstFrame = prev
+                }
+            }
+
+            var nextFrame: FrameAirplaneRemover? = firstFrame
+            while nextFrame != nil {
+                if let frame = nextFrame {
+                    if let results = await frame.getObserver()?.starAlignmentResults {
+                        for result in results.numberAligned {
+                            if let homography = result.homography {
+                                let frameOffset = NSNumber(
+                                  value: result.frameIndex - frame.frameIndex
+                                )
+                                if var existingRecordList = records[frameOffset] {
+                                    existingRecordList.append(homography)
+                                    records[frameOffset] = existingRecordList
+                                } else {
+                                    records[frameOffset] = [homography]
+                                }
+                            }
+                        }
+                    }
+                    nextFrame = await frame.getNextFrame()
+                }
+            }
+            var ret: [NSNumber: MatWrapper] = [:]
+            for (frameOffset, homographyList) in records {
+                // take the median based upon deviation of the homography
+                var sortedList = homographyList.sorted(
+                  by: { homographyDeviation($0) < homographyDeviation($1) }
+                )
+                if sortedList.count > 0 {
+                    let homography = sortedList[sortedList.count/2]
+                    
+                    ret[frameOffset] = homography.withUnsafeBufferPointer { buffer in
+                        MatWrapper(homographyValues: buffer.baseAddress!)
+                    }
+                }
+            }
+            return ret
+        }
+    }
     
     // uses opencv2 for dark ground specific detection logic
     private func loadOrCreateEarthAlignedImage() async throws -> AlignmentResult {
@@ -544,18 +598,24 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
     
     // uses opencv2 for SIFT fast, accurate image alignment
-    private func loadOrCreateStarAlignedImage() async throws -> AlignmentResult {
+    private func loadOrCreateStarAlignedImage(
+      usingExistingHomography: Bool = false
+    ) async throws -> AlignmentResult {
         try await loadOrCreateAlignedImage(
           of: .starAligned,
-          withFailedType: .failedStarAligned
+          withFailedType: .failedStarAligned,
+          usingExistingHomography: usingExistingHomography
         )
     }
     
     fileprivate func loadOrCreateAlignedImage(
       of type: FrameViewMode,
-      withFailedType failedType: FrameViewMode? = nil
+      withFailedType failedType: FrameViewMode? = nil,
+      usingExistingHomography: Bool = false
     ) async throws -> AlignmentResult {
         var alignmentType: AlignmentType = .sky
+
+        Log.d("frame \(frameIndex) loadOrCreateAlignedImage of type \(type) usingExistingHomography \(usingExistingHomography)")
         
         switch type {
         case .starAligned:
@@ -761,6 +821,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             Log.d("frame \(frameIndex) doing real alignment for type \(alignmentType)")
             // do real alignment
 
+            var homography: [NSNumber: MatWrapper]? = nil
+            if usingExistingHomography {
+                homography = await self.medianGoodStarAlignmentHomography
+                Log.i("USING EXISTING HOMOGRAPHY \(homography)")
+            }
             
             let request = AlignmentRequest(
               baseImage: originalFrame.mat,
@@ -776,9 +841,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               baseImageDilateSize: Int32(config.alignmentBaseImageDilateSize),
               baseImageThresholdValue: Int32(config.alignmentBaseImageThresholdValue),
               neighborDilateSize: Int32(config.alignmentNeighborDilateSize),
-              neighborThresholdValue: Int32(config.alignmentNeighborThresholdValue)
+              neighborThresholdValue: Int32(config.alignmentNeighborThresholdValue),
+              homography: homography
             )
-            
+
             if let result = ImageAligner.align(with: request) {
                 if let error = result as? String {
                     Log.e("error: \(error)")
@@ -1571,7 +1637,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
             } else if !loadOnly {
                 // potentially recalculate the alignment image if necessary
-                let _ = try await self.loadOrCreateStarAlignedImage()
+                //let _ = try await self.loadOrCreateStarAlignedImage()
                 
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
                 Log.d("frame \(frameIndex) calculating outliers")
@@ -2497,9 +2563,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
      If the sky contains little to no clouds, this approach can work, and gets
      rid of even the small distant satellites that move slowly through the sky.
      */
-    func createAutoProcessedImage() async throws -> PixelatedImage? {
-        Log.i("frame \(frameIndex) creating auto processed image")
-        let result = try await loadOrCreateStarAlignedImage()
+    func createAutoProcessedImage(usingExistingHomography: Bool = false) async throws -> PixelatedImage? {
+        Log.i("frame \(frameIndex) creating auto processed image usingExistingHomography \(usingExistingHomography)")
+        let result = try await loadOrCreateStarAlignedImage(
+          usingExistingHomography: usingExistingHomography
+        )
         let starAlignedImage = result.aligned
         let failedStarImage = result.failed
 
@@ -2712,8 +2780,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
     
     // used by PixelReplacementMode.automatic
-    public func finishAuto(useOutliers: Bool) async throws {
-        guard let autoProcessedImage = try await createAutoProcessedImage() else {
+    public func finishAuto(
+      useOutliers: Bool,
+      usingExistingHomography: Bool = false
+    ) async throws {
+        guard let autoProcessedImage = try await createAutoProcessedImage(
+                usingExistingHomography: usingExistingHomography
+              ) else {
             // we were unable to finish auto because of bad alignment, so we
             // finished selective instead  
             return
