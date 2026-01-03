@@ -16,7 +16,6 @@ public extension AlignmentWarpInfo {
         return AlignmentWarpInfoCodable(
             homography: homographyArray,
             deviation: deviation,
-            maxCornerDeviation: maxCornerDeviation,
             alignmentState: AlignmentState(objcState: alignmentState) ?? .unknown,
             neighborKeyPoints: Int(neighborKeyPoints),
             frameKeyPoints: Int(frameKeyPoints),
@@ -46,7 +45,6 @@ public extension AlignmentWarpInfo {
           warpedFrame: nil,
           warpedHorizon: nil,
           deviation: codable.deviation,
-          maxCornerDeviation: codable.maxCornerDeviation,
           alignmentState: codable.alignmentState.objcValue ?? AlignmentStateObjC.unknown,
           neighborKeyPoints: Int32(codable.neighborKeyPoints),
           frameKeyPoints: Int32(codable.frameKeyPoints),

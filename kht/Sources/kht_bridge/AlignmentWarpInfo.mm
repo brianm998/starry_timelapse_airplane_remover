@@ -7,7 +7,6 @@
                        warpedFrame:(nullable MatWrapper *)warpedFrame
                      warpedHorizon:(nullable MatWrapper *)warpedHorizon
                          deviation:(double)deviation
-                maxCornerDeviation:(double)maxCornerDeviation
                     alignmentState:(AlignmentStateObjC)alignmentState
                  neighborKeyPoints:(int)neighborKeyPoints
                     frameKeyPoints:(int)frameKeyPoints
@@ -18,7 +17,6 @@
         _warpedFrame = warpedFrame;
         _warpedHorizon = warpedHorizon;
         _deviation = deviation;
-        _maxCornerDeviation = maxCornerDeviation;
         _frameIndex = frameIndex;
         _alignmentState = alignmentState;
         _neighborKeyPoints = neighborKeyPoints;
@@ -32,7 +30,6 @@
         _homography = nil;
         _warpedFrame = nil;
         _deviation = 0;
-        _maxCornerDeviation = 0;
         _frameIndex = frameIndex;
         _alignmentState = AlignmentStateObjCNoAlignment;
         _neighborKeyPoints = 0;

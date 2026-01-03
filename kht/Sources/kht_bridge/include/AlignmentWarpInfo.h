@@ -24,9 +24,6 @@ typedef NS_ENUM(NSInteger, AlignmentStateObjC) {
 /// L2 norm of (H - I)
 @property(nonatomic, assign) double deviation;
 
-/// Maximum corner displacement
-@property(nonatomic, assign) double maxCornerDeviation;
-
 // how many keypoints were found on the neighbor
 @property(nonatomic, assign) int neighborKeyPoints;
 
@@ -42,7 +39,6 @@ typedef NS_ENUM(NSInteger, AlignmentStateObjC) {
                                 warpedFrame:(nullable MatWrapper *)warpedFrame
                               warpedHorizon:(nullable MatWrapper *)warpedHorizon
                                   deviation:(double)deviation
-                         maxCornerDeviation:(double)maxCornerDeviation
                              alignmentState:(AlignmentStateObjC)alignmentState
                           neighborKeyPoints:(int)neighborKeyPoints
                              frameKeyPoints:(int)frameKeyPoints

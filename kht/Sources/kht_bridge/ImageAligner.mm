@@ -755,7 +755,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                            warpedFrame:nil
                          warpedHorizon:nil
                              deviation:0
-                    maxCornerDeviation:0
                         alignmentState:AlignmentStateObjCUnableToDetectKeypoints
                      neighborKeyPoints:0
                         frameKeyPoints:0
@@ -869,27 +868,9 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                 if (!H.empty() && H.rows == 3 && H.cols == 3) {
                   // Check warp quality with two checks
 
-                  // first check is simple, max deviation
+                  // check max deviation
                   cv::Mat I = cv::Mat::eye(3, 3, H.type());
                   double deviation = cv::norm(H - I, cv::NORM_L2);
-
-                  // second check makes sure all four corners aren't very far away
-                  // we're aligning images from a timelapse video here, so even with
-                  // a moving camera we shouldn't need very much frame to frame adjustement
-                  std::vector<cv::Point2f> corners = {
-                    {0, 0},
-                    {(float)neighbor.cols, 0},
-                    {(float)neighbor.cols, (float)neighbor.rows},
-                    {0, (float)neighbor.rows}
-                  };
-                  std::vector<cv::Point2f> projectedCorners;
-                  cv::perspectiveTransform(corners, projectedCorners, H);
-
-                  double maxCornerDist = 0.0;
-                  for (size_t i = 0; i < corners.size(); i++) {
-                    maxCornerDist = std::max(maxCornerDist,
-                                             (double)cv::norm(projectedCorners[i] - corners[i]));
-                  }
 
                   // if we accept the warp, then actually warp
                   // this frame to fit the baseImage image
@@ -929,7 +910,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                                 warpedFrame:[[MatWrapper alloc] initWithMat: warped]
                               warpedHorizon:neighborHorizon == NULL ? nil : [[MatWrapper alloc] initWithMat: warpedHorizon]
                                   deviation:deviation
-                         maxCornerDeviation:maxCornerDist
                              alignmentState:AlignmentStateObjCHomographySuccess
                           neighborKeyPoints:ptsNeighbor.size()
                              frameKeyPoints:ptsBaseImage.size()
@@ -946,7 +926,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                              warpedFrame:nil
                            warpedHorizon:nil
                                deviation:0
-                      maxCornerDeviation:0
                           alignmentState:AlignmentStateObjCNoHomographyFound
                        neighborKeyPoints:0
                           frameKeyPoints:ptsBaseImage.size()
@@ -963,7 +942,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                            warpedFrame:nil
                          warpedHorizon:nil
                              deviation:0
-                    maxCornerDeviation:0
                         alignmentState:AlignmentStateObjCNotEnoughKeypoints
                      neighborKeyPoints:0
                         frameKeyPoints:ptsBaseImage.size()

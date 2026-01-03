@@ -6,7 +6,6 @@ public struct AlignmentWarpInfoCodable: Codable, Sendable {
     public let homography: [Double]?
 
     public let deviation: Double
-    public let maxCornerDeviation: Double
     public let alignmentState: AlignmentState
     public let neighborKeyPoints: Int
     public let frameKeyPoints: Int
