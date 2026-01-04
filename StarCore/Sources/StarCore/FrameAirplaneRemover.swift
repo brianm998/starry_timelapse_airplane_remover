@@ -540,6 +540,161 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
+    // this method assumes that there are already good alignments in the sequence
+    var closestGoodStarAlignmentHomography: [NSNumber : MatWrapper]? { // indexed by frame offset
+        get async {
+            /*
+             algorithm:
+
+             1 - find median deviation per offset for whole sequence
+             2 - look in both directions for nearest neighbor who has
+                 all neighbors within 20% of that median deviation
+             3 - use the homologies for all offsets from that specific frame
+
+             
+             */
+            // frame offset mapped to list of deviations for that offset
+            var records: [Int:[Double]] = [:]
+
+            // start at the beginning of the image sequence
+            var firstFrame = self
+            while await firstFrame.getPreviousFrame() != nil {
+                if let prev = await firstFrame.getPreviousFrame() {
+                    firstFrame = prev
+                }
+            }
+
+            // find median deviation for all homologies at each offset level
+
+            // collect list of deviations for each offset
+            var nextFrame: FrameAirplaneRemover? = firstFrame
+            while nextFrame != nil {
+                if let frame = nextFrame {
+                    if let results = await frame.getObserver()?.starAlignmentResults {
+                        for result in results.numberAligned {
+                            if let homography = result.homography {
+                                let deviation = homographyDeviation(homography)
+                                let frameOffset = result.frameIndex - frame.frameIndex
+                                if var existingRecordList = records[frameOffset] {
+                                    existingRecordList.append(deviation)
+                                    records[frameOffset] = existingRecordList
+                                } else {
+                                    records[frameOffset] = [deviation]
+                                }
+                            }
+                        }
+                    }
+                    nextFrame = await frame.getNextFrame()
+                }
+            }
+
+            // frame offset to median deviation for that offset
+            var medianDeviations: [Int: Double] = [:]
+
+            for (offset, deviationList) in records {
+                var sorted = deviationList.sorted(by: {$0 < $1})
+                if sorted.count > 0 {
+                    let medianDeviation = deviationList[sorted.count/2]
+                    medianDeviations[offset] = medianDeviation
+                }
+            }
+
+            Log.d("frame \(frameIndex) found medianDeviations \(medianDeviations)")
+
+            // now search in each directon for the first frame that has good deviations
+            let (forwardIndex, forwardHomography) = await searchForGoodHomography(
+              goingFoward: true,
+              with: medianDeviations
+            )
+            let (backwardIndex, backwardHomography) = await searchForGoodHomography(
+              goingFoward: false,
+              with: medianDeviations
+            )
+            if forwardIndex > 0 {
+                if backwardIndex > 0 {
+                    // we have both, use the closest one
+                    let forwardDistance = forwardIndex - self.frameIndex
+                    let backwardDistance = self.frameIndex - backwardIndex
+                    Log.d("frame \(frameIndex) found good frames in both directions forwardDistance \(forwardDistance) backwardDistance \(backwardDistance)")
+
+                    if forwardDistance < backwardDistance {
+                        return forwardHomography
+                    } else {
+                        return backwardHomography
+                    }
+                } else {
+                    Log.d("frame \(frameIndex) returning homology from frame \(forwardIndex)")
+                    // we have only forward
+                    return forwardHomography
+                }
+            } else if backwardIndex > 0 {
+                Log.d("frame \(frameIndex) returning homology from frame \(backwardIndex)")
+                return backwardHomography
+            }
+
+            // we didn't get any good homography
+            Log.d("frame \(frameIndex) we didn't get any good homography")
+            return nil
+        }
+    }
+    
+    private func searchForGoodHomography(
+      goingFoward: Bool,
+      with medianDeviations: [Int: Double] 
+    ) async -> (Int, [NSNumber:MatWrapper]) {
+        var nextFrame: FrameAirplaneRemover? = self
+        let config = await configManager.config()
+        while nextFrame != nil {
+            if let frame = nextFrame {
+                if let results = await frame.getObserver()?.starAlignmentResults {
+                    if results.numberAligned.count == config.numberAlignedNeighborFrames {
+                        var alignedDeviationCount = 0
+                        for result in results.numberAligned {
+                            if result.alignmentState == .homographySuccess,
+                               let homography = result.homography
+                            {
+                                let frameOffset = result.frameIndex - frame.frameIndex
+                                let deviation = homographyDeviation(homography)
+                                
+                                if let medianDeviation = medianDeviations[frameOffset] {
+                                    // compare deviation to median
+                                    if deviation < medianDeviation * 1.25,
+                                       deviation > medianDeviation / 1.25
+                                    {
+                                        // good enough
+                                        alignedDeviationCount += 1
+                                    }
+                                }
+                            }
+                        }
+                        if alignedDeviationCount == results.numberAligned.count {
+                            // looks like a good frame, use its homologies
+                            var ret: [NSNumber: MatWrapper] = [:]
+
+                            for result in results.numberAligned {
+                                if let homography = result.homography {
+                                    let frameOffset = NSNumber(
+                                      value: result.frameIndex - frame.frameIndex
+                                    )
+                                    
+                                    ret[frameOffset] = homography.withUnsafeBufferPointer { buffer in
+                                        MatWrapper(homographyValues: buffer.baseAddress!)
+                                    }
+                                }
+                            }
+                            return (frame.frameIndex, ret)
+                        }
+                    }
+                }
+                if goingFoward {
+                    nextFrame = await frame.getNextFrame()
+                } else {
+                    nextFrame = await frame.getPreviousFrame()
+                }
+            }
+        }
+        return (-1, [:])
+    }
 
     // returns the homography with median deviation for each frame offset
     /*
@@ -888,10 +1043,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             var homography: [NSNumber: MatWrapper]? = nil
             if usingExistingHomography {
-                Log.i("USING EXISTING HOMOGRAPHY \(homography)")
+                Log.i("frame \(frameIndex) using existing homography \(homography)")
                 switch alignmentType {
                 case .sky:
-                    homography = await self.medianGoodStarAlignmentHomography
+                    if let closestGood = await self.closestGoodStarAlignmentHomography {
+                        Log.i("frame \(frameIndex) using closest good homography \(closestGood)")
+                        homography = closestGood
+                    } else {
+                        Log.i("frame \(frameIndex) using median good homography")
+                        homography = await self.medianGoodStarAlignmentHomography
+                    }
 //
 //                case .earth:
 //                    homography = await self.medianGoodEarthAlignmentHomography
