@@ -541,7 +541,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
 
-    // returns the homography with median deviation for each frame offset 
+    // returns the homography with median deviation for each frame offset
+    /*
+     This returns the median for each frame offset, which could easily
+     include homography from more than one frame.
+
+     A better approach:
+     find the closest frame with good homography and use that.
+
+     good homography:
+
+     all deviations within 20% of median deviation  
+
+     
+     */
     var medianGoodStarAlignmentHomography: [NSNumber:MatWrapper] { // indexed by frame offset
         get async {
             var records: [NSNumber:[[Double]]] = [:]
@@ -557,6 +570,58 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             while nextFrame != nil {
                 if let frame = nextFrame {
                     if let results = await frame.getObserver()?.starAlignmentResults {
+                        for result in results.numberAligned {
+                            if let homography = result.homography {
+                                let frameOffset = NSNumber(
+                                  value: result.frameIndex - frame.frameIndex
+                                )
+                                if var existingRecordList = records[frameOffset] {
+                                    existingRecordList.append(homography)
+                                    records[frameOffset] = existingRecordList
+                                } else {
+                                    records[frameOffset] = [homography]
+                                }
+                            }
+                        }
+                    }
+                    nextFrame = await frame.getNextFrame()
+                }
+            }
+            var ret: [NSNumber: MatWrapper] = [:]
+            for (frameOffset, homographyList) in records {
+                // take the median based upon deviation of the homography
+                var sortedList = homographyList.sorted(
+                  by: { homographyDeviation($0) < homographyDeviation($1) }
+                )
+                if sortedList.count > 0 {
+                    let homography = sortedList[sortedList.count/2]
+                    
+                    ret[frameOffset] = homography.withUnsafeBufferPointer { buffer in
+                        MatWrapper(homographyValues: buffer.baseAddress!)
+                    }
+                }
+            }
+            return ret
+        }
+    }
+    
+    // returns the homography with median deviation for each frame offset
+    // XXX nearly a direct copy of star version above with s/star/earth/ :(
+    var medianGoodEarthAlignmentHomography: [NSNumber:MatWrapper] { // indexed by frame offset
+        get async {
+            var records: [NSNumber:[[Double]]] = [:]
+
+            var firstFrame = self
+            while await firstFrame.getPreviousFrame() != nil {
+                if let prev = await firstFrame.getPreviousFrame() {
+                    firstFrame = prev
+                }
+            }
+
+            var nextFrame: FrameAirplaneRemover? = firstFrame
+            while nextFrame != nil {
+                if let frame = nextFrame {
+                    if let results = await frame.getObserver()?.earthAlignmentResults {
                         for result in results.numberAligned {
                             if let homography = result.homography {
                                 let frameOffset = NSNumber(
@@ -823,8 +888,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             var homography: [NSNumber: MatWrapper]? = nil
             if usingExistingHomography {
-                homography = await self.medianGoodStarAlignmentHomography
                 Log.i("USING EXISTING HOMOGRAPHY \(homography)")
+                switch alignmentType {
+                case .sky:
+                    homography = await self.medianGoodStarAlignmentHomography
+//
+//                case .earth:
+//                    homography = await self.medianGoodEarthAlignmentHomography
+                default:
+                  break
+                }
             }
             
             let request = AlignmentRequest(
@@ -847,11 +920,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             if let result = ImageAligner.align(with: request) {
                 if let error = result as? String {
-                    Log.e("error: \(error)")
+                    Log.e("frame \(frameIndex) error: \(error)")
                 } else if let results = result as? [kht_bridge.AlignmentWarpInfo] {
-                    Log.d("got \(results.count) warp infos back from alignment")
+                    Log.d("frame \(frameIndex) got \(results.count) warp infos back from alignment")
                     // do the calculations here to figure out which alignments are ok
 
+//                    if results.count == 0 {
+
+//                    } else {
+                    
                     let outlierThreshold = pixelThreshold
                     /*
 
@@ -935,6 +1012,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                             )
                         }
                     }
+
+                    if goodWarps.count == 0,
+                       badWarps.count == 0
+                    {
+                        // we got absolutetly nothing from alignment,
+                        // fall back to the original frame, better than nothing
+                        failedResult = originalFrame.mat
+                        Log.i("frame \(frameIndex) got no results for alignment of type \(type), falling back to original image")
+                    } else {
+                        Log.d("frame \(frameIndex) got some results for alignment of type \(type) goodWarps.count \(goodWarps.count) badWarps.count \(badWarps.count)")
+                    }
+
+                    Log.d("frame \(frameIndex) failedResult \(failedResult)")
+                    
                      alignmentResult = AlignmentResult(
                        alignedMat: alignedResult,
                        alignedWarps: goodWarps,
@@ -942,8 +1033,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                        failedWarps: badWarps, 
                        horizonMask: horizonResult
                      )
+                     Log.i("frame \(frameIndex) has alignment result \(alignmentResult)")
                 } else {
-                    Log.e("cannot handle aligned result \(result)")
+                    Log.e("frame \(frameIndex) cannot handle aligned result \(result)")
                 }
             }
         }
@@ -968,12 +1060,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             break
         }
 
-        var alignedImage: PixelatedImage? = nil     // XXX written to but not read :(
-        var failedAlignImage: PixelatedImage? = nil // XXX written to but not read :(
-
         if let aligned = alignmentResult.aligned {
-            alignedImage = aligned
             // write out the successfully aligned images
+            Log.e("frame \(frameIndex) writing out a successfully aligned image of type \(type)")
             try await imageAccessor.save(
               aligned,
               frameIndex: frameIndex,
@@ -992,10 +1081,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         } else if let failed = alignmentResult.failed,
                   let failedType
         {
+            Log.e("frame \(frameIndex) writing out a failed aligned image of type \(type)")
             // if we have no successfully aligned image,
             // and do have a failed image, and have been asked to
             // save them, write them out
-            failedAlignImage = failed
             try await imageAccessor.save(
               failed,
               frameIndex: frameIndex,
@@ -2575,7 +2664,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         let config = await configManager.config()
         
-        if result.numAligned < config.minAlignmentFrames {
+        if false,               // XXX DISABLE THIS
+           result.numAligned < config.minAlignmentFrames {
             // fall back to selective clean here because alignment was not good enough
             Log.i("frame \(frameIndex) falling back to selective because \(result.numAligned) < \(config.minAlignmentFrames)")
             try await fallbackToSelective() // finishSelective() is called here

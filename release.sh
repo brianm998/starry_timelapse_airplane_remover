@@ -24,6 +24,7 @@ set -e
 # next build the decision tree code into a static, universal library (.a file)
 # this can be large, and is linked into the gui, cli and decision tree generator apps
 ####
+
 #cd StarDecisionTrees
 #./release.sh
 #cd ..
@@ -35,9 +36,10 @@ set -e
 ####
 # next build a universal (all arch) binary for the cli     
 ####
-cd cli
-./release.sh
-cd ..
+
+#cd cli
+#./release.sh
+#cd ..
 
 # result ends up here:
 # cli/.build/star_cli_${STAR_VERSION}.pkg"
@@ -62,3 +64,6 @@ cd ..
 
 # output should be in releases/star-${STAR_VERSION}.zip
 # tag release/${STAR_VERSION} should be on both local and remote
+
+
+say 'the release worked'

@@ -464,11 +464,12 @@ public struct Config: Codable, Sendable, Transferable {
     //        add alignment params to config and UI
     //        add support for jpeg and other file types
     // 0.10.2 a lot of small 8 bit image fixes
-    //        added alignment info window
+    // 0.10.3 added alignment info window
+    //        added fix bad alignment button (use existing homography)
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.10.2"
+    public static let latestVersion = "0.10.3"
     
     public var basename: String {
         let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)"
