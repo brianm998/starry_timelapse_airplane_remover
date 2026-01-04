@@ -430,6 +430,34 @@ public struct ImageAccessor: Sendable {
         }
     }
 
+    public func deleteImages(
+      frameIndex: Int,
+      ofType imageType: FrameViewMode,
+      atSizes sizes: [ImageDisplaySize]
+    ) {
+        for size in sizes {
+            try? deleteImage(
+              frameIndex: frameIndex,
+              ofType: imageType,
+              atSize: size
+            )
+        }
+    }
+    
+    public func deleteImages(
+      frameIndex: Int,
+      ofTypes imageTypes: [FrameViewMode],
+      atSizes sizes: [ImageDisplaySize]
+    ) {
+        for imageType in imageTypes {
+            try? deleteImages(
+              frameIndex: frameIndex,
+              ofType: imageType,
+              atSizes: sizes
+            )
+        }
+    }
+    
     public func deleteImage(
       frameIndex: Int,
       ofType imageType: FrameViewMode,

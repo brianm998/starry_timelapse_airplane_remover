@@ -194,6 +194,7 @@ struct ProcessingSettingsView: View {
 
     @State private var showAlignmentWriteDebugImagesInfo = false
     @State private var showAlignmentAllowEarthAlignmentInfo = false
+    @State private var showAlignmentRunSecondPassInfo = false
 
     private var addSpacer: Bool {
         showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo ||
@@ -211,7 +212,8 @@ struct ProcessingSettingsView: View {
         showAlignmentNeighborDilateSizeInfo ||
         showAlignmentNeighborThresholdValueInfo ||
         showAlignmentWriteDebugImagesInfo ||
-        showAlignmentAllowEarthAlignmentInfo
+        showAlignmentAllowEarthAlignmentInfo ||
+        showAlignmentRunSecondPassInfo         
     }
     
     private func showAll() {
@@ -240,6 +242,7 @@ struct ProcessingSettingsView: View {
         showAlignmentNeighborThresholdValueInfo = true
         showAlignmentWriteDebugImagesInfo = true
         showAlignmentAllowEarthAlignmentInfo = true
+        showAlignmentRunSecondPassInfo = true
     }
 
     private func hideAll() {
@@ -268,6 +271,7 @@ struct ProcessingSettingsView: View {
         showAlignmentNeighborThresholdValueInfo = false
         showAlignmentWriteDebugImagesInfo = false
         showAlignmentAllowEarthAlignmentInfo = false
+        showAlignmentRunSecondPassInfo = false
     }
     
     @FocusState private var focusedField: FocusedField?
@@ -349,6 +353,8 @@ struct ProcessingSettingsView: View {
                           Divider()
                           DisclosureGroup {
                               Grid {
+                                  self.alignmentAllowSecondPassView
+                                  Divider()
                                   self.neighborFrameCountView
                                   Divider()
                                   self.minAlignmentFramesView
@@ -883,6 +889,34 @@ struct ProcessingSettingsView: View {
                 HStack {
                     Space(width: 10)
                     Toggle(isOn: $viewModel.allowEarthAlignment) {
+                        Text("")
+                    }
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var alignmentAllowSecondPassView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showAlignmentRunSecondPassInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            When doing star alignment, allow doing a second pass that can identify and re-warp frames that have bad alignment do to a lack of features in the sky.  This can be due to clouds and/or dawn/dusk.  The more stars in the sky, the better alignment will be found for each frame.  While using the alignemnt from another frame is not perfect, the errors are small.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Second Alignment Pass:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    Space(width: 10)
+                    Toggle(isOn: $viewModel.runSecondAlignmentPass) {
                         Text("")
                     }
                     Spacer()
