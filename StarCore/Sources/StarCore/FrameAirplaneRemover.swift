@@ -814,7 +814,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     
     // uses opencv2 for dark ground specific detection logic
     private func loadOrCreateEarthAlignedImage() async throws -> AlignmentResult {
-        try await loadOrCreateAlignedImage(of: .earthAligned)
+        try await loadOrCreateAlignedImage(
+          of: .earthAligned,
+          withFailedType: .failedEarthAligned
+        )
     }
     
     // uses opencv2 for SIFT fast, accurate image alignment

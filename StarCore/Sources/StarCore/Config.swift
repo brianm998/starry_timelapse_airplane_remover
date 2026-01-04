@@ -547,6 +547,16 @@ public struct Config: Codable, Sendable, Transferable {
             case .thumbnail:
                 return nil
             }
+        case .failedEarthAligned:
+            switch size {
+            case .original:
+                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-earth-failed-aligned"
+
+            case .preview:
+                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-earth-failed-aligned-previews"
+            case .thumbnail:
+                return nil
+            }
         case .earthAligned:
             switch size {
             case .original:
@@ -660,6 +670,7 @@ public struct Config: Codable, Sendable, Transferable {
         
         if let dir = self.dirForImage(ofType: .starAligned) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .failedStarAligned) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .failedEarthAligned) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .earthAligned) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .horizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .mergedHorizon) { ret.append(dir) }

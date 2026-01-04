@@ -21,6 +21,7 @@ public enum FrameViewMode: String,
     case starAligned            // star aligned neighbor frame
     case failedStarAligned      // failed star aligned neighbor frame
     case earthAligned           // earth aligned neighbor frame
+    case failedEarthAligned     // failed earth aligned neighbor frame
     case subtraction            // the result of subtracting a star aligned neighbor frame
     case blobs                  // blobs detected from the subtraction frame
     case validation             // an image of exactly what pixels have been identified as unwanted
@@ -61,6 +62,8 @@ public enum FrameViewMode: String,
             "failedStarAligned"
         case .earthAligned:
             "earthAligned"
+        case .failedEarthAligned:
+            "failedEarthAligned"
         case .horizon:
             "horizon"
         case .mergedHorizon:
@@ -90,6 +93,8 @@ public enum FrameViewMode: String,
             "final processed frame"
         case .earthAligned:
             "earth aligned frame"
+        case .failedEarthAligned:
+            "failed earth aligned frame"
         case .starAligned:
             "star aligned frame"
         case .failedStarAligned:
