@@ -5,16 +5,23 @@ public struct AlignmentWarpInfoCodable: Codable, Sendable {
     /// Row-major 3x3 homography (length = 9)
     public let homography: [Double]?
 
+    // the same as calling homographyDeviation on the above homography
     public let deviation: Double
+
+    // how this homography was discovered,
+    // or what error caused it to not exist
     public let alignmentState: AlignmentState
+
+    // these appear to always be identical for some reason
     public let neighborKeyPoints: Int
     public let frameKeyPoints: Int
-    public let frameIndex: Int
 
+    // frame index of the warped frame
+    public let frameIndex: Int
 }
 
 
-
+// calculates how var the passed homography is from identity
 public func homographyDeviation(_ h: [Double]) -> Double {
     // Frobenius norm of (H - I)
     let I: [Double] = [

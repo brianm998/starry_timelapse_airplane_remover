@@ -287,6 +287,10 @@ public struct Config: Codable, Sendable, Transferable {
     // when doing auto aligned outputs, how far to shift up the horizon mask
     // when doing a final composite image.
     public var horizonVerticalShiftAmount: Int = 8
+
+    // try to align earth on moving frames?
+    // turned off by default as it's still expermintal
+    public var allowEarthAlignment: Bool = false
     
     // how many pixels do we crop off the top of the image when making
     // earth aligned images
@@ -364,6 +368,8 @@ public struct Config: Codable, Sendable, Transferable {
         self.horizonMaxY = try c.decodeIfPresent(Int.self, forKey: .horizonMaxY)
         self.maxConcurrentHorizonCalculations = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentHorizonCalculations) ?? self.maxConcurrentHorizonCalculations
         self.horizonVerticalShiftAmount = try c.decodeIfPresent(Int.self, forKey: .horizonVerticalShiftAmount) ?? self.horizonVerticalShiftAmount
+
+        self.allowEarthAlignment = try c.decodeIfPresent(Bool.self, forKey: .allowEarthAlignment) ?? self.allowEarthAlignment
         
         self.earthAlignedImageCropAmount = try c.decodeIfPresent(Int.self, forKey: .earthAlignedImageCropAmount)
 

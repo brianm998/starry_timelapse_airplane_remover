@@ -637,7 +637,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             return nil
         }
     }
-    
+
+    // search either forwards or backwards looking for homography close enough
+    // to what was passed for each frame offset
     private func searchForGoodHomography(
       goingFoward: Bool,
       with medianDeviations: [Int: Double] 
@@ -648,6 +650,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             if let frame = nextFrame {
                 if let results = await frame.getObserver()?.starAlignmentResults {
                     if results.numberAligned.count == config.numberAlignedNeighborFrames {
+                        // this frame had all its neighbors aligned, but by how  much?
                         var alignedDeviationCount = 0
                         for result in results.numberAligned {
                             if result.alignmentState == .homographySuccess,
@@ -661,13 +664,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                     if deviation < medianDeviation * 1.25,
                                        deviation > medianDeviation / 1.25
                                     {
-                                        // good enough
+                                        // this neighbor was aligned good enough
                                         alignedDeviationCount += 1
                                     }
                                 }
                             }
                         }
                         if alignedDeviationCount == results.numberAligned.count {
+                            // all neighbors were close enough to the median deviations
                             // looks like a good frame, use its homologies
                             var ret: [NSNumber: MatWrapper] = [:]
 
@@ -2856,21 +2860,45 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if config.horizonDetectionEnabled {
             // with horizon detection, we need to mask the star and earth images
 
-            let alignmentResult = try await loadOrCreateEarthAlignedImage()
-            let earthAlignedImage = alignmentResult.aligned
-            let failedAlignmentImage = alignmentResult.failed
-            let horizonMask = alignmentResult.horizon
+            var earthImage: PixelatedImage? = nil
+            var horizonMask: PixelatedImage? = nil
 
-            var earthImage: PixelatedImage? = earthAlignedImage
-            if  earthImage == nil {
-                 earthImage = failedAlignmentImage
+            if config.allowEarthAlignment {
+                let alignmentResult = try await loadOrCreateEarthAlignedImage()
+
+                // XXX validate this alignment result, it might be erroneous
+                // if it's bad, use the original frame and horizon mask instead
+
+                let earthAlignedImage = alignmentResult.aligned
+                let failedAlignmentImage = alignmentResult.failed
+                horizonMask = alignmentResult.horizon
+
+                if  earthAlignedImage == nil {
+                    earthImage = failedAlignmentImage
+                } else {
+                    earthImage = earthAlignedImage
+                }
+            } else {
+                // not using earth alignment
+
+                // use original image for the earth
+                earthImage = try await imageAccessor.load(
+                  frameIndex: frameIndex,
+                  type: .original,
+                  atSize: .original)
+
+                // use non-merged horizon for merging
+                horizonMask = try await imageAccessor.load(
+                  frameIndex: frameIndex,
+                  type: .horizon,
+                  atSize: .original)
             }
             
             if let earthImage {
-                // XXX make new parameter for horizon vertical extension
-                // use it here to move the horizon mask up by that many pixels
                 if let horizonMask,
-                   let highHorizon = horizonMask.shiftImageUp(by: 8)
+                   let highHorizon = horizonMask.shiftImageUp(
+                     by: config.horizonVerticalShiftAmount
+                   )
                 {
                     // this merged horizon mask should have been created right above
                     return try skyImage.apply(
@@ -2881,7 +2909,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     // but if not, fallback to the non-merged one, which is better than nothing
                     Log.w("frame \(frameIndex) falling back to non-merged horizon mask")
                     let horizonMask = try await loadOrCreateHorizonMask()
-                    if let highHorizon = horizonMask.image.shiftImageUp(by: 8) {
+                    if let highHorizon = horizonMask.image.shiftImageUp(
+                         by: config.horizonVerticalShiftAmount
+                       ) {
                         return try skyImage.apply(
                           mask: highHorizon,
                           with: earthImage
@@ -2896,6 +2926,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             } else {
                 // no earth aligned image, fall back to sky
+
+                // XXX check here to see if there was a horizon mask,
+                // and if so, apply it with the original image for earth
+                
                 return skyImage
             }
         } else {
@@ -3040,7 +3074,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     ) async throws {
         guard let autoProcessedImage = try await createAutoProcessedImage(
                 usingExistingHomography: usingExistingHomography
-              ) else {
+              ) else
+        {
+            Log.e("frame \(frameIndex) unable to create auto processed image")
             // we were unable to finish auto because of bad alignment, so we
             // finished selective instead  
             return

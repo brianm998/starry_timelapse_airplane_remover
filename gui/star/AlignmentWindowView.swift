@@ -56,7 +56,9 @@ struct AlignmentWindowView: View {
                             )
                         }
                     }
-                    if let results = viewModel.currentFrameView.frameObserver.earthAlignmentResults {
+                    if viewModel.allowEarthAlignment,
+                       let results = viewModel.currentFrameView.frameObserver.earthAlignmentResults
+                    {
                         if showEarthDeviation {
                             Text("Deviation in Earth Alignment")
                             AlignmentDeviationChart(
@@ -88,8 +90,12 @@ struct AlignmentWindowView: View {
             Text("Show:")
             Toggle("Star Deviation", isOn: $showStarDeviation)
             Toggle("Star Keypoints", isOn: $showStarKeypoints)
-            Toggle("Earth Deviation", isOn: $showEarthDeviation)
-            Toggle("Earth Keypoints", isOn: $showEarthKeypoints)
+            if let viewModel = viewModel.imageSequence,
+               viewModel.allowEarthAlignment
+            {
+                Toggle("Earth Deviation", isOn: $showEarthDeviation)
+                Toggle("Earth Keypoints", isOn: $showEarthKeypoints)
+            }
             Toggle("Good Points", isOn: $showGoodPoints)
             Toggle("Bad Points", isOn: $showBadPoints)
             Divider()

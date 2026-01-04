@@ -514,6 +514,14 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    var allowEarthAlignment: Bool {
+        didSet {
+            var realConfig = config.config()
+            realConfig.allowEarthAlignment = allowEarthAlignment
+            config.update(realConfig)
+        }
+    }
+
 
     public var alignmentMaxKeypoints: Int {
         didSet {
@@ -765,6 +773,7 @@ public final class ImageSequenceViewModel {
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.maxConcurrentHorizonCalculations = config.maxConcurrentHorizonCalculations
         self.horizonVerticalShiftAmount = config.horizonVerticalShiftAmount
+        self.allowEarthAlignment = config.allowEarthAlignment
 
         self.alignmentMaxKeypoints = config.alignmentMaxKeypoints
         self.alignmentGroundHorizonExtension = config.alignmentGroundHorizonExtension

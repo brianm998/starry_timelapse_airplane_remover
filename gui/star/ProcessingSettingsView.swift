@@ -193,6 +193,7 @@ struct ProcessingSettingsView: View {
     @State private var showAlignmentNeighborThresholdValueInfo = false
 
     @State private var showAlignmentWriteDebugImagesInfo = false
+    @State private var showAlignmentAllowEarthAlignmentInfo = false
 
     private var addSpacer: Bool {
         showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo ||
@@ -209,7 +210,8 @@ struct ProcessingSettingsView: View {
         showAlignmentBaseImageThresholdValueInfo ||
         showAlignmentNeighborDilateSizeInfo ||
         showAlignmentNeighborThresholdValueInfo ||
-        showAlignmentWriteDebugImagesInfo
+        showAlignmentWriteDebugImagesInfo ||
+        showAlignmentAllowEarthAlignmentInfo
     }
     
     private func showAll() {
@@ -237,6 +239,7 @@ struct ProcessingSettingsView: View {
         showAlignmentNeighborDilateSizeInfo = true
         showAlignmentNeighborThresholdValueInfo = true
         showAlignmentWriteDebugImagesInfo = true
+        showAlignmentAllowEarthAlignmentInfo = true
     }
 
     private func hideAll() {
@@ -264,6 +267,7 @@ struct ProcessingSettingsView: View {
         showAlignmentNeighborDilateSizeInfo = false
         showAlignmentNeighborThresholdValueInfo = false
         showAlignmentWriteDebugImagesInfo = false
+        showAlignmentAllowEarthAlignmentInfo = false
     }
     
     @FocusState private var focusedField: FocusedField?
@@ -366,6 +370,8 @@ struct ProcessingSettingsView: View {
                                   self.alignmentNeighborDilateSizeView
                                   Divider()
                                   self.alignmentNeighborThresholdValueView
+                                  Divider()
+                                  self.alignmentAllowEarthAlignmentView
                                   Divider()
                                   self.alignmentWriteDebugImagesViewValueView
                               }
@@ -848,6 +854,35 @@ struct ProcessingSettingsView: View {
                 HStack {
                     Space(width: 10)
                     Toggle(isOn: $viewModel.alignmentWriteDebugImages) {
+                        Text("")
+                    }
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var alignmentAllowEarthAlignmentView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showAlignmentAllowEarthAlignmentInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            Try using the experimental earth alignment for moving videos.
+            This can help to get rid of things like car headlights if the earth can be aligned properly.  Off by default for now.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Allow Earth Alignment:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    Space(width: 10)
+                    Toggle(isOn: $viewModel.allowEarthAlignment) {
                         Text("")
                     }
                     Spacer()
