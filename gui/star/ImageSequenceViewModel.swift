@@ -1805,7 +1805,7 @@ public final class ImageSequenceViewModel {
         Task {
             Log.d("renderAllFrames Task")
             let semaphore = AsyncSemaphore(value: self.numberOfFramesToProcessConcurrently)
-            try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+            await withTaskGroup(of: Void.self) { taskGroup in
                 Log.d("renderAllFrames TaskGroup")
 
                 let counter = CountActor()
@@ -1877,9 +1877,41 @@ public final class ImageSequenceViewModel {
 
                                 switch await frame.cleanMethod {
                                 case .selective:
-                                    try await frameSaveQueue.saveNow(frame: frame) {
-                                        await self.refresh(frame: frame)
+                                    do {
+                                        try await frameSaveQueue.saveNow(frame: frame) {
+                                            await self.refresh(frame: frame)
 
+                                            await counter.decrease()
+                                            if !(await counter.isMoreThanZero()) {
+                                                await MainActor.run {
+                                                    self.renderingAllFrames = false
+                                                }
+                                            }
+                                            semaphore.signal()
+                                        }
+                                    } catch {
+                                        Log.e("frame \(frame.frameIndex) unable to save")
+                                    }
+
+                                case .automatic(let useOutliers):
+                                    do {
+                                        try await frame.finishAuto(
+                                          useOutliers: useOutliers,
+                                          usingExistingHomography: self.useExistingHomography || renderWasBad
+                                        )
+
+                                        if useOutliers {
+                                            if await frame.getOutlierGroups() == nil {
+                                                try await frame.loadOutliers()
+                                                Task { @MainActor in
+                                                    let frameView = self.frames[frame.frameIndex]
+                                                    frameView.outlierViews = nil
+                                                    await frameView.setOutlierGroups()
+                                                }
+                                            }
+                                        }
+                                        
+                                        await self.refresh(frame: frame)
                                         await counter.decrease()
                                         if !(await counter.isMoreThanZero()) {
                                             await MainActor.run {
@@ -1887,33 +1919,9 @@ public final class ImageSequenceViewModel {
                                             }
                                         }
                                         semaphore.signal()
+                                    } catch {
+                                        Log.e("frame \(frame.frameIndex) unable to save")
                                     }
-
-                                case .automatic(let useOutliers):
-                                    try await frame.finishAuto(
-                                      useOutliers: useOutliers,
-                                      usingExistingHomography: self.useExistingHomography || renderWasBad
-                                    )
-
-                                    if useOutliers {
-                                        if await frame.getOutlierGroups() == nil {
-                                            try await frame.loadOutliers()
-                                            Task { @MainActor in
-                                                let frameView = self.frames[frame.frameIndex]
-                                                frameView.outlierViews = nil
-                                                await frameView.setOutlierGroups()
-                                            }
-                                        }
-                                    }
-                                    
-                                    await self.refresh(frame: frame)
-                                    await counter.decrease()
-                                    if !(await counter.isMoreThanZero()) {
-                                        await MainActor.run {
-                                            self.renderingAllFrames = false
-                                        }
-                                    }
-                                    semaphore.signal()
                                 }
                             }
                         } else {
@@ -1924,7 +1932,7 @@ public final class ImageSequenceViewModel {
                     }
                 }
                 
-                try await taskGroup.waitForAll()
+                await taskGroup.waitForAll()
             }
         }
     }
