@@ -357,8 +357,6 @@ struct ProcessingSettingsView: View {
                                   Divider()
                                   self.neighborFrameCountView
                                   Divider()
-                                  self.minAlignmentFramesView
-                                  Divider()
                                   self.staticNeighborFrameCountView
                                   Divider()
                                   self.pixelThresholdView
@@ -612,42 +610,6 @@ struct ProcessingSettingsView: View {
                       textColor: .white,
                       focusedField: $focusedField,
                       focusField: .numberOfNeighborFrames,
-                      alwaysOpen: true
-                    )
-                    Spacer()   
-                }
-            }
-        }
-    }
-
-    private var minAlignmentFramesView: some View {
-        @Bindable var viewModel = viewModel
-        return InfoTextInstructionGridRow(
-          showInfo: $showMinAlignmentFramesInfo,
-          addSpacer: { addSpacer },
-          infoText: """
-            If star or earth alignment fails by less than this number of frames and we're using automatic clean mode, fall back to selective clean, as results will be better.
-            """
-        ) {
-            HStack {
-                HStack {
-                    Spacer()
-                    Text("Min Alignment Frames:")
-                      .font(.title2)
-                      .foregroundColor(.white)
-                      .opacity(0.6)
-                }
-                HStack {
-                    EditableNumberView(
-                      value: $viewModel.minAlignmentFrames,
-                      minValue: 1,
-                      maxValue: viewModel.imageSequenceSize,
-                      fullTextProvider: { _ in "" },
-                      prefixText: "",
-                      suffixTextProvider: { _ in "" },
-                      textColor: .white,
-                      focusedField: $focusedField,
-                      focusField: .minAlignmentFrames,
                       alwaysOpen: true
                     )
                     Spacer()   

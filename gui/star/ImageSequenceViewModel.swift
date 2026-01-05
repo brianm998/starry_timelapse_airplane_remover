@@ -347,14 +347,6 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    var minAlignmentFrames: Int {
-        didSet {
-            var realConfig = config.config()
-            realConfig.minAlignmentFrames = minAlignmentFrames
-            config.update(realConfig)
-        }
-    }
-
     var horizonDetectionEnabled: Bool {
         didSet {
             var realConfig = config.config()
@@ -766,7 +758,6 @@ public final class ImageSequenceViewModel {
         } 
 
         self.numberOfAlignedNeighborFrames = config.numberAlignedNeighborFrames
-        self.minAlignmentFrames = config.minAlignmentFrames
         self.numberStaticNeighborFrames = config.numberStaticNeighborFrames
         self.horizonDetectionEnabled = config.horizonDetectionEnabled
         self.useCannyForHorizonDetection = config.useCannyForHorizonDetection ? .yes : .no
