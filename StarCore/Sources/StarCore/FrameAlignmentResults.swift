@@ -7,7 +7,7 @@ public struct FrameAlignmentResults: Codable, Sendable {
     public var total: Int { numberAligned.count + numberFailed.count }
 
     public func matches(
-      deviations: [Int: Double], // frame offset to expected deviance
+      deviations: [Int: [Double]], // frame offset to expected min/max deviance
       by variance: Double,       // 1.25 for 25% change allowed
       at frameIndex: Int,        // frame index of frame being processed
       successfulHomographyOnly: Bool = false
@@ -20,10 +20,13 @@ public struct FrameAlignmentResults: Codable, Sendable {
                 let frameOffset = result.frameIndex - frameIndex
                 let deviation = homographyDeviation(homography)
                 
-                if let expectedDeviation = deviations[frameOffset] {
-                    // compare deviation to median
-                    if deviation < expectedDeviation * variance,
-                       deviation > expectedDeviation / variance
+                if let deviationMinMax = deviations[frameOffset] {
+                    let minExpectedDeviation = deviationMinMax[0]
+                    let maxExpectedDeviation = deviationMinMax[1]
+
+                    // compare deviation to expected results
+                    if deviation < maxExpectedDeviation * variance,
+                       deviation > minExpectedDeviation / variance
                     {
                         // this neighbor was aligned good enough
                         alignedDeviationCount += 1

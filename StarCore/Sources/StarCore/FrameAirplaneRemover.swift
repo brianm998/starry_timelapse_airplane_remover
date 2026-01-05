@@ -540,16 +540,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
              */
 
             // first, get median deviations
-            let medianDeviations = await self.medianDeviationsForEntireSequence
+            let minMaxDeviations = await self.maxMinDeviationsForEntireSequence
 
             // now search in each directon for the first frame that has good deviations
             let (forwardIndex, forwardHomography) = await searchForGoodHomography(
               goingFoward: true,
-              with: medianDeviations
+              with: minMaxDeviations
             )
             let (backwardIndex, backwardHomography) = await searchForGoodHomography(
               goingFoward: false,
-              with: medianDeviations
+              with: minMaxDeviations
             )
             if forwardIndex > 0 {
                 if backwardIndex > 0 {
@@ -595,12 +595,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
 
             // find median deviation for all homologies at each offset level
+            let config = await configManager.config()
 
             // collect list of deviations for each offset
             var nextFrame: FrameAirplaneRemover? = firstFrame
             while nextFrame != nil {
                 if let frame = nextFrame {
-                    if let results = await frame.getObserver()?.starAlignmentResults {
+                    if let results = await frame.getObserver()?.starAlignmentResults,
+                       results.numberAligned.count == config.numberAlignedNeighborFrames
+                    {
                         for result in results.numberAligned {
                             if let homography = result.homography {
                                 let deviation = homographyDeviation(homography)
@@ -635,11 +638,71 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
+    // returns median deviations from identity for each frame offset
+    // from the entire image sequence.
+    public var maxMinDeviationsForEntireSequence: [Int: [Double]] {
+        get async {
+            // frame offset mapped to list of deviations for that offset
+            var records: [Int:[Double]] = [:]
+
+            // start at the beginning of the image sequence
+            var firstFrame = self
+            while await firstFrame.getPreviousFrame() != nil {
+                if let prev = await firstFrame.getPreviousFrame() {
+                    firstFrame = prev
+                }
+            }
+
+            // find median deviation for all homologies at each offset level
+            let config = await configManager.config()
+
+            // collect list of deviations for each offset
+            var nextFrame: FrameAirplaneRemover? = firstFrame
+            while nextFrame != nil {
+                if let frame = nextFrame {
+                    if let results = await frame.getObserver()?.starAlignmentResults,
+                       results.numberAligned.count == config.numberAlignedNeighborFrames
+                    {
+                        for result in results.numberAligned {
+                            if let homography = result.homography {
+                                let deviation = homographyDeviation(homography)
+                                let frameOffset = result.frameIndex - frame.frameIndex
+                                if var existingRecordList = records[frameOffset] {
+                                    existingRecordList.append(deviation)
+                                    records[frameOffset] = existingRecordList
+                                } else {
+                                    records[frameOffset] = [deviation]
+                                }
+                            }
+                        }
+                    }
+                    nextFrame = await frame.getNextFrame()
+                }
+            }
+
+            // frame offset to median deviation for that offset
+            var minMaxDeviations: [Int: [Double]] = [:]
+
+            for (offset, deviationList) in records {
+                let sorted = deviationList.sorted(by: {$0 < $1})
+                if sorted.count > 0 {
+                    let minDeviation = sorted[0]
+                    let maxDeviation = sorted[sorted.count-1]
+                    minMaxDeviations[offset] = [minDeviation, maxDeviation]
+                }
+            }
+
+            Log.d("frame \(frameIndex) found minMaxDeviations \(minMaxDeviations)")
+
+            return minMaxDeviations
+        }
+    }
+    
     // search either forwards or backwards looking for homography close enough
     // to what was passed for each frame offset
     private func searchForGoodHomography(
       goingFoward: Bool,
-      with medianDeviations: [Int: Double] 
+      with minMaxDeviations: [Int: [Double]] // frame offset to min/max deviation
     ) async -> (Int, [NSNumber:MatWrapper]) {
         var nextFrame: FrameAirplaneRemover? = self
         let config = await configManager.config()
@@ -649,7 +712,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     if results.numberAligned.count == config.numberAlignedNeighborFrames {
                         // this frame had all its neighbors aligned, but by how  much?
                         if results.matches(
-                             deviations: medianDeviations,
+                             deviations: minMaxDeviations,
                              by: 1.25,
                              at: frame.frameIndex,
                              successfulHomographyOnly: true
@@ -709,10 +772,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
 
+            let config = await configManager.config()
+
             var nextFrame: FrameAirplaneRemover? = firstFrame
             while nextFrame != nil {
                 if let frame = nextFrame {
-                    if let results = await frame.getObserver()?.starAlignmentResults {
+                    if let results = await frame.getObserver()?.starAlignmentResults,
+                       results.numberAligned.count == config.numberAlignedNeighborFrames
+                    {
                         for result in results.numberAligned {
                             if let homography = result.homography {
                                 let frameOffset = NSNumber(
@@ -761,10 +828,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
 
+            let config = await configManager.config()
+            
             var nextFrame: FrameAirplaneRemover? = firstFrame
             while nextFrame != nil {
                 if let frame = nextFrame {
-                    if let results = await frame.getObserver()?.earthAlignmentResults {
+                    if let results = await frame.getObserver()?.earthAlignmentResults,
+                       results.numberAligned.count == config.numberAlignedNeighborFrames
+                    {
                         for result in results.numberAligned {
                             if let homography = result.homography {
                                 let frameOffset = NSNumber(

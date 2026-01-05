@@ -1185,7 +1185,7 @@ public final class ImageSequenceViewModel {
                         Log.i("running second alignment pass")
                         if let firstFrame = frames[0].frame {
                             self.renderAllFrames(
-                              reRenderWith: await firstFrame.medianDeviationsForEntireSequence
+                              reRenderWith: await firstFrame.maxMinDeviationsForEntireSequence
                             )
                         } else {
                             Log.w("no first frame :(")
@@ -1205,7 +1205,7 @@ public final class ImageSequenceViewModel {
                     Log.i("running second alignment pass")
                     if let firstFrame = frames[0].frame {
                         self.renderAllFrames(
-                          reRenderWith: await firstFrame.medianDeviationsForEntireSequence
+                          reRenderWith: await firstFrame.maxMinDeviationsForEntireSequence
                         )
                     }
                 }
@@ -1797,7 +1797,7 @@ public final class ImageSequenceViewModel {
     }
     
     func renderAllFrames(
-      reRenderWith medianDeviations: ([Int: Double])? = nil
+      reRenderWith minMaxDeviations: ([Int: [Double]])? = nil
     ) {
         Log.d("renderAllFrames")
         self.renderingAllFrames = true
@@ -1815,11 +1815,11 @@ public final class ImageSequenceViewModel {
                         var shouldRender = await frame.processingState() != .complete
                         var renderWasBad = false
                         
-                        if let medianDeviations {
+                        if let minMaxDeviations {
                             /*
                              check to see if we should re-render based upon
                              how bad the homography was for this frame based upon
-                             what medianDeviations may have been passed in
+                             what minMaxDeviations may have been passed in
                              
                              */
 
@@ -1829,7 +1829,7 @@ public final class ImageSequenceViewModel {
                             {
                                 // compare homography to median deviations
                                 if !results.matches(
-                                     deviations: medianDeviations,
+                                     deviations: minMaxDeviations,
                                      by: 1.25,
                                      at: frame.frameIndex
                                    )
