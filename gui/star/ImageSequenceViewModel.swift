@@ -1828,7 +1828,10 @@ public final class ImageSequenceViewModel {
                                let results = observer.starAlignmentResults
                             {
                                 // compare homography to median deviations
-                                if !results.matches(
+                                // we need both fully aligned neighbors,
+                                // and good homography, otherwise we will re-render
+                                if results.numberAligned.count != self.numberOfAlignedNeighborFrames || 
+                                   !results.matches(
                                      deviations: minMaxDeviations,
                                      by: 1.25,
                                      at: frame.frameIndex
