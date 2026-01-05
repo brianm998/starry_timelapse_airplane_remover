@@ -2788,25 +2788,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    private func fallbackToSelective() async throws {
-        
-        // 1. set mode to selective
-        await self.set(cleanMethod: .selective)
-
-        // 2. check for outliers either in ram or on disk, create if missing
-        try await self.loadOutliers()
-
-        self.set(state: .secondClassification)
-
-        // 3. classify outliers
-        await self.applyDecisionTreeToAllOutliers(includingTrash: true)
-
-        // 4. render that image and return it here
-        try await self.finish()
-
-        await self.updateCombineSubjects()
-    }
-    
     // Mark - Auto Mode Logic
 
     /*
@@ -2830,14 +2811,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.i("frame \(frameIndex) got result \(result) for star aligned image")
         
         let config = await configManager.config()
-        
-        if false,               // XXX DISABLE THIS
-           result.numAligned < config.minAlignmentFrames {
-            // fall back to selective clean here because alignment was not good enough
-            Log.i("frame \(frameIndex) falling back to selective because \(result.numAligned) < \(config.minAlignmentFrames)")
-            try await fallbackToSelective() // finishSelective() is called here
-            return nil          
-        }
         
         var skyImage: PixelatedImage? = starAlignedImage
         if skyImage == nil {

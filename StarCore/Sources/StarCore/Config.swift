@@ -180,9 +180,6 @@ public struct Config: Codable, Sendable, Transferable {
     // creating the subtraction image and calculating pixel values during removal
     public var numberAlignedNeighborFrames = 8 // total
 
-    // if we're using automatic clean mode, and get less alignment frames than this,
-    // fall back to selective instead
-    public var minAlignmentFrames = 2
 
     // when camera is not moving, use this value instead of
     // numberAlignedNeighborFrames for calculating the merged horizon for each frame
@@ -397,7 +394,6 @@ public struct Config: Codable, Sendable, Transferable {
 
         self.numberFinalProcessingNeighborsNeeded = try c.decodeIfPresent(Int.self, forKey: .numberFinalProcessingNeighborsNeeded) ?? self.numberFinalProcessingNeighborsNeeded
         self.numberAlignedNeighborFrames = try c.decodeIfPresent(Int.self, forKey: .numberAlignedNeighborFrames) ?? self.numberAlignedNeighborFrames
-        self.minAlignmentFrames = try c.decodeIfPresent(Int.self, forKey: .minAlignmentFrames) ?? self.minAlignmentFrames
         self.numberStaticNeighborFrames = try c.decodeIfPresent(Int.self, forKey: .numberStaticNeighborFrames) ?? self.numberStaticNeighborFrames
         self.supportedImageFileTypes = try c.decodeIfPresent([String].self, forKey: .supportedImageFileTypes) ?? self.supportedImageFileTypes
     }
@@ -480,10 +476,11 @@ public struct Config: Codable, Sendable, Transferable {
     // 0.10.2 a lot of small 8 bit image fixes
     // 0.10.3 added alignment info window
     //        added fix bad alignment button (use existing homography)
+    //        added second pass of alignment to fix bad alignment automatically
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.10.3"
+    public static let latestVersion = "0.10.4"
     
     public var basename: String {
         let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)"
