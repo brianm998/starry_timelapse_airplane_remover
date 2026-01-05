@@ -838,10 +838,10 @@ public final class ImageSequenceViewModel {
           config: configManager.config(),
           imageSequence: imageSequence,
           frameIndexToBaseNameMap: frameIndexToBaseNameMap
-        ) { [weak self] frameIndex, type, size in
+        ) { [weak self] image, frameIndex, type, size in
             Task { @MainActor in
                 Log.d("frame \(frameIndex) saved image of type \(type) at size \(size)")
-                self?.frames[frameIndex].savedImage(ofType: type, atSize: size)
+                self?.frames[frameIndex].saved(image: image, ofType: type, atSize: size)
             }
         }
 
@@ -1223,7 +1223,7 @@ public final class ImageSequenceViewModel {
         // let outlierTask: Task<Void,Never>?
 
         let acc = frame.imageAccessor
-/*
+
         let prTask = Task.detached {
             await acc.loadImage(frameIndex: frame.frameIndex,
                                 type: .final,
@@ -1235,7 +1235,6 @@ public final class ImageSequenceViewModel {
                                 atSize: .preview)?.resizable()
         }
 
-*/
         let otTask = Task.detached {
             await acc.loadImage(frameIndex: frame.frameIndex,
                                 type: .original,
@@ -1254,6 +1253,13 @@ public final class ImageSequenceViewModel {
         }
 
         self.frames[frame.frameIndex].existingImages = existingImages
+
+        if let image = await prTask.value {
+            self.frames[frame.frameIndex].processedPreviewImage = image
+        }
+        if let image = await opTask.value {
+            self.frames[frame.frameIndex].originalPreviewImage = image
+        }
 
         if let image = await otTask.value {
             self.frames[frame.frameIndex].thumbnailImage = image

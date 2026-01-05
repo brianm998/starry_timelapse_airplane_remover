@@ -51,10 +51,28 @@ public class FrameViewModel {
     
     let frameIndex: Int
 
-    func savedImage(ofType type: FrameViewMode, atSize size: ImageDisplaySize) {
+    func saved(
+      image: PixelatedImage,
+      ofType type: FrameViewMode,
+      atSize size: ImageDisplaySize)
+    {
         existingImages.insert(type)
         if size == .preview {
-            reloadID = UUID()
+            switch type {
+            case .final:
+                if let image = image.nsImage {
+                    self.processedPreviewImage = Image(nsImage: image)
+                }
+                
+            case .original:
+                if let image = image.nsImage {
+                    self.originalPreviewImage = Image(nsImage: image)
+                      .resizable()
+                }
+
+            default: 
+                reloadID = UUID()
+            }
         }
     }
     
@@ -99,45 +117,44 @@ public class FrameViewModel {
     // we don't keep full resolution images here
 
     var thumbnailImage: Image = initialImage
-//    var previewImage: Image = initialImage
-//    var processedPreviewImage: Image = initialImage
+    var originalPreviewImage: Image = initialImage
+    var processedPreviewImage: Image = initialImage
 
+    @ViewBuilder
     public func previewImage(type: FrameViewMode) -> some View {
-        Group {
-            switch type {
-                /*
-            case .original:
-                self.previewImage
-            case .processed:
-                self.processedPreviewImage
-                 */
-            default: 
-                if let frame,
-                   let url = frame.imageAccessor.urlForImage(
-                     frameIndex: frame.frameIndex,
-                     ofType: type,
-                     atSize: .preview
-                   )
-                {
-                    AsyncImage(
-                      url: url.appending(
-                        queryItems: [
-                          URLQueryItem(
-                            name: "v",
-                            value: reloadID.uuidString
-                          )
-                        ]
+
+        switch type {
+        case .original:
+            self.originalPreviewImage
+        case .final:
+            self.processedPreviewImage
+        default: 
+            if let frame,
+               let url = frame.imageAccessor.urlForImage(
+                 frameIndex: frame.frameIndex,
+                 ofType: type,
+                 atSize: .preview
+               )
+            {
+                AsyncImage(
+                  url: url.appending(
+                    queryItems: [
+                      URLQueryItem(
+                        name: "v",
+                        value: reloadID.uuidString
                       )
-                    ) { image in
-                        image.resizable()
-                    } placeholder: {
-                        initialImage
-                    }
-                } else {
+                    ]
+                  )
+                ) { image in
+                    image.resizable()
+                } placeholder: {
                     initialImage
                 }
+            } else {
+                initialImage
             }
         }
+
     }
 
     // puts view outliers into the trash

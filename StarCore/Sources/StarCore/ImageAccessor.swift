@@ -40,16 +40,25 @@ public struct ImageAccessor: Sendable {
     let config: Config
     let frameIndexToBaseNameMap: [Int: String]
     let imageSequence: ImageSequence
-    let imageSavedClosure: (@Sendable (Int, FrameViewMode, ImageDisplaySize) -> Void)?
+    let imageSavedClosure: (
+      @Sendable (
+        PixelatedImage,
+        Int,
+        FrameViewMode,
+        ImageDisplaySize
+      ) -> Void)?
     
     public init(
       config: Config,
       imageSequence: ImageSequence,
       frameIndexToBaseNameMap: [Int: String],
-      imageSavedClosure: (@Sendable (Int,
-                                     FrameViewMode,
-                                     ImageDisplaySize
-                          ) -> Void
+      imageSavedClosure: (
+        @Sendable (
+          PixelatedImage,
+          Int,
+          FrameViewMode,
+          ImageDisplaySize
+        ) -> Void
       )? = nil
     ) {
         // the dirname (not full path) of where the main output files will sit
@@ -264,7 +273,7 @@ public struct ImageAccessor: Sendable {
       frameIndex: Int,
       as type: FrameViewMode,
       atSize size: ImageDisplaySize
-    ) throws {
+    ) async throws {
         if let fromName = nameForImage(
             frameIndex: frameIndex,
             ofType: type,
@@ -280,7 +289,19 @@ public struct ImageAccessor: Sendable {
               from: fromName,
               to: toName
             )
-            imageSavedClosure?(frameIndex, .final, size)
+            if size == .preview,
+               let imageSavedClosure
+            {
+                // f-ing load the image here
+                if let image = try await self.loadInt(
+                     frameIndex: frameIndex,
+                     type: .final,
+                     atSize: size
+                   )
+                {
+                    imageSavedClosure(image, frameIndex, .final, size)
+                }
+            }
         } else {
             throw "cannot link: either name for \(type) or name for .final doesn't exist"
         }
@@ -346,8 +367,8 @@ public struct ImageAccessor: Sendable {
                        )
                     {
                         downScaled.saveJpeg(withQuality: 60, filename: filename)
+                        imageSavedClosure?(downScaled, frameIndex, type, size)
                     }
-                    imageSavedClosure?(frameIndex, type, size)
                 }
             } else {
                 Log.w("no place to save image of type \(type) at size \(size)")

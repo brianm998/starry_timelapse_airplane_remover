@@ -1684,13 +1684,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     )
 
                     // link to final here
-                    try imageAccessor.linkFinal(
+                    try await imageAccessor.linkFinal(
                       frameIndex: frameIndex,
                       as: .selectiveProcessed,
                       atSize: .original
                     )
 
-                    try imageAccessor.linkFinal(
+                    try await imageAccessor.linkFinal(
                       frameIndex: frameIndex,
                       as: .selectiveProcessed,
                       atSize: .preview
@@ -2960,12 +2960,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                        )
                     {
                         if FileManager.default.fileExists(atPath: filename) {
-                            try imageAccessor.linkFinal(
+                            try await imageAccessor.linkFinal(
                               frameIndex: frameIndex,
                               as: .autoSelectiveProcessed,
                               atSize: .original
                             )
-                            try imageAccessor.linkFinal(
+                            try await imageAccessor.linkFinal(
                               frameIndex: frameIndex,
                               as: .autoSelectiveProcessed,
                               atSize: .preview
@@ -2984,12 +2984,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                        )
                     {
                         if FileManager.default.fileExists(atPath: filename) {
-                            try imageAccessor.linkFinal(
+                            try await imageAccessor.linkFinal(
                               frameIndex: frameIndex,
                               as: .autoProcessed,
                               atSize: .original
                             )
-                            try imageAccessor.linkFinal(
+                            try await imageAccessor.linkFinal(
                               frameIndex: frameIndex,
                               as: .autoProcessed,
                               atSize: .preview
@@ -3008,12 +3008,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                    )
                 {
                     if FileManager.default.fileExists(atPath: filename) {
-                        try imageAccessor.linkFinal(
+                        try await imageAccessor.linkFinal(
                           frameIndex: frameIndex,
                           as: .selectiveProcessed,
                           atSize: .original
                         )
-                        try imageAccessor.linkFinal(
+                        try await imageAccessor.linkFinal(
                           frameIndex: frameIndex,
                           as: .selectiveProcessed,
                           atSize: .preview
@@ -3139,13 +3139,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         )
 
                         // link to final here
-                        try imageAccessor.linkFinal(
+                        try await imageAccessor.linkFinal(
                           frameIndex: frameIndex,
                           as: .autoSelectiveProcessed,
                           atSize: .original
                         )
 
-                        try imageAccessor.linkFinal(
+                        try await imageAccessor.linkFinal(
                           frameIndex: frameIndex,
                           as: .autoSelectiveProcessed,
                           atSize: .preview
@@ -3202,13 +3202,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             )
 
             // link to final here
-            try imageAccessor.linkFinal(
+            try await imageAccessor.linkFinal(
               frameIndex: frameIndex,
               as: .autoProcessed,
               atSize: .original
             )
 
-            try imageAccessor.linkFinal(
+            try await imageAccessor.linkFinal(
               frameIndex: frameIndex,
               as: .autoProcessed,
               atSize: .preview
