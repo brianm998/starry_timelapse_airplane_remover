@@ -449,14 +449,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               mergedHorizon,
               frameIndex: frameIndex,
               as: .mergedHorizon,
-              atSize: .original,
-              overwrite: true
-            )
-            try await imageAccessor.save(
-              mergedHorizon,
-              frameIndex: frameIndex,
-              as: .mergedHorizon,
-              atSize: .preview,
+              atSizes: [.original, .preview],
               overwrite: true
             )
             let bounds = mergedHorizon.horizonBounds()
@@ -521,15 +514,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               horizonMask.image,
               frameIndex: frameIndex,
               as: .horizon,
-              atSize: .original,
-              overwrite: true
-            )
-
-            try await imageAccessor.save(
-              horizonMask.image,
-              frameIndex: frameIndex,
-              as: .horizon,
-              atSize: .preview,
+              atSizes: [.preview, .original],
               overwrite: true
             )
 
@@ -637,7 +622,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             var medianDeviations: [Int: Double] = [:]
 
             for (offset, deviationList) in records {
-                var sorted = deviationList.sorted(by: {$0 < $1})
+                let sorted = deviationList.sorted(by: {$0 < $1})
                 if sorted.count > 0 {
                     let medianDeviation = deviationList[sorted.count/2]
                     medianDeviations[offset] = medianDeviation
@@ -748,7 +733,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             var ret: [NSNumber: MatWrapper] = [:]
             for (frameOffset, homographyList) in records {
                 // take the median based upon deviation of the homography
-                var sortedList = homographyList.sorted(
+                let sortedList = homographyList.sorted(
                   by: { homographyDeviation($0) < homographyDeviation($1) }
                 )
                 if sortedList.count > 0 {
@@ -800,7 +785,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             var ret: [NSNumber: MatWrapper] = [:]
             for (frameOffset, homographyList) in records {
                 // take the median based upon deviation of the homography
-                var sortedList = homographyList.sorted(
+                let sortedList = homographyList.sorted(
                   by: { homographyDeviation($0) < homographyDeviation($1) }
                 )
                 if sortedList.count > 0 {
@@ -1096,7 +1081,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
 //                    } else {
                     
-                    let outlierThreshold = pixelThreshold
                     /*
 
                      Logic here is to attempt to determine a median slope for all
@@ -1234,15 +1218,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               aligned,
               frameIndex: frameIndex,
               as: type,
-              atSize: .original,
-              overwrite: true
-            )
-
-            try await imageAccessor.save(
-              aligned,
-              frameIndex: frameIndex,
-              as: type,
-              atSize: .preview,
+              atSizes: [.original, .preview],
               overwrite: true
             )
         } else if let failed = alignmentResult.failed,
@@ -1256,15 +1232,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               failed,
               frameIndex: frameIndex,
               as: failedType,
-              atSize: .original,
-              overwrite: true
-            )
-
-            try await imageAccessor.save(
-              failed,
-              frameIndex: frameIndex,
-              as: failedType,
-              atSize: .preview,
+              atSizes: [.preview, .original],
               overwrite: true
             )
         } else {
@@ -1279,14 +1247,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               image,
               frameIndex: frameIndex,
               as: .mergedHorizon,
-              atSize: .original,
-              overwrite: true
-            )
-            try await imageAccessor.save(
-              image,
-              frameIndex: frameIndex,
-              as: .mergedHorizon,
-              atSize: .preview,
+              atSizes: [.preview, .original],
               overwrite: true
             )
         }
@@ -1576,14 +1537,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         /*
         if self.writeOutputFiles {
             self.set(state: .loadingImages1)
-            try await imageAccessor.saveFinal(
+            try await imageAccessor.save(
               image, 
               frameIndex: frameIndex,
               as: .original,
               atSize: .preview,
               overwrite: false
             )
-            try await imageAccessor.saveFinal(
+            try await imageAccessor.save(
               image,
               frameIndex: frameIndex,
               as: .original,
@@ -1667,33 +1628,19 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
                 do {
                     Log.d("frame \(self.frameIndex) processed file")
-                    try await imageAccessor.saveFinal(
+                    try await imageAccessor.save(
                       processedImage,
                       frameIndex: frameIndex,
                       as: .selectiveProcessed,
-                      atSize: .original,
-                      overwrite: true
-                    )
-                    Log.d("frame \(self.frameIndex) writing processed preview")
-                    try await imageAccessor.saveFinal(
-                      processedImage,
-                      frameIndex: frameIndex,
-                      as: .selectiveProcessed,
-                      atSize: .preview,
+                      atSizes: [.preview, .original],
                       overwrite: true
                     )
 
                     // link to final here
-                    try await imageAccessor.linkFinal(
+                    try await imageAccessor.linkFinals(
                       frameIndex: frameIndex,
                       as: .selectiveProcessed,
-                      atSize: .original
-                    )
-
-                    try await imageAccessor.linkFinal(
-                      frameIndex: frameIndex,
-                      as: .selectiveProcessed,
-                      atSize: .preview
+                      atSizes: [.preview, .original]
                     )
                     
                 } catch {
@@ -1705,19 +1652,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     Log.d("frame \(self.frameIndex) getting validating image")
                     if let validationImage = await outlierGroups.validationImage() {
                         Log.d("frame \(self.frameIndex) writing validated image")
-                        try await imageAccessor.saveFinal(
+                        try await imageAccessor.save(
                           validationImage,
                           frameIndex: frameIndex,
                           as: .validation,
-                          atSize: .original,
-                          overwrite: false
-                        )
-                        Log.d("frame \(self.frameIndex) writing validated preview")
-                        try await imageAccessor.saveFinal(
-                          validationImage,
-                          frameIndex: frameIndex,
-                          as: .validation,
-                          atSize: .preview,
+                          atSizes: [.preview, .original],
                           overwrite: false
                         )
                     } else {
@@ -2494,21 +2433,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
 
             if let removeMaskImage = removeMaskImageData.image {
-                let (_,_) = await (
-                  try imageAccessor.save(
-                    removeMaskImage,
-                    frameIndex: frameIndex,
-                    as: .removeMask,
-                    atSize: .original,
-                    overwrite: true
-                  ),
-                  try imageAccessor.save(
-                    removeMaskImage,
-                    frameIndex: frameIndex,
-                    as: .removeMask,
-                    atSize: .preview,
-                    overwrite: true
-                  )
+                try await imageAccessor.save(
+                  removeMaskImage,
+                  frameIndex: frameIndex,
+                  as: .removeMask,
+                  atSizes: [.preview, .original],
+                  overwrite: true
                 )
             } else {
                 Log.w("unable to create remove mask image from data")
@@ -2960,15 +2890,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                        )
                     {
                         if FileManager.default.fileExists(atPath: filename) {
-                            try await imageAccessor.linkFinal(
+                            try await imageAccessor.linkFinals(
                               frameIndex: frameIndex,
                               as: .autoSelectiveProcessed,
-                              atSize: .original
-                            )
-                            try await imageAccessor.linkFinal(
-                              frameIndex: frameIndex,
-                              as: .autoSelectiveProcessed,
-                              atSize: .preview
+                              atSizes: [.preview, .original]
                             )
                         } else {
                             // no file exists
@@ -2984,15 +2909,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                        )
                     {
                         if FileManager.default.fileExists(atPath: filename) {
-                            try await imageAccessor.linkFinal(
+                            try await imageAccessor.linkFinals(
                               frameIndex: frameIndex,
                               as: .autoProcessed,
-                              atSize: .original
-                            )
-                            try await imageAccessor.linkFinal(
-                              frameIndex: frameIndex,
-                              as: .autoProcessed,
-                              atSize: .preview
+                              atSizes: [.preview, .original] 
                             )
                         } else {
                             // no file exists
@@ -3008,15 +2928,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                    )
                 {
                     if FileManager.default.fileExists(atPath: filename) {
-                        try await imageAccessor.linkFinal(
+                        try await imageAccessor.linkFinals(
                           frameIndex: frameIndex,
                           as: .selectiveProcessed,
-                          atSize: .original
-                        )
-                        try await imageAccessor.linkFinal(
-                          frameIndex: frameIndex,
-                          as: .selectiveProcessed,
-                          atSize: .preview
+                          atSizes: [.preview, .original]
                         )
                     } else {
                         // no file exists
@@ -3122,33 +3037,19 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     // write frame out as processed versions
                     do {
                         Log.d("frame \(self.frameIndex) processed file")
-                        try await imageAccessor.saveFinal(
+                        try await imageAccessor.save(
                           processedImage,
                           frameIndex: frameIndex,
                           as: .autoSelectiveProcessed,
-                          atSize: .original,
-                          overwrite: true
-                        )
-                        Log.d("frame \(self.frameIndex) writing processed preview")
-                        try await imageAccessor.saveFinal(
-                          processedImage,
-                          frameIndex: frameIndex,
-                          as: .autoSelectiveProcessed,
-                          atSize: .preview,
+                          atSizes: [.preview, .original],
                           overwrite: true
                         )
 
                         // link to final here
-                        try await imageAccessor.linkFinal(
+                        try await imageAccessor.linkFinals(
                           frameIndex: frameIndex,
                           as: .autoSelectiveProcessed,
-                          atSize: .original
-                        )
-
-                        try await imageAccessor.linkFinal(
-                          frameIndex: frameIndex,
-                          as: .autoSelectiveProcessed,
-                          atSize: .preview
+                          atSizes: [.preview, .original]
                         )
 
                     } catch {
@@ -3160,19 +3061,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         Log.d("frame \(self.frameIndex) getting validating image")
                         if let validationImage = await outlierGroups.validationImage() {
                             Log.d("frame \(self.frameIndex) writing validated image")
-                            try await imageAccessor.saveFinal(
+                            try await imageAccessor.save(
                               validationImage,
                               frameIndex: frameIndex,
                               as: .validation,
-                              atSize: .original,
-                              overwrite: false
-                            )
-                            Log.d("frame \(self.frameIndex) writing validated preview")
-                            try await imageAccessor.saveFinal(
-                              validationImage,
-                              frameIndex: frameIndex,
-                              as: .validation,
-                              atSize: .preview,
+                              atSizes: [.preview, .original],
                               overwrite: false
                             )
                         } else {
@@ -3186,36 +3079,23 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // if not using outliers, then save the auto processed image as
             // complete 
             self.set(state: .loadingImages1)
-            try await imageAccessor.saveFinal(
+            try await imageAccessor.save(
               autoProcessedImage, 
               frameIndex: frameIndex,
               as: .autoProcessed,
-              atSize: .preview,
-              overwrite: false
-            )
-            try await imageAccessor.saveFinal(
-              autoProcessedImage, 
-              frameIndex: frameIndex,
-              as: .autoProcessed,
-              atSize: .original,
+              atSizes: [.preview, .original],
               overwrite: false
             )
 
             // link to final here
-            try await imageAccessor.linkFinal(
+            try await imageAccessor.linkFinals(
               frameIndex: frameIndex,
               as: .autoProcessed,
-              atSize: .original
-            )
-
-            try await imageAccessor.linkFinal(
-              frameIndex: frameIndex,
-              as: .autoProcessed,
-              atSize: .preview
+              atSizes: [.original, .preview]
             )
             
             /*
-            try await imageAccessor.saveFinal(
+            try await imageAccessor.save(
               autoProcessedImage,
               frameIndex: frameIndex,
               as: .final,

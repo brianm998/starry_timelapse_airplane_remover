@@ -268,6 +268,20 @@ public struct ImageAccessor: Sendable {
         return nil
     }
 
+    public func linkFinals(
+      frameIndex: Int,
+      as type: FrameViewMode,
+      atSizes sizes: [ImageDisplaySize]
+    ) async throws {
+        for size in sizes {
+            try await self.linkFinal(
+              frameIndex: frameIndex,
+              as: type,
+              atSize: size
+            )
+        }
+    }
+
     // ln a processed type to .final
     public func linkFinal(
       frameIndex: Int,
@@ -293,7 +307,7 @@ public struct ImageAccessor: Sendable {
                let imageSavedClosure
             {
                 // f-ing load the image here
-                if let image = try await self.loadInt(
+                if let image = await self.loadInt(
                      frameIndex: frameIndex,
                      type: .final,
                      atSize: size
@@ -308,20 +322,22 @@ public struct ImageAccessor: Sendable {
     }
     
     // save using the file system monitor
-    public func saveFinal(_ image: PixelatedImage,
-                          frameIndex: Int,
-                          as type: FrameViewMode,
-                          atSize size: ImageDisplaySize,
-                          overwrite: Bool) async throws
-    {
-        try await finalFileSystemMonitor.save() {
-            await self.saveInt(
+
+    public func save(
+      _ image: PixelatedImage,
+      frameIndex: Int,
+      as type: FrameViewMode,
+      atSizes sizes: [ImageDisplaySize],
+      overwrite: Bool
+    ) async throws {
+        for size in sizes {
+            try await self.save(
               image,
               frameIndex: frameIndex,
               as: type,
               atSize: size,
               overwrite: overwrite
-            )
+            )              
         }
     }
             
@@ -471,7 +487,7 @@ public struct ImageAccessor: Sendable {
       atSizes sizes: [ImageDisplaySize]
     ) {
         for imageType in imageTypes {
-            try? deleteImages(
+            deleteImages(
               frameIndex: frameIndex,
               ofType: imageType,
               atSizes: sizes
