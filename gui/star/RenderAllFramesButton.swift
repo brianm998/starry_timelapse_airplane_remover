@@ -7,7 +7,9 @@ struct RenderAllFramesButton: View {
     
     var body: some View {
         let action: () -> Void = {
-            viewModel.renderAllFrames()
+            Task {
+                await viewModel.renderAllFrames()
+            }
         }
         
         return Button(action: action) {

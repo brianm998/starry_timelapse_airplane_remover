@@ -181,7 +181,9 @@ struct LeftPanel: View {
             
             Button() {
                 // XXX this has no max number of processes :(
-                viewModel.renderAllFrames()
+                Task {
+                    await viewModel.renderAllFrames()
+                }
             } label: {
                 Text("Update \(userModified) frames")
             }

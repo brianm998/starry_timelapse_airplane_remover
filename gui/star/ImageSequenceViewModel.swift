@@ -1177,14 +1177,14 @@ public final class ImageSequenceViewModel {
                     try await self.processHorizonForAllFrames()
                     Log.d("processAll got horizons")
                     // after we get horizons for all frames, render frames
-                    self.renderAllFrames()
+                    await self.renderAllFrames()
                     if self.runSecondAlignmentPass {
                         // get expected deviations
                         // re-run render all fames with it
                         // XXX Set some flag for UI
                         Log.i("running second alignment pass")
                         if let firstFrame = frames[0].frame {
-                            self.renderAllFrames(
+                            await self.renderAllFrames(
                               reRenderWith: await firstFrame.maxMinDeviationsForEntireSequence
                             )
                         } else {
@@ -1198,13 +1198,13 @@ public final class ImageSequenceViewModel {
             } else {
                 Log.d("processAll NO horizonDetection")
                 self.ignoreLowerPixels = 0
-                self.renderAllFrames()
+                await self.renderAllFrames()
                 if self.runSecondAlignmentPass {
                     // get expected deviation
                     // re-run render all fames with it
                     Log.i("running second alignment pass")
                     if let firstFrame = frames[0].frame {
-                        self.renderAllFrames(
+                        await self.renderAllFrames(
                           reRenderWith: await firstFrame.maxMinDeviationsForEntireSequence
                         )
                     }
@@ -1798,65 +1798,48 @@ public final class ImageSequenceViewModel {
     
     func renderAllFrames(
       reRenderWith minMaxDeviations: ([Int: [Double]])? = nil
-    ) {
-        Log.d("renderAllFrames")
+    ) async {
+        Log.d("renderAllFrames minMaxDeviations \(minMaxDeviations)")
         self.renderingAllFrames = true
         let frameSaveQueue = self.frameSaveQueue
-        Task {
-            Log.d("renderAllFrames Task")
-            let semaphore = AsyncSemaphore(value: self.numberOfFramesToProcessConcurrently)
-            await withTaskGroup(of: Void.self) { taskGroup in
-                Log.d("renderAllFrames TaskGroup")
+        Log.d("renderAllFrames Task")
+        let semaphore = AsyncSemaphore(value: self.numberOfFramesToProcessConcurrently)
+        await withTaskGroup(of: Void.self) { taskGroup in
+            Log.d("renderAllFrames TaskGroup")
 
-                let counter = CountActor()
-                for frameView in self.frames {
-                    if let frame = frameView.frame {
+            let counter = CountActor()
+            for frameView in self.frames {
+                if let frame = frameView.frame {
 
-                        var shouldRender = await frame.processingState() != .complete
-                        var renderWasBad = false
-                        
-                        if let minMaxDeviations {
-                            /*
-                             check to see if we should re-render based upon
-                             how bad the homography was for this frame based upon
-                             what minMaxDeviations may have been passed in
-                             
-                             */
+                    var shouldRender = await frame.processingState() != .complete
+                    var renderWasBad = false
+                    
+                    if let minMaxDeviations {
+                        /*
+                         check to see if we should re-render based upon
+                         how bad the homography was for this frame based upon
+                         what minMaxDeviations may have been passed in
+                         
+                         */
 
-                            // get frame homography
-                            if let observer = await frame.getObserver(),
-                               let results = observer.starAlignmentResults
+                        // get frame homography
+                        if let observer = await frame.getObserver(),
+                           let results = observer.starAlignmentResults
+                        {
+                            // compare homography to median deviations
+                            // we need both fully aligned neighbors,
+                            // and good homography, otherwise we will re-render
+                            if results.numberAligned.count != self.numberOfAlignedNeighborFrames || 
+                                 !results.matches(
+                                   deviations: minMaxDeviations,
+                                   by: 1.25,
+                                   at: frame.frameIndex
+                                 )
                             {
-                                // compare homography to median deviations
-                                // we need both fully aligned neighbors,
-                                // and good homography, otherwise we will re-render
-                                if results.numberAligned.count != self.numberOfAlignedNeighborFrames || 
-                                   !results.matches(
-                                     deviations: minMaxDeviations,
-                                     by: 1.25,
-                                     at: frame.frameIndex
-                                   )
-                                {
-                                    Log.i("frame \(frame.frameIndex) doesn't match median deviation so it will re-render")
-                                    shouldRender = true
-                                    renderWasBad = true
-
-                                    frame.imageAccessor.deleteImages(
-                                      frameIndex: frame.frameIndex,
-                                      ofTypes: [.starAligned,
-                                                .failedStarAligned,
-                                                .earthAligned,
-                                                .failedEarthAligned],
-                                      atSizes: [.original, .preview]
-                                    )
-                                } else {
-                                    Log.i("frame \(frame.frameIndex) matchs median deviation so keeping alignment")
-
-                                }
-                            } else {
-                                Log.i("frame \(frame.frameIndex) has no frame homography, will re-render")
+                                Log.i("frame \(frame.frameIndex) doesn't match median deviation so it will re-render")
                                 shouldRender = true
                                 renderWasBad = true
+
                                 frame.imageAccessor.deleteImages(
                                   frameIndex: frame.frameIndex,
                                   ofTypes: [.starAligned,
@@ -1865,56 +1848,41 @@ public final class ImageSequenceViewModel {
                                             .failedEarthAligned],
                                   atSizes: [.original, .preview]
                                 )
+                            } else {
+                                Log.i("frame \(frame.frameIndex) matchs median deviation so keeping alignment")
+
                             }
-                            Log.i("frame \(frame.frameIndex) WTF shouldRender \(shouldRender)")
                         } else {
-                            Log.d("no median deviations")
+                            Log.i("frame \(frame.frameIndex) has no frame homography, will re-render")
+                            shouldRender = true
+                            renderWasBad = true
+                            frame.imageAccessor.deleteImages(
+                              frameIndex: frame.frameIndex,
+                              ofTypes: [.starAligned,
+                                        .failedStarAligned,
+                                        .earthAligned,
+                                        .failedEarthAligned],
+                              atSizes: [.original, .preview]
+                            )
                         }
-                        if shouldRender {
-                            Log.d("frame \(frame.frameIndex) rendering")
-                            taskGroup.addTask() {
-                                Log.d("frame \(frame.frameIndex) rendering pre semaphore")
-                                await semaphore.wait()
-                                Log.d("frame \(frame.frameIndex) rendering post semaphor")
-                                await counter.increase()
+                        Log.i("frame \(frame.frameIndex) WTF shouldRender \(shouldRender)")
+                    } else {
+                        Log.d("no median deviations")
+                    }
+                    if shouldRender {
+                        Log.d("frame \(frame.frameIndex) rendering")
+                        taskGroup.addTask() {
+                            Log.d("frame \(frame.frameIndex) rendering pre semaphore")
+                            await semaphore.wait()
+                            Log.d("frame \(frame.frameIndex) rendering post semaphor")
+                            await counter.increase()
 
-                                switch await frame.cleanMethod {
-                                case .selective:
-                                    do {
-                                        try await frameSaveQueue.saveNow(frame: frame) {
-                                            await self.refresh(frame: frame)
-
-                                            await counter.decrease()
-                                            if !(await counter.isMoreThanZero()) {
-                                                await MainActor.run {
-                                                    self.renderingAllFrames = false
-                                                }
-                                            }
-                                            semaphore.signal()
-                                        }
-                                    } catch {
-                                        Log.e("frame \(frame.frameIndex) unable to save")
-                                    }
-
-                                case .automatic(let useOutliers):
-                                    do {
-                                        try await frame.finishAuto(
-                                          useOutliers: useOutliers,
-                                          usingExistingHomography: self.useExistingHomography || renderWasBad
-                                        )
-
-                                        if useOutliers {
-                                            if await frame.getOutlierGroups() == nil {
-                                                try await frame.loadOutliers()
-                                                Task { @MainActor in
-                                                    let frameView = self.frames[frame.frameIndex]
-                                                    frameView.outlierViews = nil
-                                                    await frameView.setOutlierGroups()
-                                                }
-                                            }
-                                        }
-                                        
+                            switch await frame.cleanMethod {
+                            case .selective:
+                                do {
+                                    try await frameSaveQueue.saveNow(frame: frame) {
                                         await self.refresh(frame: frame)
+
                                         await counter.decrease()
                                         if !(await counter.isMoreThanZero()) {
                                             await MainActor.run {
@@ -1922,21 +1890,51 @@ public final class ImageSequenceViewModel {
                                             }
                                         }
                                         semaphore.signal()
-                                    } catch {
-                                        Log.e("frame \(frame.frameIndex) unable to save")
                                     }
+                                } catch {
+                                    Log.e("frame \(frame.frameIndex) unable to save")
+                                }
+
+                            case .automatic(let useOutliers):
+                                do {
+                                    try await frame.finishAuto(
+                                      useOutliers: useOutliers,
+                                      usingExistingHomography: self.useExistingHomography || renderWasBad
+                                    )
+
+                                    if useOutliers {
+                                        if await frame.getOutlierGroups() == nil {
+                                            try await frame.loadOutliers()
+                                            Task { @MainActor in
+                                                let frameView = self.frames[frame.frameIndex]
+                                                frameView.outlierViews = nil
+                                                await frameView.setOutlierGroups()
+                                            }
+                                        }
+                                    }
+                                    
+                                    await self.refresh(frame: frame)
+                                    await counter.decrease()
+                                    if !(await counter.isMoreThanZero()) {
+                                        await MainActor.run {
+                                            self.renderingAllFrames = false
+                                        }
+                                    }
+                                    semaphore.signal()
+                                } catch {
+                                    Log.e("frame \(frame.frameIndex) unable to save")
                                 }
                             }
-                        } else {
-                            Log.d("frame \(frame.frameIndex) not re-rendering")
                         }
                     } else {
-                        Log.d("renderAllFrames FOO")
+                        Log.d("frame \(frame.frameIndex) not re-rendering")
                     }
+                } else {
+                    Log.d("renderAllFrames FOO")
                 }
-                
-                await taskGroup.waitForAll()
             }
+            
+            await taskGroup.waitForAll()
         }
     }
     
