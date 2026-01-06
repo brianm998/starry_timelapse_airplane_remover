@@ -1548,18 +1548,18 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         try await loadOutliers()
     }
 
-    public func finish() async throws {
+    public func finish(alignOnly: Bool) async throws {
         switch await self.cleanMethod {
         case .automatic(let useOutliers):
-            try await self.finishAuto(useOutliers: useOutliers)
+            try await self.finishAuto(alignOnly: alignOnly, useOutliers: useOutliers)
         case .selective:
-            try await self.finishSelective()
+            try await self.finishSelective(alignOnly: alignOnly)
         }
     }
     
     // run after shouldRemove has been set for each group, 
     // does the final removing and then writes out the output files
-    public func finishSelective() async throws {
+    public func finishSelective(alignOnly: Bool) async throws {
         Log.d("frame \(self.frameIndex) starting to finish")
         
         mkdir(await self.outliersDirname)
@@ -1645,6 +1645,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         let alignmentResult = try await loadOrCreateStarAlignedImage()
+
+        if alignOnly { return }
+        
         let starAlignedImage = alignmentResult.aligned
         let failedStarAlignedImage = alignmentResult.failed
 
@@ -2801,7 +2804,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
      If the sky contains little to no clouds, this approach can work, and gets
      rid of even the small distant satellites that move slowly through the sky.
      */
-    func createAutoProcessedImage(usingExistingHomography: Bool = false) async throws -> PixelatedImage? {
+    func createAutoProcessedImage(
+      alignOnly: Bool,
+      usingExistingHomography: Bool = false
+    ) async throws -> PixelatedImage? {
         Log.i("frame \(frameIndex) creating auto processed image usingExistingHomography \(usingExistingHomography)")
         let result = try await loadOrCreateStarAlignedImage(
           usingExistingHomography: usingExistingHomography
@@ -2839,6 +2845,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             if config.allowEarthAlignment {
                 let alignmentResult = try await loadOrCreateEarthAlignedImage()
 
+                if alignOnly { return nil }
+                
                 // XXX validate this alignment result, it might be erroneous
                 // if it's bad, use the original frame and horizon mask instead
 
@@ -2853,7 +2861,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             } else {
                 // not using earth alignment
-
+                if alignOnly { return nil }
                 // use original image for the earth
                 earthImage = try await imageAccessor.load(
                   frameIndex: frameIndex,
@@ -2968,7 +2976,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                             )
                         } else {
                             // no file exists
-                            try await self.finishAuto(useOutliers: true)
+                            try await self.finishAuto(
+                              alignOnly: false,
+                              useOutliers: true
+                            )
                         }
                     }
                 } else {
@@ -2987,7 +2998,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                             )
                         } else {
                             // no file exists
-                            try await self.finishAuto(useOutliers: false)
+                            try await self.finishAuto(
+                              alignOnly: false,
+                              useOutliers: false
+                            )
                         }
                     }
                 }
@@ -3014,7 +3028,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         // 3. classify outliers
                         await self.applyDecisionTreeToAllOutliers(includingTrash: true)
 
-                        try await self.finishSelective()
+                        try await self.finishSelective(alignOnly: false)
 
                         await self.updateCombineSubjects()
                     }
@@ -3027,16 +3041,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     
     // used by PixelReplacementMode.automatic
     public func finishAuto(
+      alignOnly: Bool,
       useOutliers: Bool,
       usingExistingHomography: Bool = false
     ) async throws {
         guard let autoProcessedImage = try await createAutoProcessedImage(
+                alignOnly: alignOnly,
                 usingExistingHomography: usingExistingHomography
               ) else
         {
-            Log.e("frame \(frameIndex) unable to create auto processed image")
-            // we were unable to finish auto because of bad alignment, so we
-            // finished selective instead  
+            // passing alignOnly == true always ends up here
+            if !alignOnly {
+                // only an error if !alignOnly
+                Log.e("frame \(frameIndex) unable to create auto processed image")
+            }
+            // we were unable to finish auto because of bad alignment
             return
         }
         if useOutliers {

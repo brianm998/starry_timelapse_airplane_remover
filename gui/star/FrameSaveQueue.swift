@@ -34,13 +34,14 @@ class FrameSaveQueue {
                 // only save if it is still in purgatory
                 let savingState = await frame.savingState()
                 if savingState == .inPurgatory {
-                    try await self.saveNow(frame: frame, completionClosure: completionClosure)
-                } 
+                    try await self.saveNow(frame: frame, alignOnly: false, completionClosure: completionClosure)
+                }
             }
         }
     }
     
     func saveNow(frame: FrameAirplaneRemover,
+                 alignOnly: Bool,
                  completionClosure: @Sendable @escaping () async -> Void) async throws
     {
         Task.detached(priority: .high) {
@@ -63,7 +64,7 @@ class FrameSaveQueue {
                     }
                     
                     try await frame.loadOutliers()
-                    try await frame.finish()
+                    try await frame.finish(alignOnly: alignOnly)
                     await frame.changesHandled()
                 } catch {
                     Log.e("frame \(frame.frameIndex) frame save error: \(error)")

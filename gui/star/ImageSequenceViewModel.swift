@@ -1177,7 +1177,11 @@ public final class ImageSequenceViewModel {
                     try await self.processHorizonForAllFrames()
                     Log.d("processAll got horizons")
                     // after we get horizons for all frames, render frames
-                    await self.renderAllFrames()
+
+                    // first pass of rendering just does alignment,
+                    // but only if we have a second pass
+                    await self.renderAllFrames(alignOnly: self.runSecondAlignmentPass)
+
                     if self.runSecondAlignmentPass {
                         // get expected deviations
                         // re-run render all fames with it
@@ -1185,6 +1189,7 @@ public final class ImageSequenceViewModel {
                         Log.i("running second alignment pass")
                         if let firstFrame = frames[0].frame {
                             await self.renderAllFrames(
+                              alignOnly: false,
                               reRenderWith: await firstFrame.maxMinDeviationsForEntireSequence
                             )
                         } else {
@@ -1198,13 +1203,16 @@ public final class ImageSequenceViewModel {
             } else {
                 Log.d("processAll NO horizonDetection")
                 self.ignoreLowerPixels = 0
-                await self.renderAllFrames()
+                
+                await self.renderAllFrames(alignOnly: self.runSecondAlignmentPass)
+                
                 if self.runSecondAlignmentPass {
                     // get expected deviation
                     // re-run render all fames with it
                     Log.i("running second alignment pass")
                     if let firstFrame = frames[0].frame {
                         await self.renderAllFrames(
+                          alignOnly: false,
                           reRenderWith: await firstFrame.maxMinDeviationsForEntireSequence
                         )
                     }
@@ -1565,7 +1573,7 @@ public final class ImageSequenceViewModel {
                 closure: (@Sendable () async -> Void)? = nil) async throws
     {
         if saveNow {
-            try await self.frameSaveQueue.saveNow(frame: frame) {
+            try await self.frameSaveQueue.saveNow(frame: frame, alignOnly: false) {
                 await closure?()
             }
         } else if saveEver {
@@ -1797,6 +1805,7 @@ public final class ImageSequenceViewModel {
     }
     
     func renderAllFrames(
+      alignOnly: Bool,
       reRenderWith minMaxDeviations: ([Int: [Double]])? = nil
     ) async {
         Log.d("renderAllFrames minMaxDeviations \(minMaxDeviations)")
@@ -1880,7 +1889,10 @@ public final class ImageSequenceViewModel {
                             switch await frame.cleanMethod {
                             case .selective:
                                 do {
-                                    try await frameSaveQueue.saveNow(frame: frame) {
+                                    try await frameSaveQueue.saveNow(
+                                      frame: frame,
+                                      alignOnly: alignOnly
+                                    ) {
                                         await self.refresh(frame: frame)
 
                                         await counter.decrease()
@@ -1898,11 +1910,14 @@ public final class ImageSequenceViewModel {
                             case .automatic(let useOutliers):
                                 do {
                                     try await frame.finishAuto(
+                                      alignOnly: alignOnly,
                                       useOutliers: useOutliers,
                                       usingExistingHomography: self.useExistingHomography || renderWasBad
                                     )
 
-                                    if useOutliers {
+                                    if useOutliers,
+                                       !alignOnly
+                                    {
                                         if await frame.getOutlierGroups() == nil {
                                             try await frame.loadOutliers()
                                             Task { @MainActor in

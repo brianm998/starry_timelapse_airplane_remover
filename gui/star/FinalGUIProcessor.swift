@@ -105,6 +105,7 @@ public actor FinalGUIProcessor {
 
                         case .automatic(let useOutliers):
                             try await frame.finishAuto(
+                              alignOnly: false,
                               useOutliers: useOutliers,
                               usingExistingHomography: usingExistingHomography
                             )
@@ -321,7 +322,7 @@ fileprivate func finalProcess(atIndex currentIndex: Int,
         Log.d("frame \(frame.frameIndex) saveNow for real")
         do {
             try await frame.loadOutliers()
-            try await frame.finishSelective()
+            try await frame.finishSelective(alignOnly: false)
             await frame.changesHandled()
         } catch {
             Log.e("frame \(frame.frameIndex) frame save error: \(error)")

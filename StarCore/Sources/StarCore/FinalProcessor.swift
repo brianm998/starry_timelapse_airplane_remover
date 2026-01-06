@@ -316,7 +316,7 @@ public actor FinalProcessor {
         Log.d("adding frame \(frame.frameIndex) to the final queue")
 
         Log.d("frame \(frame.frameIndex) finishing")
-        try await frame.finish()
+        try await frame.finish(alignOnly: false)
         Log.d("frame \(frame.frameIndex) finished")
     }
 }    

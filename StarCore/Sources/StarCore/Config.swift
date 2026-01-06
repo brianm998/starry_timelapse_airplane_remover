@@ -477,6 +477,8 @@ public struct Config: Codable, Sendable, Transferable {
     // 0.10.3 added alignment info window
     //        added fix bad alignment button (use existing homography)
     //        added second pass of alignment to fix bad alignment automatically
+    // 0.10.4 fixed second pass of alignment to actually work
+    //        updated deviation checks to use a min/max range, not median
     
     public var starVersion = Config.latestVersion
 
