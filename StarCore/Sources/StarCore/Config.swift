@@ -482,7 +482,7 @@ public struct Config: Codable, Sendable, Transferable {
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.10.4"
+    public static let latestVersion = "0.10.5"
     
     public var basename: String {
         let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)"
