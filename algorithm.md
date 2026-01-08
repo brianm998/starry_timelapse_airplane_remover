@@ -4,7 +4,7 @@ Written as of Star 0.10.4
 
 ## High Level
 
-Star offers to different and complementary methods to remove unwanted signals from timelapses.
+Star offers two different and complementary methods to remove unwanted signals from timelapses.
 
  - Auto Clean
  - Selective Clean
@@ -14,11 +14,13 @@ Auto Clean can be used by itself, or in addition to selective clean in one of tw
  - to select which identified bad signals to remove from the original image
  - to select which identified good signals to retain in the fully processed image
 
+A video can have any processing method applied to any frame, but the presence of clouds in the sky can result in some flickering if the same processing method is not used for all frames.
+
 ### Auto Clean
 
 Auto Clean is used by all processing modes, but in potentially different ways.
 
-The goal of auto clean is to automatically remove all artificial lights that are moving from the video.  This can include both sky and earth.
+The goal of auto clean is to automatically remove all moving artificial lights from the video.  This can include both sky and earth, airplanes and cars.
 
 The output image has had every single pixel potentially updated, using the following sequence of steps.
 
@@ -70,11 +72,11 @@ If a video was captured on a moving tripod head, then the homography from other 
 
 ##### Median Merge
 
-After successfully aligning all the desired neighor frames, Star will then proceed to merge them into a single image my choosing the median intensity for every channel of each pixel.
+After successfully aligning all the desired neighor frames, Star will then proceed to merge them into a single image my choosing the median intensity for every channel of each pixel.  The frame being processed is also included in the median merge, more data helps.
 
-What this means is that Star will collect all of the values for each pixel, and sort them by brightness.  Zeros values are ignored, they may come from parts of an image that had no signal after warp.  In addition, values that are statistically too much brigher than the other values for that pixel are ignored.  Then the median value remaining in the list sorted by intensity is chosen.
+Star will collect all of the values for each channel of each pixel, and sort them by brightness.  Zeros values are ignored, they may come from parts of an image that had no signal after warp.  In addition, values that are statistically too much brigher than the other values for that pixel are ignored.  Then the median value remaining in the list sorted by intensity is chosen.
 
-This is a very similar process to how deep sky astrophotography can be done.
+This is a very similar process to how deep sky astrophotography can combine multiple exosures of the same area of the sky, resulting in a better image with a lower noise floor.
 
 The median merge is similar, but different from simply merging all of the values together.
 
