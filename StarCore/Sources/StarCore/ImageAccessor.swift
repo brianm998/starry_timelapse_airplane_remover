@@ -628,7 +628,7 @@ public struct ImageAccessor: Sendable {
             Log.i("found previews and thumbnails for end of sequence, did nothing")
         } else {
 //            try await withThrowingTaskGroup(of: Void.self) { taskGroup in
-                for frameIndex in 0..<imageSequenceSize {
+            for frameIndex in farthestFirstOrder(range: 0..<imageSequenceSize) {
                     Log.d("frame \(frameIndex) checking for missing images")
                     guard let filename = self.nameForImage(
                             frameIndex: frameIndex,
@@ -762,3 +762,56 @@ func createHardLinkReplacingDestination(from sourcePath: String,
     }
 }
 
+func farthestFirstOrder(range: Range<Int>) -> [Int] {
+    let count = range.count
+    guard count > 0 else { return [] }
+    if count == 1 { return [range.lowerBound] }
+
+    var result: [Int] = []
+    result.reserveCapacity(count)
+
+    // Each interval is inclusive
+    struct Interval {
+        let low: Int
+        let high: Int
+    }
+
+    // Queue of intervals to process
+    var queue: [Interval] = []
+    queue.reserveCapacity(count)
+
+    let low = range.lowerBound
+    let high = range.upperBound - 1
+
+    // Seed with first and last
+    result.append(low)
+    if high != low {
+        result.append(high)
+    }
+
+    // Remaining interval after removing endpoints
+    if low + 1 <= high - 1 {
+        queue.append(Interval(low: low + 1, high: high - 1))
+    }
+
+    var index = 0
+    while index < queue.count {
+        let interval = queue[index]
+        index += 1
+
+        let mid = (interval.low + interval.high) / 2
+        result.append(mid)
+
+        // Left subinterval
+        if interval.low <= mid - 1 {
+            queue.append(Interval(low: interval.low, high: mid - 1))
+        }
+
+        // Right subinterval
+        if mid + 1 <= interval.high {
+            queue.append(Interval(low: mid + 1, high: interval.high))
+        }
+    }
+
+    return result
+}
