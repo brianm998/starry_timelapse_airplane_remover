@@ -1,174 +1,153 @@
 # This document describes the algorithm used by Star to remove airplanes and satellites from image sequences
 
-Written as of Star 0.9.0.
+Written as of Star 0.10.4
 
-## High level
+## High Level
 
-At a high level, Star processes each frame in the following steps.
+Star offers to different and complementary methods to remove unwanted signals from timelapses.
 
-As of Star 0.9.0, horizon detection is optional, but defaulted to on.  Turn in off if you don't have a horizon, or aren't worried about airplanes close to the horizon.
+ - Auto Clean
+ - Selective Clean
 
-1. optionally detect horizon across all frames first
-2. align some number of neighboring frames
-3. subtract the image(s) from step #2 from the frame being processed
-4. detect bright groups of pixels in the image from step #3
-5. apply some heuristics to filter out a lot of the groups from step #4
-6. use grouping and line detection to combine lines of dots
-7. throw out a lot of smaller groups
-8. classify groups left after step #7 using machine learning to decide which ones to derive layer masks from
-9. create a layer mask for this frame using the classified groups from step #8
-10. use the layer mask from step #9 and the aligned neighbor frames from step #3 and #5 to generate the output image for this frame
+Auto Clean can be used by itself, or in addition to selective clean in one of two ways:
 
-### Step #1, horizon detection
+ - to select which identified bad signals to remove from the original image
+ - to select which identified good signals to retain in the fully processed image
 
-While this step is optional, any timelapse that has an earthly horizon below the stars will benefit from turning this on.
+### Auto Clean
 
-A binary image mask is computed via Otsu's method, using brightness to determine that is in the sky and not.  While not perfect, it does a pretty good job.
+Auto Clean is used by all processing modes, but in potentially different ways.
 
-Having a horizon mask allows us to know what part of the image is ground, and then compute an earth aligned image as well as a star aligned image.
+The goal of auto clean is to automatically remove all artificial lights that are moving from the video.  This can include both sky and earth.
 
-These are each images computed from a number of neighboring frames, aligned to either the sky or the earth.  
+The output image has had every single pixel potentially updated, using the following sequence of steps.
 
-### Step #2, Neignboring Image Alignment
+If Auto Clean is the desired clean mode, then the output image will be simply the auto cleaned frame.
 
-As of Star 0.9.0, neighboring image alignment is no longer done with hugin's align_image_stack.  While align_image_stack did a pretty good job, it struggled at the edges with wide lenses, and had trouble aligning the earth.
+If using either of the selective modes, then the output image will include some parts or almost all of the auto cleaned frame.
 
-If horizon detection is enabled, then Star does two separate kinds of image alignment, one for each the sky and earth, determined by the horizon mask.
+#### Horizon Detection
 
-If horizon detection is not enabled, then Star does star alignment for the entire frame.
+First, if a video contains both sky and earth, Star needs to detect the horizon.  This is necessary for both proper alignment of the sky and maybe the earth.  It is also necessary when outputting an auto cleaned frame.
 
-Star alignment is done with opencv2's SIFT (Scale Invariant Feature Transform).  The area of each frame to detect keypoints in is masked by a star mask, which is a mask computed based thresholding the image for really bright spots and then dilating them bit.  This avoids letting SIFT grab keypoints from things like clouds.
+To detect the horizons Star uses a combination of Otsu classification, connected component filtering, and Canny edge detection.
 
-Earth alignment is done with opencv2's AKAZE Algorithm.  Before alignment the image is boosted in a number of ways to allow at least the horizon area to allow keypoint detection, if not other parts of the foreground as well.
+As of Star 0.10.4, horizon detection works best on darker horizons.  If the moon is up, or there is snow on the horizon, or lots of clouds, then horizon detection will not work as well.
 
-These alignments are based upon some number of detected control points, i.e the same feature in each frame.  How far away they are from eachother is used to calculate a transformation to all but the first image given in the stack to be aligned.
+In those cases, selective clean may work better, as it doesn't depend as much on good horizon detection.
 
-This means that for both static and moving tripod heads (any number of axes), Star is able to align one or more of the neighboring frames to each frame that Star is processing.  Typically there will be a very small area around the borders of the frame which have been rotated out.  In practice this is just a handful of pixels, and is not a problem.
+#### Star Alignment
 
-The benefits of having aligned neighbor frames for each frame Star processes are:
+Star Alignment is how Star computes a frame that doesn't contain any satellites or airplanes.
 
- - a much more accurate subtraction image in step #3
- - more accurate data to replace unwanted pixels with
+At the core, some number of neighboring frames are aligned with each frame being processed.
 
-When using multiple aligned frames, Star applies the standard deviation of brightness between a given pixel position in each of them to determine if any of them contains a noisy value at that pixel.  This works best when aligning with more frames, which is slower.  I've found that 8 frames is a good number of frames to have aligned to each frame being processed.  This gives enough signal over the noise of artifical objects in the sky.
+The default setting of 8 neighbor frames (four on each side) seems to work pretty good.
 
-This parameter is configurable from a minimum of 1 to the ability of your machine to process lots and lots of data.  In theory the more aligned frames the better, except for machine overload and the fact that the ground moves further when aligning more frames.  This can be a problem for removing noise next to the horizon. 
+First the frame being processed has keypoints identified in it using SIFT (Scale Invariant Feature Transform) in opencv.  A layer mask that disregards the earth and areas that are not close to bright stars is used to make sure we're aligning with the movement of the stars and not clouds or the earth.
 
-The end result from this step is one or two aligned composite frames, one for the sky and maybe one for the earth.
+Then each neighboring frame has keypoints identified, and then matched with the keypoints of the using a number of different feature matching methods in opencv.
 
-Each one of these will have had most of the unwanted signal removed, the better signal to noise ratio happens when more images are processed.
+If anough keypoints can be matched, then a 3x3 matrix of homography is be computed which can be used to warp the neighboring frame to match the frame being processed.
 
-### Step #3, image subtraction
+Each 3x3 matrix of homography tells the warper to deviate the frame being warped by an average number of pixels, which can be computed as an average deviation for each frame from not being warped at all.  
 
-The next step is to subtract the aligned image from the frame being processed.
+A 'good' alignment of all eight neighboring frames results in deviations for each neighbor frame which are multiples of a deviation of the nearest frames, within some bounds.
 
-This subtraction image is done in greyscale, and records the amount of change in brightness between the frame being processed and one of its neighboring frames.  If the neighbor has been aligned, then almost all of the bright changes in the sky are a result of things like airplanes.  Clouds can also change brightness levels, even with really dark skies, as they can reveal stars as they move.
+That means that a neighbor frame 2 frames away has been warped twice as much as a frame directly adject (1 frame away).
 
-The subtraction is really just taking each pixel value and subtracting the neibhoring frame's value for the same pixel.
+Star accepts neighboring frame warps that are close to all having the same amount of deviation per frame distance, regardless of how much that warp ends up being.
 
-As of Star v0.7.3, the subtraction image is calculated as a sum of all aligned images.  This has the effect of reducing the noise in the subtration image, allowing for detection of noisy pixels across more than one frame.  For example, if a set of pixels is illuminated in two neighboring frames by different but nearby sources, then the subtraction image from only that one other frame would not be able to distinguish that set of pixels as noisy.
+If for whatever reason Star cannot get all neighbors to look like they are aligned properly, it will take a second pass on aligning frames.
 
-With more subtraction images assembled into the subtraction image, we can more easily identify pixels in the frame being processed as undesirable noise.
+This second pass will re-warp any initial warps that didn't look properly aligned.  Star will re-warp them with the homograpy from the nearest frame that did have good warping.
 
-As of Star v0.9.0, the subtraction image can be calculated from both the star aligned and earth aligned images if horizon detection is enabled.  This allows for detection of headlights, and recudes the number of false negative signals found on the ground.
+Conditions where this is necessary include dawn and dusk, as well as frames with lots of clouds.
 
-### Step #4, detect groups of bright pixels in the subtraction image 
+If a video was captured on a static tripod, then the homography from other frames is likely to be very good.
 
-In the next step, Star sorts all of the pixels in the subtraction image from step #2 by brightness, brightess first.
+If a video was captured on a moving tripod head, then the homography from other frames won't be 100%, but for dawn/dusk/lots of clouds, it's good enough.
 
-Star then iterates, brightest pixel first, and looks for pixels around each bright pixel that are not too much darker.  This creates a potentially large number of groups of brighter pixels.
+##### Median Merge
 
-These are called `Blobs` in the Star code.
+After successfully aligning all the desired neighor frames, Star will then proceed to merge them into a single image my choosing the median intensity for every channel of each pixel.
 
-A first level of filter is done here, where we look back at the original image around the pixels which we have identified as part of each blob.  If the signal we're observing is because of a moving lighted object, then it is almost always the case that any nearby pixels in the original image are less bright than the pixels in the blob.
+What this means is that Star will collect all of the values for each pixel, and sort them by brightness.  Zeros values are ignored, they may come from parts of an image that had no signal after warp.  In addition, values that are statistically too much brigher than the other values for that pixel are ignored.  Then the median value remaining in the list sorted by intensity is chosen.
 
-Other signals can show up in the subtraction image which do not follow this rule.  Moving landscape is one.  Partially, but not fully aligned bright stars are another.
+This is a very similar process to how deep sky astrophotography can be done.
 
-So before being added to the initial list to blobs to consider, a quick check of nearby pixels on the original source image is performed, which can throw out nearly half of the blobs in many cases.
+The median merge is similar, but different from simply merging all of the values together.
 
-### Step #5, apply heuristics to filter out groups
+Specifically it throws out all of the bright signal, where a mean merge (average) would include all pixels in the final output.  While a mean merge does reduce the brightness of unwanted pixels, the signal will still be present.  Using the median (value in the middle) throws out the bright pixels like it throws billionares out of financial numbers. 
 
-In step #5, a set of heuristics is applied to the potentially large group of blobs from step #4.
+Be aware that clouds will look different, appearing to flow a bit smoother.  Whether clouds look better or worse with this teatment is a matter of taste.
 
-This can be controlled the `--detection-type` command line argument.
+#### Earth Alignment
 
-Many of the smaller blobs that are not close to any other blos are removed here, as well as a number of other techniques.
+##### Static
 
-Using different versions of `--detection-type` will result in more Blobs making it past this step.
+For videos shot on a static tripod, earth alignment works well.  This uses the same logic as star alignment above, just minus the keypoints and warping, only doing the median merge.
 
-This can drasticaly reduce the number of blobs present
+This can help to get rid of highlights from moving cars, and also to allow the horizon mask to be median merged over neighbors, giving a better result for difficult horizons.
 
-### Step #6, use grouping and line detection to combine blobs
+It is also helpful to have an earth aligned image to get rid of bad airplane signals right on the horizon.  In this case, the earth aligned image will include the sky, which looks very similar to the sky aligned image, but with most of the stars blurred out.  Star has a parameter which allows a certain amount of the earth aligned image to be used directly above the horizon.
 
-In these steps, nearby blobs are grouped together, and then some of them may be combined together if they are found to be linear, i.e. making a line.  Star uses the kernel hough transform to detect lines in blobs.
+The benefit of using some of the earth aligned image in the sky is that airplanes will not appear right next to the horizon as they might sometimes otherwise do.  The negative is that stars will be blurred out right next to the horizon as well, but not for long.
 
-Many airplane signals close to the horizon are a sequence of separated dots.  This step tries to combine them into a single group, which conforms to a line we have found.
+##### Moving
 
-Combining these small dots at this step helps us to both categorize based upon linearity, and weed out smaller blobs after this that do not form a line.
+For videos show on a moving triod, earth alignment is experimental as of Star 0.10.4.  There is an option in settings to turn it on, off by default.   
 
-### Step #7, throw out a lot of small, dimmer blobs
+It needs more work, as earth alignment is more difficult, especially for really dark foregrounds.
 
-At this step, we assume that any blobs that are small and too dim can be thrown away.  This can really reduce the number of blobs per frame, from thousands to hundreds or less.
+#### Final Auto Clean
 
-### Step #8, use machine learning to classify bright groups
+If using auto clean, Star will then use the star aligned image for each frame, along with the horizon mask and earth image if present.
 
-At this point, what are called `Blob`s in the code are promoted to `OutlierGroup`s.
+Auto clean simply does the same logic that photoshop uses for merging two layers with a mask.
 
-Each `OutlierGroup` is able to provide a list of classification criteria for itself.
+This works well for users that don't want any airplanes or satellites in their videos.
 
-Some of these are very basic, like the number of pixels, their brightness, the size of their bounding box, their position in the frame, etc.
+Auto clean also gets rid of all meteors and any potentially associated explosions.
 
-Others are more complicated, involving things like the Kernel Hough Transform to attempt to detect lines.
+If a user wants to keep any of these signals in their video, they should choose selective clean or selective auto clean.
 
-Data from neighboring frames is used as well, things like how many pixels in frames close by are also an outlier at the same place.  Airplanes tend to streak across frames, not touching the same pixel twice in adjecent frames.
+The introductory UI is designed to make this as intuitive as possible.
 
-All of this data is fed into a machine learning system developed for Star, using decision trees.
+### Selective Clean
 
-For each `OutlierGroup`, the machine learning system will output a real number value between -1 and 1.  -1 means that Star should leave it alone.  1 means that Star should include the pixels from this `OutlierGroup` in the layer mask for step #3.  Zero is wholly unclear.  Any other value betwee -1 and 1 is a guess, multiply by 100 to get percentage.  Negative values mean likelyhood of leaving it alone.  Positive values mean the likeyhood of removing those pixels.
+Selective clean is good if users want to get rid of the most obvious and blaringly bright airplane and satellite signals, and leave the rest.
 
-A set of images sequences can be validated as being 'correct' by fixing all of the classification errors using the Star gui application, frame by frame.  This can be tedious, but results in both an image sequence with as much unwanted signal removed as possble, as well as a 'validated' image sequence, which can be used to train the machine learning engine to produce more accurate decision trees.
+Selective clean is also good if users want to keep meteor streaks.  If users want meteors without any satellites, then selective auto clean is better than selective clean.
 
-Each version of Star has some set of decision trees embedded in it.  Currently the approach is to generate a 'forest' of trees, each using a slightly different set of test data.  Then a high level classifier combines all of their scores to get a consensus vote, which tends to increase accuracy by 0.5% or more.
+Selective Clean starts with the final auto clean image for each frame.
 
-As of Star 0.7.1, two levels of decision tree forests are used with different classification criteria.  The first level of classification does not rely upon other frames, only data from within the frame being processed is used for this level of classification.  We also accept a level less than zero to let more pass through.
+It then:
 
-Any blobs that fail this first level of classification are left in the trash bin.  Data in the trash bin can be recovered later if desired.
+1. subtracts the auto clean image from the frame being processed
+2. detect bright groups of pixels in the image from step #1
+3. apply some heuristics to filter out a lot of the groups from step #2
+4. use grouping and line detection to combine lines of dots
+5. throw out a lot of smaller groups
+6. classify groups left after step #7 using machine learning to decide which ones to derive layer masks from
+7. create a layer mask for this frame using the classified groups from step #6
+8. use the layer mask from step #7 and the aligned neighbor frames to generate the output image for this frame
 
-The second level of classification uses a super set of criteria from the first level, including information about outlier groups in neighboring frames.  If any data fails this level of classification it is shown in the gui as green, as opposed to the yellow trash bin.
+This ends up giving the user with a list of identified areas of each frame that could be removed.  If an area is identified for removal, either through automatic classification, or via user input, then that part of the output image is written out from the auto clean image.
 
-Seperating out into two levels of classification allows us to deal with smaller groups of pixels more efficiently.  
+This process preserves more of the original video content than the auto clean method.  Clouds should look the same as before.  Only the parts that are identifed to be removed are changed.
 
-This step is still a work in progess, specifically needing more training data, and potentially more classification criteria as well.
+However, this requires more attention to each frame, and can be time consuming. 
 
-Best accuracy so far is approx 99.1% on test data.
+### Selective Auto Clean
 
-Other approaches to machine learning are also possible, if I find time to pursue them.  So far I've been making the data more linear for easier classification. 
+Selective Auto Clean is basically Selective clean but flipped so that the base image being output is the Auto Clean image, instead of the original image being processed.
 
-### Step #9, layer mask creation
+This allows users to get rid of all bad signals except for a very few desired ones.
 
-After final classification of all the `OutlierGroup`s for the frame being processed, Star will then create a layer mask.
+One use case for this is meteors.  As of Star v0.10.4 there is no classification into meteor/airplane/satellite/other, just a binary good/bad.
 
-This 'layer mask' is used in the same way as a layer mask in an application like The Gimp or Photoshop.
-
-The base image is the layer being processed.  On top of that is placed the (hopefully aligned) neighbor frame, using the layer mask created here to determine how much of each pixel from the aligned image to include in the final output.
-
-Currently the layer mask is created by selecting all pixels that are part of `OutlierGroup`s that were scored positive by the machine learning engine.
-
-Next this selection is enlarged by a handful of pixels, at full opacity, meaning that some number of pixels that were not part of any `OutlierGroup` are still fully changed in the output frame.
-
-Then, the selection is feathered a larger amount of pixels.  During this feathering, the opacity of the layer mask decreases to zero at the edges.  This helps to avoid any rough changes when Star replaces pixels in the final output.
-
-### Step #10, generate output image.
-
-Given the layer mask from step #3, and the (hopefully aligned) neighbor frame from step #1, Star simply blends the desired pixels from the neighbor frame into the right places into the frame being processed.
-
-If all has gone well with detection and classification for this frame, then the output image will not include the vast majority of unwanted airplane and satellite signals.
-
-Still hard to detect as of Star 0.9.0, sorted by hardest to detect first:
-
- - really slow moving satellites
- - really dim satellites, even when moving fast
-
+A future feature would be to widen the ability to classify into more categories.
 
 
 
