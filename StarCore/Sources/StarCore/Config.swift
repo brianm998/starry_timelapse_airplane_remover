@@ -113,11 +113,14 @@ public struct Config: Codable, Sendable, Transferable {
       writeFrameProcessedPreviewFiles: Bool,
       writeFrameThumbnailFiles: Bool
     ) {
+        let prefix = "star_temp_\(imageSequenceName)"
+        
         if let outputPath {
-            self.outputPath = outputPath
+            self.outputPath = "\(outputPath)/\(prefix)"
         } else {
-            self.outputPath = "."
+            self.outputPath = "./\(prefix)"
         }
+        
         self.cleanMethod = cleanMethod
         self.detectionType = detectionType
         self.imageSequenceDirname = imageSequenceName
@@ -491,7 +494,7 @@ public struct Config: Codable, Sendable, Transferable {
     }
 
     public var outlierOutputDirname: String {
-        "\(self.outputPath)/\(self.basename)-outliers"
+        "\(self.outputPath)/outliers"
     }
     
     public func writeJson(named filename: String, overwrite: Bool = false) {
@@ -536,76 +539,76 @@ public struct Config: Codable, Sendable, Transferable {
             case .original:
                 return "\(self.imageSequencePath)/\(self.imageSequenceDirname)"
             case .preview:
-                return "\(self.outputPath)/\(self.basename)-previews"
+                return "\(self.outputPath)/previews"
             case .thumbnail:
-                return "\(self.outputPath)/\(self.basename)-thumbnails"
+                return "\(self.outputPath)/thumbnails"
             }
         case .starAligned:
             switch size {
             case .original:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-aligned"
+                return "\(self.outputPath)/aligned"
 
             case .preview:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-aligned-previews"
+                return "\(self.outputPath)/aligned-previews"
             case .thumbnail:
                 return nil
             }
         case .failedStarAligned:
             switch size {
             case .original:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-failed-aligned"
+                return "\(self.outputPath)/failed-aligned"
 
             case .preview:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-failed-aligned-previews"
+                return "\(self.outputPath)/failed-aligned-previews"
             case .thumbnail:
                 return nil
             }
         case .failedEarthAligned:
             switch size {
             case .original:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-earth-failed-aligned"
+                return "\(self.outputPath)/earth-failed-aligned"
 
             case .preview:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-earth-failed-aligned-previews"
+                return "\(self.outputPath)/earth-failed-aligned-previews"
             case .thumbnail:
                 return nil
             }
         case .earthAligned:
             switch size {
             case .original:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-earth-aligned"
+                return "\(self.outputPath)/earth-aligned"
 
             case .preview:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-earth-aligned-previews"
+                return "\(self.outputPath)/earth-aligned-previews"
             case .thumbnail:
                 return nil
             }
         case .horizon:
             switch size {
             case .original:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-horizon"
+                return "\(self.outputPath)/horizon"
 
             case .preview:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-horizon-previews"
+                return "\(self.outputPath)/horizon-previews"
             case .thumbnail:
                 return nil
             }
         case .mergedHorizon:
             switch size {
             case .original:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-mergedHorizon"
+                return "\(self.outputPath)/mergedHorizon"
 
             case .preview:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-mergedHorizon-previews"
+                return "\(self.outputPath)/mergedHorizon-previews"
             case .thumbnail:
                 return nil
             }
         case .subtraction:
             switch size {
             case .original:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-aligned-subtracted"
+                return "\(self.outputPath)/aligned-subtracted"
             case .preview:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-aligned-subtracted-previews"
+                return "\(self.outputPath)/aligned-subtracted-previews"
             case .thumbnail:
                 return nil
             }
@@ -614,34 +617,34 @@ public struct Config: Codable, Sendable, Transferable {
             case .original:
                 return nil
             case .preview:
-                return "\(self.outputPath)/\(self.basename)-blobs-preview"
+                return "\(self.outputPath)/blobs-preview"
             case .thumbnail:
                 return nil
             }
         case .removeMask:
             switch size {
             case .original:
-                return "\(self.outputPath)/\(self.basename)-paintMask"
+                return "\(self.outputPath)/paintMask"
             case .preview:
-                return "\(self.outputPath)/\(self.basename)-paintMask-preview"
+                return "\(self.outputPath)/paintMask-preview"
             case .thumbnail:
                 return nil
             }
         case .validation:
             switch size {
             case .original:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-validated-outlier-images"
+                return "\(self.outputPath)/validated-outlier-images"
             case .preview:
-                return "\(self.outputPath)/\(self.imageSequenceDirname)-star-validated-outlier-images-previews"
+                return "\(self.outputPath)/validated-outlier-images-previews"
             case .thumbnail:
                 return nil
             }
         case .autoProcessed:
             switch size {
             case .original:
-                return "\(self.outputPath)/\(self.basename)-auto-processed"
+                return "\(self.outputPath)/auto-processed"
             case .preview:
-                return "\(self.outputPath)/\(self.basename)-auto-processed-previews"
+                return "\(self.outputPath)/auto-processed-previews"
             case .thumbnail:
                 return nil
             }
@@ -649,9 +652,9 @@ public struct Config: Codable, Sendable, Transferable {
         case .autoSelectiveProcessed:
             switch size {
             case .original:
-                return "\(self.outputPath)/\(self.basename)-auto-selective-processed"
+                return "\(self.outputPath)/auto-selective-processed"
             case .preview:
-                return "\(self.outputPath)/\(self.basename)-auto-selective-processed-previews"
+                return "\(self.outputPath)/auto-selective-processed-previews"
             case .thumbnail:
                 return nil
             }
@@ -659,9 +662,9 @@ public struct Config: Codable, Sendable, Transferable {
         case .selectiveProcessed:
             switch size {
             case .original:
-                return "\(self.outputPath)/\(self.basename)-selective-processed"
+                return "\(self.outputPath)/selective-processed"
             case .preview:
-                return "\(self.outputPath)/\(self.basename)-selective-processed-previews"
+                return "\(self.outputPath)/selective-processed-previews"
             case .thumbnail:
                 return nil
             }
@@ -669,9 +672,9 @@ public struct Config: Codable, Sendable, Transferable {
         case .final:
             switch size {
             case .original:
-                return "\(self.outputPath)/\(self.basename)"
+                return "\(self.outputPath)/final-sequence"
             case .preview:
-                return "\(self.outputPath)/\(self.basename)-processed-previews"
+                return "\(self.outputPath)/final-sequence-previews"
             case .thumbnail:
                 return nil
             }
