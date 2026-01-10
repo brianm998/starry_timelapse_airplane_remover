@@ -1986,89 +1986,18 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    // XXX move to StarCore
     func processHorizonForAllFrames(redo: Bool = false) async throws {
         if isFindingAllHorizons { return }
         isFindingAllHorizons = true
 
-        let max = self.maxConcurrentHorizonCalculations
+        if let frame = await self.frames[0].frame {
+            try await frame.processHorizonForAllFrames(redo: redo)
+        }
 
-        Log.d("finding all horizons with max \(max)")
+        self.isFindingAllHorizons = false
+
+        Log.d("done with all horizons")
         
-        try await Task.detached(priority: .medium) { [self] in 
-
-            // use a semaphore to not do too many at once
-
-            let semaphore = AsyncSemaphore(value: max)
-            
-            let allBounds =
-              try await withThrowingTaskGroup(of: Optional<HorizonBounds>.self) { taskGroup in
-
-                  for frameViewModel in await self.frames {
-                      Log.d("frame \(frameViewModel.frameIndex) about to create task for horizon")
-                      taskGroup.addTask {
-                          Log.d("frame \(frameViewModel.frameIndex) in task for horizon waiting for semaphore")
-                          await semaphore.wait()
-                          Log.d("frame \(frameViewModel.frameIndex) in task for horizon got semaphore")
-                          if let frame = await frameViewModel.frame {
-                              if redo {
-                                  // get rid of all the existing horizon images first
-                                  await frame.deleteHorizonImages()
-                              }
-                              let ret = try await frame.loadOrCreateHorizonMask().bounds
-                              semaphore.signal()
-                              return ret
-                          } else {
-                              Log.d("frame \(frameViewModel.frameIndex) in task for horizon no frame")
-                              semaphore.signal()
-                              return nil
-                          }
-                      }
-                  }
-
-                  var results: [HorizonBounds] = []
-                  
-                  for try await result in taskGroup {
-                      if let result { results.append(result) }
-                  }
-                  
-                  return results
-              }
-
-          if let horizonStats = allBounds.calculateStats() {
-            Log.i("got horizon stats \(horizonStats)")
-            
-            
-            await MainActor.run {
-              // save the height of the portion of the frames that is sky
-              // account for 50 extra pixels of sky on top of the highest part
-              //self.earthAlignedImageCropAmount = horizonStats.highestTopY - 50
-              
-              //self.showHorizonBar = false
-                //self.ignoreLowerPixels = frameHeight - CGFloat(horizonStats.lowestBottomY)
-              Log.i("ignoreLowerPixels \(ignoreLowerPixels) = \(frameHeight) - \(horizonStats.lowestBottomY)")
-              //var realConfig = config.config()
-              //realConfig.ignoreLowerPixels = Int(ignoreLowerPixels)
-              //config.update(realConfig)
-            }
-          }
-            await MainActor.run {
-                self.isFindingAllHorizons = false
-            }
-        }.value
-
-        Log.d("done all horizons with max \(max)")
-
-        
-        /*
-         * set a boolean saying we are processing horizon for all frames
-         * disbable left panel buttons until that is done
-         * actually process them all
-         * change FrameAirplaneRemover to not load horizon unless it really needs it
-         * add number of horizon images to process at once to this view
-         * set showHorizonBar = true after getting the right value for it
-         * make sure we show that action is happening in the GUI somewhere
-         */
     }
 }
 

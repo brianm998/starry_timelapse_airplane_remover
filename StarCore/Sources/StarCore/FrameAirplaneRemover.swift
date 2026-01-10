@@ -1,6 +1,7 @@
 import Foundation
 import CoreGraphics
 import KHTSwift
+import Semaphore
 import kht_bridge
 import logging
 import Cocoa
@@ -612,6 +613,80 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return (-1, [:])
     }
 
+    public func processHorizonForAllFrames(redo: Bool = false) async throws {
+
+        let config = await configManager.config()
+        let max = config.maxConcurrentHorizonCalculations
+
+        Log.d("finding all horizons with max \(max)")
+        
+        try await Task.detached(priority: .medium) { 
+
+            // use a semaphore to not do too many at once
+
+            let semaphore = AsyncSemaphore(value: max)
+            
+            let allBounds =
+              try await withThrowingTaskGroup(of: Optional<HorizonBounds>.self) { taskGroup in
+                  
+                  var nextFrame: FrameAirplaneRemover? = await self.firstFrameInSequence
+                  while nextFrame != nil {
+                      
+                      if let frame = nextFrame {
+                          Log.d("frame \(frame.frameIndex) about to create task for horizon")
+                          taskGroup.addTask {
+                              Log.d("frame \(frame.frameIndex) in task for horizon waiting for semaphore")
+                              await semaphore.wait()
+                              Log.d("frame \(frame.frameIndex) in task for horizon got semaphore")
+                              if redo {
+                                  // get rid of all the existing horizon images first
+                                  await frame.deleteHorizonImages()
+                              }
+                              let ret = try await frame.loadOrCreateHorizonMask().bounds
+                              semaphore.signal()
+                              return ret
+                          }
+                          nextFrame = await frame.getNextFrame()
+                      }
+                  }
+                  
+                  var results: [HorizonBounds] = []
+                  
+                  for try await result in taskGroup {
+                      if let result { results.append(result) }
+                  }
+                  
+                  return results
+              }
+        }.value
+
+        Log.d("done all horizons with max \(max)")
+
+        
+        /*
+         * set a boolean saying we are processing horizon for all frames
+         * disbable left panel buttons until that is done
+         * actually process them all
+         * change FrameAirplaneRemover to not load horizon unless it really needs it
+         * add number of horizon images to process at once to this view
+         * set showHorizonBar = true after getting the right value for it
+         * make sure we show that action is happening in the GUI somewhere
+         */
+    }
+
+    
+    var firstFrameInSequence: FrameAirplaneRemover {
+        get async {
+            var firstFrame = self
+            while await firstFrame.getPreviousFrame() != nil {
+                if let prev = await firstFrame.getPreviousFrame() {
+                    firstFrame = prev
+                }
+            }
+            return firstFrame
+        }
+    }
+    
     // returns the homography with median deviation for each frame offset
     /*
      This returns the median for each frame offset, which could easily
@@ -630,13 +705,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         get async {
             var records: [NSNumber:[[Double]]] = [:]
 
-            var firstFrame = self
-            while await firstFrame.getPreviousFrame() != nil {
-                if let prev = await firstFrame.getPreviousFrame() {
-                    firstFrame = prev
-                }
-            }
-
+            var firstFrame = await self.firstFrameInSequence
+            
             let config = await configManager.config()
 
             var nextFrame: FrameAirplaneRemover? = firstFrame
@@ -686,12 +756,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         get async {
             var records: [NSNumber:[[Double]]] = [:]
 
-            var firstFrame = self
-            while await firstFrame.getPreviousFrame() != nil {
-                if let prev = await firstFrame.getPreviousFrame() {
-                    firstFrame = prev
-                }
-            }
+            var firstFrame = await self.firstFrameInSequence
 
             let config = await configManager.config()
             
