@@ -1180,17 +1180,17 @@ public final class ImageSequenceViewModel {
 
                     // first pass of rendering just does alignment,
                     // but only if we have a second pass
-                    await self.renderAllFrames(alignOnly: self.runSecondAlignmentPass)
+                    await self.renderAllFrames(
+                      renderWithExistingHomography: false
+                    )
 
                     if self.runSecondAlignmentPass {
                         // get expected deviations
                         // re-run render all fames with it
-                        // XXX Set some flag for UI
                         Log.i("running second alignment pass")
                         if let firstFrame = frames[0].frame {
                             await self.renderAllFrames(
-                              alignOnly: false,
-                              reRenderWith: await firstFrame.maxMinDeviationsForEntireSequence
+                              renderWithExistingHomography: true
                             )
                         } else {
                             Log.w("no first frame :(")
@@ -1204,7 +1204,9 @@ public final class ImageSequenceViewModel {
                 Log.d("processAll NO horizonDetection")
                 self.ignoreLowerPixels = 0
                 
-                await self.renderAllFrames(alignOnly: self.runSecondAlignmentPass)
+                await self.renderAllFrames(
+                  renderWithExistingHomography: false
+                )
                 
                 if self.runSecondAlignmentPass {
                     // get expected deviation
@@ -1212,8 +1214,7 @@ public final class ImageSequenceViewModel {
                     Log.i("running second alignment pass")
                     if let firstFrame = frames[0].frame {
                         await self.renderAllFrames(
-                          alignOnly: false,
-                          reRenderWith: await firstFrame.maxMinDeviationsForEntireSequence
+                          renderWithExistingHomography: true
                         )
                     }
                 }
@@ -1573,7 +1574,7 @@ public final class ImageSequenceViewModel {
                 closure: (@Sendable () async -> Void)? = nil) async throws
     {
         if saveNow {
-            try await self.frameSaveQueue.saveNow(frame: frame, alignOnly: false) {
+            try await self.frameSaveQueue.saveNow(frame: frame) {
                 await closure?()
             }
         } else if saveEver {
@@ -1805,10 +1806,9 @@ public final class ImageSequenceViewModel {
     }
     
     func renderAllFrames(
-      alignOnly: Bool,
-      reRenderWith minMaxDeviations: ([Int: [Double]])? = nil
+      renderWithExistingHomography: Bool = false // re-aligns and renders badly aligned frames
     ) async {
-        Log.d("renderAllFrames minMaxDeviations \(minMaxDeviations)")
+        Log.d("renderAllFrames")
         self.renderingAllFrames = true
         let frameSaveQueue = self.frameSaveQueue
         Log.d("renderAllFrames Task")
@@ -1818,53 +1818,31 @@ public final class ImageSequenceViewModel {
 
             let counter = CountActor()
             for frameView in self.frames {
+                var renderWasBad = false
                 if let frame = frameView.frame {
 
                     var shouldRender = await frame.processingState() != .complete
-                    var renderWasBad = false
                     
-                    if let minMaxDeviations {
-                        /*
-                         check to see if we should re-render based upon
-                         how bad the homography was for this frame based upon
-                         what minMaxDeviations may have been passed in
-                         
-                         */
+                    /*
+                     check to see if we should re-render based upon
+                     how bad the homography was for this frame based upon
+                     how many neighbors aligned with homography that looked ok
+                     (i.e. homography deviation at neighbor1 * 3 =
+                     homography deviation at neighbor3
+                     */
 
-                        // get frame homography
-                        if let observer = await frame.getObserver(),
-                           let results = observer.starAlignmentResults
-                        {
-                            // compare homography to median deviations
-                            // we need both fully aligned neighbors,
-                            // and good homography, otherwise we will re-render
-                            if results.numberAligned.count != self.numberOfAlignedNeighborFrames || 
-                                 !results.matches(
-                                   deviations: minMaxDeviations,
-                                   by: 1.25,
-                                   at: frame.frameIndex
-                                 )
-                            {
-                                Log.i("frame \(frame.frameIndex) doesn't match median deviation so it will re-render")
-                                shouldRender = true
-                                renderWasBad = true
-
-                                frame.imageAccessor.deleteImages(
-                                  frameIndex: frame.frameIndex,
-                                  ofTypes: [.starAligned,
-                                            .failedStarAligned,
-                                            .earthAligned,
-                                            .failedEarthAligned],
-                                  atSizes: [.original, .preview]
-                                )
-                            } else {
-                                Log.i("frame \(frame.frameIndex) matchs median deviation so keeping alignment")
-
-                            }
-                        } else {
-                            Log.i("frame \(frame.frameIndex) has no frame homography, will re-render")
-                            shouldRender = true
+                    // get frame homography
+                    if let observer = await frame.getObserver(),
+                       let results = observer.starAlignmentResults
+                    {
+                        // compare homography to median deviations
+                        // we need both fully aligned neighbors,
+                        // and good homography, otherwise we will re-render
+                        if !results.wasSuccessfullyAligned {
+                            Log.i("frame \(frame.frameIndex) doesn't have good alignment will re-render")
+                            shouldRender = renderWithExistingHomography
                             renderWasBad = true
+
                             frame.imageAccessor.deleteImages(
                               frameIndex: frame.frameIndex,
                               ofTypes: [.starAligned,
@@ -1873,11 +1851,24 @@ public final class ImageSequenceViewModel {
                                         .failedEarthAligned],
                               atSizes: [.original, .preview]
                             )
+                        } else {
+                            Log.i("frame \(frame.frameIndex) has good alignment so keeping")
                         }
-                        Log.i("frame \(frame.frameIndex) WTF shouldRender \(shouldRender)")
                     } else {
-                        Log.d("no median deviations")
+                        Log.i("frame \(frame.frameIndex) has no frame homography, will re-render")
+                        shouldRender = true
+                        renderWasBad = true
+                        frame.imageAccessor.deleteImages(
+                          frameIndex: frame.frameIndex,
+                          ofTypes: [.starAligned,
+                                    .failedStarAligned,
+                                    .earthAligned,
+                                    .failedEarthAligned],
+                          atSizes: [.original, .preview]
+                        )
                     }
+                    Log.i("frame \(frame.frameIndex) WTF shouldRender \(shouldRender)")
+
                     if shouldRender {
                         Log.d("frame \(frame.frameIndex) rendering")
                         taskGroup.addTask() {
@@ -1890,8 +1881,7 @@ public final class ImageSequenceViewModel {
                             case .selective:
                                 do {
                                     try await frameSaveQueue.saveNow(
-                                      frame: frame,
-                                      alignOnly: alignOnly
+                                      frame: frame
                                     ) {
                                         await self.refresh(frame: frame)
 
@@ -1910,14 +1900,11 @@ public final class ImageSequenceViewModel {
                             case .automatic(let useOutliers):
                                 do {
                                     try await frame.finishAuto(
-                                      alignOnly: alignOnly,
                                       useOutliers: useOutliers,
-                                      usingExistingHomography: self.useExistingHomography || renderWasBad
+                                      usingExistingHomography: self.useExistingHomography || (renderWasBad && renderWithExistingHomography)
                                     )
 
-                                    if useOutliers,
-                                       !alignOnly
-                                    {
+                                    if useOutliers {
                                         if await frame.getOutlierGroups() == nil {
                                             try await frame.loadOutliers()
                                             Task { @MainActor in
@@ -1945,10 +1932,9 @@ public final class ImageSequenceViewModel {
                         Log.d("frame \(frame.frameIndex) not re-rendering")
                     }
                 } else {
-                    Log.d("renderAllFrames FOO")
+                    Log.w("no frame")
                 }
             }
-            
             await taskGroup.waitForAll()
         }
     }

@@ -6,6 +6,11 @@ public struct FrameAlignmentResults: Codable, Sendable {
 
     public var total: Int { numberAligned.count + numberFailed.count }
 
+    public var wasSuccessfullyAligned: Bool {
+        self.numberAligned.count != 0 &&
+        self.numberFailed.count == 0
+    }
+    
     public func matches(
       deviations: [Int: [Double]], // frame offset to expected min/max deviance
       by variance: Double,       // 1.25 for 25% change allowed

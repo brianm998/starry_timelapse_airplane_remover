@@ -531,25 +531,18 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             /*
              algorithm:
 
-             1 - find median deviation per offset for whole sequence
-             2 - look in both directions for nearest neighbor who has
-                 all neighbors within 20% of that median deviation
-             3 - use the homologies for all offsets from that specific frame
-
+             1 - look in both directions for nearest neighbor who has
+                 all neighbors aligned close to 1 offset = 1 deviation level
+             2 - use the homologies for all offsets from that specific frame
              
              */
 
-            // first, get median deviations
-            let minMaxDeviations = await self.maxMinDeviationsForEntireSequence
-
-            // now search in each directon for the first frame that has good deviations
+            // search in each directon for the first frame that has good deviations
             let (forwardIndex, forwardHomography) = await searchForGoodHomography(
-              goingFoward: true,
-              with: minMaxDeviations
+              goingFoward: true
             )
             let (backwardIndex, backwardHomography) = await searchForGoodHomography(
-              goingFoward: false,
-              with: minMaxDeviations
+              goingFoward: false
             )
             if forwardIndex > 0 {
                 if backwardIndex > 0 {
@@ -578,163 +571,34 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             return nil
         }
     }
-
-    // returns median deviations from identity for each frame offset
-    // from the entire image sequence.
-    public var medianDeviationsForEntireSequence: [Int: Double] {
-        get async {
-            // frame offset mapped to list of deviations for that offset
-            var records: [Int:[Double]] = [:]
-
-            // start at the beginning of the image sequence
-            var firstFrame = self
-            while await firstFrame.getPreviousFrame() != nil {
-                if let prev = await firstFrame.getPreviousFrame() {
-                    firstFrame = prev
-                }
-            }
-
-            // find median deviation for all homologies at each offset level
-            let config = await configManager.config()
-
-            // collect list of deviations for each offset
-            var nextFrame: FrameAirplaneRemover? = firstFrame
-            while nextFrame != nil {
-                if let frame = nextFrame {
-                    if let results = await frame.getObserver()?.starAlignmentResults,
-                       results.numberAligned.count == config.numberAlignedNeighborFrames
-                    {
-                        for result in results.numberAligned {
-                            if let homography = result.homography {
-                                let deviation = homographyDeviation(homography)
-                                let frameOffset = result.frameIndex - frame.frameIndex
-                                if var existingRecordList = records[frameOffset] {
-                                    existingRecordList.append(deviation)
-                                    records[frameOffset] = existingRecordList
-                                } else {
-                                    records[frameOffset] = [deviation]
-                                }
-                            }
-                        }
-                    }
-                    nextFrame = await frame.getNextFrame()
-                }
-            }
-
-            // frame offset to median deviation for that offset
-            var medianDeviations: [Int: Double] = [:]
-
-            for (offset, deviationList) in records {
-                let sorted = deviationList.sorted(by: {$0 < $1})
-                if sorted.count > 0 {
-                    let medianDeviation = deviationList[sorted.count/2]
-                    medianDeviations[offset] = medianDeviation
-                }
-            }
-
-            Log.d("frame \(frameIndex) found medianDeviations \(medianDeviations)")
-
-            return medianDeviations
-        }
-    }
-    
-    // returns median deviations from identity for each frame offset
-    // from the entire image sequence.
-    public var maxMinDeviationsForEntireSequence: [Int: [Double]] {
-        get async {
-            // frame offset mapped to list of deviations for that offset
-            var records: [Int:[Double]] = [:]
-
-            // start at the beginning of the image sequence
-            var firstFrame = self
-            while await firstFrame.getPreviousFrame() != nil {
-                if let prev = await firstFrame.getPreviousFrame() {
-                    firstFrame = prev
-                }
-            }
-
-            // find median deviation for all homologies at each offset level
-            let config = await configManager.config()
-
-            // collect list of deviations for each offset
-            var nextFrame: FrameAirplaneRemover? = firstFrame
-            while nextFrame != nil {
-                if let frame = nextFrame {
-                    if let results = await frame.getObserver()?.starAlignmentResults,
-                       results.numberAligned.count == config.numberAlignedNeighborFrames
-                    {
-                        for result in results.numberAligned {
-                            if let homography = result.homography {
-                                let deviation = homographyDeviation(homography)
-                                let frameOffset = result.frameIndex - frame.frameIndex
-                                if var existingRecordList = records[frameOffset] {
-                                    existingRecordList.append(deviation)
-                                    records[frameOffset] = existingRecordList
-                                } else {
-                                    records[frameOffset] = [deviation]
-                                }
-                            }
-                        }
-                    }
-                    nextFrame = await frame.getNextFrame()
-                }
-            }
-
-            // frame offset to median deviation for that offset
-            var minMaxDeviations: [Int: [Double]] = [:]
-
-            for (offset, deviationList) in records {
-                let sorted = deviationList.sorted(by: {$0 < $1})
-                if sorted.count > 0 {
-                    let minDeviation = sorted[0]
-                    let maxDeviation = sorted[sorted.count-1]
-                    minMaxDeviations[offset] = [minDeviation, maxDeviation]
-                }
-            }
-
-            Log.d("frame \(frameIndex) found minMaxDeviations \(minMaxDeviations)")
-
-            return minMaxDeviations
-        }
-    }
     
     // search either forwards or backwards looking for homography close enough
     // to what was passed for each frame offset
     private func searchForGoodHomography(
-      goingFoward: Bool,
-      with minMaxDeviations: [Int: [Double]] // frame offset to min/max deviation
+      goingFoward: Bool
     ) async -> (Int, [NSNumber:MatWrapper]) {
         var nextFrame: FrameAirplaneRemover? = self
         let config = await configManager.config()
         while nextFrame != nil {
             if let frame = nextFrame {
                 if let results = await frame.getObserver()?.starAlignmentResults {
-                    if results.numberAligned.count == config.numberAlignedNeighborFrames {
-                        // this frame had all its neighbors aligned, but by how  much?
-                        if results.matches(
-                             deviations: minMaxDeviations,
-                             by: 1.25,
-                             at: frame.frameIndex,
-                             successfulHomographyOnly: true
-                           )
-                        {
-                            // all neighbors were close enough to the median deviations
-                            // looks like a good frame, use its homologies
-                            var ret: [NSNumber: MatWrapper] = [:]
+                    if results.wasSuccessfullyAligned {
+                        // all neighbors were close enough to the median deviations
+                        // looks like a good frame, use its homologies
+                        var ret: [NSNumber: MatWrapper] = [:]
 
-                            for result in results.numberAligned {
-                                if let homography = result.homography {
-                                    let frameOffset = NSNumber(
-                                      value: result.frameIndex - frame.frameIndex
-                                    )
-                                    
-                                    ret[frameOffset] = homography.withUnsafeBufferPointer { buffer in
-                                        MatWrapper(homographyValues: buffer.baseAddress!)
-                                    }
+                        for result in results.numberAligned {
+                            if let homography = result.homography {
+                                let frameOffset = NSNumber(
+                                  value: result.frameIndex - frame.frameIndex
+                                )
+                                
+                                ret[frameOffset] = homography.withUnsafeBufferPointer { buffer in
+                                    MatWrapper(homographyValues: buffer.baseAddress!)
                                 }
                             }
-                            return (frame.frameIndex, ret)
                         }
+                        return (frame.frameIndex, ret)
                     }
                 }
                 if goingFoward {
@@ -778,7 +642,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             while nextFrame != nil {
                 if let frame = nextFrame {
                     if let results = await frame.getObserver()?.starAlignmentResults,
-                       results.numberAligned.count == config.numberAlignedNeighborFrames
+                       results.wasSuccessfullyAligned 
                     {
                         for result in results.numberAligned {
                             if let homography = result.homography {
@@ -834,7 +698,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             while nextFrame != nil {
                 if let frame = nextFrame {
                     if let results = await frame.getObserver()?.earthAlignmentResults,
-                       results.numberAligned.count == config.numberAlignedNeighborFrames
+                       results.wasSuccessfullyAligned 
                     {
                         for result in results.numberAligned {
                             if let homography = result.homography {
@@ -1548,18 +1412,18 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         try await loadOutliers()
     }
 
-    public func finish(alignOnly: Bool) async throws {
+    public func finish() async throws {
         switch await self.cleanMethod {
         case .automatic(let useOutliers):
-            try await self.finishAuto(alignOnly: alignOnly, useOutliers: useOutliers)
+            try await self.finishAuto(useOutliers: useOutliers)
         case .selective:
-            try await self.finishSelective(alignOnly: alignOnly)
+            try await self.finishSelective()
         }
     }
     
     // run after shouldRemove has been set for each group, 
     // does the final removing and then writes out the output files
-    public func finishSelective(alignOnly: Bool) async throws {
+    public func finishSelective() async throws {
         Log.d("frame \(self.frameIndex) starting to finish")
         
         mkdir(await self.outliersDirname)
@@ -1646,7 +1510,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         let alignmentResult = try await loadOrCreateStarAlignedImage()
 
-        if alignOnly { return }
+        if !alignmentResult.wasSuccessfullyAligned { return }
         
         let starAlignedImage = alignmentResult.aligned
         let failedStarAlignedImage = alignmentResult.failed
@@ -2805,7 +2669,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
      rid of even the small distant satellites that move slowly through the sky.
      */
     func createAutoProcessedImage(
-      alignOnly: Bool,
       usingExistingHomography: Bool = false
     ) async throws -> PixelatedImage? {
         Log.i("frame \(frameIndex) creating auto processed image usingExistingHomography \(usingExistingHomography)")
@@ -2816,8 +2679,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let failedStarImage = result.failed
 
         Log.i("frame \(frameIndex) got result \(result) for star aligned image")
-        
+
         let config = await configManager.config()
+
+        if !result.wasSuccessfullyAligned {
+            Log.w("frame \(frameIndex) only got \(result.alignedWarps) aligned warps cannot merge \(usingExistingHomography)")
+            return nil
+        }
         
         var skyImage: PixelatedImage? = starAlignedImage
         if skyImage == nil {
@@ -2845,7 +2713,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             if config.allowEarthAlignment {
                 let alignmentResult = try await loadOrCreateEarthAlignedImage()
 
-                if alignOnly { return nil }
+                // XXX add check to see if the alignment was good, and if so, save it
+                // if not, return early
                 
                 // XXX validate this alignment result, it might be erroneous
                 // if it's bad, use the original frame and horizon mask instead
@@ -2861,7 +2730,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             } else {
                 // not using earth alignment
-                if alignOnly { return nil }
+
                 // use original image for the earth
                 earthImage = try await imageAccessor.load(
                   frameIndex: frameIndex,
@@ -2977,7 +2846,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         } else {
                             // no file exists
                             try await self.finishAuto(
-                              alignOnly: false,
                               useOutliers: true
                             )
                         }
@@ -2999,7 +2867,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         } else {
                             // no file exists
                             try await self.finishAuto(
-                              alignOnly: false,
                               useOutliers: false
                             )
                         }
@@ -3028,7 +2895,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         // 3. classify outliers
                         await self.applyDecisionTreeToAllOutliers(includingTrash: true)
 
-                        try await self.finishSelective(alignOnly: false)
+                        try await self.finishSelective()
 
                         await self.updateCombineSubjects()
                     }
@@ -3041,20 +2908,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     
     // used by PixelReplacementMode.automatic
     public func finishAuto(
-      alignOnly: Bool,
       useOutliers: Bool,
       usingExistingHomography: Bool = false
     ) async throws {
         guard let autoProcessedImage = try await createAutoProcessedImage(
-                alignOnly: alignOnly,
                 usingExistingHomography: usingExistingHomography
               ) else
         {
-            // passing alignOnly == true always ends up here
-            if !alignOnly {
-                // only an error if !alignOnly
+            // only an error if usingExistingHomography
+            if usingExistingHomography {
                 Log.e("frame \(frameIndex) unable to create auto processed image")
+
+                // XXX copy original here?
             }
+
             // we were unable to finish auto because of bad alignment
             return
         }
@@ -3825,8 +3692,4 @@ private extension PixelatedImage {
 
 */
 
-public extension AlignmentResult {
-    var numAligned: Int { alignedWarps.count }
-    var numFailed: Int { failedWarps.count }
-}
 
