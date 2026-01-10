@@ -813,8 +813,6 @@ public final class ImageSequenceViewModel {
         
         self.earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? Int(imageInfo.imageHeight)/2
         
-        self.frameSaveQueue.viewModel = self
-        
         let callbacks = self.makeCallbacks()
 
         if let imageSequenceSizeClosure = callbacks.imageSequenceSizeClosure {
@@ -1168,6 +1166,7 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    // XXX move to StarCore
     func processAll() {
         Task {
             Log.d("processAll")
@@ -1805,6 +1804,7 @@ public final class ImageSequenceViewModel {
         }
     }
     
+    // XXX move to StarCore
     func renderAllFrames(
       renderWithExistingHomography: Bool = false // re-aligns and renders badly aligned frames
     ) async {
@@ -1828,7 +1828,7 @@ public final class ImageSequenceViewModel {
                      how bad the homography was for this frame based upon
                      how many neighbors aligned with homography that looked ok
                      (i.e. homography deviation at neighbor1 * 3 =
-                     homography deviation at neighbor3
+                           homography deviation at neighbor3
                      */
 
                     // get frame homography
@@ -1986,6 +1986,7 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    // XXX move to StarCore
     func processHorizonForAllFrames(redo: Bool = false) async throws {
         if isFindingAllHorizons { return }
         isFindingAllHorizons = true

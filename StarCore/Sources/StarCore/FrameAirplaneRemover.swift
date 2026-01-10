@@ -324,10 +324,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     // threshold used for throwing out bad pixels before replacing with them
-    var pixelThreshold: Double = 1.2 // XXX constant
-    
-    public func set(pixelThreshold: Double) {
-        self.pixelThreshold = pixelThreshold
+    public var pixelThreshold: Double {
+        get async {
+            let config = await configManager.config()
+            return config.pixelThreshold
+        }
     }
 
     public func setNumberOfStaticNeighborFrames() async {
@@ -441,7 +442,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         if let mergedHorizon = mask.image.medianMerge(
              with: neighboringHorizons,
-             outlierThreshold: pixelThreshold,
+             outlierThreshold: await self.pixelThreshold,
              includeAll: true)
         {
             Log.d("saving merged horizon images")
@@ -923,6 +924,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(frameIndex) original frame \(originalFrame.description)")
         
         var alignmentResult: AlignmentResult? = nil
+
+        let pixelThreshold = await self.pixelThreshold
         
         if alignmentType == .earth,
            !config.tripodHeadWasMoving
@@ -2669,7 +2672,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
      rid of even the small distant satellites that move slowly through the sky.
      */
     func createAutoProcessedImage(
-      usingExistingHomography: Bool = false
+      usingExistingHomography: Bool = false // warp to homography from a different frame
     ) async throws -> PixelatedImage? {
         Log.i("frame \(frameIndex) creating auto processed image usingExistingHomography \(usingExistingHomography)")
         let result = try await loadOrCreateStarAlignedImage(

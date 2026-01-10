@@ -322,6 +322,10 @@ public struct Config: Codable, Sendable, Transferable {
     public var imageBitsPerComponent: Int = 0
     public var fileExtension: String = "tiff"
     
+    // threshold used for throwing out bad pixels before replacing with them
+    // good vs
+    var pixelThreshold: Double = 1.2
+    
     mutating public func set(videoInfo: VideoInfo) {
         self.frameRate = videoInfo.frameRate
         self.codec = videoInfo.codec
@@ -344,7 +348,8 @@ public struct Config: Codable, Sendable, Transferable {
         self = Config()
 
         let c = try decoder.container(keyedBy: CodingKeys.self)
-
+        
+        self.pixelThreshold = try c.decodeIfPresent(Double.self, forKey: .pixelThreshold) ?? self.pixelThreshold
         self.tempOutputPath = try c.decodeIfPresent(String.self, forKey: .tempOutputPath) ?? self.tempOutputPath
         self.outputPath = try c.decodeIfPresent(String.self, forKey: .outputPath) ?? self.outputPath
         self.cleanMethod = try c.decodeIfPresent(CleanMethod.self, forKey: .cleanMethod) ?? self.cleanMethod

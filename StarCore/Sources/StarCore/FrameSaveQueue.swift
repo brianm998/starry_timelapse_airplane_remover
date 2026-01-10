@@ -1,26 +1,25 @@
 import Foundation
 import SwiftUI
 import Cocoa
-import StarCore
 import logging
 
 fileprivate let frameSaveMonitor = FileSystemMonitor(max: 16) // guess, make configurable?
 // XXX this needs to track numberOfFramesToProcessConcurrently
+
 @MainActor @Observable
-class FrameSaveQueue {
+public class FrameSaveQueue {
 
-    init() { } 
+    public init() { } 
 
-    weak var viewModel: ImageSequenceViewModel?
-    
-    var savingCount: Int = 0
-    var pendingSavingCount: Int = 0
-    var purgatoryCount: Int = 0
+    public var savingCount: Int = 0
+    public var pendingSavingCount: Int = 0
+    public var purgatoryCount: Int = 0
 
-    func readyToSave(frame: FrameAirplaneRemover,
-                     waitTime: TimeInterval = 10,
-                     completionClosure: @Sendable @escaping () async -> Void) async
-    {
+    public func readyToSave(
+      frame: FrameAirplaneRemover,
+      waitTime: TimeInterval = 10,
+      completionClosure: @Sendable @escaping () async -> Void
+    ) async {
         Task.detached {
             if await frame.savingState() == .savePending { return }
             
@@ -40,9 +39,10 @@ class FrameSaveQueue {
         }
     }
     
-    func saveNow(frame: FrameAirplaneRemover,
-                 completionClosure: @Sendable @escaping () async -> Void) async throws
-    {
+    public func saveNow(
+      frame: FrameAirplaneRemover,
+      completionClosure: @Sendable @escaping () async -> Void
+    ) async throws {
         Task.detached(priority: .high) {
             Log.d("frame \(frame.frameIndex) saveNow")
             try Task.checkCancellation()
@@ -53,14 +53,9 @@ class FrameSaveQueue {
                 do {
                     // update values that may have been changed by the user in the gui
 
-                    if let viewModel = await self.viewModel {
-                        // set pixelThreshold
-                        await frame.set(pixelThreshold: viewModel.pixelThreshold)
-                        // set number of aligned images
-
-                        await frame.setNumberOfAlignedFrames()
-                        await frame.setNumberOfStaticNeighborFrames()
-                    }
+                    // set number of aligned images
+                    await frame.setNumberOfAlignedFrames()
+                    await frame.setNumberOfStaticNeighborFrames()
                     
                     try await frame.loadOutliers()
                     try await frame.finish()
