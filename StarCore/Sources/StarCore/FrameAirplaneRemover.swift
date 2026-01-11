@@ -23,6 +23,9 @@ You should have received a copy of the GNU General Public License along with sta
 
 // the first pass is done upon init, finding and pruning outlier groups
 
+// used for finding outliers in frames when processing
+public let maxFramesProcessing = IntegralActor(value: 20) // XXX read this initial value from #-CPU's
+
 public let finalMonitor = FileSystemMonitor(max: 32)
 
 public let classificationTimingDataHolder = ClassificationTimingDataHolder()
@@ -613,6 +616,206 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return (-1, [:])
     }
 
+    public func processAll(frameSaveQueue: FrameSaveQueue) async {
+        Log.d("processAll")
+        
+        let config = await configManager.config()
+        Task.detached(priority: .userInitiated) {
+            if config.horizonDetectionEnabled {
+                Log.d("processAll horizonDetectionEnabled")
+                do {
+                    try await self.processHorizonForAllFrames()
+                    Log.d("processAll got horizons")
+                    // after we get horizons for all frames, render frames
+
+                    // first pass of rendering just does alignment,
+                    // but only if we have a second pass
+                    await self.renderAllFrames(
+                      frameSaveQueue: frameSaveQueue,
+                      renderWithExistingHomography: false
+                    )
+
+                    if config.runSecondAlignmentPass {
+                        // get expected deviations
+                        // re-run render all fames with it
+                        Log.i("running second alignment pass")
+                        await self.renderAllFrames(
+                          frameSaveQueue: frameSaveQueue,
+                          renderWithExistingHomography: true
+                        )
+                    }
+                    Log.d("processAll rendered all frames")
+                } catch {
+                    Log.e("ERROR: \(error)")
+                }
+            } else {
+                Log.d("processAll NO horizonDetection")
+                //self.ignoreLowerPixels = 0 // ???
+                
+                await self.renderAllFrames(
+                  frameSaveQueue: frameSaveQueue,
+                  renderWithExistingHomography: false
+                )
+                
+                if config.runSecondAlignmentPass {
+                    // get expected deviation
+                    // re-run render all fames with it
+                    Log.i("running second alignment pass")
+                    await self.renderAllFrames(
+                      frameSaveQueue: frameSaveQueue,
+                      renderWithExistingHomography: true
+                    )
+                }
+            }
+        }
+    }
+
+    func renderAllFrames(
+      frameSaveQueue: FrameSaveQueue,
+      renderWithExistingHomography: Bool = false // re-aligns and renders badly aligned frames
+    ) async {
+        Log.d("renderAllFrames")
+// XXX ???
+//        self.renderingAllFrames = true
+        Log.d("renderAllFrames Task")
+
+        // XXX this could be better
+        let numberOfFramesToProcessConcurrently = await Task { await maxFramesProcessing.getValue() }.value
+        
+        let semaphore = AsyncSemaphore(value: numberOfFramesToProcessConcurrently)
+        await withTaskGroup(of: Void.self) { taskGroup in
+            Log.d("renderAllFrames TaskGroup")
+
+            let counter = CountActor()
+            
+            var nextFrame: FrameAirplaneRemover? = await self.firstFrameInSequence
+            while nextFrame != nil {
+                var renderWasBad = false
+                if let frame = nextFrame {
+
+                    var shouldRender = await frame.processingState() != .complete
+                    
+                    /*
+                     check to see if we should re-render based upon
+                     how bad the homography was for this frame based upon
+                     how many neighbors aligned with homography that looked ok
+                     (i.e. homography deviation at neighbor1 * 3 =
+                           homography deviation at neighbor3
+                     */
+
+                    // get frame homography
+                    if let observer = await frame.getObserver(),
+                       let results = await observer.starAlignmentResults
+                    {
+                        // compare homography to median deviations
+                        // we need both fully aligned neighbors,
+                        // and good homography, otherwise we will re-render
+                        if !results.wasSuccessfullyAligned {
+                            Log.i("frame \(frame.frameIndex) doesn't have good alignment will re-render")
+                            shouldRender = renderWithExistingHomography
+                            renderWasBad = true
+
+                            frame.imageAccessor.deleteImages(
+                              frameIndex: frame.frameIndex,
+                              ofTypes: [.starAligned,
+                                        .failedStarAligned,
+                                        .earthAligned,
+                                        .failedEarthAligned],
+                              atSizes: [.original, .preview]
+                            )
+                        } else {
+                            Log.i("frame \(frame.frameIndex) has good alignment so keeping")
+                        }
+                    } else {
+                        Log.i("frame \(frame.frameIndex) has no frame homography, will re-render")
+                        shouldRender = true
+                        renderWasBad = true
+                        frame.imageAccessor.deleteImages(
+                          frameIndex: frame.frameIndex,
+                          ofTypes: [.starAligned,
+                                    .failedStarAligned,
+                                    .earthAligned,
+                                    .failedEarthAligned],
+                          atSizes: [.original, .preview]
+                        )
+                    }
+                    Log.i("frame \(frame.frameIndex) WTF shouldRender \(shouldRender)")
+
+                    if shouldRender {
+                        Log.d("frame \(frame.frameIndex) rendering")
+                        taskGroup.addTask() {
+                            Log.d("frame \(frame.frameIndex) rendering pre semaphore")
+                            await semaphore.wait()
+                            Log.d("frame \(frame.frameIndex) rendering post semaphor")
+                            await counter.increase()
+
+                            switch await frame.cleanMethod {
+                            case .selective:
+                                do {
+                                    try await frameSaveQueue.saveNow(
+                                      frame: frame
+                                    ) {
+                                        // XXX ???
+                                        //await self.refresh(frame: frame)
+
+                                        await counter.decrease()
+                                        if !(await counter.isMoreThanZero()) {
+// XXX                                            
+//                                            await MainActor.run {
+//                                                self.renderingAllFrames = false
+//                                            }
+                                        }
+                                        semaphore.signal()
+                                    }
+                                } catch {
+                                    Log.e("frame \(frame.frameIndex) unable to save")
+                                }
+
+                            case .automatic(let useOutliers):
+                                do {
+                                    try await frame.finishAuto(
+                                      useOutliers: useOutliers,
+                                      usingExistingHomography: renderWasBad && renderWithExistingHomography
+                                    )
+
+                                    if useOutliers {
+                                        if await frame.getOutlierGroups() == nil {
+                                            try await frame.loadOutliers()
+                                            /* XXX ???
+                                            Task { @MainActor in
+                                                let frameView = self.frames[frame.frameIndex]
+                                                frameView.outlierViews = nil
+                                                await frameView.setOutlierGroups()
+                                            }*/
+                                        }
+                                    }
+                                    
+                                    // XXX ???
+                                    // await self.refresh(frame: frame)
+                                    
+                                    await counter.decrease()
+                                    if !(await counter.isMoreThanZero()) {
+                                        await MainActor.run {
+                                            // XXX
+                                            //self.renderingAllFrames = false
+                                        }
+                                    }
+                                    semaphore.signal()
+                                } catch {
+                                    Log.e("frame \(frame.frameIndex) unable to save")
+                                }
+                            }
+                        }
+                    } else {
+                        Log.d("frame \(frame.frameIndex) not re-rendering")
+                    }
+                    nextFrame = await frame.getNextFrame()
+                }
+            }
+            await taskGroup.waitForAll()
+        }
+    }
+    
     public func processHorizonForAllFrames(redo: Bool = false) async throws {
 
         let config = await configManager.config()
@@ -631,7 +834,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                   
                   var nextFrame: FrameAirplaneRemover? = await self.firstFrameInSequence
                   while nextFrame != nil {
-                      
                       if let frame = nextFrame {
                           Log.d("frame \(frame.frameIndex) about to create task for horizon")
                           taskGroup.addTask {
@@ -3759,5 +3961,20 @@ private extension PixelatedImage {
 }
 
 */
+
+
+public actor CountActor {
+    private var value: Int = 0
+
+    public init() {
+        value = 0
+    }
+    
+    public func increase() { value += 1 }
+    public func decrease() { value -= 1 }
+    
+    public func isMore(than: Int) -> Bool { value > than }
+    public func isMoreThanZero() -> Bool { value > 0 }
+}
 
 

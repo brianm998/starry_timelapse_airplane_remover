@@ -3,9 +3,6 @@ import StarCore
 import Semaphore
 import logging
 
-// used for finding outliers in frames when processing
-public let maxFramesProcessing = IntegralActor(value: 20) // XXX read this initial value from #-CPU's
-
 // used for final processing (categorizing, painting, saving)
 fileprivate let finalSemaphore = AsyncSemaphore(value: 40) // XXX make this configurable
 

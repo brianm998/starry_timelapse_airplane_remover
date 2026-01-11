@@ -1166,57 +1166,10 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    // XXX move to StarCore
     func processAll() {
-        Task {
-            Log.d("processAll")
-            if self.horizonDetectionEnabled {
-                Log.d("processAll horizonDetectionEnabled")
-                do {
-                    try await self.processHorizonForAllFrames()
-                    Log.d("processAll got horizons")
-                    // after we get horizons for all frames, render frames
-
-                    // first pass of rendering just does alignment,
-                    // but only if we have a second pass
-                    await self.renderAllFrames(
-                      renderWithExistingHomography: false
-                    )
-
-                    if self.runSecondAlignmentPass {
-                        // get expected deviations
-                        // re-run render all fames with it
-                        Log.i("running second alignment pass")
-                        if let firstFrame = frames[0].frame {
-                            await self.renderAllFrames(
-                              renderWithExistingHomography: true
-                            )
-                        } else {
-                            Log.w("no first frame :(")
-                        }
-                    }
-                    Log.d("processAll rendered all frames")
-                } catch {
-                    Log.e("ERROR: \(error)")
-                }
-            } else {
-                Log.d("processAll NO horizonDetection")
-                self.ignoreLowerPixels = 0
-                
-                await self.renderAllFrames(
-                  renderWithExistingHomography: false
-                )
-                
-                if self.runSecondAlignmentPass {
-                    // get expected deviation
-                    // re-run render all fames with it
-                    Log.i("running second alignment pass")
-                    if let firstFrame = frames[0].frame {
-                        await self.renderAllFrames(
-                          renderWithExistingHomography: true
-                        )
-                    }
-                }
+        if let frame = frames[0].frame {
+            Task {
+                await frame.processAll(frameSaveQueue: frameSaveQueue)
             }
         }
     }
@@ -1804,140 +1757,6 @@ public final class ImageSequenceViewModel {
         }
     }
     
-    // XXX move to StarCore
-    func renderAllFrames(
-      renderWithExistingHomography: Bool = false // re-aligns and renders badly aligned frames
-    ) async {
-        Log.d("renderAllFrames")
-        self.renderingAllFrames = true
-        let frameSaveQueue = self.frameSaveQueue
-        Log.d("renderAllFrames Task")
-        let semaphore = AsyncSemaphore(value: self.numberOfFramesToProcessConcurrently)
-        await withTaskGroup(of: Void.self) { taskGroup in
-            Log.d("renderAllFrames TaskGroup")
-
-            let counter = CountActor()
-            for frameView in self.frames {
-                var renderWasBad = false
-                if let frame = frameView.frame {
-
-                    var shouldRender = await frame.processingState() != .complete
-                    
-                    /*
-                     check to see if we should re-render based upon
-                     how bad the homography was for this frame based upon
-                     how many neighbors aligned with homography that looked ok
-                     (i.e. homography deviation at neighbor1 * 3 =
-                           homography deviation at neighbor3
-                     */
-
-                    // get frame homography
-                    if let observer = await frame.getObserver(),
-                       let results = observer.starAlignmentResults
-                    {
-                        // compare homography to median deviations
-                        // we need both fully aligned neighbors,
-                        // and good homography, otherwise we will re-render
-                        if !results.wasSuccessfullyAligned {
-                            Log.i("frame \(frame.frameIndex) doesn't have good alignment will re-render")
-                            shouldRender = renderWithExistingHomography
-                            renderWasBad = true
-
-                            frame.imageAccessor.deleteImages(
-                              frameIndex: frame.frameIndex,
-                              ofTypes: [.starAligned,
-                                        .failedStarAligned,
-                                        .earthAligned,
-                                        .failedEarthAligned],
-                              atSizes: [.original, .preview]
-                            )
-                        } else {
-                            Log.i("frame \(frame.frameIndex) has good alignment so keeping")
-                        }
-                    } else {
-                        Log.i("frame \(frame.frameIndex) has no frame homography, will re-render")
-                        shouldRender = true
-                        renderWasBad = true
-                        frame.imageAccessor.deleteImages(
-                          frameIndex: frame.frameIndex,
-                          ofTypes: [.starAligned,
-                                    .failedStarAligned,
-                                    .earthAligned,
-                                    .failedEarthAligned],
-                          atSizes: [.original, .preview]
-                        )
-                    }
-                    Log.i("frame \(frame.frameIndex) WTF shouldRender \(shouldRender)")
-
-                    if shouldRender {
-                        Log.d("frame \(frame.frameIndex) rendering")
-                        taskGroup.addTask() {
-                            Log.d("frame \(frame.frameIndex) rendering pre semaphore")
-                            await semaphore.wait()
-                            Log.d("frame \(frame.frameIndex) rendering post semaphor")
-                            await counter.increase()
-
-                            switch await frame.cleanMethod {
-                            case .selective:
-                                do {
-                                    try await frameSaveQueue.saveNow(
-                                      frame: frame
-                                    ) {
-                                        await self.refresh(frame: frame)
-
-                                        await counter.decrease()
-                                        if !(await counter.isMoreThanZero()) {
-                                            await MainActor.run {
-                                                self.renderingAllFrames = false
-                                            }
-                                        }
-                                        semaphore.signal()
-                                    }
-                                } catch {
-                                    Log.e("frame \(frame.frameIndex) unable to save")
-                                }
-
-                            case .automatic(let useOutliers):
-                                do {
-                                    try await frame.finishAuto(
-                                      useOutliers: useOutliers,
-                                      usingExistingHomography: self.useExistingHomography || (renderWasBad && renderWithExistingHomography)
-                                    )
-
-                                    if useOutliers {
-                                        if await frame.getOutlierGroups() == nil {
-                                            try await frame.loadOutliers()
-                                            Task { @MainActor in
-                                                let frameView = self.frames[frame.frameIndex]
-                                                frameView.outlierViews = nil
-                                                await frameView.setOutlierGroups()
-                                            }
-                                        }
-                                    }
-                                    
-                                    await self.refresh(frame: frame)
-                                    await counter.decrease()
-                                    if !(await counter.isMoreThanZero()) {
-                                        await MainActor.run {
-                                            self.renderingAllFrames = false
-                                        }
-                                    }
-                                    semaphore.signal()
-                                } catch {
-                                    Log.e("frame \(frame.frameIndex) unable to save")
-                                }
-                            }
-                        }
-                    } else {
-                        Log.d("frame \(frame.frameIndex) not re-rendering")
-                    }
-                } else {
-                    Log.w("no frame")
-                }
-            }
-            await taskGroup.waitForAll()
-        }
-    }
     
     //private var videoRenderTask: Task<Void>? = nil
     
@@ -2000,17 +1819,6 @@ public final class ImageSequenceViewModel {
         
     }
 }
-
-public actor CountActor {
-    private var value: Int = 0
-
-    public func increase() { value += 1 }
-    public func decrease() { value -= 1 }
-    
-    public func isMore(than: Int) -> Bool { value > than }
-    public func isMoreThanZero() -> Bool { value > 0 }
-}
-
 
 final class AppNapDisabler {
     private var activity: NSObjectProtocol?
