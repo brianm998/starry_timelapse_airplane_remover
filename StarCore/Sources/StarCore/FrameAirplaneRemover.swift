@@ -2953,8 +2953,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let config = await configManager.config()
 
         if !result.wasSuccessfullyAligned {
-            Log.w("frame \(frameIndex) only got \(result.alignedWarps) aligned warps cannot merge \(usingExistingHomography)")
-            return nil
+            Log.w("frame \(frameIndex) only got \(result.alignedWarps) aligned warps cannot merge \(usingExistingHomography), returning original image instead")
+
+            return try await imageAccessor.load(
+              frameIndex: frameIndex,
+              type: .original,
+              atSize: .original
+            )
         }
         
         var skyImage: PixelatedImage? = starAlignedImage
