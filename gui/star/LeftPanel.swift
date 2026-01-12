@@ -147,17 +147,17 @@ struct LeftPanel: View {
         let unprocessed = viewModel.frameStateMap[.unprocessed]?.count ?? 0
         let horizon = viewModel.frameStateMap[.horizonDetected]?.count ?? 0
 
-        return (unprocessed == 0 && horizon != viewModel.frames.count) || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo || viewModel.isFindingAllHorizons
+        return (unprocessed == 0 && horizon != viewModel.frames.count) || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo
     }
 
     var updateButtonDisabled: Bool {
         let userModified = viewModel.frameStateMap[.userModified]?.count ?? 0
-        return userModified == 0 || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo || viewModel.isFindingAllHorizons
+        return userModified == 0 || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo
     }
 
     var renderButtonDisabled: Bool {
         let complete = viewModel.frameStateMap[.complete]?.count ?? 0
-        return complete != viewModel.frames.count || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo || viewModel.isFindingAllHorizons
+        return complete != viewModel.frames.count || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo
     }
     
     var processingButtons: some View {
@@ -178,7 +178,7 @@ struct LeftPanel: View {
             
             
             let userModified = viewModel.frameStateMap[.userModified]?.count ?? 0
-            
+            /*
             Button() {
                 // XXX this has no max number of processes :(
                 Task {
@@ -193,7 +193,7 @@ struct LeftPanel: View {
                     .buttonStyle(.borderedProminent)
                     .tint(.blue)
               }
-
+*/
             let complete = viewModel.frameStateMap[.complete]?.count ?? 0
 
             Button() {

@@ -62,6 +62,7 @@ public enum SequenceProcessingState: Codable,
     case done
     case error(String)
 }
+
 public enum FrameProcessingState: Codable,
                                   Hashable,
                                   Sendable,

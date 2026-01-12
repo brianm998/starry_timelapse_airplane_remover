@@ -104,11 +104,29 @@ struct BottomRightView: View {
                       .foregroundColor(.white)
                 }
 
-                if viewModel.isFindingAllHorizons {
+                switch viewModel.sequenceProcessingState {
+                case .unprocessed:
+                    Group { }
+                case .horizonDetection:
                     ProgressView()
                       .colorScheme(.dark)
-                    Text("Detecting Horizon on all frames")
+                    Text("Detecting Horizons")
                       .foregroundColor(.white)
+                case .firstAlignment:
+                    ProgressView()
+                      .colorScheme(.dark)
+                    Text("First Alignment")
+                      .foregroundColor(.white)
+                case .secondAlignment:
+                    ProgressView()
+                      .colorScheme(.dark)
+                    Text("Second Alignment")
+                      .foregroundColor(.white)
+                case .done:
+                    Text("Alignment Done")
+                      .foregroundColor(.green)
+                case .error(let errorString):
+                    Text("Alignment Error: \(errorString)")
                 }
 
                 if let frameState = frameView.frameState {

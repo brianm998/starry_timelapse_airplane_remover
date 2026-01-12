@@ -163,6 +163,7 @@ public final class ViewModel {
         amountPreviewsSaved = 0.0
 
         let imageSequenceViewModel = try await ImageSequenceViewModel(
+          viewModel: self, 
           withConfig: jsonConfigFilename
         ) { [weak self]
             numberPreviewsSaved,
@@ -203,7 +204,10 @@ public final class ViewModel {
         numberPreviewsSaved = 0
         amountPreviewsSaved = 0.0
         
-        let imageSequenceViewModel = try await ImageSequenceViewModel(with: config) { [weak self] numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
+        let imageSequenceViewModel = try await ImageSequenceViewModel(
+          viewModel: self, 
+          with: config
+        ) { [weak self] numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
             guard let self else { return }
             Task { @MainActor in
                 if amountLoaded != 0 {
@@ -241,8 +245,11 @@ public final class ViewModel {
 
         
         let imageSequenceViewModel =
-          try await ImageSequenceViewModel(withNewImageSequence: imageSequenceDirname, and: videoInfo)
-        { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
+          try await ImageSequenceViewModel(
+            viewModel: self, 
+            withNewImageSequence: imageSequenceDirname,
+            and: videoInfo
+          ) { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
             Task { @MainActor in
                 if amountLoaded != 0 {
                     self.amountLoaded = amountLoaded

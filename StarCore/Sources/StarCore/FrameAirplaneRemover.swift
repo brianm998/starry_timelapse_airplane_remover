@@ -618,57 +618,62 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func processAll(
       frameSaveQueue: FrameSaveQueue,
-      closure: @Sendable (SequenceProcessingState) -> Void
+      progressClosure: @Sendable @escaping (SequenceProcessingState) -> Void
     ) async {
         Log.d("processAll")
         
         let config = await configManager.config()
         Task.detached(priority: .userInitiated) {
-            if config.horizonDetectionEnabled {
-                Log.d("processAll horizonDetectionEnabled")
-                do {
+            do {
+                if config.horizonDetectionEnabled {
+                    progressClosure(.horizonDetection)
+                    Log.d("processAll horizonDetectionEnabled")
                     try await self.processHorizonForAllFrames()
                     Log.d("processAll got horizons")
                     // after we get horizons for all frames, render frames
 
                     // first pass of rendering just does alignment,
                     // but only if we have a second pass
-                    await self.renderAllFrames(
+                    progressClosure(.firstAlignment)
+                    try await self.renderAllFrames(
                       frameSaveQueue: frameSaveQueue,
                       renderWithExistingHomography: false
                     )
 
-                   
-                        // get expected deviations
-                        // re-run render all fames with it
-                        Log.i("running second alignment pass")
-                        await self.renderAllFrames(
-                          frameSaveQueue: frameSaveQueue,
-                          renderWithExistingHomography: true
-                        )
+                    progressClosure(.secondAlignment)
                     
-                    Log.d("processAll rendered all frames")
-                } catch {
-                    Log.e("ERROR: \(error)")
-                }
-            } else {
-                Log.d("processAll NO horizonDetection")
-                //self.ignoreLowerPixels = 0 // ???
-                
-                await self.renderAllFrames(
-                  frameSaveQueue: frameSaveQueue,
-                  renderWithExistingHomography: false
-                )
-                
-               
-                    // get expected deviation
+                    // get expected deviations
                     // re-run render all fames with it
                     Log.i("running second alignment pass")
-                    await self.renderAllFrames(
+                    try await self.renderAllFrames(
                       frameSaveQueue: frameSaveQueue,
                       renderWithExistingHomography: true
                     )
-                
+                } else {
+                    Log.d("processAll NO horizonDetection")
+                    //self.ignoreLowerPixels = 0 // ???
+                    
+                    progressClosure(.firstAlignment)
+                    try await self.renderAllFrames(
+                      frameSaveQueue: frameSaveQueue,
+                      renderWithExistingHomography: false
+                    )
+
+                    progressClosure(.secondAlignment)
+                    
+                    // get expected deviation
+                    // re-run render all fames with it
+                    Log.i("running second alignment pass")
+                    try await self.renderAllFrames(
+                      frameSaveQueue: frameSaveQueue,
+                      renderWithExistingHomography: true
+                    )
+                    
+                }
+                progressClosure(.done)
+            } catch {
+                Log.e("ERROR: \(error)")
+                progressClosure(.error("\(error)"))
             }
         }
     }
@@ -676,7 +681,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     func renderAllFrames(
       frameSaveQueue: FrameSaveQueue,
       renderWithExistingHomography: Bool = false // re-aligns and renders badly aligned frames
-    ) async {
+    ) async throws {
         Log.d("renderAllFrames")
 // XXX ???
 //        self.renderingAllFrames = true
@@ -686,7 +691,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let numberOfFramesToProcessConcurrently = await Task { await maxFramesProcessing.getValue() }.value
         
         let semaphore = AsyncSemaphore(value: numberOfFramesToProcessConcurrently)
-        await withTaskGroup(of: Void.self) { taskGroup in
+        try await withThrowingTaskGroup(of: Void.self) { taskGroup in
             Log.d("renderAllFrames TaskGroup")
 
             let counter = CountActor()
@@ -754,7 +759,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
                             switch await frame.cleanMethod {
                             case .selective:
-                                do {
+//                                do {
                                     try await frameSaveQueue.saveNow(
                                       frame: frame
                                     ) {
@@ -770,12 +775,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                         }
                                         semaphore.signal()
                                     }
-                                } catch {
-                                    Log.e("frame \(frame.frameIndex) unable to save")
-                                }
+//                                } catch {
+//                                    Log.e("frame \(frame.frameIndex) unable to save")
+//                                }
 
                             case .automatic(let useOutliers):
-                                do {
+//                                do {
                                     try await frame.finishAuto(
                                       useOutliers: useOutliers,
                                       usingExistingHomography: renderWasBad && renderWithExistingHomography
@@ -804,9 +809,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                         }
                                     }
                                     semaphore.signal()
-                                } catch {
-                                    Log.e("frame \(frame.frameIndex) unable to save")
-                                }
+//                                } catch {
+//                                    Log.e("frame \(frame.frameIndex) unable to save")
+//                                }
                             }
                         }
                     } else {
@@ -815,7 +820,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     nextFrame = await frame.getNextFrame()
                 }
             }
-            await taskGroup.waitForAll()
+            try await taskGroup.waitForAll()
         }
     }
     

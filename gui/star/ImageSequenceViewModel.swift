@@ -208,8 +208,8 @@ public final class ImageSequenceViewModel {
     // view class for each frame in the sequence in order
     var frames: [FrameViewModel] = []
 
-    // the view mode that we set this image with
-
+    weak var topViewModel: ViewModel? = nil
+    
     var initialLoadInProgress = false
     var loadingAllOutliers = false
     var loadingOutliers = false
@@ -233,7 +233,6 @@ public final class ImageSequenceViewModel {
     var renderingCurrentFrame = false
 
     var isProcessingFrames = false
-    var isFindingAllHorizons = false
     var numberOfFramesProcessed = 0
 
     var isRenderingVideo = false
@@ -636,20 +635,28 @@ public final class ImageSequenceViewModel {
     // and their total size
     var totalMatBytes = 0
     
-    convenience init(withConfig jsonConfigFilename: String,
-                     closure: @escaping @Sendable (Int, Double, Int, Double) -> Void) async throws
+    convenience init(
+      viewModel: ViewModel,
+      withConfig jsonConfigFilename: String,
+      closure: @escaping @Sendable (Int, Double, Int, Double) -> Void) async throws
     {
         Log.d("outlier_json_startup with \(jsonConfigFilename)")
         // first read config from json
 
         let config = try ConfigManager(configFilename: jsonConfigFilename)
 
-        try await self.init(with: config, closure: closure)
+        try await self.init(
+          viewModel: viewModel,
+          with: config,
+          closure: closure
+        )
     }
     
-    convenience init(withNewImageSequence imageSequenceDirname: String,
-                     and videoInfo: VideoInfo? = nil,
-                     closure: @Sendable @escaping (Int, Double, Int, Double) -> Void) async throws
+    convenience init(
+      viewModel: ViewModel,
+      withNewImageSequence imageSequenceDirname: String,
+      and videoInfo: VideoInfo? = nil,
+      closure: @Sendable @escaping (Int, Double, Int, Double) -> Void) async throws
     {
         let shouldWriteOutlierGroupFiles = true // XXX see what happens
         
@@ -703,7 +710,11 @@ public final class ImageSequenceViewModel {
         
         let configManager = ConfigManager(configFilename: configFilename, config: config)
 
-        try await self.init(with: configManager, closure: closure)
+        try await self.init(
+          viewModel: viewModel,
+          with: configManager,
+          closure: closure
+        )
 
         if config.writeOutlierGroupFiles {
             mkdir(config.outlierOutputDirname)
@@ -738,9 +749,11 @@ public final class ImageSequenceViewModel {
     private var appNapDisabler: AppNapDisabler
     
     init(
+      viewModel: ViewModel,
       with configManager: ConfigManager,
       closure: @Sendable @escaping (Int, Double, Int, Double) -> Void
     ) async throws {
+        self.topViewModel = viewModel
         self.trashLevel = await constants.getTrashLevel()
         self.smallTrashMax = await constants.getSmallTrashMax()
 
@@ -1174,7 +1187,18 @@ public final class ImageSequenceViewModel {
         if let frame = frames[0].frame {
             Task {
                 await frame.processAll(frameSaveQueue: frameSaveQueue) { processingState in
+                    
                     Task { @MainActor in
+                        switch processingState {
+                        case .done:
+                            // show video render sheet?
+                            self.renderVideoSheetShowing = true
+                        case .error(let errorString):
+                            Log.e("Error: \(errorString)")
+                            self.topViewModel?.report(error: errorString)
+                        default:
+                            break
+                        }
                         self.sequenceProcessingState = processingState
                     }
                 }
@@ -1814,14 +1838,10 @@ public final class ImageSequenceViewModel {
     }
 
     func processHorizonForAllFrames(redo: Bool = false) async throws {
-        if isFindingAllHorizons { return }
-        isFindingAllHorizons = true
 
         if let frame = await self.frames[0].frame {
             try await frame.processHorizonForAllFrames(redo: redo)
         }
-
-        self.isFindingAllHorizons = false
 
         Log.d("done with all horizons")
         
