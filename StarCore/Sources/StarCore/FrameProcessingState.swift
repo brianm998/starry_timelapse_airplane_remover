@@ -25,12 +25,12 @@ public enum LoopReturn: Sendable {
 }
 
 @objc public enum AlignmentStep: Int,
-                                  CaseIterable,
-                                  Equatable,
-                                  Hashable,
-                                  Codable,
-                                  Sendable,
-                                  Identifiable
+                                 CaseIterable,
+                                 Equatable,
+                                 Hashable,
+                                 Codable,
+                                 Sendable,
+                                 Identifiable
 {
     public var id: Self { self }
     
@@ -48,6 +48,20 @@ public enum LoopReturn: Sendable {
     }
 }
 
+public enum SequenceProcessingState: Codable,
+                                     Hashable,
+                                     Sendable,
+                                     Identifiable
+{
+    public var id: Self { self }
+
+    case unprocessed
+    case horizonDetection
+    case firstAlignment
+    case secondAlignment
+    case done
+    case error(String)
+}
 public enum FrameProcessingState: Codable,
                                   Hashable,
                                   Sendable,

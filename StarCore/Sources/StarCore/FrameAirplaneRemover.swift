@@ -617,8 +617,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public func processAll(
-      frameSaveQueue: FrameSaveQueue
-      // add callback method to report status along the way to the gui
+      frameSaveQueue: FrameSaveQueue,
+      closure: @Sendable (SequenceProcessingState) -> Void
     ) async {
         Log.d("processAll")
         
@@ -638,7 +638,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                       renderWithExistingHomography: false
                     )
 
-                    if config.runSecondAlignmentPass {
+                   
                         // get expected deviations
                         // re-run render all fames with it
                         Log.i("running second alignment pass")
@@ -646,7 +646,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                           frameSaveQueue: frameSaveQueue,
                           renderWithExistingHomography: true
                         )
-                    }
+                    
                     Log.d("processAll rendered all frames")
                 } catch {
                     Log.e("ERROR: \(error)")
@@ -660,7 +660,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                   renderWithExistingHomography: false
                 )
                 
-                if config.runSecondAlignmentPass {
+               
                     // get expected deviation
                     // re-run render all fames with it
                     Log.i("running second alignment pass")
@@ -668,7 +668,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                       frameSaveQueue: frameSaveQueue,
                       renderWithExistingHomography: true
                     )
-                }
+                
             }
         }
     }

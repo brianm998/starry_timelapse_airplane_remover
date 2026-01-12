@@ -156,6 +156,9 @@ public final class ImageSequenceViewModel {
 
     var frameStateMap: [FrameProcessingState: Set<FrameAirplaneRemover>] = [:]
 
+    // XXX report this from processAll
+    var sequenceProcessingState: SequenceProcessingState = .unprocessed
+    
     var frameSaveQueue = FrameSaveQueue()
 
     var frameOpacity: Double = 1.0
@@ -514,14 +517,6 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    var runSecondAlignmentPass: Bool {
-        didSet {
-            var realConfig = config.config()
-            realConfig.runSecondAlignmentPass = runSecondAlignmentPass
-            config.update(realConfig)
-        }
-    }
-
     public var alignmentMaxKeypoints: Int {
         didSet {
             var realConfig = config.config()
@@ -772,7 +767,6 @@ public final class ImageSequenceViewModel {
         self.maxConcurrentHorizonCalculations = config.maxConcurrentHorizonCalculations
         self.horizonVerticalShiftAmount = config.horizonVerticalShiftAmount
         self.allowEarthAlignment = config.allowEarthAlignment
-        self.runSecondAlignmentPass = config.runSecondAlignmentPass
 
         self.alignmentMaxKeypoints = config.alignmentMaxKeypoints
         self.alignmentGroundHorizonExtension = config.alignmentGroundHorizonExtension
@@ -864,11 +858,21 @@ public final class ImageSequenceViewModel {
         
         var numberPreviewsSaved = 0
 
-        Task(priority: .utility) { [imageAccessor] in
+        let throttle = Throttle()
+
+        Task(priority: .background) { [imageAccessor] in
           Log.d("writing missing images")
           try await imageAccessor.writeMissingImages() { numberSaved in
+
+              let now = ContinuousClock.now
+
+              guard await throttle.shouldUpdate(
+                      now: now,
+                      interval: .milliseconds(1000)
+                    ) else { return }
+              
               Task { @MainActor in 
-                  numberPreviewsSaved += 1
+                  numberPreviewsSaved += numberSaved
                   //Log.d("numberSaved \(numberSaved) numberPreviewsSaved \(numberPreviewsSaved)")
                   let amountPreviewsSaved = Double(numberPreviewsSaved)/Double(self.imageSequenceSize)
                   closure(numberPreviewsSaved, amountPreviewsSaved, 0, 0)
@@ -1169,7 +1173,11 @@ public final class ImageSequenceViewModel {
     func processAll() {
         if let frame = frames[0].frame {
             Task {
-                await frame.processAll(frameSaveQueue: frameSaveQueue)
+                await frame.processAll(frameSaveQueue: frameSaveQueue) { processingState in
+                    Task { @MainActor in
+                        self.sequenceProcessingState = processingState
+                    }
+                }
             }
         }
     }
@@ -1839,5 +1847,18 @@ final class AppNapDisabler {
             ProcessInfo.processInfo.endActivity(activity)
             self.activity = nil
         }
+    }
+}
+
+actor Throttle {
+    private var lastUpdate = ContinuousClock.now
+
+    func shouldUpdate(now: ContinuousClock.Instant,
+                      interval: Duration) -> Bool {
+        if now - lastUpdate > interval {
+            lastUpdate = now
+            return true
+        }
+        return false
     }
 }

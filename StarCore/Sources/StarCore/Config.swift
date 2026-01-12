@@ -298,11 +298,6 @@ public struct Config: Codable, Sendable, Transferable {
     // turned off by default as it's still expermintal
     public var allowEarthAlignment: Bool = false
     
-    // should we run a second pass on alignment?
-    // i.e. after a first run, check to see that the expected deviation is
-    // for each frame offset, and re-align frames that are too far
-    public var runSecondAlignmentPass: Bool = true
-    
     // how many pixels do we crop off the top of the image when making
     // earth aligned images
     public var earthAlignedImageCropAmount: Int?
@@ -388,8 +383,6 @@ public struct Config: Codable, Sendable, Transferable {
 
         self.allowEarthAlignment = try c.decodeIfPresent(Bool.self, forKey: .allowEarthAlignment) ?? self.allowEarthAlignment
 
-        self.runSecondAlignmentPass = try c.decodeIfPresent(Bool.self, forKey: .runSecondAlignmentPass) ?? self.runSecondAlignmentPass
-        
         
         self.earthAlignedImageCropAmount = try c.decodeIfPresent(Int.self, forKey: .earthAlignedImageCropAmount)
 

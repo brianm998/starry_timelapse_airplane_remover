@@ -608,7 +608,9 @@ public struct ImageAccessor: Sendable {
         }
     }
 
-    public func writeMissingImages(_ closure: @Sendable @escaping (Int) -> Void) async throws {
+    public func writeMissingImages(
+      _ closure: @Sendable @escaping (Int) async -> Void
+    ) async throws {
         Log.d("write missing images")
         let imageSequenceSize = imageSequence.filenames.count
         if self.imageExists(frameIndex: 0,
@@ -662,11 +664,11 @@ public struct ImageAccessor: Sendable {
                               previewExists: previewExists,
                               thumbnailExists: thumbnailExists
                             )
-                            closure(frameIndex)
+                             await closure(frameIndex)
                             //                            return
 //                        }
                     } else {
-                        closure(frameIndex)
+                        await closure(frameIndex)
                     }
 //                }
 //                try await taskGroup.waitForAll()
