@@ -66,6 +66,17 @@ struct LeftPanel: View {
                      //.frame(maxWidth: .none)
                     
                     Space(height: 10)
+
+                    AlignmentDeviationChart(
+                      goodFrames: viewModel.goodStarAlignmentInfo,
+                      badFrames: viewModel.badStarAlignmentInfo,
+                      showGoodPoints: .constant(true),
+                      showBadPoints: .constant(true),
+                      foregroundColor: .white
+                    )
+                      .frame(width: 200, height: 200)
+
+                    Space(height: 10)
                     
                     self.processingStateView
 
@@ -152,7 +163,7 @@ struct LeftPanel: View {
 
     var updateButtonDisabled: Bool {
         let userModified = viewModel.frameStateMap[.userModified]?.count ?? 0
-        return userModified == 0 || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo
+        return userModified == 0 || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo 
     }
 
     var renderButtonDisabled: Bool {

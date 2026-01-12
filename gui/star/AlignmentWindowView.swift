@@ -44,8 +44,10 @@ struct AlignmentWindowView: View {
                               goodFrames: viewModel.goodStarAlignmentInfo,
                               badFrames: viewModel.badStarAlignmentInfo,
                               showGoodPoints: $showGoodPoints,
-                              showBadPoints: $showBadPoints
+                              showBadPoints: $showBadPoints,
+                              foregroundColor: .gray
                             )
+                              .frame(minHeight: 320)
                         }
                         if showStarKeypoints {
                             AlignmentKeypointsChart(
@@ -65,8 +67,10 @@ struct AlignmentWindowView: View {
                               goodFrames: viewModel.goodEarthAlignmentInfo,
                               badFrames: viewModel.badEarthAlignmentInfo,
                               showGoodPoints: $showGoodPoints,
-                              showBadPoints: $showBadPoints
+                              showBadPoints: $showBadPoints,
+                              foregroundColor: .gray
                             )
+                              .frame(minHeight: 320)
                         }
                         if showEarthKeypoints {
                             AlignmentKeypointsChart(
@@ -435,6 +439,8 @@ struct AlignmentDeviationChart: View {
     @Binding var showGoodPoints: Bool
     @Binding var showBadPoints: Bool
 
+    let foregroundColor: Color
+    
     @State private var hoveredFrame: Int?
     @State private var hoveredOffset: Int?
 
@@ -444,12 +450,14 @@ struct AlignmentDeviationChart: View {
       goodFrames: [[AlignmentWarpInfoCodable]],
       badFrames: [[AlignmentWarpInfoCodable]],
       showGoodPoints: Binding<Bool>,
-      showBadPoints: Binding<Bool>
+      showBadPoints: Binding<Bool>,
+      foregroundColor: Color
     ) {
         self._showGoodPoints = showGoodPoints
         self._showBadPoints = showBadPoints
         self.goodFrames = goodFrames
         self.badFrames = badFrames
+        self.foregroundColor = foregroundColor
 
         let maxFrame = max(goodFrames.count - 1, 0)
         _xDomain = State(initialValue: 0 ... maxFrame)
@@ -556,10 +564,32 @@ struct AlignmentDeviationChart: View {
           }
           .chartXScale(domain: xDomain)
           .chartYScale(domain: -maxVisibleDeviation ... maxVisibleDeviation)
-          .chartXAxisLabel("Frame Index")
-          .chartYAxisLabel("Deviation")
+          .chartXAxisLabel {
+              Text("Frame Index")
+                .foregroundColor(foregroundColor)
+          }
+          .chartYAxisLabel {
+              Text("Deviation")
+                .foregroundColor(foregroundColor)
+          }
           .chartLegend(.hidden)
           .chartYScale(domain: symmetricDomain())
+          .chartXAxis {
+              AxisMarks {
+                  AxisGridLine()
+                    .foregroundStyle(foregroundColor)
+                  AxisTick()
+                    .foregroundStyle(foregroundColor)
+              }
+          }
+          .chartYAxis {
+              AxisMarks {
+                  AxisGridLine()
+                    .foregroundStyle(foregroundColor)
+                  AxisTick()
+                    .foregroundStyle(foregroundColor)
+              }
+          }
           .chartOverlay { proxy in
               GeometryReader { geo in
                   Rectangle()
@@ -600,7 +630,6 @@ struct AlignmentDeviationChart: View {
                     }
               }
           }
-          .frame(minHeight: 320)
     }
 
     private func ensureVisible(frame: Int) {
