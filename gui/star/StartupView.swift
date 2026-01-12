@@ -128,6 +128,7 @@ struct MovingView: View {
                 Button {
                     self.state = .removal
                     viewModel.cameraMotion = .fixed
+                    viewModel.allowEarthAlignment = true // default to on for earth
                 } label: {
                     Text("Static")
                       .font(.title)
