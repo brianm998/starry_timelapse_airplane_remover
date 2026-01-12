@@ -237,7 +237,7 @@ static NSUInteger _totalInstances = 0;
       }
     });
 
-  Log_d(@"dealloc %@", [self debugDescription]);
+  //Log_d(@"dealloc %@", [self debugDescription]);
 }
 
 
