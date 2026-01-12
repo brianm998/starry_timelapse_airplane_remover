@@ -24,13 +24,13 @@ public enum LoopReturn: Sendable {
     case `break`
 }
 
-@objc public enum AlignmentStep: Int,
-                                 CaseIterable,
-                                 Equatable,
-                                 Hashable,
-                                 Codable,
-                                 Sendable,
-                                 Identifiable
+/*@objc*/ public enum AlignmentStep: //Int,
+            CaseIterable,
+            Equatable,
+            Hashable,
+            Codable,
+            Sendable,
+            Identifiable
 {
     public var id: Self { self }
     
@@ -77,6 +77,7 @@ public enum FrameProcessingState: Codable,
     case earthAlignment(AlignmentStep)
     case creatingEarthAlignedFrame
     case starAlignment(AlignmentStep)
+    case starAlignmentFailed
     case creatingStarAlignedFrame
     case subtractingNeighbor
     case assemblingPixels
@@ -120,6 +121,7 @@ public enum FrameProcessingState: Codable,
         .earthAlignment(.one),
         .creatingEarthAlignedFrame,
         .starAlignment(.one),
+        .starAlignmentFailed,
         .creatingStarAlignedFrame,
         .subtractingNeighbor,
         .assemblingPixels,
@@ -171,6 +173,8 @@ public enum FrameProcessingState: Codable,
         case .earthAlignment(_):
             "aligning earth"
             //"aligning earth \(state)"
+        case .starAlignmentFailed:
+            "star alignment failed"
         case .creatingStarAlignedFrame:
             "creating star aligned frame"
         case .creatingEarthAlignedFrame:
@@ -250,6 +254,8 @@ public enum FrameProcessingState: Codable,
             false
         case .earthAlignment:
             false
+        case .starAlignmentFailed:
+            false
         case .creatingStarAlignedFrame:
             false
         case .creatingEarthAlignedFrame:
@@ -323,6 +329,8 @@ public enum FrameProcessingState: Codable,
             "star align"
         case .earthAlignment:
             "earth align"
+        case .starAlignmentFailed:
+            "star failed"
         case .creatingStarAlignedFrame:
             "combine star align"
         case .creatingEarthAlignedFrame:
@@ -395,6 +403,8 @@ public enum FrameProcessingState: Codable,
             .yellow
         case .earthAlignment:
             .cyan
+        case .starAlignmentFailed:
+            .orange
         case .creatingStarAlignedFrame:
             .cyan
         case .creatingEarthAlignedFrame:

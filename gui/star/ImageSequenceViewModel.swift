@@ -260,7 +260,6 @@ public final class ImageSequenceViewModel {
     // causes tapping an outlier to open a dialog with multiple choices
     var multiChoice = false
     
-    var renderingAllFrames = false
     var updatingFrameBatch = false
 
     var videoPlaybackFramerate = 30

@@ -75,6 +75,7 @@ struct LeftPanel: View {
                       foregroundColor: .white
                     )
                       .frame(width: 200, height: 200)
+                    
 
                     Space(height: 10)
                     
@@ -158,17 +159,17 @@ struct LeftPanel: View {
         let unprocessed = viewModel.frameStateMap[.unprocessed]?.count ?? 0
         let horizon = viewModel.frameStateMap[.horizonDetected]?.count ?? 0
 
-        return (unprocessed == 0 && horizon != viewModel.frames.count) || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo
+        return (unprocessed == 0 && horizon != viewModel.frames.count) || viewModel.isProcessingFrames || viewModel.isRenderingVideo
     }
 
     var updateButtonDisabled: Bool {
         let userModified = viewModel.frameStateMap[.userModified]?.count ?? 0
-        return userModified == 0 || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo 
+        return userModified == 0 || viewModel.isProcessingFrames || viewModel.isRenderingVideo 
     }
 
     var renderButtonDisabled: Bool {
         let complete = viewModel.frameStateMap[.complete]?.count ?? 0
-        return complete != viewModel.frames.count || viewModel.renderingAllFrames || viewModel.isProcessingFrames || viewModel.isRenderingVideo
+        return complete != viewModel.frames.count || viewModel.isProcessingFrames || viewModel.isRenderingVideo
     }
     
     var processingButtons: some View {

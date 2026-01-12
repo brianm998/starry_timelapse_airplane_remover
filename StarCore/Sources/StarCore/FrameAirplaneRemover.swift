@@ -684,7 +684,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     ) async throws {
         Log.d("renderAllFrames")
 // XXX ???
-//        self.renderingAllFrames = true
         Log.d("renderAllFrames Task")
 
         // XXX this could be better
@@ -694,8 +693,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         try await withThrowingTaskGroup(of: Void.self) { taskGroup in
             Log.d("renderAllFrames TaskGroup")
 
-            let counter = CountActor()
-            
             var nextFrame: FrameAirplaneRemover? = await self.firstFrameInSequence
             while nextFrame != nil {
                 var renderWasBad = false
@@ -755,7 +752,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                             Log.d("frame \(frame.frameIndex) rendering pre semaphore")
                             await semaphore.wait()
                             Log.d("frame \(frame.frameIndex) rendering post semaphor")
-                            await counter.increase()
 
                             switch await frame.cleanMethod {
                             case .selective:
@@ -766,13 +762,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                         // XXX ???
                                         //await self.refresh(frame: frame)
 
-                                        await counter.decrease()
-                                        if !(await counter.isMoreThanZero()) {
-// XXX                                            
-//                                            await MainActor.run {
-//                                                self.renderingAllFrames = false
-//                                            }
-                                        }
                                         semaphore.signal()
                                     }
 //                                } catch {
@@ -801,13 +790,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                     // XXX ???
                                     // await self.refresh(frame: frame)
                                     
-                                    await counter.decrease()
-                                    if !(await counter.isMoreThanZero()) {
-                                        await MainActor.run {
-                                            // XXX
-                                            //self.renderingAllFrames = false
-                                        }
-                                    }
                                     semaphore.signal()
 //                                } catch {
 //                                    Log.e("frame \(frame.frameIndex) unable to save")
@@ -1790,7 +1772,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         let alignmentResult = try await loadOrCreateStarAlignedImage()
 
-        if !alignmentResult.wasSuccessfullyAligned { return }
+        if !alignmentResult.wasSuccessfullyAligned {
+            self.set(state: .starAlignmentFailed)
+            Log.e("frame \(frameIndex) star alignment failed")
+            return
+        }
         
         let starAlignedImage = alignmentResult.aligned
         let failedStarAlignedImage = alignmentResult.failed
@@ -2049,9 +2035,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
             } else if !loadOnly {
-                // potentially recalculate the alignment image if necessary
-                //let _ = try await self.loadOrCreateStarAlignedImage()
-                
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
                 Log.d("frame \(frameIndex) calculating outliers")
                 await self.initializeEmptyOutlierGroups()
@@ -2972,6 +2955,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                   atSize: .original
                 )
             } else {
+                self.set(state: .starAlignmentFailed)
                 Log.w("frame \(frameIndex) only got \(result.alignedWarps) aligned warps cannot merge \(usingExistingHomography), returning nil")
                 return nil
             }
