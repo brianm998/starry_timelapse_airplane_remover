@@ -616,7 +616,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return (-1, [:])
     }
 
-    public func processAll(frameSaveQueue: FrameSaveQueue) async {
+    public func processAll(
+      frameSaveQueue: FrameSaveQueue,
+      // add callback method to report status along the way to the gui
+    ) async {
         Log.d("processAll")
         
         let config = await configManager.config()
@@ -1416,7 +1419,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             break
         }
 
-        if let aligned = alignmentResult.aligned {
+        if alignmentResult.wasSuccessfullyAligned,
+           let aligned = alignmentResult.aligned
+        {
             // write out the successfully aligned images
             Log.e("frame \(frameIndex) writing out a successfully aligned image of type \(type)")
             try await imageAccessor.save(
@@ -2953,13 +2958,19 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let config = await configManager.config()
 
         if !result.wasSuccessfullyAligned {
-            Log.w("frame \(frameIndex) only got \(result.alignedWarps) aligned warps cannot merge \(usingExistingHomography), returning original image instead")
+            if usingExistingHomography {
+                Log.w("frame \(frameIndex) only got \(result.alignedWarps) aligned warps cannot merge \(usingExistingHomography), returning original image instead")
 
-            return try await imageAccessor.load(
-              frameIndex: frameIndex,
-              type: .original,
-              atSize: .original
-            )
+                return try await imageAccessor.load(
+                  frameIndex: frameIndex,
+                  type: .original,
+                  atSize: .original
+                )
+            } else {
+                Log.w("frame \(frameIndex) only got \(result.alignedWarps) aligned warps cannot merge \(usingExistingHomography), returning nil")
+                return nil
+            }
+            
         }
         
         var skyImage: PixelatedImage? = starAlignedImage
