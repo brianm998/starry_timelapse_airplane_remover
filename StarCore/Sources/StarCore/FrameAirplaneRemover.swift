@@ -617,7 +617,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public func processAll(
-      frameSaveQueue: FrameSaveQueue,
+      frameSaveQueue: FrameSaveQueue
       // add callback method to report status along the way to the gui
     ) async {
         Log.d("processAll")
