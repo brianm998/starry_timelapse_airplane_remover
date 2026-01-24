@@ -158,6 +158,11 @@ public final class ImageSequenceViewModel {
 
     // XXX report this from processAll
     var sequenceProcessingState: SequenceProcessingState = .unprocessed
+
+    // the number of frames that are the given processing state
+    func count(for state: FrameProcessingState) -> Int {
+        self.frameStateMap[state]?.count ?? 0
+    }
     
     var frameSaveQueue = FrameSaveQueue()
 

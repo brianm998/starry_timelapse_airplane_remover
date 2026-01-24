@@ -110,18 +110,35 @@ struct BottomRightView: View {
                 case .horizonDetection:
                     ProgressView()
                       .colorScheme(.dark)
-                    Text("Detecting Horizons")
-                      .foregroundColor(.white)
+                    VStack {
+                        Text("Detecting Horizons")
+                          .foregroundColor(.white)
+                        let remaining = viewModel.frames.count - viewModel.count(for: .horizonDetected)
+                        Text("\(remaining) frames left")
+                          .foregroundColor(.white)
+                    }
                 case .firstAlignment:
                     ProgressView()
                       .colorScheme(.dark)
-                    Text("First Alignment")
-                      .foregroundColor(.white)
+                    VStack {
+                        Text("First Alignment")
+                          .foregroundColor(.white)
+                        let remaining = viewModel.frames.count
+                          - viewModel.count(for: .complete)
+                          - viewModel.count(for: .starAlignmentFailed)
+                        Text("\(remaining) frames left")
+                          .foregroundColor(.white)
+                    }
                 case .secondAlignment:
                     ProgressView()
                       .colorScheme(.dark)
-                    Text("Second Alignment")
-                      .foregroundColor(.white)
+                    VStack {
+                        Text("Second Alignment")
+                          .foregroundColor(.white)
+                        let remaining = viewModel.frames.count - viewModel.count(for: .complete)
+                        Text("\(remaining) frames left")
+                          .foregroundColor(.white)
+                    }
                 case .done:
                     Text("Alignment Done")
                       .foregroundColor(.green)
