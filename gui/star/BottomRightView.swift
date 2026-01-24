@@ -142,8 +142,10 @@ struct BottomRightView: View {
                 case .done:
                     Text("Alignment Done")
                       .foregroundColor(.green)
+
                 case .error(let errorString):
                     Text("Alignment Error: \(errorString)")
+                      .foregroundColor(.red)
                 }
 
                 if let frameState = frameView.frameState {
