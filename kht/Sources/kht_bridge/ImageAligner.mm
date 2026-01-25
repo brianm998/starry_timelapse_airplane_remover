@@ -468,6 +468,8 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
       // how many threads opencv can use
       //    cv::setNumThreads(36);    // XXX make this a parameter?
 
+      uint32_t logID = request.frameIndex;
+
       SET_FRAME_STATE(request, ObjCAlignmentStepStart, 0);
 
       if(request.homography != nil) {
@@ -475,11 +477,8 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
         return [ImageAligner alignWithExistingHomographyRequest:request];
       }
       
-      // random logID
-      uint32_t logID = arc4random_uniform(1000);
-
-      //Log_d(@"%d align neighbors %@ matchMethod %ld maxDeviation %lf maxCornerDeviation %lf invertMask %d maxKeypoints %d k %lf", logID, request.neighbors, request.matchMethod, request.maxDeviation, request.maxCornerDeviation, request.alignmentType == AlignmentTypeEarth, request.maxKeypoints, request.k);
-      //    Log_d(@"%d align frames %@ frameMasks %@ matchMethod %d ",
+      //Log_d(@"frame %d align neighbors %@ matchMethod %ld maxDeviation %lf maxCornerDeviation %lf invertMask %d maxKeypoints %d k %lf", logID, request.neighbors, request.matchMethod, request.maxDeviation, request.maxCornerDeviation, request.alignmentType == AlignmentTypeEarth, request.maxKeypoints, request.k);
+      //    Log_d(@"frame %d align frames %@ frameMasks %@ matchMethod %d ",
       //          logID, frameFilenames, frameMaskFilenames, matchMethod);
 
       // Horizon mask (sky = nonzero, ground = 0)
@@ -506,7 +505,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
         horizonMask = createGradientMaskIntoSky(horizonMask.mat,
                                                 request.groundHorizonExtension);
       }
-
+      
       // Prepare grayscale baseImage frame with the horizon mask
       MatWrapper * baseImageGray = toGray8UWithMask(request.baseImage.mat,
                                                     horizonMask.mat,
@@ -575,12 +574,15 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                                     descBaseImage);
       } else {
         // sky: use SIFT
+        
         cv::Ptr<cv::SIFT> siftBase = cv::SIFT::create(request.maxKeypoints);
         siftBase->detectAndCompute(baseImageGray.mat,
                                    detectionMask.mat,
                                    kpBaseImage,
                                    descBaseImage);
       }
+
+      SET_FRAME_STATE(request, ObjCAlignmentStepBaseKeypointDetectionComplete, 0);
 
       if(request.writeDebugImages) {
         // save detectionMask.mat if desired
@@ -610,12 +612,12 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
       // holds warp information
       std::vector<AlignmentWarpInfo *> warpInfos(n, nullptr);
 
-      //Log_i(@"%d, about to align in parallel", logID);
+      //Log_i(@"frame %d, about to align in parallel", logID);
     
       // We will run the heavy loop in parallel with OpenCV
-      //Log_i(@"%d before parallel_for", logID);
+      //Log_i(@"frame %d before parallel_for", logID);
       //    cv::parallel_for_(cv::Range(0, (int)n), [&](const cv::Range &range) {
-          //Log_i(@"%d in before parallel_for", logID);
+          //Log_i(@"frame %d in before parallel_for", logID);
 	    
           static thread_local cv::Ptr<cv::SIFT> sift;
           static thread_local cv::Ptr<cv::AKAZE> akaze;
@@ -623,16 +625,19 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 			    
           //  for (int ii = range.start; ii < range.end; ++ii) {
           for (int ii = 0 ; ii < n; ++ii) {
+            SET_FRAME_STATE(request, ObjCAlignmentStepLoadingNeighbor, ii);
 
             MatWrapper* preloadedFrame = [ObjcImageCache loadImage:request.neighbors[ii].filename];
             MatWrapper* preloadedMask = nil;
             if (request.neighbors[ii].maskFilename != nil) {
               preloadedMask = [ObjcImageCache loadImage:request.neighbors[ii].maskFilename];
             }
-            SET_FRAME_STATE(request, ObjCAlignmentStepAligningNeighbor, ii);
+
+            
+            SET_FRAME_STATE(request, ObjCAlignmentStepNeighborKeypointDetection, ii);
             
             NSUInteger idx = (NSUInteger)ii;
-            //Log_i(@"%d %d top", logID, ii);
+            //Log_i(@"frame %d %d top", logID, ii);
             MatWrapper * neighbor = preloadedFrame;
             if (neighbor == nil) {
               //Log_e(@"%d neighbor is nil", logID);
@@ -643,7 +648,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               neighborHorizon = preloadedMask;
             }
             try {
-              //Log_i(@"%d %d loaded", logID, ii);
+              //Log_i(@"frame %d %d loaded", logID, ii);
 
               // make a gray 8 bit image for detection
 
@@ -684,7 +689,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                 }
               }
 
-              //Log_i(@"%d %d to gray check", logID, ii);
+              //Log_i(@"frame %d %d to gray check", logID, ii);
 
               std::vector<cv::KeyPoint> kpNeighbor;
               cv::Mat descNeighbor;
@@ -699,7 +704,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               
                 //cv::imwrite("/tmp/star_mask_" + std::to_string(idx) + ".tiff", localDetectionMask.mat);
               
-                //Log_i(@"%d %d made star mask check", logID, ii);
+                //Log_i(@"frame %d %d made star mask check", logID, ii);
               }
 
               // create local detector/matcher/clahe instances so they are thread-local
@@ -740,7 +745,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                 }
               }
             
-              //Log_i(@"%d %d detected and computed check", logID, ii);
+              //Log_i(@"frame %d %d detected and computed check", logID, ii);
 
               neighborGray.mat.release();
               neighborGray = nil;          // not used past here, allow deallocation
@@ -751,7 +756,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               if (descNeighbor.empty() || descBaseImage.empty()) {
                 // failed early: no descriptors
                 CFRetain((__bridge CFTypeRef)neighbor);
-                Log_e(@"%d descNeighbor or descBaseImage is empty", logID);
+                Log_e(@"frame %d descNeighbor or descBaseImage is empty", logID);
 
                 AlignmentWarpInfo *info =
                   [[AlignmentWarpInfo alloc]
@@ -770,6 +775,8 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                 continue;
               }
 
+              SET_FRAME_STATE(request, ObjCAlignmentStepNeighborKeypointMatch, ii);
+              
               // we have keypoints to match between the baseImage frame
               // and the neighbor frame we're iterating on
 	    
@@ -841,7 +848,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                 }
                 break;
               }
-              //Log_i(@"%d %d matcher check", logID, ii);
+              //Log_i(@"frame %d %d matcher check", logID, ii);
 
               // after matching the keypoints between the baseImage frame and
               // the neibhgor frame we're iterating over, we next need to
@@ -856,7 +863,10 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 
               // need at least four points
               if (ptsNeighbor.size() >= 4) {
-                //Log_d(@"%d has $zu control points", logID, ptsNeighbor.size());
+
+                SET_FRAME_STATE(request, ObjCAlignmentStepAligningNeighbor, ii);
+                
+                //Log_d(@"frame %d has $zu control points", logID, ptsNeighbor.size());
                 // find homography between the matched keypoints 
                 cv::Mat H = cv::findHomography(ptsNeighbor, ptsBaseImage, cv::RANSAC, 10);
                 if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
@@ -878,8 +888,8 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 
                   // if we accept the warp, then actually warp
                   // this frame to fit the baseImage image
-                  //Log_i(@"%d %d accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf", logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
-                  //Log_i(@"%d %d accepting warp and warping", logID, ii);
+                  //Log_i(@"frame %d %d accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf", logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
+                  //Log_i(@"frame %d %d accepting warp and warping", logID, ii);
                   cv::warpPerspective(neighbor.mat, // the input to warp
                                       warped, // the warped output
                                       H, // the homography to warp with
@@ -893,7 +903,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 
                   if (neighborHorizon != NULL) {
                     // warp horizon with same homography as ground
-                    //Log_i(@"%d %d accepting warp and warping horizon", logID, ii);
+                    //Log_i(@"frame %d %d accepting warp and warping horizon", logID, ii);
                     cv::warpPerspective(neighborHorizon.mat, warpedHorizon, H,
                                         neighborHorizon.mat.size(),
                                         cv::INTER_LINEAR, cv::BORDER_CONSTANT,
@@ -956,26 +966,21 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               }
 
             } catch (const cv::Exception &e) {
-              Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
+              Log_e(@"frame %d Error: %@", logID, [NSString stringWithUTF8String:e.what()]);
               // On exception mark as failed and store original
               CFRetain((__bridge CFTypeRef)neighbor);
             } catch (const std::exception &e) {
-              Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
+              Log_e(@"frame %d Error: %@", logID, [NSString stringWithUTF8String:e.what()]);
               CFRetain((__bridge CFTypeRef)neighbor);
             } catch (...) {
-              Log_e(@"Unknown Error");
+              Log_e(@"frame %d Unknown Error", logID);
               CFRetain((__bridge CFTypeRef)neighbor);
             }
           }
-          //Log_i(@"%d end of inner parallel_for", logID);
+          //Log_i(@"frame %d end of inner parallel_for", logID);
           //   });
 
-      //Log_i(@"%d after parallel_for", logID);
-      
-      //cv::setNumThreads(oldThreads);           // restore
-
       SET_FRAME_STATE(request, ObjCAlignmentStepComplete, 0);
-
           
       NSMutableArray<AlignmentWarpInfo *> *warps = [NSMutableArray array];
       for (size_t i = 0; i < n; ++i) {

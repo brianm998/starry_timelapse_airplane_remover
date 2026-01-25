@@ -25,13 +25,12 @@ public enum LoopReturn: Sendable {
     case `break`
 }
 
-/*@objc*/ public enum AlignmentStep: //Int,
-           // CaseIterable,
-            Equatable,
-            Hashable,
-            Codable,
-            Sendable,
-            Identifiable
+public enum AlignmentStep: Equatable,
+                           Hashable,
+                           Codable,
+                           Sendable,
+                           Identifiable,
+                           CustomStringConvertible
 {
     public var id: Self { self }
 
@@ -41,10 +40,16 @@ public enum LoopReturn: Sendable {
             self = .start
         case .baseKeypointDetection:
             self = .baseKeypointDetection
-        case .loadingNeighbors:
-            self = .loadingNeighbors
+        case .baseKeypointDetectionComplete:
+            self = .baseKeypointDetectionComplete
+        case .neighborKeypointDetection: 
+            self = .neighborKeypointDetection(neighborNumber)
+        case .neighborKeypointMatch: 
+            self = .neighborKeypointMatch(neighborNumber)
         case .aligningNeighbor:
             self = .aligningNeighbor(neighborNumber)
+        case .loadingNeighbor:
+            self = .loadingNeighbor(neighborNumber)
         case .complete:
             self = .complete
         @unknown default:
@@ -54,8 +59,11 @@ public enum LoopReturn: Sendable {
     
     case start
     case baseKeypointDetection
-    case loadingNeighbors
+    case baseKeypointDetectionComplete
+    case neighborKeypointDetection(Int)
+    case neighborKeypointMatch(Int)
     case aligningNeighbor(Int) // neighbor index
+    case loadingNeighbor(Int) // neighbor index
     case complete
 
     public var description: String {
@@ -63,11 +71,17 @@ public enum LoopReturn: Sendable {
         case .start:
             "start"
         case .baseKeypointDetection:
-            "baseKeypointDetection"
-        case .loadingNeighbors:
-            "loadingNeighbors"
+            "base detect"
+        case .baseKeypointDetectionComplete:
+            "base done"
         case .aligningNeighbor(let neighborIndex):
-            "aligningNeighbor \(neighborIndex)"
+            "align #\(neighborIndex)"
+        case .neighborKeypointDetection(let neighborIndex):
+            "detect #\(neighborIndex)"
+        case .neighborKeypointMatch(let neighborIndex):
+            "match #\(neighborIndex)"
+        case .loadingNeighbor(let neighborIndex):
+            "load #\(neighborIndex)"
         case .complete:
             "complete"
         }

@@ -1272,6 +1272,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                             alignmentStep,
                             neighborNumber in
 
+                     Log.d("frame \(frameIndex) got alignment step update \(alignmentStep)")
                      // update frame state while processing
                      var processingState: FrameProcessingState? = nil
 
@@ -1289,10 +1290,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                              @unknown default:
                                  break
                          }
+                     } else {
+                         Log.w("frame \(frameIndex) unable to process alignment step \(alignmentStep)")
                      }
 
                      if let processingState {
-                         Task { await self.set(state: processingState) }
+                         Log.d("frame \(frameIndex) setting processingState \(processingState)")
+                         self.set(state: processingState)
                      }
             }) {
                 if let error = result as? String {
