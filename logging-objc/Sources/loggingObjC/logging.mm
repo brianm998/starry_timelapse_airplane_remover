@@ -5,7 +5,7 @@
 static LogHandlerBlock handler = nil;
 
 +(void)setHandler:(LogHandlerBlock)newHandler {
-  handler = newHandler;
+  handler = newHandler ? [newHandler copy] : nil;
 }
 
 +(LogHandlerBlock)handler { return handler; }
