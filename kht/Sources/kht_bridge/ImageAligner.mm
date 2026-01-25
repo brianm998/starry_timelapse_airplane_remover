@@ -1,6 +1,7 @@
 #import "ImageAligner.h"
 #import "MatWrapper_Internal.h"
 #import "ObjcImageCache.h"
+#import "ObjcAlignmentStep.h"
 #import "logging.h"
 #import <opencv2/core.hpp>
 #import <opencv2/imgproc.hpp>
@@ -459,11 +460,15 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
  *
  * Uses different logic for sky and earth alignment, alignmentType governs that.
  */
-+ (id _Nullable)alignWithRequest:(AlignmentRequest * _Nonnull)request {
++ (id _Nullable)alignWithRequest:(AlignmentRequest * _Nonnull)request
+                         handler:(ImageAlignerUpdateBlock)handler
+{
   @try {
     try {
       // how many threads opencv can use
       //    cv::setNumThreads(36);    // XXX make this a parameter?
+
+      SET_FRAME_STATE(request, ObjCAlignmentStepStart, 0);
 
       if(request.homography != nil) {
         // use passed homography
@@ -520,7 +525,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
         }
       }
     
-      // default to deteting with the horizon mask as is
+      // default to detecting with the horizon mask as is
       MatWrapper * detectionMask = horizonMask;
 
       if (request.alignmentType == AlignmentTypeSky) {
@@ -538,6 +543,10 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
       std::vector<cv::KeyPoint> kpBaseImage;
       cv::Mat descBaseImage;
 
+
+      SET_FRAME_STATE(request, ObjCAlignmentStepBaseKeypointDetection, 0);
+      
+      
       // first detect keypoints in the baseImage frame we're aligning to
       if (request.alignmentType == AlignmentTypeEarth) {
         // not used for sky, only for earth
@@ -601,45 +610,37 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
       // holds warp information
       std::vector<AlignmentWarpInfo *> warpInfos(n, nullptr);
 
-      Log_i(@"%d, about to align in parallel", logID);
-
-      // preload frames and masks
-      std::vector<MatWrapper*> preloadedFrames;
-      std::vector<MatWrapper*> preloadedMasks;
-      preloadedFrames.resize(n);
-      preloadedMasks.resize(n);
-
-      for (size_t i = 0; i < n; ++i) {
-        preloadedFrames[i] = [ObjcImageCache loadImage:request.neighbors[i].filename];
-        if (request.neighbors[i].maskFilename != nil)
-          preloadedMasks[i] = [ObjcImageCache loadImage:request.neighbors[i].maskFilename];
-        else
-          preloadedMasks[i] = nullptr;
-        // Optionally CFRetain if you need to hold them past ObjC scope
-      }
-
-      //int oldThreads = cv::getNumThreads();   // remember current setting
-      //cv::setNumThreads(1);                    // disable internal parallelism
+      //Log_i(@"%d, about to align in parallel", logID);
     
       // We will run the heavy loop in parallel with OpenCV
-      // for some reason this doesn't seem to really end up in parallel, not sure why
-      cv::parallel_for_(cv::Range(0, (int)n), [&](const cv::Range &range) {
+      //Log_i(@"%d before parallel_for", logID);
+      //    cv::parallel_for_(cv::Range(0, (int)n), [&](const cv::Range &range) {
+          //Log_i(@"%d in before parallel_for", logID);
 	    
           static thread_local cv::Ptr<cv::SIFT> sift;
           static thread_local cv::Ptr<cv::AKAZE> akaze;
           static thread_local cv::Ptr<cv::CLAHE> clahe;
 			    
-          for (int ii = range.start; ii < range.end; ++ii) {
+          //  for (int ii = range.start; ii < range.end; ++ii) {
+          for (int ii = 0 ; ii < n; ++ii) {
+
+            MatWrapper* preloadedFrame = [ObjcImageCache loadImage:request.neighbors[ii].filename];
+            MatWrapper* preloadedMask = nil;
+            if (request.neighbors[ii].maskFilename != nil) {
+              preloadedMask = [ObjcImageCache loadImage:request.neighbors[ii].maskFilename];
+            }
+            SET_FRAME_STATE(request, ObjCAlignmentStepAligningNeighbor, ii);
+            
             NSUInteger idx = (NSUInteger)ii;
             //Log_i(@"%d %d top", logID, ii);
-            MatWrapper * neighbor = preloadedFrames[idx];
+            MatWrapper * neighbor = preloadedFrame;
             if (neighbor == nil) {
-              Log_e(@"%d neighbor is nil", logID);
+              //Log_e(@"%d neighbor is nil", logID);
               continue;
             }
             MatWrapper * neighborHorizon = 0;
-            if (preloadedMasks[idx] != nil) {
-              neighborHorizon = preloadedMasks[idx];
+            if (preloadedMask != nil) {
+              neighborHorizon = preloadedMask;
             }
             try {
               //Log_i(@"%d %d loaded", logID, ii);
@@ -649,7 +650,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               cv::Mat horizon = horizonMask.mat;
 
               //cv::imwrite("/tmp/horizon_a_" + std::to_string(idx) + ".tiff", horizon);
-
 
               if (request.alignmentType == AlignmentTypeSky) {
                 horizon = horizon.clone();
@@ -967,10 +967,16 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               CFRetain((__bridge CFTypeRef)neighbor);
             }
           }
-        });
+          //Log_i(@"%d end of inner parallel_for", logID);
+          //   });
 
+      //Log_i(@"%d after parallel_for", logID);
+      
       //cv::setNumThreads(oldThreads);           // restore
 
+      SET_FRAME_STATE(request, ObjCAlignmentStepComplete, 0);
+
+          
       NSMutableArray<AlignmentWarpInfo *> *warps = [NSMutableArray array];
       for (size_t i = 0; i < n; ++i) {
         if (warpInfos[i]) [warps addObject:warpInfos[i]];

@@ -2,6 +2,7 @@ import Foundation
 import CoreGraphics
 import Cocoa
 import SwiftUI
+import kht_bridge
 
 /*
 
@@ -25,7 +26,7 @@ public enum LoopReturn: Sendable {
 }
 
 /*@objc*/ public enum AlignmentStep: //Int,
-            CaseIterable,
+           // CaseIterable,
             Equatable,
             Hashable,
             Codable,
@@ -33,17 +34,42 @@ public enum LoopReturn: Sendable {
             Identifiable
 {
     public var id: Self { self }
-    
-    case one
-    case two
-    // XXX
 
-    var description: String {
+    public init?(from objcAlignmentStep: ObjCAlignmentStep, neighborNumber: Int = 0) {
+        switch objcAlignmentStep {
+        case .start:
+            self = .start
+        case .baseKeypointDetection:
+            self = .baseKeypointDetection
+        case .loadingNeighbors:
+            self = .loadingNeighbors
+        case .aligningNeighbor:
+            self = .aligningNeighbor(neighborNumber)
+        case .complete:
+            self = .complete
+        @unknown default:
+            return nil
+        }
+    }
+    
+    case start
+    case baseKeypointDetection
+    case loadingNeighbors
+    case aligningNeighbor(Int) // neighbor index
+    case complete
+
+    public var description: String {
         switch self {
-        case .one:
-            "one"
-        case .two:
-            "two"
+        case .start:
+            "start"
+        case .baseKeypointDetection:
+            "baseKeypointDetection"
+        case .loadingNeighbors:
+            "loadingNeighbors"
+        case .aligningNeighbor(let neighborIndex):
+            "aligningNeighbor \(neighborIndex)"
+        case .complete:
+            "complete"
         }
     }
 }
@@ -118,9 +144,9 @@ public enum FrameProcessingState: Codable,
         .horizonDetection,
         .horizonDetected,
         .mergingHorizon,
-        .earthAlignment(.one),
+        .earthAlignment(.start),
         .creatingEarthAlignedFrame,
-        .starAlignment(.one),
+        .starAlignment(.start),
         .starAlignmentFailed,
         .creatingStarAlignedFrame,
         .subtractingNeighbor,
@@ -167,12 +193,10 @@ public enum FrameProcessingState: Codable,
             "merging horizon"
         case .horizonDetected:
             "horizon found"
-        case .starAlignment(_):
-            "aligning stars"
-            //"aligning stars \(state)"
-        case .earthAlignment(_):
-            "aligning earth"
-            //"aligning earth \(state)"
+        case .starAlignment(let state):
+            "aligning stars \(state)"
+        case .earthAlignment(let state):
+            "aligning earth \(state)"
         case .starAlignmentFailed:
             "star alignment failed"
         case .creatingStarAlignedFrame:
@@ -325,10 +349,10 @@ public enum FrameProcessingState: Codable,
             "horizon"
         case .horizonDetected:
             "horizon"
-        case .starAlignment:
-            "star align"
-        case .earthAlignment:
-            "earth align"
+        case .starAlignment(let state):
+            "star align \(state)"
+        case .earthAlignment(let state):
+            "earth align \(state)"
         case .starAlignmentFailed:
             "star failed"
         case .creatingStarAlignedFrame:

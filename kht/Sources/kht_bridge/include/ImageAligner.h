@@ -4,7 +4,11 @@
 #import "AlignmentRequest.h"
 #import "AlignmentResult.h"
 #import "MatWrapper.h"
+#import "ObjcAlignmentStep.h"
 
+typedef void (^ImageAlignerUpdateBlock)(int frameIndex, AlignmentType alignmentType, ObjCAlignmentStep alignmentStep, int neighborNumber);
+
+#define SET_FRAME_STATE(request, alignmentStep, neighborNumber) handler(request.frameIndex, request.alignmentType, alignmentStep, neighborNumber)
 
 @interface ImageAligner : NSObject
 
@@ -26,7 +30,8 @@
 // align frames to special frame, with optional mask which shows where to get keypoints from
 
 // main alignment method
-+ (id _Nullable)alignWithRequest:(AlignmentRequest * _Nonnull)request;
++ (id _Nullable)alignWithRequest:(AlignmentRequest * _Nonnull)request
+                         handler:(ImageAlignerUpdateBlock _Nonnull)handler;
 
 // doesn't compute homography, expects it
 + (id _Nullable)alignWithExistingHomographyRequest:(AlignmentRequest * _Nonnull)request;

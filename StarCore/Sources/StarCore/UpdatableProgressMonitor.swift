@@ -139,7 +139,7 @@ public actor UpdatableProgressMonitor {
 
         value = 0
         
-        if let update = progressLine(for: .starAlignment(.one)) {
+        if let update = progressLine(for: .starAlignment(.start)) {
             updates.append(update)
         }
         

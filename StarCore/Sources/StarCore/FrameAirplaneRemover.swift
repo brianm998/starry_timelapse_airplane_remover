@@ -1114,10 +1114,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         switch type {
         case .starAligned:
-            self.set(state: .starAlignment(.one))
+            self.set(state: .starAlignment(.start))
         case .earthAligned:
             if config.tripodHeadWasMoving {
-                self.set(state: .earthAlignment(.one))
+                self.set(state: .earthAlignment(.start))
             }
         default:
             break
@@ -1265,7 +1265,36 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               homography: homography
             )
 
-            if let result = ImageAligner.align(with: request) {
+            if let result = ImageAligner.align(
+                 with: request,
+                 handler: { frameIndex,
+                            alignmentType,
+                            alignmentStep,
+                            neighborNumber in
+
+                     // update frame state while processing
+                     var processingState: FrameProcessingState? = nil
+
+                     if let step = AlignmentStep(
+                          from: alignmentStep,
+                          neighborNumber: Int(neighborNumber))
+                     {
+                         switch alignmentType {
+                         case .sky:
+                             processingState = .starAlignment(step)
+                             break
+                         case .earth:
+                             processingState = .earthAlignment(step)
+                             break
+                             @unknown default:
+                                 break
+                         }
+                     }
+
+                     if let processingState {
+                         Task { await self.set(state: processingState) }
+                     }
+            }) {
                 if let error = result as? String {
                     Log.e("frame \(frameIndex) error: \(error)")
                 } else if let results = result as? [kht_bridge.AlignmentWarpInfo] {
