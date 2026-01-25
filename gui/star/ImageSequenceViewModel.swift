@@ -866,7 +866,9 @@ public final class ImageSequenceViewModel {
                 let bytes = MatWrapper.totalBytes
                 Task { @MainActor in
                     self?.totalMatInstances = Int(instances)
-                    self?.totalMatBytes = Int(bytes)
+                    if bytes < Int.max {
+                        self?.totalMatBytes = Int(bytes)
+                    }
                 }
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
             }
@@ -981,7 +983,7 @@ public final class ImageSequenceViewModel {
             }
         }
     }
-
+    
     func makeCallbacks() -> Callbacks {
         var callbacks = Callbacks()
 
