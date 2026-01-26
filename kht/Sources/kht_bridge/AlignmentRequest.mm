@@ -3,6 +3,7 @@
 @implementation AlignmentRequest
 
 - (instancetype)initWithBaseImage:(MatWrapper * _Nonnull)baseImage
+                    baseKeypoints:(OCVFeatureSet *)baseKeypoints
                        frameIndex:(int)frameIndex // frame index of baseImage
                         neighbors:(NSArray<AlignmentNeighborInfo*> * _Nonnull)neighbors
                       matchMethod:(FeatureMatchMethod)matchMethod
@@ -19,6 +20,7 @@
                        homography:(NSDictionary<NSNumber *, MatWrapper *> *)homography
 {
   self.baseImage = baseImage;
+  self.baseKeypoints = baseKeypoints;
   self.frameIndex = frameIndex;
   self.neighbors = neighbors;
   self.matchMethod = matchMethod;

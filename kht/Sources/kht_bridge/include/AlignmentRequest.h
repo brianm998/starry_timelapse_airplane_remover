@@ -9,6 +9,7 @@
 @interface AlignmentRequest : NSObject
 
 @property(nonatomic, strong, nonnull) MatWrapper *baseImage; // the frame being aligned to
+@property(nonatomic, strong, nullable) OCVFeatureSet *baseKeypoints; // keypoints for the base image
 @property(nonatomic, assign) int frameIndex;               // frame index of baseImage
 @property(nonatomic, strong, nonnull) NSArray<AlignmentNeighborInfo *> * neighbors;
 @property(nonatomic, assign) FeatureMatchMethod matchMethod;
@@ -26,6 +27,7 @@
 @property(nonatomic, strong, nullable) NSDictionary<NSNumber *, MatWrapper *> *homography;
 
 - (instancetype _Nonnull)initWithBaseImage:(MatWrapper * _Nonnull)baseImage
+                             baseKeypoints:(OCVFeatureSet *)baseKeypoints
                                 frameIndex:(int)frameIndex // frame index of baseImage
   
                                  neighbors:(NSArray<AlignmentNeighborInfo*> * _Nonnull)neighbors

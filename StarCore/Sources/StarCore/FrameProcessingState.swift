@@ -97,6 +97,8 @@ public enum SequenceProcessingState: Codable,
 
     case unprocessed
     case horizonDetection
+    case starKeypoints
+    case earthKeypoints
     case firstAlignment
     case secondAlignment
     case done

@@ -117,6 +117,14 @@ struct BottomRightView: View {
                         Text("\(remaining) frames left")
                           .foregroundColor(.white)
                     }
+                case .starKeypoints:
+                    ProgressView()
+                      .colorScheme(.dark)
+                    Text("Star Keypoints")
+                case .earthKeypoints:
+                    ProgressView()
+                      .colorScheme(.dark)
+                    Text("Earth Keypoints")
                 case .firstAlignment:
                     ProgressView()
                       .colorScheme(.dark)

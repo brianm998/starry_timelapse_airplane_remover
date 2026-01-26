@@ -636,10 +636,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     // after we get horizons for all frames, render frames
 
                     // add processKeypointsForAllFrames here
+                    progressClosure(.starKeypoints)
                     try await self.processKeypointsForAllFrames(of: .starAligned)
 
-                    if config.allowEarthAlignment {
+                    if config.allowEarthAlignment,
+                       config.tripodHeadWasMoving // keypoints not used when tripod is stationary
+                    {
                         // add earth processKeypointsForAllFrames here too
+                        progressClosure(.earthKeypoints)
                         try await self.processKeypointsForAllFrames(of: .earthAligned)
                     }
                     
@@ -664,6 +668,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     Log.d("processAll NO horizonDetection")
                     //self.ignoreLowerPixels = 0 // ???
 
+                    progressClosure(.starKeypoints)
                     try await self.processKeypointsForAllFrames(of: .starAligned)
                     
                     progressClosure(.firstAlignment)
@@ -1179,6 +1184,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // with no saved aligned frame, first load or create the set of aligned frames
         // that we used to create the final aligned frame
 
+
+        /*
+         
+
+         Next steps here:
+
+         pass through keypoints instead of calculating them in this path.
+
+         get both base and neighbor keypoints from the frame
+
+         refactor alignment code to use passed in keypoints
+        
+         8x speedup on keypoint detection
+        
+         */
+        
         Log.i("frame \(frameIndex) creating aligned image of type \(type)")
         
         let config = await configManager.config()
@@ -1215,6 +1236,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                  atSize: .original
                )
             {
+                // load any possible keypoints for this neighbor 
+                var keypointFilename = ""
+                
+                switch type {
+                case .starAligned:
+                    keypointFilename = "\(neighborIndex).sky.yaml"
+                case .earthAligned:
+                    keypointFilename = "\(neighborIndex).earth.yaml"
+                default:
+                    Log.e("not loading keypoints for type \(type)")
+                }
+
+                let keypoints = try? OCVFeatureSet(
+                  file: "\(config.dirForKeypointData)/\(keypointFilename)"
+                )
+                
                 switch alignmentType {
                 case .earth:
                     if let maskFilename = self.imageAccessor.nameForImage(
@@ -1227,6 +1264,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                           AlignmentNeighborInfo(
                             filename: filename,
                             maskFilename: maskFilename,
+                            keypoints: keypoints,
                             frameIndex: Int32(neighborIndex)
                           )
                         )
@@ -1238,6 +1276,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                       AlignmentNeighborInfo(
                         filename: filename,
                         maskFilename: nil,
+                        keypoints: keypoints,
                         frameIndex: Int32(neighborIndex)
                       )
                     )
@@ -1320,6 +1359,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             
             let request = AlignmentRequest(
               baseImage: originalFrame.mat,
+              baseKeypoints: alignmentType == .sky ? self.skyKeyPoints : self.earthKeyPoints,
               frameIndex: Int32(frameIndex),
               neighbors: neighbors,
               matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
