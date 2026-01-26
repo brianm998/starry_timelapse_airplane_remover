@@ -27,7 +27,7 @@
 @property(nonatomic, strong, nullable) NSDictionary<NSNumber *, MatWrapper *> *homography;
 
 - (instancetype _Nonnull)initWithBaseImage:(MatWrapper * _Nonnull)baseImage
-                             baseKeypoints:(OCVFeatureSet *)baseKeypoints
+                             baseKeypoints:(OCVFeatureSet * _Nullable)baseKeypoints
                                 frameIndex:(int)frameIndex // frame index of baseImage
   
                                  neighbors:(NSArray<AlignmentNeighborInfo*> * _Nonnull)neighbors

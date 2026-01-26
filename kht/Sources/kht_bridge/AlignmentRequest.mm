@@ -3,7 +3,7 @@
 @implementation AlignmentRequest
 
 - (instancetype)initWithBaseImage:(MatWrapper * _Nonnull)baseImage
-                    baseKeypoints:(OCVFeatureSet *)baseKeypoints
+                    baseKeypoints:(OCVFeatureSet * _Nullable)baseKeypoints
                        frameIndex:(int)frameIndex // frame index of baseImage
                         neighbors:(NSArray<AlignmentNeighborInfo*> * _Nonnull)neighbors
                       matchMethod:(FeatureMatchMethod)matchMethod

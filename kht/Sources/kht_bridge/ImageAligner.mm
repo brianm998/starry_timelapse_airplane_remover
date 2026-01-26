@@ -525,105 +525,9 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                                                 request.groundHorizonExtension);
       }
       
-      // Prepare grayscale baseImage frame with the horizon mask
-      MatWrapper * baseImageGray = toGray8UWithMask(request.baseImage.mat,
-                                                    horizonMask.mat,
-                                                    true);
-    
-      if(request.writeDebugImages) {
-        if(request.alignmentType == AlignmentTypeEarth) {
-          cv::imwrite("/tmp/baseImage_gray_earth_frame_" +
-                      std::to_string(request.frameIndex) + ".tiff",
-                      baseImageGray.mat);
-        } else {
-          cv::imwrite("/tmp/baseImage_gray_sky_frame_" +
-                      std::to_string(request.frameIndex) +
-                      ".tiff",
-                      baseImageGray.mat);
-        }
-      }
-    
-      // default to detecting with the horizon mask as is
-      MatWrapper * detectionMask = horizonMask;
-
-      if (request.alignmentType == AlignmentTypeSky) {
-        // Build star mask for baseImage frame when doing sky
-        // the star mask restricts keypoint detection to near bright spots in the sky
-
-        // dilate further to expand keypoint detection area
-        // threshold is 0..0xFF for what is considered bright
-        detectionMask = makeStarMask(baseImageGray.mat,
-                                     request.baseImageDilateSize,
-                                     request.baseImageDilateSize);
-      }
-
-      // Detector and matcher (we'll compute kpBaseImage & descBaseImage once, reused read-only)
-      std::vector<cv::KeyPoint> kpBaseImage;
-      cv::Mat descBaseImage;
-
-
-      SET_FRAME_STATE(request, ObjCAlignmentStepBaseKeypointDetection, 0);
-      
-      
-      // first detect keypoints in the baseImage frame we're aligning to
-      if (request.alignmentType == AlignmentTypeEarth) {
-        // not used for sky, only for earth
-        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(4.0, cv::Size(8,8));
-	  
-        // ground: create a processed baseImage image for detection
-        // apply extra processing to pull up dark details to help
-        // find more keypoints in the dark ground 
-             cv::Mat baseImageProcessed;
-
-        // Apply Contrast Limited Adaptive Histogram Equalization
-        clahe->apply(baseImageGray.mat, baseImageProcessed);
-
-        // apply gamma correction to brighten the shadows only
-        baseImageProcessed.convertTo(baseImageProcessed, CV_32F, 1.0/255.0);
-        cv::pow(baseImageProcessed, 0.5, baseImageProcessed);
-        baseImageProcessed.convertTo(baseImageProcessed, CV_8U, 255.0);
-
-        cv::Ptr<cv::AKAZE> akazeBase = cv::AKAZE::create();
-        akazeBase->setThreshold(1e-5);
-
-        // run advanced kaze to detect and compute keypoints in the ground
-        akazeBase->detectAndCompute(baseImageProcessed,
-                                    detectionMask.mat,
-                                    kpBaseImage,
-                                    descBaseImage);
-      } else {
-        // sky: use SIFT
-        
-        cv::Ptr<cv::SIFT> siftBase = cv::SIFT::create(request.maxKeypoints);
-        siftBase->detectAndCompute(baseImageGray.mat,
-                                   detectionMask.mat,
-                                   kpBaseImage,
-                                   descBaseImage);
-      }
-
-      SET_FRAME_STATE(request, ObjCAlignmentStepBaseKeypointDetectionComplete, 0);
-
-      if(request.writeDebugImages) {
-        // save detectionMask.mat if desired
-        if(request.alignmentType == AlignmentTypeEarth) {
-          cv::imwrite("/tmp/detectionMask_earth_frame_" +
-                      std::to_string(request.frameIndex) +
-                      ".tiff",
-                      detectionMask.mat);
-        } else {
-          cv::imwrite("/tmp/detectionMask_sky_frame_" +
-                      std::to_string(request.frameIndex) +
-                      ".tiff",
-                      detectionMask.mat);
-        }
-      }
-    
-      detectionMask.mat.release();
-      detectionMask = nil;        // done with these, allow deallocation
-      baseImageGray.mat.release();
-      baseImageGray = nil;
-    
-      kpBaseImage.shrink_to_fit();
+      // Detector and matcher
+      std::vector<cv::KeyPoint> kpBaseImage = request.baseKeypoints.keypoints;
+      cv::Mat descBaseImage = request.baseKeypoints.descriptors;
 
       // Preallocate per-index result storage to avoid push_back from many threads
       const size_t n = request.neighbors.count;
@@ -631,154 +535,64 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
       // holds warp information
       std::vector<AlignmentWarpInfo *> warpInfos(n, nullptr);
 
-      //Log_i(@"frame %d, about to align in parallel", logID);
-    
-      // We will run the heavy loop in parallel with OpenCV
-      //Log_i(@"frame %d before parallel_for", logID);
-      //    cv::parallel_for_(cv::Range(0, (int)n), [&](const cv::Range &range) {
-          //Log_i(@"frame %d in before parallel_for", logID);
-	    
-          static thread_local cv::Ptr<cv::SIFT> sift;
-          static thread_local cv::Ptr<cv::AKAZE> akaze;
-          static thread_local cv::Ptr<cv::CLAHE> clahe;
+      static thread_local cv::Ptr<cv::SIFT> sift;
+      static thread_local cv::Ptr<cv::AKAZE> akaze;
+      static thread_local cv::Ptr<cv::CLAHE> clahe;
 			    
-          //  for (int ii = range.start; ii < range.end; ++ii) {
-          for (int ii = 0 ; ii < n; ++ii) {
-            SET_FRAME_STATE(request, ObjCAlignmentStepLoadingNeighbor, ii);
+      for (int ii = 0 ; ii < n; ++ii) {
+        SET_FRAME_STATE(request, ObjCAlignmentStepLoadingNeighbor, ii);
 
-            MatWrapper* preloadedFrame = [ObjcImageCache loadImage:request.neighbors[ii].filename];
-            MatWrapper* preloadedMask = nil;
-            if (request.neighbors[ii].maskFilename != nil) {
-              preloadedMask = [ObjcImageCache loadImage:request.neighbors[ii].maskFilename];
-            }
+        MatWrapper* preloadedFrame = [ObjcImageCache loadImage:request.neighbors[ii].filename];
+        MatWrapper* preloadedMask = nil;
+        if (request.neighbors[ii].maskFilename != nil) {
+          preloadedMask = [ObjcImageCache loadImage:request.neighbors[ii].maskFilename];
+        }
 
             
-            SET_FRAME_STATE(request, ObjCAlignmentStepNeighborKeypointDetection, ii);
+        SET_FRAME_STATE(request, ObjCAlignmentStepNeighborKeypointDetection, ii);
             
-            NSUInteger idx = (NSUInteger)ii;
-            //Log_i(@"frame %d %d top", logID, ii);
-            MatWrapper * neighbor = preloadedFrame;
-            if (neighbor == nil) {
-              //Log_e(@"%d neighbor is nil", logID);
-              continue;
-            }
-            MatWrapper * neighborHorizon = 0;
-            if (preloadedMask != nil) {
-              neighborHorizon = preloadedMask;
-            }
-            try {
-              //Log_i(@"frame %d %d loaded", logID, ii);
+        NSUInteger idx = (NSUInteger)ii;
+        //Log_i(@"frame %d %d top", logID, ii);
+        MatWrapper * neighbor = preloadedFrame;
+        if (neighbor == nil) {
+          //Log_e(@"%d neighbor is nil", logID);
+          continue;
+        }
+        MatWrapper * neighborHorizon = 0;
+        if (preloadedMask != nil) {
+          neighborHorizon = preloadedMask;
+        }
+        try {
+          //Log_i(@"frame %d %d loaded", logID, ii);
 
-              // make a gray 8 bit image for detection
+          // make a gray 8 bit image for detection
 
-              cv::Mat horizon = horizonMask.mat;
+          cv::Mat horizon = horizonMask.mat; // XXX is this the right horizon mask?
 
-              //cv::imwrite("/tmp/horizon_a_" + std::to_string(idx) + ".tiff", horizon);
+          //cv::imwrite("/tmp/horizon_a_" + std::to_string(idx) + ".tiff", horizon);
 
-              if (request.alignmentType == AlignmentTypeSky) {
-                horizon = horizon.clone();
-                // attempt to exclude the horizon from the sky area
-                // so key points are not detected there 
-                growBlack(horizon, request.skyHorizonExtension);
-              }
+          if (request.alignmentType == AlignmentTypeSky) {
+            horizon = horizon.clone();
+            // attempt to exclude the horizon from the sky area
+            // so key points are not detected there 
+            growBlack(horizon, request.skyHorizonExtension);
+          }
 
-              //cv::imwrite("/tmp/horizon_b_" + std::to_string(idx) + ".tiff", horizon);
+          //cv::imwrite("/tmp/horizon_b_" + std::to_string(idx) + ".tiff", horizon);
 
-              MatWrapper * neighborGray = toGray8UWithMask(neighbor.mat,
-                                                        //horizonMask.mat,
-                                                        horizon,
-                                                        //horizonWrapper.mat,
-                                                        true);
+          //Log_i(@"frame %d %d to gray check", logID, ii);
 
-              if(request.writeDebugImages) {
-                if(request.alignmentType == AlignmentTypeEarth) {
-                  cv::imwrite("/tmp/neighbor_gray_earth_frame_" +
-                              std::to_string(request.frameIndex) + 
-                              "_neighbor_" +
-                              std::to_string(request.neighbors[idx].frameIndex) + 
-                              ".tiff",
-                              neighborGray.mat);
-                } else {
-                  cv::imwrite("/tmp/neighbor_gray_sky_frame_" +
-                              std::to_string(request.frameIndex) +
-                              "_neighbor_" +
-                              std::to_string(request.neighbors[idx].frameIndex) + 
-                              ".tiff",
-                              neighborGray.mat);
-                }
-              }
+          std::vector<cv::KeyPoint> kpNeighbor = request.neighbors[ii].keypoints.keypoints;
+          cv::Mat descNeighbor = request.neighbors[ii].keypoints.descriptors;
 
-              //Log_i(@"frame %d %d to gray check", logID, ii);
+          // if we got nothing, then fail fast
+          if (/*kpNeighbor == nil || descNeighbor == nil || */descNeighbor.empty() || descBaseImage.empty()) {
+            // failed early: no descriptors
+            CFRetain((__bridge CFTypeRef)neighbor);
+            Log_e(@"frame %d descNeighbor or descBaseImage is empty", logID);
 
-              std::vector<cv::KeyPoint> kpNeighbor;
-              cv::Mat descNeighbor;
-
-              MatWrapper * localDetectionMask = horizonMask;
-
-              if (request.alignmentType == AlignmentTypeSky) {
-                // detection mask is a star mask for the sky
-                localDetectionMask = makeStarMask(neighborGray.mat,
-                                                  request.neighborDilateSize,
-                                                  request.neighborThresholdValue);
-              
-                //cv::imwrite("/tmp/star_mask_" + std::to_string(idx) + ".tiff", localDetectionMask.mat);
-              
-                //Log_i(@"frame %d %d made star mask check", logID, ii);
-              }
-
-              // create local detector/matcher/clahe instances so they are thread-local
-              if (request.alignmentType == AlignmentTypeEarth) {
-                // ground: AKAZE + CLAHE + gamma
-                if(!clahe) clahe = cv::createCLAHE(4.0, cv::Size(8,8));
-                cv::Mat claheOut;
-                clahe->apply(neighborGray.mat, claheOut);
-                claheOut.convertTo(claheOut, CV_32F, 1.0/255.0);
-                cv::pow(claheOut, 0.5, claheOut);
-                claheOut.convertTo(claheOut, CV_8U, 255.0);
-
-                if(!akaze) akaze = cv::AKAZE::create();
-                akaze->setThreshold(1e-5);
-                akaze->detectAndCompute(claheOut, localDetectionMask.mat, kpNeighbor, descNeighbor);
-              } else {
-                // sky: SIFT
-                if(!sift) sift = cv::SIFT::create(request.maxKeypoints);
-                sift->detectAndCompute(neighborGray.mat, localDetectionMask.mat, kpNeighbor, descNeighbor);
-              }
-
-              if(request.writeDebugImages) {
-                // save localDetectionMask.mat if desired
-                if(request.alignmentType == AlignmentTypeEarth) {
-                  cv::imwrite("/tmp/detectionMask_earth_frame_" +
-                              std::to_string(request.frameIndex) +
-                              "_neighbor_" +
-                              std::to_string(request.neighbors[idx].frameIndex) + 
-                              ".tiff",
-                              localDetectionMask.mat);
-                } else {
-                  cv::imwrite("/tmp/detectionMask_sky_frame_" +
-                              std::to_string(request.frameIndex) +
-                              "_neighbor_" +
-                              std::to_string(request.neighbors[idx].frameIndex) + 
-                              ".tiff",
-                              localDetectionMask.mat);
-                }
-              }
-            
-              //Log_i(@"frame %d %d detected and computed check", logID, ii);
-
-              neighborGray.mat.release();
-              neighborGray = nil;          // not used past here, allow deallocation
-              localDetectionMask.mat.release();
-              localDetectionMask = nil;
-            
-              // if we got nothing, then fail fast
-              if (descNeighbor.empty() || descBaseImage.empty()) {
-                // failed early: no descriptors
-                CFRetain((__bridge CFTypeRef)neighbor);
-                Log_e(@"frame %d descNeighbor or descBaseImage is empty", logID);
-
-                AlignmentWarpInfo *info =
-                  [[AlignmentWarpInfo alloc]
+            AlignmentWarpInfo *info =
+              [[AlignmentWarpInfo alloc]
                     initWithHomography:nil
                            warpedFrame:nil
                          warpedHorizon:nil
@@ -788,157 +602,157 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                         frameKeyPoints:0
                             frameIndex:request.neighbors[idx].frameIndex];
 
-                warpInfos[idx] = info;
-                CFRetain((__bridge CFTypeRef)info);
+            warpInfos[idx] = info;
+            CFRetain((__bridge CFTypeRef)info);
               
-                continue;
-              }
+            continue;
+          }
 
-              SET_FRAME_STATE(request, ObjCAlignmentStepNeighborKeypointMatch, ii);
+          SET_FRAME_STATE(request, ObjCAlignmentStepNeighborKeypointMatch, ii);
               
-              // we have keypoints to match between the baseImage frame
-              // and the neighbor frame we're iterating on
+          // we have keypoints to match between the baseImage frame
+          // and the neighbor frame we're iterating on
 	    
-              std::vector<cv::Point2f> ptsNeighbor, ptsBaseImage;
-              std::vector<std::vector<cv::DMatch>> knnMatches;
-              std::vector<cv::DMatch> matches;
-              double cutoff = 0;
-              double minDist = 0;
-              // local matcher (thread-local)
-              cv::BFMatcher matcher(cv::NORM_L2);
+          std::vector<cv::Point2f> ptsNeighbor, ptsBaseImage;
+          std::vector<std::vector<cv::DMatch>> knnMatches;
+          std::vector<cv::DMatch> matches;
+          double cutoff = 0;
+          double minDist = 0;
+          // local matcher (thread-local)
+          cv::BFMatcher matcher(cv::NORM_L2);
 		    
-              // how do we match between the two sets of keypoints?
-              // three different methods are available
-              switch (request.matchMethod) {
-              case FeatureMatchMethodBruteForce:
-                // brute force method
+          // how do we match between the two sets of keypoints?
+          // three different methods are available
+          switch (request.matchMethod) {
+          case FeatureMatchMethodBruteForce:
+            // brute force method
 		      
-                matcher.match(descNeighbor, descBaseImage, matches);
+            matcher.match(descNeighbor, descBaseImage, matches);
 
-                minDist = std::numeric_limits<double>::max();
-                for (auto &m : matches) {
-                  minDist = std::min(minDist, (double)m.distance);
-                }
-                cutoff = std::max(2 * minDist, 30.0);
+            minDist = std::numeric_limits<double>::max();
+            for (auto &m : matches) {
+              minDist = std::min(minDist, (double)m.distance);
+            }
+            cutoff = std::max(2 * minDist, 30.0);
 
-                for (auto &m : matches) {
-                  if (m.distance <= cutoff) {
-                    ptsNeighbor.push_back(kpNeighbor[m.queryIdx].pt);
-                    ptsBaseImage.push_back(kpBaseImage[m.trainIdx].pt);
-                  }
-                }
-                break;
-			
-
-              case FeatureMatchMethodKNNLowes:
-                // kNN + Lowe's Ratio Test
-
-                matcher.knnMatch(descNeighbor, descBaseImage, knnMatches, 2);
-                for (size_t i = 0; i < knnMatches.size(); i++) {
-                  if (knnMatches[i].size() == 2) {
-                    const cv::DMatch &m1 = knnMatches[i][0];
-                    const cv::DMatch &m2 = knnMatches[i][1];
-                    if (m1.distance < 0.75 * m2.distance) {
-                      ptsNeighbor.push_back(kpNeighbor[m1.queryIdx].pt);
-                      ptsBaseImage.push_back(kpBaseImage[m1.trainIdx].pt);
-                    }
-                  }
-                }
-                break;
-
-			
-              case FeatureMatchMethodFLANN:
-                // FLANN based matcher
-                // Convert to CV_32F because FLANN requires float descriptors
-                cv::Mat descNeighbor32f, descBaseImage32f;
-                descNeighbor.convertTo(descNeighbor32f, CV_32F);
-                descBaseImage.convertTo(descBaseImage32f, CV_32F);
-                cv::FlannBasedMatcher flann;
-                flann.knnMatch(descNeighbor32f, descBaseImage32f, knnMatches, 2);
-                for (size_t i = 0; i < knnMatches.size(); i++) {
-                  if (knnMatches[i].size() == 2) {
-                    const cv::DMatch &m1 = knnMatches[i][0];
-                    const cv::DMatch &m2 = knnMatches[i][1];
-                    if (m1.distance < 0.75 * m2.distance) {
-                      ptsNeighbor.push_back(kpNeighbor[m1.queryIdx].pt);
-                      ptsBaseImage.push_back(kpBaseImage[m1.trainIdx].pt);
-                    }
-                  }
-                }
-                break;
+            for (auto &m : matches) {
+              if (m.distance <= cutoff) {
+                ptsNeighbor.push_back(kpNeighbor[m.queryIdx].pt);
+                ptsBaseImage.push_back(kpBaseImage[m.trainIdx].pt);
               }
-              //Log_i(@"frame %d %d matcher check", logID, ii);
+            }
+            break;
+			
 
-              // after matching the keypoints between the baseImage frame and
-              // the neibhgor frame we're iterating over, we next need to
-              // check how good a fit we got from the match.
-              // only accept the warp if it's between provided boundaries
-              // otherwise widly off erroneous matches can creep in
+          case FeatureMatchMethodKNNLowes:
+            // kNN + Lowe's Ratio Test
 
-              // innocent until proven guilty
-              bool acceptWarp = FALSE;
-              cv::Mat warped;
-              cv::Mat warpedHorizon;
+            matcher.knnMatch(descNeighbor, descBaseImage, knnMatches, 2);
+            for (size_t i = 0; i < knnMatches.size(); i++) {
+              if (knnMatches[i].size() == 2) {
+                const cv::DMatch &m1 = knnMatches[i][0];
+                const cv::DMatch &m2 = knnMatches[i][1];
+                if (m1.distance < 0.75 * m2.distance) {
+                  ptsNeighbor.push_back(kpNeighbor[m1.queryIdx].pt);
+                  ptsBaseImage.push_back(kpBaseImage[m1.trainIdx].pt);
+                }
+              }
+            }
+            break;
 
-              // need at least four points
-              if (ptsNeighbor.size() >= 4) {
+			
+          case FeatureMatchMethodFLANN:
+            // FLANN based matcher
+            // Convert to CV_32F because FLANN requires float descriptors
+            cv::Mat descNeighbor32f, descBaseImage32f;
+            descNeighbor.convertTo(descNeighbor32f, CV_32F);
+            descBaseImage.convertTo(descBaseImage32f, CV_32F);
+            cv::FlannBasedMatcher flann;
+            flann.knnMatch(descNeighbor32f, descBaseImage32f, knnMatches, 2);
+            for (size_t i = 0; i < knnMatches.size(); i++) {
+              if (knnMatches[i].size() == 2) {
+                const cv::DMatch &m1 = knnMatches[i][0];
+                const cv::DMatch &m2 = knnMatches[i][1];
+                if (m1.distance < 0.75 * m2.distance) {
+                  ptsNeighbor.push_back(kpNeighbor[m1.queryIdx].pt);
+                  ptsBaseImage.push_back(kpBaseImage[m1.trainIdx].pt);
+                }
+              }
+            }
+            break;
+          }
+          //Log_i(@"frame %d %d matcher check", logID, ii);
 
-                SET_FRAME_STATE(request, ObjCAlignmentStepAligningNeighbor, ii);
+          // after matching the keypoints between the baseImage frame and
+          // the neibhgor frame we're iterating over, we next need to
+          // check how good a fit we got from the match.
+          // only accept the warp if it's between provided boundaries
+          // otherwise widly off erroneous matches can creep in
+
+          // innocent until proven guilty
+          bool acceptWarp = FALSE;
+          cv::Mat warped;
+          cv::Mat warpedHorizon;
+
+          // need at least four points
+          if (ptsNeighbor.size() >= 4) {
+
+            SET_FRAME_STATE(request, ObjCAlignmentStepAligningNeighbor, ii);
                 
-                //Log_d(@"frame %d has $zu control points", logID, ptsNeighbor.size());
-                // find homography between the matched keypoints 
-                cv::Mat H = cv::findHomography(ptsNeighbor, ptsBaseImage, cv::RANSAC, 10);
-                if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
-                  H.convertTo(H, CV_64F);
-                }
+            //Log_d(@"frame %d has $zu control points", logID, ptsNeighbor.size());
+            // find homography between the matched keypoints 
+                 cv::Mat H = cv::findHomography(ptsNeighbor, ptsBaseImage, cv::RANSAC, 10);
+            if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
+              H.convertTo(H, CV_64F);
+            }
 
-                // save alignment warp info for this neighbor
-                MatWrapper *HWrapper = nil;
-                if (!H.empty()) {
-                  HWrapper = [[MatWrapper alloc] initWithMat:H];
-                }
+            // save alignment warp info for this neighbor
+            MatWrapper *HWrapper = nil;
+            if (!H.empty()) {
+              HWrapper = [[MatWrapper alloc] initWithMat:H];
+            }
 
-                if (!H.empty() && H.rows == 3 && H.cols == 3) {
-                  // Check warp quality with two checks
+            if (!H.empty() && H.rows == 3 && H.cols == 3) {
+              // Check warp quality with two checks
 
-                  // check max deviation
-                  cv::Mat I = cv::Mat::eye(3, 3, H.type());
-                  double deviation = cv::norm(H - I, cv::NORM_L2);
+              // check max deviation
+              cv::Mat I = cv::Mat::eye(3, 3, H.type());
+              double deviation = cv::norm(H - I, cv::NORM_L2);
 
-                  // if we accept the warp, then actually warp
-                  // this frame to fit the baseImage image
-                  //Log_i(@"frame %d %d accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf", logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
-                  //Log_i(@"frame %d %d accepting warp and warping", logID, ii);
-                  cv::warpPerspective(neighbor.mat, // the input to warp
-                                      warped, // the warped output
-                                      H, // the homography to warp with
-                                      neighbor.mat.size(),
-                                      cv::INTER_LINEAR,
-                                      cv::BORDER_CONSTANT,
-                                      cv::Scalar(0,0,0,0));
+              // if we accept the warp, then actually warp
+              // this frame to fit the baseImage image
+              //Log_i(@"frame %d %d accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf", logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
+              //Log_i(@"frame %d %d accepting warp and warping", logID, ii);
+              cv::warpPerspective(neighbor.mat, // the input to warp
+                                  warped, // the warped output
+                                  H, // the homography to warp with
+                                  neighbor.mat.size(),
+                                  cv::INTER_LINEAR,
+                                  cv::BORDER_CONSTANT,
+                                  cv::Scalar(0,0,0,0));
 
 
-                  //cv::imwrite("/tmp/warped_first_" + std::to_string(idx) + ".tiff", warped);
+              //cv::imwrite("/tmp/warped_first_" + std::to_string(idx) + ".tiff", warped);
 
-                  if (neighborHorizon != NULL) {
-                    // warp horizon with same homography as ground
-                    //Log_i(@"frame %d %d accepting warp and warping horizon", logID, ii);
-                    cv::warpPerspective(neighborHorizon.mat, warpedHorizon, H,
-                                        neighborHorizon.mat.size(),
-                                        cv::INTER_LINEAR, cv::BORDER_CONSTANT,
-                                        cv::Scalar(0,0,0,0));
+              if (neighborHorizon != NULL) {
+                // warp horizon with same homography as ground
+                //Log_i(@"frame %d %d accepting warp and warping horizon", logID, ii);
+                cv::warpPerspective(neighborHorizon.mat, warpedHorizon, H,
+                                    neighborHorizon.mat.size(),
+                                    cv::INTER_LINEAR, cv::BORDER_CONSTANT,
+                                    cv::Scalar(0,0,0,0));
 
-                    // threshold so all values are 0 or 0xFF
-                    cv::threshold(warpedHorizon,
-                                  warpedHorizon,
-                                  128, // mid
-                                  255,
-                                  cv::THRESH_BINARY);
-                  }
+                // threshold so all values are 0 or 0xFF
+                cv::threshold(warpedHorizon,
+                              warpedHorizon,
+                              128, // mid
+                              255,
+                              cv::THRESH_BINARY);
+              }
 
-                  // keep track of warp info 
-                  AlignmentWarpInfo *info =
-                       [[AlignmentWarpInfo alloc]
+              // keep track of warp info 
+                   AlignmentWarpInfo *info =
+                   [[AlignmentWarpInfo alloc]
                          initWithHomography:HWrapper
                                 warpedFrame:[[MatWrapper alloc] initWithMat: warped]
                               warpedHorizon:neighborHorizon == NULL ? nil : [[MatWrapper alloc] initWithMat: warpedHorizon]
@@ -948,13 +762,13 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                              frameKeyPoints:ptsBaseImage.size()
                                  frameIndex:request.neighbors[idx].frameIndex];
 
-                  warpInfos[idx] = info;
-                  CFRetain((__bridge CFTypeRef)info);
+              warpInfos[idx] = info;
+              CFRetain((__bridge CFTypeRef)info);
 
-                } else {
-                  // no homography found
-                  AlignmentWarpInfo *info =
-                    [[AlignmentWarpInfo alloc]
+            } else {
+              // no homography found
+              AlignmentWarpInfo *info =
+                [[AlignmentWarpInfo alloc]
                       initWithHomography:nil
                              warpedFrame:nil
                            warpedHorizon:nil
@@ -964,13 +778,13 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                           frameKeyPoints:ptsBaseImage.size()
                               frameIndex:request.neighbors[idx].frameIndex];
 
-                  warpInfos[idx] = info;
-                  CFRetain((__bridge CFTypeRef)info);
-                }
-              } else {
-                // not enough points
-                AlignmentWarpInfo *info =
-                  [[AlignmentWarpInfo alloc]
+              warpInfos[idx] = info;
+              CFRetain((__bridge CFTypeRef)info);
+            }
+          } else {
+            // not enough points
+            AlignmentWarpInfo *info =
+              [[AlignmentWarpInfo alloc]
                     initWithHomography:nil
                            warpedFrame:nil
                          warpedHorizon:nil
@@ -980,25 +794,25 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                         frameKeyPoints:ptsBaseImage.size()
                             frameIndex:request.neighbors[idx].frameIndex];
 
-                warpInfos[idx] = info;
-                CFRetain((__bridge CFTypeRef)info);
-              }
-
-            } catch (const cv::Exception &e) {
-              Log_e(@"frame %d Error: %@", logID, [NSString stringWithUTF8String:e.what()]);
-              // On exception mark as failed and store original
-              CFRetain((__bridge CFTypeRef)neighbor);
-            } catch (const std::exception &e) {
-              Log_e(@"frame %d Error: %@", logID, [NSString stringWithUTF8String:e.what()]);
-              CFRetain((__bridge CFTypeRef)neighbor);
-            } catch (...) {
-              Log_e(@"frame %d Unknown Error", logID);
-              CFRetain((__bridge CFTypeRef)neighbor);
-            }
+            warpInfos[idx] = info;
+            CFRetain((__bridge CFTypeRef)info);
           }
-          //Log_i(@"frame %d end of inner parallel_for", logID);
-          //   });
 
+        } catch (const cv::Exception &e) {
+          Log_e(@"frame %d Error: %@", logID, [NSString stringWithUTF8String:e.what()]);
+          // On exception mark as failed and store original
+          CFRetain((__bridge CFTypeRef)neighbor);
+        } catch (const std::exception &e) {
+          Log_e(@"frame %d Error: %@", logID, [NSString stringWithUTF8String:e.what()]);
+          CFRetain((__bridge CFTypeRef)neighbor);
+        } catch (...) {
+          Log_e(@"frame %d Unknown Error", logID);
+          CFRetain((__bridge CFTypeRef)neighbor);
+        }
+      }
+
+      // done processing neighbor frames
+      
       SET_FRAME_STATE(request, ObjCAlignmentStepComplete, 0);
           
       NSMutableArray<AlignmentWarpInfo *> *warps = [NSMutableArray array];
@@ -1032,7 +846,9 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
   }
 }
 
-// returns a OCVFeatureSet upon success, which contains keypoints and descriptors  
+// runs on a single frame, returning a OCVFeatureSet upon success,
+// which contains keypoints and descriptors that are later used
+// to find homography between frames
 + (id _Nullable)findFeatures:(OCVFeatureRequest * _Nonnull)request {
   @try {
     try {
