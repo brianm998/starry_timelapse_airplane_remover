@@ -121,10 +121,12 @@ struct BottomRightView: View {
                     ProgressView()
                       .colorScheme(.dark)
                     Text("Star Keypoints")
+                      .foregroundColor(.white)
                 case .earthKeypoints:
                     ProgressView()
                       .colorScheme(.dark)
                     Text("Earth Keypoints")
+                      .foregroundColor(.white)
                 case .firstAlignment:
                     ProgressView()
                       .colorScheme(.dark)
