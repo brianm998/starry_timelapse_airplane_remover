@@ -487,10 +487,12 @@ public struct Config: Codable, Sendable, Transferable {
     //        added second pass of alignment to fix bad alignment automatically
     // 0.10.4 fixed second pass of alignment to actually work
     //        updated deviation checks to use a min/max range, not median
+    // 0.10.5 added more status and error reporting
+    //        single thread alignment pre frame for better results
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.10.5"
+    public static let latestVersion = "0.10.6"
     
     public var basename: String {
         let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)"
