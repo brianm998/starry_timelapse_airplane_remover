@@ -97,6 +97,7 @@ public struct ImageAccessor: Sendable {
         for dirname in config.allImageDirnames {
             StarCore.mkdir(dirname)
         }
+        StarCore.mkdir(config.dirForKeypointData)
     }
 
     // load for display as SwiftUI Image

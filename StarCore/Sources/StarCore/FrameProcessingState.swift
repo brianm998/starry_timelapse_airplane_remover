@@ -116,6 +116,8 @@ public enum FrameProcessingState: Codable,
     case mergingHorizon
     case earthAlignment(AlignmentStep)
     case creatingEarthAlignedFrame
+    case starKeypoints
+    case earthKeypoints
     case starAlignment(AlignmentStep)
     case starAlignmentFailed
     case creatingStarAlignedFrame
@@ -160,6 +162,8 @@ public enum FrameProcessingState: Codable,
         .mergingHorizon,
         .earthAlignment(.start),
         .creatingEarthAlignedFrame,
+        .starKeypoints,
+        .earthKeypoints,
         .starAlignment(.start),
         .starAlignmentFailed,
         .creatingStarAlignedFrame,
@@ -207,6 +211,10 @@ public enum FrameProcessingState: Codable,
             "merging horizon"
         case .horizonDetected:
             "horizon found"
+        case .starKeypoints:
+            "star keypoints"
+        case .earthKeypoints:
+            "earth keypoints"
         case .starAlignment(let state):
             "aligning stars \(state)"
         case .earthAlignment(let state):
@@ -288,6 +296,10 @@ public enum FrameProcessingState: Codable,
             false
         case .horizonDetected:
             false
+        case .starKeypoints:
+            false
+        case .earthKeypoints:
+            false
         case .starAlignment:
             false
         case .earthAlignment:
@@ -363,6 +375,10 @@ public enum FrameProcessingState: Codable,
             "horizon"
         case .horizonDetected:
             "horizon"
+        case .starKeypoints:
+            "star keypoints"
+        case .earthKeypoints:
+            "earth keypoints"
         case .starAlignment(let state):
             "star align \(state)"
         case .earthAlignment(let state):
@@ -437,6 +453,10 @@ public enum FrameProcessingState: Codable,
             .cyan
         case .horizonDetected:
             .green
+        case .starKeypoints:
+            .orange
+        case .earthKeypoints:
+            .orange
         case .starAlignment:
             .yellow
         case .earthAlignment:

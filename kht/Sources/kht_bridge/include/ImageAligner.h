@@ -5,6 +5,8 @@
 #import "AlignmentResult.h"
 #import "MatWrapper.h"
 #import "ObjcAlignmentStep.h"
+#import "OCVFeatureRequest.h"
+#import "OCVFeatureSet.h"
 
 typedef void (^ImageAlignerUpdateBlock)(int frameIndex, AlignmentType alignmentType, ObjCAlignmentStep alignmentStep, int neighborNumber);
 
@@ -32,6 +34,9 @@ typedef void (^ImageAlignerUpdateBlock)(int frameIndex, AlignmentType alignmentT
 // main alignment method
 + (id _Nullable)alignWithRequest:(AlignmentRequest * _Nonnull)request
                          handler:(ImageAlignerUpdateBlock _Nonnull)handler;
+
+// returns a OCVFeatureSet upon success, which contains keypoints and descriptors  
++ (id _Nullable)findFeatures:(OCVFeatureRequest * _Nonnull)request;
 
 // doesn't compute homography, expects it
 + (id _Nullable)alignWithExistingHomographyRequest:(AlignmentRequest * _Nonnull)request;

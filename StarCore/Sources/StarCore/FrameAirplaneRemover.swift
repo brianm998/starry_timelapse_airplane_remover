@@ -266,6 +266,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     internal var isLoadingOutliers = false
 
     private weak var imageSequence: ImageSequence?
+
+    private var skyKeyPoints: OCVFeatureSet? = nil
+    private var earthKeyPoints: OCVFeatureSet? = nil
     
     public init(with configManager: ConfigManager,
                 width: Int,
@@ -632,6 +635,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     Log.d("processAll got horizons")
                     // after we get horizons for all frames, render frames
 
+                    // add processKeypointsForAllFrames here
+                    try await self.processKeypointsForAllFrames(of: .starAligned)
+
+                    if config.allowEarthAlignment {
+                        // add earth processKeypointsForAllFrames here too
+                        try await self.processKeypointsForAllFrames(of: .earthAligned)
+                    }
+                    
                     // first pass of rendering just does alignment,
                     // but only if we have a second pass
                     progressClosure(.firstAlignment)
@@ -652,6 +663,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 } else {
                     Log.d("processAll NO horizonDetection")
                     //self.ignoreLowerPixels = 0 // ???
+
+                    try await self.processKeypointsForAllFrames(of: .starAligned)
                     
                     progressClosure(.firstAlignment)
                     try await self.renderAllFrames(
@@ -866,6 +879,64 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
          */
     }
 
+    public func processKeypointsForAllFrames(
+      of type: FrameViewMode
+    ) async throws {
+
+        var alignmentType: AlignmentType = .sky
+
+        Log.d("frame \(frameIndex) loadOrCreateOCVFeatures")
+        
+        switch type {
+        case .starAligned:
+            alignmentType = .sky
+        case .earthAligned:
+            alignmentType = .earth
+        default:
+            throw "unable to loadOrCreateOCVFeatures of type \(type)"
+        }
+
+        let letAlignmentType = alignmentType
+        
+        let config = await configManager.config()
+        let max = config.maxConcurrentHorizonCalculations
+
+        Log.d("finding keypoints for all frames with max \(max)")
+        
+        try await Task.detached(priority: .medium) { 
+
+            // use a semaphore to not do too many at once
+
+            let semaphore = AsyncSemaphore(value: max)
+            
+            try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+                var nextFrame: FrameAirplaneRemover? = await self.firstFrameInSequence
+                while nextFrame != nil {
+                    if let frame = nextFrame {
+                        Log.d("frame \(frame.frameIndex) about to create task keypoints")
+                        taskGroup.addTask {
+                            Log.d("frame \(frame.frameIndex) in task for keypoints waiting for semaphore")
+                            await semaphore.wait()
+                            Log.d("frame \(frame.frameIndex) in task for keypoints got semaphore")
+                            switch letAlignmentType {
+                            case .sky:
+                                _ = try await frame.loadOrCreateStarFeatures()
+                            case .earth:
+                                _ = try await frame.loadOrCreateEarthFeatures()
+                            @unknown default:
+                                break
+                            }
+                            semaphore.signal()
+                        }
+                        nextFrame = await frame.getNextFrame()
+                    }
+                }
+                try await taskGroup.waitForAll()
+            }
+        }.value
+
+        Log.d("done all \(alignmentType) keypoints with max \(max)")
+    }
     
     var firstFrameInSequence: FrameAirplaneRemover {
         get async {
@@ -1505,7 +1576,130 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         return alignmentResult
     }    
+    
+    // uses opencv2 for dark ground specific detection logic
+    public func loadOrCreateEarthFeatures() async throws -> OCVFeatureSet? {
+        if let earthKeyPoints {
+            return earthKeyPoints
+        } else {
+            self.earthKeyPoints = try await loadOrCreateOCVFeatures(of: .earthAligned)
+            return self.earthKeyPoints
+        }
+    }
+    
+    // uses opencv2 for SIFT fast, accurate image alignment
+    public func loadOrCreateStarFeatures() async throws -> OCVFeatureSet? {
+        if let skyKeyPoints {
+            return skyKeyPoints
+        } else {
+            self.skyKeyPoints = try await loadOrCreateOCVFeatures(of: .starAligned)
+            return self.skyKeyPoints
+        } 
+    }
+    
+    fileprivate func loadOrCreateOCVFeatures(
+      of type: FrameViewMode
+    ) async throws -> OCVFeatureSet? {
+        var alignmentType: AlignmentType = .sky
 
+        Log.d("frame \(frameIndex) loadOrCreateOCVFeatures")
+        var filename = ""
+          
+        switch type {
+        case .starAligned:
+            alignmentType = .sky
+            filename = "\(frameIndex).sky.yaml"
+        case .earthAligned:
+            alignmentType = .earth
+            filename = "\(frameIndex).earth.yaml"
+        default:
+            throw "unable to loadOrCreateOCVFeatures of type \(type)"
+        }
+
+        // load or create the features
+
+        // try to load first
+        let config = await configManager.config()
+
+        let fullPath = "\(config.dirForKeypointData)/\(filename)"
+        if let features = try? OCVFeatureSet(file: fullPath) {
+            return features
+        }
+
+        // with no saved features, find them
+        // that we used to create the final aligned frame
+
+        Log.i("frame \(frameIndex) creating aligned image of type \(type)")
+        switch type {
+        case .starAligned:
+            self.set(state: .starKeypoints)
+        case .earthAligned:
+            self.set(state: .earthKeypoints)
+        default:
+            break
+        }
+
+        guard let originalFrame = try await imageAccessor.load(
+                frameIndex: frameIndex,
+                type: .original,
+                atSize: .original)
+        else {
+            throw "frame \(frameIndex) unable to load original frame for keypoint detection"
+        }
+
+        if originalFrame.isEmpty { Log.w("EMPTY IMAGE") }
+
+        Log.d("frame \(frameIndex) original frame \(originalFrame.description)")
+
+        Log.d("frame \(frameIndex) original frame \(originalFrame.description)")
+        
+        let pixelThreshold = await self.pixelThreshold
+        
+        var horizonMask: HorizonMask? = nil
+        if config.horizonDetectionEnabled {
+            horizonMask = try await loadOrCreateHorizonMask()
+            if let horizonMask {
+                Log.d("horizon mask \(horizonMask.image.description)")
+            }
+        }
+        
+        Log.d("frame \(frameIndex) finding keypoints of type \(alignmentType)")
+
+        let request = OCVFeatureRequest(
+          baseImage: originalFrame.mat,
+          frameIndex: Int32(frameIndex),
+          matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
+          mask: horizonMask?.image.mat,
+          alignmentType: alignmentType,       // earth is zero in mask
+          maxKeypoints: Int32(config.alignmentMaxKeypoints), 
+          writeDebugImages: config.alignmentWriteDebugImages,
+          groundHorizonExtension: Int32(config.alignmentGroundHorizonExtension), // extend the horizon for ground by this amount to get more keypoints
+          baseImageDilateSize: Int32(config.alignmentBaseImageDilateSize),
+          baseImageThresholdValue: Int32(config.alignmentBaseImageThresholdValue)
+        )
+
+        if let result = ImageAligner.findFeatures(request) {
+            if let error = result as? String {
+                Log.e("frame \(frameIndex) error: \(error)")
+            } else if let results = result as? kht_bridge.OCVFeatureSet {
+                Log.d("frame \(frameIndex) got \(results.keypointCount) keypoints")
+
+                do {
+                    try results.write(toFile: fullPath)
+
+                    Log.d("frame \(frameIndex) wrote results to \(fullPath)")
+                } catch {
+                    Log.w("frame \(frameIndex) failed to write results to \(fullPath): error: \(error)")
+                }
+                
+                return results
+            } else {
+                Log.e("frame \(frameIndex) cannot handle aligned result \(result)")
+            }
+        }
+        return nil
+    }    
+    
     let numberOfStarAlignedImagesFilename = "number_of_star_aligned_images.json"
     
     private func write(
@@ -4016,3 +4210,4 @@ public actor CountActor {
 }
 
 
+extension OCVFeatureSet: @unchecked Sendable {}

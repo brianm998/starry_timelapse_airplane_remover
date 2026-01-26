@@ -10,7 +10,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface OCVFeatureSet : NSObject
+@interface OCVFeatureSet : NSObject <NSCopying>
 
 #pragma mark - Construction
 

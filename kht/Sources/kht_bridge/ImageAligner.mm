@@ -3,6 +3,8 @@
 #import "ObjcImageCache.h"
 #import "ObjcAlignmentStep.h"
 #import "logging.h"
+#import "OCVFeatureRequest.h"
+#import "OCVFeatureSet.h"
 #import <opencv2/core.hpp>
 #import <opencv2/imgproc.hpp>
 #import <opencv2/imgcodecs.hpp>
@@ -459,6 +461,23 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
  * returns string errors when there is a problem, or maybe nil
  *
  * Uses different logic for sky and earth alignment, alignmentType governs that.
+ */
+/*
+
+  Faster rewrite:
+
+   Right now, the vast majority of time is spent in keypoint detection.
+   The app is computing keypoints on each frame N times, where N is the number of neighbors.
+   This is slow and redundant.
+
+   Faster would be to compute keypoints for all frames once, and keep that information
+   available after computation, both in ram and in flash.
+
+   Then alignment is split into more different phases:
+     - first find sky (and maybe earth) keypoints for all frames, saving this data
+     - then have a process which tries to match keypoints and produce a homography
+     - then go through again and do our current second pass to fix bad homography
+   
  */
 + (id _Nullable)alignWithRequest:(AlignmentRequest * _Nonnull)request
                          handler:(ImageAlignerUpdateBlock)handler
@@ -996,6 +1015,155 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
       }
 
       return warps;
+
+    } catch (const cv::Exception &e) {
+      Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
+      return [NSString stringWithUTF8String:e.what()];
+    } catch (const std::exception &e) {
+      Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
+      return [NSString stringWithUTF8String:e.what()];
+    } catch (...) {
+      Log_e(@"Unknown Error");
+      return @"Unknown Exception";
+    }
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception: %@", exception);
+    return [NSString stringWithFormat:@"Objective-C Exception: %@", exception];
+  }
+}
+
+// returns a OCVFeatureSet upon success, which contains keypoints and descriptors  
++ (id _Nullable)findFeatures:(OCVFeatureRequest * _Nonnull)request {
+  @try {
+    try {
+      // how many threads opencv can use
+      //    cv::setNumThreads(36);    // XXX make this a parameter?
+
+      uint32_t logID = request.frameIndex;
+      
+      // Horizon mask (sky = nonzero, ground = 0)
+      MatWrapper * horizonMask;
+      if (request.mask != NULL && !request.mask.mat.empty()) {
+        // use passed in horizon mask
+        horizonMask = request.mask;
+      } else {
+        // if no horizon mask is passed, assume a fully white mask (all pixels)
+        horizonMask = [[MatWrapper alloc]
+                        initWithMat:cv::Mat(request.baseImage.mat.size(),
+                                            CV_8U,
+                                            cv::Scalar(255))];
+      }
+
+      //cv::imwrite("/tmp/horizon_start.tiff", horizonMask.mat);
+
+      horizonMask = toGray8U(horizonMask);
+
+      if (request.alignmentType == AlignmentTypeEarth) {
+        // invert the mask to apply to the ground instead of the sky
+        cv::bitwise_not(horizonMask.mat, horizonMask.mat);
+
+        // for the ground, we make the horizon mask include a bit above the horizon,
+        // which leads to better keypoints down the road
+        horizonMask = createGradientMaskIntoSky(horizonMask.mat,
+                                                request.groundHorizonExtension);
+      }
+      
+      // Prepare grayscale baseImage frame with the horizon mask
+      MatWrapper * baseImageGray = toGray8UWithMask(request.baseImage.mat,
+                                                    horizonMask.mat,
+                                                    true);
+    
+      if(request.writeDebugImages) {
+        if(request.alignmentType == AlignmentTypeEarth) {
+          cv::imwrite("/tmp/baseImage_gray_earth_frame_" +
+                      std::to_string(request.frameIndex) + ".tiff",
+                      baseImageGray.mat);
+        } else {
+          cv::imwrite("/tmp/baseImage_gray_sky_frame_" +
+                      std::to_string(request.frameIndex) +
+                      ".tiff",
+                      baseImageGray.mat);
+        }
+      }
+    
+      // default to detecting with the horizon mask as is
+      MatWrapper * detectionMask = horizonMask;
+
+      if (request.alignmentType == AlignmentTypeSky) {
+        // Build star mask for baseImage frame when doing sky
+        // the star mask restricts keypoint detection to near bright spots in the sky
+
+        // dilate further to expand keypoint detection area
+        // threshold is 0..0xFF for what is considered bright
+        detectionMask = makeStarMask(baseImageGray.mat,
+                                     request.baseImageDilateSize,
+                                     request.baseImageDilateSize);
+      }
+
+      // Detector and matcher
+      std::vector<cv::KeyPoint> keypoints;
+      cv::Mat descriptors;
+
+      // first detect keypoints in the baseImage frame we're aligning to
+      if (request.alignmentType == AlignmentTypeEarth) {
+        // not used for sky, only for earth
+        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(4.0, cv::Size(8,8));
+	  
+        // ground: create a processed baseImage image for detection
+        // apply extra processing to pull up dark details to help
+        // find more keypoints in the dark ground 
+             cv::Mat baseImageProcessed;
+
+        // Apply Contrast Limited Adaptive Histogram Equalization
+        clahe->apply(baseImageGray.mat, baseImageProcessed);
+
+        // apply gamma correction to brighten the shadows only
+        baseImageProcessed.convertTo(baseImageProcessed, CV_32F, 1.0/255.0);
+        cv::pow(baseImageProcessed, 0.5, baseImageProcessed);
+        baseImageProcessed.convertTo(baseImageProcessed, CV_8U, 255.0);
+
+        cv::Ptr<cv::AKAZE> akazeBase = cv::AKAZE::create();
+        akazeBase->setThreshold(1e-5);
+
+        // run advanced kaze to detect and compute keypoints in the ground
+        akazeBase->detectAndCompute(baseImageProcessed,
+                                    detectionMask.mat,
+                                    keypoints,
+                                    descriptors);
+      } else {
+        // sky: use SIFT
+        
+        cv::Ptr<cv::SIFT> siftBase = cv::SIFT::create(request.maxKeypoints);
+        siftBase->detectAndCompute(baseImageGray.mat,
+                                   detectionMask.mat,
+                                   keypoints,
+                                   descriptors);
+      }
+
+      if(request.writeDebugImages) {
+        // save detectionMask.mat if desired
+        if(request.alignmentType == AlignmentTypeEarth) {
+          cv::imwrite("/tmp/detectionMask_earth_frame_" +
+                      std::to_string(request.frameIndex) +
+                      ".tiff",
+                      detectionMask.mat);
+        } else {
+          cv::imwrite("/tmp/detectionMask_sky_frame_" +
+                      std::to_string(request.frameIndex) +
+                      ".tiff",
+                      detectionMask.mat);
+        }
+      }
+    
+      detectionMask.mat.release();
+      detectionMask = nil;        // done with these, allow deallocation
+      baseImageGray.mat.release();
+      baseImageGray = nil;
+    
+      keypoints.shrink_to_fit();
+
+      return [[OCVFeatureSet alloc] initWithKeypoints:keypoints
+                                          descriptors:descriptors];
 
     } catch (const cv::Exception &e) {
       Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);

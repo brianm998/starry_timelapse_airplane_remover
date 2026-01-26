@@ -537,6 +537,10 @@ public struct Config: Codable, Sendable, Transferable {
         }
     }
 
+    public var dirForKeypointData: String {
+        "\(self.tempOutputPath)/keypoints"
+    }
+    
     public func dirForImage(ofType type: FrameViewMode,
                             atSize size: ImageDisplaySize = .original) -> String?
     {
