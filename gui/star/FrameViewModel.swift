@@ -62,6 +62,7 @@ public class FrameViewModel {
             case .final:
                 if let image = image.nsImage {
                     self.processedPreviewImage = Image(nsImage: image)
+                      .resizable()
                 }
                 
             case .original:
