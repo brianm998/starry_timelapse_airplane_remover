@@ -155,7 +155,9 @@ public final class PixelatedImage: Sendable {
     public var byteCount: Int { imageData.byteCount }
         
     public convenience init?(filename: String) {
-        if let wrapper = MatWrapper.load(fromFilename: filename) {
+        if FileManager.default.fileExists(atPath: filename),
+           let wrapper = MatWrapper.load(fromFilename: filename)
+        {
             self.init(mat: wrapper)
         } else {
             return nil
