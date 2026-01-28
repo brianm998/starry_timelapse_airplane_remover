@@ -878,25 +878,13 @@ public final class ImageSequenceViewModel {
         var numberPreviewsSaved = 0
 
         let throttle = Throttle()
-
+        
         Task(priority: .background) { [imageAccessor] in
-          Log.d("writing missing images")
-          try await imageAccessor.writeMissingImages() { numberSaved in
-
-              let now = ContinuousClock.now
-
-              guard await throttle.shouldUpdate(
-                      now: now,
-                      interval: .milliseconds(1000)
-                    ) else { return }
-              
-              Task { @MainActor in 
-                  numberPreviewsSaved += numberSaved
-                  //Log.d("numberSaved \(numberSaved) numberPreviewsSaved \(numberPreviewsSaved)")
-                  let amountPreviewsSaved = Double(numberPreviewsSaved)/Double(self.imageSequenceSize)
-                  closure(numberPreviewsSaved, amountPreviewsSaved, 0, 0)
-              }
-            }
+          do {
+            try await makePreviews(imageAccessor: imageAccessor)
+          } catch {
+            Log.e("unable to make previews: \(error)")
+          }
         }
         
         Log.d("done with make missing previews")
@@ -982,6 +970,13 @@ public final class ImageSequenceViewModel {
                 }
             }
         }
+    }
+
+    // nonisolated so it doesn't run on the main thread
+    nonisolated func makePreviews(imageAccessor: ImageAccessor) async throws {
+        Log.d("writing missing images")
+
+        try await imageAccessor.writeMissingImages() { _ in }
     }
     
     func makeCallbacks() -> Callbacks {
