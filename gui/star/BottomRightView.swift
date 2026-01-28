@@ -120,13 +120,27 @@ struct BottomRightView: View {
                 case .starKeypoints:
                     ProgressView()
                       .colorScheme(.dark)
-                    Text("Star Keypoints")
-                      .foregroundColor(.white)
+                    let remaining = viewModel.frames.count
+                      - viewModel.count(for: .complete)
+                      - viewModel.count(for: .starKeypointsFound)
+                    VStack {
+                        Text("Star Keypoints")
+                          .foregroundColor(.white)
+                        Text("\(remaining) frames left")
+                          .foregroundColor(.white)
+                    }
                 case .earthKeypoints:
                     ProgressView()
                       .colorScheme(.dark)
-                    Text("Earth Keypoints")
-                      .foregroundColor(.white)
+                    let remaining = viewModel.frames.count
+                      - viewModel.count(for: .complete)
+                      - viewModel.count(for: .earthKeypointsFound)
+                    VStack {
+                        Text("Earth Keypoints")
+                          .foregroundColor(.white)
+                        Text("\(remaining) frames left")
+                          .foregroundColor(.white)
+                    }
                 case .firstAlignment:
                     ProgressView()
                       .colorScheme(.dark)

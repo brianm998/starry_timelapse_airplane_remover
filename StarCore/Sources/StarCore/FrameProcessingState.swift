@@ -120,6 +120,8 @@ public enum FrameProcessingState: Codable,
     case creatingEarthAlignedFrame
     case starKeypoints
     case earthKeypoints
+    case starKeypointsFound
+    case earthKeypointsFound
     case starAlignment(AlignmentStep)
     case starAlignmentFailed
     case creatingStarAlignedFrame
@@ -165,7 +167,9 @@ public enum FrameProcessingState: Codable,
         .earthAlignment(.start),
         .creatingEarthAlignedFrame,
         .starKeypoints,
+        .starKeypointsFound,
         .earthKeypoints,
+        .earthKeypointsFound,
         .starAlignment(.start),
         .starAlignmentFailed,
         .creatingStarAlignedFrame,
@@ -217,6 +221,10 @@ public enum FrameProcessingState: Codable,
             "star keypoints"
         case .earthKeypoints:
             "earth keypoints"
+        case .starKeypointsFound:
+            "found star keypoints"
+        case .earthKeypointsFound:
+            "found earth keypoints"
         case .starAlignment(let state):
             "aligning stars \(state)"
         case .earthAlignment(let state):
@@ -302,6 +310,10 @@ public enum FrameProcessingState: Codable,
             false
         case .earthKeypoints:
             false
+        case .starKeypointsFound:
+            false
+        case .earthKeypointsFound:
+            false
         case .starAlignment:
             false
         case .earthAlignment:
@@ -381,6 +393,10 @@ public enum FrameProcessingState: Codable,
             "star keypoints"
         case .earthKeypoints:
             "earth keypoints"
+        case .starKeypointsFound:
+            "found star keypoints"
+        case .earthKeypointsFound:
+            "found earth keypoints"
         case .starAlignment(let state):
             "star align \(state)"
         case .earthAlignment(let state):
@@ -457,8 +473,12 @@ public enum FrameProcessingState: Codable,
             .green
         case .starKeypoints:
             .orange
+        case .starKeypointsFound:
+            .green
         case .earthKeypoints:
             .orange
+        case .earthKeypointsFound:
+            .green
         case .starAlignment:
             .yellow
         case .earthAlignment:

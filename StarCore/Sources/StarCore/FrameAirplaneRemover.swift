@@ -904,7 +904,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let letAlignmentType = alignmentType
         
         let config = await configManager.config()
-        let max = config.maxConcurrentHorizonCalculations
+        let max = await maxFramesProcessing.getValue()
 
         Log.d("finding keypoints for all frames with max \(max)")
         
@@ -926,8 +926,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                             switch letAlignmentType {
                             case .sky:
                                 _ = try await frame.loadOrCreateStarFeatures()
+                                await frame.set(state: .starKeypointsFound)
                             case .earth:
                                 _ = try await frame.loadOrCreateEarthFeatures()
+                                await frame.set(state: .earthKeypointsFound)
                             @unknown default:
                                 break
                             }
@@ -1691,8 +1693,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         Log.d("frame \(frameIndex) original frame \(originalFrame.description)")
 
-        Log.d("frame \(frameIndex) original frame \(originalFrame.description)")
-        
         let pixelThreshold = await self.pixelThreshold
         
         var horizonMask: HorizonMask? = nil
