@@ -484,9 +484,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 {
   @try {
     try {
-      // how many threads opencv can use
-      //    cv::setNumThreads(36);    // XXX make this a parameter?
-
       uint32_t logID = request.frameIndex;
 
       SET_FRAME_STATE(request, ObjCAlignmentStepStart, 0);
@@ -496,10 +493,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
         return [ImageAligner alignWithExistingHomographyRequest:request];
       }
       
-      //Log_d(@"frame %d align neighbors %@ matchMethod %ld maxDeviation %lf maxCornerDeviation %lf invertMask %d maxKeypoints %d k %lf", logID, request.neighbors, request.matchMethod, request.maxDeviation, request.maxCornerDeviation, request.alignmentType == AlignmentTypeEarth, request.maxKeypoints, request.k);
-      //    Log_d(@"frame %d align frames %@ frameMasks %@ matchMethod %d ",
-      //          logID, frameFilenames, frameMaskFilenames, matchMethod);
-
       // Horizon mask (sky = nonzero, ground = 0)
       MatWrapper * horizonMask;
       if (request.mask != NULL && !request.mask.mat.empty()) {
@@ -920,7 +913,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
       std::vector<cv::KeyPoint> keypoints;
       cv::Mat descriptors;
 
-      // first detect keypoints in the baseImage frame we're aligning to
+      // detect keypoints
       if (request.alignmentType == AlignmentTypeEarth) {
         // not used for sky, only for earth
         cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(4.0, cv::Size(8,8));
