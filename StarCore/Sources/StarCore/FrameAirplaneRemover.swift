@@ -1448,8 +1448,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         for alignment in results {
                             let frameDistance = abs(self.frameIndex-Int(alignment.frameIndex))
                             let alignmentSlope = alignment.deviation/Double(frameDistance)
-                            if alignmentSlope < medianSlope * 1.25, // XXX tweak this number
-                               alignmentSlope > medianSlope / 1.25
+                            /*
+                             two checks here:
+                                - deviation isn't too large in general
+                                  fast clouds without stars can get large deviation
+                                - alignment slope is close to constant
+                                  deviation should be evenly spaced by frame distance
+                             */
+                            if alignment.deviation < 60*Double(frameDistance), // XXX make this a constant
+                               alignmentSlope < medianSlope * 1.20, // XXX make this a constant too
+                               alignmentSlope > medianSlope / 1.20
                             {
                                 // rough estimate
                                 goodWarps.append(alignment)
