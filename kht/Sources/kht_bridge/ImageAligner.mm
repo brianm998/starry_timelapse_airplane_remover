@@ -519,6 +519,10 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
       }
       
       // Detector and matcher
+      if (request == nil || request.baseKeypoints == nil) {
+        return @"not given keypoints on base frame";
+      }
+      
       std::vector<cv::KeyPoint> kpBaseImage = request.baseKeypoints.keypoints;
       cv::Mat descBaseImage = request.baseKeypoints.descriptors;
 
