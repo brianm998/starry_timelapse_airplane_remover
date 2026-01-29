@@ -823,52 +823,50 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             try await taskGroup.waitForAll()
         }
     }
-    
-    public func processHorizonForAllFrames(redo: Bool = false) async throws {
+
+    // not actor isolated
+    nonisolated public func processHorizonForAllFrames(redo: Bool = false) async throws {
 
         let config = await configManager.config()
         let max = config.maxConcurrentHorizonCalculations
 
         Log.d("finding all horizons with max \(max)")
+
+        // use a semaphore to not do too many at once
+
+        let semaphore = AsyncSemaphore(value: max)
         
-        try await Task.detached(priority: .medium) { 
-
-            // use a semaphore to not do too many at once
-
-            let semaphore = AsyncSemaphore(value: max)
-            
-            let allBounds =
-              try await withThrowingTaskGroup(of: Optional<HorizonBounds>.self) { taskGroup in
-                  
-                  var nextFrame: FrameAirplaneRemover? = await self.firstFrameInSequence
-                  while nextFrame != nil {
-                      if let frame = nextFrame {
-                          Log.d("frame \(frame.frameIndex) about to create task for horizon")
-                          taskGroup.addTask {
-                              Log.d("frame \(frame.frameIndex) in task for horizon waiting for semaphore")
-                              await semaphore.wait()
-                              Log.d("frame \(frame.frameIndex) in task for horizon got semaphore")
-                              if redo {
-                                  // get rid of all the existing horizon images first
-                                  await frame.deleteHorizonImages()
-                              }
-                              let ret = try await frame.loadOrCreateHorizonMask().bounds
-                              semaphore.signal()
-                              return ret
+        let allBounds =
+          try await withThrowingTaskGroup(of: Optional<HorizonBounds>.self) { taskGroup in
+              
+              var nextFrame: FrameAirplaneRemover? = await self.firstFrameInSequence
+              while nextFrame != nil {
+                  if let frame = nextFrame {
+                      Log.d("frame \(frame.frameIndex) about to create task for horizon")
+                      taskGroup.addTask {
+                          Log.d("frame \(frame.frameIndex) in task for horizon waiting for semaphore")
+                          await semaphore.wait()
+                          Log.d("frame \(frame.frameIndex) in task for horizon got semaphore")
+                          if redo {
+                              // get rid of all the existing horizon images first
+                              await frame.deleteHorizonImages()
                           }
-                          nextFrame = await frame.getNextFrame()
+                          let ret = try await frame.loadOrCreateHorizonMask().bounds
+                          semaphore.signal()
+                          return ret
                       }
+                      nextFrame = await frame.getNextFrame()
                   }
-                  
-                  var results: [HorizonBounds] = []
-                  
-                  for try await result in taskGroup {
-                      if let result { results.append(result) }
-                  }
-                  
-                  return results
               }
-        }.value
+              
+              var results: [HorizonBounds] = []
+              
+              for try await result in taskGroup {
+                  if let result { results.append(result) }
+              }
+              
+              return results
+          }
 
         Log.d("done all horizons with max \(max)")
 
