@@ -101,7 +101,7 @@ public struct ImageAccessor: Sendable {
     }
 
     // load for display as SwiftUI Image
-    public func loadImage(
+    nonisolated public func loadImage(
       frameIndex: Int,
       type imageType: FrameViewMode,
       atSize size: ImageDisplaySize
@@ -111,6 +111,7 @@ public struct ImageAccessor: Sendable {
              ofType: imageType,
              atSize: size
            ),
+
            let image = PixelatedImage(filename: filename),
            let nsImage = image.nsImage
         {
@@ -180,26 +181,20 @@ public struct ImageAccessor: Sendable {
         }
     }
 
-    // load using the file system monitor
     public func loadFinal(
       frameIndex: Int,
       type imageType: FrameViewMode,
       atSize size: ImageDisplaySize
     ) async throws -> PixelatedImage? {
-        try await finalFileSystemMonitor.load() {
-            await self.loadInt(frameIndex: frameIndex, type: imageType, atSize: size)
-        }
+        await self.loadInt(frameIndex: frameIndex, type: imageType, atSize: size)
     }
 
-    // load using the file system monitor
     public func load(
       frameIndex: Int,
       type imageType: FrameViewMode,
       atSize size: ImageDisplaySize
     ) async throws -> PixelatedImage? {
-        try await fileSystemMonitor.load() {
-            await self.loadInt(frameIndex: frameIndex, type: imageType, atSize: size)
-        }
+        await self.loadInt(frameIndex: frameIndex, type: imageType, atSize: size)
     }
 
     public func loadInt(
@@ -349,15 +344,13 @@ public struct ImageAccessor: Sendable {
                      atSize size: ImageDisplaySize,
                      overwrite: Bool) async throws
     {
-        try await fileSystemMonitor.save() {
-            await self.saveInt(
-              image,
-              frameIndex: frameIndex,
-              as: type,
-              atSize: size,
-              overwrite: overwrite
-            )
-        }
+        await self.saveInt(
+          image,
+          frameIndex: frameIndex,
+          as: type,
+          atSize: size,
+          overwrite: overwrite
+        )
     }
     
     // make this use the file access guard
@@ -630,7 +623,7 @@ public struct ImageAccessor: Sendable {
             // nop
             Log.i("found previews and thumbnails for end of sequence, did nothing")
         } else {
-//            try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+            try await withThrowingTaskGroup(of: Void.self) { taskGroup in
             for frameIndex in farthestFirstOrder(range: 0..<imageSequenceSize) {
                     Log.d("frame \(frameIndex) checking for missing images")
                     guard let filename = self.nameForImage(
@@ -655,7 +648,7 @@ public struct ImageAccessor: Sendable {
                     let thumbnailExists = FileManager.default.fileExists(atPath: thumbnailFilename)
                     if !previewExists || !thumbnailExists {
                         Log.d("frame \(frameIndex) is missing images")
-//                        taskGroup.addTask() { [self] in
+                        taskGroup.addTask() { [self] in
                             Log.d("making missing image for frame \(frameIndex)")
                             try await self.writeMissingImages(
                               frameIndex: frameIndex,
@@ -666,13 +659,13 @@ public struct ImageAccessor: Sendable {
                               thumbnailExists: thumbnailExists
                             )
                              await closure(frameIndex)
-                            //                            return
-//                        }
+                             //                            return
+                        }
                     } else {
                         await closure(frameIndex)
                     }
-//                }
-//                try await taskGroup.waitForAll()
+                }
+                try await taskGroup.waitForAll()
             }
         }
     }
