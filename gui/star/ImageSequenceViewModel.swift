@@ -874,19 +874,8 @@ public final class ImageSequenceViewModel {
             }
         }
         
-        
         var numberPreviewsSaved = 0
 
-        let throttle = Throttle()
-        
-        Task(priority: .background) { [imageAccessor] in
-          do {
-            try await makePreviews(imageAccessor: imageAccessor)
-          } catch {
-            Log.e("unable to make previews: \(error)")
-          }
-        }
-        
         Log.d("done with make missing previews")
 //        Log.d("make missing thumbnails")
 //        try await imageAccessor.writeMissingImages(atSize: .thumbnail)
@@ -1024,7 +1013,7 @@ public final class ImageSequenceViewModel {
         // called when we should check a frame
         callbacks.frameCheckClosure = { [weak self] newFrame in
             guard let self else { return }            
-            //Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
+            Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
             Task { @MainActor [weak self] in
                 await self?.addToViewModel(frame: newFrame)
             }
@@ -1185,10 +1174,15 @@ public final class ImageSequenceViewModel {
     }
 
     func processAll() {
+        Log.d("processAll")
         if let frame = frames[0].frame {
             Task {
-                await frame.processAll(frameSaveQueue: frameSaveQueue) { processingState in
-                    
+                Log.d("processAll")
+                await self.process(
+                  frame: frame,
+                  frameSaveQueue: frameSaveQueue
+                ) { processingState in
+                    Log.d("processAll")
                     Task { @MainActor in
                         switch processingState {
                         case .done:
@@ -1206,6 +1200,18 @@ public final class ImageSequenceViewModel {
             }
         }
     }
+
+    private nonisolated func process(
+      frame: FrameAirplaneRemover,
+      frameSaveQueue: FrameSaveQueue,
+      closure: @Sendable @escaping (SequenceProcessingState) -> Void
+    ) async {
+        Log.d("processAll")
+        await frame.processAll(
+          frameSaveQueue: frameSaveQueue,
+          progressClosure: closure
+        )
+    }
     
     func refresh(frame: FrameAirplaneRemover) async {
         //        Log.d("refreshing frame \(frame.frameIndex)")
@@ -1218,50 +1224,63 @@ public final class ImageSequenceViewModel {
 
         let acc = frame.imageAccessor
 
-        let prTask = Task.detached {
-            await acc.loadImage(frameIndex: frame.frameIndex,
-                                type: .final,
-                                atSize: .preview)?.resizable()
-        }
-        let opTask = Task.detached {
-            await acc.loadImage(frameIndex: frame.frameIndex,
-                                type: .original,
-                                atSize: .preview)?.resizable()
-        }
-
-        let otTask = Task.detached {
-            await acc.loadImage(frameIndex: frame.frameIndex,
-                                type: .original,
-                                atSize: .thumbnail)
-        }
-        // set list of view modes for this frame
-
-        var existingImages: Set<FrameViewMode> = []
-        for type in FrameViewMode.allCases {
-            if acc.imageExists(frameIndex: frame.frameIndex,
-                               ofType: type,
-                               atSize: .original)
-            {
-                existingImages.insert(type)
+        Task {
+            
+            let prTask = Task.detached {
+                await acc.loadImage(frameIndex: frame.frameIndex,
+                                    type: .final,
+                                    atSize: .preview)?.resizable()
             }
-        }
+            let opTask = Task.detached {
+                await acc.loadImage(frameIndex: frame.frameIndex,
+                                    type: .original,
+                                    atSize: .preview)?.resizable()
+            }
 
-        self.frames[frame.frameIndex].existingImages = existingImages
+            let otTask = Task.detached {
+                await acc.loadImage(frameIndex: frame.frameIndex,
+                                    type: .original,
+                                    atSize: .thumbnail)
+            }
+            // set list of view modes for this frame
 
-        if let image = await prTask.value {
-            self.frames[frame.frameIndex].processedPreviewImage = image
-        }
-        if let image = await opTask.value {
-            self.frames[frame.frameIndex].originalPreviewImage = image
-        }
+            var existingImages: Set<FrameViewMode> = []
+            for type in FrameViewMode.allCases {
+                if acc.imageExists(frameIndex: frame.frameIndex,
+                                   ofType: type,
+                                   atSize: .original)
+                {
+                    existingImages.insert(type)
+                }
+            }
+            
+            self.frames[frame.frameIndex].existingImages = existingImages
 
-        if let image = await otTask.value {
-            self.frames[frame.frameIndex].thumbnailImage = image
+            async let processedImage = prTask.value
+            async let originalImage  = opTask.value
+            async let thumbnailImage = otTask.value
+
+            let (processed, original, thumbnail) = await (
+              processedImage,
+              originalImage,
+              thumbnailImage
+            )
+            
+            if let image = processed {
+                self.frames[frame.frameIndex].processedPreviewImage = image
+            }
+            if let image = original {
+                self.frames[frame.frameIndex].originalPreviewImage = image
+            }
+
+            if let image = thumbnail {
+                self.frames[frame.frameIndex].thumbnailImage = image
+            }
         }
         //Log.d("done refreshing frame \(frame.frameIndex)")
     }
 
-  func append(frame: FrameAirplaneRemover) async {
+    func append(frame: FrameAirplaneRemover) async {
       //Log.d("appending frame \(frame.frameIndex)")
 
         guard frame.frameIndex >= 0,
@@ -1340,7 +1359,7 @@ public final class ImageSequenceViewModel {
 
 
     func addToViewModel(frame newFrame: FrameAirplaneRemover) async {
-        //Log.d("addToViewModel(frame: \(newFrame.frameIndex))")
+        Log.d("addToViewModel(frame: \(newFrame.frameIndex))")
 
         if self.config == nil {
             Log.e("FUCK, config is nil")
@@ -1871,15 +1890,3 @@ final class AppNapDisabler {
     }
 }
 
-actor Throttle {
-    private var lastUpdate = ContinuousClock.now
-
-    func shouldUpdate(now: ContinuousClock.Instant,
-                      interval: Duration) -> Bool {
-        if now - lastUpdate > interval {
-            lastUpdate = now
-            return true
-        }
-        return false
-    }
-}
