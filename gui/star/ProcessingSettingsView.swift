@@ -433,6 +433,7 @@ struct ProcessingSettingsView: View {
 
                   HStack {
                       Button {
+                          Log.d("processAll")
                           startProcessing()
                       } label: {
                           ZStack {
@@ -1243,14 +1244,14 @@ struct ProcessingSettingsView: View {
     }
     
     private func startProcessing() {
-        Log.d("Starting processing")
+        Log.d("processAll Starting processing")
         self.applySettings()
         viewModel.shouldShowProcessingSettings = false
-        Log.d("settings applied")
+        Log.d("processAll settings applied")
         viewModel.showHorizonBar = false
 
         viewModel.processAll()
-        Log.d("process all done")
+        Log.d("processAll process all returned")
     }
 }
 

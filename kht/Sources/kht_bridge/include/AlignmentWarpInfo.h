@@ -25,12 +25,6 @@ typedef NS_ENUM(NSInteger, AlignmentStateObjC) {
 /// L2 norm of (H - I)
 @property(nonatomic, assign) double deviation;
 
-// how many keypoints were found on the neighbor
-@property(nonatomic, assign) int neighborKeyPoints;
-
-// how many keypoints were found on the frame being processed
-@property(nonatomic, assign) int frameKeyPoints;
-                          
 @property(nonatomic, assign) AlignmentStateObjC alignmentState;
 
 /// Index into original frame array (optional but very useful)
@@ -41,8 +35,6 @@ typedef NS_ENUM(NSInteger, AlignmentStateObjC) {
                               warpedHorizon:(nullable MatWrapper *)warpedHorizon
                                   deviation:(double)deviation
                              alignmentState:(AlignmentStateObjC)alignmentState
-                          neighborKeyPoints:(int)neighborKeyPoints
-                             frameKeyPoints:(int)frameKeyPoints
                                  frameIndex:(NSUInteger)frameIndex;
 
 - (instancetype _Nonnull)initForNoWarpWithFrameIndex:(NSUInteger)frameIndex;

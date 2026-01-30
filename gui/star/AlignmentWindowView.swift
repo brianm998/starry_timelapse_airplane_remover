@@ -51,10 +51,7 @@ struct AlignmentWindowView: View {
                         }
                         if showStarKeypoints {
                             AlignmentKeypointsChart(
-                              goodFrames: viewModel.goodStarAlignmentInfo,
-                              badFrames: viewModel.badStarAlignmentInfo,
-                              showGoodPoints: $showGoodPoints,
-                              showBadPoints: $showBadPoints
+                              keyPoints: viewModel.skyKeypointCounts
                             )
                         }
                     }
@@ -74,10 +71,7 @@ struct AlignmentWindowView: View {
                         }
                         if showEarthKeypoints {
                             AlignmentKeypointsChart(
-                              goodFrames: viewModel.goodEarthAlignmentInfo,
-                              badFrames: viewModel.badEarthAlignmentInfo,
-                              showGoodPoints: $showGoodPoints,
-                              showBadPoints: $showBadPoints
+                              keyPoints: viewModel.earthKeypointCounts
                             )
                         }
                     }
@@ -144,97 +138,50 @@ struct DeviationPoint: Identifiable {
     let baseFrame: Int
     let offset: Int          // neighbor.frameIndex - baseFrame
     let signedDeviation: Double
-    let keyPoints: Int
     let alignmentState: AlignmentState
     let isGood: Bool
+}
+
+struct GraphKeyPoint: Identifiable {
+    let id = UUID()
+    let baseFrame: Int
+    let keyPointCount: Int
 }
 
 struct AlignmentKeypointsChart: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
-    let goodFrames: [[AlignmentWarpInfoCodable]]
-    let badFrames: [[AlignmentWarpInfoCodable]]
-
-    @Binding var showGoodPoints: Bool
-    @Binding var showBadPoints: Bool
+    let keyPoints: [Int]
 
     @State private var hoveredFrame: Int?
-    @State private var hoveredOffset: Int?
+//    @State private var hoveredOffset: Int?
 
     @State private var xDomain: ClosedRange<Int>
     
     init(
-      goodFrames: [[AlignmentWarpInfoCodable]],
-      badFrames: [[AlignmentWarpInfoCodable]],
-      showGoodPoints: Binding<Bool>,
-      showBadPoints: Binding<Bool>
+      keyPoints: [Int]
     ) {
-        self._showGoodPoints = showGoodPoints
-        self._showBadPoints = showBadPoints
-        self.goodFrames = goodFrames
-        self.badFrames = badFrames
+        self.keyPoints = keyPoints
 
-        let maxFrame = max(goodFrames.count - 1, 0)
+        let maxFrame = max(keyPoints.count - 1, 0)
         _xDomain = State(initialValue: 0 ... maxFrame)
      }
      
-    private var points: [DeviationPoint] {
-        makeKeyframePoints(
-          goodFrames: goodFrames,
-          badFrames: badFrames
-        )
+    private var points: [GraphKeyPoint] {
+        makeKeyframePoints()
     }
 
-    private var pointsByOffset: [(offset: Int, points: [DeviationPoint])] {
-        Dictionary(grouping: points, by: \.offset)
-          .map { offset, pts in
-              (
-                offset: offset,
-                points: pts.sorted { $0.baseFrame < $1.baseFrame }
-              )
-          }
-          .sorted { $0.offset < $1.offset }
-    }
-
-    
     var body: some View {
         Chart {
             // === Lines ===
-            if showGoodPoints {
-                ForEach(pointsByOffset, id: \.offset) { group in
-                    ForEach(group.points.filter(\.isGood)) { point in
-                        LineMark(
-                          x: .value("Frame", point.baseFrame),
-                          y: .value("KeyPoints", point.keyPoints)
-                        )
-                        .foregroundStyle(Color.byOffset(group.offset))
-                        .foregroundStyle(by: .value("Neighbor Offset", group.offset))
-                          .interpolationMethod(.linear)
-                          .opacity(point.isGood ? 1.0 : 0.4) // XXX doesn't work
-                    }
-                }
-            }
-
-            // BAD: translucent dots
-            if showBadPoints {
-                ForEach(points.filter { !$0.isGood }) { point in
-                    PointMark(
-                      x: .value("Frame", point.baseFrame),
-                      y: .value("KeyPoints", point.keyPoints)
-                    )
-                    .foregroundStyle(Color.byOffset(point.offset))
-
-//                      .foregroundStyle(by: .value("Neighbor Offset", point.offset))
-                    /*
-                      .foregroundStyle(
-                        by: .value(
-                          "Neighbor",
-                          point.offset > 0 ? "+\(point.offset)" : "\(point.offset)"
-                        )
-                      )*/
-                      .opacity(0.5)
-                      .symbolSize(20)
-                }
+            ForEach(points, id: \.id) { point in
+                LineMark(
+                  x: .value("Frame", point.baseFrame),
+                  y: .value("KeyPoints", point.keyPointCount)
+                )
+                  //.foregroundStyle(Color.byOffset(group.offset))
+                //                        .foregroundStyle(by: .value("Neighbor Offset", group.offset))
+                  .interpolationMethod(.linear)
             }
             
             // === Current frame indicator ===
@@ -250,7 +197,7 @@ struct AlignmentKeypointsChart: View {
               }
 
             // === Hover indicator ===
-            if let hoveredFrame, let hoveredOffset {
+            if let hoveredFrame {
                 RuleMark(
                   x: .value("Hover Frame", hoveredFrame)
                 )
@@ -259,15 +206,14 @@ struct AlignmentKeypointsChart: View {
                 PointMark(
                   x: .value("Frame", hoveredFrame),
                   y: .value(
-                    "Deviation",
-                    keyPointsAt(frame: hoveredFrame, offset: hoveredOffset)
+                    "Key Points",
+                    keyPointsAt(frame: hoveredFrame)
                   )
                 )
                   .symbolSize(60)
                   .annotation(position: .top) {
                       tooltipView(
-                        frame: hoveredFrame,
-                        offset: hoveredOffset
+                        frame: hoveredFrame
                       )
                   }
             }
@@ -317,7 +263,7 @@ struct AlignmentKeypointsChart: View {
                             )
                         case .ended:
                             hoveredFrame = nil
-                            hoveredOffset = nil
+                         //   hoveredOffset = nil
                         }
                     }
               }
@@ -336,10 +282,10 @@ struct AlignmentKeypointsChart: View {
         guard delta != 0 else { return }
         var newSpan = max(10, Int(Double(currentSpan) / Double(delta)))
 
-        if newSpan > goodFrames.count { newSpan = goodFrames.count }
+        if newSpan > keyPoints.count { newSpan = keyPoints.count }
         if newSpan < 20 { newSpan = 20 }
         
-        let maxFrame = goodFrames.count - 1
+        let maxFrame = keyPoints.count - 1
         let half = newSpan / 2
 
         let lower = max(0, center - half)
@@ -357,7 +303,7 @@ struct AlignmentKeypointsChart: View {
     }
 
     private func shiftDomain(by delta: Int) {
-        let maxFrame = goodFrames.count - 1
+        let maxFrame = keyPoints.count - 1
 
         let lower = max(0, xDomain.lowerBound + delta)
         let upper = min(maxFrame, lower + (xDomain.count - 1))
@@ -365,53 +311,17 @@ struct AlignmentKeypointsChart: View {
         if lower < upper { xDomain = lower ... upper }
     }
     
-    func makeKeyframePoints(
-      goodFrames: [[AlignmentWarpInfoCodable]],
-      badFrames: [[AlignmentWarpInfoCodable]]
-    ) -> [DeviationPoint] {
+    func makeKeyframePoints() -> [GraphKeyPoint] {
 
-        var points: [DeviationPoint] = []
+        var points: [GraphKeyPoint] = []
 
-        for (baseFrameIndex, neighbors) in goodFrames.enumerated() {
-            for neighbor in neighbors {
-                let offset = neighbor.frameIndex - baseFrameIndex
-                guard offset != 0 else { continue }
-
-                let signedDeviation =
-                  offset > 0 ? neighbor.deviation : -neighbor.deviation
-
-                points.append(
-                  DeviationPoint(
-                    baseFrame: baseFrameIndex,
-                    offset: offset,
-                    signedDeviation: signedDeviation,
-                    keyPoints: neighbor.neighborKeyPoints,
-                    alignmentState: neighbor.alignmentState,
-                    isGood: true
-                  )
-                )
-            }
-        }
-
-        for (baseFrameIndex, neighbors) in badFrames.enumerated() {
-            for neighbor in neighbors {
-                let offset = neighbor.frameIndex - baseFrameIndex
-                guard offset != 0 else { continue }
-
-                let signedDeviation =
-                  offset > 0 ? neighbor.deviation : -neighbor.deviation
-
-                points.append(
-                  DeviationPoint(
-                    baseFrame: baseFrameIndex,
-                    offset: offset,
-                    signedDeviation: signedDeviation,
-                    keyPoints: neighbor.neighborKeyPoints,
-                    alignmentState: neighbor.alignmentState,
-                    isGood: false
-                  )
-                )
-            }
+        for (index, keyPointCount) in keyPoints.enumerated() {
+            points.append(
+              GraphKeyPoint(
+                baseFrame: index,
+                keyPointCount: keyPointCount
+              )
+            )
         }
 
         return points
@@ -422,7 +332,7 @@ struct AlignmentKeypointsChart: View {
 
         let span = xDomain.upperBound - xDomain.lowerBound
         let lower = max(0, frame - span / 2)
-        let upper = min(goodFrames.count - 1, lower + span)
+        let upper = min(keyPoints.count - 1, lower + span)
 
         xDomain = lower ... upper
     }
@@ -734,7 +644,6 @@ struct AlignmentDeviationChart: View {
                     baseFrame: baseFrameIndex,
                     offset: offset,
                     signedDeviation: signedDeviation,
-                    keyPoints: neighbor.neighborKeyPoints,
                     alignmentState: neighbor.alignmentState,
                     isGood: true
                   )
@@ -755,7 +664,6 @@ struct AlignmentDeviationChart: View {
                     baseFrame: baseFrameIndex,
                     offset: offset,
                     signedDeviation: signedDeviation,
-                    keyPoints: neighbor.neighborKeyPoints,
                     alignmentState: neighbor.alignmentState,
                     isGood: false
                   )
@@ -800,13 +708,6 @@ private extension AlignmentDeviationChart {
             $0.baseFrame == frame && $0.offset == offset
         }?.signedDeviation ?? 0
     }
-
-    func keyPointsAt(frame: Int, offset: Int) -> Int {
-        points.first {
-            $0.baseFrame == frame && $0.offset == offset
-        }?.keyPoints ?? 0
-    }
-
     func isGoodAt(frame: Int, offset: Int) -> Bool {
         points.first {
             $0.baseFrame == frame && $0.offset == offset
@@ -825,7 +726,7 @@ private extension AlignmentDeviationChart {
 
     func tooltipView(frame: Int, offset: Int) -> some View {
         let deviation = deviationAt(frame: frame, offset: offset)
-        let keypoints = keyPointsAt(frame: frame, offset: offset)
+  //      let keypoints = keyPointsAt(frame: frame, offset: offset)
         let isGood = isGoodAt(frame: frame, offset: offset)
         let alignmentState = alignmentStateAt(frame: frame, offset: offset)
         
@@ -839,9 +740,6 @@ private extension AlignmentDeviationChart {
             Text(String(format: "Deviation: %.3f", deviation))
               .font(.caption.monospacedDigit())
               .foregroundColor(isGood ? .green : .red)
-
-            Text("Keypoints: \(keypoints)")
-              .font(.caption.monospacedDigit())
 
             Text("Aligned: \(alignmentState)")
               .font(.caption.monospacedDigit())
@@ -877,46 +775,31 @@ private extension AlignmentKeypointsChart {
         let candidates = points.filter { $0.baseFrame == frame }
 
         guard let closest = candidates.min(by: {
-            abs($0.keyPoints - Int(keypoints)) <
-            abs($1.keyPoints - Int(keypoints))
+            abs($0.keyPointCount - Int(keypoints)) <
+            abs($1.keyPointCount - Int(keypoints))
         }) else { return }
 
         hoveredFrame = frame
-        hoveredOffset = closest.offset
+//        hoveredOffset = closest.offset
     }
 
-    func deviationAt(frame: Int, offset: Int) -> Double {
-        points.first {
-            $0.baseFrame == frame && $0.offset == offset
-        }?.signedDeviation ?? 0
-    }
 
-    func keyPointsAt(frame: Int, offset: Int) -> Int {
+    func keyPointsAt(frame: Int) -> Int {
         points.first {
-            $0.baseFrame == frame && $0.offset == offset
-        }?.keyPoints ?? 0
-    }
-
-    func isGoodAt(frame: Int, offset: Int) -> Bool {
-        points.first {
-            $0.baseFrame == frame && $0.offset == offset
-        }?.isGood ?? false
+            $0.baseFrame == frame
+        }?.keyPointCount ?? 0
     }
 }
 
 
 private extension AlignmentKeypointsChart {
 
-    func tooltipView(frame: Int, offset: Int) -> some View {
-        let keypoints = keyPointsAt(frame: frame, offset: offset)
-        let isGood = isGoodAt(frame: frame, offset: offset)
+    func tooltipView(frame: Int) -> some View {
+        let keypoints = keyPointsAt(frame: frame)
         
         return VStack(alignment: .leading, spacing: 4) {
             Text("Frame \(frame)")
                 .font(.caption.bold())
-
-            Text("Neighbor offset: \(offset > 0 ? "+" : "")\(offset)")
-                .font(.caption)
 
             Text("Keypoints: \(keypoints)")
                 .font(.caption.monospacedDigit())

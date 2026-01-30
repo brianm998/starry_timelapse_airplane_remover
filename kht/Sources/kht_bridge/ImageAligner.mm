@@ -595,8 +595,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                          warpedHorizon:nil
                              deviation:0
                         alignmentState:AlignmentStateObjCUnableToDetectKeypoints
-                     neighborKeyPoints:0
-                        frameKeyPoints:0
                             frameIndex:request.neighbors[idx].frameIndex];
 
             warpInfos[idx] = info;
@@ -755,8 +753,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                               warpedHorizon:neighborHorizon == NULL ? nil : [[MatWrapper alloc] initWithMat: warpedHorizon]
                                   deviation:deviation
                              alignmentState:AlignmentStateObjCHomographySuccess
-                          neighborKeyPoints:ptsNeighbor.size()
-                             frameKeyPoints:ptsBaseImage.size()
                                  frameIndex:request.neighbors[idx].frameIndex];
 
               warpInfos[idx] = info;
@@ -771,8 +767,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                            warpedHorizon:nil
                                deviation:0
                           alignmentState:AlignmentStateObjCNoHomographyFound
-                       neighborKeyPoints:0
-                          frameKeyPoints:ptsBaseImage.size()
                               frameIndex:request.neighbors[idx].frameIndex];
 
               warpInfos[idx] = info;
@@ -787,8 +781,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                          warpedHorizon:nil
                              deviation:0
                         alignmentState:AlignmentStateObjCNotEnoughKeypoints
-                     neighborKeyPoints:0
-                        frameKeyPoints:ptsBaseImage.size()
                             frameIndex:request.neighbors[idx].frameIndex];
 
             warpInfos[idx] = info;
@@ -1041,8 +1033,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                               warpedHorizon:maskFilename == nil ? nil : [[MatWrapper alloc] initWithMat: warpedMask]
                                   deviation:deviation
                              alignmentState:AlignmentStateObjCUsedExistingHomography
-                          neighborKeyPoints:0
-                             frameKeyPoints:0
                                  frameIndex:request.neighbors[i].frameIndex];
 
             [warps addObject:info];

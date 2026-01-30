@@ -1152,6 +1152,30 @@ public final class ImageSequenceViewModel {
         }
         return ret
     }
+
+    var skyKeypointCounts: [Int] {
+        var ret: [Int] = []
+        for frame in frames {
+            if let keypointCount = frame.frameObserver.numberOfSkyKeyPoints {
+                ret.append(keypointCount)
+            } else {
+                ret.append(0)
+            }
+        }
+        return ret
+    }
+    
+    var earthKeypointCounts: [Int] {
+        var ret: [Int] = []
+        for frame in frames {
+            if let keypointCount = frame.frameObserver.numberOfEarthKeyPoints {
+                ret.append(keypointCount)
+            } else {
+                ret.append(0)
+            }
+        }
+        return ret
+    }
     
     var currentFrame: FrameAirplaneRemover? {
         if currentIndex >= 0,

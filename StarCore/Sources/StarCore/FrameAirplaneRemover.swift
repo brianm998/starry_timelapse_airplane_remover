@@ -267,8 +267,36 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     private weak var imageSequence: ImageSequence?
 
-    private var skyKeyPoints: OCVFeatureSet? = nil
-    private var earthKeyPoints: OCVFeatureSet? = nil
+    private var skyKeyPoints: OCVFeatureSet? = nil {
+        didSet {
+            Task { 
+                await observer?.set(numberOfSkyKeyPoints: self.skyKeyPointCount())
+            }
+        }
+    }
+    private var earthKeyPoints: OCVFeatureSet? = nil {
+        didSet {
+            Task {
+                await observer?.set(numberOfEarthKeyPoints: self.earthKeyPointCount())
+            }
+        }
+    }
+
+    public func skyKeyPointCount() -> Int {
+        if let skyKeyPoints {
+            skyKeyPoints.keypointCount
+        } else {
+            0
+        }
+    }
+    
+    public func earthKeyPointCount() -> Int {
+        if let earthKeyPoints {
+            earthKeyPoints.keypointCount
+        } else {
+            0
+        }
+    }
     
     public init(with configManager: ConfigManager,
                 width: Int,
@@ -1342,7 +1370,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 Log.i("frame \(frameIndex) using existing homography \(homography)")
                 switch alignmentType {
                 case .sky:
-                    if let closestGood = await self.closestGoodStarAlignmentHomography {
+                    // only use closest good if we are moving
+                    if config.tripodHeadWasMoving,
+                       let closestGood = await self.closestGoodStarAlignmentHomography
+                    {
                         Log.i("frame \(frameIndex) using closest good homography \(closestGood)")
                         homography = closestGood
                     } else {
@@ -1456,8 +1487,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                   deviation should be evenly spaced by frame distance
                              */
                             if alignment.deviation < 60*Double(frameDistance), // XXX make this a constant
-                               alignmentSlope < medianSlope * 1.20, // XXX make this a constant too
-                               alignmentSlope > medianSlope / 1.20
+                               alignmentSlope < medianSlope * 1.15, // XXX make this a constant too
+                               alignmentSlope > medianSlope / 1.15
                             {
                                 // rough estimate
                                 goodWarps.append(alignment)

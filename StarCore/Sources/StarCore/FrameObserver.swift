@@ -17,6 +17,9 @@ public class FrameObserver {
     public var starAlignmentResults: FrameAlignmentResults?
     public var earthAlignmentResults: FrameAlignmentResults?
 
+    public var numberOfSkyKeyPoints: Int?
+    public var numberOfEarthKeyPoints: Int?
+    
     public var cleanMethod: CleanMethod?
     
     // XXX stick more here, like state
@@ -47,6 +50,14 @@ public class FrameObserver {
 
     public func set(numberOfTrashOutliers: Int) {
         self.numberOfTrashOutliers = numberOfTrashOutliers
+    }
+
+    public func set(numberOfSkyKeyPoints: Int) {
+        self.numberOfSkyKeyPoints = numberOfSkyKeyPoints
+    }
+
+    public func set(numberOfEarthKeyPoints: Int) {
+        self.numberOfEarthKeyPoints = numberOfEarthKeyPoints
     }
     
     func set(numberOfPositiveOutliers: Int,

@@ -17,8 +17,6 @@ public extension AlignmentWarpInfo {
             homography: homographyArray,
             deviation: deviation,
             alignmentState: AlignmentState(objcState: alignmentState) ?? .unknown,
-            neighborKeyPoints: Int(neighborKeyPoints),
-            frameKeyPoints: Int(frameKeyPoints),
             frameIndex: Int(frameIndex)
         )
     }
@@ -46,8 +44,6 @@ public extension AlignmentWarpInfo {
           warpedHorizon: nil,
           deviation: codable.deviation,
           alignmentState: codable.alignmentState.objcValue ?? AlignmentStateObjC.unknown,
-          neighborKeyPoints: Int32(codable.neighborKeyPoints),
-          frameKeyPoints: Int32(codable.frameKeyPoints),
           frameIndex: UInt(codable.frameIndex)
         )
     }

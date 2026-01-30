@@ -8,8 +8,6 @@
                      warpedHorizon:(nullable MatWrapper *)warpedHorizon
                          deviation:(double)deviation
                     alignmentState:(AlignmentStateObjC)alignmentState
-                 neighborKeyPoints:(int)neighborKeyPoints
-                    frameKeyPoints:(int)frameKeyPoints
                         frameIndex:(NSUInteger)frameIndex
 {
     if ((self = [super init])) {
@@ -19,8 +17,6 @@
         _deviation = deviation;
         _frameIndex = frameIndex;
         _alignmentState = alignmentState;
-        _neighborKeyPoints = neighborKeyPoints;
-        _frameKeyPoints = frameKeyPoints;
     }
     return self;
 }
@@ -32,8 +28,6 @@
         _deviation = 0;
         _frameIndex = frameIndex;
         _alignmentState = AlignmentStateObjCNoAlignment;
-        _neighborKeyPoints = 0;
-        _frameKeyPoints = 0;
     }
     return self;
 }

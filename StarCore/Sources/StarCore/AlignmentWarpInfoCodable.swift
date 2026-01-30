@@ -12,10 +12,6 @@ public struct AlignmentWarpInfoCodable: Codable, Sendable {
     // or what error caused it to not exist
     public let alignmentState: AlignmentState
 
-    // these appear to always be identical for some reason
-    public let neighborKeyPoints: Int
-    public let frameKeyPoints: Int
-
     // frame index of the warped frame
     public let frameIndex: Int
 }
