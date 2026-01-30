@@ -39,7 +39,7 @@ public enum ImageDisplaySize: Sendable {
 public struct ImageAccessor: Sendable {
     let config: Config
     let frameIndexToBaseNameMap: [Int: String]
-    let imageSequence: ImageSequence
+    public let imageSequence: ImageSequence
     let imageSavedClosure: (
       @Sendable (
         PixelatedImage,

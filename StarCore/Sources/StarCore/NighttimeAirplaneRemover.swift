@@ -257,10 +257,6 @@ public actor NighttimeAirplaneRemover {
 
         let imageSequenceSize = /*self.*/imageSequence.filenames.count
 
-        if let imageSequenceSizeClosure = callbacks.imageSequenceSizeClosure {
-            imageSequenceSizeClosure(imageSequenceSize)
-        }
-        
         self.remainingImagesClosure = { numberOfUnprocessed in
             if let updatable = callbacks.updatable {
                 // log number of unprocessed images here

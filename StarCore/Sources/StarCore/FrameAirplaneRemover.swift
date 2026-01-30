@@ -312,6 +312,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 imageAccessor: ImageAccessor,
                 completion: (@Sendable () async -> Void)? = nil) async throws
     {
+        Log.d("frame \(frameIndex) init begin")
         self.imageSequence = imageSequence
         self.imageAccessor = imageAccessor
         self.fullyProcess = fullyProcess
@@ -339,6 +340,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           cleanMethod: config.cleanMethod(for: frameIndex),
           process: false
         )
+        Log.d("frame \(frameIndex) init mid")
         
         if imageAccessor.imageExists(frameIndex: frameIndex,
                                      ofType: .final,
@@ -350,12 +352,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // even if some are not classified
             self.state = .userModified
         }
+        Log.d("frame \(frameIndex) init mid 2")
         
         if let frameStateChangeCallback = callbacks.frameStateChangeCallback {
             frameStateChangeCallback(self, self.state)
         }
 
         await self.updateCombineSubjects()
+        Log.d("frame \(frameIndex) init end")
     }
 
     // threshold used for throwing out bad pixels before replacing with them
@@ -1486,8 +1490,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                 - alignment slope is close to constant
                                   deviation should be evenly spaced by frame distance
                              */
-                            if alignment.deviation < 60*Double(frameDistance), // XXX make this a constant
-                               alignmentSlope < medianSlope * 1.15, // XXX make this a constant too
+                            if alignment.deviation < 60*Double(frameDistance), // XXX make this a parameter
+                               alignmentSlope < medianSlope * 1.15, // XXX make this a parameter too
                                alignmentSlope > medianSlope / 1.15
                             {
                                 // rough estimate

@@ -99,7 +99,7 @@ public enum InteractionMode: String, Equatable, CaseIterable {
 public let frameProcessingMonitor = FileSystemMonitor(max: 32) // XXX make this configurable
 
 // used for loading frames, loading 20 at a time is faster than 1000
-fileprivate let frameLoadMonitor = FileSystemMonitor(max: 28) // XXX make this configurable
+fileprivate let frameLoadMonitor = FileSystemMonitor(max: 100) // XXX make this configurable
 
 
 // view model for a sequence of images
@@ -299,26 +299,30 @@ public final class ImageSequenceViewModel {
     // the frame number of the frame we're currently showing
     var currentIndex = 0 {
         didSet {
-            if let method = self.frames[currentIndex].frameObserver.cleanMethod {
-                switch method {
-                case .automatic(let useOutliers):
-                    self._currentFrameHighLevelCleanMethod = .automatic
-                    self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
+            if currentIndex >= 0,
+               currentIndex < self.frames.count
+            {
+                if let method = self.frames[currentIndex].frameObserver.cleanMethod {
+                    switch method {
+                    case .automatic(let useOutliers):
+                        self._currentFrameHighLevelCleanMethod = .automatic
+                        self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
+                        
+                    case .selective:
+                        self._currentFrameHighLevelCleanMethod = .selective
+                        self._currentFrameAutoPreservationMode = .no
+                    }
                     
-                case .selective:
-                    self._currentFrameHighLevelCleanMethod = .selective
-                    self._currentFrameAutoPreservationMode = .no
-                }
-                 
-            } else {
-                switch self.currentFrameCleanMethod {
-                case .automatic(let useOutliers):
-                    self._currentFrameHighLevelCleanMethod = .automatic
-                    self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
+                } else {
+                    switch self.currentFrameCleanMethod {
+                    case .automatic(let useOutliers):
+                        self._currentFrameHighLevelCleanMethod = .automatic
+                        self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
 
-                case .selective:
-                    self._currentFrameHighLevelCleanMethod = .selective
-                    self._currentFrameAutoPreservationMode = .no
+                    case .selective:
+                        self._currentFrameHighLevelCleanMethod = .selective
+                        self._currentFrameAutoPreservationMode = .no
+                    }
                 }
             }
         }
@@ -826,38 +830,14 @@ public final class ImageSequenceViewModel {
         
         let callbacks = self.makeCallbacks()
 
-        if let imageSequenceSizeClosure = callbacks.imageSequenceSizeClosure {
-            let imageSequenceSize = await imageSequence.filenames.count
-            imageSequenceSizeClosure(imageSequenceSize)
-        }
+        self.imageSequenceSize = await imageSequence.filenames.count
+        Log.d("loaded \(imageSequenceSize) images")
+        self.set(numberOfFrames: imageSequenceSize)
         
         Log.d("loaded imageInfo \(imageInfo)")
 
-        let filenames = await imageSequence.filenames
-
-        var frameIndexToBaseNameMap: [Int: String] = [:]
-        
-        for (frameIndex, filename) in filenames.enumerated() {
-            frameIndexToBaseNameMap[frameIndex] = removePath(fromString: filename)
-        }
-
-        // make image accessor here now
-        // the image accessor always has the original config
-        let imageAccessor = ImageAccessor(
-          config: configManager.config(),
-          imageSequence: imageSequence,
-          frameIndexToBaseNameMap: frameIndexToBaseNameMap
-        ) { [weak self] image, frameIndex, type, size in
-            Task { @MainActor in
-                Log.d("frame \(frameIndex) saved image of type \(type) at size \(size)")
-                self?.frames[frameIndex].saved(image: image, ofType: type, atSize: size)
-            }
-        }
-
         self.appNapDisabler.begin()
         
-        Log.d("make missing previews")
-
         self.finalProcessor = FinalGUIProcessor(self)
 
         self.matInstancesTask = Task { [weak self] in 
@@ -873,24 +853,68 @@ public final class ImageSequenceViewModel {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
             }
         }
-        
+
+        // finish setup off the main thread
+        await Task {
+            do {
+                try await self.setup(
+                  with: imageSequence,
+                  and: callbacks,
+                  configManager: configManager,
+                  config: config,
+                  closure: closure
+                )
+            } catch {
+                Log.e("startup error: \(error)")
+            }
+        }.value
+    }
+
+    nonisolated private func setup(
+      with imageSequence: ImageSequence,
+      and callbacks: Callbacks,
+      configManager: ConfigManager,
+      config: Config,
+      closure: @Sendable @escaping (Int, Double, Int, Double) -> Void
+    ) async throws {
         var numberPreviewsSaved = 0
 
-        Log.d("done with make missing previews")
-//        Log.d("make missing thumbnails")
-//        try await imageAccessor.writeMissingImages(atSize: .thumbnail)
-//        Log.d("done make missing thumbnails")
+        Log.d("setup")
 
+        var frameIndexToBaseNameMap: [Int: String] = [:]
+
+        let filenames = await imageSequence.filenames
+        
+        for (frameIndex, filename) in filenames.enumerated() {
+            frameIndexToBaseNameMap[frameIndex] = removePath(fromString: filename)
+        }
+
+        
+        let imageAccessor = ImageAccessor(
+          config: config,
+          imageSequence: imageSequence,
+          frameIndexToBaseNameMap: frameIndexToBaseNameMap
+        ) { [weak self] image, frameIndex, type, size in
+            Task { @MainActor in
+                Log.d("frame \(frameIndex) saved image of type \(type) at size \(size)")
+                self?.frames[frameIndex].saved(image: image, ofType: type, atSize: size)
+            }
+        }
+
+
+        let imageInfo = try await imageSequence.getImageInfo()
+        
         try await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
             
             for (frameIndex, filename) in filenames.enumerated() {
 
-                //Log.d("add task at frameIndex \(frameIndex)")
+                Log.d("add task at frameIndex \(frameIndex)")
 
                 taskGroup.addTask() {
                     let basename = removePath(fromString: filename)
                     let frame = try await frameLoadMonitor.load() {
-                        try await FrameAirplaneRemover(
+                        Log.d("running task at frameIndex \(frameIndex)")
+                        return try await FrameAirplaneRemover(
                           with: configManager,
                           width: imageInfo.imageWidth,
                           height: imageInfo.imageHeight,
@@ -905,8 +929,9 @@ public final class ImageSequenceViewModel {
                           imageAccessor: imageAccessor
                         )
                     }
+                    Log.d("got frame at frameIndex \(frameIndex)")
                     if let callback = callbacks.frameCheckClosure { 
-                        await MainActor.run {
+                        Task { @MainActor in 
                             callback(frame)
                         }
                     }
@@ -923,8 +948,9 @@ public final class ImageSequenceViewModel {
             
             for try await frame in taskGroup {
                 numberOfLoadedFrames += 1
+                Log.d("numberOfLoadedFrames \(numberOfLoadedFrames)")
                 // call the callback here on the main thread
-                let update = Double(numberOfLoadedFrames)/Double(imageSequenceSize)
+                let update = await Double(numberOfLoadedFrames)/Double(imageSequenceSize)
                 closure(numberPreviewsSaved, 1, numberOfLoadedFrames, update)
                 incomingFrames[frame.frameIndex] = frame
             }
@@ -942,20 +968,26 @@ public final class ImageSequenceViewModel {
             // doubly link them here
             await doublyLink(frames: frames)
 
-            self.initialLoadInProgress = false
+            Log.d("done loading image sequence")
+            
+            Task { @MainActor in
+                self.initialLoadInProgress = false
+            }
         }
 
         // Update All Frame View Models
-        for frame in frames {
-            if frame.frameIndex == currentIndex {
-                switch frame.cleanMethod {
-                case .automatic(let useOutliers): 
-                    currentFrameHighLevelCleanMethod = .automatic
-                    currentFrameAutoPreservationMode = useOutliers ? .yes : .no
+        Task { @MainActor in
+            for frame in frames {
+                if frame.frameIndex == currentIndex {
+                    switch frame.cleanMethod {
+                    case .automatic(let useOutliers): 
+                        currentFrameHighLevelCleanMethod = .automatic
+                        currentFrameAutoPreservationMode = useOutliers ? .yes : .no
 
-                case .selective:
-                    currentFrameHighLevelCleanMethod = .selective
-                    currentFrameAutoPreservationMode = .no
+                    case .selective:
+                        currentFrameHighLevelCleanMethod = .selective
+                        currentFrameAutoPreservationMode = .no
+                    }
                 }
             }
         }
@@ -970,16 +1002,6 @@ public final class ImageSequenceViewModel {
     
     func makeCallbacks() -> Callbacks {
         var callbacks = Callbacks()
-
-        // get the full number of images in the sequence
-        callbacks.imageSequenceSizeClosure = { [weak self] imageSequenceSize in
-            guard let self else { return }            
-            Task { @MainActor [weak self] in
-                self?.imageSequenceSize = imageSequenceSize
-                Log.i("read imageSequenceSize \(imageSequenceSize)")
-                self?.set(numberOfFrames: imageSequenceSize)
-            }
-        }
 
         callbacks.frameOutliersLoadedCallback = { [weak self] frameIndex, outliersLoaded in
             guard let self else { return }            

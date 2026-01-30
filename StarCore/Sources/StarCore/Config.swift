@@ -753,9 +753,6 @@ public struct Callbacks: Sendable {
     // called for the user to see a frame
     public var frameCheckClosure: (@Sendable (FrameAirplaneRemover) -> ())?
 
-    // returns the total full size of the image sequence
-    public var imageSequenceSizeClosure: (@Sendable (Int) -> Void)?
-
     public var frameOutliersLoadedCallback: (@Sendable (Int, OutlierLoadingState) -> Void)?
     
     public init() { }
