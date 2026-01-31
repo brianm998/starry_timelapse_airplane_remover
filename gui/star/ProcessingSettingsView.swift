@@ -365,10 +365,6 @@ struct ProcessingSettingsView: View {
                                   Divider()
                                   self.alignmentBaseImageThresholdValueView
                                   Divider()
-                                  self.alignmentNeighborDilateSizeView
-                                  Divider()
-                                  self.alignmentNeighborThresholdValueView
-                                  Divider()
                                   self.alignmentAllowEarthAlignmentView
                                   Divider()
                                   self.alignmentWriteDebugImagesViewValueView
@@ -854,77 +850,6 @@ struct ProcessingSettingsView: View {
         }
     }
 
-    private var alignmentNeighborThresholdValueView: some View {
-        @Bindable var viewModel = viewModel
-        return InfoTextInstructionGridRow(
-          showInfo: $showAlignmentNeighborThresholdValueInfo,
-          addSpacer: { addSpacer },
-          infoText: """
-            The Star alignment algorithm computes a mask for keypoint detection in neighbor frames when aligning them to a base image.  When computing this mask, in addition to discarding the ground, the sky is thresholded by this value.  What that means is only areas this bright or brighter will be scanned for keypoints.  This helps focus keypoint detection on the bright stars, and avoid clouds and other atmospheric phenomenon.  Lower values will give more key points on neighboring frames during alignment.  Max value is 255.
-            """
-        ) {
-            HStack {
-                HStack {
-                    Spacer()
-                    Text("Neighbor Image Threshold:")
-                      .font(.title2)
-                      .foregroundColor(.white)
-                      .opacity(0.6)
-                }
-                HStack {
-                    EditableNumberView(
-                      value: $viewModel.alignmentNeighborThresholdValue,
-                      minValue: 1,
-                      maxValue: 255,
-                      fullTextProvider: { _ in "" },
-                      prefixText: "",
-                      suffixTextProvider: { _ in "" },
-                      textColor: .white,
-                      focusedField: $focusedField,
-                      focusField: .alignmentNeighborThresholdValue,
-                      alwaysOpen: true            
-                    )
-                    Spacer()
-                }
-            }
-        }
-    }
-
-    private var alignmentNeighborDilateSizeView: some View {
-        @Bindable var viewModel = viewModel
-        return InfoTextInstructionGridRow(
-          showInfo: $showAlignmentNeighborDilateSizeInfo,
-          addSpacer: { addSpacer },
-          infoText: """
-            The Star alignment algorithm computes a mask for keypoint detection each neighboring frame.  When computing this mask, in addition to discarding the ground, the sky is thresholded by this value.  After thresholding, star will then dilate, or expand, the mask to include the given amount of pixels around the thresholded pixels.  This allows for the keypoint detection to see more of the transition of intensity, which can help keypoint detection.
-            """
-        ) {
-            HStack {
-                HStack {
-                    Spacer()
-                    Text("Neighbor Dilation Size:")
-                      .font(.title2)
-                      .foregroundColor(.white)
-                      .opacity(0.6)
-                }
-                HStack {
-                    EditableNumberView(
-                      value: $viewModel.alignmentNeighborDilateSize,
-                      minValue: 4,
-                      maxValue: 10000,
-                      fullTextProvider: { _ in "" },
-                      prefixText: "",
-                      suffixTextProvider: { _ in "" },
-                      textColor: .white,
-                      focusedField: $focusedField,
-                      focusField: .alignmentNeighborDilateSize,
-                      alwaysOpen: true            
-                    )
-                    Spacer()
-                }
-            }
-        }
-    }
 
     private var alignmentBaseImageThresholdValueView: some View {
         @Bindable var viewModel = viewModel
