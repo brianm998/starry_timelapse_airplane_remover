@@ -1696,6 +1696,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
      */
 
+    private var neighborEarthHomography: HomographyResultsCodable? = nil
+    private var neighborStarHomography: HomographyResultsCodable? = nil
+    
     internal func loadOrCreateHomography(
       of type: FrameViewMode
     ) async throws -> HomographyResultsCodable? {
@@ -1712,21 +1715,33 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             throw "unable to loadOrCreateAlignedImage of type \(type)"
         }
 
-        // try to load from file first
+        // try to load from ram/file first
         switch alignmentType {
         case .sky:
-            if let results = await self.readStarNeighborHomographyForThisFrame() {
-                return HomographyResultsCodable(with: results.homography)
+            if let ret = neighborStarHomography {
+                // from ram
+                return ret
+            } else if let results = await self.readStarNeighborHomographyForThisFrame() {
+                // from file
+                let ret = HomographyResultsCodable(with: results.homography)
+                self.neighborStarHomography = ret
+                return ret
             }
         case .earth:
-            if let results = await self.readEarthNeighborHomographyForThisFrame() {
-                return HomographyResultsCodable(with: results.homography)
+            if let ret = neighborEarthHomography {
+                // from ram
+                return ret
+            } else if let results = await self.readEarthNeighborHomographyForThisFrame() {
+                // from file
+                let ret = HomographyResultsCodable(with: results.homography)
+                self.neighborEarthHomography = ret
+                return ret
             }
         default:
             break
         }
 
-        // load from file failed
+        // cached loads failed
         
         // with no saved homography, calculate it from given feature points
         // of both this frame and all relevant neighboring frames.
@@ -1875,21 +1890,27 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             } else if let result = result as? HomographyResult {
                 let alignedWarps = result.warpInfo.map { $0.toCodable() }
 
+                let ret = HomographyResultsCodable(from: result)
+                
                 // save homograhpy results for later
                 switch type {
                 case .starAligned:
                     try self.write(
                       neighborStarHomography: alignedWarps
                     )
+                    // store results in ram for lookup later
+                    self.neighborStarHomography = ret
                 case .earthAligned:
                     try self.write(
                       neighborEarthHomography: alignedWarps
                     )
+                    // store results in ram for lookup later
+                    self.neighborEarthHomography = ret
                 default:
                     break
                 }
-
-                return HomographyResultsCodable(from: result)
+                
+                return ret
             }
         }
         
