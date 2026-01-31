@@ -765,6 +765,23 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         // compare homography to median deviations
                         // we need both fully aligned neighbors,
                         // and good homography, otherwise we will re-render
+
+
+                        /*
+                         If the video was not moving, check alignment based upon
+                         existing homography.
+
+                         If average derivation is too much, then reject alignment.
+
+                         more difficult if video was moving.
+
+                         need to know median homography if not moving
+
+                         need to know curve of near neighbors if moving
+
+                         see if our deviation fits this or not
+                         */
+                        
                         if !results.wasSuccessfullyAligned {
                             Log.i("frame \(frame.frameIndex) doesn't have good alignment will re-render")
                             shouldRender = renderWithExistingHomography
@@ -1680,7 +1697,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         } 
     }
     
-    fileprivate func loadOrCreateOCVFeatures(
+    func loadOrCreateOCVFeatures(
       of type: FrameViewMode
     ) async throws -> OCVFeatureSet? {
         var alignmentType: AlignmentType = .sky
