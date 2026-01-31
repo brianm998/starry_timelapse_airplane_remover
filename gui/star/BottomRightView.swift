@@ -192,7 +192,7 @@ struct BottomRightView: View {
                     }
                 }
 
-                
+                /*
                 if frameView.frameObserver.starAlignmentResults != nil ||
                    frameView.frameObserver.earthAlignmentResults != nil
                 {
@@ -210,6 +210,7 @@ struct BottomRightView: View {
                         .foregroundColor(results.numberAligned.count == results.total ? .white : .red)
                     }
                 }
+                 */
                 
                 VStack {
                     if let _ = frameView.outlierViews {
