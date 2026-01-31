@@ -17,11 +17,11 @@ public final class FrameGraphBuilder {
     }
 
     public func build(
-        frames: [FrameContext],
+        frames: [FrameAirplaneRemover],
         hasHorizon: Bool,
         processEarth: Bool,
         closure: @escaping () -> Void
-    ) {
+    ) async {
         var homographyOps: [Operation] = []
         var mergeOps: [Operation] = []
 
@@ -46,14 +46,14 @@ public final class FrameGraphBuilder {
             lastOps.forEach { skyKP.addDependency($0) }
             Log.d("\(lastOps.count) lastOps")
             keypointQueue.addOperation(skyKP)
-            skyKeypointOps[frame.index] = skyKP
+            skyKeypointOps[frame.frameIndex] = skyKP
             
             // 2b. Earth keypoints (optional)
             if hasHorizon && processEarth {
                 let kp = KeypointOp(frame: frame, mode: .earthAligned)
                 kp.addDependency(skyKP)
                 keypointQueue.addOperation(kp)
-                earthKeypointOps[frame.index] = kp
+                earthKeypointOps[frame.frameIndex] = kp
             }
         }
 
@@ -61,14 +61,13 @@ public final class FrameGraphBuilder {
             // 3. Homographies
             let skyH = HomographyOp(frame: frame, mode: .starAligned)
 
-
             // Depends on this frame's sky keypoints
-            if let selfKP = skyKeypointOps[frame.index] {
+            if let selfKP = skyKeypointOps[frame.frameIndex] {
                 skyH.addDependency(selfKP)
             }
 
             // Depends on neighbors' sky keypoints
-            for neighborIndex in frame.neighbors {
+            for neighborIndex in await frame.getAlignmentFrameIndices() {
                 if let neighborKP = skyKeypointOps[neighborIndex] {
                     skyH.addDependency(neighborKP)
                 }
@@ -79,12 +78,12 @@ public final class FrameGraphBuilder {
 
             // ---- Earth-aligned homography (optional) ----
             if hasHorizon && processEarth {
-                guard let selfEarthKP = earthKeypointOps[frame.index] else { continue }
+                guard let selfEarthKP = earthKeypointOps[frame.frameIndex] else { continue }
 
                 let earthH = HomographyOp(frame: frame, mode: .earthAligned)
                 earthH.addDependency(selfEarthKP)
 
-                for neighborIndex in frame.neighbors {
+                for neighborIndex in await frame.getAlignmentFrameIndices() {
                     if let neighborKP = earthKeypointOps[neighborIndex] {
                         earthH.addDependency(neighborKP)
                     }

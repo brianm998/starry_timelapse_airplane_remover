@@ -6,7 +6,7 @@ public class AsyncOperation: Operation {
     private var _isExecuting = false
     private var _isFinished = false
 
-    internal var task: Task<Void, Never>?
+    internal var task: Task<Void, any Error>?
     
     override public var isAsynchronous: Bool { true }
 

@@ -2,9 +2,9 @@ import Foundation
 import logging
 
 final class AlignmentValidationOp: AsyncOperation {
-    let frames: [FrameContext]
+    let frames: [FrameAirplaneRemover]
 
-    init(frames: [FrameContext]) {
+    init(frames: [FrameAirplaneRemover]) {
         self.frames = frames
     }
 

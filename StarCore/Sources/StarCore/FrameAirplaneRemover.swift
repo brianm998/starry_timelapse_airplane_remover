@@ -1136,7 +1136,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           usingExistingHomography: usingExistingHomography
         )
     }
-    
+
+    // XXX break this up into:
+    // - get and save neighbor homography
+    // - align neighbors with given homography
     fileprivate func loadOrCreateAlignedImage(
       of type: FrameViewMode,
       withFailedType failedType: FrameViewMode? = nil,
@@ -1233,22 +1236,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // with no saved aligned frame, first load or create the set of aligned frames
         // that we used to create the final aligned frame
 
-
-        /*
-         
-
-         Next steps here:
-
-         pass through keypoints instead of calculating them in this path.
-
-         get both base and neighbor keypoints from the frame
-
-         refactor alignment code to use passed in keypoints
-        
-         8x speedup on keypoint detection
-        
-         */
-        
         Log.i("frame \(frameIndex) creating aligned image of type \(type)")
         
         let config = await configManager.config()
@@ -1947,6 +1934,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                        atSize: .preview)
     }
 
+    public func getAlignmentFrameIndices() -> [Int] {
+        alignmentFrames
+    }
+    
     private var alignmentFrames: [Int] = []
     private var staticNeighborFrames: [Int] = []
     private let baseFilename: String
