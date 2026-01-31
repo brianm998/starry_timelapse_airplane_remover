@@ -1823,28 +1823,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         // can't load from file, detect homography 
 
-        var horizonMask: HorizonMask? = nil
-        /*
-        if config.horizonDetectionEnabled {
-            horizonMask = try await loadOrCreateHorizonMask()
-            if let horizonMask {
-                Log.d("horizon mask \(horizonMask.image.description)")
-            }
-        }
-         */
-        
         Log.d("frame \(frameIndex) doing real alignment for type \(alignmentType)")
         // do real alignment
 
-        var homography: [NSNumber: MatWrapper]? = nil
+//        var homography: [NSNumber: MatWrapper]? = nil
         
         let request = HomographyRequest(
           baseKeypoints: alignmentType == .sky ? self.skyKeyPoints : self.earthKeyPoints,
           frameIndex: Int32(frameIndex),
           neighbors: neighbors,
           matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
-          mask: horizonMask?.image.mat, // XXX REMOVE THIS
-          alignmentType: alignmentType,       // earth is zero in mask
+          alignmentType: alignmentType,
           maxKeypoints: Int32(config.alignmentMaxKeypoints), 
           writeDebugImages: config.alignmentWriteDebugImages
         )
