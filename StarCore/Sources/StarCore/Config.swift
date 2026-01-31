@@ -308,8 +308,6 @@ public struct Config: Codable, Sendable, Transferable {
     public var alignmentSkyHorizonExtension: Int = 40
     public var alignmentBaseImageDilateSize: Int = 20
     public var alignmentBaseImageThresholdValue: Int = 100
-    public var alignmentNeighborDilateSize: Int = 20
-    public var alignmentNeighborThresholdValue: Int = 20
 
     public var imageWidth: Int = 0
     public var imageHeight: Int = 0
@@ -392,10 +390,6 @@ public struct Config: Codable, Sendable, Transferable {
         self.alignmentSkyHorizonExtension = try c.decodeIfPresent(Int.self, forKey: .alignmentSkyHorizonExtension) ?? self.alignmentSkyHorizonExtension
         self.alignmentBaseImageDilateSize = try c.decodeIfPresent(Int.self, forKey: .alignmentBaseImageDilateSize) ?? self.alignmentBaseImageDilateSize
         self.alignmentBaseImageThresholdValue = try c.decodeIfPresent(Int.self, forKey: .alignmentBaseImageThresholdValue) ?? self.alignmentBaseImageThresholdValue
-        self.alignmentNeighborDilateSize = try c.decodeIfPresent(Int.self, forKey: .alignmentNeighborDilateSize) ?? self.alignmentNeighborDilateSize
-        self.alignmentNeighborThresholdValue = try c.decodeIfPresent(Int.self, forKey: .alignmentNeighborThresholdValue) ?? self.alignmentNeighborThresholdValue
-        
-        
         
 
         self.starVersion = try c.decodeIfPresent(String.self, forKey: .starVersion) ?? self.starVersion

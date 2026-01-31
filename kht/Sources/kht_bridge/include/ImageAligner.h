@@ -7,6 +7,7 @@
 #import "ObjcAlignmentStep.h"
 #import "OCVFeatureRequest.h"
 #import "OCVFeatureSet.h"
+#import "HomographyRequest.h"
 
 typedef void (^ImageAlignerUpdateBlock)(int frameIndex, AlignmentType alignmentType, ObjCAlignmentStep alignmentStep, int neighborNumber);
 
@@ -29,17 +30,15 @@ typedef void (^ImageAlignerUpdateBlock)(int frameIndex, AlignmentType alignmentT
                    outlierThreshold:(double)k
                          includeAll:(BOOL)includeAll;
 
-// align frames to special frame, with optional mask which shows where to get keypoints from
-
-// main alignment method
-+ (id _Nullable)alignWithRequest:(AlignmentRequest * _Nonnull)request
-                         handler:(ImageAlignerUpdateBlock _Nonnull)handler;
-
 // returns a OCVFeatureSet upon success, which contains keypoints and descriptors  
 + (id _Nullable)findFeatures:(OCVFeatureRequest * _Nonnull)request;
 
-// doesn't compute homography, expects it
-+ (id _Nullable)alignWithExistingHomographyRequest:(AlignmentRequest * _Nonnull)request;
+// compute homography with given keypoints 
++ (id _Nullable)homographyWithRequest:(HomographyRequest * _Nonnull)request
+                              handler:(ImageAlignerUpdateBlock _Nonnull)handler;
+
+// align with given homography
++ (id _Nullable)alignWithRequest:(AlignmentRequest * _Nonnull)request;
 
 +(MatWrapper * _Nonnull)createGradientMaskIntoSky:(MatWrapper* _Nonnull)binaryMask
                                  gradientDistance:(int)gradientDistance;

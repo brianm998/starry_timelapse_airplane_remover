@@ -1,7 +1,7 @@
 import Foundation
 import logging
 
-final class KeypointOp: AsyncOperation {
+final class KeypointOp: AsyncOperation, @unchecked Sendable {
     let frame: FrameAirplaneRemover
     let mode: FrameViewMode
 

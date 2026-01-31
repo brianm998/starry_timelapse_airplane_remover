@@ -1,7 +1,7 @@
 import Foundation
 import logging
 
-public final class MergeOp: AsyncOperation {
+public final class MergeOp: AsyncOperation, @unchecked Sendable {
     let frame: FrameAirplaneRemover
 
     init(frame: FrameAirplaneRemover) {

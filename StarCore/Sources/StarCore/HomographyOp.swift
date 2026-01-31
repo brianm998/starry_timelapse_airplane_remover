@@ -1,7 +1,7 @@
 import Foundation
 import logging
 
-final class HomographyOp: AsyncOperation {
+final class HomographyOp: AsyncOperation, @unchecked Sendable {
     let frame: FrameAirplaneRemover
     let mode: FrameViewMode
 
@@ -17,8 +17,7 @@ final class HomographyOp: AsyncOperation {
                 finish()
             }
             Log.d("frame \(frame.frameIndex) start")
-            try? await Task.sleep(nanoseconds: UInt64.random(in: 2_000_000_000...10_000_000_000))
-//            try? await frame.remover.computeNeighborHomographies(mode: mode)
+            try await frame.loadOrCreateHomography(of: mode)
         }
     }
 }

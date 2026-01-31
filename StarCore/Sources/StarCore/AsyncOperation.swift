@@ -1,6 +1,6 @@
 import Foundation
 
-public class AsyncOperation: Operation {
+public class AsyncOperation: Operation, @unchecked Sendable {
     private let stateQueue = DispatchQueue(label: "async.op.state")
 
     private var _isExecuting = false

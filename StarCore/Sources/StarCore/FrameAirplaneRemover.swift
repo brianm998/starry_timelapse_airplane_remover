@@ -82,14 +82,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         Task {
             await observer.set(cleanMethod: cleanMethod)
-            if let results = await self.readNumberOfEarthAlignedImagesForThisFrame() {
+            if let results = await self.readEarthNeighborHomographyForThisFrame() {
                 Log.d("frame \(frameIndex) setting number of earth alignments \(results)")
                 await observer.set(earthAlignmentResults: results)
             } else {
                 Log.d("frame \(frameIndex) NO number of earth alignments")
             }
 
-            if let results = await self.readNumberOfStarAlignedImagesForThisFrame() {
+            if let results = await self.readStarNeighborHomographyForThisFrame() {
                 Log.d("frame \(frameIndex) setting number of star alignments \(results)")
                 await observer.set(starAlignmentResults: results)
             } else {
@@ -617,6 +617,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     private func searchForGoodHomography(
       goingFoward: Bool
     ) async -> (Int, [NSNumber:MatWrapper]) {
+        /*
+
+         XXX REDO THIS 
         var nextFrame: FrameAirplaneRemover? = self
         let config = await configManager.config()
         while nextFrame != nil {
@@ -648,6 +651,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
         }
+         */
         return (-1, [:])
     }
 
@@ -781,7 +785,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
                          see if our deviation fits this or not
                          */
-                        
+
+
+                        /*
+
+                         XXX REWRITE THIS FOR GRAPH
+                         
                         if !results.wasSuccessfullyAligned {
                             Log.i("frame \(frame.frameIndex) doesn't have good alignment will re-render")
                             shouldRender = renderWithExistingHomography
@@ -798,6 +807,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         } else {
                             Log.i("frame \(frame.frameIndex) has good alignment so keeping")
                         }
+                         */
                     } else {
                         Log.i("frame \(frame.frameIndex) has no frame homography, will re-render")
                         shouldRender = true
@@ -1020,6 +1030,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
      */
     var medianGoodStarAlignmentHomography: [NSNumber:MatWrapper] { // indexed by frame offset
         get async {
+            /*
+
+             XXX REWRITE FOR GRAPH
+             
             var records: [NSNumber:[[Double]]] = [:]
 
             var firstFrame = await self.firstFrameInSequence
@@ -1049,7 +1063,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     nextFrame = await frame.getNextFrame()
                 }
             }
-            var ret: [NSNumber: MatWrapper] = [:]
             for (frameOffset, homographyList) in records {
                 // take the median based upon deviation of the homography
                 let sortedList = homographyList.sorted(
@@ -1063,6 +1076,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     }
                 }
             }
+             */
+            var ret: [NSNumber: MatWrapper] = [:]
             return ret
         }
     }
@@ -1071,6 +1086,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // XXX nearly a direct copy of star version above with s/star/earth/ :(
     var medianGoodEarthAlignmentHomography: [NSNumber:MatWrapper] { // indexed by frame offset
         get async {
+            /*
+             XXX REWRITE FOR GRAPH
+             
             var records: [NSNumber:[[Double]]] = [:]
 
             var firstFrame = await self.firstFrameInSequence
@@ -1115,31 +1133,38 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
             return ret
+             */
+            return [:]
         }
     }
     
     // uses opencv2 for dark ground specific detection logic
     private func loadOrCreateEarthAlignedImage() async throws -> AlignmentResult {
+        fatalError("UNIMIPLEMENTED")
+        /*
         try await loadOrCreateAlignedImage(
           of: .earthAligned,
           withFailedType: .failedEarthAligned
-        )
+        )*/
     }
     
     // uses opencv2 for SIFT fast, accurate image alignment
     private func loadOrCreateStarAlignedImage(
       usingExistingHomography: Bool = false
     ) async throws -> AlignmentResult {
+        fatalError("UNIMIPLEMENTED")
+        /*
         try await loadOrCreateAlignedImage(
           of: .starAligned,
           withFailedType: .failedStarAligned,
           usingExistingHomography: usingExistingHomography
-        )
+        )*/
     }
 
     // XXX break this up into:
     // - get and save neighbor homography
     // - align neighbors with given homography
+    /*
     fileprivate func loadOrCreateAlignedImage(
       of type: FrameViewMode,
       withFailedType failedType: FrameViewMode? = nil,
@@ -1168,15 +1193,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             Log.d("frame \(frameIndex) loaded aligned frame")
             
             let horizonMask = try await self.loadMergedHorizonMask()
-            var results: FrameAlignmentResults? = nil
+            var results: HomographyResultsCodable? = nil
             switch alignmentType {
             case .earth:
-                results = await self.readNumberOfEarthAlignedImagesForThisFrame()
+                results = await self.readEarthNeighborHomographyForThisFrame()
                 if let results {
                     await observer?.set(earthAlignmentResults: results)
                 }
             case .sky:
-                results = await self.readNumberOfStarAlignedImagesForThisFrame()
+                results = await self.readStarNeighborHomographyForThisFrame()
                 if let results {
                     await observer?.set(starAlignmentResults: results)
                 }
@@ -1202,15 +1227,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 {
                     Log.d("frame \(frameIndex) trying to load image of type \(failedType) because we were unable to load image of type \(type)")
                     let horizonMask = try await self.loadMergedHorizonMask()
-                    var results: FrameAlignmentResults? = nil
+                    var results: HomographyResultsCodable? = nil
                     switch alignmentType {
                     case .earth:
-                        results = await self.readNumberOfEarthAlignedImagesForThisFrame()
+                        results = await self.readEarthNeighborHomographyForThisFrame()
                         if let results {
                             await observer?.set(earthAlignmentResults: results)
                         }
                     case .sky:
-                        results = await self.readNumberOfStarAlignedImagesForThisFrame()
+                        results = await self.readStarNeighborHomographyForThisFrame()
                         if let results {
                             await observer?.set(starAlignmentResults: results)
                         }
@@ -1396,8 +1421,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
             
-            let request = AlignmentRequest(
-              baseImage: originalFrame.mat,
+            let request = HomographyRequest(
               baseKeypoints: alignmentType == .sky ? self.skyKeyPoints : self.earthKeyPoints,
               frameIndex: Int32(frameIndex),
               neighbors: neighbors,
@@ -1405,17 +1429,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               mask: horizonMask?.image.mat,
               alignmentType: alignmentType,       // earth is zero in mask
               maxKeypoints: Int32(config.alignmentMaxKeypoints), 
-              writeDebugImages: config.alignmentWriteDebugImages,
-              groundHorizonExtension: Int32(config.alignmentGroundHorizonExtension), // extend the horizon for ground by this amount to get more keypoints
-              skyHorizonExtension: Int32(config.alignmentSkyHorizonExtension),
-              baseImageDilateSize: Int32(config.alignmentBaseImageDilateSize),
-              baseImageThresholdValue: Int32(config.alignmentBaseImageThresholdValue),
-              neighborDilateSize: Int32(config.alignmentNeighborDilateSize),
-              neighborThresholdValue: Int32(config.alignmentNeighborThresholdValue),
-              homography: homography
+              writeDebugImages: config.alignmentWriteDebugImages
             )
 
-            if let result = ImageAligner.align(
+            if let result = ImageAligner.homography(
                  with: request,
                  handler: { frameIndex,
                             alignmentType,
@@ -1511,6 +1528,19 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         badWarps = results
                     }
 
+                    /*
+
+
+                     XXX THIS SHIT ISN'T THERE ANYMORE
+
+
+                     rewrite this to just pass back the homography
+
+                     move the alignment checking to a different place
+
+                     
+                          */
+                    
                     var failedResult: MatWrapper? = nil
                     var alignedResult: MatWrapper? = nil
                     var horizonResult: MatWrapper? = nil
@@ -1649,7 +1679,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         switch type {
         case .starAligned:
             try self.write(
-              numberOfStarAlignedImagesForThisFrame: alignedWarps,
+              neighborStarHomography: alignedWarps,
               andFailures: failedWarps
             )
         case .earthAligned:
@@ -1663,6 +1693,208 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         return alignmentResult
     }    
+
+     */
+
+    internal func loadOrCreateHomography(
+      of type: FrameViewMode
+    ) async throws -> HomographyResultsCodable? {
+        var alignmentType: AlignmentType = .sky
+
+        Log.d("frame \(frameIndex) loadOrCreateHomography of type \(type) ")
+        
+        switch type {
+        case .starAligned:
+            alignmentType = .sky
+        case .earthAligned:
+            alignmentType = .earth
+        default:
+            throw "unable to loadOrCreateAlignedImage of type \(type)"
+        }
+
+        // try to load from file first
+        switch alignmentType {
+        case .sky:
+            if let results = await self.readStarNeighborHomographyForThisFrame() {
+                return HomographyResultsCodable(with: results.homography)
+            }
+        case .earth:
+            if let results = await self.readEarthNeighborHomographyForThisFrame() {
+                return HomographyResultsCodable(with: results.homography)
+            }
+        default:
+            break
+        }
+
+        // load from file failed
+        
+        // with no saved homography, calculate it from given feature points
+        // of both this frame and all relevant neighboring frames.
+
+        Log.i("frame \(frameIndex) creating aligned image of type \(type)")
+        
+        let config = await configManager.config()
+
+        switch type {
+        case .starAligned:
+            self.set(state: .starAlignment(.start))
+        case .earthAligned:
+            if config.tripodHeadWasMoving {
+                self.set(state: .earthAlignment(.start))
+            }
+        default:
+            break
+        }
+
+        var neighbors: [AlignmentNeighborInfo] = []
+        
+        for neighborIndex in alignmentFilenames.keys {
+            if let filename = self.imageAccessor.nameForImage(
+                 frameIndex: neighborIndex,
+                 ofType: .original,
+                 atSize: .original
+               )
+            {
+                // load any possible keypoints for this neighbor 
+                var keypointFilename = ""
+                
+                switch type {
+                case .starAligned:
+                    keypointFilename = "\(neighborIndex).sky.yaml"
+                case .earthAligned:
+                    keypointFilename = "\(neighborIndex).earth.yaml"
+                default:
+                    Log.e("not loading keypoints for type \(type)")
+                }
+
+                let keypoints = try? OCVFeatureSet(
+                  file: "\(config.dirForKeypointData)/\(keypointFilename)"
+                )
+                switch alignmentType {
+                case .earth:
+                    if let maskFilename = self.imageAccessor.nameForImage(
+                         frameIndex: neighborIndex,
+                         ofType: .horizon,
+                         atSize: .original
+                       )
+                    {
+                        neighbors.append(
+                          AlignmentNeighborInfo(
+                            filename: filename,
+                            maskFilename: maskFilename,
+                            keypoints: keypoints,
+                            frameIndex: Int32(neighborIndex)
+                          )
+                        )
+                    } else {
+                        Log.w("frame \(frameIndex) unable to get filename mask original image at frame index \(neighborIndex)")
+                    }
+                case .sky:
+                    neighbors.append(
+                      AlignmentNeighborInfo(
+                        filename: filename,
+                        maskFilename: nil,
+                        keypoints: keypoints,
+                        frameIndex: Int32(neighborIndex)
+                      )
+                    )
+                default:
+                    break
+                }
+            }
+        }
+
+        var alignmentResult: HomographyResult? = nil
+
+        // can't load from file, detect homography 
+
+        var horizonMask: HorizonMask? = nil
+        /*
+        if config.horizonDetectionEnabled {
+            horizonMask = try await loadOrCreateHorizonMask()
+            if let horizonMask {
+                Log.d("horizon mask \(horizonMask.image.description)")
+            }
+        }
+         */
+        
+        Log.d("frame \(frameIndex) doing real alignment for type \(alignmentType)")
+        // do real alignment
+
+        var homography: [NSNumber: MatWrapper]? = nil
+        
+        let request = HomographyRequest(
+          baseKeypoints: alignmentType == .sky ? self.skyKeyPoints : self.earthKeyPoints,
+          frameIndex: Int32(frameIndex),
+          neighbors: neighbors,
+          matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
+          mask: horizonMask?.image.mat, // XXX REMOVE THIS
+          alignmentType: alignmentType,       // earth is zero in mask
+          maxKeypoints: Int32(config.alignmentMaxKeypoints), 
+          writeDebugImages: config.alignmentWriteDebugImages
+        )
+
+        if let result = ImageAligner.homography(
+             with: request,
+             handler: { frameIndex,
+                        alignmentType,
+                        alignmentStep,
+                        neighborNumber in
+
+                 // XXX this handler is out of date now
+                 
+                 Log.d("frame \(frameIndex) got alignment step update \(alignmentStep)")
+                 // update frame state while processing
+                 var processingState: FrameProcessingState? = nil
+
+                 if let step = AlignmentStep(
+                      from: alignmentStep,
+                      neighborNumber: Int(neighborNumber))
+                 {
+                     switch alignmentType {
+                     case .sky:
+                         processingState = .starAlignment(step)
+                         break
+                     case .earth:
+                         processingState = .earthAlignment(step)
+                         break
+                         @unknown default:
+                             break
+                     }
+                 } else {
+                     Log.w("frame \(frameIndex) unable to process alignment step \(alignmentStep)")
+                 }
+
+                 if let processingState {
+                     Log.d("frame \(frameIndex) setting processingState \(processingState)")
+                     self.set(state: processingState)
+                 }
+             }) {
+            if let error = result as? String {
+                Log.e("frame \(frameIndex) error: \(error)")
+            } else if let result = result as? HomographyResult {
+                let alignedWarps = result.warpInfo.map { $0.toCodable() }
+
+                // save homograhpy results for later
+                switch type {
+                case .starAligned:
+                    try self.write(
+                      neighborStarHomography: alignedWarps
+                    )
+                case .earthAligned:
+                    try self.write(
+                      neighborEarthHomography: alignedWarps
+                    )
+                default:
+                    break
+                }
+
+                return HomographyResultsCodable(from: result)
+            }
+        }
+        
+        return nil
+    }
     
     // uses opencv2 for dark ground specific detection logic
     public func loadOrCreateEarthFeatures() async throws -> OCVFeatureSet? {
@@ -1785,16 +2017,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return nil
     }    
     
-    let numberOfStarAlignedImagesFilename = "number_of_star_aligned_images.json"
+    let neighborStarHomographyFilename = "neighbor_star_homography.json"
     
     private func write(
-      numberOfStarAlignedImagesForThisFrame: [AlignmentWarpInfoCodable],
-      andFailures failures: [AlignmentWarpInfoCodable]
+      neighborStarHomography: [AlignmentWarpInfoCodable]
     ) throws {
         if let results = try write(
-             success: numberOfStarAlignedImagesForThisFrame,
-             andFailures: failures,
-             to: numberOfStarAlignedImagesFilename
+             homography: neighborStarHomography,
+             to: neighborStarHomographyFilename
            ),
            let observer
         {
@@ -1803,10 +2033,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     private func write(
-      success: [AlignmentWarpInfoCodable],
-      andFailures: [AlignmentWarpInfoCodable],
+      homography: [AlignmentWarpInfoCodable],
       to filename: String
-    ) throws -> FrameAlignmentResults? {
+    ) throws -> HomographyResultsCodable? {
         if let dirname = imageAccessor.dirForImage(
           ofType: .starAligned,
           atSize: .original
@@ -1815,9 +2044,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             StarCore.mkdir(dirname)
             // write a text file with
 
-            let results = FrameAlignmentResults(
-              numberAligned: success,
-              numberFailed: andFailures
+            let results = HomographyResultsCodable(
+              with: homography
             )
 
             let encoder = JSONEncoder()
@@ -1843,11 +2071,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
-    public func readNumberOfStarAlignedImagesForThisFrame() async -> FrameAlignmentResults? {
-        await readAlignmentResults(from: numberOfStarAlignedImagesFilename)
+    public func readStarNeighborHomographyForThisFrame() async -> HomographyResultsCodable? {
+        await readHomographyResults(from: neighborStarHomographyFilename)
     }
 
-    private func readAlignmentResults(from filename: String) async -> FrameAlignmentResults? {
+    private func readHomographyResults(from filename: String) async -> HomographyResultsCodable? {
         if let dirname = imageAccessor.dirForImage(ofType: .starAligned,
                                                    atSize: .original)
         {
@@ -1867,7 +2095,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                      )
                 )
                 let decoder = JSONDecoder()
-                return try decoder.decode(FrameAlignmentResults.self, from: data)
+                return try decoder.decode(HomographyResultsCodable.self, from: data)
             } catch {
                 //Log.i("Error: \(error)")
                 return nil
@@ -1887,25 +2115,24 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         } 
     }
         
-    let numberOfEarthAlignedImagesFilename = "number_of_earth_aligned_images.json"
+    let neighborEarthHomographyFilename = "neighbor_earth_homography.json"
 
     private func write(
-      numberOfEarthAlignedImagesForThisFrame: [AlignmentWarpInfoCodable],
-      andFailures failures: [AlignmentWarpInfoCodable]
+      neighborEarthHomography: [AlignmentWarpInfoCodable]
     ) throws {
         if let results = try write(
-             success: numberOfEarthAlignedImagesForThisFrame,
-             andFailures: failures,
-             to: numberOfEarthAlignedImagesFilename
+             homography: neighborEarthHomography,
+             to: neighborEarthHomographyFilename
            ),
            let observer
         {
             Task { await observer.set(earthAlignmentResults: results) }
         }
     }
-    
-    public func readNumberOfEarthAlignedImagesForThisFrame() async -> FrameAlignmentResults? {
-        await readAlignmentResults(from: numberOfEarthAlignedImagesFilename)
+
+
+    public func readEarthNeighborHomographyForThisFrame() async -> HomographyResultsCodable? {
+        await readHomographyResults(from: neighborEarthHomographyFilename)
     }
 
     public func deleteAllProcessedImages() {

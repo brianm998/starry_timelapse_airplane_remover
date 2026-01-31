@@ -16,12 +16,6 @@ typedef NS_ENUM(NSInteger, AlignmentStateObjC) {
 /// 3x3 homography matrix (CV_64F), nil if none computed
 @property(nonatomic, strong, nullable) MatWrapper *homography;
 
-/// Warped frame if warping is possible at all
-@property(nonatomic, strong, nullable) MatWrapper *warpedFrame;
-
-/// Warped frame if warping is possible at all
-@property(nonatomic, strong, nullable) MatWrapper *warpedHorizon;
-
 /// L2 norm of (H - I)
 @property(nonatomic, assign) double deviation;
 
@@ -31,8 +25,6 @@ typedef NS_ENUM(NSInteger, AlignmentStateObjC) {
 @property(nonatomic, assign) NSUInteger frameIndex;
 
 - (instancetype _Nonnull)initWithHomography:(nullable MatWrapper *)homography
-                                warpedFrame:(nullable MatWrapper *)warpedFrame
-                              warpedHorizon:(nullable MatWrapper *)warpedHorizon
                                   deviation:(double)deviation
                              alignmentState:(AlignmentStateObjC)alignmentState
                                  frameIndex:(NSUInteger)frameIndex;

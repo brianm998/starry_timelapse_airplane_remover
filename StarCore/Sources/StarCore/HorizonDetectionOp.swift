@@ -1,7 +1,7 @@
 import Foundation
 import logging
 
-final class HorizonDetectionOp: AsyncOperation {
+final class HorizonDetectionOp: AsyncOperation, @unchecked Sendable {
     let frame: FrameAirplaneRemover
 
     init(frame: FrameAirplaneRemover) {

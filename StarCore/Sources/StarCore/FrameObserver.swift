@@ -14,8 +14,8 @@ public class FrameObserver {
     public var numberOfUndecidedOutliers: Int?
     public var numberOfTrashOutliers: Int?
 
-    public var starAlignmentResults: FrameAlignmentResults?
-    public var earthAlignmentResults: FrameAlignmentResults?
+    public var starAlignmentResults: HomographyResultsCodable?
+    public var earthAlignmentResults: HomographyResultsCodable?
 
     public var numberOfSkyKeyPoints: Int?
     public var numberOfEarthKeyPoints: Int?
@@ -28,11 +28,11 @@ public class FrameObserver {
         self.cleanMethod = cleanMethod
     }
     
-    public func set(starAlignmentResults: FrameAlignmentResults) {
+    public func set(starAlignmentResults: HomographyResultsCodable) {
         self.starAlignmentResults = starAlignmentResults
     }
 
-    public func set(earthAlignmentResults: FrameAlignmentResults) {
+    public func set(earthAlignmentResults: HomographyResultsCodable) {
         self.earthAlignmentResults = earthAlignmentResults
     }
     

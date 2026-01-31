@@ -5,6 +5,9 @@
 #import "logging.h"
 #import "OCVFeatureRequest.h"
 #import "OCVFeatureSet.h"
+#import "HomographyRequest.h"
+#import "HomographyResult.h"
+#import "WarpedImageResult.h"
 #import <opencv2/core.hpp>
 #import <opencv2/imgproc.hpp>
 #import <opencv2/imgcodecs.hpp>
@@ -451,72 +454,26 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 }
 
 /***
- * Main alignment method. 
+ * Main homography method. 
  *
- * Aligns array of 'neighbors' to 'baseImage'.
- * The 'mask' is a binary mask with zero for the ground and non-zero for the sky
+ * Uses pre-computed key points for each frame
  * 
- * Returns NSMutableArray<AlignmentWarpInfo *> *warps
+ * Returns HomographyResult with NSMutableArray<AlignmentWarpInfo *> *warps
+ *
+ * Each AlignmentWarpInfo contains homography for each neighbor frame 
  *
  * returns string errors when there is a problem, or maybe nil
  *
  * Uses different logic for sky and earth alignment, alignmentType governs that.
  */
-/*
-
-  Faster rewrite:
-
-   Right now, the vast majority of time is spent in keypoint detection.
-   The app is computing keypoints on each frame N times, where N is the number of neighbors.
-   This is slow and redundant.
-
-   Faster would be to compute keypoints for all frames once, and keep that information
-   available after computation, both in ram and in flash.
-
-   Then alignment is split into more different phases:
-     - first find sky (and maybe earth) keypoints for all frames, saving this data
-     - then have a process which tries to match keypoints and produce a homography
-     - then go through again and do our current second pass to fix bad homography
-   
- */
-+ (id _Nullable)alignWithRequest:(AlignmentRequest * _Nonnull)request
-                         handler:(ImageAlignerUpdateBlock)handler
++ (id _Nullable)homographyWithRequest:(HomographyRequest * _Nonnull)request
+                              handler:(ImageAlignerUpdateBlock)handler
 {
   @try {
     try {
       uint32_t logID = request.frameIndex;
 
       SET_FRAME_STATE(request, ObjCAlignmentStepStart, 0);
-
-      if(request.homography != nil) {
-        // use passed homography
-        return [ImageAligner alignWithExistingHomographyRequest:request];
-      }
-      
-      // Horizon mask (sky = nonzero, ground = 0)
-      MatWrapper * horizonMask;
-      if (request.mask != NULL && !request.mask.mat.empty()) {
-        // use passed in horizon mask
-        horizonMask = request.mask;
-      } else {
-        // if no horizon mask is passed, assume a fully white mask (all pixels)
-        horizonMask = [[MatWrapper alloc]
-                        initWithMat:cv::Mat(request.baseImage.mat.size(), CV_8U, cv::Scalar(255))];
-      }
-
-      //cv::imwrite("/tmp/horizon_start.tiff", horizonMask.mat);
-
-      horizonMask = toGray8U(horizonMask);
-
-      if (request.alignmentType == AlignmentTypeEarth) {
-        // invert the mask to apply to the ground instead of the sky
-        cv::bitwise_not(horizonMask.mat, horizonMask.mat);
-
-        // for the ground, we make the horizon mask include a bit above the horizon,
-        // which leads to better keypoints down the road
-        horizonMask = createGradientMaskIntoSky(horizonMask.mat,
-                                                request.groundHorizonExtension);
-      }
       
       // Detector and matcher
       if (request == nil || request.baseKeypoints == nil) {
@@ -537,45 +494,15 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
       static thread_local cv::Ptr<cv::CLAHE> clahe;
 			    
       for (int ii = 0 ; ii < n; ++ii) {
-        SET_FRAME_STATE(request, ObjCAlignmentStepLoadingNeighbor, ii);
-
-        MatWrapper* preloadedFrame = [ObjcImageCache loadImage:request.neighbors[ii].filename];
-        MatWrapper* preloadedMask = nil;
-        if (request.neighbors[ii].maskFilename != nil) {
-          preloadedMask = [ObjcImageCache loadImage:request.neighbors[ii].maskFilename];
-        }
-
-            
         SET_FRAME_STATE(request, ObjCAlignmentStepNeighborKeypointDetection, ii);
             
         NSUInteger idx = (NSUInteger)ii;
         //Log_i(@"frame %d %d top", logID, ii);
-        MatWrapper * neighbor = preloadedFrame;
-        if (neighbor == nil) {
-          //Log_e(@"%d neighbor is nil", logID);
-          continue;
-        }
-        MatWrapper * neighborHorizon = 0;
-        if (preloadedMask != nil) {
-          neighborHorizon = preloadedMask;
-        }
+
         try {
           //Log_i(@"frame %d %d loaded", logID, ii);
 
           // make a gray 8 bit image for detection
-
-          cv::Mat horizon = horizonMask.mat; // XXX is this the right horizon mask?
-
-          //cv::imwrite("/tmp/horizon_a_" + std::to_string(idx) + ".tiff", horizon);
-
-          if (request.alignmentType == AlignmentTypeSky) {
-            horizon = horizon.clone();
-            // attempt to exclude the horizon from the sky area
-            // so key points are not detected there 
-            growBlack(horizon, request.skyHorizonExtension);
-          }
-
-          //cv::imwrite("/tmp/horizon_b_" + std::to_string(idx) + ".tiff", horizon);
 
           //Log_i(@"frame %d %d to gray check", logID, ii);
 
@@ -585,14 +512,11 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
           // if we got nothing, then fail fast
           if (/*kpNeighbor == nil || descNeighbor == nil || */descNeighbor.empty() || descBaseImage.empty()) {
             // failed early: no descriptors
-            CFRetain((__bridge CFTypeRef)neighbor);
             Log_e(@"frame %d descNeighbor or descBaseImage is empty", logID);
 
             AlignmentWarpInfo *info =
               [[AlignmentWarpInfo alloc]
                     initWithHomography:nil
-                           warpedFrame:nil
-                         warpedHorizon:nil
                              deviation:0
                         alignmentState:AlignmentStateObjCUnableToDetectKeypoints
                             frameIndex:request.neighbors[idx].frameIndex];
@@ -681,13 +605,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
           // after matching the keypoints between the baseImage frame and
           // the neibhgor frame we're iterating over, we next need to
           // check how good a fit we got from the match.
-          // only accept the warp if it's between provided boundaries
-          // otherwise widly off erroneous matches can creep in
-
-          // innocent until proven guilty
-          bool acceptWarp = FALSE;
-          cv::Mat warped;
-          cv::Mat warpedHorizon;
 
           // need at least four points
           if (ptsNeighbor.size() >= 4) {
@@ -696,7 +613,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                 
             //Log_d(@"frame %d has $zu control points", logID, ptsNeighbor.size());
             // find homography between the matched keypoints 
-                 cv::Mat H = cv::findHomography(ptsNeighbor, ptsBaseImage, cv::RANSAC, 10);
+            cv::Mat H = cv::findHomography(ptsNeighbor, ptsBaseImage, cv::RANSAC, 10);
             if (!H.empty() && H.type() != CV_32F && H.type() != CV_64F) {
               H.convertTo(H, CV_64F);
             }
@@ -708,49 +625,16 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
             }
 
             if (!H.empty() && H.rows == 3 && H.cols == 3) {
-              // Check warp quality with two checks
+              // homography was found
 
               // check max deviation
               cv::Mat I = cv::Mat::eye(3, 3, H.type());
               double deviation = cv::norm(H - I, cv::NORM_L2);
-
-              // if we accept the warp, then actually warp
-              // this frame to fit the baseImage image
-              //Log_i(@"frame %d %d accepting warp deviation %lf maxDeviation %lf maxCornerDist %lf maxCornerDeviation %lf", logID, ii, deviation, maxDeviation, maxCornerDist, maxCornerDeviation);
-              //Log_i(@"frame %d %d accepting warp and warping", logID, ii);
-              cv::warpPerspective(neighbor.mat, // the input to warp
-                                  warped, // the warped output
-                                  H, // the homography to warp with
-                                  neighbor.mat.size(),
-                                  cv::INTER_LINEAR,
-                                  cv::BORDER_CONSTANT,
-                                  cv::Scalar(0,0,0,0));
-
-
-              //cv::imwrite("/tmp/warped_first_" + std::to_string(idx) + ".tiff", warped);
-
-              if (neighborHorizon != NULL) {
-                // warp horizon with same homography as ground
-                //Log_i(@"frame %d %d accepting warp and warping horizon", logID, ii);
-                cv::warpPerspective(neighborHorizon.mat, warpedHorizon, H,
-                                    neighborHorizon.mat.size(),
-                                    cv::INTER_LINEAR, cv::BORDER_CONSTANT,
-                                    cv::Scalar(0,0,0,0));
-
-                // threshold so all values are 0 or 0xFF
-                cv::threshold(warpedHorizon,
-                              warpedHorizon,
-                              128, // mid
-                              255,
-                              cv::THRESH_BINARY);
-              }
-
+              
               // keep track of warp info 
-                   AlignmentWarpInfo *info =
+              AlignmentWarpInfo *info =
                    [[AlignmentWarpInfo alloc]
                          initWithHomography:HWrapper
-                                warpedFrame:[[MatWrapper alloc] initWithMat: warped]
-                              warpedHorizon:neighborHorizon == NULL ? nil : [[MatWrapper alloc] initWithMat: warpedHorizon]
                                   deviation:deviation
                              alignmentState:AlignmentStateObjCHomographySuccess
                                  frameIndex:request.neighbors[idx].frameIndex];
@@ -763,8 +647,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
               AlignmentWarpInfo *info =
                 [[AlignmentWarpInfo alloc]
                       initWithHomography:nil
-                             warpedFrame:nil
-                           warpedHorizon:nil
                                deviation:0
                           alignmentState:AlignmentStateObjCNoHomographyFound
                               frameIndex:request.neighbors[idx].frameIndex];
@@ -777,8 +659,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
             AlignmentWarpInfo *info =
               [[AlignmentWarpInfo alloc]
                     initWithHomography:nil
-                           warpedFrame:nil
-                         warpedHorizon:nil
                              deviation:0
                         alignmentState:AlignmentStateObjCNotEnoughKeypoints
                             frameIndex:request.neighbors[idx].frameIndex];
@@ -790,13 +670,10 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
         } catch (const cv::Exception &e) {
           Log_e(@"frame %d Error: %@", logID, [NSString stringWithUTF8String:e.what()]);
           // On exception mark as failed and store original
-          CFRetain((__bridge CFTypeRef)neighbor);
         } catch (const std::exception &e) {
           Log_e(@"frame %d Error: %@", logID, [NSString stringWithUTF8String:e.what()]);
-          CFRetain((__bridge CFTypeRef)neighbor);
         } catch (...) {
           Log_e(@"frame %d Unknown Error", logID);
-          CFRetain((__bridge CFTypeRef)neighbor);
         }
       }
 
@@ -817,7 +694,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
         }
       }
 
-      return warps;
+      return [[HomographyResult alloc] initWithWarpInfo: warps];
 
     } catch (const cv::Exception &e) {
       Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);
@@ -987,10 +864,10 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
 }
 
 // just warps with the given homography 
-+ (id _Nullable)alignWithExistingHomographyRequest:(AlignmentRequest * _Nonnull)request {
++ (id _Nullable)alignWithRequest:(AlignmentRequest * _Nonnull)request {
   @try {
     try {
-      NSMutableArray<AlignmentWarpInfo *> *warps = [NSMutableArray array];
+      NSMutableArray<WarpedImageResult *> *warps = [NSMutableArray array];
       const size_t n = request.neighbors.count;
       for (size_t i = 0; i < n; ++i) {
         MatWrapper * neighbor = [ObjcImageCache loadImage:request.neighbors[i].filename];
@@ -1026,14 +903,10 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
             cv::Mat I = cv::Mat::eye(3, 3, homography.mat.type());
             double deviation = cv::norm(homography.mat - I, cv::NORM_L2);
             
-            AlignmentWarpInfo *info =
-              [[AlignmentWarpInfo alloc]
-                         initWithHomography:homography
-                                warpedFrame:[[MatWrapper alloc] initWithMat: warped]
-                              warpedHorizon:maskFilename == nil ? nil : [[MatWrapper alloc] initWithMat: warpedMask]
-                                  deviation:deviation
-                             alignmentState:AlignmentStateObjCUsedExistingHomography
-                                 frameIndex:request.neighbors[i].frameIndex];
+            WarpedImageResult *info =
+              [[WarpedImageResult alloc]
+                         initWithWarpedFrame:[[MatWrapper alloc] initWithMat: warped]
+                               warpedHorizon:maskFilename == nil ? nil : [[MatWrapper alloc] initWithMat: warpedMask]];
 
             [warps addObject:info];
           }

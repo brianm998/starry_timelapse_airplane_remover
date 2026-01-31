@@ -40,8 +40,6 @@ public extension AlignmentWarpInfo {
 
         self.init(
           homography: homographyWrapper,
-          warpedFrame: nil,
-          warpedHorizon: nil,
           deviation: codable.deviation,
           alignmentState: codable.alignmentState.objcValue ?? AlignmentStateObjC.unknown,
           frameIndex: UInt(codable.frameIndex)

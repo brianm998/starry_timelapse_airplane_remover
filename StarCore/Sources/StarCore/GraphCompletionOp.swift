@@ -1,6 +1,6 @@
 import Foundation
 
-final class GraphCompletionOp: Operation {
+final class GraphCompletionOp: Operation, @unchecked Sendable {
     private let completion: () -> Void
 
     init(completion: @escaping () -> Void) {

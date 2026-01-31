@@ -1,7 +1,7 @@
 import Foundation
 import logging
 
-final class AlignmentValidationOp: AsyncOperation {
+final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
     let frames: [FrameAirplaneRemover]
 
     init(frames: [FrameAirplaneRemover]) {

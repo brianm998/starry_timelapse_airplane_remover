@@ -1,11 +1,20 @@
 import Foundation
+import kht_bridge
 
-public struct FrameAlignmentResults: Codable, Sendable {
-    public let numberAligned: [AlignmentWarpInfoCodable]
-    public let numberFailed: [AlignmentWarpInfoCodable]
+public struct HomographyResultsCodable: Codable, Sendable {
+    public let homography: [AlignmentWarpInfoCodable]
 
-    public var total: Int { numberAligned.count + numberFailed.count }
+    public var total: Int { homography.count }
 
+    public init(with homography: [AlignmentWarpInfoCodable]) {
+        self.homography = homography
+    }
+    
+    public init(from result: HomographyResult) {
+        self.homography = result.warpInfo.map { $0.toCodable() }
+    }
+
+/*
     public var wasSuccessfullyAligned: Bool {
         self.numberAligned.count != 0 &&
         self.numberFailed.count == 0
@@ -41,5 +50,6 @@ public struct FrameAlignmentResults: Codable, Sendable {
         }
         return alignedDeviationCount == self.numberAligned.count 
     }
+*/
 }
 
