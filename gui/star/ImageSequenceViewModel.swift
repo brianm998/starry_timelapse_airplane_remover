@@ -292,10 +292,6 @@ public final class ImageSequenceViewModel {
     
     var number_of_frames: Int = 50
 
-    // instead of finding keypoints and matching them to product homography,
-    // use the best existing homography for this sequence instead
-    var useExistingHomography = false
-    
     // the frame number of the frame we're currently showing
     var currentIndex = 0 {
         didSet {
@@ -572,22 +568,6 @@ public final class ImageSequenceViewModel {
         }
     }
     
-    public var alignmentNeighborDilateSize: Int {
-        didSet {
-            var realConfig = config.config()
-            realConfig.alignmentNeighborDilateSize = alignmentNeighborDilateSize
-            config.update(realConfig)
-        }
-    }
-    
-    public var alignmentNeighborThresholdValue: Int {
-        didSet {
-            var realConfig = config.config()
-            realConfig.alignmentNeighborThresholdValue = alignmentNeighborThresholdValue
-            config.update(realConfig)
-        }
-    }
-    
     var maxConcurrentHorizonCalculations: Int {
         didSet {
             var realConfig = config.config()
@@ -795,8 +775,6 @@ public final class ImageSequenceViewModel {
         self.alignmentBaseImageDilateSize = config.alignmentBaseImageDilateSize
         self.alignmentBaseImageThresholdValue = config.alignmentBaseImageThresholdValue
         //
-        self.alignmentNeighborDilateSize = config.alignmentNeighborDilateSize
-        self.alignmentNeighborThresholdValue = config.alignmentNeighborThresholdValue
         self.alignmentWriteDebugImages = config.alignmentWriteDebugImages
         //
         
@@ -1128,7 +1106,8 @@ public final class ImageSequenceViewModel {
 
         for frame in frames {
             if let results = frame.frameObserver.starAlignmentResults {
-                ret.append(results.numberAligned)
+                // XXX WTF
+                // ret.append(results.numberAligned)
             } else {
                 ret.append([])
             }
@@ -1141,7 +1120,8 @@ public final class ImageSequenceViewModel {
 
         for frame in frames {
             if let results = frame.frameObserver.starAlignmentResults {
-                ret.append(results.numberFailed)
+                // XXX WTF
+                //ret.append(results.numberFailed)
             } else {
                 ret.append([])
             }
@@ -1154,7 +1134,8 @@ public final class ImageSequenceViewModel {
 
         for frame in frames {
             if let results = frame.frameObserver.earthAlignmentResults {
-                ret.append(results.numberAligned)
+                // XXX WTF
+                //ret.append(results.numberAligned)
             } else {
                 ret.append([])
             }
@@ -1167,7 +1148,8 @@ public final class ImageSequenceViewModel {
 
         for frame in frames {
             if let results = frame.frameObserver.earthAlignmentResults {
-                ret.append(results.numberFailed)
+                // XXX WTF
+                //ret.append(results.numberFailed)
             } else {
                 ret.append([])
             }
@@ -1503,8 +1485,7 @@ public final class ImageSequenceViewModel {
 
             await finalProcessor?.processFrames(
               from: startIndex,
-              to: endIndex,
-              usingExistingHomography: self.useExistingHomography
+              to: endIndex
             )
 
             await MainActor.run {
@@ -1902,7 +1883,7 @@ public final class ImageSequenceViewModel {
             }
         }
     }
-
+/*
     func processHorizonForAllFrames(redo: Bool = false) async throws {
 
         if let frame = await self.frames[0].frame {
@@ -1911,7 +1892,7 @@ public final class ImageSequenceViewModel {
 
         Log.d("done with all horizons")
         
-    }
+    }*/
 }
 
 final class AppNapDisabler {

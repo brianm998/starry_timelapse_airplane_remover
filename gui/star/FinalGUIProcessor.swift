@@ -15,9 +15,15 @@ public actor FinalGUIProcessor {
 
     func processFrames(
       from startIndex: Int? = nil,
-      to endIndex: Int? = nil,
-      usingExistingHomography: Bool = false
+      to endIndex: Int? = nil
     ) async {
+        /*
+
+
+         XXX this is old now with the graph processing, maybe get rid of it or replace with graph
+
+         
+         */
         if viewModel == nil { return }
         Log.d("processing frames from \(startIndex) to \(endIndex)")
 
@@ -56,7 +62,7 @@ public actor FinalGUIProcessor {
         case .allHorizons:
             // delete all horizon images first
             do {
-                try await viewModel.processHorizonForAllFrames(redo: true)
+                //try await viewModel.processHorizonForAllFrames(redo: true)
             } catch {
                 Log.e("error: \(error)")
             }
@@ -102,8 +108,7 @@ public actor FinalGUIProcessor {
 
                         case .automatic(let useOutliers):
                             try await frame.finishAuto(
-                              useOutliers: useOutliers,
-                              usingExistingHomography: usingExistingHomography
+                              useOutliers: useOutliers
                             )
                             if useOutliers {
                                 if await frame.getOutlierGroups() == nil {
