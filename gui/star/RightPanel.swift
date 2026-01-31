@@ -185,11 +185,6 @@ struct RightPanel: View {
                               }
 
                              */
-                            Toggle(
-                              "Fix Bad Alignment", // XXX ???
-                              isOn: $viewModel.useExistingHomography
-                            )
-                              .foregroundColor(.red)
                             
                             Toggle(
                               "Only Unclassified",
