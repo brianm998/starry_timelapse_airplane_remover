@@ -10,10 +10,10 @@ public final class FrameGraphBuilder {
     let mergeQueue = OperationQueue()
 
     public init() {
-        horizonQueue.maxConcurrentOperationCount = 1
-        keypointQueue.maxConcurrentOperationCount = 2
-        homographyQueue.maxConcurrentOperationCount = 2
-        mergeQueue.maxConcurrentOperationCount = 10
+        horizonQueue.maxConcurrentOperationCount = 40
+        keypointQueue.maxConcurrentOperationCount = 10
+        homographyQueue.maxConcurrentOperationCount = 8
+        mergeQueue.maxConcurrentOperationCount = 20
     }
 
     public func build(
@@ -28,8 +28,7 @@ public final class FrameGraphBuilder {
         var skyKeypointOps: [Int: KeypointOp] = [:]
         var earthKeypointOps: [Int: KeypointOp] = [:]
 
-        
-        // ---- Per-frame graph ----
+        // First assemble horizon and keypoint operations for all frames
         for frame in frames {
 
             var lastOps: [Operation] = []
@@ -57,6 +56,7 @@ public final class FrameGraphBuilder {
             }
         }
 
+        // next assemble homography operations that depend upon the keyframes from above
         for frame in frames {
             // 3. Homographies
             let skyH = HomographyOp(frame: frame, mode: .starAligned)
