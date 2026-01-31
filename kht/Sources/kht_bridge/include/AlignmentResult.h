@@ -13,15 +13,10 @@
 @property(nonatomic, strong, nullable) MatWrapper *failedMat;    // fallback/original frame
 
 @property(nonatomic, strong, nullable) MatWrapper *horizonMask; // median merged horizonMask
-/// Warp metadata
-@property(nonatomic, strong) NSArray<AlignmentWarpInfo *> * _Nonnull alignedWarps;
-@property(nonatomic, strong) NSArray<AlignmentWarpInfo *> * _Nonnull failedWarps;
 
 
 -(AlignmentResult* _Nonnull)initWithAlignedMat:(nullable MatWrapper *)alignedMat
-                                  alignedWarps:(NSArray<AlignmentWarpInfo *> * _Nonnull)alignedWarps
                                      failedMat:(nullable MatWrapper *)failedMat
-                                   failedWarps:(NSArray<AlignmentWarpInfo *> * _Nonnull)failedWarps
                                    horizonMask:(nullable MatWrapper *)horizonMask;
 @end
 

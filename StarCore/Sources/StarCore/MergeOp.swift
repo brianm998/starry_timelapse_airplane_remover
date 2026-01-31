@@ -15,9 +15,7 @@ public final class MergeOp: AsyncOperation, @unchecked Sendable {
                 finish()
             }
             Log.d("frame \(frame.frameIndex) start")
-            try? await Task.sleep(nanoseconds: UInt64.random(in: 2_000_000_000...10_000_000_000))
-            // XXX DO THIS
-            //try? await frame.remover.warpAndMedianMerge()
+            try? await frame.finishAuto(useOutliers: false)
         }
     }
 }

@@ -14,6 +14,17 @@ public struct HomographyResultsCodable: Codable, Sendable {
         self.homography = result.warpInfo.map { $0.toCodable() }
     }
 
+    func mappedHomography(from frameIndex: Int) -> [NSNumber: MatWrapper] {
+        var ret: [NSNumber: MatWrapper] = [:]
+        for graphy in homography {
+            let warpInfo = AlignmentWarpInfo(from: graphy)
+            let offset = graphy.frameIndex - frameIndex
+            ret[NSNumber(value: offset)] = warpInfo.homography
+        }
+        return ret
+    }
+
+    
 /*
     public var wasSuccessfullyAligned: Bool {
         self.numberAligned.count != 0 &&

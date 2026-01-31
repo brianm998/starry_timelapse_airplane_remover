@@ -749,7 +749,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             var nextFrame: FrameAirplaneRemover? = await self.firstFrameInSequence
             while nextFrame != nil {
-                var renderWasBad = false
+                //var renderWasBad = false
                 if let frame = nextFrame {
 
                     var shouldRender = await frame.processingState() != .complete
@@ -811,7 +811,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     } else {
                         Log.i("frame \(frame.frameIndex) has no frame homography, will re-render")
                         shouldRender = true
-                        renderWasBad = true
+                        //renderWasBad = true
                         frame.imageAccessor.deleteImages(
                           frameIndex: frame.frameIndex,
                           ofTypes: [.starAligned,
@@ -848,8 +848,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                             case .automatic(let useOutliers):
 //                                do {
                                     try await frame.finishAuto(
-                                      useOutliers: useOutliers,
-                                      usingExistingHomography: renderWasBad && renderWithExistingHomography
+                                      useOutliers: useOutliers
                                     )
 
                                     if useOutliers {
@@ -1139,40 +1138,38 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
     
     // uses opencv2 for dark ground specific detection logic
-    private func loadOrCreateEarthAlignedImage() async throws -> AlignmentResult {
-        fatalError("UNIMIPLEMENTED")
-        /*
+    private func loadOrCreateEarthAlignedImage() async throws -> WarpedImageResult {
         try await loadOrCreateAlignedImage(
           of: .earthAligned,
           withFailedType: .failedEarthAligned
-        )*/
+        )
     }
     
     // uses opencv2 for SIFT fast, accurate image alignment
-    private func loadOrCreateStarAlignedImage(
-      usingExistingHomography: Bool = false
-    ) async throws -> AlignmentResult {
-        fatalError("UNIMIPLEMENTED")
-        /*
+    private func loadOrCreateStarAlignedImage() async throws -> WarpedImageResult {
         try await loadOrCreateAlignedImage(
           of: .starAligned,
-          withFailedType: .failedStarAligned,
-          usingExistingHomography: usingExistingHomography
-        )*/
+          withFailedType: .failedStarAligned
+        )
     }
 
     // XXX break this up into:
     // - get and save neighbor homography
     // - align neighbors with given homography
+
     /*
+
+     This method expects homography to have been computed for all neighbors
+     and stored in neighborStarHomography or neighborEarthHomography
+     
+     */
     fileprivate func loadOrCreateAlignedImage(
       of type: FrameViewMode,
-      withFailedType failedType: FrameViewMode? = nil,
-      usingExistingHomography: Bool = false
-    ) async throws -> AlignmentResult {
+      withFailedType failedType: FrameViewMode? = nil
+    ) async throws -> WarpedImageResult {
         var alignmentType: AlignmentType = .sky
 
-        Log.d("frame \(frameIndex) loadOrCreateAlignedImage of type \(type) usingExistingHomography \(usingExistingHomography)")
+        Log.d("frame \(frameIndex) loadOrCreateAlignedImage of type \(type)")
         
         switch type {
         case .starAligned:
@@ -1209,12 +1206,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 break
             }
 
-            return AlignmentResult(
-              alignedMat: alignedFrame.mat,
-              alignedWarps: results?.numberAligned.map { AlignmentWarpInfo(from: $0) } ?? [],
-              failedMat: nil,   // XXX load the failed mat too
-              failedWarps: results?.numberFailed.map { AlignmentWarpInfo(from: $0) } ?? [],
-              horizonMask: horizonMask?.image.mat
+            return WarpedImageResult(
+              warpedFrame: alignedFrame.mat,
+              warpedHorizon: horizonMask?.image.mat
             )
         } else {
             Log.d("frame \(frameIndex) unable to load image of type \(type)")
@@ -1244,12 +1238,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     }                
                     Log.d("frame \(frameIndex) successfully loaded failed image of type \(failedType)")
 
-                    return AlignmentResult(
-                      alignedMat: nil,
-                      alignedWarps: results?.numberAligned.map { AlignmentWarpInfo(from: $0) } ?? [],
-                      failedMat: failedFrame.mat, 
-                      failedWarps: results?.numberFailed.map { AlignmentWarpInfo(from: $0) } ?? [],
-                      horizonMask: horizonMask?.image.mat
+                    return WarpedImageResult(
+                      warpedFrame: failedFrame.mat, 
+                      warpedHorizon: horizonMask?.image.mat
                     )
                 } else {
                     Log.w("frame \(frameIndex) unable to load image of failed type \(failedType) when missing image of type \(type)")
@@ -1351,7 +1342,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         Log.d("frame \(frameIndex) original frame \(originalFrame.description)")
         
-        var alignmentResult: AlignmentResult? = nil
+        var warpedResult: WarpedImageResult? = nil
 
         let pixelThreshold = await self.pixelThreshold
         
@@ -1373,16 +1364,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     horizonMask = try await createStaticMergedHorizonMask()
                 }
                 
-                alignmentResult = AlignmentResult(
-                  alignedMat: mergedImage.mat,
-                  alignedWarps: neighbors.map {
-                      AlignmentWarpInfo(
-                        forNoWarpWithFrameIndex: UInt($0.frameIndex)
-                      )
-                  },
-                  failedMat: nil,
-                  failedWarps: [], 
-                  horizonMask: horizonMask?.image.mat
+                warpedResult = WarpedImageResult(
+                  warpedFrame: mergedImage.mat,
+                  warpedHorizon: horizonMask?.image.mat
                 )
             }
         } else {
@@ -1397,224 +1381,43 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             
             Log.d("frame \(frameIndex) doing real alignment for type \(alignmentType)")
             // do real alignment
-
             var homography: [NSNumber: MatWrapper]? = nil
-            if usingExistingHomography {
-                Log.i("frame \(frameIndex) using existing homography \(homography)")
-                switch alignmentType {
-                case .sky:
-                    // only use closest good if we are moving
-                    if config.tripodHeadWasMoving,
-                       let closestGood = await self.closestGoodStarAlignmentHomography
-                    {
-                        Log.i("frame \(frameIndex) using closest good homography \(closestGood)")
-                        homography = closestGood
-                    } else {
-                        Log.i("frame \(frameIndex) using median good homography")
-                        homography = await self.medianGoodStarAlignmentHomography
-                    }
-//
-//                case .earth:
-//                    homography = await self.medianGoodEarthAlignmentHomography
-                default:
-                  break
-                }
+            switch type {
+            case .starAligned:
+                homography = neighborStarHomography?.mappedHomography(from: self.frameIndex)
+            case .earthAligned:
+                homography = neighborEarthHomography?.mappedHomography(from: self.frameIndex)
+            default:
+                break
             }
-            
-            let request = HomographyRequest(
-              baseKeypoints: alignmentType == .sky ? self.skyKeyPoints : self.earthKeyPoints,
-              frameIndex: Int32(frameIndex),
-              neighbors: neighbors,
-              matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
-              mask: horizonMask?.image.mat,
-              alignmentType: alignmentType,       // earth is zero in mask
-              maxKeypoints: Int32(config.alignmentMaxKeypoints), 
-              writeDebugImages: config.alignmentWriteDebugImages
-            )
+            if let homography {
+                let request = AlignmentRequest(
+                  frameIndex: Int32(frameIndex),
+                  neighbors: neighbors,
+                  homography: homography
+                )
 
-            if let result = ImageAligner.homography(
-                 with: request,
-                 handler: { frameIndex,
-                            alignmentType,
-                            alignmentStep,
-                            neighborNumber in
+                if let result = ImageAligner.align(
+                     with: request
+                   ) {
+                    if let error = result as? String {
+                        Log.e("frame \(frameIndex) error: \(error)")
+                    } else if let result = result as? kht_bridge.WarpedImageResult {
+                        Log.d("frame \(frameIndex) got \(result) back from alignment")
 
-                     Log.d("frame \(frameIndex) got alignment step update \(alignmentStep)")
-                     // update frame state while processing
-                     var processingState: FrameProcessingState? = nil
-
-                     if let step = AlignmentStep(
-                          from: alignmentStep,
-                          neighborNumber: Int(neighborNumber))
-                     {
-                         switch alignmentType {
-                         case .sky:
-                             processingState = .starAlignment(step)
-                             break
-                         case .earth:
-                             processingState = .earthAlignment(step)
-                             break
-                             @unknown default:
-                                 break
-                         }
-                     } else {
-                         Log.w("frame \(frameIndex) unable to process alignment step \(alignmentStep)")
-                     }
-
-                     if let processingState {
-                         Log.d("frame \(frameIndex) setting processingState \(processingState)")
-                         self.set(state: processingState)
-                     }
-            }) {
-                if let error = result as? String {
-                    Log.e("frame \(frameIndex) error: \(error)")
-                } else if let results = result as? [kht_bridge.AlignmentWarpInfo] {
-                    Log.d("frame \(frameIndex) got \(results.count) warp infos back from alignment")
-                    // do the calculations here to figure out which alignments are ok
-
-//                    if results.count == 0 {
-
-//                    } else {
-                    
-                    /*
-
-                     Logic here is to attempt to determine a median slope for all
-                     alignments, relative to their frame distance from this frame
-
-                     If we can get a median slope, then we can use that to try to throw
-                     out aliments which deviate too much from the median slope
-                     */
-
-                    var slopes: [Double] = []
-                    
-                    for alignment in results {
-                        let frameDistance = abs(self.frameIndex-Int(alignment.frameIndex))
-                        slopes.append(alignment.deviation/Double(frameDistance))
+                        warpedResult = result
                     }
-
-                    var goodWarps: [AlignmentWarpInfo] = []
-                    var badWarps: [AlignmentWarpInfo] = []
-
-                    slopes.sort(by: { $0 < $1 })
-                    
-                    let medianIndex = slopes.count/2
-                    if medianIndex < slopes.count {
-                        let medianSlope = slopes[medianIndex]
-                        Log.d("frame \(frameIndex) got medianSlope \(medianSlope)")
-                        for alignment in results {
-                            let frameDistance = abs(self.frameIndex-Int(alignment.frameIndex))
-                            let alignmentSlope = alignment.deviation/Double(frameDistance)
-                            /*
-                             two checks here:
-                                - deviation isn't too large in general
-                                  fast clouds without stars can get large deviation
-                                - alignment slope is close to constant
-                                  deviation should be evenly spaced by frame distance
-                             */
-                            if alignment.deviation < 60*Double(frameDistance), // XXX make this a parameter
-                               alignmentSlope < medianSlope * 1.15, // XXX make this a parameter too
-                               alignmentSlope > medianSlope / 1.15
-                            {
-                                // rough estimate
-                                goodWarps.append(alignment)
-                            } else {
-                                badWarps.append(alignment)
-                            }
-                        }
-                    } else {
-                        Log.d("frame \(frameIndex) has NO medianSlope :(")
-                        // ALL FAIL :(
-                        // here we don't know the median, so all are bad :(
-                        badWarps = results
-                    }
-
-                    /*
-
-
-                     XXX THIS SHIT ISN'T THERE ANYMORE
-
-
-                     rewrite this to just pass back the homography
-
-                     move the alignment checking to a different place
-
-                     
-                          */
-                    
-                    var failedResult: MatWrapper? = nil
-                    var alignedResult: MatWrapper? = nil
-                    var horizonResult: MatWrapper? = nil
-                    
-                    if badWarps.count > 0 {
-                        Log.d("frame \(frameIndex) has \(badWarps.count) bad warps")
-                        let badFrames = badWarps.compactMap { $0.warpedFrame }
-                        if badFrames.count > 0 {
-                            failedResult = ImageAligner.medianMerge(
-                              badFrames,
-                              outlierThreshold: pixelThreshold,
-                              includeAll:false
-                            )
-                        }
-                    }
-
-                    if goodWarps.count > 0 {
-                        Log.d("frame \(frameIndex) has \(goodWarps.count) good warps")
-                        // median merge them, and any horizon masks
-                        let goodFrames = goodWarps.compactMap { $0.warpedFrame }
-
-                        if goodFrames.count > 0  {
-                            alignedResult = ImageAligner.medianMerge(
-                              goodFrames,
-                              outlierThreshold: pixelThreshold,
-                              includeAll:false
-                            )
-                        }
-
-                        let goodHorizons = goodWarps.compactMap { $0.warpedHorizon }
-                        if goodHorizons.count > 0 {
-                            horizonResult = ImageAligner.medianMerge(
-                              goodHorizons,
-                              outlierThreshold: pixelThreshold,
-                              includeAll: true
-                            )
-                        }
-                    }
-
-                    if goodWarps.count == 0,
-                       badWarps.count == 0
-                    {
-                        // we got absolutetly nothing from alignment,
-                        // fall back to the original frame, better than nothing
-                        failedResult = originalFrame.mat
-                        Log.i("frame \(frameIndex) got no results for alignment of type \(type), falling back to original image")
-                    } else {
-                        Log.d("frame \(frameIndex) got some results for alignment of type \(type) goodWarps.count \(goodWarps.count) badWarps.count \(badWarps.count)")
-                    }
-
-                    Log.d("frame \(frameIndex) failedResult \(failedResult)")
-                    
-                     alignmentResult = AlignmentResult(
-                       alignedMat: alignedResult,
-                       alignedWarps: goodWarps,
-                       failedMat: failedResult,
-                       failedWarps: badWarps, 
-                       horizonMask: horizonResult
-                     )
-                     Log.i("frame \(frameIndex) has alignment result \(alignmentResult)")
-                } else {
-                    Log.e("frame \(frameIndex) cannot handle aligned result \(result)")
                 }
+            } else {
+                Log.w("frame \(frameIndex) cannot align without homography")
             }
         }
-        Log.i("frame \(frameIndex) got alignment result \(alignmentResult) for type \(type)")
-        guard let alignmentResult else {
+        Log.i("frame \(frameIndex) got alignment result \(warpedResult) for type \(type)")
+        guard let warpedResult else {
             Log.e("frame \(frameIndex) got no alignment result")
-            return AlignmentResult(
-              alignedMat: nil,
-              alignedWarps: [], // XXX 0,
-              failedMat: originalFrame.mat, 
-              failedWarps: [], // XXX 1,
-              horizonMask: nil
+            return WarpedImageResult(
+              warpedFrame: originalFrame.mat, 
+              warpedHorizon: nil
             )
         }
         
@@ -1626,38 +1429,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         default:
             break
         }
-
-        if alignmentResult.wasSuccessfullyAligned,
-           let aligned = alignmentResult.aligned
+         
+        if let aligned = warpedResult.warpedFrame,
+           let image = PixelatedImage(mat: aligned)
         {
             // write out the successfully aligned images
             Log.e("frame \(frameIndex) writing out a successfully aligned image of type \(type)")
             try await imageAccessor.save(
-              aligned,
+              image,
               frameIndex: frameIndex,
               as: type,
               atSizes: [.original, .preview],
               overwrite: true
             )
-        } else if let failed = alignmentResult.failed,
-                  let failedType
-        {
-            Log.e("frame \(frameIndex) writing out a failed aligned image of type \(type)")
-            // if we have no successfully aligned image,
-            // and do have a failed image, and have been asked to
-            // save them, write them out
-            try await imageAccessor.save(
-              failed,
-              frameIndex: frameIndex,
-              as: failedType,
-              atSizes: [.preview, .original],
-              overwrite: true
-            )
-        } else {
-            Log.e("frame \(frameIndex) didn't get either an aligned image or a failed image from alignment results")
         }
-
-        if let mergedHorizon = alignmentResult.horizonMask,
+        
+        if let mergedHorizon = warpedResult.warpedHorizon,
            let image = PixelatedImage(mat: mergedHorizon)
         {
             Log.d("saving merged horizon images")
@@ -1669,32 +1456,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               overwrite: true
             )
         }
-        
-        // keep track of the number of alignment images used
-        // so we can make sure it's the same as the desired amount later
 
-        let alignedWarps = alignmentResult.alignedWarps.map { $0.toCodable() }
-        let failedWarps = alignmentResult.failedWarps.map { $0.toCodable() }
-        
-        switch type {
-        case .starAligned:
-            try self.write(
-              neighborStarHomography: alignedWarps,
-              andFailures: failedWarps
-            )
-        case .earthAligned:
-            try self.write(
-              numberOfEarthAlignedImagesForThisFrame: alignedWarps,
-              andFailures: failedWarps
-            )
-        default:
-            break
-        }
-
-        return alignmentResult
+        return warpedResult
     }    
-
-     */
 
     private var neighborEarthHomography: HomographyResultsCodable? = nil
     private var neighborStarHomography: HomographyResultsCodable? = nil
@@ -1712,7 +1476,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         case .earthAligned:
             alignmentType = .earth
         default:
-            throw "unable to loadOrCreateAlignedImage of type \(type)"
+            throw "unable to load homography of type \(type)"
         }
 
         // try to load from ram/file first
@@ -1825,8 +1589,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         Log.d("frame \(frameIndex) doing real alignment for type \(alignmentType)")
         // do real alignment
-
-//        var homography: [NSNumber: MatWrapper]? = nil
         
         let request = HomographyRequest(
           baseKeypoints: alignmentType == .sky ? self.skyKeyPoints : self.earthKeyPoints,
@@ -2305,15 +2067,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         var horizonMask: HorizonMask? = nil
         var earthAlignedImage: PixelatedImage? = nil
-        var failedAlignedImage: PixelatedImage? = nil
         
         if config.horizonDetectionEnabled {
             // only load these if we really need them
             var horizonMaskImage: PixelatedImage? = nil
             let result = try await loadOrCreateEarthAlignedImage()
-            earthAlignedImage = result.aligned?.ensure16Bits
-            failedAlignedImage = result.failed?.ensure16Bits
-            horizonMaskImage = result.horizon
+            if let mat = result.warpedFrame {
+                earthAlignedImage = PixelatedImage(mat: mat.ensure16Bits())
+            }
+            if let mat = result.warpedHorizon {
+                horizonMaskImage = PixelatedImage(mat: mat)
+            }
               
             if let horizonMaskImage {
                 horizonMask = HorizonMask(horizonMaskImage)
@@ -2325,19 +2089,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         let alignmentResult = try await loadOrCreateStarAlignedImage()
 
+        /*
+         XXX WTF
         if !alignmentResult.wasSuccessfullyAligned {
             self.set(state: .starAlignmentFailed)
             Log.e("frame \(frameIndex) star alignment failed")
             return
         }
+         */
         
-        let starAlignedImage = alignmentResult.aligned
-        let failedStarAlignedImage = alignmentResult.failed
+        let starAlignedImage = alignmentResult.warpedFrame
 
-        var skyAlignedImage: PixelatedImage? = starAlignedImage?.ensure16Bits
-        if skyAlignedImage == nil {
-            skyAlignedImage = failedStarAlignedImage?.ensure16Bits
+        var skyAlignedImage: PixelatedImage? = nil
+        if let starAlignedImage {
+            skyAlignedImage = PixelatedImage(mat: starAlignedImage.ensure16Bits())
         }
+
         guard let skyAlignedImage else {
             Log.e("frame \(frameIndex) Cannot selective finish without a successful or failed star alignment image")
             throw "frame \(frameIndex) Cannot selective finish without a successful or failed star alignment image"
@@ -3484,20 +3251,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
      If the sky contains little to no clouds, this approach can work, and gets
      rid of even the small distant satellites that move slowly through the sky.
      */
-    func createAutoProcessedImage(
-      usingExistingHomography: Bool = false // warp to homography from a different frame
-    ) async throws -> PixelatedImage? {
-        Log.i("frame \(frameIndex) creating auto processed image usingExistingHomography \(usingExistingHomography)")
-        let result = try await loadOrCreateStarAlignedImage(
-          usingExistingHomography: usingExistingHomography
-        )
-        let starAlignedImage = result.aligned
-        let failedStarImage = result.failed
+    func createAutoProcessedImage() async throws -> PixelatedImage? {
+        Log.i("frame \(frameIndex) creating auto processed image")
+        let result = try await loadOrCreateStarAlignedImage()
+        let starAlignedImage = result.warpedFrame
 
         Log.i("frame \(frameIndex) got result \(result) for star aligned image")
 
         let config = await configManager.config()
 
+        /*
+         XXX WTF
         if !result.wasSuccessfullyAligned {
             if usingExistingHomography {
                 Log.w("frame \(frameIndex) only got \(result.alignedWarps) aligned warps cannot merge \(usingExistingHomography), returning original image instead")
@@ -3514,8 +3278,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
             
         }
+         */
         
-        var skyImage: PixelatedImage? = starAlignedImage
+        var skyImage: PixelatedImage? = nil
+        if let starAlignedImage {
+            skyImage = PixelatedImage(mat: starAlignedImage)
+        }
         if skyImage == nil {
             // if we don't have a successful sky alignment image,
             // the original looks best for auto processed,
@@ -3547,14 +3315,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 // XXX validate this alignment result, it might be erroneous
                 // if it's bad, use the original frame and horizon mask instead
 
-                let earthAlignedImage = alignmentResult.aligned
-                let failedAlignmentImage = alignmentResult.failed
-                horizonMask = alignmentResult.horizon
+                let earthAlignedImage = alignmentResult.warpedFrame
+                if let mat = alignmentResult.warpedHorizon {
+                    horizonMask = PixelatedImage(mat: mat)
+                }
 
-                if  earthAlignedImage == nil {
-                    earthImage = failedAlignmentImage
-                } else {
-                    earthImage = earthAlignedImage
+                if let earthAlignedImage {
+                    earthImage = PixelatedImage(mat: earthAlignedImage)
                 }
             } else {
                 // not using earth alignment
@@ -3736,21 +3503,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     
     // used by PixelReplacementMode.automatic
     public func finishAuto(
-      useOutliers: Bool,
-      usingExistingHomography: Bool = false
+      useOutliers: Bool
     ) async throws {
-        guard let autoProcessedImage = try await createAutoProcessedImage(
-                usingExistingHomography: usingExistingHomography
-              ) else
-        {
-            // only an error if usingExistingHomography
-            if usingExistingHomography {
-                Log.e("frame \(frameIndex) unable to create auto processed image")
-
-                // XXX copy original here?
-            }
-
-            // we were unable to finish auto because of bad alignment
+        guard let autoProcessedImage = try await createAutoProcessedImage()
+        else {
+            Log.e("frame \(frameIndex) unable to create auto processed image")
             return
         }
         if useOutliers {
@@ -3922,15 +3679,18 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         Log.d("frame \(frameIndex) loadOrCreateStarAlignedImage")
         let result = try await loadOrCreateStarAlignedImage()
-        let starAlignedImage = result.aligned
-        let failedStarAlignment = result.failed
+        let starAlignedImage = result.warpedFrame
           
         Log.d("frame \(frameIndex) loadedOrCreatedStarAlignedImage")
 
-        var skyImage: PixelatedImage? = starAlignedImage
-        if skyImage == nil {
-            skyImage = failedStarAlignment
+        var skyImage: PixelatedImage? = nil
+
+        if let starAlignedImage {
+            skyImage = PixelatedImage(mat: starAlignedImage)
         }
+//        if skyImage == nil {
+//            skyImage = failedStarAlignment
+//        }
         guard let skyImage else {
             let msg = "frame \(frameIndex) cannot create subtraction image without either a successful or failed alignment image"
             Log.e(msg)
@@ -3956,26 +3716,29 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // that from the image instead of just the star aligned image
 
             let alignmentResult = try await loadOrCreateEarthAlignedImage()
-            let earthAlignedImage = alignmentResult.aligned
-            let failedAlignmentImage = alignmentResult.failed
-            let horizonMask = alignmentResult.horizon
+            let earthAlignedImage = alignmentResult.warpedFrame
+            let horizonMask = alignmentResult.warpedHorizon
 
             var earthImage = earthAlignedImage
-            if earthImage == nil {
-                earthImage = failedAlignmentImage
-            }
+//            if earthImage == nil {
+//                earthImage = failedAlignmentImage
+//            }
 
-            if let earthImage {
-                if let horizonMask {
+            if let earthImage,
+               let earth = PixelatedImage(mat: earthImage)
+            {
+                if let horizonMask,
+                   let horizon = PixelatedImage(mat: horizonMask)
+                {
                     imageToSubtract = try skyImage.apply(
-                      mask: horizonMask,
-                      with: earthImage
+                      mask: horizon,
+                      with: earth
                     )
                 } else {
                     // fall back to non merged horizon mask if we have to
                     imageToSubtract = try skyImage.apply(
                       mask: try await self.loadOrCreateHorizonMask().image,
-                      with: earthImage
+                      with: earth
                     )
                 }
             } else {

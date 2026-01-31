@@ -899,10 +899,6 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
                                   cv::Scalar(0,0,0,0));
             }
 
-            // check max deviation
-            cv::Mat I = cv::Mat::eye(3, 3, homography.mat.type());
-            double deviation = cv::norm(homography.mat - I, cv::NORM_L2);
-            
             WarpedImageResult *info =
               [[WarpedImageResult alloc]
                          initWithWarpedFrame:[[MatWrapper alloc] initWithMat: warped]

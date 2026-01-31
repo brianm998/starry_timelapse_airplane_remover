@@ -17,7 +17,7 @@ final class HomographyOp: AsyncOperation, @unchecked Sendable {
                 finish()
             }
             Log.d("frame \(frame.frameIndex) start")
-            try await frame.loadOrCreateHomography(of: mode)
+            let _ = try await frame.loadOrCreateHomography(of: mode)
         }
     }
 }

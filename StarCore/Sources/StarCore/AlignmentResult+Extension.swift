@@ -2,6 +2,7 @@ import Foundation
 import kht_bridge
 
 public extension AlignmentResult {
+    /*
     var wasSuccessfullyAligned: Bool {
         self.failedWarps.count == 0 &&
         self.alignedWarps.count != 0
@@ -10,8 +11,10 @@ public extension AlignmentResult {
     var numAligned: Int { alignedWarps.count }
 
     var numFailed: Int { failedWarps.count }
-}
 
+     */
+}
+/*
 extension AlignmentResult: CustomStringConvertible {
   open override var description: String {
         let aligned = alignedMat != nil ? "aligned" : "not aligned"
@@ -20,3 +23,4 @@ extension AlignmentResult: CustomStringConvertible {
         return "AlignmentResult: \(aligned) \(failed) \(horizon) numAligned \(numAligned) numFailed \(numFailed) wasSuccessfullyAligned \(wasSuccessfullyAligned)"
     }
 }
+*/
