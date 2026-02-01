@@ -69,9 +69,8 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         // apply the chosen median homography to all frames 
         for frame in frames {
             await frame.set(
-              neighborStarHomography: HomographyResultsCodable(
-                for: frame.frameIndex,
-                with: medianHomography.neighborHomography
+              neighborStarHomography: medianHomography.adjust(
+                for: frame.frameIndex
               )
             )
         }

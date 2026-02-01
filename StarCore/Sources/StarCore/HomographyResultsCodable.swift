@@ -21,6 +21,21 @@ public struct HomographyResultsCodable: Codable, Sendable {
         self.neighborHomography = result.warpInfo.map { $0.toCodable() }
     }
 
+    public func adjust(for newFrameIndex: Int) -> HomographyResultsCodable {
+        let frameDistance = newFrameIndex - frameIndex
+        return HomographyResultsCodable(
+          for: newFrameIndex,
+          with: neighborHomography.map {
+            AlignmentWarpInfoCodable(
+              homography: $0.homography,
+              deviation: $0.deviation,
+              alignmentState: $0.alignmentState,
+              frameIndex: $0.frameIndex + frameDistance
+            )
+        }
+        )
+    }
+
     func mappedHomography() -> [NSNumber: MatWrapper] {
         var ret: [NSNumber: MatWrapper] = [:]
         for homography in neighborHomography {

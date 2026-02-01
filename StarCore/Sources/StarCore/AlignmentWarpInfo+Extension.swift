@@ -42,7 +42,7 @@ public extension AlignmentWarpInfo {
           homography: homographyWrapper,
           deviation: codable.deviation,
           alignmentState: codable.alignmentState.objcValue ?? AlignmentStateObjC.unknown,
-          frameIndex: UInt(codable.frameIndex)
+          frameIndex: codable.frameIndex
         )
     }
 }
