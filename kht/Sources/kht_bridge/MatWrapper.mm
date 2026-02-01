@@ -326,7 +326,7 @@ static NSUInteger _totalInstances = 0;
                                              tileHeight:(int)tileHeight
                                          overlapPercent:(double)overlapPercent
 {
-    Log_d(@"split into matrix");
+    //Log_d(@"split into matrix");
     NSMutableArray<ObjcImageMatrixElement*>* results = [NSMutableArray array];
 
     int stepX = static_cast<int>(tileWidth  * (1.0 - overlapPercent));
@@ -358,7 +358,7 @@ static NSUInteger _totalInstances = 0;
         }
     }
 
-    Log_d(@"split into matrix returning %lu results", [results count]);
+    //Log_d(@"split into matrix returning %lu results", [results count]);
     return results;
 }
 

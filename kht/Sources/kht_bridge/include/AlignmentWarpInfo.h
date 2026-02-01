@@ -22,14 +22,14 @@ typedef NS_ENUM(NSInteger, AlignmentStateObjC) {
 @property(nonatomic, assign) AlignmentStateObjC alignmentState;
 
 /// Index into original frame array (optional but very useful)
-@property(nonatomic, assign) NSUInteger frameIndex;
+@property(nonatomic, assign) NSInteger frameIndex;
 
 - (instancetype _Nonnull)initWithHomography:(nullable MatWrapper *)homography
                                   deviation:(double)deviation
                              alignmentState:(AlignmentStateObjC)alignmentState
-                                 frameIndex:(NSUInteger)frameIndex;
+                                 frameIndex:(NSInteger)frameIndex;
 
-- (instancetype _Nonnull)initForNoWarpWithFrameIndex:(NSUInteger)frameIndex;
+- (instancetype _Nonnull)initForNoWarpWithFrameIndex:(NSInteger)frameIndex;
 
 
 @end

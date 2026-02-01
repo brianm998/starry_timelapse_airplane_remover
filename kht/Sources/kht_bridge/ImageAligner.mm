@@ -694,6 +694,8 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
         }
       }
 
+      Log_i(@"returning homography result");
+      
       return [[HomographyResult alloc]
                initWithFrameIndex: request.frameIndex
                          warpInfo: warps];

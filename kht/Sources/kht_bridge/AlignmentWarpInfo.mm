@@ -6,7 +6,7 @@
 - (instancetype)initWithHomography:(MatWrapper *)homography
                          deviation:(double)deviation
                     alignmentState:(AlignmentStateObjC)alignmentState
-                        frameIndex:(NSUInteger)frameIndex
+                        frameIndex:(NSInteger)frameIndex
 {
     if ((self = [super init])) {
         _homography = homography;
@@ -17,7 +17,7 @@
     return self;
 }
 
-- (instancetype _Nonnull)initForNoWarpWithFrameIndex:(NSUInteger)frameIndex {
+- (instancetype _Nonnull)initForNoWarpWithFrameIndex:(NSInteger)frameIndex {
     if ((self = [super init])) {
         _homography = nil;
         _deviation = 0;
