@@ -1,6 +1,17 @@
 import Foundation
 import logging
+/*
 
+ Still TODO:
+
+ - expose queue max sizes to config, replace process X frames at once
+ - write homography validation logic
+ - fix alignment graph data
+ - more UI update of what's going on (states are only partially reported)
+ - deal with FinalGUIProcessor differences
+ - deal with selective mode
+ 
+ */
 public final class FrameGraphBuilder {
 
     // MARK: Queues (user adjustable)
@@ -9,7 +20,12 @@ public final class FrameGraphBuilder {
     let homographyQueue = OperationQueue()
     let mergeQueue = OperationQueue()
 
-    public init() {
+    let configManager: ConfigManager
+    
+    public init(_ configManager: ConfigManager) {
+        self.configManager = configManager
+
+        // XXX make these VVV parameters
         horizonQueue.maxConcurrentOperationCount = 40
         keypointQueue.maxConcurrentOperationCount = 10
         homographyQueue.maxConcurrentOperationCount = 8
@@ -95,7 +111,10 @@ public final class FrameGraphBuilder {
         }
 
         // ---- 4. Global validation barrier ----
-        let validationOp = AlignmentValidationOp(frames: frames)
+        let validationOp = AlignmentValidationOp(
+          frames: frames,
+          configManager: configManager
+        )
         Log.d("\(homographyOps.count) homographyOps")
         homographyOps.forEach { validationOp.addDependency($0) }
         homographyQueue.addOperation(validationOp)

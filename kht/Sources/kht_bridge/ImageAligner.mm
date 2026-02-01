@@ -676,7 +676,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
           Log_e(@"frame %d Unknown Error", logID);
         }
       }
-
+      
       // done processing neighbor frames
       
       SET_FRAME_STATE(request, ObjCAlignmentStepComplete, 0);
@@ -694,7 +694,9 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
         }
       }
 
-      return [[HomographyResult alloc] initWithWarpInfo: warps];
+      return [[HomographyResult alloc]
+               initWithFrameIndex: request.frameIndex
+                         warpInfo: warps];
 
     } catch (const cv::Exception &e) {
       Log_e(@"Error: %@", [NSString stringWithUTF8String:e.what()]);

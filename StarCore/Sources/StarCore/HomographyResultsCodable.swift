@@ -1,66 +1,102 @@
 import Foundation
+import logging
 import kht_bridge
 
 public struct HomographyResultsCodable: Codable, Sendable {
-    public let homography: [AlignmentWarpInfoCodable]
+    public let frameIndex: Int
+    public let neighborHomography: [AlignmentWarpInfoCodable]
 
-    public var total: Int { homography.count }
+    
+    public var total: Int { neighborHomography.count }
 
-    public init(with homography: [AlignmentWarpInfoCodable]) {
-        self.homography = homography
+    public init(for frameIndex: Int,
+                with neighborHomography: [AlignmentWarpInfoCodable])
+    {
+        self.frameIndex = frameIndex
+        self.neighborHomography = neighborHomography
     }
     
     public init(from result: HomographyResult) {
-        self.homography = result.warpInfo.map { $0.toCodable() }
+        self.frameIndex = Int(result.frameIndex)
+        self.neighborHomography = result.warpInfo.map { $0.toCodable() }
     }
 
-    func mappedHomography(from frameIndex: Int) -> [NSNumber: MatWrapper] {
+    func mappedHomography() -> [NSNumber: MatWrapper] {
         var ret: [NSNumber: MatWrapper] = [:]
-        for graphy in homography {
-            let warpInfo = AlignmentWarpInfo(from: graphy)
-            let offset = graphy.frameIndex - frameIndex
+        for homography in neighborHomography {
+            let warpInfo = AlignmentWarpInfo(from: homography)
+            let offset = homography.frameIndex - frameIndex
             ret[NSNumber(value: offset)] = warpInfo.homography
         }
         return ret
     }
 
-    
-/*
-    public var wasSuccessfullyAligned: Bool {
-        self.numberAligned.count != 0 &&
-        self.numberFailed.count == 0
-    }
-    
-    public func matches(
-      deviations: [Int: [Double]], // frame offset to expected min/max deviance
-      by variance: Double,       // 1.25 for 25% change allowed
-      at frameIndex: Int,        // frame index of frame being processed
-      successfulHomographyOnly: Bool = false
-    ) -> Bool {
-        var alignedDeviationCount = 0
-        for result in self.numberAligned {
-            if (successfulHomographyOnly && result.alignmentState == .homographySuccess) || !successfulHomographyOnly,
-               let homography = result.homography
-            {
-                let frameOffset = result.frameIndex - frameIndex
-                let deviation = homographyDeviation(homography)
-                
-                if let deviationMinMax = deviations[frameOffset] {
-                    let minExpectedDeviation = deviationMinMax[0]
-                    let maxExpectedDeviation = deviationMinMax[1]
-
-                    // compare deviation to expected results
-                    if deviation < maxExpectedDeviation * variance,
-                       deviation > minExpectedDeviation / variance
-                    {
-                        // this neighbor was aligned good enough
-                        alignedDeviationCount += 1
-                    }
-                }
+    // the average of the deviation of neighbors by frame distance
+    public var compositeDeviation: Double {
+        var ret: Double = 0
+        var count: Double = 0
+        
+        for homographyInfo in neighborHomography {
+            if let homography = homographyInfo.homography {
+                let offset = Double(abs(homographyInfo.frameIndex - frameIndex))
+                ret += homographyDeviation(homography)/offset
+                count += 1
             }
         }
-        return alignedDeviationCount == self.numberAligned.count 
+
+        ret /= count
+        
+        return ret
     }
-*/
+
+    // apply some basic heurstics to the neighbor homography to see if it looks ok
+    // weeds out some obvously bad homographies
+    public var alignmentLooksOk: Bool {
+        
+        var slopes: [Double] = []
+                    
+        for homography in neighborHomography {
+            let frameDistance = abs(self.frameIndex-Int(homography.frameIndex))
+            slopes.append(homography.deviation/Double(frameDistance))
+        }
+
+        var goodWarps: [AlignmentWarpInfoCodable] = []
+        var badWarps: [AlignmentWarpInfoCodable] = []
+
+        slopes.sort(by: { $0 < $1 })
+        
+        let medianIndex = slopes.count/2
+        if medianIndex < slopes.count {
+            let medianSlope = slopes[medianIndex]
+            Log.d("frame \(frameIndex) got medianSlope \(medianSlope)")
+            for homography in neighborHomography {
+                let frameDistance = abs(self.frameIndex-Int(homography.frameIndex))
+                let alignmentSlope = homography.deviation/Double(frameDistance)
+                /*
+                 two checks here:
+                 - deviation isn't too large in general
+                   fast clouds without stars can get large deviation
+                 - alignment slope is close to constant
+                   deviation should be evenly spaced by frame distance
+                 */
+                if homography.deviation < 60*Double(frameDistance), // XXX make this a parameter
+                   alignmentSlope < medianSlope * 1.15, // XXX make this a parameter too
+                   alignmentSlope > medianSlope / 1.15
+                {
+                    // rough estimate
+                    goodWarps.append(homography)
+                } else {
+                    badWarps.append(homography)
+                }
+            }
+        } else {
+            Log.d("frame \(frameIndex) has NO medianSlope :(")
+            // ALL FAIL :(
+            // here we don't know the median, so all are bad :(
+            badWarps = neighborHomography
+        }
+        
+        return goodWarps.count != 0 && badWarps.count == 0
+    }
 }
 

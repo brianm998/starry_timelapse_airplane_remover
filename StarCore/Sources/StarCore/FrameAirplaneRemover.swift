@@ -577,7 +577,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             do {
                 // build with a graph of dependencies between different frames at
                 // different steps of the process
-                let graphBuilder = FrameGraphBuilder()
+                let graphBuilder = FrameGraphBuilder(self.configManager)
                 var nextFrame: FrameAirplaneRemover? = await self.firstFrameInSequence
                 var allFrames: [FrameAirplaneRemover] = []
                 while nextFrame != nil {
@@ -861,9 +861,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             var homography: [NSNumber: MatWrapper]? = nil
             switch type {
             case .starAligned:
-                homography = neighborStarHomography?.mappedHomography(from: self.frameIndex)
+                homography = neighborStarHomography?.mappedHomography()
             case .earthAligned:
-                homography = neighborEarthHomography?.mappedHomography(from: self.frameIndex)
+                homography = neighborEarthHomography?.mappedHomography()
             default:
                 break
             }
@@ -939,6 +939,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     private var neighborEarthHomography: HomographyResultsCodable? = nil
     private var neighborStarHomography: HomographyResultsCodable? = nil
+
+    public func set(neighborStarHomography: HomographyResultsCodable) {
+        self.neighborStarHomography = neighborStarHomography
+    }
+    
+    public func set(neighborEarthHomography: HomographyResultsCodable) {
+        self.neighborEarthHomography = neighborEarthHomography
+    }
+    
+    public func getNeighborStarHomography() -> HomographyResultsCodable? {
+        neighborStarHomography
+    }
+    
+    public func getNeighborEarthHomography() -> HomographyResultsCodable? {
+        neighborEarthHomography
+    }
     
     internal func loadOrCreateHomography(
       of type: FrameViewMode
@@ -964,7 +980,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 return ret
             } else if let results = await self.readStarNeighborHomographyForThisFrame() {
                 // from file
-                let ret = HomographyResultsCodable(with: results.homography)
+                let ret = HomographyResultsCodable(for: frameIndex, with: results.neighborHomography)
                 self.neighborStarHomography = ret
                 return ret
             }
@@ -974,7 +990,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 return ret
             } else if let results = await self.readEarthNeighborHomographyForThisFrame() {
                 // from file
-                let ret = HomographyResultsCodable(with: results.homography)
+                let ret = HomographyResultsCodable(for: frameIndex, with: results.neighborHomography)
                 self.neighborEarthHomography = ret
                 return ret
             }
@@ -1294,6 +1310,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // write a text file with
 
             let results = HomographyResultsCodable(
+              for: frameIndex,
               with: homography
             )
 

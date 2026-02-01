@@ -2,8 +2,10 @@
 
 @implementation HomographyResult
 
--(HomographyResult* _Nonnull)initWithWarpInfo:(NSArray<AlignmentWarpInfo *> * _Nonnull)warpInfo
+-(HomographyResult* _Nonnull)initWithFrameIndex:(int)frameIndex
+                                       warpInfo:(NSArray<AlignmentWarpInfo *> * _Nonnull)warpInfo
 {
+  self.frameIndex = frameIndex;
   self.warpInfo = warpInfo;
   return self;
 }
