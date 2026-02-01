@@ -269,6 +269,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     private var skyKeyPoints: OCVFeatureSet? = nil {
         didSet {
+            Log.d("frame \(frameIndex) did set skyKeyPoints \(skyKeyPoints)")
             Task { 
                 await observer?.set(numberOfSkyKeyPoints: self.skyKeyPointCount())
             }
@@ -942,10 +943,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func set(neighborStarHomography: HomographyResultsCodable) {
         self.neighborStarHomography = neighborStarHomography
+        do {
+            try self.write(neighborStarHomography: neighborStarHomography.neighborHomography)
+        } catch {
+            Log.e("frame \(frameIndex) unable to set star homography: \(error)")
+        }
     }
     
     public func set(neighborEarthHomography: HomographyResultsCodable) {
         self.neighborEarthHomography = neighborEarthHomography
+        do {
+            try self.write(neighborEarthHomography: neighborEarthHomography.neighborHomography)
+        } catch {
+            Log.e("frame \(frameIndex) unable to set star homography: \(error)")
+        }
     }
     
     public func getNeighborStarHomography() -> HomographyResultsCodable? {
@@ -1082,9 +1093,27 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         Log.d("frame \(frameIndex) doing real alignment for type \(alignmentType)")
         // do real alignment
+
+        var baseKeypoints: OCVFeatureSet? = nil
+
+        switch alignmentType {
+        case .sky:
+            baseKeypoints = self.skyKeyPoints
+        case .earth:
+            baseKeypoints = self.earthKeyPoints
+        default:
+            break
+        }
+
+        guard let baseKeypoints else {
+            Log.w("frame \(frameIndex) has no base keypoints for alignment type \(alignmentType)")
+            return nil
+        }
+
+        Log.d("frame \(frameIndex) has base keypoints \(baseKeypoints)")
         
         let request = HomographyRequest(
-          baseKeypoints: alignmentType == .sky ? self.skyKeyPoints : self.earthKeyPoints,
+          baseKeypoints: baseKeypoints,
           frameIndex: Int32(frameIndex),
           neighbors: neighbors,
           matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
@@ -1128,15 +1157,18 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                      Log.d("frame \(frameIndex) setting processingState \(processingState)")
                      self.set(state: processingState)
                  }
-             }) {
+             })
+        {
+            Log.d("frame \(frameIndex) got homography result")
             if let error = result as? String {
                 Log.e("frame \(frameIndex) error: \(error)")
             } else if let result = result as? HomographyResult {
+                Log.e("frame \(frameIndex) got HomographyResult \(result)")
                 let alignedWarps = result.warpInfo.map { $0.toCodable() }
 
                 let ret = HomographyResultsCodable(from: result)
                 
-                // save homograhpy results for later
+                // save homography results for later
                 switch type {
                 case .starAligned:
                     try self.write(
@@ -1155,6 +1187,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
                 
                 return ret
+            } else {
+                Log.w("frame \(frameIndex) cannot handle result \(result)")
             }
         }
         
@@ -1174,9 +1208,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // uses opencv2 for SIFT fast, accurate image alignment
     public func loadOrCreateStarFeatures() async throws -> OCVFeatureSet? {
         if let skyKeyPoints {
+            Log.d("frame \(frameIndex) returning \(skyKeyPoints) skyKeyPoints")
             return skyKeyPoints
         } else {
             self.skyKeyPoints = try await loadOrCreateOCVFeatures(of: .starAligned)
+            Log.d("frame \(frameIndex) loaded \(self.skyKeyPoints) skyKeyPoints")
             return self.skyKeyPoints
         } 
     }
@@ -1268,10 +1304,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
                 do {
                     try results.write(toFile: fullPath)
-
+                    
                     Log.d("frame \(frameIndex) wrote results to \(fullPath)")
                 } catch {
                     Log.w("frame \(frameIndex) failed to write results to \(fullPath): error: \(error)")
+                }
+
+                // save results in RAM
+                switch type {
+                case .starAligned:
+                    self.skyKeyPoints = results
+                case .earthAligned:
+                    self.earthKeyPoints = results
+                default:
+                    throw "unknown type \(type)"
                 }
                 
                 return results
@@ -1293,6 +1339,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
            ),
            let observer
         {
+            Log.d("frame \(frameIndex) notifying observer of star alignment results")
             Task { await observer.set(starAlignmentResults: results) }
         }
     }

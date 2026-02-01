@@ -13,9 +13,6 @@ struct AlignmentWindowView: View {
     @State private var showStarKeypoints = true
     @State private var showEarthKeypoints = true
 
-    @State private var showGoodPoints = true
-    @State private var showBadPoints = true
-    
     var body: some View {
 
         return ZStack {
@@ -41,10 +38,7 @@ struct AlignmentWindowView: View {
                         if showStarDeviation {
                             Text("Deviation in Star Alignment")
                             AlignmentDeviationChart(
-                              goodFrames: viewModel.goodStarAlignmentInfo,
-                              badFrames: viewModel.badStarAlignmentInfo,
-                              showGoodPoints: $showGoodPoints,
-                              showBadPoints: $showBadPoints,
+                              frames: viewModel.starAlignmentInfo,
                               foregroundColor: .gray
                             )
                               .frame(minHeight: 320)
@@ -61,10 +55,7 @@ struct AlignmentWindowView: View {
                         if showEarthDeviation {
                             Text("Deviation in Earth Alignment")
                             AlignmentDeviationChart(
-                              goodFrames: viewModel.goodEarthAlignmentInfo,
-                              badFrames: viewModel.badEarthAlignmentInfo,
-                              showGoodPoints: $showGoodPoints,
-                              showBadPoints: $showBadPoints,
+                              frames: viewModel.earthAlignmentInfo,
                               foregroundColor: .gray
                             )
                               .frame(minHeight: 320)
@@ -94,8 +85,6 @@ struct AlignmentWindowView: View {
                 Toggle("Earth Deviation", isOn: $showEarthDeviation)
                 Toggle("Earth Keypoints", isOn: $showEarthKeypoints)
             }
-            Toggle("Good Points", isOn: $showGoodPoints)
-            Toggle("Bad Points", isOn: $showBadPoints)
             Divider()
               .fixedSize(horizontal: true, vertical: false)
             Spacer()
@@ -119,13 +108,11 @@ struct AlignmentWindowView: View {
         }
         if let viewModel = viewModel.imageSequence {
             if showStarDeviation || showStarKeypoints {
-                collect(from: viewModel.goodStarAlignmentInfo)
-                collect(from: viewModel.badStarAlignmentInfo)
+                collect(from: viewModel.starAlignmentInfo)
             }
 
             if showEarthDeviation || showEarthKeypoints {
-                collect(from: viewModel.goodEarthAlignmentInfo)
-                collect(from: viewModel.badEarthAlignmentInfo)
+                collect(from: viewModel.earthAlignmentInfo)
             }
         }
 
@@ -343,11 +330,7 @@ struct AlignmentDeviationChart: View {
 
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
-    let goodFrames: [[AlignmentWarpInfoCodable]]
-    let badFrames: [[AlignmentWarpInfoCodable]]
-
-    @Binding var showGoodPoints: Bool
-    @Binding var showBadPoints: Bool
+    let frames: [[AlignmentWarpInfoCodable]]
 
     let foregroundColor: Color
     
@@ -357,26 +340,19 @@ struct AlignmentDeviationChart: View {
     @State private var xDomain: ClosedRange<Int>
     
     init(
-      goodFrames: [[AlignmentWarpInfoCodable]],
-      badFrames: [[AlignmentWarpInfoCodable]],
-      showGoodPoints: Binding<Bool>,
-      showBadPoints: Binding<Bool>,
+      frames: [[AlignmentWarpInfoCodable]],
       foregroundColor: Color
     ) {
-        self._showGoodPoints = showGoodPoints
-        self._showBadPoints = showBadPoints
-        self.goodFrames = goodFrames
-        self.badFrames = badFrames
+        self.frames = frames
         self.foregroundColor = foregroundColor
 
-        let maxFrame = max(goodFrames.count - 1, 0)
+        let maxFrame = max(frames.count - 1, 0)
         _xDomain = State(initialValue: 0 ... maxFrame)
      }
      
     private var points: [DeviationPoint] {
         makeDeviationPoints(
-          goodFrames: goodFrames,
-          badFrames: badFrames
+          frames: frames
         )
     }
 
@@ -397,42 +373,19 @@ struct AlignmentDeviationChart: View {
     var body: some View {
         Chart {
             // === Lines ===
-            if showGoodPoints {
-                ForEach(pointsByOffset, id: \.offset) { group in
-                    ForEach(group.points.filter(\.isGood)) { point in
-                        LineMark(
-                          x: .value("Frame", point.baseFrame),
-                          y: .value("Deviation", point.signedDeviation)
-                        )
-                          .foregroundStyle(Color.byOffset(point.offset))
-                          .foregroundStyle(by: .value("Neighbor Offset", group.offset))
-                          .interpolationMethod(.linear)
-                          .opacity(point.isGood ? 1.0 : 0.4) // XXX doesn't work
-                    }
-                }
-            }
-                
-            // BAD: translucent dots
-            if showBadPoints {
-                ForEach(points.filter { !$0.isGood }) { point in
-                    PointMark(
+            ForEach(pointsByOffset, id: \.offset) { group in
+                ForEach(group.points) { point in
+                    LineMark(
                       x: .value("Frame", point.baseFrame),
                       y: .value("Deviation", point.signedDeviation)
                     )
                       .foregroundStyle(Color.byOffset(point.offset))
-                      //.foregroundStyle(by: .value("Neighbor Offset", point.offset))
-                    /*
-                      .foregroundStyle(
-                        by: .value(
-                          "Neighbor",
-                          point.offset > 0 ? "+\(point.offset)" : "\(point.offset)"
-                        )
-                      )*/
-                      .opacity(0.5)
-                      .symbolSize(20)
+                      .foregroundStyle(by: .value("Neighbor Offset", group.offset))
+                      .interpolationMethod(.linear)
+                      .opacity(point.isGood ? 1.0 : 0.4) // XXX doesn't work
                 }
             }
-            
+
             // === Current frame indicator ===
             RuleMark(
               x: .value("Current Frame", viewModel.currentIndex)
@@ -547,7 +500,7 @@ struct AlignmentDeviationChart: View {
 
         let span = xDomain.upperBound - xDomain.lowerBound
         let lower = max(0, frame - span / 2)
-        let upper = min(goodFrames.count - 1, lower + span)
+        let upper = min(frames.count - 1, lower + span)
 
         xDomain = lower ... upper
     }
@@ -563,10 +516,10 @@ struct AlignmentDeviationChart: View {
         guard delta != 0 else { return }
         var newSpan = max(10, Int(Double(currentSpan) / Double(delta)))
 
-        if newSpan > goodFrames.count { newSpan = goodFrames.count }
+        if newSpan > frames.count { newSpan = frames.count }
         if newSpan < 20 { newSpan = 20 }
         
-        let maxFrame = goodFrames.count - 1
+        let maxFrame = frames.count - 1
         let half = newSpan / 2
 
         let lower = max(0, center - half)
@@ -584,7 +537,7 @@ struct AlignmentDeviationChart: View {
     }
 
     private func shiftDomain(by delta: Int) {
-        let maxFrame = goodFrames.count - 1
+        let maxFrame = frames.count - 1
 
         let lower = max(0, xDomain.lowerBound + delta)
         let upper = min(maxFrame, lower + (xDomain.count - 1))
@@ -625,13 +578,12 @@ struct AlignmentDeviationChart: View {
     }
     
     func makeDeviationPoints(
-      goodFrames: [[AlignmentWarpInfoCodable]],
-      badFrames: [[AlignmentWarpInfoCodable]]
+      frames: [[AlignmentWarpInfoCodable]]
     ) -> [DeviationPoint] {
 
         var points: [DeviationPoint] = []
 
-        for (baseFrameIndex, neighbors) in goodFrames.enumerated() {
+        for (baseFrameIndex, neighbors) in frames.enumerated() {
             for neighbor in neighbors {
                 let offset = neighbor.frameIndex - baseFrameIndex
                 guard offset != 0 else { continue }
@@ -646,26 +598,6 @@ struct AlignmentDeviationChart: View {
                     signedDeviation: signedDeviation,
                     alignmentState: neighbor.alignmentState,
                     isGood: true
-                  )
-                )
-            }
-        }
-
-        for (baseFrameIndex, neighbors) in badFrames.enumerated() {
-            for neighbor in neighbors {
-                let offset = neighbor.frameIndex - baseFrameIndex
-                guard offset != 0 else { continue }
-
-                let signedDeviation =
-                  offset > 0 ? neighbor.deviation : -neighbor.deviation
-
-                points.append(
-                  DeviationPoint(
-                    baseFrame: baseFrameIndex,
-                    offset: offset,
-                    signedDeviation: signedDeviation,
-                    alignmentState: neighbor.alignmentState,
-                    isGood: false
                   )
                 )
             }

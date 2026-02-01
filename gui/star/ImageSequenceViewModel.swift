@@ -1101,13 +1101,12 @@ public final class ImageSequenceViewModel {
         return frames[currentIndex]
     }
 
-    var goodStarAlignmentInfo: [[AlignmentWarpInfoCodable]] {
+    var starAlignmentInfo: [[AlignmentWarpInfoCodable]] {
         var ret: [[AlignmentWarpInfoCodable]] = []
 
         for frame in frames {
             if let results = frame.frameObserver.starAlignmentResults {
-                // XXX WTF
-                // ret.append(results.numberAligned)
+                ret.append(results.neighborHomography)
             } else {
                 ret.append([])
             }
@@ -1115,27 +1114,12 @@ public final class ImageSequenceViewModel {
         return ret
     }
 
-    var badStarAlignmentInfo: [[AlignmentWarpInfoCodable]] {
-        var ret: [[AlignmentWarpInfoCodable]] = []
-
-        for frame in frames {
-            if let results = frame.frameObserver.starAlignmentResults {
-                // XXX WTF
-                //ret.append(results.numberFailed)
-            } else {
-                ret.append([])
-            }
-        }
-        return ret
-    }
-
-    var goodEarthAlignmentInfo: [[AlignmentWarpInfoCodable]] {
+    var earthAlignmentInfo: [[AlignmentWarpInfoCodable]] {
         var ret: [[AlignmentWarpInfoCodable]] = []
 
         for frame in frames {
             if let results = frame.frameObserver.earthAlignmentResults {
-                // XXX WTF
-                //ret.append(results.numberAligned)
+                ret.append(results.neighborHomography)
             } else {
                 ret.append([])
             }
@@ -1143,20 +1127,6 @@ public final class ImageSequenceViewModel {
         return ret
     }
     
-    var badEarthAlignmentInfo: [[AlignmentWarpInfoCodable]] {
-        var ret: [[AlignmentWarpInfoCodable]] = []
-
-        for frame in frames {
-            if let results = frame.frameObserver.earthAlignmentResults {
-                // XXX WTF
-                //ret.append(results.numberFailed)
-            } else {
-                ret.append([])
-            }
-        }
-        return ret
-    }
-
     var skyKeypointCounts: [Int] {
         var ret: [Int] = []
         for frame in frames {

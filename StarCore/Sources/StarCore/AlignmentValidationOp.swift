@@ -46,7 +46,9 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         Log.d("doing static star alignment validation")
         var homographies: [HomographyResultsCodable] = []
         for frame in frames {
-            if let homography = await frame.getNeighborStarHomography() {
+            if let homography = await frame.getNeighborStarHomography(),
+               homography.alignmentLooksOk
+            {
                 homographies.append(homography)
             }
         }

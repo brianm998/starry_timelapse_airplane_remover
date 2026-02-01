@@ -68,10 +68,7 @@ struct LeftPanel: View {
                     Space(height: 10)
 
                     AlignmentDeviationChart(
-                      goodFrames: viewModel.goodStarAlignmentInfo,
-                      badFrames: viewModel.badStarAlignmentInfo,
-                      showGoodPoints: .constant(true),
-                      showBadPoints: .constant(true),
+                      frames: viewModel.starAlignmentInfo,
                       foregroundColor: .white
                     )
                       .frame(width: 200, height: 200)
