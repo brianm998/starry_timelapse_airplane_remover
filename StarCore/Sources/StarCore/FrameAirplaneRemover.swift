@@ -882,9 +882,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     } else if let result = result as? [kht_bridge.WarpedImageResult] {
                         Log.d("frame \(frameIndex) got \(result) back from alignment")
 
+                        // include the original frame so we don't miss any edges
+                        var imagesToMerge: [MatWrapper] = [originalFrame.mat]
+
+                        // merge in all the warped neighbor frames
+                        imagesToMerge += result.compactMap { $0.warpedFrame }
+
+                        // median merge the frames and package as a result
                         warpedResult = WarpedImageResult(
                           warpedFrame: ImageAligner.medianMerge(
-                            result.compactMap { $0.warpedFrame },
+                            imagesToMerge,
                             outlierThreshold: config.pixelThreshold,
                             includeAll: false
                           ),
