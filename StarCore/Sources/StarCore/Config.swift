@@ -38,11 +38,13 @@ public class ConfigManager {
 
     private var _config: Config
 
+    private var updateCallbacks: [(Config) -> Void] = []
+    
     public init() {
         _jsonFilename = ""
         _config = Config()
     }
-    
+
     public init(configFilename: String, config: Config) {
         self._jsonFilename = configFilename
         self._config = config
@@ -57,6 +59,10 @@ public class ConfigManager {
         }
     }
 
+    public func onUpdate(closure: @escaping @Sendable (Config) -> Void) {
+        updateCallbacks.append(closure)
+    }
+    
     public func save() {
         _config.writeJson(named: _jsonFilename, overwrite: true) 
     }
@@ -68,6 +74,9 @@ public class ConfigManager {
     public func update(_ config: Config) {
         self._config = config
         save()
+        for callback in updateCallbacks {
+            callback(config)
+        }
     }
 }
 
@@ -287,9 +296,18 @@ public struct Config: Codable, Sendable, Transferable {
     public var horizonMinY: Int?
     public var horizonMaxY: Int?
 
-    // max number of frames to concurrently horizon calculations on
+    // max number of frames to concurrently calculation horizons on
     public var maxConcurrentHorizonCalculations: Int = 20
 
+    // max number of frames to concurrently calculation keypoints on
+    public var maxConcurrentKeypointCalculations: Int = 8
+    
+    // max number of frames to concurrently calculation homographies on
+    public var maxConcurrentHomographyCalculations: Int = 6
+
+    // max number of frames to concurrently calculation final merges on
+    public var maxConcurrentMergeCalculations: Int = 8
+    
     // when doing auto aligned outputs, how far to shift up the horizon mask
     // when doing a final composite image.
     public var horizonVerticalShiftAmount: Int = 8
@@ -377,6 +395,11 @@ public struct Config: Codable, Sendable, Transferable {
         self.horizonMinY = try c.decodeIfPresent(Int.self, forKey: .horizonMinY)
         self.horizonMaxY = try c.decodeIfPresent(Int.self, forKey: .horizonMaxY)
         self.maxConcurrentHorizonCalculations = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentHorizonCalculations) ?? self.maxConcurrentHorizonCalculations
+
+        self.maxConcurrentKeypointCalculations = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentKeypointCalculations) ?? self.maxConcurrentKeypointCalculations
+        self.maxConcurrentHomographyCalculations = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentHomographyCalculations) ?? self.maxConcurrentHomographyCalculations
+        self.maxConcurrentMergeCalculations = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentMergeCalculations) ?? self.maxConcurrentMergeCalculations
+
         self.horizonVerticalShiftAmount = try c.decodeIfPresent(Int.self, forKey: .horizonVerticalShiftAmount) ?? self.horizonVerticalShiftAmount
 
         self.allowEarthAlignment = try c.decodeIfPresent(Bool.self, forKey: .allowEarthAlignment) ?? self.allowEarthAlignment
@@ -483,6 +506,8 @@ public struct Config: Codable, Sendable, Transferable {
     //        updated deviation checks to use a min/max range, not median
     // 0.10.5 added more status and error reporting
     //        single thread alignment pre frame for better results
+    // 0.10.6 added graph processing, split up processing into smaller chunks
+    //        bug fixes, runs a lot faster, less ram (hopefully)
     
     public var starVersion = Config.latestVersion
 

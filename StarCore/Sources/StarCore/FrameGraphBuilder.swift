@@ -2,17 +2,20 @@ import Foundation
 import logging
 /*
 
+ * write homography validation logic for static sky
+ * fix alignment graph data
+ * expose queue max sizes to config, replace process X frames at once
+
  Still TODO:
 
- - expose queue max sizes to config, replace process X frames at once
- - write homography validation logic
- - fix alignment graph data
+ - write homography validation logic for moving sky and earth
  - more UI update of what's going on (states are only partially reported)
  - deal with FinalGUIProcessor differences
  - deal with selective mode
+ - make errors show up in UI (no found keypoints, homography, etc)
  
  */
-public final class FrameGraphBuilder {
+public final actor FrameGraphBuilder {
 
     // MARK: Queues (user adjustable)
     let horizonQueue = OperationQueue()
@@ -22,22 +25,36 @@ public final class FrameGraphBuilder {
 
     let configManager: ConfigManager
     
-    public init(_ configManager: ConfigManager) {
+    public init(_ configManager: ConfigManager) async {
         self.configManager = configManager
 
-        // XXX make these VVV parameters
-        horizonQueue.maxConcurrentOperationCount = 40
-        keypointQueue.maxConcurrentOperationCount = 10
-        homographyQueue.maxConcurrentOperationCount = 8
-        mergeQueue.maxConcurrentOperationCount = 20
+        update(from: await configManager.config())
+
+        await configManager.onUpdate { [weak self] config in
+            Task {
+                await self?.update(from: config)
+            }
+        }
     }
 
+    public func update(from config: Config) {
+        horizonQueue.maxConcurrentOperationCount = config.maxConcurrentHorizonCalculations
+        keypointQueue.maxConcurrentOperationCount = config.maxConcurrentKeypointCalculations
+        homographyQueue.maxConcurrentOperationCount = config.maxConcurrentHomographyCalculations
+        mergeQueue.maxConcurrentOperationCount = config.maxConcurrentMergeCalculations
+        Log.d("update from config maxConcurrentHorizonCalculations \(config.maxConcurrentHorizonCalculations) maxConcurrentKeypointCalculations \(config.maxConcurrentKeypointCalculations) maxConcurrentHomographyCalculations \(config.maxConcurrentHomographyCalculations) maxConcurrentMergeCalculations \(config.maxConcurrentMergeCalculations)")
+    }
+    
     public func build(
         frames: [FrameAirplaneRemover],
-        hasHorizon: Bool,
-        processEarth: Bool,
         closure: @escaping () -> Void
     ) async {
+        let config = await configManager.config()
+
+        let hasHorizon = config.horizonDetectionEnabled
+        let processEarth = config.allowEarthAlignment && 
+          config.tripodHeadWasMoving // keypoints not used when stationary
+        
         var homographyOps: [Operation] = []
         var mergeOps: [Operation] = []
 

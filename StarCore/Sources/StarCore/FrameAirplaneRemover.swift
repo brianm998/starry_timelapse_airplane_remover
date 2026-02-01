@@ -578,7 +578,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             do {
                 // build with a graph of dependencies between different frames at
                 // different steps of the process
-                let graphBuilder = FrameGraphBuilder(self.configManager)
+                let graphBuilder = await FrameGraphBuilder(self.configManager)
                 var nextFrame: FrameAirplaneRemover? = await self.firstFrameInSequence
                 var allFrames: [FrameAirplaneRemover] = []
                 while nextFrame != nil {
@@ -588,10 +588,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     }
                 }
                 await graphBuilder.build(
-                  frames: allFrames,
-                  hasHorizon: config.horizonDetectionEnabled,
-                  processEarth: config.allowEarthAlignment && 
-                    config.tripodHeadWasMoving // keypoints not used when stationary
+                  frames: allFrames
                 ) {
                     progressClosure(.done) // XXX make more of these
                 }
@@ -868,6 +865,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             default:
                 break
             }
+            Log.d("frame \(frameIndex) using homography \(homography)")
             if let homography {
                 let request = AlignmentRequest(
                   frameIndex: Int32(frameIndex),
@@ -878,12 +876,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 if let result = ImageAligner.align(
                      with: request
                    ) {
+                    Log.d("frame \(frameIndex) got alignment result \(result)")
                     if let error = result as? String {
                         Log.e("frame \(frameIndex) error: \(error)")
-                    } else if let result = result as? kht_bridge.WarpedImageResult {
+                    } else if let result = result as? [kht_bridge.WarpedImageResult] {
                         Log.d("frame \(frameIndex) got \(result) back from alignment")
 
-                        warpedResult = result
+                        warpedResult = WarpedImageResult(
+                          warpedFrame: ImageAligner.medianMerge(
+                            result.compactMap { $0.warpedFrame },
+                            outlierThreshold: config.pixelThreshold,
+                            includeAll: false
+                          ),
+                          warpedHorizon: nil // XXX
+                        )
+                    } else {
+                        Log.w("frame \(frameIndex) fell off the end with request \(result)")
                     }
                 }
             } else {
@@ -893,6 +901,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.i("frame \(frameIndex) got alignment result \(warpedResult) for type \(type)")
         guard let warpedResult else {
             Log.e("frame \(frameIndex) got no alignment result")
+            // XXX report his error to the UI
             return WarpedImageResult(
               warpedFrame: originalFrame.mat, 
               warpedHorizon: nil
