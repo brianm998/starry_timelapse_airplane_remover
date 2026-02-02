@@ -16,6 +16,7 @@ public enum FastAdvancementType: String, Equatable, CaseIterable {
 
 struct RightPanel: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    @Environment(LoggingViewModel.self) var loggingViewModel: LoggingViewModel
 
     let foobar = 134.0/255.0 // XXX make a custom color from these
     let foobar2 = 138.0/255.0
@@ -24,6 +25,7 @@ struct RightPanel: View {
     
     var body: some View {
         @Bindable var viewModel = viewModel
+        @Bindable var loggingViewModel = loggingViewModel
         return Group {
             if viewModel.rightPanelShowing {
                 VStack(alignment: .leading) {
@@ -254,12 +256,12 @@ struct RightPanel: View {
                               textColor: .white,
                               alwaysOpen: false
                             )
-
+                            /*
                             EditableNumberOfFramesToProcessConcurrentlyView(
                               focusedField: $focusedField,
                               textColor: .white,
                               alwaysOpen: false
-                            )
+                            )*/
 
                             Picker("redo", selection: $viewModel.reprocessingType) {
                                 ForEach(FrameReprocessingType.allCases, id: \.self) { value in
@@ -324,7 +326,27 @@ struct RightPanel: View {
                                 Text("Render Updates")
                             }
                               .disabled(frameView.outlierViews == nil ||
-                                        viewModel.renderingCurrentFrame)
+                                          viewModel.renderingCurrentFrame)
+
+
+                            // enable logging
+                            HStack(spacing: 0) {
+                                Toggle(isOn: $loggingViewModel.fileLogEnabled) {
+                                    Text("")
+                                      .foregroundColor(loggingViewModel.fileLogEnabled ? .black : .gray)
+                                }
+                                Text("Log to file at level:")
+                                  .foregroundColor(loggingViewModel.fileLogEnabled ? .black : .gray)
+                            }
+                            Picker(selection: $loggingViewModel.fileLogLevel) {
+                                ForEach(Log.Level.allCases, id: \.self) { level in
+                                    Text("\(level.emo) \(level.rawValue)")
+                                }
+                            } label: { }
+                              .pickerStyle(.menu)
+                              .fixedSize(horizontal: true, vertical: false)
+                              .disabled(!loggingViewModel.fileLogEnabled)
+                            
                         }
                     }
                       .defaultScrollAnchor(.bottom)
@@ -515,6 +537,7 @@ struct EditableNumberOfNeighborFrames: View {
 }
 
 // “Number of Frames To Process Concurrently”
+/*
 struct EditableNumberOfFramesToProcessConcurrentlyView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     let focusedField: FocusState<FocusedField?>.Binding
@@ -541,7 +564,7 @@ struct EditableNumberOfFramesToProcessConcurrentlyView: View {
             }
         )
     }
-}
+}*/
 
 // “Number of Frames To Process”
 struct EditableNumberOfFramesToProcessView: View {

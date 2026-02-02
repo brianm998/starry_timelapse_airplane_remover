@@ -578,7 +578,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             do {
                 // build with a graph of dependencies between different frames at
                 // different steps of the process
-                let graphBuilder = await FrameGraphBuilder(self.configManager)
+                await frameGraphBuilder.set(configManager: self.configManager)
                 var nextFrame: FrameAirplaneRemover? = await self.firstFrameInSequence
                 var allFrames: [FrameAirplaneRemover] = []
                 while nextFrame != nil {
@@ -587,7 +587,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         nextFrame = await frame.getNextFrame()
                     }
                 }
-                await graphBuilder.build(
+                await frameGraphBuilder.build(
                   frames: allFrames
                 ) {
                     progressClosure(.done) // XXX make more of these
@@ -2807,26 +2807,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.i("frame \(frameIndex) got result \(result) for star aligned image")
 
         let config = await configManager.config()
-
-        /*
-         XXX WTF
-        if !result.wasSuccessfullyAligned {
-            if usingExistingHomography {
-                Log.w("frame \(frameIndex) only got \(result.alignedWarps) aligned warps cannot merge \(usingExistingHomography), returning original image instead")
-
-                return try await imageAccessor.load(
-                  frameIndex: frameIndex,
-                  type: .original,
-                  atSize: .original
-                )
-            } else {
-                self.set(state: .starAlignmentFailed)
-                Log.w("frame \(frameIndex) only got \(result.alignedWarps) aligned warps cannot merge \(usingExistingHomography), returning nil")
-                return nil
-            }
-            
-        }
-         */
         
         var skyImage: PixelatedImage? = nil
         if let starAlignedImage {

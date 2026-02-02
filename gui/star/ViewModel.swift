@@ -12,9 +12,15 @@ enum CursorStackItem {
 
 @MainActor @Observable
 public final class LoggingViewModel {
-    var logs: [GUILogHandler.LogLine] = []
+    var logs: [GUILogHandler.LogLine] = [] {
+        didSet {
+            if logs.count > maxGUILogLines {
+                logs = Array(logs.suffix(maxGUILogLines))
+            }
+        }
+    }
 
-    var maxGUILogLines = 100000 // guess
+    var maxGUILogLines = 1000 // guess
     var maxGUILogLinesString = "100000" // guess
     
     // level for what is shown in the gui

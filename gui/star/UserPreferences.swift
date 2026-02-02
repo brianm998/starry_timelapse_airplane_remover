@@ -28,15 +28,6 @@ struct UserPreferences: Codable, Sendable {
         }
     }
 
-    var concurrentFrames: Int? {
-        didSet {
-            self.save()
-            if let concurrentFrames {
-                Task { await maxFramesProcessing.set(value: concurrentFrames) }
-            }
-        }
-    }
-    
     var processingType: DetectionType? {
         didSet {
             self.save()
@@ -111,10 +102,6 @@ struct UserPreferences: Codable, Sendable {
         do {
             instance = try UserPreferences.load()
 
-            if let concurrentFrames = instance?.concurrentFrames {
-                Task { await maxFramesProcessing.set(value: concurrentFrames) }
-            }
-            
             if let processingType = instance?.processingType {
                 Task { await constants.set(detectionType: processingType) }
             }
@@ -138,10 +125,6 @@ struct UserPreferences: Codable, Sendable {
               nan: "nan")
             
             var preferences = try decoder.decode(UserPreferences.self, from: data)
-
-            if preferences.concurrentFrames == nil {
-                preferences.concurrentFrames = ProcessInfo().processorCount
-            }
 
             if preferences.processingType == nil {
                 preferences.processingType = .strong

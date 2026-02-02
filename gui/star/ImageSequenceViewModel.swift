@@ -112,9 +112,6 @@ public final class ImageSequenceViewModel {
             if let detectionType = userPreferences.processingType {
                 self.detectionType = detectionType
             }
-            if let concurrentFrames = userPreferences.concurrentFrames {
-                self.numberOfFramesToProcessConcurrently = concurrentFrames
-            }
             if let frameRate = userPreferences.frameRate {
                 self.frameRate = frameRate
             }
@@ -323,8 +320,6 @@ public final class ImageSequenceViewModel {
             }
         }
     }
-
-    var numberOfFramesToProcessConcurrently: Int
 
     // for final processing of outliers
     var numberOfNeighborFrames: Int {
@@ -572,6 +567,31 @@ public final class ImageSequenceViewModel {
         didSet {
             var realConfig = config.config()
             realConfig.maxConcurrentHorizonCalculations = maxConcurrentHorizonCalculations
+            Log.d("FUCKING update maxConcurrentHorizonCalculations \(maxConcurrentHorizonCalculations)")
+            config.update(realConfig)
+        }
+    }
+    
+    var maxConcurrentKeypointCalculations: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.maxConcurrentKeypointCalculations = maxConcurrentKeypointCalculations
+            config.update(realConfig)
+        }
+    }
+    
+    var maxConcurrentHomographyCalculations: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.maxConcurrentHomographyCalculations = maxConcurrentHomographyCalculations
+            config.update(realConfig)
+        }
+    }
+    
+    var maxConcurrentMergeCalculations: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.maxConcurrentMergeCalculations = maxConcurrentMergeCalculations
             config.update(realConfig)
         }
     }
@@ -766,6 +786,9 @@ public final class ImageSequenceViewModel {
         self.pixelReplacementOverrides = config.pixelReplacementOverrides
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.maxConcurrentHorizonCalculations = config.maxConcurrentHorizonCalculations
+        self.maxConcurrentKeypointCalculations = config.maxConcurrentKeypointCalculations
+        self.maxConcurrentHomographyCalculations = config.maxConcurrentHomographyCalculations
+        self.maxConcurrentMergeCalculations = config.maxConcurrentMergeCalculations
         self.horizonVerticalShiftAmount = config.horizonVerticalShiftAmount
         self.allowEarthAlignment = config.allowEarthAlignment
 
@@ -781,8 +804,6 @@ public final class ImageSequenceViewModel {
         self.config = configManager
 
 //        self.earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? 0
-        
-        self.numberOfFramesToProcessConcurrently = await Task { await maxFramesProcessing.getValue() }.value
         
         let ignoreLowerPixels = config.ignoreLowerPixels 
         self.ignoreLowerPixels = CGFloat(ignoreLowerPixels) // XXX need to sync back the other dir
@@ -823,7 +844,9 @@ public final class ImageSequenceViewModel {
                 let instances = MatWrapper.totalInstances
                 let bytes = MatWrapper.totalBytes
                 Task { @MainActor in
-                    self?.totalMatInstances = Int(instances)
+                    if instances < Int.max {
+                        self?.totalMatInstances = Int(instances)
+                    }
                     if bytes < Int.max {
                         self?.totalMatBytes = Int(bytes)
                     }
@@ -883,12 +906,13 @@ public final class ImageSequenceViewModel {
         let imageInfo = try await imageSequence.getImageInfo()
         
         try await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
-            
+            let semaphore = AsyncSemaphore(value: 30) // XXX constant XXX
             for (frameIndex, filename) in filenames.enumerated() {
 
                 Log.d("add task at frameIndex \(frameIndex)")
 
                 taskGroup.addTask() {
+                    await semaphore.wait()
                     let basename = removePath(fromString: filename)
                     let frame = try await frameLoadMonitor.load() {
                         Log.d("running task at frameIndex \(frameIndex)")
@@ -913,6 +937,7 @@ public final class ImageSequenceViewModel {
                             callback(frame)
                         }
                     }
+                    semaphore.signal()
                     return frame
                 }
             }

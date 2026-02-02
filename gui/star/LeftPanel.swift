@@ -4,7 +4,8 @@ import logging
 
 struct LeftPanel: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-
+    @Environment(FrameGraphViewModel.self) var frameGraphViewModel: FrameGraphViewModel
+    
     let foobar = 134.0/255.0 // XXX make a custom color from these
     let foobar2 = 138.0/255.0
 
@@ -83,6 +84,8 @@ struct LeftPanel: View {
                     self.imageCacheView
 
                     Space(height: 10)
+
+                    self.operationQueueView
                     
                     /*
 
@@ -235,6 +238,14 @@ struct LeftPanel: View {
         }
     }
 
+    var operationQueueView: some View {
+        return VStack(alignment: .leading) {
+            QueueView(stats: frameGraphViewModel.horizonStats)
+            QueueView(stats: frameGraphViewModel.keypointStats)
+            QueueView(stats: frameGraphViewModel.homographyStats)
+            QueueView(stats: frameGraphViewModel.mergeStats)
+        }
+    }
     var imageCacheView: some View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .leading) {

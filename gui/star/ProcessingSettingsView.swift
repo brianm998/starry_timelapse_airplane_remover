@@ -345,8 +345,17 @@ struct ProcessingSettingsView: View {
                           Divider()
                           self.processingModeView
                           Divider()
-                          self.cuncurrentProcessingLimitView
+                          //self.cuncurrentProcessingLimitView
+                          //Divider()
+                          self.maxConcurrentHorizonsView
                           Divider()
+                          self.maxConcurrentKeypointsView
+                          Divider()
+                          self.maxConcurrentHomographysView
+                          Divider()
+                          self.maxConcurrentMergesView
+                          Divider()
+                          
                           DisclosureGroup {
                               Grid {
                                   self.neighborFrameCountView
@@ -381,8 +390,6 @@ struct ProcessingSettingsView: View {
                           DisclosureGroup {
                               Grid {
                                   self.horizonStripWidthView
-                                  Divider()
-                                  self.maxConcurrentHorizonsView
                                   Divider()
                                   self.useCannyEdgeDetectionGridRow
                                   Divider()
@@ -527,49 +534,6 @@ struct ProcessingSettingsView: View {
           isPrimary: false
         )
           .disabled(viewModel.sceneType == .skyOnly)
-    }
-    
-
-    
-    private var cuncurrentProcessingLimitView: some View {
-        @Bindable var viewModel = viewModel
-        return InfoTextInstructionGridRow(
-          showInfo: $showProcessFramesInfo,
-          addSpacer: { addSpacer },
-          infoText: """
-            How many frames do we process concurrently?  Number of CPUs is likely too high, as much of the processing has been parallized.  2-5 is a good number here.
-            """
-        ) {
-            HStack {
-                HStack {
-                    Spacer()
-                    Text("Max Concurrent Frames:")
-                      .font(.title2)
-                      .foregroundColor(.white)
-                      .opacity(0.6)
-                }
-                HStack {
-                    EditableNumberView(
-                      value: $viewModel.numberOfFramesToProcessConcurrently,
-                      minValue: 1,
-                      maxValue: viewModel.imageSequenceSize,
-                      fullTextProvider: { _ in "" },
-                      prefixText: "",
-                      suffixTextProvider: { _ in "" },
-                      textColor: .white,
-                      focusedField: $focusedField,
-                      focusField: .numberOfFramesToProcessConcurrently,
-                      alwaysOpen: true,
-                      commitAction: { newVal in
-                          // persist to prefs & global
-                          viewModel.userPreferences.concurrentFrames = newVal
-                          Task { await maxFramesProcessing.set(value: newVal) }
-                      }
-                    )
-                    Spacer()
-                }
-            }
-        }
     }
 
     private var neighborFrameCountView: some View {
@@ -1027,6 +991,117 @@ struct ProcessingSettingsView: View {
                       textColor: .white,
                       focusedField: $focusedField,
                       focusField: .maxConcurrentHorizons,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
+        }
+          .disabled(viewModel.sceneType == .skyOnly)
+    }
+    
+    private var maxConcurrentKeypointsView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showCannyMinThresholdView,
+          addSpacer: { addSpacer },
+          infoText: """
+            How many keypoint calculations should star do at once?  Close to the number of CPUs is usually good.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Concurrent Keypoint Calculations:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.maxConcurrentKeypointCalculations,
+                      minValue: 1,
+                      maxValue: 300,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .maxConcurrentKeypoints,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
+        }
+          .disabled(viewModel.sceneType == .skyOnly)
+    }
+    
+    private var maxConcurrentHomographysView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showCannyMinThresholdView,
+          addSpacer: { addSpacer },
+          infoText: """
+            How many homography calculations should star do at once?  Close to the number of CPUs is usually good.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Concurrent Homography Calculations:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.maxConcurrentHomographyCalculations,
+                      minValue: 1,
+                      maxValue: 300,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .maxConcurrentHomographys,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
+        }
+          .disabled(viewModel.sceneType == .skyOnly)
+    }
+    
+    private var maxConcurrentMergesView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showCannyMinThresholdView,
+          addSpacer: { addSpacer },
+          infoText: """
+            How many merge calculations should star do at once?  Close to the number of CPUs is usually good.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Concurrent Merge Calculations:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.maxConcurrentMergeCalculations,
+                      minValue: 1,
+                      maxValue: 300,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .maxConcurrentMerges,
                       alwaysOpen: true            
                     )
                     Spacer()
