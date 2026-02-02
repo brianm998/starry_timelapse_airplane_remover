@@ -19,17 +19,25 @@ final class OperationQueueStats {
         syncFromQueue(queue)
 
         observations = [
-            queue.observe(\.operationCount, options: [.initial, .new]) { [weak self] q, _ in
-                self?.operationCount = q.operationCount
+          queue.observe(\.operationCount, options: [.initial, .new]) { [weak self] q, _ in
+              Task { @MainActor in
+                  self?.operationCount = q.operationCount
+              }
             },
             queue.observe(\.maxConcurrentOperationCount, options: [.initial, .new]) { [weak self] q, _ in
-                self?.maxConcurrentOperationCount = q.maxConcurrentOperationCount
+              Task { @MainActor in
+                  self?.maxConcurrentOperationCount = q.maxConcurrentOperationCount
+              }
             },
             queue.observe(\.isSuspended, options: [.initial, .new]) { [weak self] q, _ in
-                self?.isSuspended = q.isSuspended
+              Task { @MainActor in
+                  self?.isSuspended = q.isSuspended
+              }
             },
             queue.observe(\.name, options: [.initial, .new]) { [weak self] q, _ in
-                self?.name = q.name ?? ""
+              Task { @MainActor in
+                  self?.name = q.name ?? ""
+              }
             }
         ]
     }
