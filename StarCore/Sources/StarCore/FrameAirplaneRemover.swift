@@ -566,7 +566,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public func processAll(
+    public nonisolated func processAll(
       frameSaveQueue: FrameSaveQueue,
       progressClosure: @Sendable @escaping (SequenceProcessingState) -> Void
     ) async {
