@@ -24,13 +24,7 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
             Log.d("start")
             let config = await configManager.config()
             if config.tripodHeadWasMoving {
-                /*
-
-                 For moving videos, figure out how to detect the curve and match ones to it
-                 that are too far away
-
-                 */
-                Log.w("validation for moving tripods is not implemented yet")
+                await validateMovingStarAlignment()
             } else {
                 // tripod was stationary
                 try await self.validateStaticStarAlignment()
@@ -76,4 +70,70 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         }
         Log.d("done validating static star alignment")
     }
+
+    private func validateMovingStarAlignment() async {
+        Log.d("doing moving tripod star alignment validation")
+
+        let kalman = HomographyKalman()
+        var states: [Int: KalmanState] = [:]
+        var orderedFrames = frames.sorted { $0.frameIndex < $1.frameIndex }
+
+        // --- Forward pass
+        for frame in orderedFrames {
+            let idx = frame.frameIndex
+
+            if let result = await frame.getNeighborStarHomography(),
+               result.alignmentLooksOk,
+               let h = bestHomography(from: result)
+            {
+                let logH = HomographyLieMapping.log(h)
+
+                if let prev = states[idx - 1] {
+                    let predicted = kalman.predict(prev)
+                    let weight = confidence(from: result)
+                    states[idx] = kalman.update(predicted, measurement: logH, weight: weight)
+                } else {
+                    states[idx] = kalman.initialState(from: logH)
+                }
+            } else if let prev = states[idx - 1] {
+                states[idx] = kalman.predict(prev)
+            }
+        }
+
+        // --- RTS smoothing
+        let smoothed = rtsSmooth(states.values.sorted { $0.x[0] < $1.x[0] })
+
+        // --- Apply result
+        for (frame, state) in zip(orderedFrames, smoothed) {
+            let h = HomographyLieMapping.exp(state.x)
+            let warp = AlignmentWarpInfoCodable(
+              homography: h,
+              deviation: homographyDeviation(h),
+              alignmentState: .homographySuccess,
+              frameIndex: frame.frameIndex
+            )
+
+            await frame.set(
+              neighborStarHomography: HomographyResultsCodable(
+                for: frame.frameIndex,
+                with: [warp]
+              )
+            )
+        }
+
+        Log.d("done validating moving star alignment")
+    }
+
+}
+
+private func bestHomography(from result: HomographyResultsCodable) -> [Double]? {
+    result.neighborHomography
+        .filter { $0.homography != nil }
+        .min { $0.deviation < $1.deviation }?
+        .homography
+}
+
+private func confidence(from result: HomographyResultsCodable) -> Double {
+    // simple, effective
+    return max(0.1, 1.0 / result.compositeDeviation)
 }
