@@ -60,8 +60,8 @@ public enum AlignmentStep: Equatable,
     case start
     case baseKeypointDetection
     case baseKeypointDetectionComplete
-    case neighborKeypointDetection(Int)
-    case neighborKeypointMatch(Int)
+    case neighborKeypointDetection(Int) // XXX obsolete now
+    case neighborKeypointMatch(Int)     // XXX obsolete now
     case aligningNeighbor(Int) // neighbor index
     case loadingNeighbor(Int) // neighbor index
     case complete
@@ -398,9 +398,19 @@ public enum FrameProcessingState: Codable,
         case .earthKeypointsFound:
             "found earth keypoints"
         case .starAlignment(let state):
-            "star align \(state)"
+            switch state {
+            case .complete:
+                "star aligned"
+            default:
+                "star align \(state)"
+            }
         case .earthAlignment(let state):
-            "earth align \(state)"
+            switch state {
+            case .complete:
+                "earth aligned"
+            default:
+                "earth align \(state)"
+            }
         case .starAlignmentFailed:
             "star failed"
         case .creatingStarAlignedFrame:
