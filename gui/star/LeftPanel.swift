@@ -180,7 +180,7 @@ struct LeftPanel: View {
             Button() {
                 viewModel.shouldShowProcessingSettings = true
             } label: {
-                Text("Process \(unprocessed+horizonCount) frames")
+                Text("Process frames")
             }
               .disabled(processButtonDisabled)
               .if(!processButtonDisabled) { 
