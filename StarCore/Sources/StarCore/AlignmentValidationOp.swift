@@ -75,48 +75,86 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         Log.d("doing moving tripod star alignment validation")
 
         let kalman = HomographyKalman()
-        var states: [Int: KalmanState] = [:]
+
+        // Absolute pose per frame (log space)
+        var poses: [Int: [Double]] = [:]
+
         var orderedFrames = frames.sorted { $0.frameIndex < $1.frameIndex }
 
         // --- Forward pass
         for frame in orderedFrames {
-            let idx = frame.frameIndex
+            let t = frame.frameIndex
 
-            if let result = await frame.getNeighborStarHomography(),
-               result.alignmentLooksOk,
-               let h = bestHomography(from: result)
-            {
+            guard let result = await frame.getNeighborStarHomography() else {
+                if let prev = poses[t - 1] {
+                    poses[t] = prev   // constant-velocity fallback
+                }
+                continue
+            }
+
+            // Collect relative measurements
+            var measurements: [[Double]] = []
+
+            for warp in result.neighborHomography {
+                guard
+                  let h = warp.homography,
+                  warp.alignmentState == .homographySuccess
+                else { continue }
+
+                let n = warp.frameIndex
                 let logH = HomographyLieMapping.log(h)
 
-                if let prev = states[idx - 1] {
-                    let predicted = kalman.predict(prev)
-                    let weight = confidence(from: result)
-                    states[idx] = kalman.update(predicted, measurement: logH, weight: weight)
-                } else {
-                    states[idx] = kalman.initialState(from: logH)
+                if let poseN = poses[n] {
+                    // log(P(t)) ≈ log(P(n)) − log(H)
+                    let estimateT = zip(poseN, logH).map { $0 - $1 }
+                    measurements.append(estimateT)
                 }
-            } else if let prev = states[idx - 1] {
-                states[idx] = kalman.predict(prev)
+            }
+
+            if let best = measurements.first {
+                poses[t] = best
+            } else if let prev = poses[t - 1] {
+                poses[t] = prev
             }
         }
 
         // --- RTS smoothing
-        let smoothed = rtsSmooth(states.values.sorted { $0.x[0] < $1.x[0] })
+        let smoothedPoses = rtsSmoothPoses(
+          orderedFrames.map { $0.frameIndex },
+          poses: poses
+        )
 
-        // --- Apply result
-        for (frame, state) in zip(orderedFrames, smoothed) {
-            let h = HomographyLieMapping.exp(state.x)
-            let warp = AlignmentWarpInfoCodable(
-              homography: h,
-              deviation: homographyDeviation(h),
-              alignmentState: .homographySuccess,
-              frameIndex: frame.frameIndex
-            )
+         // --- Apply result
+        for frame in orderedFrames {
+            let t = frame.frameIndex
+            guard let poseT = smoothedPoses[t] else { continue }
+
+            guard let original = await frame.getNeighborStarHomography() else { continue }
+
+            var rebuilt: [AlignmentWarpInfoCodable] = []
+
+            for warp in original.neighborHomography {
+                let n = warp.frameIndex
+                guard let poseN = poses[n] else { continue }
+
+                // H(t ← n) = P(t)^-1 · P(n)
+                let delta = zip(poseN, poseT).map { $0 - $1 }
+                let h = HomographyLieMapping.exp(delta)
+
+                rebuilt.append(
+                  AlignmentWarpInfoCodable(
+                    homography: h,
+                    deviation: homographyDeviation(h),
+                    alignmentState: .homographySuccess,
+                    frameIndex: n
+                  )
+                )
+            }
 
             await frame.set(
               neighborStarHomography: HomographyResultsCodable(
-                for: frame.frameIndex,
-                with: [warp]
+                for: t,
+                with: rebuilt
               )
             )
         }
@@ -126,14 +164,33 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 
 }
 
-private func bestHomography(from result: HomographyResultsCodable) -> [Double]? {
-    result.neighborHomography
-        .filter { $0.homography != nil }
-        .min { $0.deviation < $1.deviation }?
-        .homography
-}
-
 private func confidence(from result: HomographyResultsCodable) -> Double {
     // simple, effective
     return max(0.1, 1.0 / result.compositeDeviation)
+}
+
+func rtsSmoothPoses(
+    _ order: [Int],
+    poses: [Int: [Double]]
+) -> [Int: [Double]] {
+    guard order.count > 1 else { return poses }
+
+    var smoothed = poses
+
+    for i in stride(from: order.count - 2, through: 0, by: -1) {
+        let t = order[i]
+        let t1 = order[i + 1]
+
+        guard
+            let xT = poses[t],
+            let xT1 = poses[t1],
+            let xT1s = smoothed[t1]
+        else { continue }
+
+        // Identity dynamics: xₖ = xₖ₊₁
+        let correction = zip(xT1s, xT1).map { $0 - $1 }
+        smoothed[t] = zip(xT, correction).map(+)
+    }
+
+    return smoothed
 }
