@@ -44,6 +44,10 @@ let package = Package(
               dependencies: ["kht", "LoggingObjC"],
               publicHeadersPath: "include",
               cSettings: [
+                .unsafeFlags([
+                               "-I/opt/homebrew/include/eigen3", // arm
+                               "-I/usr/local/include/eigen3"     // intel
+                             ]),
                 .headerSearchPath("../../opencv/include"),   // for headers
               ] 
       ),   

@@ -6,6 +6,7 @@
 #import "PixelatedImageBridge.h"
 #import "HorizonResult.h"
 #import "ImageAligner.h"
+#import "HomographyLie.h"
 
 @interface KHTBridgeLine : NSObject
 @property (nonatomic) double theta;
