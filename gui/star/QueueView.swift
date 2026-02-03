@@ -16,3 +16,12 @@ struct QueueView: View {
         }
     }
 }
+
+struct SmallQueueView: View {
+    let stats: OperationQueueStats
+
+    var body: some View {
+        Text("\(stats.name): \(stats.operationCount)")
+          .foregroundColor(.white)
+    }
+}
