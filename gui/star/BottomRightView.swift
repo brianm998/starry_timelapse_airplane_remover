@@ -8,6 +8,7 @@ import Combine
 
 struct BottomRightView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    @Environment(FrameGraphViewModel.self) var frameGraphViewModel: FrameGraphViewModel
 
     // stuff from harvester testing
     @State var harvesterCount: Int = 0
@@ -100,8 +101,28 @@ struct BottomRightView: View {
                 if viewModel.isProcessingFrames {
                     ProgressView()
                       .colorScheme(.dark)
-                    Text("processing \(viewModel.frames.count - viewModel.numberOfFramesProcessed) more frames")
-                      .foregroundColor(.white)
+                    VStack(alignment: .trailing) {
+                        if let stats = frameGraphViewModel.horizonStats,
+                           stats.operationCount > 0
+                        {
+                            SmallQueueView(stats: stats)
+                        }
+                        if let stats = frameGraphViewModel.keypointStats,
+                           stats.operationCount > 0
+                        {
+                            SmallQueueView(stats: stats)
+                        }
+                        if let stats = frameGraphViewModel.homographyStats,
+                           stats.operationCount > 0
+                        {
+                            SmallQueueView(stats: stats)
+                        }
+                        if let stats = frameGraphViewModel.mergeStats,
+                           stats.operationCount > 0
+                        {
+                            SmallQueueView(stats: stats)
+                        }
+                    }
                 }
 
                 switch viewModel.sequenceProcessingState {
@@ -193,6 +214,9 @@ struct BottomRightView: View {
                 }
 
                 /*
+
+                 // XXX redo this with a better metrix
+                 
                 if frameView.frameObserver.starAlignmentResults != nil ||
                    frameView.frameObserver.earthAlignmentResults != nil
                 {
