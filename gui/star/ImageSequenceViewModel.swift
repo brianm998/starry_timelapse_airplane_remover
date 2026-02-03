@@ -1198,6 +1198,7 @@ public final class ImageSequenceViewModel {
 
     func processAll() {
         Log.d("processAll")
+        self.isProcessingFrames = true
         if let frame = frames[0].frame {
             Task {
                 Log.d("processAll")
@@ -1207,8 +1208,10 @@ public final class ImageSequenceViewModel {
                 ) { processingState in
                     Log.d("processAll")
                     Task { @MainActor in
+                        self.isProcessingFrames = false
                         switch processingState {
                         case .done:
+                            // XXX show a success sheet before render
                             // show video render sheet?
                             self.renderVideoSheetShowing = true
                         case .error(let errorString):
