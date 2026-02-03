@@ -451,7 +451,7 @@ struct ProcessingSettingsView: View {
                       }
                         .buttonStyle(PlainButtonStyle()) // XXX these styles suck
                         .fixedSize(horizontal: true, vertical: true)
-
+                        .disabled(viewModel.isProcessingFrames)
 
                       Spacer()
                       Button() {
