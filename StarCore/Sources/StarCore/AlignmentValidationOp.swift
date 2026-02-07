@@ -24,7 +24,8 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
             Log.d("start")
             let config = await configManager.config()
             if config.tripodHeadWasMoving {
-                await validateMovingStarAlignment()
+                Log.w("THIS SHIT IS DISABLED")
+                //await validateMovingStarAlignment()
             } else {
                 // tripod was stationary
                 try await self.validateStaticStarAlignment()
@@ -36,7 +37,7 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 
     // runs on a static sequence after homography is known for each frame and its neighbors
     // finds the 'best' homography and applies it to all frames, to keep the video smooth.
-    private func validateStaticStarAlignment() async throws {
+    public func validateStaticStarAlignment() async throws {
         Log.d("doing static star alignment validation")
         var homographies: [HomographyResultsCodable] = []
         for frame in frames {
@@ -63,14 +64,23 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         // apply the chosen median homography to all frames 
         for frame in frames {
             await frame.set(
-              neighborStarHomography: medianHomography.adjust(
-                for: frame.frameIndex
-              )
+              neighborStarHomography:
+                medianHomography.adjust(
+                  for: frame.frameIndex
+                )
             )
         }
         Log.d("done validating static star alignment")
     }
 
+    /**
+     *  XXX this appears to make homography worse, not better :(
+     *  next steps:
+     *   - make test sequence from the first 2-300 frames of
+     *     /rp/tmp/LRT_03_01_2025-a9-1-aurora-topaz
+     *   - isolate this validation to command line script with already loaded homography
+     *   - figure out WTF is wrong with it, IDK
+     */
     private func validateMovingStarAlignment() async {
         Log.d("doing moving tripod star alignment validation")
 
@@ -81,15 +91,31 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 
         var orderedFrames = frames.sorted { $0.frameIndex < $1.frameIndex }
 
+        let dim = 8
+        let zeroPose = Array(repeating: 0.0, count: dim)
+        
         // --- Forward pass
         for frame in orderedFrames {
             let t = frame.frameIndex
 
-            guard let result = await frame.getNeighborStarHomography() else {
+            guard let result = await frame.getNeighborStarHomography()
+            else {
+                Log.w("frame \(frame.frameIndex) missing neighor star homography")
                 if let prev = poses[t - 1] {
                     poses[t] = prev   // constant-velocity fallback
                 }
                 continue
+            }
+
+            // Bootstrap: first valid frame becomes identity
+            if poses.isEmpty {
+                if result.neighborHomography.contains(
+                     where: { $0.homography != nil && $0.alignmentState == .homographySuccess })
+                {
+                    poses[t] = zeroPose
+                    Log.i("bootstrapped pose at frame \(t)")
+                    continue
+                }
             }
 
             // Collect relative measurements
@@ -99,7 +125,10 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                 guard
                   let h = warp.homography,
                   warp.alignmentState == .homographySuccess
-                else { continue }
+                else {
+                    Log.w("warp.homography is wrong")
+                    continue
+                }
 
                 let n = warp.frameIndex
                 let logH = HomographyLieMapping.log(h)
@@ -108,28 +137,45 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                     // log(P(t)) ≈ log(P(n)) − log(H)
                     let estimateT = zip(poseN, logH).map { $0 - $1 }
                     measurements.append(estimateT)
+                } else if let poseT = poses[t] {
+                    // estimate n from t (this helps bootstrap chains)
+                    let estimateN = zip(poseT, logH).map { $0 + $1 }
+                    poses[n] = estimateN
+                } else {
+                    Log.w("frame \(frame.frameIndex) no poses")
                 }
             }
 
+            Log.i("frame \(frame.frameIndex) has measurements \(measurements)")
+            
             if let best = measurements.first {
                 poses[t] = best
             } else if let prev = poses[t - 1] {
                 poses[t] = prev
+            } else {
+                Log.i("frame \(frame.frameIndex) fell off the end")
             }
         }
 
         // --- RTS smoothing
+        /*
         let smoothedPoses = rtsSmoothPoses(
           orderedFrames.map { $0.frameIndex },
           poses: poses
-        )
+        )*/
 
          // --- Apply result
         for frame in orderedFrames {
             let t = frame.frameIndex
-            guard let poseT = smoothedPoses[t] else { continue }
+            guard let poseT = poses[t] else {
+                Log.w("frame \(frame.frameIndex) missing poses")
+                continue
+            }
 
-            guard let original = await frame.getNeighborStarHomography() else { continue }
+            guard let original = await frame.getNeighborStarHomography() else {
+                Log.w("frame \(frame.frameIndex) missing neighor star homography")
+                continue
+            }
 
             var rebuilt: [AlignmentWarpInfoCodable] = []
 
@@ -151,6 +197,8 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                 )
             }
 
+            Log.d("frameIndex \(frame.frameIndex) saving results \(rebuilt) for neighbor frameIndex \(t)")
+            
             await frame.set(
               neighborStarHomography: HomographyResultsCodable(
                 for: t,
