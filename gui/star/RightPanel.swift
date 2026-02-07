@@ -336,7 +336,7 @@ struct RightPanel: View {
                                       .foregroundColor(loggingViewModel.fileLogEnabled ? .black : .gray)
                                 }
                                 Text("Log to file at level:")
-                                  .foregroundColor(loggingViewModel.fileLogEnabled ? .black : .gray)
+                                  .foregroundColor(loggingViewModel.fileLogEnabled ? .green : .white)
                             }
                             Picker(selection: $loggingViewModel.fileLogLevel) {
                                 ForEach(Log.Level.allCases, id: \.self) { level in
