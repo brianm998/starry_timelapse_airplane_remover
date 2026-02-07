@@ -75,6 +75,7 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
     func validateMovingStarAlignment() async {
 
         Log.d("validateMovingStarAlignment")
+
         var results: [HomographyResultsCodable] = []
 
         for frame in frames {
@@ -83,183 +84,35 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
             }
         }
 
-        Log.d("validateMovingStarAlignment collecting constraints")
-        let constraints = collectConstraints(results: results)
-        Log.d("validateMovingStarAlignment constraints collected")
+        guard !results.isEmpty else {
+            Log.e("No homography results found")
+            return
+        }
 
-        let frameIndices = results.map { $0.frameIndex }.sorted()
-
-        let poses = smoothPoses(
-          frameIndices: frameIndices,
-          constraints: constraints,
-          iterations: 60,
+        Log.d("Running RTS pose smoother")
+        let poses = smoothHomographyPosesRTS(
+          results: results,
           smoothness: 0.2
         )
-        Log.d("validateMovingStarAlignment smoothing complete")
 
         for frame in frames {
-            
-            Log.d("frame \(frame.frameIndex) rebuilding homographies")
             guard let original = await frame.getNeighborStarHomography() else { continue }
 
+            Log.d("frame \(frame.frameIndex) FUCKING rebuildHomographies")
+            
             let rebuilt = rebuildHomographies(
               original: original,
-              poses: poses
+              poses: poses,
+              allResults: results
             )
 
             await frame.set(neighborStarHomography: rebuilt)
         }
+
         Log.d("validateMovingStarAlignment done")
     }
 }
 
-
-func smoothPoses(
-  frameIndices: [Int],
-  constraints: [PoseConstraint],
-  iterations: Int = 50,
-  smoothness: Double = 0.1
-) -> [Int: [Double]] {
-
-    Log.d("smoothPoses")
-    var poses: [Int: [Double]] = [:]
-
-    // Anchor first frame at identity
-    if let first = frameIndices.first {
-        poses[first] = zeroPose()
-    }
-
-    // Initialize others by propagation
-    for t in frameIndices.dropFirst() {
-        poses[t] = poses[t - 1] ?? zeroPose()
-    }
-
-    let neighborsByT = Dictionary(grouping: constraints, by: { $0.t })
-    let neighborsByN = Dictionary(grouping: constraints, by: { $0.n })
-
-    for iterationNumber in 0..<iterations {
-        Log.d("smoothPoses iteration  \(iterationNumber)")
-        var next = poses
-
-        for t in frameIndices {
-            guard let pT = poses[t] else { continue }
-
-            Log.d("frameIndex \(t) smoothPoses iteration  \(iterationNumber)")
-            var accum = zeroPose()
-            var wsum = 0.0
-
-            // Data constraints
-            for c in neighborsByT[t] ?? [] {
-                if let pN = poses[c.n] {
-                    let estimate = add(pN, c.delta)
-                    accum = add(accum, scale(estimate, c.weight))
-                    wsum += c.weight
-                }
-            }
-
-            for c in neighborsByN[t] ?? [] {
-                if let pT2 = poses[c.t] {
-                    let estimate = sub(pT2, c.delta)
-                    accum = add(accum, scale(estimate, c.weight))
-                    wsum += c.weight
-                }
-            }
-
-            // Smoothness
-            if let pPrev = poses[t - 1] {
-                accum = add(accum, scale(pPrev, smoothness))
-                wsum += smoothness
-            }
-            if let pNext = poses[t + 1] {
-                accum = add(accum, scale(pNext, smoothness))
-                wsum += smoothness
-            }
-
-            if wsum > 0 {
-                next[t] = scale(accum, 1.0 / wsum)
-            }
-        }
-
-        poses = next
-    }
-
-    return poses
-}
-
-func rebuildHomographies(
-  original: HomographyResultsCodable,
-  poses: [Int: [Double]]
-) -> HomographyResultsCodable {
-
-    let t = original.frameIndex
-    guard let poseT = poses[t] else { return original }
-
-    var rebuilt: [AlignmentWarpInfoCodable] = []
-
-    for warp in original.neighborHomography {
-        let n = warp.frameIndex
-        guard let poseN = poses[n] else { continue }
-
-        let delta = sub(poseN, poseT)
-        let h = HomographyLieMapping.exp(delta)
-
-        rebuilt.append(
-          AlignmentWarpInfoCodable(
-            homography: h,
-            deviation: homographyDeviation(h),
-            alignmentState: .homographySuccess,
-            frameIndex: n
-          )
-        )
-    }
-
-    return HomographyResultsCodable(
-      for: t,
-      with: rebuilt
-    )
-}
-
-
-struct PoseConstraint {
-    let t: Int
-    let n: Int
-    let delta: [Double]
-    let weight: Double
-}
-
-func collectConstraints(
-  results: [HomographyResultsCodable]
-) -> [PoseConstraint] {
-
-    var constraints: [PoseConstraint] = []
-
-    for result in results {
-        let t = result.frameIndex
-
-        for warp in result.neighborHomography {
-            guard
-              let h = warp.homography,
-              warp.alignmentState == .homographySuccess
-            else { continue }
-
-            let n = warp.frameIndex
-            let delta = HomographyLieMapping.log(h)
-
-            let weight = max(0.1, 1.0 / (warp.deviation + 1e-6))
-
-            constraints.append(
-              PoseConstraint(
-                t: t,
-                n: n,
-                delta: delta,
-                weight: weight
-              )
-            )
-        }
-    }
-
-    return constraints
-}
 
 let poseDim = 8
 
@@ -277,4 +130,228 @@ func sub(_ a: [Double], _ b: [Double]) -> [Double] {
 
 func scale(_ a: [Double], _ s: Double) -> [Double] {
     a.map { $0 * s }
+}
+
+struct RelativeObservation {
+    let from: Int
+    let to: Int
+    let delta: [Double]
+    let weight: Double
+}
+
+func buildRelativeObservations(
+  results: [HomographyResultsCodable]
+) -> [RelativeObservation] {
+
+    var obs: [RelativeObservation] = []
+
+    for result in results {
+        let t = result.frameIndex
+
+        for warp in result.neighborHomography {
+            guard
+              let h = warp.homography,
+              warp.alignmentState == .homographySuccess
+            else {
+                Log.d("FUCKING BAD WARP")
+                continue
+            }
+
+            let n = warp.frameIndex
+            let delta = HomographyLieMapping.log(h)
+
+            let w = max(0.1, 1.0 / (warp.deviation + 1e-6))
+
+            obs.append(
+              RelativeObservation(
+                from: t,
+                to: n,
+                delta: delta,
+                weight: w
+              )
+            )
+        }
+    }
+    Log.d("FUCKING returning \(obs.count) when given \(results.count)")
+    return obs
+}
+
+func rebuildHomographies(
+  original: HomographyResultsCodable,
+  poses: [Int: [Double]],
+  allResults: [HomographyResultsCodable]
+) -> HomographyResultsCodable {
+
+    let t = original.frameIndex
+    guard let poseT = poses[t] else {
+        Log.d("FUCKING NO POSE")
+        return original
+    }
+
+    let expectedDev = expectedDeviation(
+        at: t,
+        results: allResults
+    )
+
+    var rebuilt: [AlignmentWarpInfoCodable] = []
+    Log.d("FUCKING original.neighborHomography.count \(original.neighborHomography.count)")
+    for warp in original.neighborHomography {
+
+        // 1️⃣ Keep already-good warps untouched
+        if warp.alignmentState == .homographySuccess,
+           warp.deviation < 3.0 {
+            rebuilt.append(warp)
+            Log.i("FUCKING 1")
+            continue
+        }
+
+        guard
+          warp.alignmentState == .homographySuccess,
+          let poseN = poses[warp.frameIndex]
+        else {
+            rebuilt.append(warp)
+            Log.i("FUCKING 3")
+            continue
+        }
+
+        let delta = sub(poseN, poseT)
+        let h = HomographyLieMapping.exp(delta)
+        let dev = homographyDeviation(h)
+
+        // 2️⃣ Only accept if it improves AND fits curvature
+        let accept: Bool = {
+            guard let expectedDev else {
+                return dev < warp.deviation
+            }
+            Log.i("FUCKING 3")
+
+            return dev < warp.deviation &&
+                   abs(dev - expectedDev) < expectedDev * 0.5
+        }()
+
+        Log.i("FUCKING really rebuilding")
+        rebuilt.append(
+          accept
+          ? AlignmentWarpInfoCodable(
+              homography: h,
+              deviation: dev,
+              alignmentState: .homographySuccess,
+              frameIndex: warp.frameIndex
+            )
+          : warp
+        )
+    }
+
+    return HomographyResultsCodable(for: t, with: rebuilt)
+}
+
+func expectedDeviation(
+  at frame: Int,
+  results: [HomographyResultsCodable],
+  radius: Int = 5
+) -> Double? {
+
+    let nearby = results.filter {
+        frameIsReliable($0) &&
+        abs($0.frameIndex - frame) <= radius
+    }
+
+    guard !nearby.isEmpty else { return nil }
+
+    return nearby
+        .map(\.compositeDeviation)
+        .reduce(0, +) / Double(nearby.count)
+}
+
+func frameIsReliable(_ r: HomographyResultsCodable) -> Bool {
+    r.alignmentLooksOk &&
+//    r.compositeDeviation < 30.0 &&   // tune
+    r.neighborHomography.count >= 3
+}
+
+func smoothHomographyPosesRTS(
+  results: [HomographyResultsCodable],
+  smoothness: Double = 0.2,
+  iterations: Int = 40
+) -> [Int: [Double]] {
+
+    let reliable = results.filter(frameIsReliable)
+    Log.d("RTS: \(reliable.count) reliable frames")
+
+    guard let anchorResult =
+        reliable.min(by: { $0.compositeDeviation < $1.compositeDeviation })
+    else {
+        Log.e("RTS: no anchor frame")
+        return [:]
+    }
+
+    let frameIndices = results.map(\.frameIndex).sorted()
+    let observations = buildRelativeObservations(results: reliable)
+
+    var poses: [Int: [Double]] = [:]
+
+    let anchor = anchorResult.frameIndex
+    poses[anchor] = zeroPose()
+
+    Log.d("RTS: anchor at frame \(anchor)")
+
+    // --- BOOTSTRAP FORWARD ---
+    for t in frameIndices where t > anchor {
+        if let obs = observations.first(where: { $0.from == t - 1 && $0.to == t }),
+           let pPrev = poses[t - 1]
+        {
+            Log.d("CRAPPY frame \(t) has obs")
+            poses[t] = add(pPrev, obs.delta)
+        } else {
+            Log.d("CRAPPY frame \(t) has NO obs poses[t - 1] \(poses[t - 1])")
+            poses[t] = poses[t - 1] ?? zeroPose()
+        }
+    }
+
+    // --- BOOTSTRAP BACKWARD ---
+    for t in frameIndices.reversed() where t < anchor {
+        if let obs = observations.first(where: { $0.from == t && $0.to == t + 1 }),
+           let pNext = poses[t + 1]
+        {
+            poses[t] = sub(pNext, obs.delta)
+            Log.d("CRAPPY frame \(t) has obs")
+        } else {
+            Log.d("CRAPPY frame \(t) has NO obs poses[t + 1] \(poses[t + 1])")
+            poses[t] = poses[t + 1] ?? zeroPose()
+        }
+    }
+
+    // --- ITERATIVE RELATIVE SMOOTHING ---
+    for iter in 0..<iterations {
+        var next = poses
+
+        for obs in observations {
+            guard
+              let pFrom = poses[obs.from],
+              let pTo   = poses[obs.to]
+            else { continue }
+
+            let predictedTo = add(pFrom, obs.delta)
+            let error = sub(predictedTo, pTo)
+
+            let correction = scale(error, obs.weight * smoothness)
+
+            next[obs.to]   = add(pTo, correction)
+            next[obs.from] = sub(pFrom, correction)
+        }
+
+        poses = next
+
+        if iter % 10 == 0 {
+            Log.d("RTS iter \(iter)")
+        }
+    }
+
+    for t in frameIndices {
+        Log.d("POSE[\(t)] norm = \(poses[t]!.map { abs($0) }.reduce(0,+))")
+    }
+    
+    Log.d("RTS: returning \(poses.count) poses")
+
+    return poses
 }
