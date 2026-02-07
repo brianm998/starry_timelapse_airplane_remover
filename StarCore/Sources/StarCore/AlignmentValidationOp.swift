@@ -24,8 +24,7 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
             Log.d("start")
             let config = await configManager.config()
             if config.tripodHeadWasMoving {
-                Log.w("THIS SHIT IS DISABLED")
-                //await validateMovingStarAlignment()
+                await validateMovingStarAlignment()
             } else {
                 // tripod was stationary
                 try await self.validateStaticStarAlignment()
@@ -73,172 +72,209 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         Log.d("done validating static star alignment")
     }
 
-    /**
-     *  XXX this appears to make homography worse, not better :(
-     *  next steps:
-     *   - make test sequence from the first 2-300 frames of
-     *     /rp/tmp/LRT_03_01_2025-a9-1-aurora-topaz
-     *   - isolate this validation to command line script with already loaded homography
-     *   - figure out WTF is wrong with it, IDK
-     */
-    private func validateMovingStarAlignment() async {
-        Log.d("doing moving tripod star alignment validation")
+    func validateMovingStarAlignment() async {
 
-        let kalman = HomographyKalman()
+        Log.d("validateMovingStarAlignment")
+        var results: [HomographyResultsCodable] = []
 
-        // Absolute pose per frame (log space)
-        var poses: [Int: [Double]] = [:]
-
-        var orderedFrames = frames.sorted { $0.frameIndex < $1.frameIndex }
-
-        let dim = 8
-        let zeroPose = Array(repeating: 0.0, count: dim)
-        
-        // --- Forward pass
-        for frame in orderedFrames {
-            let t = frame.frameIndex
-
-            guard let result = await frame.getNeighborStarHomography()
-            else {
-                Log.w("frame \(frame.frameIndex) missing neighor star homography")
-                if let prev = poses[t - 1] {
-                    poses[t] = prev   // constant-velocity fallback
-                }
-                continue
-            }
-
-            // Bootstrap: first valid frame becomes identity
-            if poses.isEmpty {
-                if result.neighborHomography.contains(
-                     where: { $0.homography != nil && $0.alignmentState == .homographySuccess })
-                {
-                    poses[t] = zeroPose
-                    Log.i("bootstrapped pose at frame \(t)")
-                    continue
-                }
-            }
-
-            // Collect relative measurements
-            var measurements: [[Double]] = []
-
-            for warp in result.neighborHomography {
-                guard
-                  let h = warp.homography,
-                  warp.alignmentState == .homographySuccess
-                else {
-                    Log.w("warp.homography is wrong")
-                    continue
-                }
-
-                let n = warp.frameIndex
-                let logH = HomographyLieMapping.log(h)
-
-                if let poseN = poses[n] {
-                    // log(P(t)) ≈ log(P(n)) − log(H)
-                    let estimateT = zip(poseN, logH).map { $0 - $1 }
-                    measurements.append(estimateT)
-                } else if let poseT = poses[t] {
-                    // estimate n from t (this helps bootstrap chains)
-                    let estimateN = zip(poseT, logH).map { $0 + $1 }
-                    poses[n] = estimateN
-                } else {
-                    Log.w("frame \(frame.frameIndex) no poses")
-                }
-            }
-
-            Log.i("frame \(frame.frameIndex) has measurements \(measurements)")
-            
-            if let best = measurements.first {
-                poses[t] = best
-            } else if let prev = poses[t - 1] {
-                poses[t] = prev
-            } else {
-                Log.i("frame \(frame.frameIndex) fell off the end")
+        for frame in frames {
+            if let r = await frame.getNeighborStarHomography() {
+                results.append(r)
             }
         }
 
-        // --- RTS smoothing
-        /*
-        let smoothedPoses = rtsSmoothPoses(
-          orderedFrames.map { $0.frameIndex },
-          poses: poses
-        )*/
+        Log.d("validateMovingStarAlignment collecting constraints")
+        let constraints = collectConstraints(results: results)
+        Log.d("validateMovingStarAlignment constraints collected")
 
-         // --- Apply result
-        for frame in orderedFrames {
-            let t = frame.frameIndex
-            guard let poseT = poses[t] else {
-                Log.w("frame \(frame.frameIndex) missing poses")
-                continue
-            }
+        let frameIndices = results.map { $0.frameIndex }.sorted()
 
-            guard let original = await frame.getNeighborStarHomography() else {
-                Log.w("frame \(frame.frameIndex) missing neighor star homography")
-                continue
-            }
+        let poses = smoothPoses(
+          frameIndices: frameIndices,
+          constraints: constraints,
+          iterations: 60,
+          smoothness: 0.2
+        )
+        Log.d("validateMovingStarAlignment smoothing complete")
 
-            var rebuilt: [AlignmentWarpInfoCodable] = []
-
-            for warp in original.neighborHomography {
-                let n = warp.frameIndex
-                guard let poseN = poses[n] else { continue }
-
-                // H(t ← n) = P(t)^-1 · P(n)
-                let delta = zip(poseN, poseT).map { $0 - $1 }
-                let h = HomographyLieMapping.exp(delta)
-
-                rebuilt.append(
-                  AlignmentWarpInfoCodable(
-                    homography: h,
-                    deviation: homographyDeviation(h),
-                    alignmentState: .homographySuccess,
-                    frameIndex: n
-                  )
-                )
-            }
-
-            Log.d("frameIndex \(frame.frameIndex) saving results \(rebuilt) for neighbor frameIndex \(t)")
+        for frame in frames {
             
-            await frame.set(
-              neighborStarHomography: HomographyResultsCodable(
-                for: t,
-                with: rebuilt
+            Log.d("frame \(frame.frameIndex) rebuilding homographies")
+            guard let original = await frame.getNeighborStarHomography() else { continue }
+
+            let rebuilt = rebuildHomographies(
+              original: original,
+              poses: poses
+            )
+
+            await frame.set(neighborStarHomography: rebuilt)
+        }
+        Log.d("validateMovingStarAlignment done")
+    }
+}
+
+
+func smoothPoses(
+  frameIndices: [Int],
+  constraints: [PoseConstraint],
+  iterations: Int = 50,
+  smoothness: Double = 0.1
+) -> [Int: [Double]] {
+
+    Log.d("smoothPoses")
+    var poses: [Int: [Double]] = [:]
+
+    // Anchor first frame at identity
+    if let first = frameIndices.first {
+        poses[first] = zeroPose()
+    }
+
+    // Initialize others by propagation
+    for t in frameIndices.dropFirst() {
+        poses[t] = poses[t - 1] ?? zeroPose()
+    }
+
+    let neighborsByT = Dictionary(grouping: constraints, by: { $0.t })
+    let neighborsByN = Dictionary(grouping: constraints, by: { $0.n })
+
+    for iterationNumber in 0..<iterations {
+        Log.d("smoothPoses iteration  \(iterationNumber)")
+        var next = poses
+
+        for t in frameIndices {
+            guard let pT = poses[t] else { continue }
+
+            Log.d("frameIndex \(t) smoothPoses iteration  \(iterationNumber)")
+            var accum = zeroPose()
+            var wsum = 0.0
+
+            // Data constraints
+            for c in neighborsByT[t] ?? [] {
+                if let pN = poses[c.n] {
+                    let estimate = add(pN, c.delta)
+                    accum = add(accum, scale(estimate, c.weight))
+                    wsum += c.weight
+                }
+            }
+
+            for c in neighborsByN[t] ?? [] {
+                if let pT2 = poses[c.t] {
+                    let estimate = sub(pT2, c.delta)
+                    accum = add(accum, scale(estimate, c.weight))
+                    wsum += c.weight
+                }
+            }
+
+            // Smoothness
+            if let pPrev = poses[t - 1] {
+                accum = add(accum, scale(pPrev, smoothness))
+                wsum += smoothness
+            }
+            if let pNext = poses[t + 1] {
+                accum = add(accum, scale(pNext, smoothness))
+                wsum += smoothness
+            }
+
+            if wsum > 0 {
+                next[t] = scale(accum, 1.0 / wsum)
+            }
+        }
+
+        poses = next
+    }
+
+    return poses
+}
+
+func rebuildHomographies(
+  original: HomographyResultsCodable,
+  poses: [Int: [Double]]
+) -> HomographyResultsCodable {
+
+    let t = original.frameIndex
+    guard let poseT = poses[t] else { return original }
+
+    var rebuilt: [AlignmentWarpInfoCodable] = []
+
+    for warp in original.neighborHomography {
+        let n = warp.frameIndex
+        guard let poseN = poses[n] else { continue }
+
+        let delta = sub(poseN, poseT)
+        let h = HomographyLieMapping.exp(delta)
+
+        rebuilt.append(
+          AlignmentWarpInfoCodable(
+            homography: h,
+            deviation: homographyDeviation(h),
+            alignmentState: .homographySuccess,
+            frameIndex: n
+          )
+        )
+    }
+
+    return HomographyResultsCodable(
+      for: t,
+      with: rebuilt
+    )
+}
+
+
+struct PoseConstraint {
+    let t: Int
+    let n: Int
+    let delta: [Double]
+    let weight: Double
+}
+
+func collectConstraints(
+  results: [HomographyResultsCodable]
+) -> [PoseConstraint] {
+
+    var constraints: [PoseConstraint] = []
+
+    for result in results {
+        let t = result.frameIndex
+
+        for warp in result.neighborHomography {
+            guard
+              let h = warp.homography,
+              warp.alignmentState == .homographySuccess
+            else { continue }
+
+            let n = warp.frameIndex
+            let delta = HomographyLieMapping.log(h)
+
+            let weight = max(0.1, 1.0 / (warp.deviation + 1e-6))
+
+            constraints.append(
+              PoseConstraint(
+                t: t,
+                n: n,
+                delta: delta,
+                weight: weight
               )
             )
         }
-
-        Log.d("done validating moving star alignment")
     }
 
+    return constraints
 }
 
-private func confidence(from result: HomographyResultsCodable) -> Double {
-    // simple, effective
-    return max(0.1, 1.0 / result.compositeDeviation)
+let poseDim = 8
+
+func zeroPose() -> [Double] {
+    Array(repeating: 0.0, count: poseDim)
 }
 
-func rtsSmoothPoses(
-    _ order: [Int],
-    poses: [Int: [Double]]
-) -> [Int: [Double]] {
-    guard order.count > 1 else { return poses }
+func add(_ a: [Double], _ b: [Double]) -> [Double] {
+    zip(a, b).map(+)
+}
 
-    var smoothed = poses
+func sub(_ a: [Double], _ b: [Double]) -> [Double] {
+    zip(a, b).map(-)
+}
 
-    for i in stride(from: order.count - 2, through: 0, by: -1) {
-        let t = order[i]
-        let t1 = order[i + 1]
-
-        guard
-            let xT = poses[t],
-            let xT1 = poses[t1],
-            let xT1s = smoothed[t1]
-        else { continue }
-
-        // Identity dynamics: xₖ = xₖ₊₁
-        let correction = zip(xT1s, xT1).map { $0 - $1 }
-        smoothed[t] = zip(xT, correction).map(+)
-    }
-
-    return smoothed
+func scale(_ a: [Double], _ s: Double) -> [Double] {
+    a.map { $0 * s }
 }
