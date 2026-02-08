@@ -113,8 +113,14 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
             }
             let end = i - 1   // inclusive
 
-            let leftGood  = start > 0 ? homographies[start - 1] : nil
-            let rightGood = i < homographies.count ? homographies[i] : nil
+
+            /*
+             instead of taking the first 'good' homography,
+             look a the previous N 'good' homographies within M distance from i
+             choose the one with the median deviation among them all
+             */
+            let leftGood  = bestHomography(before: start, in: homographies)
+            let rightGood = bestHomography(after:  i-1,   in: homographies)
 
             Log.d("Bad segment \(start)...\(end), leftGood=\(leftGood != nil), rightGood=\(rightGood != nil)")
 
@@ -184,6 +190,50 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 
         Log.d("validateMovingStarAlignment done")
     }
+}
+
+func bestHomography(
+  before index: Int,
+  in homographies: [HomographyResultsCodable],
+  checking checkCount: Int = 10 
+) -> HomographyResultsCodable? {
+    if index <= 0 { return nil }
+    let startIndex = index > checkCount ? index - checkCount : 0
+    var homographyBasket: [HomographyResultsCodable] = []
+    for i in startIndex..<index {
+        if homographies[i].alignmentLooksOk {
+            homographyBasket.append(homographies[i])
+        }
+    }
+    return bestMedianHomography(in: homographyBasket)
+}
+
+func bestHomography(
+  after index: Int,
+  in homographies: [HomographyResultsCodable],
+  checking checkCount: Int = 10 
+) -> HomographyResultsCodable? {
+    if index >= homographies.count { return nil }
+    let startIndex = index+1
+    let endIndex = index + checkCount < homographies.count ? index + checkCount : homographies.count - 1
+    var homographyBasket: [HomographyResultsCodable] = []
+    for i in startIndex...endIndex {
+        if homographies[i].alignmentLooksOk {
+            homographyBasket.append(homographies[i])
+        }
+    }
+    return bestMedianHomography(in: homographyBasket)
+}
+
+// returns the best median homography sorted by composite deviation from identity
+func bestMedianHomography(
+  in homographies: [HomographyResultsCodable]
+) -> HomographyResultsCodable? {
+    if homographies.count == 0 { return nil }
+
+    let sorted = homographies.sorted() { $0.compositeDeviation < $1.compositeDeviation }
+
+    return sorted[sorted.count/2]
 }
 
 func isGood(_ r: HomographyResultsCodable) -> Bool {
