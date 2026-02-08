@@ -72,286 +72,156 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         Log.d("done validating static star alignment")
     }
 
+
     func validateMovingStarAlignment() async {
 
-        Log.d("validateMovingStarAlignment")
+        Log.d("validateMovingStarAlignment (gap-fill approach) \(frames.count) frames")
 
-        var results: [HomographyResultsCodable] = []
+        // Collect results ordered by frame index
 
+        var homographies: [HomographyResultsCodable] = []
         for frame in frames {
-            if let r = await frame.getNeighborStarHomography() {
-                results.append(r)
+            if let homography = await frame.getNeighborStarHomography() {
+                homographies.append(homography)
             }
         }
 
-        guard !results.isEmpty else {
+        guard !homographies.isEmpty else {
             Log.e("No homography results found")
             return
         }
+        Log.d("validateMovingStarAlignment (gap-fill approach) \(homographies.count) homographies")
 
-        Log.d("Running RTS pose smoother")
-        let poses = smoothHomographyPosesRTS(
-          results: results,
-          smoothness: 0.2
-        )
+        // Classify frames
+        let goodFlags = homographies.map(isGood)
 
-        for frame in frames {
-            guard let original = await frame.getNeighborStarHomography() else { continue }
+        Log.d("found \(goodFlags.count) good flags out of \(homographies.count)")
+        
+        // Find contiguous bad segments
+        var i = 0
+        while i < homographies.count {
 
-            Log.d("frame \(frame.frameIndex) FUCKING rebuildHomographies")
-            
-            let rebuilt = rebuildHomographies(
-              original: original,
-              poses: poses,
-              allResults: results
-            )
+            // Skip good frames
+            if goodFlags[i] {
+                i += 1
+                continue
+            }
 
-            await frame.set(neighborStarHomography: rebuilt)
+            let start = i
+            while i < homographies.count && !goodFlags[i] {
+                i += 1
+            }
+            let end = i - 1   // inclusive
+
+            let leftGood  = start > 0 ? homographies[start - 1] : nil
+            let rightGood = i < homographies.count ? homographies[i] : nil
+
+            Log.d("Bad segment \(start)...\(end), leftGood=\(leftGood != nil), rightGood=\(rightGood != nil)")
+
+            // Apply correction strategy
+            for idx in start...end {
+                let bad = homographies[idx]
+                let t = bad.frameIndex
+
+                Log.d("rebuild @ \(idx)")
+
+                let newHomography: [AlignmentWarpInfoCodable]?
+
+                switch (leftGood, rightGood) {
+
+                    // 4a️ Only left side good → flat copy
+                case (let lg?, nil):
+                    newHomography = zip(lg.neighborHomography, bad.neighborHomography).map {
+                        AlignmentWarpInfoCodable(
+                          homography: $0.homography,
+                          deviation: $0.deviation,
+                          alignmentState: $0.alignmentState,
+                          frameIndex: $1.frameIndex
+                        )
+                    }
+
+                    // 4b️ Only right side good → flat copy
+                case (nil, let rg?):
+                    newHomography = zip(rg.neighborHomography, bad.neighborHomography).map {
+                        AlignmentWarpInfoCodable(
+                          homography: $0.homography,
+                          deviation: $0.deviation,
+                          alignmentState: $0.alignmentState,
+                          frameIndex: $1.frameIndex
+                        )
+                    }
+
+                    // 4c️ Both sides good → interpolate
+                case (let lg?, let rg?):
+                    let h0 = lg.neighborHomography
+                    let h1 = rg.neighborHomography
+
+                    let alpha = Double(idx - start + 1) /
+                      Double(end - start + 2)
+
+                    newHomography = interpolateHomography(
+                      h0,
+                      h1,
+                      bad.neighborHomography,
+                      alpha: alpha
+                    )
+
+                default:
+                    newHomography = nil
+                }
+                if let newHomography {
+                    let fuck = HomographyResultsCodable(
+                        for: idx, // XXX this is wrong? XXX
+                        with: newHomography
+                    )
+                    Log.d("frame \(idx) is getting newHomography \(newHomography)")
+                    await frames[idx].set(
+                      neighborStarHomography: fuck
+                    )
+                }
+            }
         }
 
         Log.d("validateMovingStarAlignment done")
     }
 }
 
-
-let poseDim = 8
-
-func zeroPose() -> [Double] {
-    Array(repeating: 0.0, count: poseDim)
+func isGood(_ r: HomographyResultsCodable) -> Bool {
+    r.alignmentLooksOk &&
+    r.neighborHomography.contains { $0.alignmentState == .homographySuccess }
 }
 
-func add(_ a: [Double], _ b: [Double]) -> [Double] {
-    zip(a, b).map(+)
-}
 
-func sub(_ a: [Double], _ b: [Double]) -> [Double] {
-    zip(a, b).map(-)
-}
-
-func scale(_ a: [Double], _ s: Double) -> [Double] {
-    a.map { $0 * s }
-}
-
-struct RelativeObservation {
-    let from: Int
-    let to: Int
-    let delta: [Double]
-    let weight: Double
-}
-
-func buildRelativeObservations(
-  results: [HomographyResultsCodable]
-) -> [RelativeObservation] {
-
-    var obs: [RelativeObservation] = []
-
-    for result in results {
-        let t = result.frameIndex
-
-        for warp in result.neighborHomography {
-            guard
-              let h = warp.homography,
-              warp.alignmentState == .homographySuccess
-            else {
-                Log.d("FUCKING BAD WARP")
-                continue
-            }
-
-            let n = warp.frameIndex
-            let delta = HomographyLieMapping.log(h)
-
-            let w = max(0.1, 1.0 / (warp.deviation + 1e-6))
-
-            obs.append(
-              RelativeObservation(
-                from: t,
-                to: n,
-                delta: delta,
-                weight: w
-              )
-            )
-        }
-    }
-    Log.d("FUCKING returning \(obs.count) when given \(results.count)")
-    return obs
-}
-
-func rebuildHomographies(
-  original: HomographyResultsCodable,
-  poses: [Int: [Double]],
-  allResults: [HomographyResultsCodable]
-) -> HomographyResultsCodable {
-
-    let t = original.frameIndex
-    guard let poseT = poses[t] else {
-        Log.d("FUCKING NO POSE")
-        return original
-    }
-
-    let expectedDev = expectedDeviation(
-        at: t,
-        results: allResults
-    )
-
-    var rebuilt: [AlignmentWarpInfoCodable] = []
-    Log.d("FUCKING original.neighborHomography.count \(original.neighborHomography.count)")
-    for warp in original.neighborHomography {
-
-        // 1️⃣ Keep already-good warps untouched
-        if warp.alignmentState == .homographySuccess,
-           warp.deviation < 3.0 {
-            rebuilt.append(warp)
-            Log.i("FUCKING 1")
-            continue
-        }
-
-        guard
-          warp.alignmentState == .homographySuccess,
-          let poseN = poses[warp.frameIndex]
-        else {
-            rebuilt.append(warp)
-            Log.i("FUCKING 3")
-            continue
-        }
-
-        let delta = sub(poseN, poseT)
-        let h = HomographyLieMapping.exp(delta)
-        let dev = homographyDeviation(h)
-
-        // 2️⃣ Only accept if it improves AND fits curvature
-        let accept: Bool = {
-            guard let expectedDev else {
-                return dev < warp.deviation
-            }
-            Log.i("FUCKING 3")
-
-            return dev < warp.deviation &&
-                   abs(dev - expectedDev) < expectedDev * 0.5
-        }()
-
-        Log.i("FUCKING really rebuilding")
-        rebuilt.append(
-          accept
-          ? AlignmentWarpInfoCodable(
-              homography: h,
-              deviation: dev,
-              alignmentState: .homographySuccess,
-              frameIndex: warp.frameIndex
-            )
-          : warp
+func interpolateHomography(
+  _ w0: [AlignmentWarpInfoCodable],
+  _ w1: [AlignmentWarpInfoCodable],
+  _ bad: [AlignmentWarpInfoCodable],
+  alpha: Double
+) -> [AlignmentWarpInfoCodable] {
+    var ret: [AlignmentWarpInfoCodable] = []
+    for i in 0..<w0.count {
+        ret.append(
+          AlignmentWarpInfoCodable(
+            homography: interpolateHomography(
+              w0[i].homography ?? [],
+              w1[i].homography ?? [],
+              alpha: alpha
+            ),
+            alignmentState: .homographySuccess,
+            frameIndex: bad[i].frameIndex 
+          )
         )
     }
-
-    return HomographyResultsCodable(for: t, with: rebuilt)
+    return ret
 }
 
-func expectedDeviation(
-  at frame: Int,
-  results: [HomographyResultsCodable],
-  radius: Int = 5
-) -> Double? {
-
-    let nearby = results.filter {
-        frameIsReliable($0) &&
-        abs($0.frameIndex - frame) <= radius
-    }
-
-    guard !nearby.isEmpty else { return nil }
-
-    return nearby
-        .map(\.compositeDeviation)
-        .reduce(0, +) / Double(nearby.count)
-}
-
-func frameIsReliable(_ r: HomographyResultsCodable) -> Bool {
-    r.alignmentLooksOk &&
-//    r.compositeDeviation < 30.0 &&   // tune
-    r.neighborHomography.count >= 3
-}
-
-func smoothHomographyPosesRTS(
-  results: [HomographyResultsCodable],
-  smoothness: Double = 0.2,
-  iterations: Int = 40
-) -> [Int: [Double]] {
-
-    let reliable = results.filter(frameIsReliable)
-    Log.d("RTS: \(reliable.count) reliable frames")
-
-    guard let anchorResult =
-        reliable.min(by: { $0.compositeDeviation < $1.compositeDeviation })
-    else {
-        Log.e("RTS: no anchor frame")
-        return [:]
-    }
-
-    let frameIndices = results.map(\.frameIndex).sorted()
-    let observations = buildRelativeObservations(results: reliable)
-
-    var poses: [Int: [Double]] = [:]
-
-    let anchor = anchorResult.frameIndex
-    poses[anchor] = zeroPose()
-
-    Log.d("RTS: anchor at frame \(anchor)")
-
-    // --- BOOTSTRAP FORWARD ---
-    for t in frameIndices where t > anchor {
-        if let obs = observations.first(where: { $0.from == t - 1 && $0.to == t }),
-           let pPrev = poses[t - 1]
-        {
-            Log.d("CRAPPY frame \(t) has obs")
-            poses[t] = add(pPrev, obs.delta)
-        } else {
-            Log.d("CRAPPY frame \(t) has NO obs poses[t - 1] \(poses[t - 1])")
-            poses[t] = poses[t - 1] ?? zeroPose()
-        }
-    }
-
-    // --- BOOTSTRAP BACKWARD ---
-    for t in frameIndices.reversed() where t < anchor {
-        if let obs = observations.first(where: { $0.from == t && $0.to == t + 1 }),
-           let pNext = poses[t + 1]
-        {
-            poses[t] = sub(pNext, obs.delta)
-            Log.d("CRAPPY frame \(t) has obs")
-        } else {
-            Log.d("CRAPPY frame \(t) has NO obs poses[t + 1] \(poses[t + 1])")
-            poses[t] = poses[t + 1] ?? zeroPose()
-        }
-    }
-
-    // --- ITERATIVE RELATIVE SMOOTHING ---
-    for iter in 0..<iterations {
-        var next = poses
-
-        for obs in observations {
-            guard
-              let pFrom = poses[obs.from],
-              let pTo   = poses[obs.to]
-            else { continue }
-
-            let predictedTo = add(pFrom, obs.delta)
-            let error = sub(predictedTo, pTo)
-
-            let correction = scale(error, obs.weight * smoothness)
-
-            next[obs.to]   = add(pTo, correction)
-            next[obs.from] = sub(pFrom, correction)
-        }
-
-        poses = next
-
-        if iter % 10 == 0 {
-            Log.d("RTS iter \(iter)")
-        }
-    }
-
-    for t in frameIndices {
-        Log.d("POSE[\(t)] norm = \(poses[t]!.map { abs($0) }.reduce(0,+))")
-    }
-    
-    Log.d("RTS: returning \(poses.count) poses")
-
-    return poses
+func interpolateHomography(
+  _ h0: [Double],
+  _ h1: [Double],
+  alpha: Double
+) -> [Double] {
+    let l0 = HomographyLieMapping.log(h0)
+    let l1 = HomographyLieMapping.log(h1)
+    let blended = zip(l0, l1).map { (1.0 - alpha) * $0 + alpha * $1 }
+    return HomographyLieMapping.exp(blended)
 }
