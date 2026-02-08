@@ -14,6 +14,33 @@ public struct AlignmentWarpInfoCodable: Codable, Sendable {
 
     // frame index of the warped frame
     public let frameIndex: Int
+
+    public init(
+      homography: [Double]?,
+      deviation: Double,
+      alignmentState: AlignmentState,
+      frameIndex: Int
+    ) {
+        self.homography = homography
+        self.deviation = deviation
+        self.alignmentState = alignmentState
+        self.frameIndex = frameIndex
+    }
+
+    public init(
+      homography: [Double]?,
+      alignmentState: AlignmentState,
+      frameIndex: Int
+    ) {
+        self.homography = homography
+        if let homography {
+            self.deviation = homographyDeviation(homography)
+        } else {
+            self.deviation = 0
+        }
+        self.alignmentState = alignmentState
+        self.frameIndex = frameIndex
+    }
 }
 
 
