@@ -198,7 +198,7 @@ public final class ViewModel {
         imageSequenceViewModel.userPreferences = userPreferences
         isLoadingImageSequence = false
         loadingImageSequenceFilename = nil
-        self.userPreferences.justOpened(filename: jsonConfigFilename) // make sure this works
+        self.userPreferences.justOpened(filename: jsonConfigFilename)
     }
 
     func startup(withConfig config: ConfigManager) async throws {
@@ -278,7 +278,7 @@ public final class ViewModel {
         if let configManager = imageSequence?.config {
             let config = configManager.config()
             configManager.save()
-            self.userPreferences.justOpened(filename: "\(config.outputPath)/\(configManager.jsonFilename())")
+            self.userPreferences.justOpened(filename: "\(config.tempOutputPath)/\(configManager.jsonFilename())")
         }
     }
 
