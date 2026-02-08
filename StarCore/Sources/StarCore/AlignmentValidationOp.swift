@@ -215,9 +215,9 @@ func bestHomography(
 ) -> HomographyResultsCodable? {
     if index >= homographies.count { return nil }
     let startIndex = index+1
-    let endIndex = index + checkCount < homographies.count ? index + checkCount : homographies.count - 1
+    let endIndex = index + checkCount < homographies.count ? index + checkCount : homographies.count 
     var homographyBasket: [HomographyResultsCodable] = []
-    for i in startIndex...endIndex {
+    for i in startIndex..<endIndex {
         if homographies[i].alignmentLooksOk {
             homographyBasket.append(homographies[i])
         }
@@ -268,15 +268,11 @@ func interpolateHomography(
     return ret
 }
 
+// interpolate linearly between two homographies with given alpha 
 func interpolateHomography(
   _ h0: [Double],
   _ h1: [Double],
   alpha: Double
 ) -> [Double] {
-    HomographyLieMapping.exp(
-      zip(
-        HomographyLieMapping.log(h0),
-        HomographyLieMapping.log(h1)
-      ).map { (1.0 - alpha) * $0 + alpha * $1 }
-    )
+      zip(h0,h1).map { (1.0 - alpha) * $0 + alpha * $1 }
 }
