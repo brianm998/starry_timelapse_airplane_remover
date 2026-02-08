@@ -6,19 +6,20 @@ public struct HomographyResultsCodable: Codable, Sendable {
     public let frameIndex: Int
     public let neighborHomography: [AlignmentWarpInfoCodable]
 
-    
     public var total: Int { neighborHomography.count }
 
     public init(for frameIndex: Int,
                 with neighborHomography: [AlignmentWarpInfoCodable])
     {
         self.frameIndex = frameIndex
-        self.neighborHomography = neighborHomography
+        self.neighborHomography = neighborHomography.sorted { $0.frameIndex < $1.frameIndex }
     }
     
     public init(from result: HomographyResult) {
         self.frameIndex = Int(result.frameIndex)
-        self.neighborHomography = result.warpInfo.map { $0.toCodable() }
+        self.neighborHomography = result.warpInfo
+          .map { $0.toCodable() }
+          .sorted { $0.frameIndex < $1.frameIndex }
     }
 
     public func adjust(for newFrameIndex: Int) -> HomographyResultsCodable {
@@ -83,7 +84,7 @@ public struct HomographyResultsCodable: Codable, Sendable {
         let medianIndex = slopes.count/2
         if medianIndex < slopes.count {
             let medianSlope = slopes[medianIndex]
-            Log.d("frame \(frameIndex) got medianSlope \(medianSlope)")
+            //Log.d("frame \(frameIndex) got medianSlope \(medianSlope)")
             for homography in neighborHomography {
                 let frameDistance = abs(self.frameIndex-Int(homography.frameIndex))
                 let alignmentSlope = homography.deviation/Double(frameDistance)
