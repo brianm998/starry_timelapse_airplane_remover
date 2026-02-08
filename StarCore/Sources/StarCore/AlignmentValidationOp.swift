@@ -141,7 +141,7 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                         AlignmentWarpInfoCodable(
                           homography: $0.homography,
                           deviation: $0.deviation,
-                          alignmentState: $0.alignmentState,
+                          alignmentState: .homographySuccess,
                           frameIndex: $1.frameIndex
                         )
                     }
@@ -152,7 +152,7 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                         AlignmentWarpInfoCodable(
                           homography: $0.homography,
                           deviation: $0.deviation,
-                          alignmentState: $0.alignmentState,
+                          alignmentState: .homographySuccess,
                           frameIndex: $1.frameIndex
                         )
                     }
@@ -177,7 +177,7 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                 }
                 if let newHomography {
                     let fuck = HomographyResultsCodable(
-                        for: idx, // XXX this is wrong? XXX
+                        for: idx, 
                         with: newHomography
                     )
                     Log.d("frame \(idx) is getting newHomography \(newHomography)")
@@ -249,16 +249,19 @@ func interpolateHomography(
   alpha: Double
 ) -> [AlignmentWarpInfoCodable] {
     var ret: [AlignmentWarpInfoCodable] = []
-    for i in 0..<w0.count {
+    let sortedW0 = w0.sorted { $0.frameIndex < $1.frameIndex }
+    let sortedW1 = w1.sorted { $0.frameIndex < $1.frameIndex }
+    let sortedBad = bad.sorted { $0.frameIndex < $1.frameIndex }
+    for i in 0..<sortedW0.count {
         ret.append(
           AlignmentWarpInfoCodable(
             homography: interpolateHomography(
-              w0[i].homography ?? [],
-              w1[i].homography ?? [],
+              sortedW0[i].homography ?? [],
+              sortedW1[i].homography ?? [],
               alpha: alpha
             ),
             alignmentState: .homographySuccess,
-            frameIndex: bad[i].frameIndex 
+            frameIndex: sortedBad[i].frameIndex 
           )
         )
     }
@@ -270,8 +273,10 @@ func interpolateHomography(
   _ h1: [Double],
   alpha: Double
 ) -> [Double] {
-    let l0 = HomographyLieMapping.log(h0)
-    let l1 = HomographyLieMapping.log(h1)
-    let blended = zip(l0, l1).map { (1.0 - alpha) * $0 + alpha * $1 }
-    return HomographyLieMapping.exp(blended)
+    HomographyLieMapping.exp(
+      zip(
+        HomographyLieMapping.log(h0),
+        HomographyLieMapping.log(h1)
+      ).map { (1.0 - alpha) * $0 + alpha * $1 }
+    )
 }
