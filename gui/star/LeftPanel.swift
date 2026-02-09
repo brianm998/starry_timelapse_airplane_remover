@@ -240,20 +240,29 @@ struct LeftPanel: View {
 
     var operationQueueView: some View {
         return VStack(alignment: .leading) {
-            if let stats = frameGraphViewModel.horizonStats {
+            if let stats = frameGraphViewModel.horizonStats,
+               stats.operationCount > 0
+            {
                 QueueView(stats: stats)
             }
-            if let stats = frameGraphViewModel.keypointStats {
+            if let stats = frameGraphViewModel.keypointStats,
+               stats.operationCount > 0
+            {
                 QueueView(stats: stats)
             }
-            if let stats = frameGraphViewModel.homographyStats {
+            if let stats = frameGraphViewModel.homographyStats,
+               stats.operationCount > 0
+            {
                 QueueView(stats: stats)
             }
-            if let stats = frameGraphViewModel.mergeStats {
+            if let stats = frameGraphViewModel.mergeStats,
+               stats.operationCount > 0
+            {
                 QueueView(stats: stats)
             }
         }
     }
+
     var imageCacheView: some View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .leading) {
