@@ -297,16 +297,16 @@ public struct Config: Codable, Sendable, Transferable {
     public var horizonMaxY: Int?
 
     // max number of frames to concurrently calculation horizons on
-    public var maxConcurrentHorizonCalculations: Int = 20
+    public var maxConcurrentHorizonCalculations: Int = ProcessInfo.processInfo.processorCount/2
 
     // max number of frames to concurrently calculation keypoints on
-    public var maxConcurrentKeypointCalculations: Int = 8
+    public var maxConcurrentKeypointCalculations: Int = ProcessInfo.processInfo.processorCount/2
     
     // max number of frames to concurrently calculation homographies on
-    public var maxConcurrentHomographyCalculations: Int = 6
+    public var maxConcurrentHomographyCalculations: Int = ProcessInfo.processInfo.processorCount
 
     // max number of frames to concurrently calculation final merges on
-    public var maxConcurrentMergeCalculations: Int = 8
+    public var maxConcurrentMergeCalculations: Int = ProcessInfo.processInfo.processorCount*2/3
     
     // when doing auto aligned outputs, how far to shift up the horizon mask
     // when doing a final composite image.
@@ -507,6 +507,7 @@ public struct Config: Codable, Sendable, Transferable {
     // 0.10.5 added more status and error reporting
     //        single thread alignment pre frame for better results
     // 0.10.6 added graph processing, split up processing into smaller chunks
+    //        added alignment validation to estimate alignment for frames without enough stars
     //        bug fixes, runs a lot faster, less ram (hopefully)
     
     public var starVersion = Config.latestVersion
