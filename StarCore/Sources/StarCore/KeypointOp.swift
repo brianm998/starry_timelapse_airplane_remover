@@ -4,10 +4,16 @@ import logging
 final class KeypointOp: AsyncOperation, @unchecked Sendable {
     let frame: FrameAirplaneRemover
     let mode: FrameViewMode
-
-    init(frame: FrameAirplaneRemover, mode: FrameViewMode) {
+    let errorClosure: (String) -> Void
+    
+    init(
+      frame: FrameAirplaneRemover,
+      mode: FrameViewMode,
+      errorClosure: @escaping (String) -> Void
+    ) {
         self.frame = frame
         self.mode = mode
+        self.errorClosure = errorClosure
     }
 
     override func execute() {
@@ -16,9 +22,15 @@ final class KeypointOp: AsyncOperation, @unchecked Sendable {
                 Log.d("frame \(frame.frameIndex) end")
                 finish()
             }
-            Log.d("frame \(frame.frameIndex) start")
-
-            _ = try? await frame.loadOrCreateOCVFeatures(of: mode)
+            do {
+                Log.d("frame \(frame.frameIndex) start")
+                _ = try await frame.loadOrCreateOCVFeatures(of: mode)
+                Log.d("frame \(frame.frameIndex) done")
+            } catch {
+                let str = "frame \(frame.frameIndex) error during keypoint detection: \(error)"
+                Log.e(str)
+                errorClosure(str)
+            }
         }
     }
 }

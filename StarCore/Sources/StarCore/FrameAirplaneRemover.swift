@@ -361,6 +361,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         await self.updateCombineSubjects()
         Log.d("frame \(frameIndex) init end")
+
+        // really only needs to happen once
+        await frameGraphBuilder.set(configManager: self.configManager)
     }
 
     // threshold used for throwing out bad pixels before replacing with them
@@ -578,7 +581,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             do {
                 // build with a graph of dependencies between different frames at
                 // different steps of the process
-                await frameGraphBuilder.set(configManager: self.configManager)
                 var nextFrame: FrameAirplaneRemover? = await self.firstFrameInSequence
                 var allFrames: [FrameAirplaneRemover] = []
                 while nextFrame != nil {
@@ -589,8 +591,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
                 await frameGraphBuilder.build(
                   frames: allFrames
-                ) {
-                    progressClosure(.done) // XXX make more of these
+                ) { errorArray in
+                    if errorArray.count == 0 {
+                        // success
+                        progressClosure(.done) // XXX make more of these
+                    } else {
+                        // some failures, also reported in errorClosure first
+                        progressClosure(.error(String(errorArray.joined(separator: "\n"))))
+                    }
+                } errorClosure: { errorString in
+                    Log.e("handle this error: \(errorString)")
                 }
 
             } catch {
@@ -961,6 +971,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         self.neighborStarHomography = neighborStarHomography
         do {
             try self.write(neighborStarHomography: neighborStarHomography.neighborHomography)
+            Log.i("frame \(frameIndex) set star homography: \(neighborStarHomography.neighborHomography)")
         } catch {
             Log.e("frame \(frameIndex) unable to set star homography: \(error)")
         }

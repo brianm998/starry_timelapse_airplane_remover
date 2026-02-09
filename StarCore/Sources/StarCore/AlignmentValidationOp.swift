@@ -8,10 +8,16 @@ import logging
 final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
     let frames: [FrameAirplaneRemover]
     let configManager: ConfigManager
+    let errorClosure: (String) -> Void
     
-    init(frames: [FrameAirplaneRemover], configManager: ConfigManager) {
+    init(
+      frames: [FrameAirplaneRemover],
+      configManager: ConfigManager,
+      errorClosure: @escaping (String) -> Void
+    ) {
         self.frames = frames
         self.configManager = configManager
+        self.errorClosure = errorClosure
     }
 
     override func execute() {
@@ -20,16 +26,20 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                 Log.d("end")
                 finish()
             }
-
-            Log.d("start")
-            let config = await configManager.config()
-            if config.tripodHeadWasMoving {
-                await validateMovingStarAlignment()
-            } else {
-                // tripod was stationary
-                try await self.validateStaticStarAlignment()
+            do {
+                Log.d("start")
+                let config = await configManager.config()
+                if config.tripodHeadWasMoving {
+                    await validateMovingStarAlignment()
+                } else {
+                    // tripod was stationary
+                    try await self.validateStaticStarAlignment()
+                }
+            } catch {
+                let str = "error during alignment validation: \(error)"
+                Log.e(str)
+                errorClosure(str)
             }
-
             // XXX still need to handle earth alignment if enabled
         }
     }
@@ -48,6 +58,7 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         }
         if homographies.count == 0 {
             Log.e("ERROR, canceling no homographies found")
+            errorClosure("no homographies found")
             self.cancel()
             // have this abort the operation
             return
@@ -88,10 +99,12 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 
         guard !homographies.isEmpty else {
             Log.e("No homography results found")
+            errorClosure("no homographies found")
+            self.cancel()
             return
         }
         Log.d("validateMovingStarAlignment (gap-fill approach) \(homographies.count) homographies")
-
+        
         // Classify frames
         let goodFlags = homographies.map(isGood)
 
@@ -195,7 +208,7 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 func bestHomography(
   before index: Int,
   in homographies: [HomographyResultsCodable],
-  checking checkCount: Int = 10 
+  checking checkCount: Int = 20 
 ) -> HomographyResultsCodable? {
     if index <= 0 { return nil }
     let startIndex = index > checkCount ? index - checkCount : 0
@@ -211,7 +224,7 @@ func bestHomography(
 func bestHomography(
   after index: Int,
   in homographies: [HomographyResultsCodable],
-  checking checkCount: Int = 10 
+  checking checkCount: Int = 20 
 ) -> HomographyResultsCodable? {
     if index >= homographies.count { return nil }
     let startIndex = index+1
