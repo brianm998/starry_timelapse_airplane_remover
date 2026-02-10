@@ -198,7 +198,11 @@ public struct Config: Codable, Sendable, Transferable {
     // creating the subtraction image and calculating pixel values during removal
     public var numberAlignedNeighborFrames = 8 // total
 
+    // use when smoothing homography of moving videos
+    // smaller values give more smoothing
+    public var homographySmoothingEpsilon = 1e-2 // get this right
 
+    
     // when camera is not moving, use this value instead of
     // numberAlignedNeighborFrames for calculating the merged horizon for each frame
     public var numberStaticNeighborFrames = 16 // total

@@ -595,6 +595,14 @@ public final class ImageSequenceViewModel {
             config.update(realConfig)
         }
     }
+
+    var homographySmoothingEpsilon: Double {
+        didSet {
+            var realConfig = config.config()
+            realConfig.homographySmoothingEpsilon = homographySmoothingEpsilon
+            config.update(realConfig)
+        }
+    }
     
     // the threshold used in goodPixels(thresholdFactor: )
     var pixelThreshold: Double = 1.2
@@ -789,6 +797,7 @@ public final class ImageSequenceViewModel {
         self.maxConcurrentKeypointCalculations = config.maxConcurrentKeypointCalculations
         self.maxConcurrentHomographyCalculations = config.maxConcurrentHomographyCalculations
         self.maxConcurrentMergeCalculations = config.maxConcurrentMergeCalculations
+        self.homographySmoothingEpsilon = config.homographySmoothingEpsilon
         self.horizonVerticalShiftAmount = config.horizonVerticalShiftAmount
         self.allowEarthAlignment = config.allowEarthAlignment
 

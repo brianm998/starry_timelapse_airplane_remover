@@ -195,6 +195,13 @@ struct ProcessingSettingsView: View {
     @State private var showAlignmentWriteDebugImagesInfo = false
     @State private var showAlignmentAllowEarthAlignmentInfo = false
 
+    @State private var showMaxConcurrentHorizonsView = false
+    @State private var showMaxConcurrentKeypointsView = false
+    @State private var showMaxConcurrentHomographiesView = false
+    @State private var showMaxConcurrentMergesView = false
+    @State private var showHomographySmoothingEpsilon = false
+
+
     private var addSpacer: Bool {
         showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo ||
         showAutoPreservationMethodInfo || showProcessFramesInfo ||
@@ -211,7 +218,12 @@ struct ProcessingSettingsView: View {
         showAlignmentNeighborDilateSizeInfo ||
         showAlignmentNeighborThresholdValueInfo ||
         showAlignmentWriteDebugImagesInfo ||
-        showAlignmentAllowEarthAlignmentInfo 
+        showAlignmentAllowEarthAlignmentInfo ||
+        showMaxConcurrentHorizonsView ||
+        showMaxConcurrentKeypointsView ||
+        showMaxConcurrentHomographiesView ||
+        showMaxConcurrentMergesView ||
+        showHomographySmoothingEpsilon
     }
     
     private func showAll() {
@@ -240,6 +252,11 @@ struct ProcessingSettingsView: View {
         showAlignmentNeighborThresholdValueInfo = true
         showAlignmentWriteDebugImagesInfo = true
         showAlignmentAllowEarthAlignmentInfo = true
+        showMaxConcurrentHorizonsView = true
+        showMaxConcurrentKeypointsView = true
+        showMaxConcurrentHomographiesView = true
+        showMaxConcurrentMergesView = true
+        showHomographySmoothingEpsilon = true
     }
 
     private func hideAll() {
@@ -268,6 +285,11 @@ struct ProcessingSettingsView: View {
         showAlignmentNeighborThresholdValueInfo = false
         showAlignmentWriteDebugImagesInfo = false
         showAlignmentAllowEarthAlignmentInfo = false
+        showMaxConcurrentHorizonsView = false
+        showMaxConcurrentKeypointsView = false
+        showMaxConcurrentHomographiesView = false
+        showMaxConcurrentMergesView = false
+        showHomographySmoothingEpsilon = false
     }
     
     @FocusState private var focusedField: FocusedField?
@@ -377,6 +399,8 @@ struct ProcessingSettingsView: View {
                                   self.alignmentAllowEarthAlignmentView
                                   Divider()
                                   self.alignmentWriteDebugImagesViewValueView
+                                  Divider()
+                                  self.homographySmoothingEpsilonView
                               }
                           } label: {
                               Text("Alignment Settings") 
@@ -966,7 +990,7 @@ struct ProcessingSettingsView: View {
     private var maxConcurrentHorizonsView: some View {
         @Bindable var viewModel = viewModel
         return InfoTextInstructionGridRow(
-          showInfo: $showCannyMinThresholdView,
+          showInfo: $showMaxConcurrentHorizonsView,
           addSpacer: { addSpacer },
           infoText: """
             How many horizon calculations should star do at once?  Can be more than the number of cpus, horizon calculation is pretty quick.
@@ -1003,7 +1027,7 @@ struct ProcessingSettingsView: View {
     private var maxConcurrentKeypointsView: some View {
         @Bindable var viewModel = viewModel
         return InfoTextInstructionGridRow(
-          showInfo: $showCannyMinThresholdView,
+          showInfo: $showMaxConcurrentKeypointsView,
           addSpacer: { addSpacer },
           infoText: """
             How many keypoint calculations should star do at once?  Close to the number of CPUs is usually good.
@@ -1040,7 +1064,7 @@ struct ProcessingSettingsView: View {
     private var maxConcurrentHomographysView: some View {
         @Bindable var viewModel = viewModel
         return InfoTextInstructionGridRow(
-          showInfo: $showCannyMinThresholdView,
+          showInfo: $showMaxConcurrentHomographiesView,
           addSpacer: { addSpacer },
           infoText: """
             How many homography calculations should star do at once?  Close to the number of CPUs is usually good.
@@ -1074,10 +1098,47 @@ struct ProcessingSettingsView: View {
           .disabled(viewModel.sceneType == .skyOnly)
     }
     
+    private var homographySmoothingEpsilonView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showHomographySmoothingEpsilon,
+          addSpacer: { addSpacer },
+          infoText: """
+            How close do we want the deviation of neighbor homography to be when smoothing neighbor homography across frames when processing moving videos?  Smaller ε values give more smoothing.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Homography Smoothing ε:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.homographySmoothingEpsilon,
+                      minValue: 0,
+                      maxValue: 10,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .homographySmothingEpsilon,
+                      alwaysOpen: true            
+                    )
+                    Spacer()
+                }
+            }
+        }
+          .disabled(viewModel.sceneType == .skyOnly)
+    }
+    
     private var maxConcurrentMergesView: some View {
         @Bindable var viewModel = viewModel
         return InfoTextInstructionGridRow(
-          showInfo: $showCannyMinThresholdView,
+          showInfo: $showMaxConcurrentMergesView,
           addSpacer: { addSpacer },
           infoText: """
             How many merge calculations should star do at once?  Close to the number of CPUs is usually good.

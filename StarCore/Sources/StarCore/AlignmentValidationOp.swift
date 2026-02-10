@@ -85,6 +85,7 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 
 
     func validateMovingStarAlignment() async {
+        let config = await configManager.config()
 
         Log.d("validateMovingStarAlignment (gap-fill approach) \(frames.count) frames")
 
@@ -219,14 +220,17 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         let smoothed = smoothDeviations(original, perFrameVariance: V)
 
         // Adjust only frames that violate constraints
-        let epsilon: Double = 1e-3
+        let epsilon: Double = config.homographySmoothingEpsilon
         let maxScale = 1.25
 
         for i in 0..<homographies.count {
             let o = original[i]
             let s = smoothed[i]
 
-            guard abs(s - o) > epsilon, o > 0 else { continue }
+            guard abs(s - o) > epsilon, o > 0 else {
+                Log.d("frame \(i) not smoothing homography o \(o) s \(s) epsilon \(epsilon)") 
+                continue
+            }
 
             let scale = min(maxScale, max(0.0, s / o))
 
