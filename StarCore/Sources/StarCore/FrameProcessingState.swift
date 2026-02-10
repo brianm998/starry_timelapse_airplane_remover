@@ -489,10 +489,20 @@ public enum FrameProcessingState: Codable,
             .orange
         case .earthKeypointsFound:
             .green
-        case .starAlignment:
-            .yellow
-        case .earthAlignment:
-            .cyan
+        case .starAlignment(let state):
+            switch state {
+            case .complete:
+                .green
+            default:
+                .yellow
+            }
+        case .earthAlignment(let state):
+            switch state {
+            case .complete:
+                .green
+            default:
+                .cyan
+            }
         case .starAlignmentFailed:
             .orange
         case .creatingStarAlignedFrame:
