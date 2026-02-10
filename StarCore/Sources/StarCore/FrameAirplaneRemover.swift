@@ -3044,11 +3044,42 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func finishAuto(
       useOutliers: Bool
     ) async throws {
-        guard let autoProcessedImage = try await createAutoProcessedImage()
-        else {
-            Log.e("frame \(frameIndex) unable to create auto processed image")
+
+        var autoProcessedImage: PixelatedImage? = nil
+
+        let autoAlreadyDone = imageAccessor.imageExists(
+          frameIndex: frameIndex,
+          ofType: .autoProcessed,
+          atSize: .original
+        )
+        
+        if !useOutliers,
+           autoAlreadyDone
+        {
+            Log.i("frame \(frameIndex) auto already done")
             return
         }
+
+        if useOutliers,
+           autoAlreadyDone
+        {
+            autoProcessedImage = try await imageAccessor.load(
+              frameIndex: frameIndex,
+              type: .autoProcessed,
+              atSize: .original
+            )
+        }
+
+        if autoProcessedImage == nil {
+            autoProcessedImage = try await createAutoProcessedImage()
+        }
+        
+        guard let autoProcessedImage
+        else {
+            Log.e("frame \(frameIndex) unable to load or create auto processed image")
+            return
+        }
+
         if useOutliers {
             // if using outliers, 
             let originalImage =
@@ -3156,7 +3187,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     Log.d("frame \(self.frameIndex) done writing output files")
                 }
             }
-        } else {
+        } else if !autoAlreadyDone {
             // if not using outliers, then save the auto processed image as
             // complete 
             self.set(state: .loadingImages1)
