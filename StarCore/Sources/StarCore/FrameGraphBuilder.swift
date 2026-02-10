@@ -8,13 +8,15 @@ import logging
  * see why config params don't seem to be updating
  * write homography validation logic for moving sky and earth
  * make errors show up in UI (no found keypoints, homography, etc)
+ * deal with selective modes
+   - add findOutliers step before MergeOp
+   - make mergeOp call finishSelective()
 
  Still TODO:
 
  - make sure static ground merge is still happening
  - more UI update of what's going on (states are only partially reported)
- - deal with FinalGUIProcessor differences
- - deal with selective mode
+ - make the FinalGUIProcessor use this class, but only on a subset of frames
  - hook up to CLI
  - final render re-renders when file is already there (after re-start)
  
@@ -26,6 +28,7 @@ public final actor FrameGraphBuilder {
 
     // MARK: Queues (user adjustable)
     let horizonQueue = OperationQueue()
+    let outlierQueue = OperationQueue()
     let keypointQueue = OperationQueue()
     let homographyQueue = OperationQueue()
     let mergeQueue = OperationQueue()
@@ -35,6 +38,7 @@ public final actor FrameGraphBuilder {
         keypointQueue.name = "keypoints"
         homographyQueue.name = "alignment"
         mergeQueue.name = "merging"
+        outlierQueue.name = "outliers"
     }
     
     public struct Queues {
@@ -42,6 +46,7 @@ public final actor FrameGraphBuilder {
         public let keypoint: OperationQueue
         public let homography: OperationQueue
         public let merge: OperationQueue
+        public let outlier: OperationQueue
     }
 
     public nonisolated func queues() -> Queues {
@@ -49,7 +54,8 @@ public final actor FrameGraphBuilder {
           horizon: horizonQueue,
           keypoint: keypointQueue,
           homography: homographyQueue,
-          merge: mergeQueue
+          merge: mergeQueue,
+          outlier: outlierQueue
         )
     }
     
@@ -70,6 +76,7 @@ public final actor FrameGraphBuilder {
         keypointQueue.maxConcurrentOperationCount = config.maxConcurrentKeypointCalculations
         homographyQueue.maxConcurrentOperationCount = config.maxConcurrentHomographyCalculations
         mergeQueue.maxConcurrentOperationCount = config.maxConcurrentMergeCalculations
+        outlierQueue.maxConcurrentOperationCount = config.maxConcurrentOutlierCalculations
     }
     
     public func build(
@@ -97,7 +104,9 @@ public final actor FrameGraphBuilder {
         var skyKeypointOps: [Int: KeypointOp] = [:]
         var earthKeypointOps: [Int: KeypointOp] = [:]
 
-        // First assemble horizon and keypoint operations for all frames
+        var outlierOps: [OutlierOp] = []
+        
+        // First assemble horizon, keypoint and outlier operations for all frames
         for frame in frames {
 
             var lastOps: [Operation] = []
@@ -142,6 +151,7 @@ public final actor FrameGraphBuilder {
                 keypointQueue.addOperation(kp)
                 earthKeypointOps[frame.frameIndex] = kp
             }
+
         }
 
         // next assemble homography operations that depend upon the keyframes from above
@@ -210,8 +220,28 @@ public final actor FrameGraphBuilder {
         homographyOps.forEach { validationOp.addDependency($0) }
         homographyQueue.addOperation(validationOp)
 
+        // how many in each direction for final outlier classification 
+        let numOutlierNeighbors = config.numberFinalProcessingNeighborsNeeded            
+        
+        for frame in frames {
+            // Outlier operations for selective and auto selective
+            // all frames get an op, but it may be a nop for auto only
+
+            let outlierOp = OutlierOp(
+              frame: frame
+            ) { errorString in
+                errors.append(errorString)
+                errorClosure(errorString)
+            }
+
+            outlierOp.addDependency(validationOp)
+            outlierQueue.addOperation(outlierOp)
+            outlierOps.append(outlierOp)
+        }
+
         // 5. Merge (depends on global validation later)
         for frame in frames {
+            
             let mergeOp = MergeOp(
               frame: frame
             ) { errorString in
@@ -221,9 +251,23 @@ public final actor FrameGraphBuilder {
 
             mergeOp.qualityOfService = .userInteractive
             mergeOp.addDependency(validationOp)
+
+
+            // add outlier dependencies for all frames, will be a nop if not using outliers
+            var startOutlierIndex = frame.frameIndex - numOutlierNeighbors
+            var endOutlierIndex = frame.frameIndex + numOutlierNeighbors
+            if startOutlierIndex < 0 { startOutlierIndex = 0 }
+            if endOutlierIndex >= frames.count { endOutlierIndex = frames.count - 1 }
+
+            for i in startOutlierIndex...endOutlierIndex {
+                mergeOp.addDependency(outlierOps[i])
+            }
+            
             mergeQueue.addOperation(mergeOp)
             mergeOps.append(mergeOp)
         }
+
+        // add a step here for selecive processing 
 
         // 6. runs after all have finished
         let completionOp = GraphCompletionOp {

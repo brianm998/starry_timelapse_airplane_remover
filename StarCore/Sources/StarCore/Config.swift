@@ -308,6 +308,9 @@ public struct Config: Codable, Sendable, Transferable {
     // max number of frames to concurrently calculation final merges on
     public var maxConcurrentMergeCalculations: Int = ProcessInfo.processInfo.processorCount*2/3
     
+    // max number of frames to concurrently calculation final merges on
+    public var maxConcurrentOutlierCalculations: Int = ProcessInfo.processInfo.processorCount/4
+    
     // when doing auto aligned outputs, how far to shift up the horizon mask
     // when doing a final composite image.
     public var horizonVerticalShiftAmount: Int = 8

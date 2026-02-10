@@ -19,7 +19,19 @@ public final class MergeOp: AsyncOperation, @unchecked Sendable {
             do {
                 Log.d("frame \(frame.frameIndex) start")
                 // XXX this re-writes any existing files, should skip if already there
-                try await frame.finishAuto(useOutliers: false)
+
+                switch await frame.cleanMethod {
+                case .automatic(let usesOutliers):
+                    if usesOutliers {
+                        await frame.set(state: .secondClassification)
+                        await frame.applyDecisionTreeToAllOutliers(includingTrash: false)
+                    }
+                    try await frame.finishAuto(useOutliers: usesOutliers)
+                case .selective:
+                    await frame.set(state: .secondClassification)
+                    await frame.applyDecisionTreeToAllOutliers(includingTrash: false)
+                    try await frame.finishSelective()
+                }
                 Log.d("frame \(frame.frameIndex) done")
             } catch {
                 let str = "frame \(frame.frameIndex) error during merge: \(error)"
