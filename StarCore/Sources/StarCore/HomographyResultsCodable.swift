@@ -95,9 +95,14 @@ public struct HomographyResultsCodable: Codable, Sendable {
                  - alignment slope is close to constant
                    deviation should be evenly spaced by frame distance
                  */
-                if homography.deviation < 60*Double(frameDistance), // XXX make this a parameter
-                   alignmentSlope < medianSlope * 1.08, // XXX make this a parameter too
-                   alignmentSlope > medianSlope / 1.08
+
+
+                let maxHomographyDivergence: Double = 20 // XXX make this a parameter
+                let maxSlopeDivergence: Double = 1.08    // XXX make this a parameter
+                
+                if homography.deviation < maxHomographyDivergence*Double(frameDistance),  
+                   alignmentSlope < medianSlope * maxSlopeDivergence,
+                   alignmentSlope > medianSlope / maxSlopeDivergence
                 {
                     // rough estimate
                     goodWarps.append(homography)
