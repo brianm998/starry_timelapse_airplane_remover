@@ -126,21 +126,28 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
             }
             let end = i - 1   // inclusive
 
-
             /*
              instead of taking the first 'good' homography,
              look a the previous N 'good' homographies within M distance from i
              choose the one with the median deviation among them all
              */
-            let leftGood  = bestHomography(before: start, in: homographies)
-            let rightGood = bestHomography(after:  i-1,   in: homographies)
+            let leftGood  = bestHomography(
+              before: start,
+              in: homographies,
+              checking: 20
+            )
+            let rightGood = bestHomography(
+              after:  i-1,
+              in: homographies,
+              checking: 20
+            )
 
             Log.d("Bad segment \(start)...\(end), leftGood=\(leftGood != nil), rightGood=\(rightGood != nil)")
 
             // Apply correction strategy
             for idx in start...end {
                 let bad = homographies[idx]
-                let t = bad.frameIndex
+                //let t = bad.frameIndex
 
                 Log.d("rebuild @ \(idx)")
 
@@ -189,20 +196,106 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                     newHomography = nil
                 }
                 if let newHomography {
-                    let fuck = HomographyResultsCodable(
+                    let results = HomographyResultsCodable(
                         for: idx, 
                         with: newHomography
                     )
+                    homographies[idx] = results
                     Log.d("frame \(idx) is getting newHomography \(newHomography)")
                     await frames[idx].set(
-                      neighborStarHomography: fuck
+                      neighborStarHomography: results
                     )
                 }
             }
         }
 
+        Log.d("validateMovingStarAlignment applying smoothing")
+        
+        // apply smoothing
+        let V: Double = 1.6 // max allowed divergance of compositeDeviation between frames
+
+        // Smooth deviations
+        let original = homographies.map { $0.compositeDeviation }
+        let smoothed = smoothDeviations(original, perFrameVariance: V)
+
+        // Adjust only frames that violate constraints
+        let epsilon: Double = 1e-3
+        let maxScale = 1.25
+
+        for i in 0..<homographies.count {
+            let o = original[i]
+            let s = smoothed[i]
+
+            guard abs(s - o) > epsilon, o > 0 else { continue }
+
+            let scale = min(maxScale, max(0.0, s / o))
+
+            Log.d("frame \(i) smoothing homography") 
+            
+            let adjusted = homographies[i].neighborHomography.map { neighbor in
+                guard let h = neighbor.homography else { return neighbor }
+                return AlignmentWarpInfoCodable(
+                  homography: scaleHomographyTowardsIdentity(h, scale: scale),
+                  alignmentState: .homographySuccess,
+                  frameIndex: neighbor.frameIndex
+                )
+            }
+
+            await frames[i].set(
+              neighborStarHomography: HomographyResultsCodable(
+                for: homographies[i].frameIndex,
+                with: adjusted
+              )
+            )
+        }
+
         Log.d("validateMovingStarAlignment done")
     }
+}
+
+func scaleHomographyTowardsIdentity(
+    _ h: [Double],
+    scale: Double
+) -> [Double] {
+    let I: [Double] = [
+        1,0,0,
+        0,1,0,
+        0,0,1
+    ]
+
+    return zip(h, I).map { hval, Ival in
+        Ival + scale * (hval - Ival)
+    }
+}
+
+
+func limitForward(_ d: inout [Double], maxSlope: Double) {
+    for i in 1..<d.count {
+        let maxAllowed = d[i-1] + maxSlope
+        if d[i] > maxAllowed {
+            d[i] = maxAllowed
+        }
+    }
+}
+
+func limitBackward(_ d: inout [Double], maxSlope: Double) {
+    for i in stride(from: d.count - 2, through: 0, by: -1) {
+        let maxAllowed = d[i+1] + maxSlope
+        if d[i] > maxAllowed {
+            d[i] = maxAllowed
+        }
+    }
+}
+
+
+func smoothDeviations(
+    _ d: [Double],
+    perFrameVariance V: Double
+) -> [Double] {
+    var out = d
+    limitForward(&out, maxSlope: V)
+    limitBackward(&out, maxSlope: V)
+    return out
 }
 
 func bestHomography(
