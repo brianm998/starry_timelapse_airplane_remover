@@ -255,6 +255,11 @@ struct LeftPanel: View {
             {
                 QueueView(stats: stats)
             }
+            if let stats = frameGraphViewModel.outlierStats,
+               stats.operationCount > 0
+            {
+                QueueView(stats: stats)
+            }
             if let stats = frameGraphViewModel.mergeStats,
                stats.operationCount > 0
             {

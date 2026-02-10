@@ -9,12 +9,14 @@ final class FrameGraphViewModel {
     var keypointStats: OperationQueueStats? 
     var homographyStats: OperationQueueStats?
     var mergeStats: OperationQueueStats?
+    var outlierStats: OperationQueueStats?
 
     init() {
         self.horizonStats = nil
         self.keypointStats = nil
         self.homographyStats = nil
         self.mergeStats = nil
+        self.outlierStats = nil
 
         Task {
             let queues = await frameGraphBuilder.queues()
@@ -23,6 +25,7 @@ final class FrameGraphViewModel {
             self.keypointStats = OperationQueueStats(queue: queues.keypoint)
             self.homographyStats = OperationQueueStats(queue: queues.homography)
             self.mergeStats = OperationQueueStats(queue: queues.merge)
+            self.outlierStats = OperationQueueStats(queue: queues.outlier)
         }
     }
 }
