@@ -213,7 +213,7 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         Log.d("validateMovingStarAlignment applying smoothing")
         
         // apply smoothing
-        let V: Double = 1.6 // max allowed divergance of compositeDeviation between frames
+        let V: Double = 0.3 // max allowed divergance of compositeDeviation between frames
 
         // Smooth deviations
         let original = homographies.map { $0.compositeDeviation }
@@ -228,13 +228,13 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
             let s = smoothed[i]
 
             guard abs(s - o) > epsilon, o > 0 else {
-                Log.d("frame \(i) not smoothing homography o \(o) s \(s) epsilon \(epsilon)") 
+                Log.d("frame \(i) not smoothing homography o \(o) s \(s) abs(s - o) \(abs(s - o)) epsilon \(epsilon)") 
                 continue
             }
 
             let scale = min(maxScale, max(0.0, s / o))
 
-            Log.d("frame \(i) smoothing homography") 
+            Log.d("frame \(i) smoothing homography o \(o) s \(s) abs(s - o) \(abs(s - o)) epsilon \(epsilon) scale \(scale)") 
             
             let adjusted = homographies[i].neighborHomography.map { neighbor in
                 guard let h = neighbor.homography else { return neighbor }
@@ -272,6 +272,15 @@ func scaleHomographyTowardsIdentity(
     }
 }
 
+func smoothDeviations(
+    _ d: [Double],
+    perFrameVariance V: Double
+) -> [Double] {
+    var out = d
+    limitForward(&out, maxSlope: V)
+    limitBackward(&out, maxSlope: V)
+    return out
+}
 
 func limitForward(_ d: inout [Double], maxSlope: Double) {
     for i in 1..<d.count {
@@ -291,16 +300,6 @@ func limitBackward(_ d: inout [Double], maxSlope: Double) {
     }
 }
 
-
-func smoothDeviations(
-    _ d: [Double],
-    perFrameVariance V: Double
-) -> [Double] {
-    var out = d
-    limitForward(&out, maxSlope: V)
-    limitBackward(&out, maxSlope: V)
-    return out
-}
 
 func bestHomography(
   before index: Int,
