@@ -210,6 +210,9 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
             }
         }
 
+        /* 
+           XXX smoothing code disabled for now
+           
         Log.d("validateMovingStarAlignment applying smoothing")
         
         // apply smoothing
@@ -252,6 +255,7 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
               )
             )
         }
+         */
 
         Log.d("validateMovingStarAlignment done")
     }
