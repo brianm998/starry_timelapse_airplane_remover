@@ -1,6 +1,5 @@
 import Foundation
 import CoreGraphics
-import KHTSwift
 import kht_bridge
 import Combine
 
