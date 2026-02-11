@@ -61,7 +61,7 @@ public final actor FrameGraphBuilder {
     
     var configManager: ConfigManager? = nil
 
-    func set(configManager: ConfigManager) async {
+    public func set(configManager: ConfigManager) async {
         self.configManager = configManager
         self.update(from: await configManager.config())
         await configManager.onUpdate { [weak self] config in
@@ -104,7 +104,7 @@ public final actor FrameGraphBuilder {
         var skyKeypointOps: [Int: KeypointOp] = [:]
         var earthKeypointOps: [Int: KeypointOp] = [:]
 
-        var outlierOps: [OutlierOp] = []
+        var outlierOps: [OutlierOp?] = []
         
         // First assemble horizon, keypoint and outlier operations for all frames
         for frame in frames {
@@ -226,17 +226,20 @@ public final actor FrameGraphBuilder {
         for frame in frames {
             // Outlier operations for selective and auto selective
             // all frames get an op, but it may be a nop for auto only
+            if await frame.usesOutliers {
+                let outlierOp = OutlierOp(
+                  frame: frame
+                ) { errorString in
+                    errors.append(errorString)
+                    errorClosure(errorString)
+                }
 
-            let outlierOp = OutlierOp(
-              frame: frame
-            ) { errorString in
-                errors.append(errorString)
-                errorClosure(errorString)
+                outlierOp.addDependency(validationOp)
+                outlierQueue.addOperation(outlierOp)
+                outlierOps.append(outlierOp)
+            } else {
+                outlierOps.append(nil)
             }
-
-            outlierOp.addDependency(validationOp)
-            outlierQueue.addOperation(outlierOp)
-            outlierOps.append(outlierOp)
         }
 
         // 5. Merge (depends on global validation later)
@@ -260,7 +263,9 @@ public final actor FrameGraphBuilder {
             if endOutlierIndex >= frames.count { endOutlierIndex = frames.count - 1 }
 
             for i in startOutlierIndex...endOutlierIndex {
-                mergeOp.addDependency(outlierOps[i])
+                if let outlierOp = outlierOps[i] {
+                    mergeOp.addDependency(outlierOp)
+                }
             }
             
             mergeQueue.addOperation(mergeOp)
