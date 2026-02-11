@@ -231,29 +231,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         nextFrame = frame
     }
 
-    func otherFrame(at otherFrameIndex: Int) async -> FrameAirplaneRemover? {
-        if otherFrameIndex == frameIndex {
-            return self
-        } else if otherFrameIndex < frameIndex {
-            if let previousFrame {
-                return await previousFrame.otherFrame(at: otherFrameIndex)
-            } else {
-                Log.w("run off end at otherFrameIndex \(otherFrameIndex)")
-                return nil
-            }
-        } else if otherFrameIndex > frameIndex {
-            if let nextFrame {
-                return await nextFrame.otherFrame(at: otherFrameIndex)
-            } else {
-                Log.w("run off end at otherFrameIndex \(otherFrameIndex)")
-                return nil
-            }
-        } else {
-            Log.e("HOW DID WE END UP HERE withotherFrameIndex \(otherFrameIndex) frameIndex \(frameIndex)?")
-            return nil
-        }
-    }
-    
     // if this is false, just write out outlier data
     let writeOutputFiles: Bool
 
@@ -327,8 +304,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         // call directly in init becuase didSet() isn't called from here :P
        
-        self.baseFilename = imageSequence.filenames[frameIndex]
-
         let config = await configManager.config()
         //Log.d("config.numberAlignedNeighborFrames \(config.numberAlignedNeighborFrames)")
         await self.setNumberOfAlignedFrames()
@@ -1508,7 +1483,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     
     private var alignmentFrames: [Int] = []
     private var staticNeighborFrames: [Int] = []
-    private let baseFilename: String
 
     // the filenames of the original files that we should align with this frame
     private var alignmentFilenames: [Int:String] {
@@ -1949,8 +1923,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             for (_, group) in await outlierGroups.getMembers() {
                 if await closure(group, false) { didChange = true }
             }
-            for (_, group) in await outlierGroups.getTrash() {
-                if await closure(group, true) { didChange = true }
+            if includingTrash {
+                for (_, group) in await outlierGroups.getTrash() {
+                    if await closure(group, true) { didChange = true }
+                }
             }
         }
         return didChange
