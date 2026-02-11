@@ -935,7 +935,6 @@ public final class ImageSequenceViewModel {
                           atIndex: frameIndex,
                           outputFilename: "\(config.outputPath)/\(config.basename)",
                           baseName: basename,
-                          fullyProcess: false,
                           writeOutputFiles: true,
                           imageAccessor: imageAccessor
                         )

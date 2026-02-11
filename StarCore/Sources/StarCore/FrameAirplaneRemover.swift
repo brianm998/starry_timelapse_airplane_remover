@@ -254,8 +254,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
-    let fullyProcess: Bool
-
     // if this is false, just write out outlier data
     let writeOutputFiles: Bool
 
@@ -308,7 +306,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 atIndex frameIndex: Int,
                 outputFilename: String,
                 baseName: String,       // source filename without path
-                fullyProcess: Bool = true,
                 writeOutputFiles: Bool = true,
                 imageAccessor: ImageAccessor,
                 completion: (@Sendable () async -> Void)? = nil) async throws
@@ -316,7 +313,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(frameIndex) init begin")
         self.imageSequence = imageSequence
         self.imageAccessor = imageAccessor
-        self.fullyProcess = fullyProcess
         self.writeOutputFiles = writeOutputFiles
         self.configManager = configManager
         self.baseName = baseName
@@ -938,7 +934,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
            let image = PixelatedImage(mat: aligned)
         {
             // write out the successfully aligned images
-            Log.e("frame \(frameIndex) writing out a successfully aligned image of type \(type)")
+            Log.i("frame \(frameIndex) writing out a successfully aligned image of type \(type)")
             try await imageAccessor.save(
               image,
               frameIndex: frameIndex,
@@ -1114,8 +1110,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
 
-        var alignmentResult: HomographyResult? = nil
-
         // can't load from file, detect homography 
 
         Log.d("frame \(frameIndex) doing real alignment for type \(alignmentType)")
@@ -1190,7 +1184,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             if let error = result as? String {
                 Log.e("frame \(frameIndex) error: \(error)")
             } else if let result = result as? HomographyResult {
-                Log.e("frame \(frameIndex) got HomographyResult \(result)")
                 let alignedWarps = result.warpInfo.map { $0.toCodable() }
 
                 let ret = HomographyResultsCodable(from: result)
@@ -1298,8 +1291,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         Log.d("frame \(frameIndex) original frame \(originalFrame.description)")
 
-        let pixelThreshold = await self.pixelThreshold
-        
         var horizonMask: HorizonMask? = nil
         if config.horizonDetectionEnabled {
             horizonMask = try await loadOrCreateHorizonMask()

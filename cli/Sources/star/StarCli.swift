@@ -164,10 +164,20 @@ You should have received a copy of the GNU General Public License along with sta
 @main
 struct StarCli: AsyncParsableCommand {
 
-    @Option(name: [.customShort("c"), .customLong("console-log-level")], help:"""
+    @Option(name: [.customShort("l"), .customLong("console-log-level")], help:"""
         The logging level that star will output directly to the terminal.
         """)
     var terminalLogLevel: Log.Level?/* = .info*/
+
+    @Option(name: [.customShort("c"), .customLong("clean-method")], help:"""
+        The clean mode to use for this image sequence
+        """)
+    var cleanMethod: CleanMethod = .automatic(false)
+
+    @Option(name: [.customLong("no-horizon")], help:"""
+        This video does not contain a horizon (horizon is assumed by default)
+        """)
+    var noHorizon: Bool = false
 
     @Option(name: [.short, .customLong("file-log-level")], help:"""
         If present, star will output a file log at the given level.
@@ -304,26 +314,35 @@ struct StarCli: AsyncParsableCommand {
                     _outputPath = inputImageSequencePath
                 }
 
-                var config = Config(outputPath: _outputPath,
-                                    detectionType: detectionType,
-                                    imageSequenceName: inputImageSequenceName,
-                                    imageSequencePath: inputImageSequencePath,
-                                    writeOutlierGroupFiles: shouldWriteOutlierGroupFiles,
-                                    // maybe make a separate command line parameter for these VVV? 
-                                    writeFramePreviewFiles: shouldWriteOutlierGroupFiles,
-                                    writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
-                                    writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
+                var config = Config(
+                  outputPath: _outputPath,
+                  cleanMethod: cleanMethod,
+                  detectionType: detectionType,
+                  imageSequenceName: inputImageSequenceName,
+                  imageSequencePath: inputImageSequencePath,
+                  writeOutlierGroupFiles: shouldWriteOutlierGroupFiles,
+                  // maybe make a separate command line parameter for these VVV? 
+                  writeFramePreviewFiles: shouldWriteOutlierGroupFiles,
+                  writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
+                  writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles
+                )
+
+                config.horizonDetectionEnabled = !noHorizon
 
                 let configFilename = "\(config.basename)-config.json"
                 
-                configManager = await ConfigManager(configFilename: configFilename,
-                                                    config: config)
+                configManager = await ConfigManager(
+                  configFilename: configFilename,
+                  config: config
+                )
                 
                 config.writeOutlierClassificationValues = shouldWriteOutlierClassificationValues
 
                 await constants.set(detectionType: config.detectionType)
-                
-                config.ignoreLowerPixels = ignoreLowerPixels
+
+                if let ignoreLowerPixels {
+                    config.ignoreLowerPixels = ignoreLowerPixels
+                }
                 Log.nameSuffix = inputImageSequenceName
                 // no name suffix on json config path
             }
@@ -371,38 +390,13 @@ struct StarCli: AsyncParsableCommand {
 
             do {
                 
-                let eraser = try await NighttimeAirplaneRemover(with: configManager,
-                                                                callbacks: callbacks,
-                                                                processExistingFiles: false,
-                                                                maxResidentImages: 40, // XXX
-                                                                writeOutputFiles: writeOutputFiles,
-                                                                lastFrameNumber: lastFrameNumber)
-                
-                let frameCount = await eraser.frameCount()
-                
-                if let _ = callbacks.updatable {
-                    // setup sequence monitor
-                    let updatableProgressMonitor =
-                      UpdatableProgressMonitor(frameCount: frameCount,
-                                               numConcurrentRenders: 30, // XXX use num cpus?
-                                               config: await configManager.config(),
-                                               callbacks: callbacks)
-                    callbacks.frameStateChangeCallback = { frame, state in
-                        // XXX make sure to wait for this
-                        Task(priority: .userInitiated) {
-                            await updatableProgressMonitor.stateChange(for: frame, to: state)
-                        }
-                    }
-                    callbacks.exisingFrameStateChangeCallback = { frameIndex in
-                        Task(priority: .userInitiated) {
-                            await updatableProgressMonitor.notProcesssingFrame(at: frameIndex)
-                        }
-                    }
+                let processor = try await Processor(
+                  with: configManager,
+                  callbacks: callbacks,
+                  maxResidentImages: 40 // XXX
+                )
 
-                    await eraser.set(callbacks: callbacks)
-                }
-
-                try await eraser.run()
+                try await processor.process()
 
                 Log.i("done")
 
@@ -424,4 +418,39 @@ extension Log.Level: @retroactive ExpressibleByArgument { }
 
 extension DetectionType: @retroactive ExpressibleByArgument { }
 
+extension CleanMethod: ExpressibleByArgument {
+    public init?(argument: String) {
+        let lowercased = argument.lowercased()
 
+        switch lowercased {
+        case "selective":
+            self = .selective
+
+        case "automatic":
+            // default automatic behavior if no flag is provided
+            self = .automatic(false)
+
+        case "automatic:true",
+             "automatic:yes",
+             "automatic:1":
+            self = .automatic(true)
+
+        case "automatic:false",
+             "automatic:no",
+             "automatic:0":
+            self = .automatic(false)
+
+        default:
+            return nil
+        }
+    }
+
+    public static var allValueStrings: [String] {
+        [
+            "selective",
+            "automatic",
+            "automatic:true",
+            "automatic:false"
+        ]
+    }
+}

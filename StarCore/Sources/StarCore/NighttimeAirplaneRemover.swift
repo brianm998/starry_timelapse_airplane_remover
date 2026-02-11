@@ -21,6 +21,19 @@ You should have received a copy of the GNU General Public License along with sta
 // delegating each frame to an instance of FrameAirplaneRemover
 // and then using a FinalProcessor to finish processing
 
+/*
+
+ XXX rewrite this to not use the FinalProcessor, but instead the FrameGraphBuilder
+
+ 1. first assemble an array of FrameAirplaneRemover actors for each frame
+ 2. call frameGraphBuilder.set(configManager:) with the given config
+ 3. then run frameGraphBuilder.build() on the frames
+ 4. make sure screen output still look ok
+ 5. cli should be working again
+ 6. get rid of this class, and maybe a number of other classes
+ 7. do an unused code cleanp?
+ 
+ */
 public actor NumberLeft {
     private var numberLeft: Int = 0
 
@@ -56,10 +69,6 @@ public actor NighttimeAirplaneRemover {
     var existingOutputFiles: [Bool] = [] // indexed by frame number
 
     var remainingImagesClosure: (@Sendable (Int) -> Void)?
-
-    // if this is true, outliers are detected, inter-frame processing is done
-    // if false, frames are handed back without outliers detected
-    let fullyProcess: Bool
 
     let processExistingFiles: Bool
     
@@ -220,7 +229,6 @@ public actor NighttimeAirplaneRemover {
                 callbacks: Callbacks,
                 processExistingFiles: Bool,
                 maxResidentImages: Int? = nil,
-                fullyProcess: Bool = true,
                 writeOutputFiles: Bool = true,
                 lastFrameNumber: Int? = nil) async throws
     {
@@ -242,7 +250,6 @@ public actor NighttimeAirplaneRemover {
                                                maxImages: maxResidentImages)
         self.shouldProcess = [Bool](repeating: processExistingFiles, count: imageSequence.filenames.count)
         self.existingOutputFiles = [Bool](repeating: false, count: imageSequence.filenames.count)
-        self.fullyProcess = fullyProcess
 
         // only process the first set of frames
         if let lastFrameNumber,
@@ -371,7 +378,6 @@ public actor NighttimeAirplaneRemover {
                                                    atIndex: index,
                                                    outputFilename: outputFilename,
                                                    baseName: baseName,
-                                                   fullyProcess: fullyProcess,
                                                    writeOutputFiles: writeOutputFiles,
                                                    imageAccessor: imageAccessor)
         {
