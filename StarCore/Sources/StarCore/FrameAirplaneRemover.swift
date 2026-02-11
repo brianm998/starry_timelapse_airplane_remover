@@ -3058,6 +3058,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
            autoAlreadyDone
         {
             Log.i("frame \(frameIndex) auto already done")
+            try await imageAccessor.linkFinals(
+              frameIndex: frameIndex,
+              as: .autoProcessed,
+              atSizes: [.original, .preview]
+            )
             return
         }
 
