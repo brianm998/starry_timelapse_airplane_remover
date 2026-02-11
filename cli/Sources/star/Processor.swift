@@ -94,6 +94,8 @@ public class Processor {
             frames.append(frame)
         }
 
+        await doublyLink(frames: frames)
+        
         let semaphore = AsyncSemaphore(value: 0) 
         
         await frameGraphBuilder.build(

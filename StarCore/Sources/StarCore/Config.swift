@@ -786,3 +786,11 @@ public struct Callbacks: Sendable {
 }
 
 
+extension String {
+    /// Returns a sanitized version of the string, replacing shell-unsafe characters with `_`.
+    var sanitized: String {
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/")
+        let ret = self.unicodeScalars.map { allowed.contains($0) ? Character($0) : "_" }.reduce("") { $0 + String($1) }
+        return ret
+    }
+}

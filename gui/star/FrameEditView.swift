@@ -415,3 +415,25 @@ struct FrameEditView: View {
         }
     }
 }
+
+// re-process within the given bounds
+func shovelFrame(to frame: FrameAirplaneRemover,
+                 in gestureBounds: BoundingBox,
+                 with viewModel: ImageSequenceViewModel) async
+{
+    Log.d("shovel frame \(frame.frameIndex)")
+    do {
+        // discards any existing outlier pixels that are within the given bounds
+        try await frame.findOutliers(within: gestureBounds)
+        await Task { @MainActor in
+            let frameView = viewModel.frames[frame.frameIndex]
+            frameView.outlierViews = nil
+            
+            await frameView.setOutlierGroups()
+        }.value
+        await frame.set(state: .complete)
+    } catch {
+        Log.e("error finding outliers for frame \(frame.frameIndex): \(error)")
+    }
+
+}

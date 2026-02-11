@@ -145,8 +145,6 @@ public final class ImageSequenceViewModel {
     var muxer: FFmpegMuxer = .mov
     var hasAudio = false
     
-    var eraser: NighttimeAirplaneRemover?
-
     var noImageExplainationText: String = "Loading..."
 
     var backgroundColor = ViewModel.defaultBackgroundColor
@@ -610,8 +608,6 @@ public final class ImageSequenceViewModel {
     // number of frames in the sequence we're processing
     var imageSequenceSize: Int = 0
 
-    var finalProcessor: FinalGUIProcessor?
-
     var shouldShowInitialInstructions: Bool = false
 
     var shouldShowProcessingSettings: Bool = false
@@ -846,8 +842,6 @@ public final class ImageSequenceViewModel {
 
         self.appNapDisabler.begin()
         
-        self.finalProcessor = FinalGUIProcessor(self)
-
         self.matInstancesTask = Task { [weak self] in 
             while(self != nil) { 
                 let instances = MatWrapper.totalInstances
@@ -1492,7 +1486,6 @@ public final class ImageSequenceViewModel {
         
         Task.detached(priority: .medium) { [self] in
             let reprocessingType = await self.reprocessingType
-            // XXX a crude version of the FinalProcessor, could be better
             Log.d("processAllFrames 1")
 
             if performClean {

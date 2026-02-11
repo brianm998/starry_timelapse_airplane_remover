@@ -251,9 +251,6 @@ struct InitialView: View {
                         Task { @MainActor in
                             viewModel.imageSequence?.initialLoadInProgress = true
                         }
-                        
-                       // Log.d("viewModel.eraser \(String(describing: await viewModel.eraser))")
-                        try await viewModel.imageSequence?.eraser?.run()
                     } catch {
                         Log.e("\(error)")
                         await MainActor.run {
@@ -308,7 +305,6 @@ struct InitialView: View {
                 Task { @MainActor in
                     viewModel.imageSequence?.initialLoadInProgress = true
                 }
-                try await viewModel.imageSequence?.eraser?.run()
             } catch {
                 Log.e("\(error)")
                 await MainActor.run {
@@ -325,7 +321,6 @@ struct InitialView: View {
                 Task { @MainActor in
                     viewModel.imageSequence?.initialLoadInProgress = true
                 }
-                try await viewModel.imageSequence?.eraser?.run()
             } catch {
                 Log.e("\(error)")
                 await MainActor.run {
@@ -344,7 +339,6 @@ struct InitialView: View {
                 Task { @MainActor in
                     viewModel.imageSequence?.initialLoadInProgress = true
                 }
-                try await viewModel.imageSequence?.eraser?.run()
             } catch {
                 Log.e("\(error)")
                 await MainActor.run {

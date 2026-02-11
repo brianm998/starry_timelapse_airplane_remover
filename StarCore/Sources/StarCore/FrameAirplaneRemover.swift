@@ -3871,3 +3871,19 @@ public actor CountActor {
 
 
 extension OCVFeatureSet: @unchecked Sendable {}
+
+public func doublyLink(frames: [FrameAirplaneRemover]) async {
+    // doubly link frames here so that the decision tree can have acess to other frames
+    for (i, frame) in frames.enumerated() {
+        if await frames[i].getPreviousFrame() == nil,
+           i > 0
+        {
+            await frame.setPreviousFrame(frames[i-1])
+        }
+        if await frames[i].getNextFrame() == nil,
+           i < frames.count - 1
+        {
+            await frame.setNextFrame(frames[i+1])
+        }
+    }
+}
