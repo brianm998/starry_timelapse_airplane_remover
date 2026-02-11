@@ -1,29 +1,9 @@
 import Foundation
 import logging
-/*
-
- * write homography validation logic for static sky
- * fix alignment graph data
- * expose queue max sizes to config, replace process X frames at once
- * see why config params don't seem to be updating
- * write homography validation logic for moving sky and earth
- * make errors show up in UI (no found keypoints, homography, etc)
- * deal with selective modes
-   - add findOutliers step before MergeOp
-   - make mergeOp call finishSelective()
-
- Still TODO:
-
- - make sure static ground merge is still happening
- - more UI update of what's going on (states are only partially reported)
- - make the FinalGUIProcessor use this class, but only on a subset of frames
- - hook up to CLI
- - final render re-renders when file is already there (after re-start)
- 
- */
 
 public let frameGraphBuilder = FrameGraphBuilder()
 
+// uses OperationQueues to allow processing with dependencies and configurable max processing  
 public final actor FrameGraphBuilder {
 
     // MARK: Queues (user adjustable)
