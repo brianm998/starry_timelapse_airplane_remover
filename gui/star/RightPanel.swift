@@ -277,7 +277,8 @@ struct RightPanel: View {
                                         // XXX reprocess
                                         viewModel.processFrames(
                                           from: frame.frameIndex,
-                                          to: frame.frameIndex+viewModel.numberOfFramesToProcess-1
+                                          to: frame.frameIndex+viewModel.numberOfFramesToProcess-1,
+                                          performClean: true // uses viewModel.reprocessingType
                                         )
                                     }
                                 }

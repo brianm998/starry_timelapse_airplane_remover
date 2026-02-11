@@ -1211,8 +1211,7 @@ public final class ImageSequenceViewModel {
             Task {
                 Log.d("processAll")
                 await self.process(
-                  frame: frame,
-                  frameSaveQueue: frameSaveQueue
+                  frame: frame
                 ) { processingState in
                     Log.d("processAll")
                     Task { @MainActor in
@@ -1237,12 +1236,14 @@ public final class ImageSequenceViewModel {
 
     private nonisolated func process(
       frame: FrameAirplaneRemover,
-      frameSaveQueue: FrameSaveQueue,
+      startIndex: Int = 0,
+      endIndex: Int? = nil,      // will be last index of frames
       closure: @Sendable @escaping (SequenceProcessingState) -> Void
     ) async {
         Log.d("processAll")
-        await frame.processAll(
-          frameSaveQueue: frameSaveQueue,
+        await frame.process(
+          startIndex: startIndex,
+          endIndex: endIndex,
           progressClosure: closure
         )
     }
@@ -1478,24 +1479,61 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    func processFrames(from startIndex: Int? = nil, to endIndex: Int? = nil) {
+    func processFrames(
+      from startIndex: Int,
+      to endIndex: Int? = nil,
+      performClean: Bool = false
+    ) {
         Log.d("processing frames from \(startIndex) to \(endIndex)")
         //if isProcessingFrames { return }
         isProcessingFrames = true
-
+        
         Log.d("processAllFrames start from \(startIndex) to \(endIndex)")
         
         Task.detached(priority: .medium) { [self] in
+            let reprocessingType = await self.reprocessingType
             // XXX a crude version of the FinalProcessor, could be better
             Log.d("processAllFrames 1")
 
-            await finalProcessor?.processFrames(
-              from: startIndex,
-              to: endIndex
-            )
-
-            await MainActor.run {
-                self.isProcessingFrames = false
+            if performClean {
+                var lastIndex = await frames.count - 1
+                if let endIndex { lastIndex = endIndex }
+                for i in startIndex...lastIndex {
+                    if let frame = await frames[i].frame {
+                        switch reprocessingType {
+                        case .everything:
+                            await frame.deleteAllProcessedImages()
+                            try? await frame.deleteOutliers()
+                            try? await self.clearProcessing(of: frame)
+                            
+                        case .none:
+                            break
+                        case .allHorizons:
+                            break
+                        case .horizons:
+                            await frame.deleteHorizonImages()
+                        case .alignment:
+                            try await self.clearProcessing(of: frame)
+                        case .outliers:
+                            try await self.clearProcessing(of: frame)
+                            try await frame.deleteOutliers()
+                        }
+                    }
+                }
+            }
+            
+            if let frame = await frames[0].frame {
+                await self.process(
+                  frame: frame,
+                  startIndex: startIndex,
+                  endIndex: endIndex
+                ) { processingState in
+                    Task { @MainActor in
+                        self.isProcessingFrames = false
+                    }
+                }
+            } else {
+                Log.e("no frames")
             }
         }
     }

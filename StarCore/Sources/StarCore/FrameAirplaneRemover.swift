@@ -565,8 +565,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public nonisolated func processAll(
-      frameSaveQueue: FrameSaveQueue,
+    public nonisolated func process(
+      startIndex: Int = 0,
+      endIndex: Int? = nil,      // will be last index of frames
       progressClosure: @Sendable @escaping (SequenceProcessingState) -> Void
     ) async {
         Log.d("processAll")
@@ -577,16 +578,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             do {
                 // build with a graph of dependencies between different frames at
                 // different steps of the process
-                var nextFrame: FrameAirplaneRemover? = await self.firstFrameInSequence
-                var allFrames: [FrameAirplaneRemover] = []
-                while nextFrame != nil {
-                    if let frame = nextFrame {
-                        allFrames.append(frame)
-                        nextFrame = await frame.getNextFrame()
-                    }
-                }
                 await frameGraphBuilder.build(
-                  frames: allFrames
+                  frames: await self.allFrames,
+                  startIndex: startIndex,
+                  endIndex: endIndex
                 ) { errorArray in
                     if errorArray.count == 0 {
                         // success
@@ -605,7 +600,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
     }
+
     
+    public var allFrames: [FrameAirplaneRemover] {
+        get async {
+            var nextFrame: FrameAirplaneRemover? = await self.firstFrameInSequence
+            var ret: [FrameAirplaneRemover] = []
+            while nextFrame != nil {
+                if let frame = nextFrame {
+                    ret.append(frame)
+                    nextFrame = await frame.getNextFrame()
+                }
+            }
+            return ret
+        }
+    }
+
     var firstFrameInSequence: FrameAirplaneRemover {
         get async {
             var firstFrame = self

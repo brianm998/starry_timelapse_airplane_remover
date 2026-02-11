@@ -80,9 +80,11 @@ public final actor FrameGraphBuilder {
     }
     
     public func build(
-        frames: [FrameAirplaneRemover],
-        closure: @escaping ([String]) -> Void,
-        errorClosure: @escaping (String) -> Void
+      frames: [FrameAirplaneRemover],
+      startIndex: Int = 0,
+      endIndex: Int? = nil,      // will be last index of frames
+      closure: @escaping ([String]) -> Void,
+      errorClosure: @escaping (String) -> Void
     ) async {
         guard let configManager else {
             errorClosure("cannot build without config manager")
@@ -104,10 +106,17 @@ public final actor FrameGraphBuilder {
         var skyKeypointOps: [Int: KeypointOp] = [:]
         var earthKeypointOps: [Int: KeypointOp] = [:]
 
-        var outlierOps: [OutlierOp?] = []
+        var outlierOps: [Int: OutlierOp] = [:]
+
+        var lastIndex = frames.count - 1
+        if let endIndex { lastIndex = endIndex }
+
+        Log.d("processing from frameIndex \(startIndex) to \(lastIndex)")
         
         // First assemble horizon, keypoint and outlier operations for all frames
-        for frame in frames {
+        for frameIndex in startIndex...lastIndex {
+
+            let frame = frames[frameIndex]
 
             var lastOps: [Operation] = []
 
@@ -236,9 +245,7 @@ public final actor FrameGraphBuilder {
 
                 outlierOp.addDependency(validationOp)
                 outlierQueue.addOperation(outlierOp)
-                outlierOps.append(outlierOp)
-            } else {
-                outlierOps.append(nil)
+                outlierOps[frame.frameIndex] = outlierOp
             }
         }
 

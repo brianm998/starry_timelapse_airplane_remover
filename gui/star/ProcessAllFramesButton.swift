@@ -15,7 +15,7 @@ struct ProcessAllFramesButton: View {
     }
 
     private func buttonPress() {
-        viewModel.processFrames()
+        viewModel.processAll()
     }
 }
 
