@@ -226,9 +226,15 @@ struct StarCli: AsyncParsableCommand {
 
     @Argument(help: """
         Image sequence dirname to process. 
-        Should include a sequence of 16 bit tiff files, sortable by name.
+        Should include a sequence of 8 or 16 bit image files, sortable by name.
         """)
     var imageSequenceDirname: String?
+
+    @Argument(help: """
+        Final destination for output files
+        defaults to <image-sequence-dirname>-star-version if not set
+        """)
+    var finalOutputDirname: String? = nil
 
     mutating func run() async throws {
 
@@ -328,7 +334,8 @@ struct StarCli: AsyncParsableCommand {
                 )
 
                 config.horizonDetectionEnabled = !noHorizon
-
+                config.finalOutputDir = finalOutputDirname
+                
                 let configFilename = "\(config.basename)-config.json"
                 
                 configManager = await ConfigManager(

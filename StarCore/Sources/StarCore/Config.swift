@@ -520,6 +520,9 @@ public struct Config: Codable, Sendable, Transferable {
     public var starVersion = Config.latestVersion
 
     public static let latestVersion = "0.10.6"
+
+    // defaults to basename below if not set
+    public var finalOutputDir: String? = nil
     
     public var basename: String {
         let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)"
@@ -710,7 +713,11 @@ public struct Config: Codable, Sendable, Transferable {
         case .final:
             switch size {
             case .original:
-                return "\(self.outputPath)/\(self.basename)"
+                if let finalOutputDir {
+                    return finalOutputDir
+                } else {
+                    return "\(self.outputPath)/\(self.basename)"
+                }
             case .preview:
                 return "\(self.tempOutputPath)/final-sequence-previews"
             case .thumbnail:
