@@ -12,7 +12,7 @@ CLI_PKG_NAME="cli/.build/star_cli_${STAR_VERSION}.pkg"
 
 # move packages to the releases dir
 mv $GUI_PKG_NAME releases
-#mv $CLI_PKG_NAME releases
+mv $CLI_PKG_NAME releases
 
 # tag this release in the local repo
 git tag "release/${STAR_VERSION}"

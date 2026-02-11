@@ -37,9 +37,9 @@ set -e
 # next build a universal (all arch) binary for the cli     
 ####
 
-#cd cli
-#./release.sh
-#cd ..
+cd cli
+./release.sh
+cd ..
 
 # result ends up here:
 # cli/.build/star_cli_${STAR_VERSION}.pkg"
