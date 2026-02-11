@@ -278,7 +278,7 @@ public struct ImageAccessor: Sendable {
         }
     }
 
-    // ln a processed type to .final
+    // ln or cp a processed type to .final
     public func linkFinal(
       frameIndex: Int,
       as type: FrameViewMode,
@@ -295,10 +295,18 @@ public struct ImageAccessor: Sendable {
             atSize: size
            )
         {
-            try createHardLinkReplacingDestination(
-              from: fromName,
-              to: toName
-            )
+            do {
+                try createHardLinkReplacingDestination(
+                  from: fromName,
+                  to: toName
+                )
+            } catch {
+                Log.w("cannot hard link \(fromName) to \(toName), trying copy")
+                try copyReplacingDestination(
+                  from: fromName,
+                  to: toName
+                )
+            }
             if size == .preview,
                let imageSavedClosure
             {
@@ -722,11 +730,38 @@ public struct ImageAccessor: Sendable {
     }
 }
     
-import Foundation
+func copyReplacingDestination(
+  from sourcePath: String,
+  to destinationPath: String
+) throws {
+    let fileManager = FileManager.default
 
-func createHardLinkReplacingDestination(from sourcePath: String,
-                                        to destinationPath: String) throws
-{
+    // If destination exists, remove it first
+    if fileManager.fileExists(atPath: destinationPath) {
+        do {
+            try fileManager.removeItem(atPath: destinationPath)
+        } catch {
+            throw NSError(
+                domain: NSCocoaErrorDomain,
+                code: CocoaError.fileWriteNoPermission.rawValue,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Failed to remove existing destination file: \(error.localizedDescription)"
+                ]
+            )
+        }
+    }
+
+    try FileManager.default.copyItem(
+      atPath: sourcePath,
+      toPath: destinationPath
+    )
+}
+
+func createHardLinkReplacingDestination(
+  from sourcePath: String,
+  to destinationPath: String
+) throws {
     let fileManager = FileManager.default
 
     // If destination exists, remove it first
