@@ -174,11 +174,17 @@ struct StarCli: AsyncParsableCommand {
         """)
     var cleanMethod: CleanMethod = .automatic(false)
 
-    @Option(name: [.customLong("no-horizon")], help:"""
+    @Flag(name: [.customLong("no-horizon")], help:"""
         This video does not contain a horizon (horizon is assumed by default)
         """)
     var noHorizon: Bool = false
 
+    @Flag(name: [.customLong("moving-camera")], help:"""
+        This video was shot with a moving camera.
+        By default star assumes the video was shot on a stationary tripod head.
+        """)
+    var movingCamera: Bool = false
+    
     @Option(name: [.short, .customLong("file-log-level")], help:"""
         If present, star will output a file log at the given level.
         """)
@@ -335,6 +341,7 @@ struct StarCli: AsyncParsableCommand {
 
                 config.horizonDetectionEnabled = !noHorizon
                 config.finalOutputDir = finalOutputDirname
+                config.tripodHeadWasMoving = movingCamera
                 
                 let configFilename = "\(config.basename)-config.json"
                 
