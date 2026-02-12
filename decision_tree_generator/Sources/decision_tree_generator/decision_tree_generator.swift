@@ -156,10 +156,11 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
             Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
         }
         
-        let eraser = try await NighttimeAirplaneRemover(with: configManager,
-                                                        callbacks: callbacks,
-                                                        processExistingFiles: true,
-                                                        fullyProcess: false)
+        let eraser = try await NighttimeAirplaneRemover(
+          with: configManager,
+          callbacks: callbacks,
+          processExistingFiles: true
+        )
         let sequenceSize = await eraser.imageSequence.filenames.count
         
         Log.i("got \(sequenceSize) frames")
@@ -315,10 +316,11 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
             Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
         }
         
-        let eraser = try await NighttimeAirplaneRemover(with: configManager,
-                                                        callbacks: callbacks,
-                                                        processExistingFiles: true,
-                                                        fullyProcess: false)
+        let eraser = try await NighttimeAirplaneRemover(
+          with: configManager,
+          callbacks: callbacks,
+          processExistingFiles: true
+        )
         let sequenceSize = await eraser.imageSequence.filenames.count
         
         Log.d("got \(sequenceSize) frames")
