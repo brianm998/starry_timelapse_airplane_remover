@@ -24,12 +24,12 @@ public final class MergeOp: AsyncOperation, @unchecked Sendable {
                 case .automatic(let usesOutliers):
                     if usesOutliers {
                         await frame.set(state: .secondClassification)
-                        await frame.applyDecisionTreeToAllOutliers(includingTrash: false)
+                        await frame.applyDecisionTreeToAllOutliers()
                     }
                     try await frame.finishAuto(useOutliers: usesOutliers)
                 case .selective:
                     await frame.set(state: .secondClassification)
-                    await frame.applyDecisionTreeToAllOutliers(includingTrash: false)
+                    await frame.applyDecisionTreeToAllOutliers()
                     try await frame.finishSelective()
                 }
                 Log.d("frame \(frame.frameIndex) done")

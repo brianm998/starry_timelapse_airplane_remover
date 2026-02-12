@@ -15,8 +15,7 @@ struct ApplyAllDecisionTreeButton: View {
                     //Log.d("doh index \(viewModel.currentIndex) frame \(viewModel.frames[0].frame) have_all_frames \(viewModel.have_all_frames)")
                     if let frame = await viewModel.currentFrame {
                         let frameView = await viewModel.currentFrameView
-                        _ = await frame.applyDecisionTreeToAllOutliers(includingTrash: viewModel.shouldShowTrash,
-                                                                       overwrite: !viewModel.classifyOnlyUnclassified,
+                        _ = await frame.applyDecisionTreeToAllOutliers(overwrite: !viewModel.classifyOnlyUnclassified,
                                                                        minimumSize: viewModel.minimumClassificationSize)
                         try? await viewModel.render(frame: frame) {
                             Task {

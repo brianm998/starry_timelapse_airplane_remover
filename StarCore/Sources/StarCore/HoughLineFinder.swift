@@ -15,11 +15,6 @@ import KHTSwift
 import kht_bridge
 import logging
 
-fileprivate struct LineSplitResult {
-    let score: Double
-    let line: Line
-}
-
 
 public struct CombinedHoughLineFinder: Sendable {
 

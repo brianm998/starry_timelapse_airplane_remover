@@ -62,12 +62,3 @@ struct ContentView: View {
         }
     }
 }
-
-@available(macOS 13.0, *) 
-struct ContentView_Previews: PreviewProvider {
-    @Environment(ViewModel.self) var viewModel: ViewModel
-
-    static var previews: some View {
-        ContentView()
-    }
-}

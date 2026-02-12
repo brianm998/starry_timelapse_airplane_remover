@@ -1915,9 +1915,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         )
     }
     
-    public func foreachOutlierGroup(includingTrash: Bool,
-                                    _ closure: @Sendable (OutlierGroup, Bool) async -> Bool) async -> Bool
-    {
+    public func foreachOutlierGroup(
+      includingTrash: Bool,
+      _ closure: @Sendable (OutlierGroup, Bool) async -> Bool
+    ) async -> Bool {
         var didChange = false
         if let outlierGroups {
             for (_, group) in await outlierGroups.getMembers() {
@@ -1933,9 +1934,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     // returns true if any outlier group was changed
-    public func foreachOutlierGroupMulti(includingTrash: Bool,
-                                         _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Bool) async -> Bool
-    {
+    public func foreachOutlierGroupMulti(
+      includingTrash: Bool,
+      _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Bool
+    ) async -> Bool {
         var didChange = false
         if let outlierGroups {
             didChange = await Task.detached(priority: .userInitiated) {
@@ -1957,11 +1959,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     // returns true if anything changed 
-    public func foreachOutlierGroupMulti(between startLocation: CGPoint,
-                                         and endLocation: CGPoint,
-                                         includingTrash: Bool, 
-                                         _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Bool) async -> Bool
-    {
+    public func foreachOutlierGroupMulti(
+      between startLocation: CGPoint,
+      and endLocation: CGPoint,
+      includingTrash: Bool, 
+      _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Bool
+    ) async -> Bool {
         // first get bounding box from start and end location
         var minX: CGFloat = CGFLOAT_MAX
         var maxX: CGFloat = 0
@@ -1986,13 +1989,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             if gestureBounds.contains(other: group.bounds) {
                 // check to make sure this outlier's bounding box is fully contained
                 // otherwise don't change removal status
-                if await closure(group, isInTrash) { didChange = true }
+                if !isInTrash || (includingTrash && isInTrash) {
+                    if await closure(group, isInTrash) { didChange = true }
+                }
             }
             return didChange
         }
     }
 
-    public func maybeApplyOutlierGroupClassifier(includingTrash: Bool) async throws {
+    public func maybeApplyOutlierGroupClassifier() async throws {
 
         var shouldUseDecisionTree = true
         /*
@@ -2038,7 +2043,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if shouldUseDecisionTree {
             Log.i("frame \(frameIndex) classifying outliers with decision tree")
             self.set(state: .secondClassification)
-            await self.applyDecisionTreeToAllOutliers(includingTrash: includingTrash)
+            await self.applyDecisionTreeToAllOutliers()
         }
     }
 
@@ -2645,10 +2650,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public func applyDecisionTreeToAllOutliers(includingTrash: Bool,
-                                                        overwrite: Bool = true,
-                                                        minimumSize: Int? = nil) async
-    {
+    public func applyDecisionTreeToAllOutliers(
+      overwrite: Bool = true,
+      minimumSize: Int? = nil
+    ) async {
       Log.d("frame \(self.frameIndex) applyDecisionTreeToAll \(await self.outlierGroups?.members.count ?? 0) Outliers")
         let startTime = NSDate().timeIntervalSince1970
         if let outlierGroups {
@@ -3004,7 +3009,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         self.set(state: .secondClassification)
 
                         // 3. classify outliers
-                        await self.applyDecisionTreeToAllOutliers(includingTrash: true)
+                        await self.applyDecisionTreeToAllOutliers()
 
                         try await self.finishSelective()
 
@@ -3455,63 +3460,6 @@ fileprivate class OutlierClassifier {
 
     // classifies OutlierGroup actors in OutlierGroups, marking them as removable or not
     // uses the .all classifier, which digs into neighboring frames for more data
-    func classifyAll(_ outlierGroups: OutlierGroups,
-                     overwrite: Bool = false,
-                     includingTrash: Bool) async
-    {
- //       await Task.detached(priority: .userInitiated) {
-            await withTaskGroup(of: Void.self) { taskGroup in
-                guard let classifier = await currentClassifier.get(for: .all) else { return }
-
-                //let dataHarvester = await FrameDataHarvester(for: self.frame)
-
-                let outliers = Array(await outlierGroups.getMembers().values)
-                
-                let max = 10            // XXX hardcoded constant
-
-                if outliers.count > 0 {
-                    for chunk in outliers.split(into: max) {
-                        taskGroup.addTask {
-                            for group in chunk {
-                                if await group.shouldRemove() == nil || overwrite {
-                                    // only apply classifier when no other classification is otherwise present
-                                    // XXX we need to grab the feature data from the FrameDataHarvester
-                                    //let featureData = await group.featureData(dataHarvester: dataHarvester)
-                                    let classification = await classifier.classification(of: group)
-                                    _ = await group.shouldRemove(.fromClassifier(classification))
-                                }
-                            }
-                        }
-                    }
-                }
-                if includingTrash {
-                    let trash = await Array(outlierGroups.getTrash().values)
-
-                    if trash.count > 0 {
-                        for chunk in trash.split(into: max) {
-                            let frame = self.frame
-                            taskGroup.addTask {
-                                for group in chunk {
-                                    if await group.shouldRemove() == nil || overwrite {
-                                        // only apply classifier when no other classification is otherwise present
-                                        //let featureData = await group.featureData(dataHarvester: dataHarvester)
-                                        let classification = await classifier.classification(of: group)
-                                        _ = await group.shouldRemove(.fromClassifier(classification))
-                                        await outlierGroups.promoteFromTrash(group)
-                                        await frame.markAsChanged()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                await taskGroup.waitForAll()
-            }
-       // }.value
-    }
-
-    // classifies OutlierGroup actors in OutlierGroups, marking them as removable or not
-    // uses the .all classifier, which digs into neighboring frames for more data
     func classifyAll(_ outliers: [OutlierGroup], overwrite: Bool = false) async {
 //        await Task.detached(priority: .userInitiated) {
         //let dataHarvester = await FrameDataHarvester(for: self.frame)
@@ -3697,25 +3645,6 @@ fileprivate func foreachOutlier(in outliers: [OutlierGroup],
     }
 }
 
-extension String {
-    /// Returns the substring after the last "/" in this string,
-    /// or `nil` if "/" is not found.
-    func substringAfterLastSlash() -> String? {
-        guard let idx = self.lastIndex(of: "/") else { return nil }
-        let next = self.index(after: idx)
-        return String(self[next...])
-    }
-}
-
-/// Removes *only* the files in the specified directory path (non‐recursive).
-/// Subdirectories (and their contents) are left untouched.
-/// - Parameter directoryPath: the file‐system path of an existing directory.
-/// - Throws: any FileManager errors encountered during listing or removal.
-func removeAllFiles(in directoryPath: String) throws {
-    // Convert String path → URL
-    let directoryURL = URL(fileURLWithPath: directoryPath, isDirectory: true)
-    try removeAllFiles(in: directoryURL)
-}
 
 /// Removes *only* the files in the specified directory URL (non‐recursive)
 /// whose filenames end with the given suffix. Subdirectories (and their
@@ -3761,80 +3690,6 @@ func removeFiles(withSuffix suffix: String, in directoryPath: String) throws {
         try fm.removeItem(at: fileURL)
     }
 }
-
-/// Removes *only* the files in the specified directory URL (non‐recursive).
-/// Subdirectories (and their contents) are left untouched.
-/// - Parameter directoryURL: the URL of an existing directory
-/// - Throws: any FileManager errors encountered during listing or removal
-func removeAllFiles(in directoryURL: URL) throws {
-    let fm = FileManager.default
-
-    // Ensure the URL actually points to a directory
-    var isDir: ObjCBool = false
-    guard fm.fileExists(atPath: directoryURL.path, isDirectory: &isDir),
-          isDir.boolValue
-    else {
-        throw NSError(
-            domain: NSCocoaErrorDomain,
-            code: NSFileNoSuchFileError,
-            userInfo: [NSLocalizedDescriptionKey: "Directory not found at \(directoryURL.path)"]
-        )
-    }
-
-    // List only the top‐level contents of the directory
-    let contents = try fm.contentsOfDirectory(
-        at: directoryURL,
-        includingPropertiesForKeys: [.isDirectoryKey],
-        options: [.skipsHiddenFiles]
-    )
-
-    for fileURL in contents {
-        // Skip subdirectories
-        let resourceVals = try fileURL.resourceValues(forKeys: [.isDirectoryKey])
-        if resourceVals.isDirectory == true { continue }
-
-        // Remove the file
-        try fm.removeItem(at: fileURL)
-    }
-}
-
-/// Writes the given integer to a file at the specified path.
-/// - Parameters:
-///   - value: The integer to write.
-///   - path: The file-system path (as String) where the file will be written.
-/// - Throws: An error if writing fails.
-func write(integer value: Int, toFile path: String) throws {
-    let url = URL(fileURLWithPath: path)
-    let text = String(value)
-    try text.write(to: url, atomically: true, encoding: .utf8)
-}
-
-/// Reads an integer from the file at the specified path.
-/// - Parameter path: The file-system path (as String) of the file to read.
-/// - Returns: The integer if parsing succeeds, or `nil` if reading or parsing fails.
-func readInteger(fromFile path: String) -> Int? {
-    let url = URL(fileURLWithPath: path)
-    // Try to load the file’s contents as a String
-    guard let contents = try? String(contentsOf: url, encoding: .utf8) else {
-        return nil
-    }
-    // Trim whitespace/newlines and convert to Int
-    let trimmed = contents.trimmingCharacters(in: .whitespacesAndNewlines)
-    return Int(trimmed)
-}
-
-
-/*
-// Convenience: grab 16-bit backing store if present.
-private extension PixelatedImage {
-    var u16: [UInt16]? {
-        if case .sixteenBit(let arr) = imageData { return arr }
-        return nil
-    }
-}
-
-*/
-
 
 public actor CountActor {
     private var value: Int = 0

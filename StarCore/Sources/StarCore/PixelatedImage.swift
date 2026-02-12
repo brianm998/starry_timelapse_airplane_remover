@@ -103,7 +103,6 @@ public final class PixelatedImage: Sendable {
     public let bytesPerRow: Int
     public let bitsPerComponent: Int
     public let bytesPerPixel: Int
-    let bitmapInfo: CGBitmapInfo
 
     public let componentsPerPixel: Int
 
@@ -117,8 +116,6 @@ public final class PixelatedImage: Sendable {
     public let sixteenBitBuffer: ImageBuffer<UInt16>? 
     public let thirtyTwoBitBuffer: ImageBuffer<Int32>? 
     
-    let colorSpace: CGColorSpace // XXX why both space and name?
-
     // enum to bridge between Data and direct individual component access
     // do we have 8 bits per component, or 16?
     // pixels could have multiple components, or just one.
@@ -137,17 +134,6 @@ public final class PixelatedImage: Sendable {
                 return pointer.count*2
             case .thirtyTwoBit(let pointer):
                 return pointer.count*4
-            }
-        }
-        
-        var data: Data {
-            switch self {
-            case .eightBit(let buffer):
-                Data(buffer: buffer)
-            case .sixteenBit(let buffer):
-                Data(buffer: buffer)
-            case .thirtyTwoBit(let buffer):
-                Data(buffer: buffer)
             }
         }
     }
@@ -184,9 +170,7 @@ public final class PixelatedImage: Sendable {
         self.bitsPerPixel = mat.bitsPerPixel
         self.bitsPerComponent = mat.bitsPerComponent
         self.bytesPerPixel = mat.bitsPerPixel/8
-        self.bitmapInfo = mat.bitmapInfo
         self.componentsPerPixel = mat.channels
-        self.colorSpace = mat.colorSpace
         self.thirtyTwoBitBuffer = thirtyTwoBitBuffer
         self.sixteenBitBuffer = sixteenBitBuffer
         self.eightBitBuffer = eightBitBuffer
@@ -565,11 +549,6 @@ extension PixelatedImage {
         return ret
     }    
 
-    // an element of the whole image, for testing
-    var imageMatrixElement: ImageMatrixElement {
-        ImageMatrixElement(x: 0, y: 0, image: self)
-    }
-
     /// Returns a binary (black/white) image using Otsu's thresholding.
     /// - Ignores alpha channel, but combines RGB channels into grayscale.
     public var binaryOtsuImage: PixelatedImage? {
@@ -818,72 +797,6 @@ public class ImageMatrixElement: @unchecked Sendable, Hashable, CustomStringConv
     
     public var description: String { "MatrixElement: [\(x), \(y)] -> [\(width), \(height)]" }
 }
-
-
-import Accelerate
-
-/// Averages N UInt16 buffers into one UInt16 buffer of the same length.
-/// - Parameters:
-///   - buffers: an array of pointers to UInt16 data (each length “count”)
-///   - count: number of pixels per buffer
-/// - Returns: a new [UInt16] where each element = sum(buffers[i][j]) / N
-func averageBuffersAccelerate(
-  _ buffers: [UnsafePointer<UInt16>],
-  count: Int) -> [UInt16]
-{
-  // 1) Accumulate in Float
-  var sum = [Float](repeating: 0, count: count)
-  for ptr in buffers {
-    // Convert UInt16 → Float
-    var floatBuf = [Float](repeating: 0, count: count)
-    vDSP.convertElements(
-      of: UnsafeBufferPointer(start: ptr, count: count),
-      to: &floatBuf
-    )
-    // sum += floatBuf
-    vDSP.add(floatBuf, sum, result: &sum)
-  }
-
-  // 2) Divide each element by N
-  let invN = Float(1) / Float(buffers.count)
-  var avg = [Float](repeating: 0, count: count)
-  vDSP.multiply(invN, sum, result: &avg)
-
-  // 3) Clamp & convert back to UInt16
-  var out = [UInt16](repeating: 0, count: count)
-  for i in 0..<count {
-      // clamp to valid UInt16 range just in case
-      let v = avg[i]
-      let floatValue = min(max(v, 0), Float(UInt16.max))
-      if !floatValue.isNaN {
-          out[i] = UInt16(floatValue)
-      }
-  }
-  return out
-}
-
-
-func averageBuffersSwift(
-  _ buffers: [[UInt16]]
-) -> [UInt16] {
-  guard let first = buffers.first else { return [] }
-  let count = first.count
-  let N = UInt64(buffers.count)
-  var result = [UInt16](repeating: 0, count: count)
-
-  // Perform the work in a single nested loop
-  result.withUnsafeMutableBufferPointer { outPtr in
-    for i in 0..<count {
-      var sum: UInt64 = 0
-      for buf in buffers {
-        sum += UInt64(buf[i])
-      }
-      outPtr[i] = UInt16(sum / N)
-    }
-  }
-  return result
-}
-
 
 extension PixelatedImage {
     // reassemble an image from matrix elements

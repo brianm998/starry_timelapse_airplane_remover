@@ -1622,7 +1622,7 @@ public final class ImageSequenceViewModel {
                 // XXX set state
                 await frame.set(state: .secondClassification)
                 
-                await frame.applyDecisionTreeToAllOutliers(includingTrash: self.shouldShowTrash)
+                await frame.applyDecisionTreeToAllOutliers()
                 
                 try await self.render(frame: frame, now: true) {
                     Task {
