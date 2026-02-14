@@ -368,26 +368,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         var halfNumber = alignmentNumber/2
         if alignmentNumber % 2 == 1 { halfNumber += 1 } // round up
 
-        var startFrame: Int = 0
-        var endFrame: Int = alignmentNumber + 1
+        var startFrame = frameIndex - halfNumber
+        var endFrame = startFrame + alignmentNumber + 1
         
-        if frameIndex <= halfNumber {
-            // this frame is close to the front, keep start and end at the beginning
-            
-        } else if frameIndex >= imageSequence.filenames.count-1-halfNumber {
-            // this frame is close to the end, use the last frame as the end frame
-
-            endFrame = imageSequence.filenames.count
-            startFrame = endFrame - alignmentNumber - 1
-
-        } else {
-            // this frame is not alignment number close to either end
-            // back up the start frame half number from the frame index
-            
-            startFrame = frameIndex - halfNumber
-            endFrame = startFrame + alignmentNumber + 1
+        if startFrame < 0 { startFrame = 0 }
+        if endFrame >= imageSequence.filenames.count {
+            endFrame = imageSequence.filenames.count - 1
         }
-
+        
         var ret: [Int] = []
         
         // calculate the frame indicies of the frames we will use for star alignment
