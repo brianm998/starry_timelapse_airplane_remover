@@ -181,7 +181,6 @@ public actor Blob: CustomStringConvertible,
         reset()
     }
 
-    private var _lineFillAmount: Double? 
     private var _intensity: UInt16?
     private var _medianIntensity: UInt16?
     private var _boundingBox: BoundingBox?
@@ -362,7 +361,6 @@ public actor Blob: CustomStringConvertible,
     }
     
     private func reset() {
-        _lineFillAmount = nil
         _intensity = nil
         _medianIntensity = nil
         _boundingBox = nil

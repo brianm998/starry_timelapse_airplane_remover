@@ -240,27 +240,7 @@ struct LeftPanel: View {
 
     var operationQueueView: some View {
         return VStack(alignment: .leading) {
-            if let stats = frameGraphViewModel.horizonStats,
-               stats.operationCount > 0
-            {
-                QueueView(stats: stats)
-            }
-            if let stats = frameGraphViewModel.keypointStats,
-               stats.operationCount > 0
-            {
-                QueueView(stats: stats)
-            }
-            if let stats = frameGraphViewModel.homographyStats,
-               stats.operationCount > 0
-            {
-                QueueView(stats: stats)
-            }
-            if let stats = frameGraphViewModel.outlierStats,
-               stats.operationCount > 0
-            {
-                QueueView(stats: stats)
-            }
-            if let stats = frameGraphViewModel.mergeStats,
+            if let stats = frameGraphViewModel.operationQueueStats,
                stats.operationCount > 0
             {
                 QueueView(stats: stats)

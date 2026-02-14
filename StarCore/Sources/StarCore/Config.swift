@@ -300,20 +300,10 @@ public struct Config: Codable, Sendable, Transferable {
     public var horizonMinY: Int?
     public var horizonMaxY: Int?
 
-    // max number of frames to concurrently calculation horizons on
-    public var maxConcurrentHorizonCalculations: Int = ProcessInfo.processInfo.processorCount/2
-
+    public var numberOfFramesToProcessConcurrently: Int = ProcessInfo.processInfo.processorCount
+    
     // max number of frames to concurrently calculation keypoints on
     public var maxConcurrentKeypointCalculations: Int = ProcessInfo.processInfo.processorCount/2
-    
-    // max number of frames to concurrently calculation homographies on
-    public var maxConcurrentHomographyCalculations: Int = ProcessInfo.processInfo.processorCount
-
-    // max number of frames to concurrently calculation final merges on
-    public var maxConcurrentMergeCalculations: Int = ProcessInfo.processInfo.processorCount*2/3
-    
-    // max number of frames to concurrently calculation final merges on
-    public var maxConcurrentOutlierCalculations: Int = ProcessInfo.processInfo.processorCount/4
     
     // when doing auto aligned outputs, how far to shift up the horizon mask
     // when doing a final composite image.
@@ -401,11 +391,8 @@ public struct Config: Codable, Sendable, Transferable {
 
         self.horizonMinY = try c.decodeIfPresent(Int.self, forKey: .horizonMinY)
         self.horizonMaxY = try c.decodeIfPresent(Int.self, forKey: .horizonMaxY)
-        self.maxConcurrentHorizonCalculations = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentHorizonCalculations) ?? self.maxConcurrentHorizonCalculations
-
+        self.numberOfFramesToProcessConcurrently = try c.decodeIfPresent(Int.self, forKey: .numberOfFramesToProcessConcurrently) ?? self.numberOfFramesToProcessConcurrently
         self.maxConcurrentKeypointCalculations = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentKeypointCalculations) ?? self.maxConcurrentKeypointCalculations
-        self.maxConcurrentHomographyCalculations = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentHomographyCalculations) ?? self.maxConcurrentHomographyCalculations
-        self.maxConcurrentMergeCalculations = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentMergeCalculations) ?? self.maxConcurrentMergeCalculations
 
         self.horizonVerticalShiftAmount = try c.decodeIfPresent(Int.self, forKey: .horizonVerticalShiftAmount) ?? self.horizonVerticalShiftAmount
 

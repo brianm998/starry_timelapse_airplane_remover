@@ -219,15 +219,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public weak var previousFrame: FrameAirplaneRemover?
     public weak var nextFrame: FrameAirplaneRemover?
 
-    func getPreviousFrame() -> FrameAirplaneRemover? { previousFrame }
+    public func getPreviousFrame() -> FrameAirplaneRemover? { previousFrame }
     
-    func setPreviousFrame(_ frame: FrameAirplaneRemover) {
+    public func setPreviousFrame(_ frame: FrameAirplaneRemover) {
         previousFrame = frame
     }
 
-    func getNextFrame() -> FrameAirplaneRemover? { nextFrame }
+    public func getNextFrame() -> FrameAirplaneRemover? { nextFrame }
     
-    func setNextFrame(_ frame: FrameAirplaneRemover) {
+    public func setNextFrame(_ frame: FrameAirplaneRemover) {
         nextFrame = frame
     }
 

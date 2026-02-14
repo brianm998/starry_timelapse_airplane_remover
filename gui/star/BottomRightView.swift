@@ -102,22 +102,7 @@ struct BottomRightView: View {
                     ProgressView()
                       .colorScheme(.dark)
                     VStack(alignment: .trailing) {
-                        if let stats = frameGraphViewModel.horizonStats,
-                           stats.operationCount > 0
-                        {
-                            SmallQueueView(stats: stats)
-                        }
-                        if let stats = frameGraphViewModel.keypointStats,
-                           stats.operationCount > 0
-                        {
-                            SmallQueueView(stats: stats)
-                        }
-                        if let stats = frameGraphViewModel.homographyStats,
-                           stats.operationCount > 0
-                        {
-                            SmallQueueView(stats: stats)
-                        }
-                        if let stats = frameGraphViewModel.mergeStats,
+                        if let stats = frameGraphViewModel.operationQueueStats,
                            stats.operationCount > 0
                         {
                             SmallQueueView(stats: stats)

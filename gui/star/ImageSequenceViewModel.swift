@@ -561,11 +561,11 @@ public final class ImageSequenceViewModel {
         }
     }
     
-    var maxConcurrentHorizonCalculations: Int {
+    var numberOfFramesToProcessConcurrently: Int {
         didSet {
             var realConfig = config.config()
-            realConfig.maxConcurrentHorizonCalculations = maxConcurrentHorizonCalculations
-            Log.d("FUCKING update maxConcurrentHorizonCalculations \(maxConcurrentHorizonCalculations)")
+            realConfig.numberOfFramesToProcessConcurrently = numberOfFramesToProcessConcurrently
+            Log.d("FUCKING update numberOfFramesToProcessConcurrently \(numberOfFramesToProcessConcurrently)")
             config.update(realConfig)
         }
     }
@@ -574,22 +574,6 @@ public final class ImageSequenceViewModel {
         didSet {
             var realConfig = config.config()
             realConfig.maxConcurrentKeypointCalculations = maxConcurrentKeypointCalculations
-            config.update(realConfig)
-        }
-    }
-    
-    var maxConcurrentHomographyCalculations: Int {
-        didSet {
-            var realConfig = config.config()
-            realConfig.maxConcurrentHomographyCalculations = maxConcurrentHomographyCalculations
-            config.update(realConfig)
-        }
-    }
-    
-    var maxConcurrentMergeCalculations: Int {
-        didSet {
-            var realConfig = config.config()
-            realConfig.maxConcurrentMergeCalculations = maxConcurrentMergeCalculations
             config.update(realConfig)
         }
     }
@@ -789,10 +773,8 @@ public final class ImageSequenceViewModel {
         self.cleanMethod = config.cleanMethod
         self.pixelReplacementOverrides = config.pixelReplacementOverrides
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
-        self.maxConcurrentHorizonCalculations = config.maxConcurrentHorizonCalculations
+        self.numberOfFramesToProcessConcurrently = config.numberOfFramesToProcessConcurrently
         self.maxConcurrentKeypointCalculations = config.maxConcurrentKeypointCalculations
-        self.maxConcurrentHomographyCalculations = config.maxConcurrentHomographyCalculations
-        self.maxConcurrentMergeCalculations = config.maxConcurrentMergeCalculations
         self.homographySmoothingEpsilon = config.homographySmoothingEpsilon
         self.horizonVerticalShiftAmount = config.horizonVerticalShiftAmount
         self.allowEarthAlignment = config.allowEarthAlignment

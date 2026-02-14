@@ -7,35 +7,21 @@ public let frameGraphBuilder = FrameGraphBuilder()
 public final actor FrameGraphBuilder {
 
     // MARK: Queues (user adjustable)
-    let horizonQueue = OperationQueue()
-    let outlierQueue = OperationQueue()
-    let keypointQueue = OperationQueue()
-    let homographyQueue = OperationQueue()
-    let mergeQueue = OperationQueue()
+    let queue = OperationQueue()
+
+    let keypointLimiter = KeypointLimiter(maxConcurrent: 10) // XXX use other value
 
     public init() {
-        horizonQueue.name = "horizons"
-        keypointQueue.name = "keypoints"
-        homographyQueue.name = "alignment"
-        mergeQueue.name = "merging"
-        outlierQueue.name = "outliers"
+        queue.name = "operations"
     }
     
     public struct Queues {
-        public let horizon: OperationQueue
-        public let keypoint: OperationQueue
-        public let homography: OperationQueue
-        public let merge: OperationQueue
-        public let outlier: OperationQueue
+        public let queue: OperationQueue
     }
 
     public nonisolated func queues() -> Queues {
         Queues(
-          horizon: horizonQueue,
-          keypoint: keypointQueue,
-          homography: homographyQueue,
-          merge: mergeQueue,
-          outlier: outlierQueue
+          queue: queue,
         )
     }
     
@@ -52,11 +38,12 @@ public final actor FrameGraphBuilder {
     }
     
     public func update(from config: Config) {
-        horizonQueue.maxConcurrentOperationCount = config.maxConcurrentHorizonCalculations
-        keypointQueue.maxConcurrentOperationCount = config.maxConcurrentKeypointCalculations
-        homographyQueue.maxConcurrentOperationCount = config.maxConcurrentHomographyCalculations
-        mergeQueue.maxConcurrentOperationCount = config.maxConcurrentMergeCalculations
-        outlierQueue.maxConcurrentOperationCount = config.maxConcurrentOutlierCalculations
+        queue.maxConcurrentOperationCount = config.numberOfFramesToProcessConcurrently
+        Task {
+            await keypointLimiter.set(
+              maxConcurrent: config.maxConcurrentKeypointCalculations
+            )
+        }
     }
     
     public func build(
@@ -92,7 +79,7 @@ public final actor FrameGraphBuilder {
         if let endIndex { lastIndex = endIndex }
 
         Log.d("processing from frameIndex \(startIndex) to \(lastIndex)")
-        
+
         // First assemble horizon, keypoint and outlier operations for all frames
         for frameIndex in startIndex...lastIndex {
 
@@ -107,14 +94,15 @@ public final actor FrameGraphBuilder {
                     errorClosure(errorString)
                 }
                 horizonOp.qualityOfService = .userInteractive
-                horizonQueue.addOperation(horizonOp)
+                queue.addOperation(horizonOp)
                 lastOps.append(horizonOp)
             }
 
             // 2. Keypoints (always sky)
             let skyKP = KeypointOp(
               frame: frame,
-              mode: .starAligned
+              mode: .starAligned,
+              limiter: keypointLimiter
             ) { errorString in
                 errors.append(errorString)
                 errorClosure(errorString)
@@ -123,24 +111,24 @@ public final actor FrameGraphBuilder {
             skyKP.qualityOfService = .userInteractive
             lastOps.forEach { skyKP.addDependency($0) }
             Log.d("\(lastOps.count) lastOps")
-            keypointQueue.addOperation(skyKP)
+            queue.addOperation(skyKP)
             skyKeypointOps[frame.frameIndex] = skyKP
             
             // 2b. Earth keypoints (optional)
             if hasHorizon && processEarth {
                 let kp = KeypointOp(
                   frame: frame,
-                  mode: .earthAligned
+                  mode: .earthAligned,
+                  limiter: keypointLimiter
                 ) { errorString in
                     errors.append(errorString)
                     errorClosure(errorString)
                 }
                 kp.qualityOfService = .userInteractive
                 kp.addDependency(skyKP)
-                keypointQueue.addOperation(kp)
+                queue.addOperation(kp)
                 earthKeypointOps[frame.frameIndex] = kp
             }
-
         }
 
         // next assemble homography operations that depend upon the keyframes from above
@@ -167,7 +155,7 @@ public final actor FrameGraphBuilder {
                 }
             }
 
-            homographyQueue.addOperation(skyH)
+            queue.addOperation(skyH)
             homographyOps.append(skyH)
 
             // ---- Earth-aligned homography (optional) ----
@@ -191,7 +179,7 @@ public final actor FrameGraphBuilder {
                     }
                 }
 
-                homographyQueue.addOperation(earthH)
+                queue.addOperation(earthH)
                 homographyOps.append(earthH)
             }
         }
@@ -207,7 +195,7 @@ public final actor FrameGraphBuilder {
         validationOp.qualityOfService = .userInteractive
         Log.d("\(homographyOps.count) homographyOps")
         homographyOps.forEach { validationOp.addDependency($0) }
-        homographyQueue.addOperation(validationOp)
+        queue.addOperation(validationOp)
 
         // how many in each direction for final outlier classification 
         let numOutlierNeighbors = config.numberFinalProcessingNeighborsNeeded            
@@ -224,7 +212,7 @@ public final actor FrameGraphBuilder {
                 }
 
                 outlierOp.addDependency(validationOp)
-                outlierQueue.addOperation(outlierOp)
+                queue.addOperation(outlierOp)
                 outlierOps[frame.frameIndex] = outlierOp
             }
         }
@@ -255,7 +243,7 @@ public final actor FrameGraphBuilder {
                 }
             }
             
-            mergeQueue.addOperation(mergeOp)
+            queue.addOperation(mergeOp)
             mergeOps.append(mergeOp)
         }
 
@@ -268,6 +256,6 @@ public final actor FrameGraphBuilder {
         }
         Log.d("\(mergeOps.count) mergeOps")
         mergeOps.forEach { completionOp.addDependency($0) }
-        mergeQueue.addOperation(completionOp)
+        queue.addOperation(completionOp)
     }
 }

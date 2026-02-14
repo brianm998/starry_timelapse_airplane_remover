@@ -5,27 +5,15 @@ import StarCore
 @Observable
 final class FrameGraphViewModel {
 
-    var horizonStats: OperationQueueStats? 
-    var keypointStats: OperationQueueStats? 
-    var homographyStats: OperationQueueStats?
-    var mergeStats: OperationQueueStats?
-    var outlierStats: OperationQueueStats?
+    var operationQueueStats: OperationQueueStats? 
 
     init() {
-        self.horizonStats = nil
-        self.keypointStats = nil
-        self.homographyStats = nil
-        self.mergeStats = nil
-        self.outlierStats = nil
+        self.operationQueueStats = nil
 
         Task {
             let queues = await frameGraphBuilder.queues()
 
-            self.horizonStats = OperationQueueStats(queue: queues.horizon)
-            self.keypointStats = OperationQueueStats(queue: queues.keypoint)
-            self.homographyStats = OperationQueueStats(queue: queues.homography)
-            self.mergeStats = OperationQueueStats(queue: queues.merge)
-            self.outlierStats = OperationQueueStats(queue: queues.outlier)
+            self.operationQueueStats = OperationQueueStats(queue: queues.queue)
         }
     }
 }

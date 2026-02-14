@@ -17,10 +17,6 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 
-public class LastBlob {
-    var blob: Blob?
-}
-
 // skeleton for analyzer of blobs that can then manipulate the blobs in some way
 public actor BlobAnalyzer {
 

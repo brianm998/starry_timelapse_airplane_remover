@@ -256,12 +256,12 @@ struct RightPanel: View {
                               textColor: .white,
                               alwaysOpen: false
                             )
-                            /*
+
                             EditableNumberOfFramesToProcessConcurrentlyView(
                               focusedField: $focusedField,
                               textColor: .white,
                               alwaysOpen: false
-                            )*/
+                            )
 
                             Picker("redo", selection: $viewModel.reprocessingType) {
                                 ForEach(FrameReprocessingType.allCases, id: \.self) { value in
@@ -538,7 +538,7 @@ struct EditableNumberOfNeighborFrames: View {
 }
 
 // “Number of Frames To Process Concurrently”
-/*
+
 struct EditableNumberOfFramesToProcessConcurrentlyView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     let focusedField: FocusState<FocusedField?>.Binding
@@ -560,12 +560,12 @@ struct EditableNumberOfFramesToProcessConcurrentlyView: View {
             alwaysOpen: alwaysOpen,
             commitAction: { newVal in
                 // persist to prefs & global
-                viewModel.userPreferences.concurrentFrames = newVal
+                viewModel.numberOfFramesToProcessConcurrently = newVal
                 Task { await maxFramesProcessing.set(value: newVal) }
             }
         )
     }
-}*/
+}
 
 // “Number of Frames To Process”
 struct EditableNumberOfFramesToProcessView: View {
