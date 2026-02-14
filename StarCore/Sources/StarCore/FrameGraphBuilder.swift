@@ -3,6 +3,23 @@ import logging
 
 public let frameGraphBuilder = FrameGraphBuilder()
 
+public enum OperationType: String, CaseIterable, Sendable {
+    case horizon
+    case starKeypoints = "star kp"
+    case earthKeypoints = "earth kp"
+    case starHomography = "star align"
+    case earthHomography = "earth align"
+    case alignmentValidation
+    case outliers
+    case merge
+}
+
+public enum OperationState: String, CaseIterable, Sendable {
+    case queued
+    case running
+    case done
+}
+
 // uses OperationQueues to allow processing with dependencies and configurable max processing  
 public final actor FrameGraphBuilder {
 
@@ -13,16 +30,6 @@ public final actor FrameGraphBuilder {
 
     public init() {
         queue.name = "operations"
-    }
-    
-    public struct Queues {
-        public let queue: OperationQueue
-    }
-
-    public nonisolated func queues() -> Queues {
-        Queues(
-          queue: queue,
-        )
     }
     
     var configManager: ConfigManager? = nil
@@ -100,6 +107,7 @@ public final actor FrameGraphBuilder {
 
             // 2. Keypoints (always sky)
             let skyKP = KeypointOp(
+              forStars: true,
               frame: frame,
               mode: .starAligned,
               limiter: keypointLimiter
@@ -117,6 +125,7 @@ public final actor FrameGraphBuilder {
             // 2b. Earth keypoints (optional)
             if hasHorizon && processEarth {
                 let kp = KeypointOp(
+                  forStars: false,
                   frame: frame,
                   mode: .earthAligned,
                   limiter: keypointLimiter
@@ -135,6 +144,7 @@ public final actor FrameGraphBuilder {
         for frame in frames {
             // 3. Homographies
             let skyH = HomographyOp(
+              forStars: true,
               frame: frame,
               mode: .starAligned
             ) { errorString in
@@ -163,6 +173,7 @@ public final actor FrameGraphBuilder {
                 guard let selfEarthKP = earthKeypointOps[frame.frameIndex] else { continue }
 
                 let earthH = HomographyOp(
+                  forStars: false,
                   frame: frame,
                   mode: .earthAligned
                 ) { errorString in

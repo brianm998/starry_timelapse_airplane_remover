@@ -1041,18 +1041,7 @@ public final class ImageSequenceViewModel {
     }
 
     var numberOfFramesProcessingNow: Int {
-        var total = 0
-        for (state, frameSet) in frameStateMap {
-            switch state {
-            case .unprocessed:
-                break
-            case .complete:
-                break
-            default:
-                total += frameSet.count
-            }
-        }
-        return total
+        frameGraphViewModel.numberOfFramesProcessingNow
     }
 
     var windowTitle: String {

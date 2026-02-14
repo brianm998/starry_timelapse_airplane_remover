@@ -11,9 +11,6 @@
 		D3058E1B2AC0745C00C58F1D /* MultiSelectSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */; };
 		D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBC299736730001CD0C /* ViewModel.swift */; };
 		D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBE299736730001CD0C /* OutlierGroupView.swift */; };
-		D32096BA2F3050170048423B /* FrameGraphViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32096B72F3050170048423B /* FrameGraphViewModel.swift */; };
-		D32096BB2F3050170048423B /* OperationQueueStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32096B82F3050170048423B /* OperationQueueStats.swift */; };
-		D32096BC2F3050170048423B /* QueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32096B92F3050170048423B /* QueueView.swift */; };
 		D324257F2EE5030100CEF78F /* ProcessingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D324257E2EE5030100CEF78F /* ProcessingSettingsView.swift */; };
 		D32425812EE5075000CEF78F /* StartupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32425802EE5075000CEF78F /* StartupView.swift */; };
 		D326F57C2E510DC1008E71A2 /* OldZoomableModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = D326F57B2E510DC1008E71A2 /* OldZoomableModifier.swift */; };
@@ -131,9 +128,6 @@
 		D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libStarDecisionTrees.a; path = ../../StarDecisionTrees/lib/release/libStarDecisionTrees.a; sourceTree = "<group>"; };
 		D31F9FBC299736730001CD0C /* ViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewModel.swift; sourceTree = "<group>"; };
 		D31F9FBE299736730001CD0C /* OutlierGroupView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupView.swift; sourceTree = "<group>"; };
-		D32096B72F3050170048423B /* FrameGraphViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameGraphViewModel.swift; sourceTree = "<group>"; };
-		D32096B82F3050170048423B /* OperationQueueStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationQueueStats.swift; sourceTree = "<group>"; };
-		D32096B92F3050170048423B /* QueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueView.swift; sourceTree = "<group>"; };
 		D324257E2EE5030100CEF78F /* ProcessingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessingSettingsView.swift; sourceTree = "<group>"; };
 		D32425802EE5075000CEF78F /* StartupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupView.swift; sourceTree = "<group>"; };
 		D326F57B2E510DC1008E71A2 /* OldZoomableModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OldZoomableModifier.swift; sourceTree = "<group>"; };
@@ -297,9 +291,6 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
-				D32096B72F3050170048423B /* FrameGraphViewModel.swift */,
-				D32096B82F3050170048423B /* OperationQueueStats.swift */,
-				D32096B92F3050170048423B /* QueueView.swift */,
 				D39728C52F06CC5400F1CBC2 /* AlignmentWindowView.swift */,
 				D39728C32F05C2D200F1CBC2 /* ExpandDownButton.swift */,
 				D3C5ACA52F02FDF600DD1DD9 /* HorizonBarView.swift */,
@@ -593,9 +584,6 @@
 				D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */,
 				D32F6DB32A4D2BF800704870 /* ApplyAllDecisionTreeButton.swift in Sources */,
 				D3B3730A2D50857400B56342 /* ProcessRemainingFramesButton.swift in Sources */,
-				D32096BA2F3050170048423B /* FrameGraphViewModel.swift in Sources */,
-				D32096BB2F3050170048423B /* OperationQueueStats.swift in Sources */,
-				D32096BC2F3050170048423B /* QueueView.swift in Sources */,
 				D332F70529B64004009E2796 /* ShrinkingButton.swift in Sources */,
 				D33FFC142A2CFAED00F38194 /* ImageSequenceView.swift in Sources */,
 				D33FFC2A2A2E1A8900F38194 /* OutlierGroupViewModel.swift in Sources */,

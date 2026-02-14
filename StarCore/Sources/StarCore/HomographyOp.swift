@@ -7,6 +7,7 @@ final class HomographyOp: AsyncOperation, @unchecked Sendable {
     let errorClosure: (String) -> Void
     
     init(
+      forStars: Bool,
       frame: FrameAirplaneRemover,
       mode: FrameViewMode,
       errorClosure: @escaping (String) -> Void
@@ -14,6 +15,11 @@ final class HomographyOp: AsyncOperation, @unchecked Sendable {
         self.frame = frame
         self.mode = mode
         self.errorClosure = errorClosure
+        if forStars {
+            super.init(for: .starHomography)
+        } else {
+            super.init(for: .earthHomography)
+        }
     }
 
     override func execute() {

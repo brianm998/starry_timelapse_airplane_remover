@@ -8,6 +8,7 @@ public final class MergeOp: AsyncOperation, @unchecked Sendable {
     init(frame: FrameAirplaneRemover, errorClosure: @escaping (String) -> Void) {
         self.frame = frame
         self.errorClosure = errorClosure
+        super.init(for: .merge)
     }
 
     override func execute() {

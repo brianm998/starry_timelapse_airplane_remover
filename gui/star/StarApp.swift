@@ -201,7 +201,6 @@ struct StarApp: App {
     }
     
     let loggingViewModel = LoggingViewModel()
-    let frameGraphViewModel = FrameGraphViewModel()
     
     var body: some Scene {
         let viewModel = ViewModel()
@@ -231,7 +230,7 @@ struct StarApp: App {
             ContentView()
               .environment(viewModel)
               .environment(loggingViewModel)
-              .environment(frameGraphViewModel)
+              .environment(StarCore.frameGraphViewModel)
               .onAppear { enableGUILogs() }
               .onChange(of: loggingViewModel.level) {
                   enableGUILogs()

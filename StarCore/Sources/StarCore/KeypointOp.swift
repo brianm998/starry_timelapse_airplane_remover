@@ -8,6 +8,7 @@ final class KeypointOp: AsyncOperation, @unchecked Sendable {
     private let limiter: KeypointLimiter
 
     init(
+      forStars: Bool,
       frame: FrameAirplaneRemover,
       mode: FrameViewMode,
       limiter: KeypointLimiter,
@@ -17,6 +18,11 @@ final class KeypointOp: AsyncOperation, @unchecked Sendable {
         self.mode = mode
         self.limiter = limiter
         self.errorClosure = errorClosure
+        if forStars {
+            super.init(for: .starKeypoints)
+        } else {
+            super.init(for: .earthKeypoints)
+        }
     }
 
     override func execute() {

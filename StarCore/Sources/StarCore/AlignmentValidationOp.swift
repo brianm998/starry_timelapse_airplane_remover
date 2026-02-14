@@ -18,6 +18,7 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         self.frames = frames
         self.configManager = configManager
         self.errorClosure = errorClosure
+        super.init(for: .alignmentValidation)
     }
 
     override func execute() {

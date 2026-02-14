@@ -5,9 +5,13 @@ final class HorizonDetectionOp: AsyncOperation, @unchecked Sendable {
     let frame: FrameAirplaneRemover
     let errorClosure: (String) -> Void
     
-    init(frame: FrameAirplaneRemover, errorClosure: @escaping (String) -> Void) {
+    init(
+      frame: FrameAirplaneRemover,
+      errorClosure: @escaping (String) -> Void
+    ) {
         self.frame = frame
         self.errorClosure = errorClosure
+        super.init(for: .horizon)
     }
 
     override func execute() {

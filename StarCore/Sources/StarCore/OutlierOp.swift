@@ -8,6 +8,7 @@ public final class OutlierOp: AsyncOperation, @unchecked Sendable {
     init(frame: FrameAirplaneRemover, errorClosure: @escaping (String) -> Void) {
         self.frame = frame
         self.errorClosure = errorClosure
+        super.init(for: .outliers)
     }
 
     override func execute() {

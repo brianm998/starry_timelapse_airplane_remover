@@ -87,6 +87,7 @@ struct LeftPanel: View {
 
                     self.operationQueueView
                     
+                    Space(height: 10)
                     /*
 
                      add
@@ -239,15 +240,109 @@ struct LeftPanel: View {
     }
 
     var operationQueueView: some View {
-        return VStack(alignment: .leading) {
-            if let stats = frameGraphViewModel.operationQueueStats,
-               stats.operationCount > 0
+        VStack(alignment: .leading) {
+            let hasHorizonOps = frameGraphViewModel.hasOperations(
+              ofType: .horizon,
+              atMax: viewModel.frames.count
+            )
+            let hasStarKeypointOps = frameGraphViewModel.hasOperations(
+              ofType: .starKeypoints,
+              atMax: viewModel.frames.count
+            )
+            let hasEarthKeypointOps = frameGraphViewModel.hasOperations(
+              ofType: .earthKeypoints,
+              atMax: viewModel.frames.count
+            )
+            let hasStarHomographyOps = frameGraphViewModel.hasOperations(
+              ofType: .starHomography,
+              atMax: viewModel.frames.count
+            )
+            let hasEarthHomographyOps = frameGraphViewModel.hasOperations(
+              ofType: .earthHomography,
+              atMax: viewModel.frames.count
+            )
+
+            let hasOutlierOps = frameGraphViewModel.hasOperations(
+              ofType: .outliers,
+              atMax: viewModel.frames.count
+            )
+            let hasMergeOps = frameGraphViewModel.hasOperations(
+              ofType: .merge,
+              atMax: viewModel.frames.count
+            )
+
+            if hasHorizonOps ||
+               hasStarKeypointOps ||
+               hasEarthKeypointOps ||
+               hasEarthKeypointOps ||
+               hasStarHomographyOps ||
+               hasEarthHomographyOps ||
+               hasOutlierOps ||
+               hasMergeOps
             {
-                QueueView(stats: stats)
+                Grid(alignment: .trailing) {
+                    GridRow {
+                        HStack {
+                            Text("step")
+                              .foregroundColor(.white)
+                            Spacer()
+                        }
+                        ForEach(OperationState.allCases, id: \.self) { state in
+                            Text(state.rawValue)
+                              .foregroundColor(.white)
+                        }
+                    }
+                    Divider()
+                      .foregroundColor(.white)
+                      .frame(maxWidth: .infinity)
+
+                    if hasHorizonOps {
+                        operationView(of: .horizon)
+                    }
+                    if hasStarKeypointOps {
+                        operationView(of: .starKeypoints)
+                    }
+                    if hasEarthKeypointOps {
+                        operationView(of: .earthKeypoints)
+                    }
+
+                    if hasStarHomographyOps {
+                        operationView(of: .starHomography)
+                    }
+                    if hasEarthHomographyOps {
+                        operationView(of: .earthHomography)
+                    }
+                    if hasOutlierOps {
+                        operationView(of: .outliers)
+                    }
+                    if hasMergeOps {
+                        operationView(of: .merge)
+                    }
+                }
+            }
+        }
+          .fixedSize(horizontal: true, vertical: false)
+    }
+
+    func operationView(of type: OperationType) -> some View {
+        GridRow {
+            HStack {
+                Text(type.rawValue)
+                  .foregroundColor(.white)
+                Spacer()
+            }  
+            ForEach(OperationState.allCases, id: \.self) { state in
+                let num = frameGraphViewModel.numberOfOperations(
+                  ofType: type,
+                  in: state
+                )
+                Text("\(num)")
+                  .foregroundColor(.white)
+                  .opacity(num == 0 ? 0 : 1)
             }
         }
     }
-
+    
     var imageCacheView: some View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .leading) {

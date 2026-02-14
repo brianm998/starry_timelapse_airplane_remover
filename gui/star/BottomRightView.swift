@@ -101,13 +101,8 @@ struct BottomRightView: View {
                 if viewModel.isProcessingFrames {
                     ProgressView()
                       .colorScheme(.dark)
-                    VStack(alignment: .trailing) {
-                        if let stats = frameGraphViewModel.operationQueueStats,
-                           stats.operationCount > 0
-                        {
-                            SmallQueueView(stats: stats)
-                        }
-                    }
+                    Text("\(frameGraphViewModel.numberOfFramesProcessingNow) frames processing")
+                      .foregroundColor(.white)
                 }
 
                 switch viewModel.sequenceProcessingState {

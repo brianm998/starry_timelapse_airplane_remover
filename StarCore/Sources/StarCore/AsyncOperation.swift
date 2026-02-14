@@ -10,12 +10,26 @@ public class AsyncOperation: Operation, @unchecked Sendable {
     
     override public var isAsynchronous: Bool { true }
 
+    private let type: OperationType
+
+    public init(for type: OperationType) {
+        self.type = type
+        Task { @MainActor in
+            frameGraphViewModel.queuedOperation(ofType: type)
+        }
+    }
+    
     override public var isExecuting: Bool {
         get { stateQueue.sync { _isExecuting } }
         set {
             willChangeValue(forKey: "isExecuting")
             stateQueue.sync { _isExecuting = newValue }
             didChangeValue(forKey: "isExecuting")
+            if isExecuting {
+                Task { @MainActor in
+                    frameGraphViewModel.runningOperation(ofType: type)
+                }
+            }            
         }
     }
 
@@ -25,6 +39,11 @@ public class AsyncOperation: Operation, @unchecked Sendable {
             willChangeValue(forKey: "isFinished")
             stateQueue.sync { _isFinished = newValue }
             didChangeValue(forKey: "isFinished")
+            if isFinished {
+                Task { @MainActor in
+                    frameGraphViewModel.doneWithOperation(ofType: type)
+                }
+            }
         }
     }
 
