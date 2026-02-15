@@ -302,20 +302,22 @@ public actor OutlierGroups {
         if maxX >= config.imageWidth { maxX = config.imageWidth - 1 }
         if maxY >= config.imageHeight { maxY = config.imageHeight - 1 }
 
-        for y in minY...maxY {
-//            if let outlierYAxisImageData,
-//               outlierYAxisImageData[y] == 0 { continue }
-            
-            for x in minX...maxX {
-                let index = y * config.imageWidth + x
-                let outlierId = outlierImageData[index]
-                if outlierId != 0,
-                   outlierId != group.id,
-                   !ret.keys.contains(outlierId),
-                   let outlier = members[outlierId],
-                   group.bounds.centerDistance(to: outlier.bounds) < searchDistance
-                {
-                    ret[outlierId] = outlier
+        if minY <= maxY {
+            for y in minY...maxY {
+                //            if let outlierYAxisImageData,
+                //               outlierYAxisImageData[y] == 0 { continue }
+                
+                for x in minX...maxX {
+                    let index = y * config.imageWidth + x
+                    let outlierId = outlierImageData[index]
+                    if outlierId != 0,
+                       outlierId != group.id,
+                       !ret.keys.contains(outlierId),
+                       let outlier = members[outlierId],
+                       group.bounds.centerDistance(to: outlier.bounds) < searchDistance
+                    {
+                        ret[outlierId] = outlier
+                    }
                 }
             }
         }

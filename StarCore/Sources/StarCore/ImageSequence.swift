@@ -86,6 +86,10 @@ public actor ImageSequence {
 
     public let filenames: [String]
 
+    public var frameCount: Int {
+        filenames.count
+    }
+    
     private var images: [String: ImageLoader] = [:]
 
     func removeValue(forKey key: String) {

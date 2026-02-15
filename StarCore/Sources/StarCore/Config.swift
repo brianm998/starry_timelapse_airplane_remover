@@ -700,11 +700,7 @@ public struct Config: Codable, Sendable, Transferable {
         case .final:
             switch size {
             case .original:
-                if let finalOutputDir {
-                    return finalOutputDir
-                } else {
-                    return "\(self.outputPath)/\(self.basename)"
-                }
+                return self.outputSequenceDirname
             case .preview:
                 return "\(self.tempOutputPath)/final-sequence-previews"
             case .thumbnail:
@@ -713,6 +709,14 @@ public struct Config: Codable, Sendable, Transferable {
         }
     }
 
+    public var outputSequenceDirname: String {
+        if let finalOutputDir {
+            return finalOutputDir
+        } else {
+            return "\(self.outputPath)/\(self.basename)"
+        }
+    }
+    
     public var allImageDirnames: [String] {
         var ret: [String] = []
         
@@ -728,7 +732,6 @@ public struct Config: Codable, Sendable, Transferable {
         if let dir = self.dirForImage(ofType: .autoSelectiveProcessed) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .selectiveProcessed) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .final) { ret.append(dir) }
-        
         
         if self.writeFramePreviewFiles {
             if let dir = self.dirForImage(ofType: .original, atSize: .preview) { ret.append(dir) }

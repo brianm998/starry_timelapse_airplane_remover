@@ -47,6 +47,12 @@ public class Processor {
         IMAGE_HEIGHT = Double(imageInfo.imageHeight)
     }
 
+    public var frameCount: Int {
+        get async {
+            await imageSequence.frameCount
+        }
+    }
+    
     public func process() async throws {
         await frameGraphBuilder.set(configManager: configManager)
 

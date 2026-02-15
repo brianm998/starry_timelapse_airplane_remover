@@ -4,6 +4,7 @@ import Cocoa
 import StarCore
 import logging
 import StarDecisionTrees
+import Observation
 
 /*
 
@@ -372,15 +373,19 @@ struct StarCli: AsyncParsableCommand {
                 callbacks.updatable = UpdatableLog()
 
                 if let updatable = callbacks.updatable {
-                    Log.add(handler: UpdatableLogHandler(updatable),
-                            for: .console)
+                    Log.add(
+                      handler: UpdatableLogHandler(updatable),
+                      for: .console
+                    )
                     let name = inputImageSequenceName
                     let path = inputImageSequencePath
                     let message = "star v\(Config.latestVersion) is processing images from sequence in \(path)/\(name)"
                     Task {
-                        await updatable.log(name: "star",
-                                            message: message,
-                                            value: -1)
+                        await updatable.log(
+                          name: "star",
+                          message: message,
+                          value: -1
+                        )
                     }
                 }
             }
@@ -410,10 +415,52 @@ struct StarCli: AsyncParsableCommand {
                   maxResidentImages: 40 // XXX
                 )
 
+                if let _ = callbacks.updatable {
+                    // setup sequence monitor
+                    let updatableProgressMonitor =
+                      UpdatableProgressMonitor(
+                        frameCount: await processor.frameCount,
+                        numConcurrentRenders: 30, // XXX use num cpus?
+                        config: await configManager.config(),
+                        callbacks: callbacks
+                      )
+
+                    Task {
+                        for await operations in streamFrameChanges() {
+                            await updatableProgressMonitor.operationsChange(operations)
+                        }
+                    }
+                    
+                    callbacks.frameStateChangeCallback = { frame, state in
+                        // XXX make sure to wait for this
+                        print("frame \(frame) state change to \(state)")
+                        Task(priority: .userInitiated) {
+                            await updatableProgressMonitor.stateChange(for: frame, to: state)
+                        }
+                    }
+                    callbacks.exisingFrameStateChangeCallback = { frameIndex in
+                        Task(priority: .userInitiated) {
+                            await updatableProgressMonitor.notProcesssingFrame(at: frameIndex)
+                        }
+                    }
+                }
+                
                 try await processor.process()
 
                 Log.i("done")
 
+                if let updatable = callbacks.updatable {
+                    let config = await configManager.config() 
+                    let message = "star processing was successful, output sequence is in \(config.outputSequenceDirname)"
+                    Task {
+                        await updatable.log(
+                          name: "star",
+                          message: message,
+                          value: 1000
+                        )
+                    }
+                }
+                
             } catch {
                 Log.e("\(error)")
             }
@@ -466,5 +513,29 @@ extension CleanMethod: ExpressibleByArgument {
             "automatic:true",
             "automatic:false"
         ]
+    }
+}
+
+func streamFrameChanges() -> AsyncStream<[OperationType: [OperationState: UInt]]> {
+    AsyncStream { continuation in
+        
+        Task { @MainActor in
+            registerTracking(continuation: continuation)
+        }
+    }
+}
+
+@MainActor
+private func registerTracking(
+    continuation: AsyncStream<[OperationType: [OperationState: UInt]]>.Continuation
+) {
+    withObservationTracking {
+        continuation.yield(
+            frameGraphViewModel.operations
+        )
+    } onChange: {
+        Task { @MainActor in
+            registerTracking(continuation: continuation)
+        }
     }
 }

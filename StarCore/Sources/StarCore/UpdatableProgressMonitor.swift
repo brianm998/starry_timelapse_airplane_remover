@@ -54,6 +54,8 @@ public actor UpdatableProgressMonitor {
     let padding: String
     var framesAlreadyProcessed: Int = 0
     var frames: [FrameProcessingState: Set<FrameAirplaneRemover>] = [:]
+    var operations: [OperationType: [OperationState: UInt]] = [:]
+
     public init(frameCount: Int,
                 numConcurrentRenders: Int,
                 config: Config,
@@ -85,6 +87,13 @@ public actor UpdatableProgressMonitor {
 
     private var lastUpdateTime: TimeInterval?
 
+    public func operationsChange(
+      _ operations: [OperationType: [OperationState: UInt]]
+    ) async {
+        self.operations = operations
+        await redraw()
+    }
+    
     public func stateChange(for frame: FrameAirplaneRemover,
                             to newState: FrameProcessingState) async 
     {
@@ -129,6 +138,34 @@ public actor UpdatableProgressMonitor {
         }
         return nil
     }
+
+    func progressLine(for operationType: OperationType) -> (() async -> Void)?
+    {
+        if let states = operations[operationType],
+           let updatable = callbacks.updatable
+        {
+            let myValue = self.value
+            self.value += 1
+
+            var done: UInt = 0
+            if let doneValue = states[.done] {
+                done = doneValue
+            }
+            
+            let progress =
+              Double(done) /
+              Double(self.numberOfFrames)
+
+            return {
+                await updatable.log(name: "operation \(operationType.rawValue)",
+                                    message: self.padding + progressBar(length: self.numConcurrentRenders,
+                                                                     progress: progress) +
+                                      " \(done) frames \(operationType.logName)",
+                                     value: myValue)
+            }
+        }
+        return nil
+    }
     
     var value: Double = 0
     func redraw() async {
@@ -138,7 +175,29 @@ public actor UpdatableProgressMonitor {
         var updates: [() async -> Void] = []
 
         value = 0
-        
+
+        if let update = progressLine(for: .horizon) {
+            updates.append(update)
+        }
+        if let update = progressLine(for: OperationType.starKeypoints) {
+            updates.append(update)
+        }
+        if let update = progressLine(for: OperationType.earthKeypoints) {
+            updates.append(update)
+        }
+        if let update = progressLine(for: .starHomography) {
+            updates.append(update)
+        }
+        if let update = progressLine(for: .earthHomography) {
+            updates.append(update)
+        }
+        if let update = progressLine(for: .outliers) {
+            updates.append(update)
+        }
+        if let update = progressLine(for: .merge) {
+            updates.append(update)
+        }
+
         if let update = progressLine(for: .starAlignment(.start)) {
             updates.append(update)
         }
@@ -262,3 +321,26 @@ public actor UpdatableProgressMonitor {
     }
 }
 
+
+extension OperationType {
+    var logName: String {
+        switch self {
+        case .horizon:
+            "found horizon"
+        case .starKeypoints:
+            "found star keypoints"
+        case .earthKeypoints:
+            "found earth keyoints"
+        case .starHomography:
+            "are star aligned"
+        case .earthHomography:
+            "are earth aligned"
+        case .alignmentValidation:
+            ""
+        case .outliers:
+            "found outliers"
+        case .merge:
+            "have been merged"
+        }
+    }
+}
