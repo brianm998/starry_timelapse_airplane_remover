@@ -615,8 +615,8 @@ extern cv::Mat ensure8U(const cv::Mat& input);
       cv::Mat img1Mat = img1.mat;
       cv::Mat img2Mat = img2.mat;
 
-      printMatInfo(img1Mat, "img1");
-      printMatInfo(img2Mat, "img2");
+      //printMatInfo(img1Mat, "img1");
+      //printMatInfo(img2Mat, "img2");
 
       cv::Mat gray1, gray2;
     

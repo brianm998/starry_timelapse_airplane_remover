@@ -333,7 +333,7 @@ static NSUInteger _totalInstances = 0;
     int stepY = static_cast<int>(tileHeight * (1.0 - overlapPercent));
 
     if (stepX <= 0 || stepY <= 0) {
-        NSLog(@"Invalid overlap: step becomes <= 0");
+        //NSLog(@"Invalid overlap: step becomes <= 0");
         return results;
     }
 
