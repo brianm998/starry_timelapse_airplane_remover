@@ -452,7 +452,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               mergedHorizon,
               frameIndex: frameIndex,
               as: .mergedHorizon,
-              atSizes: [.original, .preview],
+              atSizes: await self.outputSizes,
               overwrite: true
             )
             let bounds = mergedHorizon.horizonBounds()
@@ -517,7 +517,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               horizonMask.image,
               frameIndex: frameIndex,
               as: .horizon,
-              atSizes: [.preview, .original],
+              atSizes: await self.outputSizes,
               overwrite: true
             )
 
@@ -925,7 +925,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               image,
               frameIndex: frameIndex,
               as: .mergedHorizon,
-              atSizes: [.preview, .original],
+              atSizes: await self.outputSizes,
               overwrite: true
             )
         }
@@ -1672,13 +1672,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     // make sure we save the image as 8 bits per component
                     processedImage = processedImage.ensure8Bits   
                 }
+                let outputSizes = await self.outputSizes
                 do {
                     Log.d("frame \(self.frameIndex) processed file")
                     try await imageAccessor.save(
                       processedImage,
                       frameIndex: frameIndex,
                       as: .selectiveProcessed,
-                      atSizes: [.preview, .original],
+                      atSizes: outputSizes,
                       overwrite: true
                     )
 
@@ -1686,7 +1687,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     try await imageAccessor.linkFinals(
                       frameIndex: frameIndex,
                       as: .selectiveProcessed,
-                      atSizes: [.preview, .original]
+                      atSizes: outputSizes
                     )
                     
                 } catch {
@@ -1702,7 +1703,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                           validationImage,
                           frameIndex: frameIndex,
                           as: .validation,
-                          atSizes: [.preview, .original],
+                          atSizes: outputSizes,
                           overwrite: false
                         )
                     } else {
@@ -1718,6 +1719,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if let completion { await completion() }
         
         Log.i("frame \(self.frameIndex) complete")
+    }
+
+    public var outputSizes: [ImageDisplaySize] {
+        get async {
+            var sizes: [ImageDisplaySize] = [.original]
+            let config = await configManager.config()
+            if config.writeFramePreviewFiles {
+                sizes.append(.preview)
+            }
+            return sizes
+        }
     }
     
     public static func == (lhs: FrameAirplaneRemover, rhs: FrameAirplaneRemover) -> Bool {
@@ -2487,7 +2499,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                   removeMaskImage,
                   frameIndex: frameIndex,
                   as: .removeMask,
-                  atSizes: [.preview, .original],
+                  atSizes: await self.outputSizes,
                   overwrite: true
                 )
             } else {
@@ -2931,6 +2943,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // 2. create one if not
         // 3. link to the final image
 
+        let outputSizes = await self.outputSizes
+
         do {
             switch cleanMethod {
             case .automatic(let usesOutliers):
@@ -2945,7 +2959,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                             try await imageAccessor.linkFinals(
                               frameIndex: frameIndex,
                               as: .autoSelectiveProcessed,
-                              atSizes: [.preview, .original]
+                              atSizes: outputSizes
                             )
                         } else {
                             // no file exists
@@ -2966,7 +2980,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                             try await imageAccessor.linkFinals(
                               frameIndex: frameIndex,
                               as: .autoProcessed,
-                              atSizes: [.preview, .original] 
+                              atSizes: outputSizes 
                             )
                         } else {
                             // no file exists
@@ -2987,7 +3001,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         try await imageAccessor.linkFinals(
                           frameIndex: frameIndex,
                           as: .selectiveProcessed,
-                          atSizes: [.preview, .original]
+                          atSizes: outputSizes
                         )
                     } else {
                         // no file exists
@@ -3128,7 +3142,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                           processedImage,
                           frameIndex: frameIndex,
                           as: .autoSelectiveProcessed,
-                          atSizes: [.preview, .original],
+                          atSizes: outputSizes,
                           overwrite: true
                         )
 
@@ -3136,7 +3150,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         try await imageAccessor.linkFinals(
                           frameIndex: frameIndex,
                           as: .autoSelectiveProcessed,
-                          atSizes: [.preview, .original]
+                          atSizes: outputSizes
                         )
 
                     } catch {
@@ -3152,7 +3166,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                               validationImage,
                               frameIndex: frameIndex,
                               as: .validation,
-                              atSizes: [.preview, .original],
+                              atSizes: outputSizes,
                               overwrite: false
                             )
                         } else {
@@ -3170,7 +3184,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               autoProcessedImage, 
               frameIndex: frameIndex,
               as: .autoProcessed,
-              atSizes: [.preview, .original],
+              atSizes: outputSizes,
               overwrite: false
             )
 
@@ -3178,7 +3192,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             try await imageAccessor.linkFinals(
               frameIndex: frameIndex,
               as: .autoProcessed,
-              atSizes: [.original, .preview]
+              atSizes: outputSizes
             )
             
             /*
