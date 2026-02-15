@@ -180,6 +180,11 @@ struct StarCli: AsyncParsableCommand {
         """)
     var noHorizon: Bool = false
 
+    @Flag(name: [.customLong("keep-temp-files")], help:"""
+        Do not remove temporary files after processing is completed.
+        """)
+    var keepTempFiles: Bool = false
+
     @Flag(name: [.customLong("moving-camera")], help:"""
         This video was shot with a moving camera.
         By default star assumes the video was shot on a stationary tripod head.
@@ -449,8 +454,8 @@ struct StarCli: AsyncParsableCommand {
 
                 Log.i("done")
 
+                let config = await configManager.config() 
                 if let updatable = callbacks.updatable {
-                    let config = await configManager.config() 
                     let message = "star processing was successful, output sequence is in \(config.outputSequenceDirname)"
                     Task {
                         await updatable.log(
@@ -459,6 +464,11 @@ struct StarCli: AsyncParsableCommand {
                           value: 1000
                         )
                     }
+                }
+
+                if !self.keepTempFiles {
+                    // rm temp  unless told not to 
+                    try? removeDirectory(at: config.tempOutputPath)
                 }
                 
             } catch {
@@ -538,4 +548,15 @@ private func registerTracking(
             registerTracking(continuation: continuation)
         }
     }
+}
+
+func removeDirectory(at path: String) throws {
+    let url = URL(fileURLWithPath: path)
+
+    guard FileManager.default.fileExists(atPath: url.path) else {
+        print("Directory does not exist.")
+        return
+    }
+
+    try FileManager.default.removeItem(at: url)
 }
