@@ -7,11 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D32F6DBC2A4F044300704870 /* StarCli.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DBB2A4F044300704870 /* StarCli.swift */; };
 		D33185B229F1E2C4004DBB62 /* libStarDecisionTrees.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.a */; };
 		D33185B429F1E67A004DBB62 /* libswift_Concurrency.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = D33185B329F1E67A004DBB62 /* libswift_Concurrency.tbd */; };
 		D37A962C2C0C1B01002A87C6 /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = D37A962B2C0C1B01002A87C6 /* ArgumentParser */; };
 		D37A962E2C0C1B07002A87C6 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D37A962D2C0C1B07002A87C6 /* StarCore */; };
+		D3EBDD192F42467F0045F275 /* StarCli.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3EBDD162F42467F0045F275 /* StarCli.swift */; };
+		D3EBDD1A2F42467F0045F275 /* Processor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3EBDD152F42467F0045F275 /* Processor.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -27,10 +28,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		D32F6DBB2A4F044300704870 /* StarCli.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = StarCli.swift; path = Sources/star/StarCli.swift; sourceTree = SOURCE_ROOT; };
 		D331859629F1D685004DBB62 /* star */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = star; sourceTree = BUILT_PRODUCTS_DIR; };
 		D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libStarDecisionTrees.a; path = ../StarDecisionTrees/lib/debug/libStarDecisionTrees.a; sourceTree = "<group>"; };
 		D33185B329F1E67A004DBB62 /* libswift_Concurrency.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libswift_Concurrency.tbd; path = usr/lib/swift/libswift_Concurrency.tbd; sourceTree = SDKROOT; };
+		D3EBDD152F42467F0045F275 /* Processor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Processor.swift; sourceTree = "<group>"; };
+		D3EBDD162F42467F0045F275 /* StarCli.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarCli.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -51,7 +53,7 @@
 		D331858D29F1D685004DBB62 = {
 			isa = PBXGroup;
 			children = (
-				D331859829F1D685004DBB62 /* star */,
+				D3EBDD182F42467F0045F275 /* Sources */,
 				D331859729F1D685004DBB62 /* Products */,
 				D33185AC29F1E007004DBB62 /* Frameworks */,
 			);
@@ -65,14 +67,6 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		D331859829F1D685004DBB62 /* star */ = {
-			isa = PBXGroup;
-			children = (
-				D32F6DBB2A4F044300704870 /* StarCli.swift */,
-			);
-			path = star;
-			sourceTree = "<group>";
-		};
 		D33185AC29F1E007004DBB62 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -80,6 +74,23 @@
 				D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.a */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		D3EBDD172F42467F0045F275 /* star */ = {
+			isa = PBXGroup;
+			children = (
+				D3EBDD152F42467F0045F275 /* Processor.swift */,
+				D3EBDD162F42467F0045F275 /* StarCli.swift */,
+			);
+			path = star;
+			sourceTree = "<group>";
+		};
+		D3EBDD182F42467F0045F275 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				D3EBDD172F42467F0045F275 /* star */,
+			);
+			path = Sources;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -151,7 +162,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D32F6DBC2A4F044300704870 /* StarCli.swift in Sources */,
+				D3EBDD192F42467F0045F275 /* StarCli.swift in Sources */,
+				D3EBDD1A2F42467F0045F275 /* Processor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
