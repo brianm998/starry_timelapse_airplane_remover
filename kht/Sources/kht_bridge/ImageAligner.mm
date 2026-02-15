@@ -209,7 +209,7 @@ MatWrapper* medianImageFromArray(const std::vector<MatWrapper*>& mats,
         throw std::runtime_error("Unsupported depth (only CV_8U and CV_16U supported)");
     }
 
-    printMatInfo(output, "image align output");
+    //printMatInfo(output, "image align output");
 
     return [[MatWrapper alloc] initWithMat:output];
 }
