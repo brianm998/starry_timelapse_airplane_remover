@@ -1741,13 +1741,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     // loads outliers from a combination of the outliers.tiff image and the subtraction image,
     // if they are present
-    public func loadOutliersFromFile() async throws -> OutlierGroups? {
-        try await outliersFileSystemMonitor.load() {
+    public func loadOutliersFromFile() async -> OutlierGroups? {
+        try? await outliersFileSystemMonitor.load() {
             do {
                 // newer file format, default to this
                 return try await loadOutliersFromBinaryFile()
             } catch {
-                Log.e("frame \(frameIndex) failed to load outliers: \(error)")
+                Log.i("frame \(frameIndex) failed to load outliers: \(error)")
                 // XXX log here
             }
 
@@ -1871,7 +1871,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if self.outlierGroups == nil {
             // nil outlier groups means that we haven't tried to get outliers for this frame yet
             Log.d("frame \(frameIndex) loading outliers")
-            if let outlierGroups = try await loadOutliersFromFile() {
+            if let outlierGroups = await loadOutliersFromFile() {
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
                 Log.d("frame \(frameIndex) loading outliers from file")
                 for outlier in await outlierGroups.getMembers().values {
