@@ -328,9 +328,9 @@ extension OperationType {
         case .horizon:
             "found horizon"
         case .starKeypoints:
-            "found star keypoints"
+            "have star keypoints"
         case .earthKeypoints:
-            "found earth keyoints"
+            "have earth keyoints"
         case .starHomography:
             "are star aligned"
         case .earthHomography:
