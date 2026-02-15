@@ -42,6 +42,21 @@ using namespace cv;
     self = [self init];
     if (!self) { return nil; }
 
+    BOOL isDirectory = NO;
+    BOOL exists = [[NSFileManager defaultManager] fileExistsAtPath:filename
+                                                       isDirectory:&isDirectory];
+    
+    if (!exists || isDirectory) {
+      if (error) {
+        *error = [NSError errorWithDomain:@"OCVFeatureSet"
+                                     code:0
+                                 userInfo:@{NSLocalizedDescriptionKey:
+                                          @"Feature file does not exist"
+                                            }];
+      }
+      return nil;
+    }
+    
     std::string path = filename.UTF8String;
 
     FileStorage fs(path, FileStorage::READ);
