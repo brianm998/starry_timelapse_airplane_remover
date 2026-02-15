@@ -503,10 +503,11 @@ public struct Config: Codable, Sendable, Transferable {
     // 0.10.6 added graph processing, split up processing into smaller chunks
     //        added alignment validation to estimate alignment for frames without enough stars
     //        bug fixes, runs a lot faster, less ram (hopefully)
+    //        resurrected CLI
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.10.6"
+    public static let latestVersion = "0.10.7"
 
     // defaults to basename below if not set
     public var finalOutputDir: String? = nil
