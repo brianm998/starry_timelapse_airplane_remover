@@ -103,12 +103,12 @@ public actor AdaptiveHorizonState {
 }
 
 /// Computes horizon scores for a binary horizon mask image.
-enum HorizonScoring {
+public enum HorizonScoring {
 
     /// Extract the horizon Y coordinate per column from a binary mask.
     /// The horizon Y is defined as the topmost black (ground) pixel in each column.
     /// Returns nil for columns that are all-white (all sky) or all-black (all ground).
-    static func extractHorizonYPerColumn(from mask: PixelatedImage) -> [Int?] {
+    public static func extractHorizonYPerColumn(from mask: PixelatedImage) -> [Int?] {
         let w = mask.width
         let h = mask.height
         var horizonY = [Int?](repeating: nil, count: w)
@@ -132,7 +132,7 @@ enum HorizonScoring {
     /// Compute the smoothness score from per-column horizon Y values.
     /// Score is 1.0 / (1.0 + stddev(derivative)).
     /// Columns with nil values are skipped in the derivative computation.
-    static func smoothnessScore(horizonY: [Int?]) -> Double {
+    public static func smoothnessScore(horizonY: [Int?]) -> Double {
         // Compute column-to-column differences where both neighbors are non-nil
         var diffs: [Double] = []
         for i in 1..<horizonY.count {
@@ -161,7 +161,7 @@ enum HorizonScoring {
     /// `horizonY` is the per-column horizon Y from the mask.
     /// `edgeImage` is the Canny edge detection result (white=edge, black=no edge).
     /// `tolerance` is how many pixels away from the horizon Y to search for an edge.
-    static func edgeAlignmentScore(
+    public static func edgeAlignmentScore(
       horizonY: [Int?],
       edgeImage: PixelatedImage,
       tolerance: Int = 3
@@ -197,7 +197,7 @@ enum HorizonScoring {
     /// or all-ground.
     /// `horizonY` is the per-column horizon Y from the mask.
     /// `imageHeight` is the total height of the mask image.
-    static func coverageScore(horizonY: [Int?], imageHeight: Int) -> Double {
+    public static func coverageScore(horizonY: [Int?], imageHeight: Int) -> Double {
         let definedColumns = horizonY.compactMap { $0 }
         guard !definedColumns.isEmpty else {
             // No horizon detected at all - worst possible score
@@ -224,7 +224,7 @@ enum HorizonScoring {
 
     /// Compute a full HorizonScore for a horizon mask, given the original image
     /// for edge alignment checks.
-    static func score(
+    public static func score(
       horizonMask: HorizonMask,
       originalImage: PixelatedImage,
       cannyMinThreshold: Double,
@@ -263,7 +263,7 @@ enum HorizonScoring {
 
     /// Lighter-weight scoring that reuses an already-computed edge image.
     /// Use this when scoring many candidates against the same source image.
-    static func score(
+    public static func score(
       horizonMask: HorizonMask,
       edgeImage: PixelatedImage
     ) -> HorizonScore {

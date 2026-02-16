@@ -702,7 +702,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         let scoreDifference = abs(fullResScore.totalScore - bestSearchResult.score.totalScore)
         if scoreDifference > 0.2 {
-            Log.e("frame \(frameIndex) WARNING: full resolution horizon score " +
+            Log.i("frame \(frameIndex) WARNING: full resolution horizon score " +
                   "(\(String(format: "%.3f", fullResScore.totalScore))) differs significantly from " +
                   "reduced resolution score " +
                   "(\(String(format: "%.3f", bestSearchResult.score.totalScore))). " +

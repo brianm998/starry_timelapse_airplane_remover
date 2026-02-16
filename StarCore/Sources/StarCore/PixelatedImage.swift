@@ -940,11 +940,11 @@ extension PixelatedImage {
         throw "Unable to apply mask to image"
     }
 
-    func downScaleTo(width: UInt, height: UInt) -> PixelatedImage? {
+    public func downScaleTo(width: UInt, height: UInt) -> PixelatedImage? {
         PixelatedImage(mat: self.mat.downScale(to: width, height: height))
     }
 
-    func saveJpeg(withQuality quality: UInt, filename: String) {
+    public func saveJpeg(withQuality quality: UInt, filename: String) {
         self.mat.saveJpeg(withQuality: quality, filename: filename)
     }
 

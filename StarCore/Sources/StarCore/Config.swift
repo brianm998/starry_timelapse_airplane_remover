@@ -106,7 +106,7 @@ public struct Config: Codable, Sendable, Transferable {
     }
 
     // returns a stored json config file
-    static func read(fromJsonFilename filename: String) throws -> Config {
+    public static func read(fromJsonFilename filename: String) throws -> Config {
         let config_url = NSURL(fileURLWithPath: filename, isDirectory: false) as URL
 
         let config_data = try Data(contentsOf: config_url)
