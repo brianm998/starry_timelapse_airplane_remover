@@ -447,10 +447,10 @@ public struct Config: Codable, Sendable, Transferable {
         self.numberStaticNeighborFrames = try c.decodeIfPresent(Int.self, forKey: .numberStaticNeighborFrames) ?? self.numberStaticNeighborFrames
         self.supportedImageFileTypes = try c.decodeIfPresent([String].self, forKey: .supportedImageFileTypes) ?? self.supportedImageFileTypes
 
-        self.horizonSearchShrinkFactor = try c.decodeIfPresent(Int.self, forKey: .horizonSearchShrinkFactor)
-        self.horizonSearchCropAmounts = try c.decodeIfPresent([Double].self, forKey: .horizonSearchCropAmounts)
-        self.horizonSearchStripWidths = try c.decodeIfPresent([Int].self, forKey: .horizonSearchStripWidths)
-        self.horizonSearchNarrowingRange = try c.decodeIfPresent(Double.self, forKey: .horizonSearchNarrowingRange)
+        self.horizonSearchShrinkFactor = try c.decodeIfPresent(Int.self, forKey: .horizonSearchShrinkFactor) ?? self.horizonSearchShrinkFactor
+        self.horizonSearchCropAmounts = try c.decodeIfPresent([Double].self, forKey: .horizonSearchCropAmounts) ?? self.horizonSearchCropAmounts
+        self.horizonSearchStripWidths = try c.decodeIfPresent([Int].self, forKey: .horizonSearchStripWidths) ?? self.horizonSearchStripWidths
+        self.horizonSearchNarrowingRange = try c.decodeIfPresent(Double.self, forKey: .horizonSearchNarrowingRange) ?? self.horizonSearchNarrowingRange
     }
 
     
