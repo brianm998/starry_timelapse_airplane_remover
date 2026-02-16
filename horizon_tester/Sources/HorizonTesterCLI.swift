@@ -130,7 +130,13 @@ struct HorizonTesterCli: AsyncParsableCommand {
         let cropBounds = parseCropBounds()
         let count1 = cropCount1 ?? config.horizonSearchCropCount1
         let count2 = cropCount2 ?? config.horizonSearchCropCount2
-        let stripWidths = parseStripWidths()
+        // Enforce minimum strip width of 20 pixels at full resolution.
+        // Otsu on very narrow strips produces noisy single-pixel-width artifacts.
+        let minFullResStripWidth = 20
+        let rawStripWidths = parseStripWidths()
+        let stripWidths = rawStripWidths.map { w in
+            w == 0 ? 0 : max(minFullResStripWidth, w)
+        }
         let shrinkFactor = self.shrinkFactor ?? config.horizonSearchShrinkFactor
         let cannyMinThreshold = cannyMin ?? config.cannyMinThreshold
         let cannyMaxThreshold = cannyMax ?? config.cannyMaxThreshold
@@ -438,6 +444,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
               smoothnessScore: result.score.smoothnessScore,
               edgeAlignmentScore: result.score.edgeAlignmentScore,
               coverageScore: result.score.coverageScore,
+              localConsistencyScore: result.score.localConsistencyScore,
               totalScore: result.score.totalScore
             )
         }
@@ -449,6 +456,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
               smoothnessScore: result.score.smoothnessScore,
               edgeAlignmentScore: result.score.edgeAlignmentScore,
               coverageScore: result.score.coverageScore,
+              localConsistencyScore: result.score.localConsistencyScore,
               totalScore: result.score.totalScore
             )
         }
@@ -535,6 +543,7 @@ struct HorizonTestSummary: Codable {
         let smoothnessScore: Double
         let edgeAlignmentScore: Double
         let coverageScore: Double
+        let localConsistencyScore: Double
         let totalScore: Double
     }
 }

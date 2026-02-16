@@ -597,9 +597,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           bounds: cropBounds,
           count: config.horizonSearchCropCount1
         )
-        let fullResStripWidths: [Int] = await adaptiveState.narrowedStripWidths(
+        // Enforce a minimum strip width of 20 pixels at full resolution.
+        // Otsu thresholding on very narrow strips (< 20 px) produces unreliable
+        // results with isolated spike artifacts. A value of 0 (full width) is kept.
+        let minFullResStripWidth = 20
+        let rawStripWidths: [Int] = await adaptiveState.narrowedStripWidths(
           defaults: config.horizonSearchStripWidths
         )
+        let fullResStripWidths: [Int] = rawStripWidths.map { w in
+            w == 0 ? 0 : max(minFullResStripWidth, w)
+        }
 
         Log.i("frame \(frameIndex) adaptive horizon pass 1: " +
               "cropAmounts=\(pass1CropAmounts), stripWidths=\(fullResStripWidths), " +
@@ -722,6 +729,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     /// Run horizon detection and scoring for all combinations of crop amounts and
     /// strip widths on a reduced-resolution image. Returns scored results.
+    ///
+    /// Strip width handling:
+    /// - A value of 0 means "full image width" and is always kept as-is.
+    /// - Other values are scaled down by shrinkFactor for the reduced-res search,
+    ///   with a minimum of 20 pixels at reduced resolution.
+    /// - To ensure different full-res strip widths produce meaningfully different
+    ///   reduced-res strip widths, we deduplicate shrunk widths. When multiple
+    ///   full-res values map to the same shrunk width, we keep only the largest
+    ///   full-res value (since it will produce the same reduced-res result but
+    ///   will perform better at full resolution).
     private func runScoredHorizonSearch(
       cropAmounts: [Double],
       fullResStripWidths: [Int],
@@ -731,17 +748,33 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
       shrinkFactor: Int,
       config: Config
     ) async throws -> [HorizonSearchResult] {
-        try await withThrowingTaskGroup(
+        // Deduplicate: when multiple full-res widths map to the same shrunk width,
+        // keep only the largest full-res width (it produces the same reduced-res
+        // result but will work better at full resolution).
+        // The special value 0 (full width) is always kept as a separate entry.
+        var shrunkToFullRes: [Int: Int] = [:]  // shrunkWidth -> largest fullResWidth
+        let hasFullWidth = fullResStripWidths.contains(0)
+        for fullStripWidth in fullResStripWidths where fullStripWidth != 0 {
+            let shrunkStripWidth = max(20, fullStripWidth / shrinkFactor)
+            let existing = shrunkToFullRes[shrunkStripWidth]
+            if existing == nil || fullStripWidth > existing! {
+                shrunkToFullRes[shrunkStripWidth] = fullStripWidth
+            }
+        }
+        var deduplicatedWidths: [(fullRes: Int, shrunk: Int)] = shrunkToFullRes.map {
+            (fullRes: $0.value, shrunk: $0.key)
+        }
+        if hasFullWidth {
+            deduplicatedWidths.append((fullRes: 0, shrunk: Int(shrunkWidth)))
+        }
+
+        return try await withThrowingTaskGroup(
           of: HorizonSearchResult?.self
         ) { taskGroup in
             for cropAmount in cropAmounts {
-                for fullStripWidth in fullResStripWidths {
-                    let shrunkStripWidth: Int
-                    if fullStripWidth == 0 {
-                        shrunkStripWidth = Int(shrunkWidth)
-                    } else {
-                        shrunkStripWidth = max(20, fullStripWidth / shrinkFactor)
-                    }
+                for widthPair in deduplicatedWidths {
+                    let fullStripWidth = widthPair.fullRes
+                    let shrunkStripWidth = widthPair.shrunk
 
                     taskGroup.addTask { [frameIndex] in
                         guard let mask = try await shrunkImage.horizonMask(

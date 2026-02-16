@@ -335,12 +335,12 @@ public struct Config: Codable, Sendable, Transferable {
     // horizonSearchCropCount1 evenly spaced steps for the first pass, then
     // horizonSearchCropCount2 steps for a refined second pass around the first best.
     // An empty array disables adaptive search.
-    public var horizonSearchCropBounds: [Double] = [30, 70]
+    public var horizonSearchCropBounds: [Double] = [20, 70]
 
     // Number of evenly spaced crop percentage values to test in the first pass.
     // The range defined by horizonSearchCropBounds is divided into this many steps.
     // e.g. bounds=[30,70] and count1=5 produces [30, 40, 50, 60, 70].
-    public var horizonSearchCropCount1: Int = 5
+    public var horizonSearchCropCount1: Int = 8
 
     // Number of evenly spaced crop percentage values to test in the second
     // refinement pass. The second pass search area is centered on the first pass
@@ -348,14 +348,14 @@ public struct Config: Codable, Sendable, Transferable {
     // this many steps.
     // e.g. if first pass step=10 and best=50, second pass searches [40..60]
     // divided into horizonSearchCropCount2 steps.
-    public var horizonSearchCropCount2: Int = 5
+    public var horizonSearchCropCount2: Int = 24
 
     // Set of horizonStripWidth values to try during the initial reduced-resolution
     // parameter search. These are expressed in full-resolution pixels and will be
     // scaled down by horizonSearchShrinkFactor for the search pass.
     // An empty array disables the search and uses the single horizonStripWidth value.
     // A value of 0 means use the full image width.
-    public var horizonSearchStripWidths: [Int] = [100, 200, 400, 800, 0]
+    public var horizonSearchStripWidths: [Int] = [200, 400, 800]
 
     // After the first frame's horizon is detected, narrow the search area for
     // subsequent frames. This is the number of percentage points to add above

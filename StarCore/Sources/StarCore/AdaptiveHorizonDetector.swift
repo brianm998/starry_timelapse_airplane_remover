@@ -16,22 +16,31 @@ public struct HorizonScore: Sendable, CustomStringConvertible {
     /// 1.0 = reasonable ground/sky ratio, 0.0 = degenerate.
     public let coverageScore: Double
 
+    /// Penalizes horizon lines with isolated spike columns that deviate drastically
+    /// from their local neighborhood. 1.0 = no spikes, 0.0 = many spikes.
+    /// This catches single-pixel-width vertical artifacts that the global smoothness
+    /// score may miss (since stddev averages out isolated spikes).
+    public let localConsistencyScore: Double
+
     /// Combined weighted score. Higher is better.
     public var totalScore: Double {
-        // Smoothness is the strongest signal - a jerky horizon is almost certainly wrong.
+        // Smoothness is a strong signal - a jerky horizon is almost certainly wrong.
         // Edge alignment confirms the horizon sits on a real intensity boundary.
         // Coverage prevents degenerate all-sky or all-ground results.
-        let smoothnessWeight = 0.5
-        let edgeAlignmentWeight = 0.3
-        let coverageWeight = 0.2
+        // Local consistency catches isolated spike artifacts from too-narrow strips.
+        let smoothnessWeight = 0.35
+        let edgeAlignmentWeight = 0.25
+        let coverageWeight = 0.15
+        let localConsistencyWeight = 0.25
         return smoothnessScore * smoothnessWeight +
                edgeAlignmentScore * edgeAlignmentWeight +
-               coverageScore * coverageWeight
+               coverageScore * coverageWeight +
+               localConsistencyScore * localConsistencyWeight
     }
 
     public var description: String {
-        String(format: "HorizonScore(total=%.3f, smooth=%.3f, edge=%.3f, coverage=%.3f)",
-               totalScore, smoothnessScore, edgeAlignmentScore, coverageScore)
+        String(format: "HorizonScore(total=%.3f, smooth=%.3f, edge=%.3f, coverage=%.3f, consist=%.3f)",
+               totalScore, smoothnessScore, edgeAlignmentScore, coverageScore, localConsistencyScore)
     }
 }
 
@@ -224,6 +233,69 @@ public enum HorizonScoring {
         return Double(alignedCount) / Double(totalCount)
     }
 
+    /// Compute local consistency score: penalize horizon lines with isolated spike
+    /// columns that deviate drastically from their local neighborhood.
+    ///
+    /// For each column with a defined horizon Y, we compare it to the median of a
+    /// local window (±windowRadius columns). If the column deviates by more than
+    /// `spikeThreshold` pixels from the local median, it's counted as a spike.
+    /// The score is `1.0 - fractionOfSpikes`.
+    ///
+    /// This catches the single-pixel-width vertical artifacts that result from
+    /// Otsu thresholding on very narrow strips, where individual columns can jump
+    /// drastically while the overall stddev remains low (because the spikes are
+    /// isolated among many smooth columns).
+    public static func localConsistencyScore(
+      horizonY: [Int?],
+      windowRadius: Int = 5,
+      spikeThreshold: Double = 8.0
+    ) -> Double {
+        let count = horizonY.count
+        guard count > 0 else { return 0.0 }
+
+        var spikeCount = 0
+        var definedCount = 0
+
+        for i in 0..<count {
+            guard let y = horizonY[i] else { continue }
+            definedCount += 1
+
+            // Collect defined values in the local window
+            let lo = max(0, i - windowRadius)
+            let hi = min(count - 1, i + windowRadius)
+            var localValues: [Int] = []
+            for j in lo...hi {
+                if let v = horizonY[j] { localValues.append(v) }
+            }
+
+            guard localValues.count >= 3 else { continue }
+
+            // Compute median of local window
+            localValues.sort()
+            let median: Double
+            let n = localValues.count
+            if n % 2 == 0 {
+                median = Double(localValues[n / 2 - 1] + localValues[n / 2]) / 2.0
+            } else {
+                median = Double(localValues[n / 2])
+            }
+
+            // Count as spike if deviation exceeds threshold
+            if abs(Double(y) - median) > spikeThreshold {
+                spikeCount += 1
+            }
+        }
+
+        guard definedCount > 0 else { return 0.0 }
+        let fractionSpikes = Double(spikeCount) / Double(definedCount)
+
+        // Score: no spikes = 1.0, all spikes = 0.0.
+        // Use a slightly aggressive curve so even a small fraction of spikes
+        // gets penalized noticeably: score = (1 - fractionSpikes)^2
+        let raw = 1.0 - fractionSpikes
+        return raw * raw
+    }
+
     /// Compute coverage score: penalize degenerate results that are nearly all-sky
     /// or all-ground.
     /// `horizonY` is the per-column horizon Y from the mask.
@@ -284,11 +356,13 @@ public enum HorizonScoring {
         }
 
         let coverage = coverageScore(horizonY: horizonY, imageHeight: mask.height)
+        let consistency = localConsistencyScore(horizonY: horizonY)
 
         return HorizonScore(
           smoothnessScore: smoothness,
           edgeAlignmentScore: edgeAlignment,
-          coverageScore: coverage
+          coverageScore: coverage,
+          localConsistencyScore: consistency
         )
     }
 
@@ -307,11 +381,13 @@ public enum HorizonScoring {
           tolerance: 3
         )
         let coverage = coverageScore(horizonY: horizonY, imageHeight: mask.height)
+        let consistency = localConsistencyScore(horizonY: horizonY)
 
         return HorizonScore(
           smoothnessScore: smoothness,
           edgeAlignmentScore: edgeAlignment,
-          coverageScore: coverage
+          coverageScore: coverage,
+          localConsistencyScore: consistency
         )
     }
 }
