@@ -329,11 +329,26 @@ public struct Config: Codable, Sendable, Transferable {
     // Higher values are faster but less precise for parameter selection.
     public var horizonSearchShrinkFactor: Int = 4
 
-    // Set of earthAlignedImageCropAmount percentage values to try during
-    // the initial reduced-resolution parameter search.
+    // [min, max] bounds for the crop percentage search range.
     // Each value is a percentage (0-100) of the image height to ignore from the top.
-    // Empty array disables the search and uses the single earthAlignedImageCropAmount value.
-    public var horizonSearchCropAmounts: [Double] = [30, 40, 50, 60, 70]
+    // The actual crop amounts tested are computed by dividing this range into
+    // horizonSearchCropCount1 evenly spaced steps for the first pass, then
+    // horizonSearchCropCount2 steps for a refined second pass around the first best.
+    // An empty array disables adaptive search.
+    public var horizonSearchCropBounds: [Double] = [30, 70]
+
+    // Number of evenly spaced crop percentage values to test in the first pass.
+    // The range defined by horizonSearchCropBounds is divided into this many steps.
+    // e.g. bounds=[30,70] and count1=5 produces [30, 40, 50, 60, 70].
+    public var horizonSearchCropCount1: Int = 5
+
+    // Number of evenly spaced crop percentage values to test in the second
+    // refinement pass. The second pass search area is centered on the first pass
+    // best value and spans one first-pass step in each direction, divided into
+    // this many steps.
+    // e.g. if first pass step=10 and best=50, second pass searches [40..60]
+    // divided into horizonSearchCropCount2 steps.
+    public var horizonSearchCropCount2: Int = 5
 
     // Set of horizonStripWidth values to try during the initial reduced-resolution
     // parameter search. These are expressed in full-resolution pixels and will be
@@ -448,7 +463,9 @@ public struct Config: Codable, Sendable, Transferable {
         self.supportedImageFileTypes = try c.decodeIfPresent([String].self, forKey: .supportedImageFileTypes) ?? self.supportedImageFileTypes
 
         self.horizonSearchShrinkFactor = try c.decodeIfPresent(Int.self, forKey: .horizonSearchShrinkFactor) ?? self.horizonSearchShrinkFactor
-        self.horizonSearchCropAmounts = try c.decodeIfPresent([Double].self, forKey: .horizonSearchCropAmounts) ?? self.horizonSearchCropAmounts
+        self.horizonSearchCropBounds = try c.decodeIfPresent([Double].self, forKey: .horizonSearchCropBounds) ?? self.horizonSearchCropBounds
+        self.horizonSearchCropCount1 = try c.decodeIfPresent(Int.self, forKey: .horizonSearchCropCount1) ?? self.horizonSearchCropCount1
+        self.horizonSearchCropCount2 = try c.decodeIfPresent(Int.self, forKey: .horizonSearchCropCount2) ?? self.horizonSearchCropCount2
         self.horizonSearchStripWidths = try c.decodeIfPresent([Int].self, forKey: .horizonSearchStripWidths) ?? self.horizonSearchStripWidths
         self.horizonSearchNarrowingRange = try c.decodeIfPresent(Double.self, forKey: .horizonSearchNarrowingRange) ?? self.horizonSearchNarrowingRange
     }

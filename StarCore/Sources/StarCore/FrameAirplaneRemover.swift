@@ -504,7 +504,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         // Determine if we should use the adaptive multi-parameter search
-        let useAdaptiveSearch = !config.horizonSearchCropAmounts.isEmpty ||
+        let useAdaptiveSearch = config.horizonSearchCropBounds.count >= 2 ||
                                 !config.horizonSearchStripWidths.isEmpty
 
         let horizonMask: HorizonMask
@@ -549,8 +549,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return horizonMask
     }
 
-    /// Run horizon detection at reduced resolution with a matrix of parameter
-    /// combinations, score each, then apply the best parameters at full resolution.
+    /// Run horizon detection at reduced resolution with a two-pass parameter search,
+    /// score each result, then apply the best parameters at full resolution.
+    ///
+    /// Pass 1: Coarse search across the full crop bounds range with horizonSearchCropCount1
+    ///         steps, testing all strip width combinations.
+    /// Pass 2: Refined search centered on the pass-1 best crop value, spanning one
+    ///         pass-1 step in each direction, divided into horizonSearchCropCount2 steps.
+    ///         Only the best strip width from pass 1 is used.
     private func adaptiveHorizonSearch(
       original: PixelatedImage,
       config: Config,
@@ -571,36 +577,165 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         // Pre-compute Canny edges on the shrunk image once for scoring all candidates.
-        // The edge image is used by HorizonScoring to check if the detected horizon
-        // aligns with real intensity boundaries.
         let shrunkEdgeImage: PixelatedImage? = try? shrunkImage.cannyEdgeDetect(
           minThreshold: config.cannyMinThreshold,
           maxThreshold: config.cannyMaxThreshold,
           useL2Gradient: config.cannyUseL2Gradient
         )
 
-        // Step 2: Determine parameter search space.
-        // After the first frame, narrow the search based on what worked before.
-        let cropAmounts: [Double] = await adaptiveState.narrowedCropAmounts(
-          defaults: config.horizonSearchCropAmounts,
+        // Step 2: Determine first-pass parameter search space.
+        // After the first frame, narrow the bounds based on what worked before.
+        let cropBounds: [Double] = await adaptiveState.narrowedCropBounds(
+          defaults: config.horizonSearchCropBounds,
           narrowingRange: config.horizonSearchNarrowingRange
+        )
+        let pass1CropAmounts = HorizonCropAmounts.firstPass(
+          bounds: cropBounds,
+          count: config.horizonSearchCropCount1
+        )
+        let pass1Step = HorizonCropAmounts.firstPassStep(
+          bounds: cropBounds,
+          count: config.horizonSearchCropCount1
         )
         let fullResStripWidths: [Int] = await adaptiveState.narrowedStripWidths(
           defaults: config.horizonSearchStripWidths
         )
 
-        Log.i("frame \(frameIndex) adaptive horizon search: " +
-              "cropAmounts=\(cropAmounts), stripWidths=\(fullResStripWidths), " +
+        Log.i("frame \(frameIndex) adaptive horizon pass 1: " +
+              "cropAmounts=\(pass1CropAmounts), stripWidths=\(fullResStripWidths), " +
               "shrinkFactor=\(shrinkFactor)")
 
-        // Step 3: Run all parameter combinations in parallel at reduced resolution
-        let searchResults: [HorizonSearchResult] = try await withThrowingTaskGroup(
+        // Step 3: Run first-pass combinations in parallel at reduced resolution
+        let pass1Results = try await runScoredHorizonSearch(
+          cropAmounts: pass1CropAmounts,
+          fullResStripWidths: fullResStripWidths,
+          shrunkImage: shrunkImage,
+          shrunkEdgeImage: shrunkEdgeImage,
+          shrunkWidth: shrunkWidth,
+          shrinkFactor: shrinkFactor,
+          config: config
+        )
+
+        guard let pass1Best = pass1Results.max(by: { $0.score.totalScore < $1.score.totalScore })
+        else {
+            throw "adaptive horizon search pass 1 produced no valid results"
+        }
+
+        Log.i("frame \(frameIndex) pass 1 best: " +
+              "cropAmount=\(pass1Best.cropAmount), " +
+              "stripWidth=\(pass1Best.stripWidth), " +
+              "score=\(pass1Best.score)")
+
+        for result in pass1Results.sorted(by: { $0.score.totalScore > $1.score.totalScore }) {
+            Log.d("frame \(frameIndex) pass 1 result: " +
+                  "crop=\(result.cropAmount), strip=\(result.stripWidth), " +
+                  "score=\(result.score)")
+        }
+
+        // Step 4: Second pass - refine the crop amount around the pass-1 best.
+        // The search area spans one pass-1 step in each direction, divided into
+        // horizonSearchCropCount2 evenly spaced values.
+        // Strip width is fixed to the pass-1 best.
+        let pass2CropAmounts = HorizonCropAmounts.secondPass(
+          bestCrop: pass1Best.cropAmount,
+          firstPassStep: pass1Step,
+          count: config.horizonSearchCropCount2
+        )
+
+        Log.i("frame \(frameIndex) adaptive horizon pass 2: " +
+              "cropAmounts=\(pass2CropAmounts), " +
+              "stripWidth=\(pass1Best.stripWidth)")
+
+        let pass2Results = try await runScoredHorizonSearch(
+          cropAmounts: pass2CropAmounts,
+          fullResStripWidths: [pass1Best.stripWidth],
+          shrunkImage: shrunkImage,
+          shrunkEdgeImage: shrunkEdgeImage,
+          shrunkWidth: shrunkWidth,
+          shrinkFactor: shrinkFactor,
+          config: config
+        )
+
+        guard let pass2Best = pass2Results.max(by: { $0.score.totalScore < $1.score.totalScore })
+        else {
+            throw "adaptive horizon search pass 2 produced no valid results"
+        }
+
+        Log.i("frame \(frameIndex) pass 2 best: " +
+              "cropAmount=\(pass2Best.cropAmount), " +
+              "stripWidth=\(pass2Best.stripWidth), " +
+              "score=\(pass2Best.score)")
+
+        for result in pass2Results.sorted(by: { $0.score.totalScore > $1.score.totalScore }) {
+            Log.d("frame \(frameIndex) pass 2 result: " +
+                  "crop=\(result.cropAmount), strip=\(result.stripWidth), " +
+                  "score=\(result.score)")
+        }
+
+        // Step 5: Apply the pass-2 best parameters at full resolution.
+        let bestStripWidth = pass2Best.stripWidth == 0 ? original.width : pass2Best.stripWidth
+
+        guard let fullResMask = try await original.horizonMask(
+                at: frameIndex,
+                bottomPercentage: pass2Best.cropAmount,
+                stripWidth: bestStripWidth,
+                useCannyEdgeDetection: config.useCannyForHorizonDetection,
+                cannyMinThreshold: config.cannyMinThreshold,
+                cannyMaxThreshold: config.cannyMaxThreshold,
+                useL2Gradient: config.cannyUseL2Gradient
+              )
+        else {
+            throw "cannot create full resolution horizon mask with best parameters"
+        }
+
+        // Step 6: Score the full-resolution result and compare with the
+        // reduced-resolution score to detect discrepancies.
+        let fullResScore = HorizonScoring.score(
+          horizonMask: fullResMask,
+          originalImage: original,
+          cannyMinThreshold: config.cannyMinThreshold,
+          cannyMaxThreshold: config.cannyMaxThreshold,
+          useL2Gradient: config.cannyUseL2Gradient
+        )
+
+        Log.i("frame \(frameIndex) full resolution score=\(fullResScore)")
+
+        let scoreDifference = abs(fullResScore.totalScore - pass2Best.score.totalScore)
+        if scoreDifference > 0.2 {
+            Log.i("frame \(frameIndex) WARNING: full resolution horizon score " +
+                  "(\(String(format: "%.3f", fullResScore.totalScore))) differs significantly from " +
+                  "reduced resolution score " +
+                  "(\(String(format: "%.3f", pass2Best.score.totalScore))). " +
+                  "Difference: \(String(format: "%.3f", scoreDifference)). " +
+                  "Proceeding with full resolution result.")
+        }
+
+        // Step 7: Record the best parameters for narrowing subsequent frames
+        await adaptiveState.recordBest(
+          cropAmount: pass2Best.cropAmount,
+          stripWidth: pass2Best.stripWidth,
+          firstPassStep: pass1Step
+        )
+
+        return fullResMask
+    }
+
+    /// Run horizon detection and scoring for all combinations of crop amounts and
+    /// strip widths on a reduced-resolution image. Returns scored results.
+    private func runScoredHorizonSearch(
+      cropAmounts: [Double],
+      fullResStripWidths: [Int],
+      shrunkImage: PixelatedImage,
+      shrunkEdgeImage: PixelatedImage?,
+      shrunkWidth: UInt,
+      shrinkFactor: Int,
+      config: Config
+    ) async throws -> [HorizonSearchResult] {
+        try await withThrowingTaskGroup(
           of: HorizonSearchResult?.self
         ) { taskGroup in
             for cropAmount in cropAmounts {
                 for fullStripWidth in fullResStripWidths {
-                    // Scale strip width for the shrunk image.
-                    // 0 means full image width.
                     let shrunkStripWidth: Int
                     if fullStripWidth == 0 {
                         shrunkStripWidth = Int(shrunkWidth)
@@ -654,69 +789,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
             return results
         }
-
-        guard let bestSearchResult = searchResults.max(by: { $0.score.totalScore < $1.score.totalScore })
-        else {
-            throw "adaptive horizon search produced no valid results"
-        }
-
-        Log.i("frame \(frameIndex) adaptive search best: " +
-              "cropAmount=\(bestSearchResult.cropAmount), " +
-              "stripWidth=\(bestSearchResult.stripWidth), " +
-              "score=\(bestSearchResult.score)")
-
-        // Log all search results for debugging
-        for result in searchResults.sorted(by: { $0.score.totalScore > $1.score.totalScore }) {
-            Log.d("frame \(frameIndex) search result: " +
-                  "crop=\(result.cropAmount), strip=\(result.stripWidth), " +
-                  "score=\(result.score)")
-        }
-
-        // Step 4: Apply the best parameters at full resolution.
-        let bestStripWidth = bestSearchResult.stripWidth == 0 ? original.width : bestSearchResult.stripWidth
-
-        guard let fullResMask = try await original.horizonMask(
-                at: frameIndex,
-                bottomPercentage: bestSearchResult.cropAmount,
-                stripWidth: bestStripWidth,
-                useCannyEdgeDetection: config.useCannyForHorizonDetection,
-                cannyMinThreshold: config.cannyMinThreshold,
-                cannyMaxThreshold: config.cannyMaxThreshold,
-                useL2Gradient: config.cannyUseL2Gradient
-              )
-        else {
-            throw "cannot create full resolution horizon mask with best parameters"
-        }
-
-        // Step 5: Score the full-resolution result and compare with the
-        // reduced-resolution score to detect discrepancies.
-        let fullResScore = HorizonScoring.score(
-          horizonMask: fullResMask,
-          originalImage: original,
-          cannyMinThreshold: config.cannyMinThreshold,
-          cannyMaxThreshold: config.cannyMaxThreshold,
-          useL2Gradient: config.cannyUseL2Gradient
-        )
-
-        Log.i("frame \(frameIndex) full resolution score=\(fullResScore)")
-
-        let scoreDifference = abs(fullResScore.totalScore - bestSearchResult.score.totalScore)
-        if scoreDifference > 0.2 {
-            Log.i("frame \(frameIndex) WARNING: full resolution horizon score " +
-                  "(\(String(format: "%.3f", fullResScore.totalScore))) differs significantly from " +
-                  "reduced resolution score " +
-                  "(\(String(format: "%.3f", bestSearchResult.score.totalScore))). " +
-                  "Difference: \(String(format: "%.3f", scoreDifference)). " +
-                  "Proceeding with full resolution result.")
-        }
-
-        // Step 6: Record the best parameters for narrowing subsequent frames
-        await adaptiveState.recordBest(
-          cropAmount: bestSearchResult.cropAmount,
-          stripWidth: bestSearchResult.stripWidth
-        )
-
-        return fullResMask
     }
 
     public nonisolated func process(

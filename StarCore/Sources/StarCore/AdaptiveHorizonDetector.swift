@@ -43,25 +43,69 @@ struct HorizonSearchResult: Sendable {
     let score: HorizonScore
 }
 
+/// Computes evenly spaced crop amount arrays from bounds and step counts.
+public enum HorizonCropAmounts {
+
+    /// Generate the first-pass crop amount array from [min, max] bounds and a step count.
+    /// Returns evenly spaced values including both endpoints.
+    /// e.g. bounds=[30,70], count=5 -> [30, 40, 50, 60, 70]
+    public static func firstPass(bounds: [Double], count: Int) -> [Double] {
+        guard bounds.count >= 2 else { return [50] }
+        let lo = bounds[0]
+        let hi = bounds[1]
+        let n = max(2, count)
+        let step = (hi - lo) / Double(n - 1)
+        return (0..<n).map { lo + Double($0) * step }
+    }
+
+    /// Compute the step size used in the first pass.
+    public static func firstPassStep(bounds: [Double], count: Int) -> Double {
+        guard bounds.count >= 2 else { return 10 }
+        let lo = bounds[0]
+        let hi = bounds[1]
+        let n = max(2, count)
+        return (hi - lo) / Double(n - 1)
+    }
+
+    /// Generate the second-pass crop amount array centered on the first-pass best value.
+    /// The search area spans one first-pass step in each direction (2 * step total),
+    /// divided into `count` evenly spaced values.
+    /// e.g. bestCrop=50, step1=10, count=5 -> [40, 45, 50, 55, 60]
+    public static func secondPass(
+      bestCrop: Double,
+      firstPassStep step1: Double,
+      count: Int
+    ) -> [Double] {
+        let halfRange = step1 // one step in each direction
+        let lo = max(0, bestCrop - halfRange)
+        let hi = min(100, bestCrop + halfRange)
+        let n = max(2, count)
+        let step = (hi - lo) / Double(n - 1)
+        return (0..<n).map { lo + Double($0) * step }
+    }
+}
+
 /// Tracks the best-known parameters from previous frames to narrow future searches.
 public actor AdaptiveHorizonState {
     private var lastBestCropAmount: Double?
     private var lastBestStripWidth: Int?
+    private var lastFirstPassStep: Double?
     private var frameCount: Int = 0
 
     public init() {}
 
     /// Record the best parameters found for a frame.
-    func recordBest(cropAmount: Double, stripWidth: Int) {
+    func recordBest(cropAmount: Double, stripWidth: Int, firstPassStep: Double) {
         lastBestCropAmount = cropAmount
         lastBestStripWidth = stripWidth
+        lastFirstPassStep = firstPassStep
         frameCount += 1
     }
 
-    /// Get narrowed crop amounts for subsequent frames.
+    /// Get narrowed first-pass crop bounds for subsequent frames.
     /// After the first frame, we center the search around the previous best
     /// and narrow the range.
-    func narrowedCropAmounts(
+    func narrowedCropBounds(
       defaults: [Double],
       narrowingRange: Double
     ) -> [Double] {
@@ -69,22 +113,9 @@ public actor AdaptiveHorizonState {
             return defaults
         }
 
-        // Build a narrowed set: [lastBest - range, lastBest, lastBest + range]
-        // Clamp to valid 0-100 range, deduplicate
-        let candidates = [
-            lastBest - narrowingRange,
-            lastBest,
-            lastBest + narrowingRange
-        ].map { max(0, min(100, $0)) }
-
-        // Deduplicate values that are very close after clamping
-        var result: [Double] = []
-        for c in candidates {
-            if !result.contains(where: { abs($0 - c) < 1.0 }) {
-                result.append(c)
-            }
-        }
-        return result.sorted()
+        let lo = max(0, lastBest - narrowingRange)
+        let hi = min(100, lastBest + narrowingRange)
+        return [lo, hi]
     }
 
     /// Get narrowed strip widths for subsequent frames.
