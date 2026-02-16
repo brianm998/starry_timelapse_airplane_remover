@@ -367,17 +367,19 @@ func interpolateHomography(
     let sortedW1 = w1.sorted { $0.frameIndex < $1.frameIndex }
     let sortedBad = bad.sorted { $0.frameIndex < $1.frameIndex }
     for i in 0..<sortedW0.count {
-        ret.append(
-          AlignmentWarpInfoCodable(
-            homography: interpolateHomography(
-              sortedW0[i].homography ?? [],
-              sortedW1[i].homography ?? [],
-              alpha: alpha
-            ),
-            alignmentState: .homographySuccess,
-            frameIndex: sortedBad[i].frameIndex 
-          )
-        )
+        if i < sortedBad.count {
+            ret.append(
+              AlignmentWarpInfoCodable(
+                homography: interpolateHomography(
+                  sortedW0[i].homography ?? [],
+                  sortedW1[i].homography ?? [],
+                  alpha: alpha
+                ),
+                alignmentState: .homographySuccess,
+                frameIndex: sortedBad[i].frameIndex 
+              )
+            )
+        }
     }
     return ret
 }
