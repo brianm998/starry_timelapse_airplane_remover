@@ -639,8 +639,6 @@ public final class ImageSequenceViewModel {
         Log.d("outlier_json_startup with \(jsonConfigFilename)")
         // first read config from json
 
-        let config = try ConfigManager(configFilename: jsonConfigFilename)
-
         try await self.init(
           viewModel: viewModel,
           with: config,
@@ -755,8 +753,14 @@ public final class ImageSequenceViewModel {
 
         self.appNapDisabler = AppNapDisabler()
         
-        let config = configManager.config()
+        var config = configManager.config()
 
+        // turn on previews if they're off as the gui needs them
+        if !config.writeFramePreviewFiles {
+            config.writeFramePreviewFiles = true
+            configManager.update(config)
+        }
+        
         if !config.cleanMethod.usesOutliers {
             self.selectionMode = .none
         } 
