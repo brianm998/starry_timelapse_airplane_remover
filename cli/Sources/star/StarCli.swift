@@ -348,6 +348,7 @@ struct StarCli: AsyncParsableCommand {
                 config.horizonDetectionEnabled = !noHorizon
                 config.finalOutputDir = finalOutputDirname
                 config.tripodHeadWasMoving = movingCamera
+                config.numberOfFramesToProcessConcurrently = Int(numConcurrentRenders)
                 
                 let configFilename = "\(config.basename)-config.json"
                 
