@@ -468,7 +468,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return nil
     }
 
-    // this horizon mask is calculated based upon this frame only
+    // this horizon mask is calculated based upon this frame only.
+    // Uses adaptive parameter search: runs horizon detection at reduced resolution
+    // with multiple parameter combinations, scores each result, then applies the
+    // best parameters at full resolution.
     public func loadOrCreateHorizonMask() async throws -> HorizonMask {
         Log.d("frame \(frameIndex) trying to load horizon mask")
         // load if possible
@@ -488,44 +491,232 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(frameIndex) trying to create horizon mask")
 
         self.set(state: .horizonDetection)
-        // if not, create 
         let config = await configManager.config()
-        // load originalimage
+        let adaptiveState = await configManager.adaptiveHorizonState
 
-        var bottomPercentage: Double = 50
-        if let cropAmount = config.earthAlignedImageCropAmount {
-            bottomPercentage = Double(cropAmount) / Double(height) * 100
-            Log.i("frame \(frameIndex) calculated bottomPercentage \(bottomPercentage) from cropAmount \(cropAmount)")
+        guard let original = try await imageAccessor.load(
+                frameIndex: frameIndex,
+                type: .original,
+                atSize: .original
+              )
+        else {
+            throw "cannot load original image for horizon detection"
         }
-        
-        if let original = try await imageAccessor.load(frameIndex: frameIndex,
-                                                       type: .original,
-                                                       atSize: .original),
-           // calculate horizon mask from original image
-           let horizonMask = try await original.horizonMask(
-             at: frameIndex,
-             bottomPercentage: bottomPercentage,
-             stripWidth: config.horizonStripWidth,
-             useCannyEdgeDetection: config.useCannyForHorizonDetection,
-             cannyMinThreshold: config.cannyMinThreshold,
-             cannyMaxThreshold: config.cannyMaxThreshold,
-             useL2Gradient: config.cannyUseL2Gradient
-           )
-        {
-            Log.d("frame \(frameIndex) horizon mask image \(horizonMask.image) created")
-            try await imageAccessor.save(
-              horizonMask.image,
-              frameIndex: frameIndex,
-              as: .horizon,
-              atSizes: await self.outputSizes,
-              overwrite: true
+
+        // Determine if we should use the adaptive multi-parameter search
+        let useAdaptiveSearch = !config.horizonSearchCropAmounts.isEmpty ||
+                                !config.horizonSearchStripWidths.isEmpty
+
+        let horizonMask: HorizonMask
+
+        if useAdaptiveSearch {
+            horizonMask = try await adaptiveHorizonSearch(
+              original: original,
+              config: config,
+              adaptiveState: adaptiveState
             )
-
-            self.set(state: .horizonDetected)
-            return horizonMask
         } else {
-            throw "cannot create horizon mask"
+            // Fallback: single parameter set, same as original behavior
+            var bottomPercentage: Double = 50
+            if let cropAmount = config.earthAlignedImageCropAmount {
+                bottomPercentage = Double(cropAmount) / Double(height) * 100
+            }
+            guard let mask = try await original.horizonMask(
+                    at: frameIndex,
+                    bottomPercentage: bottomPercentage,
+                    stripWidth: config.horizonStripWidth,
+                    useCannyEdgeDetection: config.useCannyForHorizonDetection,
+                    cannyMinThreshold: config.cannyMinThreshold,
+                    cannyMaxThreshold: config.cannyMaxThreshold,
+                    useL2Gradient: config.cannyUseL2Gradient
+                  )
+            else {
+                throw "cannot create horizon mask"
+            }
+            horizonMask = mask
         }
+
+        Log.d("frame \(frameIndex) horizon mask image \(horizonMask.image) created")
+        try await imageAccessor.save(
+          horizonMask.image,
+          frameIndex: frameIndex,
+          as: .horizon,
+          atSizes: await self.outputSizes,
+          overwrite: true
+        )
+
+        self.set(state: .horizonDetected)
+        return horizonMask
+    }
+
+    /// Run horizon detection at reduced resolution with a matrix of parameter
+    /// combinations, score each, then apply the best parameters at full resolution.
+    private func adaptiveHorizonSearch(
+      original: PixelatedImage,
+      config: Config,
+      adaptiveState: AdaptiveHorizonState
+    ) async throws -> HorizonMask {
+        let shrinkFactor = max(1, config.horizonSearchShrinkFactor)
+        let shrunkWidth = UInt(original.width / shrinkFactor)
+        let shrunkHeight = UInt(original.height / shrinkFactor)
+
+        // Step 1: Create reduced-resolution image for parameter search
+        guard let shrunkImage = original.downScaleTo(
+                width: shrunkWidth,
+                height: shrunkHeight
+              )
+        else {
+            Log.w("frame \(frameIndex) unable to downscale for adaptive horizon search, falling back")
+            throw "cannot downscale image for adaptive horizon search"
+        }
+
+        // Pre-compute Canny edges on the shrunk image once for scoring all candidates.
+        // The edge image is used by HorizonScoring to check if the detected horizon
+        // aligns with real intensity boundaries.
+        let shrunkEdgeImage: PixelatedImage? = try? shrunkImage.cannyEdgeDetect(
+          minThreshold: config.cannyMinThreshold,
+          maxThreshold: config.cannyMaxThreshold,
+          useL2Gradient: config.cannyUseL2Gradient
+        )
+
+        // Step 2: Determine parameter search space.
+        // After the first frame, narrow the search based on what worked before.
+        let cropAmounts: [Double] = await adaptiveState.narrowedCropAmounts(
+          defaults: config.horizonSearchCropAmounts,
+          narrowingRange: config.horizonSearchNarrowingRange
+        )
+        let fullResStripWidths: [Int] = await adaptiveState.narrowedStripWidths(
+          defaults: config.horizonSearchStripWidths
+        )
+
+        Log.i("frame \(frameIndex) adaptive horizon search: " +
+              "cropAmounts=\(cropAmounts), stripWidths=\(fullResStripWidths), " +
+              "shrinkFactor=\(shrinkFactor)")
+
+        // Step 3: Run all parameter combinations in parallel at reduced resolution
+        let searchResults: [HorizonSearchResult] = try await withThrowingTaskGroup(
+          of: HorizonSearchResult?.self
+        ) { taskGroup in
+            for cropAmount in cropAmounts {
+                for fullStripWidth in fullResStripWidths {
+                    // Scale strip width for the shrunk image.
+                    // 0 means full image width.
+                    let shrunkStripWidth: Int
+                    if fullStripWidth == 0 {
+                        shrunkStripWidth = Int(shrunkWidth)
+                    } else {
+                        shrunkStripWidth = max(20, fullStripWidth / shrinkFactor)
+                    }
+
+                    taskGroup.addTask { [frameIndex] in
+                        guard let mask = try await shrunkImage.horizonMask(
+                                at: frameIndex,
+                                bottomPercentage: cropAmount,
+                                stripWidth: shrunkStripWidth,
+                                useCannyEdgeDetection: config.useCannyForHorizonDetection,
+                                cannyMinThreshold: config.cannyMinThreshold,
+                                cannyMaxThreshold: config.cannyMaxThreshold,
+                                useL2Gradient: config.cannyUseL2Gradient
+                              )
+                        else {
+                            return nil
+                        }
+
+                        let score: HorizonScore
+                        if let edges = shrunkEdgeImage {
+                            score = HorizonScoring.score(
+                              horizonMask: mask,
+                              edgeImage: edges
+                            )
+                        } else {
+                            score = HorizonScoring.score(
+                              horizonMask: mask,
+                              originalImage: shrunkImage,
+                              cannyMinThreshold: config.cannyMinThreshold,
+                              cannyMaxThreshold: config.cannyMaxThreshold,
+                              useL2Gradient: config.cannyUseL2Gradient
+                            )
+                        }
+
+                        return HorizonSearchResult(
+                          cropAmount: cropAmount,
+                          stripWidth: fullStripWidth,
+                          horizonMask: mask,
+                          score: score
+                        )
+                    }
+                }
+            }
+
+            var results: [HorizonSearchResult] = []
+            for try await result in taskGroup {
+                if let result { results.append(result) }
+            }
+            return results
+        }
+
+        guard let bestSearchResult = searchResults.max(by: { $0.score.totalScore < $1.score.totalScore })
+        else {
+            throw "adaptive horizon search produced no valid results"
+        }
+
+        Log.i("frame \(frameIndex) adaptive search best: " +
+              "cropAmount=\(bestSearchResult.cropAmount), " +
+              "stripWidth=\(bestSearchResult.stripWidth), " +
+              "score=\(bestSearchResult.score)")
+
+        // Log all search results for debugging
+        for result in searchResults.sorted(by: { $0.score.totalScore > $1.score.totalScore }) {
+            Log.d("frame \(frameIndex) search result: " +
+                  "crop=\(result.cropAmount), strip=\(result.stripWidth), " +
+                  "score=\(result.score)")
+        }
+
+        // Step 4: Apply the best parameters at full resolution.
+        let bestStripWidth = bestSearchResult.stripWidth == 0 ? original.width : bestSearchResult.stripWidth
+
+        guard let fullResMask = try await original.horizonMask(
+                at: frameIndex,
+                bottomPercentage: bestSearchResult.cropAmount,
+                stripWidth: bestStripWidth,
+                useCannyEdgeDetection: config.useCannyForHorizonDetection,
+                cannyMinThreshold: config.cannyMinThreshold,
+                cannyMaxThreshold: config.cannyMaxThreshold,
+                useL2Gradient: config.cannyUseL2Gradient
+              )
+        else {
+            throw "cannot create full resolution horizon mask with best parameters"
+        }
+
+        // Step 5: Score the full-resolution result and compare with the
+        // reduced-resolution score to detect discrepancies.
+        let fullResScore = HorizonScoring.score(
+          horizonMask: fullResMask,
+          originalImage: original,
+          cannyMinThreshold: config.cannyMinThreshold,
+          cannyMaxThreshold: config.cannyMaxThreshold,
+          useL2Gradient: config.cannyUseL2Gradient
+        )
+
+        Log.i("frame \(frameIndex) full resolution score=\(fullResScore)")
+
+        let scoreDifference = abs(fullResScore.totalScore - bestSearchResult.score.totalScore)
+        if scoreDifference > 0.2 {
+            Log.e("frame \(frameIndex) WARNING: full resolution horizon score " +
+                  "(\(String(format: "%.3f", fullResScore.totalScore))) differs significantly from " +
+                  "reduced resolution score " +
+                  "(\(String(format: "%.3f", bestSearchResult.score.totalScore))). " +
+                  "Difference: \(String(format: "%.3f", scoreDifference)). " +
+                  "Proceeding with full resolution result.")
+        }
+
+        // Step 6: Record the best parameters for narrowing subsequent frames
+        await adaptiveState.recordBest(
+          cropAmount: bestSearchResult.cropAmount,
+          stripWidth: bestSearchResult.stripWidth
+        )
+
+        return fullResMask
     }
 
     public nonisolated func process(

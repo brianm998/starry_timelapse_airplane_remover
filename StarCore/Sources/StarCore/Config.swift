@@ -39,6 +39,11 @@ public class ConfigManager {
     private var _config: Config
 
     private var updateCallbacks: [(Config) -> Void] = []
+
+    /// Shared state for adaptive horizon parameter search across frames.
+    /// This allows subsequent frames to narrow their search based on what worked
+    /// for previous frames in the same sequence.
+    public let adaptiveHorizonState = AdaptiveHorizonState()
     
     public init() {
         _jsonFilename = ""
@@ -316,6 +321,32 @@ public struct Config: Codable, Sendable, Transferable {
     // how many pixels do we crop off the top of the image when making
     // earth aligned images
     public var earthAlignedImageCropAmount: Int?
+
+    // --- Adaptive horizon detection parameters ---
+
+    // How much to shrink the image for the initial parameter search pass.
+    // 4 means 1/4 resolution, 8 means 1/8 resolution, etc.
+    // Higher values are faster but less precise for parameter selection.
+    public var horizonSearchShrinkFactor: Int = 4
+
+    // Set of earthAlignedImageCropAmount percentage values to try during
+    // the initial reduced-resolution parameter search.
+    // Each value is a percentage (0-100) of the image height to ignore from the top.
+    // Empty array disables the search and uses the single earthAlignedImageCropAmount value.
+    public var horizonSearchCropAmounts: [Double] = [30, 40, 50, 60, 70]
+
+    // Set of horizonStripWidth values to try during the initial reduced-resolution
+    // parameter search. These are expressed in full-resolution pixels and will be
+    // scaled down by horizonSearchShrinkFactor for the search pass.
+    // An empty array disables the search and uses the single horizonStripWidth value.
+    // A value of 0 means use the full image width.
+    public var horizonSearchStripWidths: [Int] = [100, 200, 400, 800, 0]
+
+    // After the first frame's horizon is detected, narrow the search area for
+    // subsequent frames. This is the number of percentage points to add above
+    // and below the previously detected best crop amount.
+    // e.g. if best crop was 50 and this is 15, next frame searches [35, 50, 65].
+    public var horizonSearchNarrowingRange: Double = 20
     
     public var alignmentMaxKeypoints: Int = 2000
     public var alignmentWriteDebugImages: Bool = false
@@ -415,6 +446,11 @@ public struct Config: Codable, Sendable, Transferable {
         self.numberAlignedNeighborFrames = try c.decodeIfPresent(Int.self, forKey: .numberAlignedNeighborFrames) ?? self.numberAlignedNeighborFrames
         self.numberStaticNeighborFrames = try c.decodeIfPresent(Int.self, forKey: .numberStaticNeighborFrames) ?? self.numberStaticNeighborFrames
         self.supportedImageFileTypes = try c.decodeIfPresent([String].self, forKey: .supportedImageFileTypes) ?? self.supportedImageFileTypes
+
+        self.horizonSearchShrinkFactor = try c.decodeIfPresent(Int.self, forKey: .horizonSearchShrinkFactor)
+        self.horizonSearchCropAmounts = try c.decodeIfPresent([Double].self, forKey: .horizonSearchCropAmounts)
+        self.horizonSearchStripWidths = try c.decodeIfPresent([Int].self, forKey: .horizonSearchStripWidths)
+        self.horizonSearchNarrowingRange = try c.decodeIfPresent(Double.self, forKey: .horizonSearchNarrowingRange)
     }
 
     
