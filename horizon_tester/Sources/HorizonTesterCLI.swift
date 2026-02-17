@@ -84,6 +84,25 @@ struct HorizonTesterCli: AsyncParsableCommand {
     @Flag(name: [.customLong("no-canny")], help: "Disable Canny edge detection (use only Otsu)")
     var noCanny: Bool = false
 
+    @Flag(name: [.customLong("no-dp")], help: "Disable DP horizon detection (use only Otsu)")
+    var noDp: Bool = false
+
+    @Option(name: [.customLong("dp-lambda")], help: """
+        DP smoothness penalty (cost per pixel of vertical displacement).
+        Higher = smoother horizon. Default: 2.0
+        """)
+    var dpLambda: Double?
+
+    @Option(name: [.customLong("dp-sobel-weight")], help: """
+        DP cost weight for Sobel vertical gradient. Default: 0.6
+        """)
+    var dpSobelWeight: Double?
+
+    @Option(name: [.customLong("dp-canny-weight")], help: """
+        DP cost weight for Canny edge presence. Default: 0.4
+        """)
+    var dpCannyWeight: Double?
+
     @Flag(name: [.short, .customLong("verbose")], help: "Enable verbose logging")
     var verbose: Bool = false
 
@@ -142,6 +161,10 @@ struct HorizonTesterCli: AsyncParsableCommand {
         let cannyMaxThreshold = cannyMax ?? config.cannyMaxThreshold
         let useCanny = !noCanny && config.useCannyForHorizonDetection
         let useL2Gradient = config.cannyUseL2Gradient
+        let useDp = !noDp
+        let dpSmoothnessLambda = dpLambda ?? config.dpHorizonSmoothnessLambda
+        let dpSobel = dpSobelWeight ?? config.dpHorizonSobelWeight
+        let dpCanny = dpCannyWeight ?? config.dpHorizonCannyWeight
 
         // Compute pass-1 crop amounts from bounds
         let pass1CropAmounts = HorizonCropAmounts.firstPass(bounds: cropBounds, count: count1)
@@ -432,8 +455,85 @@ struct HorizonTesterCli: AsyncParsableCommand {
         }
 
         fullResMask.image.writeTIFFEncoding(
-          toFilename: "\(outputDir)/03_best_fullres_horizon.tiff"
+          toFilename: "\(outputDir)/03_best_fullres_otsu_horizon.tiff"
         )
+
+        // ===================================================================
+        // DP HORIZON DETECTION: Run in parallel and compare
+        // ===================================================================
+        var dpFullResScore: HorizonScore? = nil
+        var dpWins = false
+
+        if useDp {
+            Log.i("")
+            Log.i("=== DP HORIZON DETECTION ===")
+            Log.i("Parameters: lambda=\(dpSmoothnessLambda), " +
+                  "sobelWeight=\(dpSobel), cannyWeight=\(dpCanny)")
+            Log.i("Search region: crop=\(pass2Best.cropAmount)% from top")
+            Log.i("")
+
+            do {
+                if let dpMask = try await original.dpHorizonMask(
+                     at: 0,
+                     bottomPercentage: pass2Best.cropAmount,
+                     cannyMinThreshold: cannyMinThreshold,
+                     cannyMaxThreshold: cannyMaxThreshold,
+                     useL2Gradient: useL2Gradient,
+                     smoothnessLambda: dpSmoothnessLambda,
+                     sobelWeight: dpSobel,
+                     cannyWeight: dpCanny
+                   )
+                {
+                    let dpScore: HorizonScore
+                    if let edges = fullResEdges {
+                        dpScore = HorizonScoring.score(horizonMask: dpMask, edgeImage: edges)
+                    } else {
+                        dpScore = HorizonScoring.score(
+                          horizonMask: dpMask,
+                          originalImage: original,
+                          cannyMinThreshold: cannyMinThreshold,
+                          cannyMaxThreshold: cannyMaxThreshold,
+                          useL2Gradient: useL2Gradient
+                        )
+                    }
+
+                    dpFullResScore = dpScore
+
+                    dpMask.image.writeTIFFEncoding(
+                      toFilename: "\(outputDir)/04_dp_horizon.tiff"
+                    )
+
+                    Log.i("DP horizon score: \(dpScore)")
+
+                    if dpScore.totalScore > fullResScore.totalScore {
+                        Log.i("DP WINS: \(String(format: "%.3f", dpScore.totalScore)) > " +
+                              "Otsu \(String(format: "%.3f", fullResScore.totalScore))")
+                        dpWins = true
+                    } else {
+                        Log.i("Otsu WINS: \(String(format: "%.3f", fullResScore.totalScore)) > " +
+                              "DP \(String(format: "%.3f", dpScore.totalScore))")
+                    }
+                } else {
+                    Log.w("DP horizon detection returned nil")
+                }
+            } catch {
+                Log.w("DP horizon detection failed: \(error)")
+            }
+        }
+
+        // Write the overall best result.
+        // Use FileManager to copy the winning mask file instead of regenerating it.
+        let bestSourceFile: String
+        if dpWins {
+            Log.i("Writing DP result as best overall")
+            bestSourceFile = "\(outputDir)/04_dp_horizon.tiff"
+        } else {
+            Log.i("Writing Otsu result as best overall")
+            bestSourceFile = "\(outputDir)/03_best_fullres_otsu_horizon.tiff"
+        }
+        let bestDestFile = "\(outputDir)/05_best_overall_horizon.tiff"
+        try? fileManager.removeItem(atPath: bestDestFile)
+        try? fileManager.copyItem(atPath: bestSourceFile, toPath: bestDestFile)
 
         // Write summary JSON
         let allPass1Entries = pass1Ranked.map { result in
@@ -481,7 +581,15 @@ struct HorizonTesterCli: AsyncParsableCommand {
           pass2BestCrop: pass2Best.cropAmount,
           pass2BestStrip: pass2Best.stripWidth,
           bestShrunkScore: pass2Best.score.totalScore,
-          bestFullResScore: fullResScore.totalScore
+          bestOtsuFullResScore: fullResScore.totalScore,
+          useDp: useDp,
+          dpSmoothnessLambda: dpSmoothnessLambda,
+          dpSobelWeight: dpSobel,
+          dpCannyWeight: dpCanny,
+          dpFullResScore: dpFullResScore?.totalScore,
+          dpWins: dpWins,
+          overallBestMethod: dpWins ? "dp" : "otsu",
+          overallBestScore: dpWins ? (dpFullResScore?.totalScore ?? fullResScore.totalScore) : fullResScore.totalScore
         )
 
         let encoder = JSONEncoder()
@@ -494,21 +602,29 @@ struct HorizonTesterCli: AsyncParsableCommand {
         Log.i("=== COMPLETE ===")
         Log.i("")
         Log.i("Output directory: \(outputDir)")
-        Log.i("  00_shrunk_input.tiff          - Reduced resolution input")
+        Log.i("  00_shrunk_input.tiff              - Reduced resolution input")
         if useCanny {
-            Log.i("  00_shrunk_canny_edges.tiff    - Canny edges (reduced res)")
-            Log.i("  00_fullres_canny_edges.tiff   - Canny edges (full res)")
+            Log.i("  00_shrunk_canny_edges.tiff        - Canny edges (reduced res)")
+            Log.i("  00_fullres_canny_edges.tiff       - Canny edges (full res)")
         }
-        Log.i("  01_pass1_NN_*.tiff            - Pass 1 (coarse) horizon masks")
-        Log.i("  02_pass2_NN_*.tiff            - Pass 2 (refined) horizon masks")
-        Log.i("  03_best_fullres_horizon.tiff  - Best result at full resolution")
-        Log.i("  summary.json                  - Scores and parameters")
+        Log.i("  01_pass1_NN_*.tiff                - Pass 1 (coarse) horizon masks")
+        Log.i("  02_pass2_NN_*.tiff                - Pass 2 (refined) horizon masks")
+        Log.i("  03_best_fullres_otsu_horizon.tiff - Best Otsu result at full resolution")
+        if useDp {
+            Log.i("  04_dp_horizon.tiff                - DP horizon detection result")
+        }
+        Log.i("  05_best_overall_horizon.tiff      - Overall best horizon mask")
+        Log.i("  summary.json                      - Scores and parameters")
         Log.i("")
         Log.i("Pass 1 best: crop=\(pass1Best.cropAmount), strip=\(pass1Best.stripWidth), " +
               "score=\(pass1Best.score)")
         Log.i("Pass 2 best: crop=\(pass2Best.cropAmount), strip=\(pass2Best.stripWidth), " +
               "score=\(pass2Best.score)")
-        Log.i("Full res score: \(fullResScore)")
+        Log.i("Otsu full res score: \(fullResScore)")
+        if let dpScore = dpFullResScore {
+            Log.i("DP full res score: \(dpScore)")
+        }
+        Log.i("Overall winner: \(dpWins ? "DP" : "Otsu")")
     }
 }
 
@@ -534,7 +650,16 @@ struct HorizonTestSummary: Codable {
     let pass2BestCrop: Double
     let pass2BestStrip: Int
     let bestShrunkScore: Double
-    let bestFullResScore: Double
+    let bestOtsuFullResScore: Double
+    // DP horizon detection results
+    let useDp: Bool
+    let dpSmoothnessLambda: Double
+    let dpSobelWeight: Double
+    let dpCannyWeight: Double
+    let dpFullResScore: Double?
+    let dpWins: Bool
+    let overallBestMethod: String
+    let overallBestScore: Double
 
     struct ResultEntry: Codable {
         let pass: Int
