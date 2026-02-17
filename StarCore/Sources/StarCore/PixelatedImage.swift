@@ -457,7 +457,53 @@ extension PixelatedImage {
             throw "cannot perform edge detection"
         }
     }
-    
+
+    /// Dynamic programming horizon tracing.
+    /// Finds the optimal left-to-right path through the image that follows
+    /// strong horizontal edges (Sobel vertical gradient + Canny edges).
+    /// Returns a binary mask: white (255) above the horizon, black (0) below.
+    ///
+    /// - Parameters:
+    ///   - cannyMinThreshold: Canny edge detection minimum threshold
+    ///   - cannyMaxThreshold: Canny edge detection maximum threshold
+    ///   - useL2Gradient: Use L2 gradient for Canny edge detection
+    ///   - smoothnessLambda: Penalty per pixel of vertical displacement between
+    ///     adjacent columns (higher = smoother horizon). Default 2.0.
+    ///   - sobelWeight: Weight for Sobel vertical gradient in cost function. Default 0.6.
+    ///   - cannyWeight: Weight for Canny edge presence in cost function. Default 0.4.
+    ///   - searchTopFraction: Fraction from top of image where horizon search starts.
+    ///   - searchBottomFraction: Fraction from top where horizon search ends.
+    /// - Returns: A `PixelatedImage` binary mask, or nil if detection fails.
+    public func dpHorizonDetect(
+      cannyMinThreshold: Double = 50,
+      cannyMaxThreshold: Double = 120,
+      useL2Gradient: Bool = true,
+      smoothnessLambda: Double = 2.0,
+      sobelWeight: Double = 0.6,
+      cannyWeight: Double = 0.4,
+      searchTopFraction: Double = 0.0,
+      searchBottomFraction: Double = 1.0
+    ) throws -> PixelatedImage {
+        guard let resultMat = PixelatedImageBridge.dpHorizonMask(
+                self.mat,
+                cannyMin: cannyMinThreshold,
+                cannyMax: cannyMaxThreshold,
+                useL2Gradient: useL2Gradient,
+                smoothnessLambda: smoothnessLambda,
+                sobelWeight: sobelWeight,
+                cannyWeight: cannyWeight,
+                searchTopFraction: searchTopFraction,
+                searchBottomFraction: searchBottomFraction
+              )
+        else {
+            throw "DP horizon detection failed"
+        }
+        guard let result = PixelatedImage(mat: resultMat) else {
+            throw "cannot create PixelatedImage from DP horizon mask"
+        }
+        return result
+    }
+
     // returns a 16 bit grayscale image that results from subtrating
     // the given frame from this frame, done in c++ opencv2 land for speed
     public func subtract(_ otherFrame: PixelatedImage) throws -> PixelatedImage {

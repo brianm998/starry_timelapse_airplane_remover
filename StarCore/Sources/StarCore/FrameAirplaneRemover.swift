@@ -676,10 +676,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                   "score=\(result.score)")
         }
 
-        // Step 5: Apply the pass-2 best parameters at full resolution.
+        // Step 5: Apply the pass-2 best parameters at full resolution (Otsu pipeline).
         let bestStripWidth = pass2Best.stripWidth == 0 ? original.width : pass2Best.stripWidth
 
-        guard let fullResMask = try await original.horizonMask(
+        guard let otsuFullResMask = try await original.horizonMask(
                 at: frameIndex,
                 bottomPercentage: pass2Best.cropAmount,
                 stripWidth: bestStripWidth,
@@ -692,27 +692,67 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             throw "cannot create full resolution horizon mask with best parameters"
         }
 
-        // Step 6: Score the full-resolution result and compare with the
-        // reduced-resolution score to detect discrepancies.
-        let fullResScore = HorizonScoring.score(
-          horizonMask: fullResMask,
+        // Step 6: Score the full-resolution Otsu result.
+        let otsuFullResScore = HorizonScoring.score(
+          horizonMask: otsuFullResMask,
           originalImage: original,
           cannyMinThreshold: config.cannyMinThreshold,
           cannyMaxThreshold: config.cannyMaxThreshold,
           useL2Gradient: config.cannyUseL2Gradient
         )
 
-        Log.i("frame \(frameIndex) full resolution score=\(fullResScore)")
+        Log.i("frame \(frameIndex) Otsu full resolution score=\(otsuFullResScore)")
 
-        let scoreDifference = abs(fullResScore.totalScore - pass2Best.score.totalScore)
-        if scoreDifference > 0.2 {
-            Log.i("frame \(frameIndex) WARNING: full resolution horizon score " +
-                  "(\(String(format: "%.3f", fullResScore.totalScore))) differs significantly from " +
-                  "reduced resolution score " +
-                  "(\(String(format: "%.3f", pass2Best.score.totalScore))). " +
-                  "Difference: \(String(format: "%.3f", scoreDifference)). " +
-                  "Proceeding with full resolution result.")
+        var bestMask = otsuFullResMask
+        var bestScore = otsuFullResScore
+        var bestMethod = "otsu"
+
+        // Step 6b: Run DP horizon detection in parallel if enabled.
+        // The DP approach traces the strongest horizontal boundary through the image
+        // using Sobel gradients and Canny edges, independent of Otsu classification.
+        // This handles bright ground (snow, etc.) that confuses Otsu thresholding.
+        if config.useDPHorizonDetection {
+            do {
+                // Run DP at full resolution using the pass-2 best crop amount
+                // as the search region constraint.
+                if let dpMask = try await original.dpHorizonMask(
+                     at: frameIndex,
+                     bottomPercentage: pass2Best.cropAmount,
+                     cannyMinThreshold: config.cannyMinThreshold,
+                     cannyMaxThreshold: config.cannyMaxThreshold,
+                     useL2Gradient: config.cannyUseL2Gradient,
+                     smoothnessLambda: config.dpHorizonSmoothnessLambda,
+                     sobelWeight: config.dpHorizonSobelWeight,
+                     cannyWeight: config.dpHorizonCannyWeight
+                   )
+                {
+                    let dpScore = HorizonScoring.score(
+                      horizonMask: dpMask,
+                      originalImage: original,
+                      cannyMinThreshold: config.cannyMinThreshold,
+                      cannyMaxThreshold: config.cannyMaxThreshold,
+                      useL2Gradient: config.cannyUseL2Gradient
+                    )
+
+                    Log.i("frame \(frameIndex) DP full resolution score=\(dpScore)")
+
+                    if dpScore.totalScore > otsuFullResScore.totalScore {
+                        Log.i("frame \(frameIndex) DP horizon (\(String(format: "%.3f", dpScore.totalScore))) " +
+                              "beats Otsu (\(String(format: "%.3f", otsuFullResScore.totalScore))), using DP result")
+                        bestMask = dpMask
+                        bestScore = dpScore
+                        bestMethod = "dp"
+                    } else {
+                        Log.i("frame \(frameIndex) Otsu horizon (\(String(format: "%.3f", otsuFullResScore.totalScore))) " +
+                              "beats DP (\(String(format: "%.3f", dpScore.totalScore))), using Otsu result")
+                    }
+                }
+            } catch {
+                Log.w("frame \(frameIndex) DP horizon detection failed: \(error), using Otsu result")
+            }
         }
+
+        Log.i("frame \(frameIndex) final horizon method=\(bestMethod), score=\(bestScore)")
 
         // Step 7: Record the best parameters for narrowing subsequent frames
         await adaptiveState.recordBest(
@@ -721,7 +761,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           firstPassStep: pass1Step
         )
 
-        return fullResMask
+        return bestMask
     }
 
     /// Run horizon detection and scoring for all combinations of crop amounts and
@@ -1392,6 +1432,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             break
         }
 
+        if baseKeypoints == nil {
+            Log.w("frame \(frameIndex) didn't have keypoints in ram for alignment type \(alignmentType), trying to load or create them")
+            baseKeypoints = try await loadOrCreateOCVFeatures(of: type) 
+        }
+
         guard let baseKeypoints else {
             Log.w("frame \(frameIndex) has no base keypoints for alignment type \(alignmentType)")
             return nil
@@ -1502,7 +1547,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             return self.skyKeyPoints
         } 
     }
-    
+
     func loadOrCreateOCVFeatures(
       of type: FrameViewMode
     ) async throws -> OCVFeatureSet? {

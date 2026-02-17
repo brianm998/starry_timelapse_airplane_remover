@@ -358,7 +358,26 @@ public struct Config: Codable, Sendable, Transferable {
     // and below the previously detected best crop amount.
     // e.g. if best crop was 50 and this is 15, next frame searches [35, 50, 65].
     public var horizonSearchNarrowingRange: Double = 20
-    
+
+    // --- DP horizon detection parameters ---
+    // Enable the dynamic programming horizon tracing approach.
+    // When true, runs DP horizon detection in parallel with the Otsu-based
+    // approach and picks whichever scores higher.
+    public var useDPHorizonDetection: Bool = true
+
+    // Smoothness penalty for the DP path. Higher = smoother horizon line.
+    // This is the cost per pixel of vertical displacement between adjacent columns.
+    // Typical range: 0.5 - 5.0. Higher values enforce a smoother horizon.
+    public var dpHorizonSmoothnessLambda: Double = 2.0
+
+    // Weight of the Sobel vertical gradient in the DP cost function.
+    // Higher values make the path follow strong intensity transitions more.
+    public var dpHorizonSobelWeight: Double = 0.6
+
+    // Weight of Canny edge presence in the DP cost function.
+    // Higher values make the path follow detected edges more.
+    public var dpHorizonCannyWeight: Double = 0.4
+
     public var alignmentMaxKeypoints: Int = 2000
     public var alignmentWriteDebugImages: Bool = false
     public var alignmentGroundHorizonExtension: Int = 100 // extend the horizon for ground by this amount to get more keypoints
@@ -462,6 +481,10 @@ public struct Config: Codable, Sendable, Transferable {
         self.horizonSearchCropCount2 = try c.decodeIfPresent(Int.self, forKey: .horizonSearchCropCount2) ?? self.horizonSearchCropCount2
         self.horizonSearchStripWidths = try c.decodeIfPresent([Int].self, forKey: .horizonSearchStripWidths) ?? self.horizonSearchStripWidths
         self.horizonSearchNarrowingRange = try c.decodeIfPresent(Double.self, forKey: .horizonSearchNarrowingRange) ?? self.horizonSearchNarrowingRange
+        self.useDPHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useDPHorizonDetection) ?? self.useDPHorizonDetection
+        self.dpHorizonSmoothnessLambda = try c.decodeIfPresent(Double.self, forKey: .dpHorizonSmoothnessLambda) ?? self.dpHorizonSmoothnessLambda
+        self.dpHorizonSobelWeight = try c.decodeIfPresent(Double.self, forKey: .dpHorizonSobelWeight) ?? self.dpHorizonSobelWeight
+        self.dpHorizonCannyWeight = try c.decodeIfPresent(Double.self, forKey: .dpHorizonCannyWeight) ?? self.dpHorizonCannyWeight
     }
 
     

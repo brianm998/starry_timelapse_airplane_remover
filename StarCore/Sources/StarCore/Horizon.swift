@@ -318,7 +318,57 @@ extension PixelatedImage {
 }
 
 extension PixelatedImage {
-    // digs into opencv2 to remove a lot of connected components 
+    /// Dynamic programming horizon detection.
+    /// Finds the horizon as an optimal left-to-right path through the image
+    /// that follows strong horizontal edges (Sobel vertical gradient + Canny edges).
+    ///
+    /// Unlike the Otsu-based `horizonMask()`, this approach does NOT classify
+    /// pixels by brightness. Instead, it directly traces the strongest horizontal
+    /// boundary in the image, making it robust to bright ground (snow, reflections)
+    /// that would confuse Otsu thresholding.
+    ///
+    /// The `bottomPercentage` parameter controls how much of the top is assumed
+    /// to be sky (same semantics as `horizonMask()`). The DP search is constrained
+    /// to the cropped region.
+    ///
+    /// Returns a `HorizonMask` with a binary image: white = sky, black = ground.
+    public func dpHorizonMask(
+      at frameIndex: Int,
+      bottomPercentage: Double = 50,
+      cannyMinThreshold: Double = 50,
+      cannyMaxThreshold: Double = 120,
+      useL2Gradient: Bool = true,
+      smoothnessLambda: Double = 2.0,
+      sobelWeight: Double = 0.6,
+      cannyWeight: Double = 0.4
+    ) async throws -> HorizonMask? {
+        // The bottomPercentage means "ignore this fraction from the top".
+        // Convert to search fractions: the horizon should be somewhere in
+        // the bottom portion of the image.
+        let searchTopFraction = bottomPercentage / 100.0
+        let searchBottomFraction = 1.0
+
+        Log.d("frame \(frameIndex) dpHorizonMask: " +
+              "searchTop=\(String(format: "%.2f", searchTopFraction)), " +
+              "lambda=\(smoothnessLambda), sobelW=\(sobelWeight), cannyW=\(cannyWeight)")
+
+        let dpMask = try self.dpHorizonDetect(
+          cannyMinThreshold: cannyMinThreshold,
+          cannyMaxThreshold: cannyMaxThreshold,
+          useL2Gradient: useL2Gradient,
+          smoothnessLambda: smoothnessLambda,
+          sobelWeight: sobelWeight,
+          cannyWeight: cannyWeight,
+          searchTopFraction: searchTopFraction,
+          searchBottomFraction: searchBottomFraction
+        )
+
+        return HorizonMask(dpMask)
+    }
+}
+
+extension PixelatedImage {
+    // digs into opencv2 to remove a lot of connected components
     public func connectedComponentFiltered(keepLargest n: Int = 2) throws -> PixelatedImage {
 
         // first convert self to MatWrapper
