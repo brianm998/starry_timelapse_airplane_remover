@@ -237,8 +237,6 @@ public final class ImageSequenceViewModel {
 
     var isRenderingVideo = false
     
-    var showHorizonBar = false
-    
     var ignoreLowerPixels: CGFloat = 0
 
     var outlierOpacity = 1.0
@@ -412,14 +410,6 @@ public final class ImageSequenceViewModel {
         }
     }
     
-    var earthAlignedImageCropAmount: Int {
-        didSet {
-            var realConfig = config.config()
-            realConfig.earthAlignedImageCropAmount = earthAlignedImageCropAmount
-            config.update(realConfig)
-        }
-    }
-
     // fallback replacement method if not specified per frame
     var cleanMethod: CleanMethod {
         didSet {
@@ -638,6 +628,7 @@ public final class ImageSequenceViewModel {
     {
         Log.d("outlier_json_startup with \(jsonConfigFilename)")
         // first read config from json
+        let config = try ConfigManager(configFilename: jsonConfigFilename)
 
         try await self.init(
           viewModel: viewModel,
@@ -715,7 +706,6 @@ public final class ImageSequenceViewModel {
         }
         self.interactionMode = .edit
         self.shouldShowInitialInstructions = true
-        self.showHorizonBar = true
         self.frameViewMode = .original
         if let videoInfo {
             self.frameRate = videoInfo.frameRate
@@ -794,8 +784,6 @@ public final class ImageSequenceViewModel {
         
         self.config = configManager
 
-//        self.earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? 0
-        
         let ignoreLowerPixels = config.ignoreLowerPixels 
         self.ignoreLowerPixels = CGFloat(ignoreLowerPixels) // XXX need to sync back the other dir
                     
@@ -815,8 +803,6 @@ public final class ImageSequenceViewModel {
         var updatedConfig = self.config.config()
         updatedConfig.set(imageInfo: imageInfo)
         self.config.update(updatedConfig)
-        
-        self.earthAlignedImageCropAmount = config.earthAlignedImageCropAmount ?? Int(imageInfo.imageHeight)/2
         
         let callbacks = self.makeCallbacks()
 

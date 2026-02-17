@@ -308,10 +308,7 @@ struct BottomRightView: View {
                         Text("processing \(viewModel.frames.count - viewModel.numberOfFramesProcessed) more frames")
                           .foregroundColor(.white)
                     }
-                    if viewModel.showHorizonBar {
-                        Toggle("Show Ignore Bar", isOn: $viewModel.showHorizonBar)
-                          .foregroundColor(.white)
-                    }
+
 
                     EditableFrameNumberView()
                 }

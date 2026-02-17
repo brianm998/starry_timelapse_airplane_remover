@@ -126,9 +126,6 @@ struct RightPanel: View {
                             Toggle("multi choice", isOn: $viewModel.multiChoice)
                               .foregroundColor(.white)
 
-                            Toggle("Show Horizon Bar", isOn: $viewModel.showHorizonBar)
-                              .foregroundColor(.white)
-                            
                             Toggle("Show Trash", isOn: $viewModel.shouldShowTrash)
                               .foregroundColor(.white)
                               .disabled(!viewModel.currentFrameUsesOutliers)

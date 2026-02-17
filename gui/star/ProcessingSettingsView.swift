@@ -1194,8 +1194,7 @@ struct ProcessingSettingsView: View {
         self.applySettings()
         viewModel.shouldShowProcessingSettings = false
         Log.d("processAll settings applied")
-        viewModel.showHorizonBar = false
-
+      
         viewModel.processAll()
         Log.d("processAll process all returned")
     }

@@ -518,9 +518,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         } else {
             // Fallback: single parameter set, same as original behavior
             var bottomPercentage: Double = 50
-            if let cropAmount = config.earthAlignedImageCropAmount {
-                bottomPercentage = Double(cropAmount) / Double(height) * 100
-            }
             guard let mask = try await original.horizonMask(
                     at: frameIndex,
                     bottomPercentage: bottomPercentage,

@@ -211,10 +211,6 @@ public struct FrameEditImageView: View {
                         }
                     }.opacity(viewModel.outlierOpacity)
                 }
-                
-                if viewModel.showHorizonBar {
-                    HorizonBarView()
-                }
             }
         }
           .onChange(of: self.viewModel.frames[self.viewModel.currentIndex].frameObserver.numberOfUndecidedOutliers) {

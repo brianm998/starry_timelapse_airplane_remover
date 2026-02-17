@@ -317,10 +317,6 @@ public struct Config: Codable, Sendable, Transferable {
     // try to align earth on moving frames?
     // turned off by default as it's still expermintal
     public var allowEarthAlignment: Bool = false
-    
-    // how many pixels do we crop off the top of the image when making
-    // earth aligned images
-    public var earthAlignedImageCropAmount: Int?
 
     // --- Adaptive horizon detection parameters ---
 
@@ -445,8 +441,6 @@ public struct Config: Codable, Sendable, Transferable {
         self.allowEarthAlignment = try c.decodeIfPresent(Bool.self, forKey: .allowEarthAlignment) ?? self.allowEarthAlignment
 
         
-        self.earthAlignedImageCropAmount = try c.decodeIfPresent(Int.self, forKey: .earthAlignedImageCropAmount)
-
         self.alignmentMaxKeypoints = try c.decodeIfPresent(Int.self, forKey: .alignmentMaxKeypoints) ?? self.alignmentMaxKeypoints
         self.alignmentWriteDebugImages = try c.decodeIfPresent(Bool.self, forKey: .alignmentWriteDebugImages) ?? self.alignmentWriteDebugImages
         self.alignmentGroundHorizonExtension = try c.decodeIfPresent(Int.self, forKey: .alignmentGroundHorizonExtension) ?? self.alignmentGroundHorizonExtension

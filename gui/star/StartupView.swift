@@ -307,8 +307,6 @@ struct RemovalView: View {
                     withAnimation {
                         viewModel.shouldShowInitialInstructions = false
                         viewModel.cleanMethod = self.cleanMethod
-                        viewModel.showHorizonBar = false
-
                         viewModel.processAll()
                     }
                 } label: {
