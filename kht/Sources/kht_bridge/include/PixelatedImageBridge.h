@@ -66,6 +66,29 @@ NS_ASSUME_NONNULL_BEGIN
 		       mask:(MatWrapper *)mask
 		     border:(int)amount;
 
+/// Dynamic programming horizon tracing.
+/// Finds the optimal left-to-right path through the image that follows
+/// strong horizontal edges (Sobel vertical gradient + Canny edges).
+/// Returns a binary mask: white (255) above the horizon, black (0) below.
+///
+/// @param img           Source image (grayscale or color)
+/// @param cannyMin      Canny edge detection minimum threshold
+/// @param cannyMax      Canny edge detection maximum threshold
+/// @param useL2Gradient Use L2 gradient for Canny
+/// @param smoothnessLambda Penalty per pixel of vertical displacement between adjacent columns (higher = smoother horizon)
+/// @param sobelWeight   Weight for Sobel vertical gradient in the cost function
+/// @param cannyWeight   Weight for Canny edge presence in the cost function
+/// @param searchTopFraction  Fraction from top of image where horizon search starts (0.0 - 1.0)
+/// @param searchBottomFraction Fraction from top where horizon search ends (0.0 - 1.0)
++ (nullable MatWrapper *)dpHorizonMask:(MatWrapper *)img
+                              cannyMin:(double)cannyMin
+                              cannyMax:(double)cannyMax
+                         useL2Gradient:(BOOL)useL2Gradient
+                     smoothnessLambda:(double)smoothnessLambda
+                          sobelWeight:(double)sobelWeight
+                          cannyWeight:(double)cannyWeight
+                    searchTopFraction:(double)searchTopFraction
+                 searchBottomFraction:(double)searchBottomFraction;
 
 @end
 

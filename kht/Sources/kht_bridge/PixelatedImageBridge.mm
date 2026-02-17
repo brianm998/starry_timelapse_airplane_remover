@@ -932,6 +932,230 @@ extern cv::Mat ensure8U(const cv::Mat& input);
 }
 
 
+/// Dynamic programming horizon tracing.
+/// Finds an optimal left-to-right path through the image that follows
+/// strong horizontal edges using Sobel vertical gradients and Canny edges.
+/// Returns a binary mask: white (255) = sky (above path), black (0) = ground (below path).
++ (MatWrapper *)dpHorizonMask:(MatWrapper *)img
+                     cannyMin:(double)cannyMin
+                     cannyMax:(double)cannyMax
+                useL2Gradient:(BOOL)useL2Gradient
+            smoothnessLambda:(double)smoothnessLambda
+                 sobelWeight:(double)sobelWeight
+                 cannyWeight:(double)cannyWeight
+           searchTopFraction:(double)searchTopFraction
+        searchBottomFraction:(double)searchBottomFraction
+{
+  @try {
+    try {
+      cv::Mat input = img.mat;
+
+      // Convert to grayscale
+      cv::Mat gray;
+      if (input.channels() == 4)
+        cv::cvtColor(input, gray, cv::COLOR_BGRA2GRAY);
+      else if (input.channels() == 3)
+        cv::cvtColor(input, gray, cv::COLOR_BGR2GRAY);
+      else
+        gray = input.clone();
+
+      gray = ensure8U(gray);
+
+      int rows = gray.rows;
+      int cols = gray.cols;
+      if (rows < 2 || cols < 2) {
+        Log_e(@"dpHorizonMask: image too small (%dx%d)", cols, rows);
+        return nil;
+      }
+
+      // Compute the search band (the vertical region where the horizon could be)
+      int searchTop = std::max(0, (int)(rows * searchTopFraction));
+      int searchBottom = std::min(rows - 1, (int)(rows * searchBottomFraction));
+      int bandHeight = searchBottom - searchTop + 1;
+      if (bandHeight < 2) {
+        Log_e(@"dpHorizonMask: search band too small (top=%d, bottom=%d)", searchTop, searchBottom);
+        return nil;
+      }
+
+      // --- Step 1: Compute Sobel vertical gradient magnitude ---
+      // The absolute vertical gradient highlights horizontal edges
+      // (transitions from sky to ground or vice versa)
+      cv::Mat sobelY;
+      cv::Sobel(gray, sobelY, CV_32F, 0, 1, 3); // dy, kernel size 3
+      cv::Mat absSobelY;
+      cv::convertScaleAbs(sobelY, absSobelY); // back to 8-bit absolute
+
+      // Normalize to [0, 1] range for cost computation
+      cv::Mat sobelNorm;
+      absSobelY.convertTo(sobelNorm, CV_32F, 1.0 / 255.0);
+
+      // --- Step 2: Compute Canny edges ---
+      cv::Mat edges;
+      cv::Canny(gray, edges, cannyMin, cannyMax, 3, useL2Gradient);
+
+      // Normalize Canny to [0, 1]
+      cv::Mat cannyNorm;
+      edges.convertTo(cannyNorm, CV_32F, 1.0 / 255.0);
+
+      // --- Step 3: Build cost image (lower cost = more likely horizon) ---
+      // Cost = baseCost - sobelWeight * |Sobel_y| - cannyWeight * Canny
+      // We want the DP to find the minimum-cost path, attracted to strong
+      // gradients and edges.
+      double baseCost = 1.0;
+      cv::Mat costImage(rows, cols, CV_32F);
+      for (int y = 0; y < rows; y++) {
+        float *costRow = costImage.ptr<float>(y);
+        const float *sobelRow = sobelNorm.ptr<float>(y);
+        const float *cannyRow = cannyNorm.ptr<float>(y);
+        for (int x = 0; x < cols; x++) {
+          double cost = baseCost - sobelWeight * sobelRow[x] - cannyWeight * cannyRow[x];
+          // Clamp to a small positive value to avoid negative costs
+          costRow[x] = (float)std::max(0.01, cost);
+        }
+      }
+
+      // Add penalty for being outside the search band.
+      // Pixels outside the expected horizon region get very high cost.
+      for (int y = 0; y < rows; y++) {
+        if (y < searchTop || y > searchBottom) {
+          float *costRow = costImage.ptr<float>(y);
+          for (int x = 0; x < cols; x++) {
+            costRow[x] = 100.0f; // very high cost, effectively excluded
+          }
+        }
+      }
+
+      // --- Step 4: Dynamic programming (left to right) ---
+      // DP[x][y] = minimum cost to reach pixel (x, y) from the left edge.
+      // Transition from column x-1 to column x incurs a smoothness penalty
+      // proportional to the vertical displacement |y - y'|.
+      //
+      // This is equivalent to seam carving but applied horizontally.
+      // For efficiency, we use the O(n) distance transform trick:
+      // process top-to-bottom and bottom-to-top in each column.
+
+      // Allocate DP state.
+      // We only need two columns of DP values (previous and current),
+      // but we need the full backtrack table for the backtrace.
+      std::vector<float> dpPrev(bandHeight, 0);
+      std::vector<float> dpCurr(bandHeight, 0);
+      std::vector<std::vector<int>> backtrack(cols, std::vector<int>(bandHeight, 0));
+
+      // Initialize first column
+      for (int by = 0; by < bandHeight; by++) {
+        dpPrev[by] = costImage.at<float>(searchTop + by, 0);
+        backtrack[0][by] = by;
+      }
+
+      // Reusable buffers for the two-pass approach
+      std::vector<float> bestFromAbove(bandHeight);
+      std::vector<int> bestIdxFromAbove(bandHeight);
+      std::vector<float> bestFromBelow(bandHeight);
+      std::vector<int> bestIdxFromBelow(bandHeight);
+
+      // Fill DP table column by column
+      float lambda = (float)smoothnessLambda;
+      for (int x = 1; x < cols; x++) {
+        // For each row in this column, find the minimum (dpPrev[y'] + lambda * |y - y'|)
+        // This can be done in O(bandHeight) using two passes:
+        // Pass 1: top-to-bottom, propagating the minimum cost downward
+        // Pass 2: bottom-to-top, propagating the minimum cost upward
+
+        // Top-down pass
+        bestFromAbove[0] = dpPrev[0];
+        bestIdxFromAbove[0] = 0;
+        for (int by = 1; by < bandHeight; by++) {
+          float candidate = dpPrev[by];
+          float propagated = bestFromAbove[by-1] + lambda;
+          if (candidate <= propagated) {
+            bestFromAbove[by] = candidate;
+            bestIdxFromAbove[by] = by;
+          } else {
+            bestFromAbove[by] = propagated;
+            bestIdxFromAbove[by] = bestIdxFromAbove[by-1];
+          }
+        }
+
+        // Bottom-up pass
+        bestFromBelow[bandHeight-1] = dpPrev[bandHeight-1];
+        bestIdxFromBelow[bandHeight-1] = bandHeight-1;
+        for (int by = bandHeight - 2; by >= 0; by--) {
+          float candidate = dpPrev[by];
+          float propagated = bestFromBelow[by+1] + lambda;
+          if (candidate <= propagated) {
+            bestFromBelow[by] = candidate;
+            bestIdxFromBelow[by] = by;
+          } else {
+            bestFromBelow[by] = propagated;
+            bestIdxFromBelow[by] = bestIdxFromBelow[by+1];
+          }
+        }
+
+        // Combine: take the min of the two passes.
+        // bestFromAbove[by] already includes the smoothness cost from the
+        // best source row to by. Same for bestFromBelow[by].
+        for (int by = 0; by < bandHeight; by++) {
+          float localCost = costImage.at<float>(searchTop + by, x);
+
+          if (bestFromAbove[by] <= bestFromBelow[by]) {
+            dpCurr[by] = localCost + bestFromAbove[by];
+            backtrack[x][by] = bestIdxFromAbove[by];
+          } else {
+            dpCurr[by] = localCost + bestFromBelow[by];
+            backtrack[x][by] = bestIdxFromBelow[by];
+          }
+        }
+
+        // Swap current and previous for next iteration
+        std::swap(dpPrev, dpCurr);
+      }
+
+      // After the loop, dpPrev holds the last column's values
+
+      // --- Step 5: Backtrace to find the optimal path ---
+      std::vector<int> horizonPath(cols);
+
+      // Find the minimum cost in the last column
+      int bestEndY = 0;
+      float bestEndCost = dpPrev[0];
+      for (int by = 1; by < bandHeight; by++) {
+        if (dpPrev[by] < bestEndCost) {
+          bestEndCost = dpPrev[by];
+          bestEndY = by;
+        }
+      }
+      horizonPath[cols-1] = searchTop + bestEndY;
+
+      // Backtrace
+      int currentBy = bestEndY;
+      for (int x = cols - 2; x >= 0; x--) {
+        currentBy = backtrack[x+1][currentBy];
+        horizonPath[x] = searchTop + currentBy;
+      }
+
+      // --- Step 6: Generate binary mask ---
+      // White (255) above the horizon path = sky
+      // Black (0) at and below the horizon path = ground
+      cv::Mat mask = cv::Mat::zeros(rows, cols, CV_8UC1);
+      for (int x = 0; x < cols; x++) {
+        int horizY = horizonPath[x];
+        // Fill sky (above horizon) with white
+        for (int y = 0; y < horizY; y++) {
+          mask.at<uchar>(y, x) = 255;
+        }
+        // Everything at horizY and below stays black (ground)
+      }
+
+      return [[MatWrapper alloc] initWithMat: mask];
+    } catch (const cv::Exception &e) {
+      Log_e(@"OpenCV Exception in dpHorizonMask: %s", e.what());
+    }
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception in dpHorizonMask: %@", exception);
+  }
+  return nil;
+}
+
 @end
 
 
