@@ -327,7 +327,7 @@ public struct Config: Codable, Sendable, Transferable {
     // How much to shrink the image for the initial parameter search pass.
     // 4 means 1/4 resolution, 8 means 1/8 resolution, etc.
     // Higher values are faster but less precise for parameter selection.
-    public var horizonSearchShrinkFactor: Int = 4
+    public var horizonSearchShrinkFactor: Int = 8
 
     // [min, max] bounds for the crop percentage search range.
     // Each value is a percentage (0-100) of the image height to ignore from the top.
