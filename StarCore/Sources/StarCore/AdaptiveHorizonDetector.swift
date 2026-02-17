@@ -22,25 +22,35 @@ public struct HorizonScore: Sendable, CustomStringConvertible {
     /// score may miss (since stddev averages out isolated spikes).
     public let localConsistencyScore: Double
 
+    /// Penalizes horizon lines that are flat (constant Y) across large portions
+    /// of the image. A flat horizon typically means the crop amount was set too
+    /// aggressively, cropping the actual horizon and leaving only the straight
+    /// crop boundary. 1.0 = no significant flat segments, 0.0 = entirely flat.
+    public let flatnessScore: Double
+
     /// Combined weighted score. Higher is better.
     public var totalScore: Double {
         // Smoothness is a strong signal - a jerky horizon is almost certainly wrong.
         // Edge alignment confirms the horizon sits on a real intensity boundary.
         // Coverage prevents degenerate all-sky or all-ground results.
         // Local consistency catches isolated spike artifacts from too-narrow strips.
-        let smoothnessWeight = 0.35
+        // Flatness catches degenerate results from over-cropping.
+        let smoothnessWeight = 0.25
         let edgeAlignmentWeight = 0.25
-        let coverageWeight = 0.15
-        let localConsistencyWeight = 0.25
+        let coverageWeight = 0.10
+        let localConsistencyWeight = 0.20
+        let flatnessWeight = 0.20
         return smoothnessScore * smoothnessWeight +
                edgeAlignmentScore * edgeAlignmentWeight +
                coverageScore * coverageWeight +
-               localConsistencyScore * localConsistencyWeight
+               localConsistencyScore * localConsistencyWeight +
+               flatnessScore * flatnessWeight
     }
 
     public var description: String {
-        String(format: "HorizonScore(total=%.3f, smooth=%.3f, edge=%.3f, coverage=%.3f, consist=%.3f)",
-               totalScore, smoothnessScore, edgeAlignmentScore, coverageScore, localConsistencyScore)
+        String(format: "HorizonScore(total=%.3f, smooth=%.3f, edge=%.3f, coverage=%.3f, consist=%.3f, flat=%.3f)",
+               totalScore, smoothnessScore, edgeAlignmentScore, coverageScore,
+               localConsistencyScore, flatnessScore)
     }
 }
 
@@ -296,6 +306,82 @@ public enum HorizonScoring {
         return raw * raw
     }
 
+    /// Compute flatness score: penalize horizon lines that are flat (constant Y)
+    /// across large portions of the image.
+    ///
+    /// Walks along the defined horizon Y values and finds runs of consecutive
+    /// columns at the same Y value. Short flat segments (≤ `minRunLength` columns)
+    /// are normal and ignored. Longer flat segments indicate the horizon was
+    /// cropped away, leaving only the straight crop boundary.
+    ///
+    /// The score is based on what fraction of defined columns are part of
+    /// flat runs exceeding the minimum length:
+    /// - 0% flat → score 1.0
+    /// - 33%+ flat → score drops sharply
+    /// - 100% flat → score ~0.0
+    ///
+    /// `minRunLength` is the minimum number of consecutive same-Y columns
+    /// before a run is considered "flat". Default 20 pixels.
+    public static func flatnessScore(
+      horizonY: [Int?],
+      minRunLength: Int = 20
+    ) -> Double {
+        let count = horizonY.count
+        guard count > 0 else { return 1.0 }
+
+        // Walk through defined columns, tracking runs of identical Y values
+        var flatPixelCount = 0
+        var definedCount = 0
+        var currentRunY: Int? = nil
+        var currentRunLength = 0
+
+        for i in 0..<count {
+            guard let y = horizonY[i] else {
+                // End of any current run when we hit an undefined column
+                if currentRunLength > minRunLength {
+                    flatPixelCount += currentRunLength
+                }
+                currentRunY = nil
+                currentRunLength = 0
+                continue
+            }
+            definedCount += 1
+
+            if let runY = currentRunY, y == runY {
+                // Continue the current run
+                currentRunLength += 1
+            } else {
+                // End previous run if it was long enough
+                if currentRunLength > minRunLength {
+                    flatPixelCount += currentRunLength
+                }
+                // Start a new run
+                currentRunY = y
+                currentRunLength = 1
+            }
+        }
+        // Don't forget the last run
+        if currentRunLength > minRunLength {
+            flatPixelCount += currentRunLength
+        }
+
+        guard definedCount > 0 else { return 1.0 }
+
+        let flatFraction = Double(flatPixelCount) / Double(definedCount)
+
+        // Score: no flat segments = 1.0, fully flat = 0.0.
+        // Use a curve that penalizes aggressively once flatness exceeds ~20%:
+        //   score = max(0, 1 - 2 * flatFraction)^1.5
+        // This means:
+        //   0% flat   → 1.0
+        //   10% flat  → ~0.72
+        //   25% flat  → ~0.35
+        //   33% flat  → ~0.19
+        //   50%+ flat → 0.0
+        let raw = max(0.0, 1.0 - 2.0 * flatFraction)
+        return pow(raw, 1.5)
+    }
+
     /// Compute coverage score: penalize degenerate results that are nearly all-sky
     /// or all-ground.
     /// `horizonY` is the per-column horizon Y from the mask.
@@ -357,12 +443,14 @@ public enum HorizonScoring {
 
         let coverage = coverageScore(horizonY: horizonY, imageHeight: mask.height)
         let consistency = localConsistencyScore(horizonY: horizonY)
+        let flatness = flatnessScore(horizonY: horizonY)
 
         return HorizonScore(
           smoothnessScore: smoothness,
           edgeAlignmentScore: edgeAlignment,
           coverageScore: coverage,
-          localConsistencyScore: consistency
+          localConsistencyScore: consistency,
+          flatnessScore: flatness
         )
     }
 
@@ -382,12 +470,14 @@ public enum HorizonScoring {
         )
         let coverage = coverageScore(horizonY: horizonY, imageHeight: mask.height)
         let consistency = localConsistencyScore(horizonY: horizonY)
+        let flatness = flatnessScore(horizonY: horizonY)
 
         return HorizonScore(
           smoothnessScore: smoothness,
           edgeAlignmentScore: edgeAlignment,
           coverageScore: coverage,
-          localConsistencyScore: consistency
+          localConsistencyScore: consistency,
+          flatnessScore: flatness
         )
     }
 }
