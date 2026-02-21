@@ -221,17 +221,21 @@ struct HorizonTesterCli: AsyncParsableCommand {
             fullResEdges = nil
         }
 
-        // Closure to score a mask using the pre-computed edges
-        func scoreHorizonMask(_ mask: HorizonMask) -> HorizonScore {
+        // Closure to score a mask using the pre-computed edges.
+        // cropBoundaryY: the pixel Y coordinate of the Otsu crop boundary on the shrunk image.
+        // Pass nil to skip the crop-boundary proximity penalty (cropBoundaryScore = 1.0).
+        func scoreHorizonMask(_ mask: HorizonMask, cropBoundaryY: Int? = nil) -> HorizonScore {
             if let edges = shrunkEdges {
-                return HorizonScoring.score(horizonMask: mask, edgeImage: edges)
+                return HorizonScoring.score(horizonMask: mask, edgeImage: edges,
+                                            cropBoundaryY: cropBoundaryY)
             } else {
                 return HorizonScoring.score(
                   horizonMask: mask,
                   originalImage: shrunkImage,
                   cannyMinThreshold: cannyMinThreshold,
                   cannyMaxThreshold: cannyMaxThreshold,
-                  useL2Gradient: useL2Gradient
+                  useL2Gradient: useL2Gradient,
+                  cropBoundaryY: cropBoundaryY
                 )
             }
         }
@@ -287,8 +291,10 @@ struct HorizonTesterCli: AsyncParsableCommand {
                     continue
                 }
 
-                let score = scoreHorizonMask(mask)
-                Log.i("  -> \(score)")
+                // crop boundary Y in shrunk-image coordinates
+                let shrunkCropBoundaryY = Int(Double(shrunkImage.height) * cropAmount / 100.0)
+                let score = scoreHorizonMask(mask, cropBoundaryY: shrunkCropBoundaryY)
+                Log.i("  -> \(score) totalScore \(score.totalScore)")
 
                 let filename = String(
                   format: "%@/01_pass1_%02d_%@.tiff",
@@ -308,7 +314,15 @@ struct HorizonTesterCli: AsyncParsableCommand {
             throw ExitCode.failure
         }
 
-        let pass1Ranked = pass1Results.sorted { $0.score.totalScore > $1.score.totalScore }
+        // Primary sort: higher total score wins.
+        // Tie-break: larger cropAmount wins (more conservative sky crop; avoids
+        // choosing a crop that bites into the real horizon when scores are equal).
+        let pass1Ranked = pass1Results.sorted {
+            if $0.score.totalScore != $1.score.totalScore {
+                return $0.score.totalScore > $1.score.totalScore
+            }
+            return $0.cropAmount > $1.cropAmount
+        }
 
         Log.i("")
         Log.i("=== PASS 1 RANKING ===")
@@ -348,7 +362,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
 
         for cropAmount in pass2CropAmounts {
             testIndex += 1
-
+            
             let shrunkStripWidth: Int
             if pass1Best.stripWidth == 0 {
                 shrunkStripWidth = Int(shrunkWidth)
@@ -373,8 +387,10 @@ struct HorizonTesterCli: AsyncParsableCommand {
                 continue
             }
 
-            let score = scoreHorizonMask(mask)
-            Log.i("  -> \(score)")
+            // crop boundary Y in shrunk-image coordinates
+            let shrunkCropBoundaryY = Int(Double(shrunkImage.height) * cropAmount / 100.0)
+            let score = scoreHorizonMask(mask, cropBoundaryY: shrunkCropBoundaryY)
+            Log.i("  -> \(score) total score \(score.totalScore)")
 
             let filename = String(
               format: "%@/02_pass2_%02d_%@.tiff",
@@ -393,7 +409,13 @@ struct HorizonTesterCli: AsyncParsableCommand {
             throw ExitCode.failure
         }
 
-        let pass2Ranked = pass2Results.sorted { $0.score.totalScore > $1.score.totalScore }
+        // Same tie-breaking as pass 1: prefer larger cropAmount on equal scores.
+        let pass2Ranked = pass2Results.sorted {
+            if $0.score.totalScore != $1.score.totalScore {
+                return $0.score.totalScore > $1.score.totalScore
+            }
+            return $0.cropAmount > $1.cropAmount
+        }
 
         Log.i("")
         Log.i("=== PASS 2 RANKING ===")
@@ -433,16 +455,20 @@ struct HorizonTesterCli: AsyncParsableCommand {
             throw ExitCode.failure
         }
 
+        // crop boundary Y in full-resolution coordinates
+        let fullResCropBoundaryY = Int(Double(original.height) * pass2Best.cropAmount / 100.0)
         let fullResScore: HorizonScore
         if let edges = fullResEdges {
-            fullResScore = HorizonScoring.score(horizonMask: fullResMask, edgeImage: edges)
+            fullResScore = HorizonScoring.score(horizonMask: fullResMask, edgeImage: edges,
+                                                cropBoundaryY: fullResCropBoundaryY)
         } else {
             fullResScore = HorizonScoring.score(
               horizonMask: fullResMask,
               originalImage: original,
               cannyMinThreshold: cannyMinThreshold,
               cannyMaxThreshold: cannyMaxThreshold,
-              useL2Gradient: useL2Gradient
+              useL2Gradient: useL2Gradient,
+              cropBoundaryY: fullResCropBoundaryY
             )
         }
 
@@ -475,7 +501,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
             do {
                 if let dpMask = try await original.dpHorizonMask(
                      at: 0,
-                     bottomPercentage: pass2Best.cropAmount,
+                     //bottomPercentage: pass2Best.cropAmount,
                      cannyMinThreshold: cannyMinThreshold,
                      cannyMaxThreshold: cannyMaxThreshold,
                      useL2Gradient: useL2Gradient,
@@ -545,6 +571,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
               edgeAlignmentScore: result.score.edgeAlignmentScore,
               coverageScore: result.score.coverageScore,
               localConsistencyScore: result.score.localConsistencyScore,
+              flatnessScore: result.score.flatnessScore,
               totalScore: result.score.totalScore
             )
         }
@@ -557,6 +584,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
               edgeAlignmentScore: result.score.edgeAlignmentScore,
               coverageScore: result.score.coverageScore,
               localConsistencyScore: result.score.localConsistencyScore,
+              flatnessScore: result.score.flatnessScore,
               totalScore: result.score.totalScore
             )
         }
@@ -669,6 +697,7 @@ struct HorizonTestSummary: Codable {
         let edgeAlignmentScore: Double
         let coverageScore: Double
         let localConsistencyScore: Double
+        let flatnessScore: Double
         let totalScore: Double
     }
 }

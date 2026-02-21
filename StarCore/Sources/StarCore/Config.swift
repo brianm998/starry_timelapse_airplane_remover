@@ -323,7 +323,7 @@ public struct Config: Codable, Sendable, Transferable {
     // How much to shrink the image for the initial parameter search pass.
     // 4 means 1/4 resolution, 8 means 1/8 resolution, etc.
     // Higher values are faster but less precise for parameter selection.
-    public var horizonSearchShrinkFactor: Int = 6
+    public var horizonSearchShrinkFactor: Int = 4
 
     // [min, max] bounds for the crop percentage search range.
     // Each value is a percentage (0-100) of the image height to ignore from the top.
@@ -331,12 +331,12 @@ public struct Config: Codable, Sendable, Transferable {
     // horizonSearchCropCount1 evenly spaced steps for the first pass, then
     // horizonSearchCropCount2 steps for a refined second pass around the first best.
     // An empty array disables adaptive search.
-    public var horizonSearchCropBounds: [Double] = [20, 70]
+    public var horizonSearchCropBounds: [Double] = [10, 90]
 
     // Number of evenly spaced crop percentage values to test in the first pass.
     // The range defined by horizonSearchCropBounds is divided into this many steps.
     // e.g. bounds=[30,70] and count1=5 produces [30, 40, 50, 60, 70].
-    public var horizonSearchCropCount1: Int = 8
+    public var horizonSearchCropCount1: Int = 16
 
     // Number of evenly spaced crop percentage values to test in the second
     // refinement pass. The second pass search area is centered on the first pass
@@ -351,7 +351,7 @@ public struct Config: Codable, Sendable, Transferable {
     // scaled down by horizonSearchShrinkFactor for the search pass.
     // An empty array disables the search and uses the single horizonStripWidth value.
     // A value of 0 means use the full image width.
-    public var horizonSearchStripWidths: [Int] = [300, 400, 500]
+    public var horizonSearchStripWidths: [Int] = [0]
 
     // After the first frame's horizon is detected, narrow the search area for
     // subsequent frames. This is the number of percentage points to add above
@@ -377,6 +377,18 @@ public struct Config: Codable, Sendable, Transferable {
     // Weight of Canny edge presence in the DP cost function.
     // Higher values make the path follow detected edges more.
     public var dpHorizonCannyWeight: Double = 0.4
+
+    // [min, max] bounds (as percentage of image height, 0-100) of the vertical
+    // search band for the DP horizon tracer.  Unlike the Otsu pipeline, the DP
+    // tracer does not need a pre-computed crop amount — it traces the strongest
+    // horizontal edge within this band directly from image gradients.
+    //
+    // Using a wide, independent band lets the DP recover the real horizon even
+    // when the Otsu crop amount is set below the true horizon.  The default
+    // [10, 90] searches 80% of the image height, which is safe for most scenes.
+    // Narrow this (e.g. [30, 70]) if you know the horizon is always near the
+    // middle, for a small speed improvement.
+    public var dpHorizonSearchBounds: [Double] = [10.0, 90.0]
 
     public var alignmentMaxKeypoints: Int = 2000
     public var alignmentWriteDebugImages: Bool = false
@@ -485,6 +497,7 @@ public struct Config: Codable, Sendable, Transferable {
         self.dpHorizonSmoothnessLambda = try c.decodeIfPresent(Double.self, forKey: .dpHorizonSmoothnessLambda) ?? self.dpHorizonSmoothnessLambda
         self.dpHorizonSobelWeight = try c.decodeIfPresent(Double.self, forKey: .dpHorizonSobelWeight) ?? self.dpHorizonSobelWeight
         self.dpHorizonCannyWeight = try c.decodeIfPresent(Double.self, forKey: .dpHorizonCannyWeight) ?? self.dpHorizonCannyWeight
+        self.dpHorizonSearchBounds = try c.decodeIfPresent([Double].self, forKey: .dpHorizonSearchBounds) ?? self.dpHorizonSearchBounds
     }
 
     

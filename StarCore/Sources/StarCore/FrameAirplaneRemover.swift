@@ -620,7 +620,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           config: config
         )
 
-        guard let pass1Best = pass1Results.max(by: { $0.score.totalScore < $1.score.totalScore })
+        // Tie-break on equal total score: prefer larger cropAmount (more conservative
+        // sky crop). A larger crop is less likely to bite into the real horizon; when
+        // the algorithm can't distinguish candidates by score it should stay safe.
+        guard let pass1Best = pass1Results.max(by: {
+            if $0.score.totalScore != $1.score.totalScore {
+                return $0.score.totalScore < $1.score.totalScore
+            }
+            return $0.cropAmount < $1.cropAmount   // higher cropAmount wins
+        })
         else {
             throw "adaptive horizon search pass 1 produced no valid results"
         }
@@ -660,7 +668,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           config: config
         )
 
-        guard let pass2Best = pass2Results.max(by: { $0.score.totalScore < $1.score.totalScore })
+        // Same tie-break as pass 1: prefer larger cropAmount on equal scores.
+        guard let pass2Best = pass2Results.max(by: {
+            if $0.score.totalScore != $1.score.totalScore {
+                return $0.score.totalScore < $1.score.totalScore
+            }
+            return $0.cropAmount < $1.cropAmount   // higher cropAmount wins
+        })
         else {
             throw "adaptive horizon search pass 2 produced no valid results"
         }
@@ -698,7 +712,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           originalImage: original,
           cannyMinThreshold: config.cannyMinThreshold,
           cannyMaxThreshold: config.cannyMaxThreshold,
-          useL2Gradient: config.cannyUseL2Gradient
+          useL2Gradient: config.cannyUseL2Gradient,
+          cropBoundaryY: Int(Double(original.height)*pass2Best.cropAmount/100)
         )
 
         Log.i("frame \(frameIndex) Otsu full resolution score=\(otsuFullResScore)")
@@ -711,13 +726,42 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // The DP approach traces the strongest horizontal boundary through the image
         // using Sobel gradients and Canny edges, independent of Otsu classification.
         // This handles bright ground (snow, etc.) that confuses Otsu thresholding.
+        //
+        // Crucially, the DP search band comes from `dpHorizonSearchBounds` (config),
+        // NOT from `pass2Best.cropAmount`.  The Otsu crop amount can end up below
+        // the real horizon (that's the failure mode we're fixing), which would
+        // constrain the DP search band to start below the real horizon too.
+        // By using an independent, wider search band the DP can always find the
+        // real horizon regardless of what Otsu decided.
         if config.useDPHorizonDetection {
             do {
-                // Run DP at full resolution using the pass-2 best crop amount
-                // as the search region constraint.
+                // Derive the DP search band from the dedicated config bounds.
+                // dpHorizonSearchBounds is [minPct, maxPct] of image height.
+                let dpBounds = config.dpHorizonSearchBounds
+                let dpSearchTop: Double    // fraction of height to start search from top
+                let dpSearchBottom: Double // fraction of height to end search
+
+                if dpBounds.count >= 2 {
+                    // bounds are expressed as "% from top", i.e. the same convention
+                    // as horizonSearchCropBounds: the lower number is closer to the top.
+                    dpSearchTop    = max(0, min(1, dpBounds[0] / 100.0))
+                    dpSearchBottom = max(0, min(1, dpBounds[1] / 100.0))
+                } else {
+                    // Fallback: search 10%-90% of the image
+                    dpSearchTop    = 0.10
+                    dpSearchBottom = 0.90
+                }
+
+                Log.i("frame \(frameIndex) DP horizon search band: " +
+                      "\(String(format: "%.0f", dpSearchTop * 100))%–" +
+                      "\(String(format: "%.0f", dpSearchBottom * 100))% of image height " +
+                      "(independent of Otsu crop=\(String(format: "%.1f", pass2Best.cropAmount))%)")
+
+                // Run DP at full resolution using the independent search band.
                 if let dpMask = try await original.dpHorizonMask(
                      at: frameIndex,
-                     bottomPercentage: pass2Best.cropAmount,
+                     searchTopFraction: dpSearchTop,
+                     searchBottomFraction: dpSearchBottom,
                      cannyMinThreshold: config.cannyMinThreshold,
                      cannyMaxThreshold: config.cannyMaxThreshold,
                      useL2Gradient: config.cannyUseL2Gradient,
@@ -827,11 +871,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                             return nil
                         }
 
+                        // The crop boundary is the first row of the cropped region
+                        // in the mask's coordinate space.  The mask has the same
+                        // height as the shrunk image; the top `cropAmount`% rows
+                        // were assumed to be sky and were filled white (not processed
+                        // by Otsu). The boundary between assumed-sky and the Otsu
+                        // region sits at this Y coordinate.
+                        let shrunkCropBoundaryY = Int(Double(shrunkImage.height) * cropAmount / 100.0)
+
                         let score: HorizonScore
                         if let edges = shrunkEdgeImage {
                             score = HorizonScoring.score(
                               horizonMask: mask,
-                              edgeImage: edges
+                              edgeImage: edges,
+                              cropBoundaryY: shrunkCropBoundaryY,
+                              scaleFactor: shrinkFactor
                             )
                         } else {
                             score = HorizonScoring.score(
@@ -839,7 +893,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                               originalImage: shrunkImage,
                               cannyMinThreshold: config.cannyMinThreshold,
                               cannyMaxThreshold: config.cannyMaxThreshold,
-                              useL2Gradient: config.cannyUseL2Gradient
+                              useL2Gradient: config.cannyUseL2Gradient,
+                              cropBoundaryY: shrunkCropBoundaryY,
+                              scaleFactor: shrinkFactor
                             )
                         }
 

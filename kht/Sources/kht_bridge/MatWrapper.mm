@@ -289,6 +289,7 @@ static NSUInteger _totalInstances = 0;
 
     int newHeight = self.mat.rows - N;
     if (newHeight <= 0) {
+        Log_w(@"invalid newHeight %d", newHeight);
         // If cropping removes everything, return an empty Mat
         return [[MatWrapper alloc] initWithMat: cv::Mat()];
     }

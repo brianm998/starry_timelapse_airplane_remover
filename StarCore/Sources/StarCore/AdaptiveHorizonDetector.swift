@@ -25,8 +25,17 @@ public struct HorizonScore: Sendable, CustomStringConvertible {
     /// Penalizes horizon lines that are flat (constant Y) across large portions
     /// of the image. A flat horizon typically means the crop amount was set too
     /// aggressively, cropping the actual horizon and leaving only the straight
-    /// crop boundary. 1.0 = no significant flat segments, 0.0 = entirely flat.
+    /// crop boundary. Used as a *multiplier* on the total score so that a fully
+    /// flat result always scores near zero regardless of other sub-scores.
+    /// 1.0 = no significant flat segments, 0.0 = entirely flat.
     public let flatnessScore: Double
+
+    /// Penalizes horizon lines whose average Y position sits very close to the
+    /// Otsu crop boundary. When the crop is set too low (below the real horizon),
+    /// the pipeline detects the crop boundary itself as the horizon. This penalty
+    /// is a second *multiplier* on the total score.
+    /// 1.0 = horizon is well above the crop boundary, 0.0 = horizon is at the boundary.
+    public let cropBoundaryScore: Double
 
     /// Combined weighted score. Higher is better.
     public var totalScore: Double {
@@ -34,23 +43,34 @@ public struct HorizonScore: Sendable, CustomStringConvertible {
         // Edge alignment confirms the horizon sits on a real intensity boundary.
         // Coverage prevents degenerate all-sky or all-ground results.
         // Local consistency catches isolated spike artifacts from too-narrow strips.
-        // Flatness catches degenerate results from over-cropping.
-        let smoothnessWeight = 0.25
-        let edgeAlignmentWeight = 0.25
-        let coverageWeight = 0.10
-        let localConsistencyWeight = 0.20
-        let flatnessWeight = 0.20
-        return smoothnessScore * smoothnessWeight +
-               edgeAlignmentScore * edgeAlignmentWeight +
-               coverageScore * coverageWeight +
-               localConsistencyScore * localConsistencyWeight +
-               flatnessScore * flatnessWeight
+        //
+        // Flatness is treated as a *multiplier*, not an additive term.
+        // A flat horizon line almost always means the crop boundary was mistaken for
+        // the real horizon. The line is maximally smooth and edge-aligned at the crop
+        // boundary, so an additive flatness penalty cannot overcome those high scores.
+        // By multiplying the entire score by flatnessScore:
+        //   - flatnessScore = 1.0 (no flat segments)  → no effect
+        //   - flatnessScore = 0.5 (half flat)         → total halved
+        //   - flatnessScore = 0.0 (fully flat)        → total zeroed out
+        // This makes flatness an existential gate rather than a weak offset.
+        let smoothnessWeight    = 0.30
+        let edgeAlignmentWeight = 0.30
+        let coverageWeight      = 0.15
+        let localConsistencyWeight = 0.25
+        let additive = smoothnessScore    * smoothnessWeight +
+                       edgeAlignmentScore * edgeAlignmentWeight +
+                       coverageScore      * coverageWeight +
+                       localConsistencyScore * localConsistencyWeight
+        // flatnessScore and cropBoundaryScore are multipliers: either one
+        // can suppress the total to near-zero when the detected horizon is
+        // degenerate (flat crop-boundary artifact).
+        return additive * flatnessScore * cropBoundaryScore
     }
 
     public var description: String {
-        String(format: "HorizonScore(total=%.3f, smooth=%.3f, edge=%.3f, coverage=%.3f, consist=%.3f, flat=%.3f)",
+        String(format: "HorizonScore(total=%.3f, smooth=%.3f, edge=%.3f, coverage=%.3f, consist=%.3f, flat=%.3f×, cropBnd=%.3f×)",
                totalScore, smoothnessScore, edgeAlignmentScore, coverageScore,
-               localConsistencyScore, flatnessScore)
+               localConsistencyScore, flatnessScore, cropBoundaryScore)
     }
 }
 
@@ -180,9 +200,28 @@ public enum HorizonScoring {
     }
 
     /// Compute the smoothness score from per-column horizon Y values.
-    /// Score is 1.0 / (1.0 + stddev(derivative)).
+    ///
+    /// The score rewards gentle, natural variation and penalises two failure modes:
+    ///
+    ///  1. **Too rough** (large stddev): a jerky, spike-filled horizon is almost
+    ///     certainly wrong. Penalty rises quickly with stddev via the classic
+    ///     `1 / (1 + stddev)` term.
+    ///
+    ///  2. **Too flat** (near-zero stddev): a perfectly constant horizon line is
+    ///     almost certainly the crop boundary, not the real horizon. A real
+    ///     horizon shifts gently across the frame; a truly flat line has zero
+    ///     derivative variance. We penalise this with a Gaussian lower-bound term
+    ///     `1 - exp(-stddev² / (2 * naturalStddev²))` that rises from 0 at
+    ///     stddev=0 toward 1 as stddev approaches `naturalStddev` (default ≈ 3 px).
+    ///
+    /// The combined score peaks around stddev ≈ 2–4 pixels and falls for both
+    /// flatter and rougher lines.
+    ///
     /// Columns with nil values are skipped in the derivative computation.
-    public static func smoothnessScore(horizonY: [Int?]) -> Double {
+    public static func smoothnessScore(
+      horizonY: [Int?],
+      naturalStddev: Double = 3.0
+    ) -> Double {
         // Compute column-to-column differences where both neighbors are non-nil
         var diffs: [Double] = []
         for i in 1..<horizonY.count {
@@ -200,10 +239,16 @@ public enum HorizonScoring {
         let variance = diffs.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(diffs.count)
         let stddev = sqrt(variance)
 
-        // Score: lower stddev = smoother = higher score
-        // A perfectly smooth horizon has stddev=0 -> score=1.0
-        // stddev of 10 pixels -> score ~= 0.09
-        return 1.0 / (1.0 + stddev)
+        // Upper-roughness penalty: score drops as the line becomes more erratic.
+        // stddev=0  → 1.0,  stddev=5 → 0.17,  stddev=10 → 0.09
+        let upperPenalty = 1.0 / (1.0 + stddev)
+
+        // Lower-flatness penalty: score rises from 0 toward 1 as stddev increases
+        // from 0, reaching ~0.63 at stddev=naturalStddev and ~0.86 at 2×naturalStddev.
+        // This directly penalises robotically flat (crop-boundary) detections.
+        let lowerPenalty = 1.0 - exp(-(stddev * stddev) / (2.0 * naturalStddev * naturalStddev))
+
+        return upperPenalty * lowerPenalty
     }
 
     /// Compute edge alignment score: what fraction of horizon pixels coincide with
@@ -241,6 +286,46 @@ public enum HorizonScoring {
 
         guard totalCount > 0 else { return 0.0 }
         return Double(alignedCount) / Double(totalCount)
+    }
+
+    /// Compute crop-boundary proximity score.
+    ///
+    /// When the Otsu crop amount is set too low (below the real horizon), the
+    /// pipeline detects the crop boundary itself as the horizon. The crop boundary
+    /// is a perfectly straight, perfectly smooth, well-edge-aligned line — so the
+    /// other scores cannot distinguish it from a real horizon.
+    ///
+    /// This score penalises results whose average horizon Y is very close to the
+    /// crop boundary Y. It is applied as a *multiplier* on the total score.
+    ///
+    /// - `cropBoundaryY`: the Y pixel coordinate of the Otsu crop boundary
+    ///   (the topmost row of the cropped region, i.e. `imageHeight * cropFraction`).
+    /// - `tolerancePixels`: how far from the boundary (in pixels) counts as "at the
+    ///   boundary". Default 8 px. Results within this distance get a heavy penalty.
+    ///
+    /// Score transitions from 0.05 (within tolerancePixels) to 1.0 (≥ 3× tolerance
+    /// away) using a smooth sigmoid ramp.
+    public static func cropBoundaryScore(
+      horizonY: [Int?],
+      cropBoundaryY: Int,
+      tolerancePixels: Int = 8
+    ) -> Double {
+        let defined = horizonY.compactMap { $0 }
+        guard !defined.isEmpty else { return 0.666 }
+
+        let avgY = Double(defined.reduce(0, +)) / Double(defined.count)
+        let dist = abs(avgY - Double(cropBoundaryY))
+        let tol = Double(max(1, tolerancePixels))
+
+        // Smooth ramp: score rises from ~0.05 at dist=0 to ~1.0 at dist=3*tol.
+        // Uses a sigmoid centred at tol with width tol/2.
+        // s(x) = 1 / (1 + exp(-k*(x - tol)))   where k = 4/tol
+        let k = 4.0 / tol
+        let score = 1.0 / (1.0 + exp(-k * (dist - tol)))
+        // Rescale so that score at dist=0 is near 0.05 and at dist→∞ is 1.0.
+        // The sigmoid at dist=0 gives 1/(1+exp(4)) ≈ 0.018; at dist=∞ gives 1.0.
+        // We want a minimum floor of ~0.05, so just clamp below.
+        return max(0.05, score)
     }
 
     /// Compute local consistency score: penalize horizon lines with isolated spike
@@ -324,7 +409,9 @@ public enum HorizonScoring {
     /// before a run is considered "flat". Default 20 pixels.
     public static func flatnessScore(
       horizonY: [Int?],
-      minRunLength: Int = 20
+      imageWidth: Int,
+      minRunLength: Int = 20,   // relative to the image width
+      scaleFactor: Int = 1
     ) -> Double {
         let count = horizonY.count
         guard count > 0 else { return 1.0 }
@@ -335,10 +422,12 @@ public enum HorizonScoring {
         var currentRunY: Int? = nil
         var currentRunLength = 0
 
+        let scaledMinRunLength = Int(Double(minRunLength)/Double(scaleFactor))
+        
         for i in 0..<count {
             guard let y = horizonY[i] else {
                 // End of any current run when we hit an undefined column
-                if currentRunLength > minRunLength {
+                if currentRunLength > scaledMinRunLength {
                     flatPixelCount += currentRunLength
                 }
                 currentRunY = nil
@@ -352,7 +441,7 @@ public enum HorizonScoring {
                 currentRunLength += 1
             } else {
                 // End previous run if it was long enough
-                if currentRunLength > minRunLength {
+                if currentRunLength > scaledMinRunLength {
                     flatPixelCount += currentRunLength
                 }
                 // Start a new run
@@ -361,7 +450,7 @@ public enum HorizonScoring {
             }
         }
         // Don't forget the last run
-        if currentRunLength > minRunLength {
+        if currentRunLength > scaledMinRunLength {
             flatPixelCount += currentRunLength
         }
 
@@ -413,12 +502,19 @@ public enum HorizonScoring {
 
     /// Compute a full HorizonScore for a horizon mask, given the original image
     /// for edge alignment checks.
+    ///
+    /// - `cropBoundaryY`: the Y pixel coordinate of the Otsu crop boundary in the
+    ///   mask's coordinate space (i.e. `imageHeight * cropFraction`). Pass `nil`
+    ///   (default) to skip the crop-boundary penalty (e.g. when scoring at full
+    ///   resolution where the boundary is not meaningful).
     public static func score(
       horizonMask: HorizonMask,
       originalImage: PixelatedImage,
       cannyMinThreshold: Double,
       cannyMaxThreshold: Double,
-      useL2Gradient: Bool
+      useL2Gradient: Bool,
+      cropBoundaryY: Int? = nil,
+      scaleFactor: Int = 1
     ) -> HorizonScore {
         let mask = horizonMask.image
         let horizonY = extractHorizonYPerColumn(from: mask)
@@ -443,22 +539,38 @@ public enum HorizonScoring {
 
         let coverage = coverageScore(horizonY: horizonY, imageHeight: mask.height)
         let consistency = localConsistencyScore(horizonY: horizonY)
-        let flatness = flatnessScore(horizonY: horizonY)
+        let flatness = flatnessScore(
+          horizonY: horizonY,
+          imageWidth: originalImage.width,
+          scaleFactor: scaleFactor
+        )
+        let cropBoundary: Double
+        if let boundaryY = cropBoundaryY {
+            cropBoundary = cropBoundaryScore(horizonY: horizonY, cropBoundaryY: boundaryY)
+        } else {
+            cropBoundary = 0.999 // no penalty when boundary is unknown
+        }
 
         return HorizonScore(
           smoothnessScore: smoothness,
           edgeAlignmentScore: edgeAlignment,
           coverageScore: coverage,
           localConsistencyScore: consistency,
-          flatnessScore: flatness
+          flatnessScore: flatness,
+          cropBoundaryScore: cropBoundary
         )
     }
 
     /// Lighter-weight scoring that reuses an already-computed edge image.
     /// Use this when scoring many candidates against the same source image.
+    ///
+    /// - `cropBoundaryY`: the Y pixel coordinate of the Otsu crop boundary in the
+    ///   mask's coordinate space. Pass `nil` (default) to skip the penalty.
     public static func score(
       horizonMask: HorizonMask,
-      edgeImage: PixelatedImage
+      edgeImage: PixelatedImage,
+      cropBoundaryY: Int? = nil,
+      scaleFactor: Int = 1
     ) -> HorizonScore {
         let mask = horizonMask.image
         let horizonY = extractHorizonYPerColumn(from: mask)
@@ -470,14 +582,25 @@ public enum HorizonScoring {
         )
         let coverage = coverageScore(horizonY: horizonY, imageHeight: mask.height)
         let consistency = localConsistencyScore(horizonY: horizonY)
-        let flatness = flatnessScore(horizonY: horizonY)
+        let flatness = flatnessScore(
+          horizonY: horizonY,
+          imageWidth: edgeImage.width,
+          scaleFactor: scaleFactor
+        )
+        let cropBoundary: Double
+        if let boundaryY = cropBoundaryY {
+            cropBoundary = cropBoundaryScore(horizonY: horizonY, cropBoundaryY: boundaryY)
+        } else {
+            cropBoundary = 0.99 // no penalty when boundary is unknown
+        }
 
         return HorizonScore(
           smoothnessScore: smoothness,
           edgeAlignmentScore: edgeAlignment,
           coverageScore: coverage,
           localConsistencyScore: consistency,
-          flatnessScore: flatness
+          flatnessScore: flatness,
+          cropBoundaryScore: cropBoundary
         )
     }
 }

@@ -207,14 +207,29 @@ extension PixelatedImage {
         // determine the size of the sky to remove
         let topHeight = Int(Double(self.height)*bottomPercentage/100)
 
-        Log.d("topHeight \(topHeight)")
-        
+        Log.i("horizonMask: image=\(self.width)×\(self.height) crop=\(String(format:"%.1f",bottomPercentage))% topHeight=\(topHeight) cropHeight=\(self.height-topHeight) stripWidth=\(stripWidth)")
+
         // crop out the top part
         guard let bottomCrop = self.bottomCrop(by: topHeight) else {
             Log.w("Unable to bottom crop")
             return nil
         }
 
+
+        // XXX TESTING XXX
+        // XXX TESTING XXX
+        // XXX TESTING XXX
+        let filename = String(
+          format: "/tmp/bottom_crop_%d_%f.tiff",
+          self.height, bottomPercentage
+        )
+        bottomCrop.writeTIFFEncoding(toFilename: filename)
+
+        // XXX TESTING XXX
+        // XXX TESTING XXX
+        // XXX TESTING XXX
+
+        
         // split into an array of smaller images
         let matrix = bottomCrop.splitIntoMatrix(
           maxWidth: stripWidth,
@@ -225,7 +240,7 @@ extension PixelatedImage {
         // updated elements go here
         var newElements: [ImageMatrixElement] = []
 
-        Log.d("frame \(frameIndex) has \(newElements.count) matrix elements for horizon removal")
+        Log.i("horizonMask: \(matrix.count) strips from \(bottomCrop.width)×\(bottomCrop.height) cropped region")
 
 
         return try await withThrowingTaskGroup(of: Optional<ImageMatrixElement>.self) { taskGroup in
@@ -259,24 +274,56 @@ extension PixelatedImage {
             
             if newElements.count == matrix.count {
 
+                // Log the per-strip Otsu horizon extents so we can see if the
+                // Otsu phase is producing variation across crop/strip combinations.
+                let otsuExtents = newElements.map { e -> String in
+                    let t = e.horizonTopY.map { "\($0)" } ?? "nil"
+                    let b = e.horizonBottomY.map { "\($0)" } ?? "nil"
+                    return "[\(t)..\(b)]"
+                }
+                Log.i("horizonMask: Otsu strip extents (in crop-relative coords): \(otsuExtents.joined(separator: " "))")
+
                 // XXX redo this
                 let (horizonTopY, horizonBottomY) = newElements.combinedHorizonExtents()
 
                 if let no_sky_image = PixelatedImage(from: newElements),
                    let image = no_sky_image.addSky(height: topHeight)
                 {
+
+
+                    // XXX TESTING XXX
+                    // XXX TESTING XXX
+                    // XXX TESTING XXX
+                    let filename0 = String(
+                      format: "/tmp/no_sky_%d_%f.tiff",
+                      self.height, bottomPercentage
+                    )
+                    no_sky_image.writeTIFFEncoding(toFilename: filename0)
+
+                    let filename2 = String(
+                      format: "/tmp/not_no_sky_%d_%f.tiff",
+                      self.height, bottomPercentage
+                    )
+                    image.writeTIFFEncoding(toFilename: filename2)
+
+                    // XXX TESTING XXX
+                    // XXX TESTING XXX
+                    // XXX TESTING XXX
+
+
+                    
                     var combined = image
 
-                    if useCannyEdgeDetection {
-                        // find edges on self (source image)
-                        let edges = try self.cannyEdgeDetect(
+                    if useCannyEdgeDetection, false {
+                        // find edges 
+                        let edges = try image.cannyEdgeDetect( 
                           minThreshold: cannyMinThreshold,
                           maxThreshold: cannyMaxThreshold,
                           useL2Gradient: useL2Gradient
                         )
                           .bitwiseNot()
                           .growDarkRegions(by: 1)
-                        
+
                         // combine otsu and canny edge detection into one image
 
                         combined = try image
@@ -300,6 +347,29 @@ extension PixelatedImage {
 
                     var _horizonBottomY: Int = 0
                     if let horizonBottomY { _horizonBottomY = horizonBottomY }
+                    
+                    let horizonYValues = HorizonScoring.extractHorizonYPerColumn(from: groundOnly)
+                    let definedYs = horizonYValues.compactMap { $0 }
+                    if definedYs.isEmpty {
+                        Log.i("horizonMask: result has no defined horizon columns (all sky or all ground)")
+                    } else {
+                        let minY = definedYs.min()!
+                        let maxY = definedYs.max()!
+                        let avgY = Double(definedYs.reduce(0,+)) / Double(definedYs.count)
+                        Log.i("horizonMask: result horizonY min=\(minY) max=\(maxY) avg=\(String(format:"%.1f",avgY)) defined=\(definedYs.count)/\(horizonYValues.count) cols")
+                    }
+
+                    // XXX TESTING XXX
+                    // XXX TESTING XXX
+                    // XXX TESTING XXX
+                    let filename = String(
+                      format: "/tmp/ground_only_%d_%f.tiff",
+                      self.height, bottomPercentage
+                    )
+                    groundOnly.writeTIFFEncoding(toFilename: filename)
+                    // XXX TESTING XXX
+                    // XXX TESTING XXX
+                    // XXX TESTING XXX
                     
                     return HorizonMask(
                       image: groundOnly,
@@ -327,14 +397,16 @@ extension PixelatedImage {
     /// boundary in the image, making it robust to bright ground (snow, reflections)
     /// that would confuse Otsu thresholding.
     ///
-    /// The `bottomPercentage` parameter controls how much of the top is assumed
-    /// to be sky (same semantics as `horizonMask()`). The DP search is constrained
-    /// to the cropped region.
+    /// The search band is defined by `searchTopFraction` and `searchBottomFraction`
+    /// (both as fractions of image height, 0.0–1.0).  These are independent of
+    /// the Otsu crop amount so the DP can find the real horizon even when the
+    /// Otsu crop parameter is set below the true horizon.
     ///
     /// Returns a `HorizonMask` with a binary image: white = sky, black = ground.
     public func dpHorizonMask(
       at frameIndex: Int,
-      bottomPercentage: Double = 50,
+      searchTopFraction: Double = 0.10,
+      searchBottomFraction: Double = 0.90,
       cannyMinThreshold: Double = 50,
       cannyMaxThreshold: Double = 120,
       useL2Gradient: Bool = true,
@@ -342,14 +414,12 @@ extension PixelatedImage {
       sobelWeight: Double = 0.6,
       cannyWeight: Double = 0.4
     ) async throws -> HorizonMask? {
-        // The bottomPercentage means "ignore this fraction from the top".
-        // Convert to search fractions: the horizon should be somewhere in
-        // the bottom portion of the image.
-        let searchTopFraction = bottomPercentage / 100.0
-        let searchBottomFraction = 1.0
+        let top    = max(0.0, min(1.0, searchTopFraction))
+        let bottom = max(top, min(1.0, searchBottomFraction))
 
         Log.d("frame \(frameIndex) dpHorizonMask: " +
-              "searchTop=\(String(format: "%.2f", searchTopFraction)), " +
+              "searchTop=\(String(format: "%.2f", top)), " +
+              "searchBottom=\(String(format: "%.2f", bottom)), " +
               "lambda=\(smoothnessLambda), sobelW=\(sobelWeight), cannyW=\(cannyWeight)")
 
         let dpMask = try self.dpHorizonDetect(
@@ -359,8 +429,8 @@ extension PixelatedImage {
           smoothnessLambda: smoothnessLambda,
           sobelWeight: sobelWeight,
           cannyWeight: cannyWeight,
-          searchTopFraction: searchTopFraction,
-          searchBottomFraction: searchBottomFraction
+          searchTopFraction: top,
+          searchBottomFraction: bottom
         )
 
         return HorizonMask(dpMask)
