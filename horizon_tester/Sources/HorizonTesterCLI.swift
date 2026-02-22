@@ -570,33 +570,71 @@ struct HorizonTesterCli: AsyncParsableCommand {
         }
 
         // ===================================================================
-        // FULL RESOLUTION: Run the overall winner at full resolution
+        // FULL RESOLUTION: Generate Otsu + DP, combine, score all four
         // ===================================================================
-        // Compare best Otsu shrunk score vs best DP shrunk score; run the winner.
-        let dpWinsShrunk: Bool
-        if let dpBest = dpBestShrunkResult {
-            dpWinsShrunk = dpBest.score.totalScore > pass2Best.score.totalScore
-            Log.i("")
-            Log.i(String(format: "Shrunk comparison: Otsu=%.3f  DP=%.3f  → %@ wins",
-                         pass2Best.score.totalScore, dpBest.score.totalScore,
-                         dpWinsShrunk ? "DP" : "Otsu"))
-        } else {
-            dpWinsShrunk = false
-        }
+        // We always produce:
+        //   03_otsu.tiff  — Otsu+Canny at full res
+        //   04_dp.tiff    — DP at full res  (when useDp and shrunk grid found a result)
+        //   04_and.tiff   — Otsu AND DP    (conservative: sky only where both agree)
+        //   04_or.tiff    — Otsu OR  DP    (permissive:  sky where either agrees)
+        // All four are scored; the best becomes 05_best_overall_horizon.tiff.
 
         Log.i("")
         Log.i("=== FULL RESOLUTION (\(original.width)x\(original.height)) ===")
 
-        var dpFullResScore: HorizonScore? = nil
-        var dpWins = false
+        // --- Otsu at full resolution ---
+        Log.i("Running Otsu at full res: crop=\(pass2Best.cropAmount), strip=\(pass2Best.stripWidth)")
 
-        if dpWinsShrunk {
-            dpWins = true
+        let otsuStripWidth = pass2Best.stripWidth == 0 ? original.width : pass2Best.stripWidth
+
+        guard let otsuFullResMask = try await original.horizonMask(
+                at: 0,
+                bottomPercentage: pass2Best.cropAmount,
+                stripWidth: otsuStripWidth,
+                useCannyEdgeDetection: useCanny,
+                cannyMinThreshold: cannyMinThreshold,
+                cannyMaxThreshold: cannyMaxThreshold,
+                useL2Gradient: useL2Gradient
+              )
+        else {
+            Log.e("Failed to create full resolution Otsu horizon mask")
+            throw ExitCode.failure
         }
-        
-        if let dpBest = dpBestShrunkResult {
-            // DP won on shrunk image: run the winning DP params at full resolution.
-            let dpSearchTop    = pass2Best.cropAmount/100
+
+        let fullResCropBoundaryY = Int(Double(original.height) * pass2Best.cropAmount / 100.0)
+        let otsuFullResScore: HorizonScore
+        if let edges = fullResEdges {
+            otsuFullResScore = HorizonScoring.score(horizonMask: otsuFullResMask, edgeImage: edges,
+                                                    cropBoundaryY: fullResCropBoundaryY)
+        } else {
+            otsuFullResScore = HorizonScoring.score(
+              horizonMask: otsuFullResMask,
+              originalImage: original,
+              cannyMinThreshold: cannyMinThreshold,
+              cannyMaxThreshold: cannyMaxThreshold,
+              useL2Gradient: useL2Gradient,
+              cropBoundaryY: fullResCropBoundaryY
+            )
+        }
+        Log.i("Otsu full resolution score: \(otsuFullResScore)")
+
+        let otsuShrunkScoreDiff = abs(otsuFullResScore.totalScore - pass2Best.score.totalScore)
+        if otsuShrunkScoreDiff > 0.2 {
+            Log.w("WARNING: Otsu full-res score differs significantly from " +
+                  "reduced-res score (diff=\(String(format: "%.3f", otsuShrunkScoreDiff)))")
+        }
+
+        otsuFullResMask.image.writeTIFFEncoding(toFilename: "\(outputDir)/03_otsu.tiff")
+
+        // Track the current best across all four candidates
+        var bestMask   = otsuFullResMask
+        var fullResScore  = otsuFullResScore
+        var bestMethod = "otsu"
+        var dpFullResScore: HorizonScore? = nil
+
+        // --- DP at full resolution (if enabled and shrunk grid found a winner) ---
+        if useDp, let dpBest = dpBestShrunkResult {
+            let dpSearchTop    = pass2Best.cropAmount / 100.0
             let dpSearchBottom = 1.0
 
             Log.i(String(format: "Running DP at full res: λ=%.2f s=%.2f c=%.2f",
@@ -626,88 +664,79 @@ struct HorizonTesterCli: AsyncParsableCommand {
                       useL2Gradient: useL2Gradient
                     )
                 }
-
                 dpFullResScore = dpScore
-
-                dpFullResMask.image.writeTIFFEncoding(
-                  toFilename: "\(outputDir)/04_dp_horizon.tiff"
-                )
-                // Also write to the "03" slot so the copy step below works uniformly
-                dpFullResMask.image.writeTIFFEncoding(
-                  toFilename: "\(outputDir)/03_best_fullres_dp_horizon.tiff"
-                )
-
                 Log.i("DP full resolution score: \(dpScore)")
+                dpFullResMask.image.writeTIFFEncoding(toFilename: "\(outputDir)/04_dp.tiff")
+
+                if dpScore.totalScore > fullResScore.totalScore {
+                    bestMask   = dpFullResMask
+                    fullResScore  = dpScore
+                    bestMethod = "dp"
+                }
+
+                // --- AND combination ---
+                if let andImage = try? otsuFullResMask.image.bitwiseAnd(with: dpFullResMask.image) {
+                    let andMask = HorizonMask(andImage)
+                    let andScore: HorizonScore
+                    if let edges = fullResEdges {
+                        andScore = HorizonScoring.score(horizonMask: andMask, edgeImage: edges)
+                    } else {
+                        andScore = HorizonScoring.score(
+                          horizonMask: andMask,
+                          originalImage: original,
+                          cannyMinThreshold: cannyMinThreshold,
+                          cannyMaxThreshold: cannyMaxThreshold,
+                          useL2Gradient: useL2Gradient
+                        )
+                    }
+                    Log.i("AND combination score: \(andScore)")
+                    andImage.writeTIFFEncoding(toFilename: "\(outputDir)/04_and.tiff")
+
+                    if andScore.totalScore > fullResScore.totalScore {
+                        bestMask   = andMask
+                        fullResScore  = andScore
+                        bestMethod = "otsu∧dp"
+                    }
+                } else {
+                    Log.w("AND combination failed")
+                }
+
+                // --- OR combination ---
+                if let orImage = try? otsuFullResMask.image.bitwiseOr(with: dpFullResMask.image) {
+                    let orMask = HorizonMask(orImage)
+                    let orScore: HorizonScore
+                    if let edges = fullResEdges {
+                        orScore = HorizonScoring.score(horizonMask: orMask, edgeImage: edges)
+                    } else {
+                        orScore = HorizonScoring.score(
+                          horizonMask: orMask,
+                          originalImage: original,
+                          cannyMinThreshold: cannyMinThreshold,
+                          cannyMaxThreshold: cannyMaxThreshold,
+                          useL2Gradient: useL2Gradient
+                        )
+                    }
+                    Log.i("OR combination score: \(orScore)")
+                    orImage.writeTIFFEncoding(toFilename: "\(outputDir)/04_or.tiff")
+
+                    if orScore.totalScore > fullResScore.totalScore {
+                        bestMask   = orMask
+                        fullResScore  = orScore
+                        bestMethod = "otsu∨dp"
+                    }
+                } else {
+                    Log.w("OR combination failed")
+                }
+
+                Log.i("Full resolution winner: \(bestMethod) (score=\(fullResScore))")
             } else {
-                Log.w("DP full resolution failed, falling back to Otsu")
+                Log.w("DP full resolution failed, using Otsu only")
             }
-        }
-
-        // Run Otsu at full resolution if DP didn't win (or failed).
-        var fullResScore: HorizonScore
-        if !dpWins {
-            Log.i("Running Otsu at full res: crop=\(pass2Best.cropAmount), strip=\(pass2Best.stripWidth)")
-
-            let bestStripWidth = pass2Best.stripWidth == 0 ? original.width : pass2Best.stripWidth
-
-            guard let fullResMask = try await original.horizonMask(
-                    at: 0,
-                    bottomPercentage: pass2Best.cropAmount,
-                    stripWidth: bestStripWidth,
-                    useCannyEdgeDetection: useCanny,
-                    cannyMinThreshold: cannyMinThreshold,
-                    cannyMaxThreshold: cannyMaxThreshold,
-                    useL2Gradient: useL2Gradient
-                  )
-            else {
-                Log.e("Failed to create full resolution horizon mask")
-                throw ExitCode.failure
-            }
-
-            let fullResCropBoundaryY = Int(Double(original.height) * pass2Best.cropAmount / 100.0)
-            if let edges = fullResEdges {
-                fullResScore = HorizonScoring.score(horizonMask: fullResMask, edgeImage: edges,
-                                                    cropBoundaryY: fullResCropBoundaryY)
-            } else {
-                fullResScore = HorizonScoring.score(
-                  horizonMask: fullResMask,
-                  originalImage: original,
-                  cannyMinThreshold: cannyMinThreshold,
-                  cannyMaxThreshold: cannyMaxThreshold,
-                  useL2Gradient: useL2Gradient,
-                  cropBoundaryY: fullResCropBoundaryY
-                )
-            }
-
-            Log.i("Otsu full resolution score: \(fullResScore)")
-
-            let scoreDiff = abs(fullResScore.totalScore - pass2Best.score.totalScore)
-            if scoreDiff > 0.2 {
-                Log.w("WARNING: Full resolution score differs significantly from " +
-                      "reduced resolution score (diff=\(String(format: "%.3f", scoreDiff)))")
-            }
-
-            fullResMask.image.writeTIFFEncoding(
-              toFilename: "\(outputDir)/03_best_fullres_otsu_horizon.tiff"
-            )
-        } else {
-            // DP won — set fullResScore from the DP result (guaranteed non-nil here).
-            fullResScore = dpFullResScore!
         }
 
         // Write the overall best result.
-        // Use FileManager to copy the winning mask file instead of regenerating it.
-        let bestSourceFile: String
-        if dpWins {
-            Log.i("Writing DP result as best overall")
-            bestSourceFile = "\(outputDir)/04_dp_horizon.tiff"
-        } else {
-            Log.i("Writing Otsu result as best overall")
-            bestSourceFile = "\(outputDir)/03_best_fullres_otsu_horizon.tiff"
-        }
-        let bestDestFile = "\(outputDir)/05_best_overall_horizon.tiff"
-        try? fileManager.removeItem(atPath: bestDestFile)
-        try? fileManager.copyItem(atPath: bestSourceFile, toPath: bestDestFile)
+        Log.i("Writing \(bestMethod) result as best overall")
+        bestMask.image.writeTIFFEncoding(toFilename: "\(outputDir)/05_best_overall_horizon.tiff")
 
         // Write summary JSON
         let allPass1Entries = pass1Ranked.map { result in
@@ -765,9 +794,8 @@ struct HorizonTesterCli: AsyncParsableCommand {
           dpShrunkCandidateCount: dpShrunkAllResults.count,
           dpBestShrunkScore: dpBestShrunkResult?.score.totalScore,
           dpFullResScore: dpFullResScore?.totalScore,
-          dpWins: dpWins,
-          overallBestMethod: dpWins ? "dp" : "otsu",
-          overallBestScore: dpWins ? (dpFullResScore?.totalScore ?? fullResScore.totalScore) : fullResScore.totalScore
+          overallBestMethod: bestMethod,
+          overallBestScore: fullResScore.totalScore
         )
 
         let encoder = JSONEncoder()
@@ -785,18 +813,19 @@ struct HorizonTesterCli: AsyncParsableCommand {
             Log.i("  00_shrunk_canny_edges.tiff        - Canny edges (reduced res)")
             Log.i("  00_fullres_canny_edges.tiff       - Canny edges (full res)")
         }
-        Log.i("  01_pass1_NN_*.tiff                - Pass 1 (coarse) horizon masks")
-        Log.i("  02_pass2_NN_*.tiff                - Pass 2 (refined) horizon masks")
+        Log.i("  01_pass1_NN_*.tiff           - Pass 1 (coarse) Otsu horizon masks")
+        Log.i("  02_pass2_NN_*.tiff           - Pass 2 (refined) Otsu horizon masks")
         if useDp {
-            Log.i("  02dp_NN_*.tiff                    - DP shrunk-image candidates")
+            Log.i("  02dp_NN_*.tiff               - DP shrunk-image candidates")
         }
-        Log.i("  03_best_fullres_otsu_horizon.tiff - Best Otsu result at full resolution")
-        if useDp && dpWins {
-            Log.i("  03_best_fullres_dp_horizon.tiff   - Best DP result at full resolution")
-            Log.i("  04_dp_horizon.tiff                - Best DP result (same as above)")
+        Log.i("  03_otsu.tiff                 - Otsu result at full resolution")
+        if useDp {
+            Log.i("  04_dp.tiff                   - DP result at full resolution")
+            Log.i("  04_and.tiff                  - Otsu AND DP (conservative/intersection)")
+            Log.i("  04_or.tiff                   - Otsu OR  DP (permissive/union)")
         }
-        Log.i("  05_best_overall_horizon.tiff      - Overall best horizon mask")
-        Log.i("  summary.json                      - Scores and parameters")
+        Log.i("  05_best_overall_horizon.tiff - Best of all four candidates")
+        Log.i("  summary.json                 - Scores and parameters")
         Log.i("")
         Log.i("Pass 1 best: crop=\(pass1Best.cropAmount), strip=\(pass1Best.stripWidth), " +
               "score=\(pass1Best.score)")
@@ -806,11 +835,11 @@ struct HorizonTesterCli: AsyncParsableCommand {
             Log.i(String(format: "DP shrunk best: λ=%.2f s=%.2f c=%.2f  score=%@",
                          dpBest.lambda, dpBest.sobelW, dpBest.cannyW, dpBest.score.description))
         }
-        Log.i("Full res score: \(fullResScore)")
+        Log.i("Otsu full res score: \(otsuFullResScore)")
         if let dpScore = dpFullResScore {
             Log.i("DP full res score: \(dpScore)")
         }
-        Log.i("Overall winner: \(dpWins ? "DP" : "Otsu")")
+        Log.i("Overall winner: \(bestMethod) score=\(fullResScore)")
     }
 }
 
@@ -845,7 +874,7 @@ struct HorizonTestSummary: Codable {
     let dpShrunkCandidateCount: Int
     let dpBestShrunkScore: Double?
     let dpFullResScore: Double?
-    let dpWins: Bool
+    // overallBestMethod: "otsu", "dp", "otsu∧dp" (AND), or "otsu∨dp" (OR)
     let overallBestMethod: String
     let overallBestScore: Double
 

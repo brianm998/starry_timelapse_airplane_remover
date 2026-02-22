@@ -435,7 +435,18 @@ extension PixelatedImage {
         if let ret = PixelatedImage(mat: resultMat) {
             return ret
         } else {
-            throw "cannot run bitwise not"
+            throw "cannot run bitwise and"
+        }
+    }
+
+    public func bitwiseOr(with image: PixelatedImage) throws -> PixelatedImage {
+        let selfMat = self.mat
+        let otherMat = image.mat
+        let resultMat = PixelatedImageBridge.bitwiseOr(selfMat, withImage: otherMat)
+        if let ret = PixelatedImage(mat: resultMat) {
+            return ret
+        } else {
+            throw "cannot run bitwise or"
         }
     }
     
