@@ -351,7 +351,7 @@ public struct Config: Codable, Sendable, Transferable {
     // scaled down by horizonSearchShrinkFactor for the search pass.
     // An empty array disables the search and uses the single horizonStripWidth value.
     // A value of 0 means use the full image width.
-    public var horizonSearchStripWidths: [Int] = [0,500,800]
+    public var horizonSearchStripWidths: [Int] = [0]
 
     // After the first frame's horizon is detected, narrow the search area for
     // subsequent frames. This is the number of percentage points to add above

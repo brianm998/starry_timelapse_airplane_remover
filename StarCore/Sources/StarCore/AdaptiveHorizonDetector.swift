@@ -22,14 +22,6 @@ public struct HorizonScore: Sendable, CustomStringConvertible {
     /// score may miss (since stddev averages out isolated spikes).
     public let localConsistencyScore: Double
 
-    /// Penalizes horizon lines that are flat (constant Y) across large portions
-    /// of the image. A flat horizon typically means the crop amount was set too
-    /// aggressively, cropping the actual horizon and leaving only the straight
-    /// crop boundary. Used as a *multiplier* on the total score so that a fully
-    /// flat result always scores near zero regardless of other sub-scores.
-    /// 1.0 = no significant flat segments, 0.0 = entirely flat.
-    public let flatnessScore: Double
-
     /// Penalizes horizon lines whose average Y position sits very close to the
     /// Otsu crop boundary. When the crop is set too low (below the real horizon),
     /// the pipeline detects the crop boundary itself as the horizon. This penalty
@@ -48,11 +40,6 @@ public struct HorizonScore: Sendable, CustomStringConvertible {
         // A flat horizon line almost always means the crop boundary was mistaken for
         // the real horizon. The line is maximally smooth and edge-aligned at the crop
         // boundary, so an additive flatness penalty cannot overcome those high scores.
-        // By multiplying the entire score by flatnessScore:
-        //   - flatnessScore = 1.0 (no flat segments)  → no effect
-        //   - flatnessScore = 0.5 (half flat)         → total halved
-        //   - flatnessScore = 0.0 (fully flat)        → total zeroed out
-        // This makes flatness an existential gate rather than a weak offset.
         let smoothnessWeight    = 0.30
         let edgeAlignmentWeight = 0.30
         let coverageWeight      = 0.15
@@ -61,27 +48,30 @@ public struct HorizonScore: Sendable, CustomStringConvertible {
                        edgeAlignmentScore * edgeAlignmentWeight +
                        coverageScore      * coverageWeight +
                        localConsistencyScore * localConsistencyWeight
-        // flatnessScore and cropBoundaryScore are multipliers: either one
-        // can suppress the total to near-zero when the detected horizon is
+        // cropBoundaryScore is a multiplier:  
+        // it can suppress the total to near-zero when the detected horizon is
         // degenerate (flat crop-boundary artifact).
-        return additive * flatnessScore * cropBoundaryScore
+        return additive * cropBoundaryScore
     }
 
-    public init(smoothnessScore: Double, edgeAlignmentScore: Double,
-                coverageScore: Double, localConsistencyScore: Double,
-                flatnessScore: Double, cropBoundaryScore: Double) {
+    public init(
+      smoothnessScore: Double,
+      edgeAlignmentScore: Double,
+      coverageScore: Double,
+      localConsistencyScore: Double,
+      cropBoundaryScore: Double
+    ) {
         self.smoothnessScore      = smoothnessScore
         self.edgeAlignmentScore   = edgeAlignmentScore
         self.coverageScore        = coverageScore
         self.localConsistencyScore = localConsistencyScore
-        self.flatnessScore        = flatnessScore
         self.cropBoundaryScore    = cropBoundaryScore
     }
 
     public var description: String {
-        String(format: "HorizonScore(total=%.3f, smooth=%.3f, edge=%.3f, coverage=%.3f, consist=%.3f, flat=%.3f×, cropBnd=%.3f×)",
+        String(format: "HorizonScore(total=%.3f, smooth=%.3f, edge=%.3f, coverage=%.3f, consist=%.3f, cropBnd=%.3f×)",
                totalScore, smoothnessScore, edgeAlignmentScore, coverageScore,
-               localConsistencyScore, flatnessScore, cropBoundaryScore)
+               localConsistencyScore, cropBoundaryScore)
     }
 }
 
@@ -432,86 +422,6 @@ public enum HorizonScoring {
         return raw * raw
     }
 
-    /// Compute flatness score: penalize horizon lines that are flat (constant Y)
-    /// across large portions of the image.
-    ///
-    /// Walks along the defined horizon Y values and finds runs of consecutive
-    /// columns at the same Y value. Short flat segments (≤ `minRunLength` columns)
-    /// are normal and ignored. Longer flat segments indicate the horizon was
-    /// cropped away, leaving only the straight crop boundary.
-    ///
-    /// The score is based on what fraction of defined columns are part of
-    /// flat runs exceeding the minimum length:
-    /// - 0% flat → score 1.0
-    /// - 33%+ flat → score drops sharply
-    /// - 100% flat → score ~0.0
-    ///
-    /// `minRunLength` is the minimum number of consecutive same-Y columns
-    /// before a run is considered "flat". Default 20 pixels.
-    public static func flatnessScore(
-      horizonY: [Int?],
-      imageWidth: Int,
-      minRunLength: Int = 20,   // relative to the image width
-      scaleFactor: Int = 1
-    ) -> Double {
-        let count = horizonY.count
-        guard count > 0 else { return 1.0 }
-
-        // Walk through defined columns, tracking runs of identical Y values
-        var flatPixelCount = 0
-        var definedCount = 0
-        var currentRunY: Int? = nil
-        var currentRunLength = 0
-
-        let scaledMinRunLength = Int(Double(minRunLength)/Double(scaleFactor))
-        
-        for i in 0..<count {
-            guard let y = horizonY[i] else {
-                // End of any current run when we hit an undefined column
-                if currentRunLength > scaledMinRunLength {
-                    flatPixelCount += currentRunLength
-                }
-                currentRunY = nil
-                currentRunLength = 0
-                continue
-            }
-            definedCount += 1
-
-            if let runY = currentRunY, y == runY {
-                // Continue the current run
-                currentRunLength += 1
-            } else {
-                // End previous run if it was long enough
-                if currentRunLength > scaledMinRunLength {
-                    flatPixelCount += currentRunLength
-                }
-                // Start a new run
-                currentRunY = y
-                currentRunLength = 1
-            }
-        }
-        // Don't forget the last run
-        if currentRunLength > scaledMinRunLength {
-            flatPixelCount += currentRunLength
-        }
-
-        guard definedCount > 0 else { return 1.0 }
-
-        let flatFraction = Double(flatPixelCount) / Double(definedCount)
-
-        // Score: no flat segments = 1.0, fully flat = 0.0.
-        // Use a curve that penalizes aggressively once flatness exceeds ~20%:
-        //   score = max(0, 1 - 2 * flatFraction)^1.5
-        // This means:
-        //   0% flat   → 1.0
-        //   10% flat  → ~0.72
-        //   25% flat  → ~0.35
-        //   33% flat  → ~0.19
-        //   50%+ flat → 0.0
-        let raw = max(0.0, 1.0 - 2.0 * flatFraction)
-        return pow(raw, 1.5)
-    }
-
     /// Compute coverage score: penalize degenerate results that are nearly all-sky
     /// or all-ground.
     /// `horizonY` is the per-column horizon Y from the mask.
@@ -580,11 +490,6 @@ public enum HorizonScoring {
 
         let coverage = coverageScore(horizonY: horizonY, imageHeight: mask.height)
         let consistency = localConsistencyScore(horizonY: horizonY)
-        let flatness = flatnessScore(
-          horizonY: horizonY,
-          imageWidth: originalImage.width,
-          scaleFactor: scaleFactor
-        )
         let cropBoundary: Double
         if let boundaryY = cropBoundaryY {
             cropBoundary = cropBoundaryScore(horizonY: horizonY, cropBoundaryY: boundaryY)
@@ -597,7 +502,6 @@ public enum HorizonScoring {
           edgeAlignmentScore: edgeAlignment,
           coverageScore: coverage,
           localConsistencyScore: consistency,
-          flatnessScore: flatness,
           cropBoundaryScore: cropBoundary
         )
     }
@@ -623,11 +527,6 @@ public enum HorizonScoring {
         )
         let coverage = coverageScore(horizonY: horizonY, imageHeight: mask.height)
         let consistency = localConsistencyScore(horizonY: horizonY)
-        let flatness = flatnessScore(
-          horizonY: horizonY,
-          imageWidth: edgeImage.width,
-          scaleFactor: scaleFactor
-        )
         let cropBoundary: Double
         if let boundaryY = cropBoundaryY {
             cropBoundary = cropBoundaryScore(horizonY: horizonY, cropBoundaryY: boundaryY)
@@ -640,7 +539,6 @@ public enum HorizonScoring {
           edgeAlignmentScore: edgeAlignment,
           coverageScore: coverage,
           localConsistencyScore: consistency,
-          flatnessScore: flatness,
           cropBoundaryScore: cropBoundary
         )
     }

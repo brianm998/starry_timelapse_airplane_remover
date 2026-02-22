@@ -580,6 +580,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           useL2Gradient: config.cannyUseL2Gradient
         )
 
+        // Pre-compute Canny edges on the full-resolution image once so all full-res
+        // candidates (Otsu, DP, AND, OR) are scored using the same edge image.
+        let fullResEdgeImage: PixelatedImage? = config.useCannyForHorizonDetection
+          ? try? original.cannyEdgeDetect(
+              minThreshold: config.cannyMinThreshold,
+              maxThreshold: config.cannyMaxThreshold,
+              useL2Gradient: config.cannyUseL2Gradient
+            )
+          : nil
+
         // Step 2: Determine first-pass parameter search space.
         // After the first frame, narrow the bounds based on what worked before.
         let cropBounds: [Double] = await adaptiveState.narrowedCropBounds(
@@ -822,14 +832,24 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             throw "cannot create full resolution Otsu horizon mask"
         }
 
-        let otsuFullResScore = HorizonScoring.score(
-          horizonMask: otsuFullResMask,
-          originalImage: original,
-          cannyMinThreshold: config.cannyMinThreshold,
-          cannyMaxThreshold: config.cannyMaxThreshold,
-          useL2Gradient: config.cannyUseL2Gradient,
-          cropBoundaryY: Int(Double(original.height) * pass2Best.cropAmount / 100)
-        )
+        let fullResCropBoundaryY = Int(Double(original.height) * pass2Best.cropAmount / 100)
+        let otsuFullResScore: HorizonScore
+        if let edges = fullResEdgeImage {
+            otsuFullResScore = HorizonScoring.score(
+              horizonMask: otsuFullResMask,
+              edgeImage: edges,
+              cropBoundaryY: fullResCropBoundaryY
+            )
+        } else {
+            otsuFullResScore = HorizonScoring.score(
+              horizonMask: otsuFullResMask,
+              originalImage: original,
+              cannyMinThreshold: config.cannyMinThreshold,
+              cannyMaxThreshold: config.cannyMaxThreshold,
+              useL2Gradient: config.cannyUseL2Gradient,
+              cropBoundaryY: fullResCropBoundaryY
+            )
+        }
         Log.i("frame \(frameIndex) Otsu full resolution score=\(otsuFullResScore)")
 
         var bestMask   = otsuFullResMask
@@ -863,13 +883,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                  cannyWeight: cannyW
                )
             {
-                let dpFullResScore = HorizonScoring.score(
-                  horizonMask: dpFullResMask,
-                  originalImage: original,
-                  cannyMinThreshold: config.cannyMinThreshold,
-                  cannyMaxThreshold: config.cannyMaxThreshold,
-                  useL2Gradient: config.cannyUseL2Gradient
-                )
+                let dpFullResScore: HorizonScore
+                if let edges = fullResEdgeImage {
+                    dpFullResScore = HorizonScoring.score(
+                      horizonMask: dpFullResMask,
+                      edgeImage: edges
+                    )
+                } else {
+                    dpFullResScore = HorizonScoring.score(
+                      horizonMask: dpFullResMask,
+                      originalImage: original,
+                      cannyMinThreshold: config.cannyMinThreshold,
+                      cannyMaxThreshold: config.cannyMaxThreshold,
+                      useL2Gradient: config.cannyUseL2Gradient
+                    )
+                }
                 Log.i("frame \(frameIndex) DP full resolution score=\(dpFullResScore)")
 
                 if dpFullResScore.totalScore > bestScore.totalScore {
@@ -881,13 +909,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 // --- 6c: AND combination (conservative: sky only where both agree) ---
                 if let andImage = try? otsuFullResMask.image.bitwiseAnd(with: dpFullResMask.image) {
                     let andMask  = HorizonMask(andImage)
-                    let andScore = HorizonScoring.score(
-                      horizonMask: andMask,
-                      originalImage: original,
-                      cannyMinThreshold: config.cannyMinThreshold,
-                      cannyMaxThreshold: config.cannyMaxThreshold,
-                      useL2Gradient: config.cannyUseL2Gradient
-                    )
+                    let andScore: HorizonScore
+                    if let edges = fullResEdgeImage {
+                        andScore = HorizonScoring.score(
+                          horizonMask: andMask,
+                          edgeImage: edges
+                        )
+                    } else {
+                        andScore = HorizonScoring.score(
+                          horizonMask: andMask,
+                          originalImage: original,
+                          cannyMinThreshold: config.cannyMinThreshold,
+                          cannyMaxThreshold: config.cannyMaxThreshold,
+                          useL2Gradient: config.cannyUseL2Gradient
+                        )
+                    }
                     Log.i("frame \(frameIndex) AND combination score=\(andScore)")
 
                     if andScore.totalScore > bestScore.totalScore {
@@ -902,13 +938,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 // --- 6d: OR combination (permissive: sky where either agrees) ---
                 if let orImage = try? otsuFullResMask.image.bitwiseOr(with: dpFullResMask.image) {
                     let orMask  = HorizonMask(orImage)
-                    let orScore = HorizonScoring.score(
-                      horizonMask: orMask,
-                      originalImage: original,
-                      cannyMinThreshold: config.cannyMinThreshold,
-                      cannyMaxThreshold: config.cannyMaxThreshold,
-                      useL2Gradient: config.cannyUseL2Gradient
-                    )
+                    let orScore: HorizonScore
+                    if let edges = fullResEdgeImage {
+                        orScore = HorizonScoring.score(
+                          horizonMask: orMask,
+                          edgeImage: edges
+                        )
+                    } else {
+                        orScore = HorizonScoring.score(
+                          horizonMask: orMask,
+                          originalImage: original,
+                          cannyMinThreshold: config.cannyMinThreshold,
+                          cannyMaxThreshold: config.cannyMaxThreshold,
+                          useL2Gradient: config.cannyUseL2Gradient
+                        )
+                    }
                     Log.i("frame \(frameIndex) OR combination score=\(orScore)")
 
                     if orScore.totalScore > bestScore.totalScore {

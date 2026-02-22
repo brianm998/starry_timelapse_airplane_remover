@@ -207,7 +207,7 @@ extension PixelatedImage {
         // determine the size of the sky to remove
         let topHeight = Int(Double(self.height)*bottomPercentage/100)
 
-        Log.i("horizonMask: image=\(self.width)×\(self.height) crop=\(String(format:"%.1f",bottomPercentage))% topHeight=\(topHeight) cropHeight=\(self.height-topHeight) stripWidth=\(stripWidth)")
+        Log.d("horizonMask: image=\(self.width)×\(self.height) crop=\(String(format:"%.1f",bottomPercentage))% topHeight=\(topHeight) cropHeight=\(self.height-topHeight) stripWidth=\(stripWidth)")
 
         // crop out the top part
         guard let bottomCrop = self.bottomCrop(by: topHeight) else {
@@ -225,7 +225,7 @@ extension PixelatedImage {
         // updated elements go here
         var newElements: [ImageMatrixElement] = []
 
-        Log.i("horizonMask: \(matrix.count) strips from \(bottomCrop.width)×\(bottomCrop.height) cropped region")
+        Log.d("horizonMask: \(matrix.count) strips from \(bottomCrop.width)×\(bottomCrop.height) cropped region")
 
 
         return try await withThrowingTaskGroup(of: Optional<ImageMatrixElement>.self) { taskGroup in
@@ -266,7 +266,7 @@ extension PixelatedImage {
                     let b = e.horizonBottomY.map { "\($0)" } ?? "nil"
                     return "[\(t)..\(b)]"
                 }
-                Log.i("horizonMask: Otsu strip extents (in crop-relative coords): \(otsuExtents.joined(separator: " "))")
+                Log.d("horizonMask: Otsu strip extents (in crop-relative coords): \(otsuExtents.joined(separator: " "))")
 
                 // XXX redo this
                 let (horizonTopY, horizonBottomY) = newElements.combinedHorizonExtents()
@@ -318,20 +318,8 @@ extension PixelatedImage {
                         let minY = definedYs.min()!
                         let maxY = definedYs.max()!
                         let avgY = Double(definedYs.reduce(0,+)) / Double(definedYs.count)
-                        Log.i("horizonMask: result horizonY min=\(minY) max=\(maxY) avg=\(String(format:"%.1f",avgY)) defined=\(definedYs.count)/\(horizonYValues.count) cols")
+                        Log.d("horizonMask: result horizonY min=\(minY) max=\(maxY) avg=\(String(format:"%.1f",avgY)) defined=\(definedYs.count)/\(horizonYValues.count) cols")
                     }
-
-                    // XXX TESTING XXX
-                    // XXX TESTING XXX
-                    // XXX TESTING XXX
-                    let filename = String(
-                      format: "/tmp/ground_only_%d_%f.tiff",
-                      self.height, bottomPercentage
-                    )
-                    groundOnly.writeTIFFEncoding(toFilename: filename)
-                    // XXX TESTING XXX
-                    // XXX TESTING XXX
-                    // XXX TESTING XXX
                     
                     return HorizonMask(
                       image: groundOnly,
