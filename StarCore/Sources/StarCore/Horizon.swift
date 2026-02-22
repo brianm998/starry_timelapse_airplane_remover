@@ -214,21 +214,6 @@ extension PixelatedImage {
             Log.w("Unable to bottom crop")
             return nil
         }
-
-
-        // XXX TESTING XXX
-        // XXX TESTING XXX
-        // XXX TESTING XXX
-        let filename = String(
-          format: "/tmp/bottom_crop_%d_%f.tiff",
-          self.height, bottomPercentage
-        )
-        bottomCrop.writeTIFFEncoding(toFilename: filename)
-
-        // XXX TESTING XXX
-        // XXX TESTING XXX
-        // XXX TESTING XXX
-
         
         // split into an array of smaller images
         let matrix = bottomCrop.splitIntoMatrix(
@@ -289,29 +274,6 @@ extension PixelatedImage {
                 if let no_sky_image = PixelatedImage(from: newElements),
                    let image = no_sky_image.addSky(height: topHeight)
                 {
-
-
-                    // XXX TESTING XXX
-                    // XXX TESTING XXX
-                    // XXX TESTING XXX
-                    let filename0 = String(
-                      format: "/tmp/no_sky_%d_%f.tiff",
-                      self.height, bottomPercentage
-                    )
-                    no_sky_image.writeTIFFEncoding(toFilename: filename0)
-
-                    let filename2 = String(
-                      format: "/tmp/not_no_sky_%d_%f.tiff",
-                      self.height, bottomPercentage
-                    )
-                    image.writeTIFFEncoding(toFilename: filename2)
-
-                    // XXX TESTING XXX
-                    // XXX TESTING XXX
-                    // XXX TESTING XXX
-
-
-                    
                     var combined = image
 
                     if useCannyEdgeDetection, false {
