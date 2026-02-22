@@ -388,18 +388,6 @@ public struct Config: Codable, Sendable, Transferable {
     // Number of evenly-spaced Canny weight values to test within the range above.
     public var dpHorizonCannyWeightCount: Int = 8
 
-    // [min, max] bounds (as percentage of image height, 0-100) of the vertical
-    // search band for the DP horizon tracer.  Unlike the Otsu pipeline, the DP
-    // tracer does not need a pre-computed crop amount — it traces the strongest
-    // horizontal edge within this band directly from image gradients.
-    //
-    // Using a wide, independent band lets the DP recover the real horizon even
-    // when the Otsu crop amount is set below the true horizon.  The default
-    // [10, 90] searches 80% of the image height, which is safe for most scenes.
-    // Narrow this (e.g. [30, 70]) if you know the horizon is always near the
-    // middle, for a small speed improvement.
-    public var dpHorizonSearchBounds: [Double] = [10.0, 90.0]
-
     public var alignmentMaxKeypoints: Int = 2000
     public var alignmentWriteDebugImages: Bool = false
     public var alignmentGroundHorizonExtension: Int = 100 // extend the horizon for ground by this amount to get more keypoints
@@ -510,7 +498,6 @@ public struct Config: Codable, Sendable, Transferable {
         self.dpHorizonSobelWeightCount = try c.decodeIfPresent(Int.self, forKey: .dpHorizonSobelWeightCount) ?? self.dpHorizonSobelWeightCount
         self.dpHorizonCannyWeightRange = try c.decodeIfPresent([Double].self, forKey: .dpHorizonCannyWeightRange) ?? self.dpHorizonCannyWeightRange
         self.dpHorizonCannyWeightCount = try c.decodeIfPresent(Int.self, forKey: .dpHorizonCannyWeightCount) ?? self.dpHorizonCannyWeightCount
-        self.dpHorizonSearchBounds = try c.decodeIfPresent([Double].self, forKey: .dpHorizonSearchBounds) ?? self.dpHorizonSearchBounds
     }
 
     /// Expand a [min, max] range and a step count into an array of evenly-spaced values.

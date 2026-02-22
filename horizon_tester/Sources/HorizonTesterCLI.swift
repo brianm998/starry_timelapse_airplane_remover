@@ -483,9 +483,8 @@ struct HorizonTesterCli: AsyncParsableCommand {
         var dpShrunkAllResults: [DPResult] = []
 
         if useDp {
-            let dpBounds = config.dpHorizonSearchBounds
-            let dpSearchTop    = dpBounds.count >= 2 ? max(0.0, min(1.0, dpBounds[0] / 100.0)) : 0.10
-            let dpSearchBottom = dpBounds.count >= 2 ? max(0.0, min(1.0, dpBounds[1] / 100.0)) : 0.90
+            let dpSearchTop    = pass2Best.cropAmount/100
+            let dpSearchBottom = 1.0
             let dpTotal = dpLambdaValues.count * dpSobelValues.count * dpCannyValues.count
 
             Log.i("")
@@ -502,7 +501,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
                     for cannyW in dpCannyValues {
                         dpIndex += 1
                         let label = String(format: "λ=%.2f s=%.2f c=%.2f", lambda, sobelW, cannyW)
-                        Log.i("[\(dpIndex)/\(dpTotal)] DP shrunk \(label)")
+                        Log.i("[\(dpIndex)/\(dpTotal)] DP shrunk \(label) dpSearchBottom \(dpSearchBottom)")
 
                         guard let dpMask = try? await shrunkImage.dpHorizonMask(
                                 at: 0,
@@ -597,9 +596,8 @@ struct HorizonTesterCli: AsyncParsableCommand {
         
         if let dpBest = dpBestShrunkResult {
             // DP won on shrunk image: run the winning DP params at full resolution.
-            let dpBounds = config.dpHorizonSearchBounds
-            let dpSearchTop    = dpBounds.count >= 2 ? max(0.0, min(1.0, dpBounds[0] / 100.0)) : 0.10
-            let dpSearchBottom = dpBounds.count >= 2 ? max(0.0, min(1.0, dpBounds[1] / 100.0)) : 0.90
+            let dpSearchTop    = pass2Best.cropAmount/100
+            let dpSearchBottom = 1.0
 
             Log.i(String(format: "Running DP at full res: λ=%.2f s=%.2f c=%.2f",
                          dpBest.lambda, dpBest.sobelW, dpBest.cannyW))

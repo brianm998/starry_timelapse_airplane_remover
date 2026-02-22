@@ -696,15 +696,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // shrunk image using the same pre-computed Canny edge image used for Otsu scoring,
         // so all candidates (Otsu and DP) are comparable on equal footing.
         //
-        // The DP search band is independent of the Otsu crop amount, using the dedicated
-        // dpHorizonSearchBounds config value so it can find the real horizon even when
-        // the Otsu crop is set below it.
         var dpBestShrunkResult: HorizonSearchResult? = nil
 
         if config.useDPHorizonDetection {
-            let dpBounds = config.dpHorizonSearchBounds
-            let dpSearchTop    = dpBounds.count >= 2 ? max(0, min(1, dpBounds[0] / 100.0)) : 0.10
-            let dpSearchBottom = dpBounds.count >= 2 ? max(0, min(1, dpBounds[1] / 100.0)) : 0.90
+            let dpSearchTop    = pass2Best.cropAmount/100
+            let dpSearchBottom = 1.0
 
             let lambdaValues = config.dpHorizonSmoothnessLambdaValues
             let sobelValues  = config.dpHorizonSobelWeightValues
@@ -820,9 +816,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if useDP, let dpBest = dpBestShrunkResult,
            let lambda = dpBest.lambda, let sobelW = dpBest.sobelW, let cannyW = dpBest.cannyW
         {
-            let dpBounds = config.dpHorizonSearchBounds
-            let dpSearchTop    = dpBounds.count >= 2 ? max(0, min(1, dpBounds[0] / 100.0)) : 0.10
-            let dpSearchBottom = dpBounds.count >= 2 ? max(0, min(1, dpBounds[1] / 100.0)) : 0.90
+            let dpSearchTop    = pass2Best.cropAmount/100
+            let dpSearchBottom = 1.0
 
             Log.i("frame \(frameIndex) running DP at full resolution: " +
                   "lambda=\(lambda), sobel=\(sobelW), canny=\(cannyW), " +
