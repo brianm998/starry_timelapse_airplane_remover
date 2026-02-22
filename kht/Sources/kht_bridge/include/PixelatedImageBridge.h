@@ -21,6 +21,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (MatWrapper *)bitwiseAnd:(MatWrapper *)img withImage:(MatWrapper *)img1;
 
++ (MatWrapper *)bitwiseOr:(MatWrapper *)img withImage:(MatWrapper *)img1;
+
 + (MatWrapper *)bitwiseNot:(MatWrapper *)img;
 
 // new horizon detection attempt

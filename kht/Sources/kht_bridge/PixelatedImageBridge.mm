@@ -850,12 +850,44 @@ extern cv::Mat ensure8U(const cv::Mat& input);
 
 }
 
++ (MatWrapper *)bitwiseOr:(MatWrapper *)img withImage:(MatWrapper *)img1 {
+
+  @try {
+    try {
+      cv::Mat input = img.mat;
+      cv::Mat input1 = img1.mat;
+      cv::Mat gray;
+      if (input.channels() == 3)
+        cv::cvtColor(input, gray, cv::COLOR_BGR2GRAY);
+      else
+        gray = input;
+
+      cv::Mat gray1;
+      if (input1.channels() == 3)
+        cv::cvtColor(input1, gray1, cv::COLOR_BGR2GRAY);
+      else
+        gray1 = input1;
+
+      cv::Mat output;
+      cv::bitwise_or(gray, gray1, output);
+
+      return [[MatWrapper alloc] initWithMat: output];
+    } catch (const cv::Exception &e) {
+      Log_e(@"OpenCV Exception: %s", e.what());
+    }
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception: %@", exception);
+  }
+  return nil;
+
+}
+
 + (MatWrapper *)bitwiseNot:(MatWrapper *)img {
 
   @try {
     try {
       cv::Mat input = img.mat;
-  
+
       cv::Mat gray;
       if (input.channels() == 3)
         cv::cvtColor(input, gray, cv::COLOR_BGR2GRAY);
