@@ -351,7 +351,7 @@ public struct Config: Codable, Sendable, Transferable {
     // scaled down by horizonSearchShrinkFactor for the search pass.
     // An empty array disables the search and uses the single horizonStripWidth value.
     // A value of 0 means use the full image width.
-    public var horizonSearchStripWidths: [Int] = [0]
+    public var horizonSearchStripWidths: [Int] = [0,500]
 
     // After the first frame's horizon is detected, narrow the search area for
     // subsequent frames. This is the number of percentage points to add above
@@ -365,18 +365,28 @@ public struct Config: Codable, Sendable, Transferable {
     // approach and picks whichever scores higher.
     public var useDPHorizonDetection: Bool = true
 
-    // Smoothness penalty for the DP path. Higher = smoother horizon line.
-    // This is the cost per pixel of vertical displacement between adjacent columns.
-    // Typical range: 0.5 - 5.0. Higher values enforce a smoother horizon.
-    public var dpHorizonSmoothnessLambda: Double = 2.0
+    // [min, max] range for the DP smoothness penalty (cost per pixel of vertical
+    // displacement). Higher = smoother horizon line. Typical range: 0.5–5.0.
+    // Set both values equal (and count=1) to use a single fixed value.
+    public var dpHorizonSmoothnessLambdaRange: [Double] = [1, 2]
 
-    // Weight of the Sobel vertical gradient in the DP cost function.
+    // Number of evenly-spaced lambda values to test within the range above.
+    // 1 = use only the min (or both equal) value. Higher = finer grid search.
+    public var dpHorizonSmoothnessLambdaCount: Int = 4
+
+    // [min, max] range for the Sobel vertical gradient weight in the DP cost.
     // Higher values make the path follow strong intensity transitions more.
-    public var dpHorizonSobelWeight: Double = 0.6
+    public var dpHorizonSobelWeightRange: [Double] = [0.2, 1.2]
 
-    // Weight of Canny edge presence in the DP cost function.
+    // Number of evenly-spaced Sobel weight values to test within the range above.
+    public var dpHorizonSobelWeightCount: Int = 8
+
+    // [min, max] range for the Canny edge presence weight in the DP cost.
     // Higher values make the path follow detected edges more.
-    public var dpHorizonCannyWeight: Double = 0.4
+    public var dpHorizonCannyWeightRange: [Double] = [0.2, 1.2]
+
+    // Number of evenly-spaced Canny weight values to test within the range above.
+    public var dpHorizonCannyWeightCount: Int = 8
 
     // [min, max] bounds (as percentage of image height, 0-100) of the vertical
     // search band for the DP horizon tracer.  Unlike the Otsu pipeline, the DP
@@ -494,13 +504,40 @@ public struct Config: Codable, Sendable, Transferable {
         self.horizonSearchStripWidths = try c.decodeIfPresent([Int].self, forKey: .horizonSearchStripWidths) ?? self.horizonSearchStripWidths
         self.horizonSearchNarrowingRange = try c.decodeIfPresent(Double.self, forKey: .horizonSearchNarrowingRange) ?? self.horizonSearchNarrowingRange
         self.useDPHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useDPHorizonDetection) ?? self.useDPHorizonDetection
-        self.dpHorizonSmoothnessLambda = try c.decodeIfPresent(Double.self, forKey: .dpHorizonSmoothnessLambda) ?? self.dpHorizonSmoothnessLambda
-        self.dpHorizonSobelWeight = try c.decodeIfPresent(Double.self, forKey: .dpHorizonSobelWeight) ?? self.dpHorizonSobelWeight
-        self.dpHorizonCannyWeight = try c.decodeIfPresent(Double.self, forKey: .dpHorizonCannyWeight) ?? self.dpHorizonCannyWeight
+        self.dpHorizonSmoothnessLambdaRange = try c.decodeIfPresent([Double].self, forKey: .dpHorizonSmoothnessLambdaRange) ?? self.dpHorizonSmoothnessLambdaRange
+        self.dpHorizonSmoothnessLambdaCount = try c.decodeIfPresent(Int.self, forKey: .dpHorizonSmoothnessLambdaCount) ?? self.dpHorizonSmoothnessLambdaCount
+        self.dpHorizonSobelWeightRange = try c.decodeIfPresent([Double].self, forKey: .dpHorizonSobelWeightRange) ?? self.dpHorizonSobelWeightRange
+        self.dpHorizonSobelWeightCount = try c.decodeIfPresent(Int.self, forKey: .dpHorizonSobelWeightCount) ?? self.dpHorizonSobelWeightCount
+        self.dpHorizonCannyWeightRange = try c.decodeIfPresent([Double].self, forKey: .dpHorizonCannyWeightRange) ?? self.dpHorizonCannyWeightRange
+        self.dpHorizonCannyWeightCount = try c.decodeIfPresent(Int.self, forKey: .dpHorizonCannyWeightCount) ?? self.dpHorizonCannyWeightCount
         self.dpHorizonSearchBounds = try c.decodeIfPresent([Double].self, forKey: .dpHorizonSearchBounds) ?? self.dpHorizonSearchBounds
     }
 
-    
+    /// Expand a [min, max] range and a step count into an array of evenly-spaced values.
+    /// - count=1 → [min]  (single value; if min==max this is just that value)
+    /// - count=2 → [min, max]
+    /// - count>2 → min, min+step, …, max
+    public static func expandRange(_ range: [Double], count: Int) -> [Double] {
+        guard range.count >= 2 else { return [range.first ?? 0] }
+        let lo = range[0]
+        let hi = range[1]
+        let n  = max(1, count)
+        if n == 1 { return [lo] }
+        let step = (hi - lo) / Double(n - 1)
+        return (0..<n).map { lo + Double($0) * step }
+    }
+
+    /// Convenience accessors that expand the range+count pairs into value arrays.
+    public var dpHorizonSmoothnessLambdaValues: [Double] {
+        Config.expandRange(dpHorizonSmoothnessLambdaRange, count: dpHorizonSmoothnessLambdaCount)
+    }
+    public var dpHorizonSobelWeightValues: [Double] {
+        Config.expandRange(dpHorizonSobelWeightRange, count: dpHorizonSobelWeightCount)
+    }
+    public var dpHorizonCannyWeightValues: [Double] {
+        Config.expandRange(dpHorizonCannyWeightRange, count: dpHorizonCannyWeightCount)
+    }
+
     // 0.0.2 added more detail group hough transormation analysis, based upon a data set
     // 0.0.3 included the data set analysis to include group size and fill, and to use histograms
     // 0.0.4 included .inStreak final processing

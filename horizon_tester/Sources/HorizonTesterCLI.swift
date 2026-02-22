@@ -87,21 +87,39 @@ struct HorizonTesterCli: AsyncParsableCommand {
     @Flag(name: [.customLong("no-dp")], help: "Disable DP horizon detection (use only Otsu)")
     var noDp: Bool = false
 
-    @Option(name: [.customLong("dp-lambda")], help: """
-        DP smoothness penalty (cost per pixel of vertical displacement).
-        Higher = smoother horizon. Default: 2.0
+    @Option(name: [.customLong("dp-lambda-range")], help: """
+        DP smoothness penalty range as "min,max" (cost per pixel of vertical displacement).
+        Higher = smoother horizon. Default: uses config (2.0,2.0).
+        Example: --dp-lambda-range 1.0,4.0
         """)
-    var dpLambda: Double?
+    var dpLambdaRangeStr: String?
 
-    @Option(name: [.customLong("dp-sobel-weight")], help: """
-        DP cost weight for Sobel vertical gradient. Default: 0.6
+    @Option(name: [.customLong("dp-lambda-count")], help: """
+        Number of lambda values to test within the range. Default: 1 (single value).
         """)
-    var dpSobelWeight: Double?
+    var dpLambdaCount: Int?
 
-    @Option(name: [.customLong("dp-canny-weight")], help: """
-        DP cost weight for Canny edge presence. Default: 0.4
+    @Option(name: [.customLong("dp-sobel-range")], help: """
+        DP Sobel weight range as "min,max". Default: uses config (0.6,0.6).
+        Example: --dp-sobel-range 0.4,0.8
         """)
-    var dpCannyWeight: Double?
+    var dpSobelRangeStr: String?
+
+    @Option(name: [.customLong("dp-sobel-count")], help: """
+        Number of Sobel weight values to test within the range. Default: 1.
+        """)
+    var dpSobelCount: Int?
+
+    @Option(name: [.customLong("dp-canny-range")], help: """
+        DP Canny weight range as "min,max". Default: uses config (0.4,0.4).
+        Example: --dp-canny-range 0.2,0.6
+        """)
+    var dpCannyRangeStr: String?
+
+    @Option(name: [.customLong("dp-canny-count")], help: """
+        Number of Canny weight values to test within the range. Default: 1.
+        """)
+    var dpCannyCount: Int?
 
     @Flag(name: [.short, .customLong("verbose")], help: "Enable verbose logging")
     var verbose: Bool = false
@@ -114,6 +132,13 @@ struct HorizonTesterCli: AsyncParsableCommand {
             if values.count >= 2 { return values }
         }
         return [30, 70]
+    }
+
+    /// Parse a "min,max" CLI string into a [Double] range, falling back to `defaultRange`.
+    private func parseRange(_ str: String?, default defaultRange: [Double]) -> [Double] {
+        guard let str else { return defaultRange }
+        let values = str.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+        return values.count >= 2 ? [values[0], values[1]] : defaultRange
     }
 
     private func parseStripWidths() -> [Int] {
@@ -161,10 +186,17 @@ struct HorizonTesterCli: AsyncParsableCommand {
         let cannyMaxThreshold = cannyMax ?? config.cannyMaxThreshold
         let useCanny = !noCanny && config.useCannyForHorizonDetection
         let useL2Gradient = config.cannyUseL2Gradient
-        let useDp = !noDp
-        let dpSmoothnessLambda = dpLambda ?? config.dpHorizonSmoothnessLambda
-        let dpSobel = dpSobelWeight ?? config.dpHorizonSobelWeight
-        let dpCanny = dpCannyWeight ?? config.dpHorizonCannyWeight
+        let useDp = !noDp && config.useDPHorizonDetection
+        // Expand each DP parameter range+count into an array of test values.
+        let dpLambdaRange  = parseRange(dpLambdaRangeStr,  default: config.dpHorizonSmoothnessLambdaRange)
+        let dpLambdaValues = Config.expandRange(dpLambdaRange,
+                                                count: dpLambdaCount ?? config.dpHorizonSmoothnessLambdaCount)
+        let dpSobelRange   = parseRange(dpSobelRangeStr,   default: config.dpHorizonSobelWeightRange)
+        let dpSobelValues  = Config.expandRange(dpSobelRange,
+                                                count: dpSobelCount ?? config.dpHorizonSobelWeightCount)
+        let dpCannyRange   = parseRange(dpCannyRangeStr,   default: config.dpHorizonCannyWeightRange)
+        let dpCannyValues  = Config.expandRange(dpCannyRange,
+                                                count: dpCannyCount ?? config.dpHorizonCannyWeightCount)
 
         // Compute pass-1 crop amounts from bounds
         let pass1CropAmounts = HorizonCropAmounts.firstPass(bounds: cropBounds, count: count1)
@@ -432,119 +464,237 @@ struct HorizonTesterCli: AsyncParsableCommand {
         let pass2Best = pass2Ranked[0]
 
         // ===================================================================
-        // FULL RESOLUTION: Apply pass-2 best parameters
+        // DP SHRUNK-IMAGE GRID SEARCH
         // ===================================================================
+        // Run DP across all combinations of lambda × sobelWeight × cannyWeight on the
+        // shrunk image, score each result, and find the best DP candidate.
+        // This lets the DP search compete directly with the Otsu candidates before
+        // committing to a full-resolution run.
+
+        struct DPResult {
+            let mask: HorizonMask
+            let score: HorizonScore
+            let lambda: Double
+            let sobelW: Double
+            let cannyW: Double
+        }
+
+        var dpBestShrunkResult: DPResult? = nil
+        var dpShrunkAllResults: [DPResult] = []
+
+        if useDp {
+            let dpBounds = config.dpHorizonSearchBounds
+            let dpSearchTop    = dpBounds.count >= 2 ? max(0.0, min(1.0, dpBounds[0] / 100.0)) : 0.10
+            let dpSearchBottom = dpBounds.count >= 2 ? max(0.0, min(1.0, dpBounds[1] / 100.0)) : 0.90
+            let dpTotal = dpLambdaValues.count * dpSobelValues.count * dpCannyValues.count
+
+            Log.i("")
+            Log.i("=== DP SHRUNK-IMAGE GRID SEARCH ===")
+            Log.i("Grid: lambda×\(dpLambdaValues.count) sobel×\(dpSobelValues.count) " +
+                  "canny×\(dpCannyValues.count) = \(dpTotal) combinations")
+            Log.i("Search band: \(String(format:"%.0f",dpSearchTop*100))%–" +
+                  "\(String(format:"%.0f",dpSearchBottom*100))% of image height")
+            Log.i("")
+
+            var dpIndex = 0
+            for lambda in dpLambdaValues {
+                for sobelW in dpSobelValues {
+                    for cannyW in dpCannyValues {
+                        dpIndex += 1
+                        let label = String(format: "λ=%.2f s=%.2f c=%.2f", lambda, sobelW, cannyW)
+                        Log.i("[\(dpIndex)/\(dpTotal)] DP shrunk \(label)")
+
+                        guard let dpMask = try? await shrunkImage.dpHorizonMask(
+                                at: 0,
+                                searchTopFraction: dpSearchTop,
+                                searchBottomFraction: dpSearchBottom,
+                                cannyMinThreshold: cannyMinThreshold,
+                                cannyMaxThreshold: cannyMaxThreshold,
+                                useL2Gradient: useL2Gradient,
+                                smoothnessLambda: lambda,
+                                sobelWeight: sobelW,
+                                cannyWeight: cannyW
+                              )
+                        else {
+                            Log.w("  -> DP returned nil, skipping")
+                            continue
+                        }
+
+                        let score: HorizonScore
+                        if let edges = shrunkEdges {
+                            score = HorizonScoring.score(horizonMask: dpMask, edgeImage: edges)
+                        } else {
+                            score = HorizonScoring.score(
+                              horizonMask: dpMask,
+                              originalImage: shrunkImage,
+                              cannyMinThreshold: cannyMinThreshold,
+                              cannyMaxThreshold: cannyMaxThreshold,
+                              useL2Gradient: useL2Gradient
+                            )
+                        }
+
+                        Log.i("  -> \(score)")
+
+                        let result = DPResult(mask: dpMask, score: score,
+                                              lambda: lambda, sobelW: sobelW, cannyW: cannyW)
+                        dpShrunkAllResults.append(result)
+
+                        if let current = dpBestShrunkResult {
+                            if score.totalScore > current.score.totalScore {
+                                dpBestShrunkResult = result
+                            }
+                        } else {
+                            dpBestShrunkResult = result
+                        }
+                    }
+                }
+            }
+
+            // Write all DP shrunk results as TIFFs
+            for (i, r) in dpShrunkAllResults.enumerated() {
+                let filename = String(
+                  format: "%@/02dp_%02d_lambda%.2f_sobel%.2f_canny%.2f.tiff",
+                  outputDir, i + 1, r.lambda, r.sobelW, r.cannyW
+                )
+                r.mask.image.writeTIFFEncoding(toFilename: filename)
+            }
+
+            Log.i("")
+            Log.i("=== DP SHRUNK RANKING ===")
+            Log.i("")
+            let dpRanked = dpShrunkAllResults.sorted { $0.score.totalScore > $1.score.totalScore }
+            for (rank, r) in dpRanked.enumerated() {
+                let marker = rank == 0 ? " <-- BEST DP" : ""
+                Log.i(String(format: "  #%d: λ=%.2f s=%.2f c=%.2f  score=%@%@",
+                             rank + 1, r.lambda, r.sobelW, r.cannyW, r.score.description, marker))
+            }
+        }
+
+        // ===================================================================
+        // FULL RESOLUTION: Run the overall winner at full resolution
+        // ===================================================================
+        // Compare best Otsu shrunk score vs best DP shrunk score; run the winner.
+        let dpWinsShrunk: Bool
+        if let dpBest = dpBestShrunkResult {
+            dpWinsShrunk = dpBest.score.totalScore > pass2Best.score.totalScore
+            Log.i("")
+            Log.i(String(format: "Shrunk comparison: Otsu=%.3f  DP=%.3f  → %@ wins",
+                         pass2Best.score.totalScore, dpBest.score.totalScore,
+                         dpWinsShrunk ? "DP" : "Otsu"))
+        } else {
+            dpWinsShrunk = false
+        }
+
         Log.i("")
         Log.i("=== FULL RESOLUTION (\(original.width)x\(original.height)) ===")
-        Log.i("Final parameters: crop=\(pass2Best.cropAmount), strip=\(pass2Best.stripWidth)")
-        Log.i("")
 
-        let bestStripWidth = pass2Best.stripWidth == 0 ? original.width : pass2Best.stripWidth
-
-        guard let fullResMask = try await original.horizonMask(
-                at: 0,
-                bottomPercentage: pass2Best.cropAmount,
-                stripWidth: bestStripWidth,
-                useCannyEdgeDetection: useCanny,
-                cannyMinThreshold: cannyMinThreshold,
-                cannyMaxThreshold: cannyMaxThreshold,
-                useL2Gradient: useL2Gradient
-              )
-        else {
-            Log.e("Failed to create full resolution horizon mask")
-            throw ExitCode.failure
-        }
-
-        // crop boundary Y in full-resolution coordinates
-        let fullResCropBoundaryY = Int(Double(original.height) * pass2Best.cropAmount / 100.0)
-        let fullResScore: HorizonScore
-        if let edges = fullResEdges {
-            fullResScore = HorizonScoring.score(horizonMask: fullResMask, edgeImage: edges,
-                                                cropBoundaryY: fullResCropBoundaryY)
-        } else {
-            fullResScore = HorizonScoring.score(
-              horizonMask: fullResMask,
-              originalImage: original,
-              cannyMinThreshold: cannyMinThreshold,
-              cannyMaxThreshold: cannyMaxThreshold,
-              useL2Gradient: useL2Gradient,
-              cropBoundaryY: fullResCropBoundaryY
-            )
-        }
-
-        Log.i("Full resolution score: \(fullResScore)")
-
-        let scoreDiff = abs(fullResScore.totalScore - pass2Best.score.totalScore)
-        if scoreDiff > 0.2 {
-            Log.w("WARNING: Full resolution score differs significantly from " +
-                  "reduced resolution score (diff=\(String(format: "%.3f", scoreDiff)))")
-        }
-
-        fullResMask.image.writeTIFFEncoding(
-          toFilename: "\(outputDir)/03_best_fullres_otsu_horizon.tiff"
-        )
-
-        // ===================================================================
-        // DP HORIZON DETECTION: Run in parallel and compare
-        // ===================================================================
         var dpFullResScore: HorizonScore? = nil
         var dpWins = false
 
-        if useDp {
-            Log.i("")
-            Log.i("=== DP HORIZON DETECTION ===")
-            Log.i("Parameters: lambda=\(dpSmoothnessLambda), " +
-                  "sobelWeight=\(dpSobel), cannyWeight=\(dpCanny)")
-            Log.i("Search region: crop=\(pass2Best.cropAmount)% from top")
-            Log.i("")
+        if dpWinsShrunk {
+            dpWins = true
+        }
+        
+        if let dpBest = dpBestShrunkResult {
+            // DP won on shrunk image: run the winning DP params at full resolution.
+            let dpBounds = config.dpHorizonSearchBounds
+            let dpSearchTop    = dpBounds.count >= 2 ? max(0.0, min(1.0, dpBounds[0] / 100.0)) : 0.10
+            let dpSearchBottom = dpBounds.count >= 2 ? max(0.0, min(1.0, dpBounds[1] / 100.0)) : 0.90
 
-            do {
-                if let dpMask = try await original.dpHorizonMask(
-                     at: 0,
-                     //bottomPercentage: pass2Best.cropAmount,
-                     cannyMinThreshold: cannyMinThreshold,
-                     cannyMaxThreshold: cannyMaxThreshold,
-                     useL2Gradient: useL2Gradient,
-                     smoothnessLambda: dpSmoothnessLambda,
-                     sobelWeight: dpSobel,
-                     cannyWeight: dpCanny
-                   )
-                {
-                    let dpScore: HorizonScore
-                    if let edges = fullResEdges {
-                        dpScore = HorizonScoring.score(horizonMask: dpMask, edgeImage: edges)
-                    } else {
-                        dpScore = HorizonScoring.score(
-                          horizonMask: dpMask,
-                          originalImage: original,
-                          cannyMinThreshold: cannyMinThreshold,
-                          cannyMaxThreshold: cannyMaxThreshold,
-                          useL2Gradient: useL2Gradient
-                        )
-                    }
+            Log.i(String(format: "Running DP at full res: λ=%.2f s=%.2f c=%.2f",
+                         dpBest.lambda, dpBest.sobelW, dpBest.cannyW))
 
-                    dpFullResScore = dpScore
-
-                    dpMask.image.writeTIFFEncoding(
-                      toFilename: "\(outputDir)/04_dp_horizon.tiff"
-                    )
-
-                    Log.i("DP horizon score: \(dpScore)")
-
-                    if dpScore.totalScore > fullResScore.totalScore {
-                        Log.i("DP WINS: \(String(format: "%.3f", dpScore.totalScore)) > " +
-                              "Otsu \(String(format: "%.3f", fullResScore.totalScore))")
-                        dpWins = true
-                    } else {
-                        Log.i("Otsu WINS: \(String(format: "%.3f", fullResScore.totalScore)) > " +
-                              "DP \(String(format: "%.3f", dpScore.totalScore))")
-                    }
+            if let dpFullResMask = try? await original.dpHorizonMask(
+                 at: 0,
+                 searchTopFraction: dpSearchTop,
+                 searchBottomFraction: dpSearchBottom,
+                 cannyMinThreshold: cannyMinThreshold,
+                 cannyMaxThreshold: cannyMaxThreshold,
+                 useL2Gradient: useL2Gradient,
+                 smoothnessLambda: dpBest.lambda,
+                 sobelWeight: dpBest.sobelW,
+                 cannyWeight: dpBest.cannyW
+               )
+            {
+                let dpScore: HorizonScore
+                if let edges = fullResEdges {
+                    dpScore = HorizonScoring.score(horizonMask: dpFullResMask, edgeImage: edges)
                 } else {
-                    Log.w("DP horizon detection returned nil")
+                    dpScore = HorizonScoring.score(
+                      horizonMask: dpFullResMask,
+                      originalImage: original,
+                      cannyMinThreshold: cannyMinThreshold,
+                      cannyMaxThreshold: cannyMaxThreshold,
+                      useL2Gradient: useL2Gradient
+                    )
                 }
-            } catch {
-                Log.w("DP horizon detection failed: \(error)")
+
+                dpFullResScore = dpScore
+
+                dpFullResMask.image.writeTIFFEncoding(
+                  toFilename: "\(outputDir)/04_dp_horizon.tiff"
+                )
+                // Also write to the "03" slot so the copy step below works uniformly
+                dpFullResMask.image.writeTIFFEncoding(
+                  toFilename: "\(outputDir)/03_best_fullres_dp_horizon.tiff"
+                )
+
+                Log.i("DP full resolution score: \(dpScore)")
+            } else {
+                Log.w("DP full resolution failed, falling back to Otsu")
             }
+        }
+
+        // Run Otsu at full resolution if DP didn't win (or failed).
+        var fullResScore: HorizonScore
+        if !dpWins {
+            Log.i("Running Otsu at full res: crop=\(pass2Best.cropAmount), strip=\(pass2Best.stripWidth)")
+
+            let bestStripWidth = pass2Best.stripWidth == 0 ? original.width : pass2Best.stripWidth
+
+            guard let fullResMask = try await original.horizonMask(
+                    at: 0,
+                    bottomPercentage: pass2Best.cropAmount,
+                    stripWidth: bestStripWidth,
+                    useCannyEdgeDetection: useCanny,
+                    cannyMinThreshold: cannyMinThreshold,
+                    cannyMaxThreshold: cannyMaxThreshold,
+                    useL2Gradient: useL2Gradient
+                  )
+            else {
+                Log.e("Failed to create full resolution horizon mask")
+                throw ExitCode.failure
+            }
+
+            let fullResCropBoundaryY = Int(Double(original.height) * pass2Best.cropAmount / 100.0)
+            if let edges = fullResEdges {
+                fullResScore = HorizonScoring.score(horizonMask: fullResMask, edgeImage: edges,
+                                                    cropBoundaryY: fullResCropBoundaryY)
+            } else {
+                fullResScore = HorizonScoring.score(
+                  horizonMask: fullResMask,
+                  originalImage: original,
+                  cannyMinThreshold: cannyMinThreshold,
+                  cannyMaxThreshold: cannyMaxThreshold,
+                  useL2Gradient: useL2Gradient,
+                  cropBoundaryY: fullResCropBoundaryY
+                )
+            }
+
+            Log.i("Otsu full resolution score: \(fullResScore)")
+
+            let scoreDiff = abs(fullResScore.totalScore - pass2Best.score.totalScore)
+            if scoreDiff > 0.2 {
+                Log.w("WARNING: Full resolution score differs significantly from " +
+                      "reduced resolution score (diff=\(String(format: "%.3f", scoreDiff)))")
+            }
+
+            fullResMask.image.writeTIFFEncoding(
+              toFilename: "\(outputDir)/03_best_fullres_otsu_horizon.tiff"
+            )
+        } else {
+            // DP won — set fullResScore from the DP result (guaranteed non-nil here).
+            fullResScore = dpFullResScore!
         }
 
         // Write the overall best result.
@@ -609,11 +759,13 @@ struct HorizonTesterCli: AsyncParsableCommand {
           pass2BestCrop: pass2Best.cropAmount,
           pass2BestStrip: pass2Best.stripWidth,
           bestShrunkScore: pass2Best.score.totalScore,
-          bestOtsuFullResScore: fullResScore.totalScore,
+          bestFullResScore: fullResScore.totalScore,
           useDp: useDp,
-          dpSmoothnessLambda: dpSmoothnessLambda,
-          dpSobelWeight: dpSobel,
-          dpCannyWeight: dpCanny,
+          dpLambdaRange: dpLambdaValues,
+          dpSobelRange: dpSobelValues,
+          dpCannyRange: dpCannyValues,
+          dpShrunkCandidateCount: dpShrunkAllResults.count,
+          dpBestShrunkScore: dpBestShrunkResult?.score.totalScore,
           dpFullResScore: dpFullResScore?.totalScore,
           dpWins: dpWins,
           overallBestMethod: dpWins ? "dp" : "otsu",
@@ -637,9 +789,13 @@ struct HorizonTesterCli: AsyncParsableCommand {
         }
         Log.i("  01_pass1_NN_*.tiff                - Pass 1 (coarse) horizon masks")
         Log.i("  02_pass2_NN_*.tiff                - Pass 2 (refined) horizon masks")
-        Log.i("  03_best_fullres_otsu_horizon.tiff - Best Otsu result at full resolution")
         if useDp {
-            Log.i("  04_dp_horizon.tiff                - DP horizon detection result")
+            Log.i("  02dp_NN_*.tiff                    - DP shrunk-image candidates")
+        }
+        Log.i("  03_best_fullres_otsu_horizon.tiff - Best Otsu result at full resolution")
+        if useDp && dpWins {
+            Log.i("  03_best_fullres_dp_horizon.tiff   - Best DP result at full resolution")
+            Log.i("  04_dp_horizon.tiff                - Best DP result (same as above)")
         }
         Log.i("  05_best_overall_horizon.tiff      - Overall best horizon mask")
         Log.i("  summary.json                      - Scores and parameters")
@@ -648,7 +804,11 @@ struct HorizonTesterCli: AsyncParsableCommand {
               "score=\(pass1Best.score)")
         Log.i("Pass 2 best: crop=\(pass2Best.cropAmount), strip=\(pass2Best.stripWidth), " +
               "score=\(pass2Best.score)")
-        Log.i("Otsu full res score: \(fullResScore)")
+        if let dpBest = dpBestShrunkResult {
+            Log.i(String(format: "DP shrunk best: λ=%.2f s=%.2f c=%.2f  score=%@",
+                         dpBest.lambda, dpBest.sobelW, dpBest.cannyW, dpBest.score.description))
+        }
+        Log.i("Full res score: \(fullResScore)")
         if let dpScore = dpFullResScore {
             Log.i("DP full res score: \(dpScore)")
         }
@@ -678,12 +838,14 @@ struct HorizonTestSummary: Codable {
     let pass2BestCrop: Double
     let pass2BestStrip: Int
     let bestShrunkScore: Double
-    let bestOtsuFullResScore: Double
+    let bestFullResScore: Double
     // DP horizon detection results
     let useDp: Bool
-    let dpSmoothnessLambda: Double
-    let dpSobelWeight: Double
-    let dpCannyWeight: Double
+    let dpLambdaRange: [Double]    // actual lambda values tested (expanded from range+count)
+    let dpSobelRange: [Double]     // actual sobel values tested
+    let dpCannyRange: [Double]     // actual canny values tested
+    let dpShrunkCandidateCount: Int
+    let dpBestShrunkScore: Double?
     let dpFullResScore: Double?
     let dpWins: Bool
     let overallBestMethod: String

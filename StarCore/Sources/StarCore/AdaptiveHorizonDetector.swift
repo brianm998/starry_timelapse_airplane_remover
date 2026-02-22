@@ -67,6 +67,17 @@ public struct HorizonScore: Sendable, CustomStringConvertible {
         return additive * flatnessScore * cropBoundaryScore
     }
 
+    public init(smoothnessScore: Double, edgeAlignmentScore: Double,
+                coverageScore: Double, localConsistencyScore: Double,
+                flatnessScore: Double, cropBoundaryScore: Double) {
+        self.smoothnessScore      = smoothnessScore
+        self.edgeAlignmentScore   = edgeAlignmentScore
+        self.coverageScore        = coverageScore
+        self.localConsistencyScore = localConsistencyScore
+        self.flatnessScore        = flatnessScore
+        self.cropBoundaryScore    = cropBoundaryScore
+    }
+
     public var description: String {
         String(format: "HorizonScore(total=%.3f, smooth=%.3f, edge=%.3f, coverage=%.3f, consist=%.3f, flat=%.3f×, cropBnd=%.3f×)",
                totalScore, smoothnessScore, edgeAlignmentScore, coverageScore,
@@ -75,11 +86,40 @@ public struct HorizonScore: Sendable, CustomStringConvertible {
 }
 
 /// The result of a single parameter combination trial during adaptive horizon search.
+/// For Otsu results, `cropAmount` and `stripWidth` are set; `lambda`, `sobelW`, `cannyW` are nil.
+/// For DP results, `lambda`, `sobelW`, `cannyW` are set; `cropAmount` is -1 (sentinel).
 struct HorizonSearchResult: Sendable {
-    let cropAmount: Double      // the bottomPercentage used
-    let stripWidth: Int         // the stripWidth used (in full-resolution pixels)
+    let cropAmount: Double      // the bottomPercentage used (Otsu); -1 for DP results
+    let stripWidth: Int         // the stripWidth used (Otsu); 0 for DP results
     let horizonMask: HorizonMask
     let score: HorizonScore
+    // DP-specific parameters (nil for Otsu results)
+    let lambda: Double?
+    let sobelW: Double?
+    let cannyW: Double?
+
+    /// Convenience initialiser for Otsu results (no DP params).
+    init(cropAmount: Double, stripWidth: Int, horizonMask: HorizonMask, score: HorizonScore) {
+        self.cropAmount  = cropAmount
+        self.stripWidth  = stripWidth
+        self.horizonMask = horizonMask
+        self.score       = score
+        self.lambda      = nil
+        self.sobelW      = nil
+        self.cannyW      = nil
+    }
+
+    /// Full initialiser used for DP results (all fields).
+    init(cropAmount: Double, stripWidth: Int, horizonMask: HorizonMask, score: HorizonScore,
+         lambda: Double?, sobelW: Double?, cannyW: Double?) {
+        self.cropAmount  = cropAmount
+        self.stripWidth  = stripWidth
+        self.horizonMask = horizonMask
+        self.score       = score
+        self.lambda      = lambda
+        self.sobelW      = sobelW
+        self.cannyW      = cannyW
+    }
 }
 
 /// Computes evenly spaced crop amount arrays from bounds and step counts.
@@ -308,24 +348,25 @@ public enum HorizonScoring {
     public static func cropBoundaryScore(
       horizonY: [Int?],
       cropBoundaryY: Int,
-      tolerancePixels: Int = 8
+      tolerancePixels: Double = 8
     ) -> Double {
         let defined = horizonY.compactMap { $0 }
-        guard !defined.isEmpty else { return 0.666 }
+        guard !defined.isEmpty else { return 1.0 }
 
-        let avgY = Double(defined.reduce(0, +)) / Double(defined.count)
-        let dist = abs(avgY - Double(cropBoundaryY))
-        let tol = Double(max(1, tolerancePixels))
+        var goodColumns = 0
+        var totalColumns = 0
+        
+        for y in horizonY {
+            if let y {
+                totalColumns += 1
+                let dist = abs(Double(y) - Double(cropBoundaryY))
+                if dist >= tolerancePixels {
+                    goodColumns += 1
+                }
+            }
+        }
 
-        // Smooth ramp: score rises from ~0.05 at dist=0 to ~1.0 at dist=3*tol.
-        // Uses a sigmoid centred at tol with width tol/2.
-        // s(x) = 1 / (1 + exp(-k*(x - tol)))   where k = 4/tol
-        let k = 4.0 / tol
-        let score = 1.0 / (1.0 + exp(-k * (dist - tol)))
-        // Rescale so that score at dist=0 is near 0.05 and at dist→∞ is 1.0.
-        // The sigmoid at dist=0 gives 1/(1+exp(4)) ≈ 0.018; at dist=∞ gives 1.0.
-        // We want a minimum floor of ~0.05, so just clamp below.
-        return max(0.05, score)
+        return Double(goodColumns)/Double(totalColumns)
     }
 
     /// Compute local consistency score: penalize horizon lines with isolated spike
