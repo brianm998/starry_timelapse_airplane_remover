@@ -391,6 +391,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public var numberOfAlignedFrames: Int { alignmentFrames.count }
 
+    internal func loadOrCreateFinalHorizonMask() async throws -> HorizonMask? {
+        if let mask = try await self.loadMergedHorizonMask() {
+            mask
+        } else {
+            // fall back to non-merged horizon mask
+            try await self.loadOrCreateHorizonMask()
+        }
+    }
+    
     // this horizon mask has been calculated by a median merge of
     // possibly aligned horizon masks from neighbor frames.
     public func loadMergedHorizonMask() async throws -> HorizonMask? {
@@ -416,30 +425,36 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             Log.w("frame \(frameIndex) unable to load merged horizon mask")
         }
 
-        let config = await configManager.config()
-        
-        // this image should have been created during earth alignment
-        if config.tripodHeadWasMoving {
-            Log.w("frame \(frameIndex) unable to calculate merged horizon")
-            return nil
-        }
-
         Log.i("frame \(frameIndex) making merged horizon")
 
-        return try await createStaticMergedHorizonMask()
+        return try await createMergedHorizonMask()
     }
 
-    public func createStaticMergedHorizonMask() async throws -> HorizonMask? { 
-        // with no moving tropod head, earth alignment is not done.
+    public func createMergedHorizonMask() async throws -> HorizonMask? { 
 
         self.set(state: .mergingHorizon)
-        
+
+        // get original horizon mask for this frame
+        Log.d("frame \(frameIndex) calling loadOrCreateHorizonMask()")
         let mask = try await self.loadOrCreateHorizonMask()
-        let neighboringHorizons = staticNeighborFrames.compactMap {
+        
+        let config = await configManager.config()
+
+        var neighborIndices: [Int] = []
+        
+        if config.tripodHeadWasMoving {
+            neighborIndices = alignmentFrames
+        } else {
+            neighborIndices = staticNeighborFrames
+        }
+
+        // get the names of neighboring horizon masks
+        let neighboringHorizons = neighborIndices.compactMap {
             self.imageAccessor.nameForImage(frameIndex: $0,
                                             ofType: .horizon,
                                             atSize: .original)
         }
+
         Log.i("frame \(frameIndex) making merged horizon \(staticNeighborFrames.count) staticNeighborFrames \(neighboringHorizons.count) neighboringHorizons")
         
         if let mergedHorizon = mask.image.medianMerge(
@@ -472,7 +487,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // Uses adaptive parameter search: runs horizon detection at reduced resolution
     // with multiple parameter combinations, scores each result, then applies the
     // best parameters at full resolution.
-    public func loadOrCreateHorizonMask() async throws -> HorizonMask {
+    internal func loadOrCreateHorizonMask() async throws -> HorizonMask {
         Log.d("frame \(frameIndex) trying to load horizon mask")
         // load if possible
         do {
@@ -1376,7 +1391,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 var horizonMask: HorizonMask? = nil
                 if config.horizonDetectionEnabled {
                     // use static merged horizons  
-                    horizonMask = try await createStaticMergedHorizonMask()
+                    horizonMask = try await createMergedHorizonMask()
                 }
                 
                 warpedResult = WarpedImageResult(
@@ -1388,7 +1403,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // tripod head is moving or stars, do full alignment
             var horizonMask: HorizonMask? = nil
             if config.horizonDetectionEnabled {
-                horizonMask = try await loadOrCreateHorizonMask()
+                Log.d("frame \(frameIndex) calling loadFinalHorizonMask()")
+                horizonMask = try await loadOrCreateFinalHorizonMask()
                 if let horizonMask {
                     Log.d("horizon mask \(horizonMask.image.description)")
                 }
@@ -1832,7 +1848,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         var horizonMask: HorizonMask? = nil
         if config.horizonDetectionEnabled {
-            horizonMask = try await loadOrCreateHorizonMask()
+            horizonMask = try await loadOrCreateFinalHorizonMask()
             if let horizonMask {
                 Log.d("horizon mask \(horizonMask.image.description)")
             }
@@ -2038,6 +2054,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     private var alignmentFrames: [Int] = []
     private var staticNeighborFrames: [Int] = []
 
+    public func getStaticNeighborFrames() -> [Int] { staticNeighborFrames }
+
     // the filenames of the original files that we should align with this frame
     private var alignmentFilenames: [Int:String] {
         guard let imageSequence else {
@@ -2180,7 +2198,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 horizonMask = HorizonMask(horizonMaskImage)
             } else {
                 Log.w("frame \(frameIndex) falling back to non-merged horizon mask")
-                horizonMask = try await loadOrCreateHorizonMask()
+                horizonMask = try await loadOrCreateFinalHorizonMask()
             }
         }
 
@@ -3405,8 +3423,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 let earthAlignedImage = alignmentResult.warpedFrame
                 if let mat = alignmentResult.warpedHorizon {
                     horizonMask = PixelatedImage(mat: mat)
+                } else {
+                    horizonMask = try await loadOrCreateFinalHorizonMask()?.image
                 }
-
+                
                 if let earthAlignedImage {
                     earthImage = PixelatedImage(mat: earthAlignedImage)
                 }
@@ -3419,11 +3439,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                   type: .original,
                   atSize: .original)
 
-                // use non-merged horizon for merging
-                horizonMask = try await imageAccessor.load(
-                  frameIndex: frameIndex,
-                  type: .horizon,
-                  atSize: .original)
+                horizonMask = try await loadOrCreateFinalHorizonMask()?.image
             }
             
             if let earthImage {
@@ -3440,20 +3456,24 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 } else {
                     // but if not, fallback to the non-merged one, which is better than nothing
                     Log.w("frame \(frameIndex) falling back to non-merged horizon mask")
-                    let horizonMask = try await loadOrCreateHorizonMask()
-                    if let highHorizon = horizonMask.image.shiftImageUp(
-                         by: config.horizonVerticalShiftAmount
-                       ) {
-                        return try skyImage.apply(
-                          mask: highHorizon,
-                          with: earthImage
-                        )
+                    if let horizonMask = try await loadOrCreateFinalHorizonMask() {
+                        if let highHorizon = horizonMask.image.shiftImageUp(
+                             by: config.horizonVerticalShiftAmount
+                           ) {
+                            return try skyImage.apply(
+                              mask: highHorizon,
+                              with: earthImage
+                            )
+                        } else {
+                            // we can't extend the horizon, just use what we have
+                            return try skyImage.apply(
+                              mask: horizonMask.image,
+                              with: earthImage
+                            )
+                        }
                     } else {
-                        // we can't extend the horizon, just use what we have
-                        return try skyImage.apply(
-                          mask: horizonMask.image,
-                          with: earthImage
-                        )
+                        Log.w("frame \(frameIndex) cannot load or create final horizon mask")
+                        return skyImage
                     }
                 }
             } else {
@@ -3859,10 +3879,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                       mask: horizon,
                       with: earth
                     )
-                } else {
+                } else if let mask = try await self.loadOrCreateFinalHorizonMask() {
                     // fall back to non merged horizon mask if we have to
                     imageToSubtract = try skyImage.apply(
-                      mask: try await self.loadOrCreateHorizonMask().image,
+                      mask: mask.image,
                       with: earth
                     )
                 }

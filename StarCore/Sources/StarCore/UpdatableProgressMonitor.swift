@@ -179,6 +179,9 @@ public actor UpdatableProgressMonitor {
         if let update = progressLine(for: .horizon) {
             updates.append(update)
         }
+        if let update = progressLine(for: .mergedHorizon) {
+            updates.append(update)
+        }
         if let update = progressLine(for: OperationType.starKeypoints) {
             updates.append(update)
         }
@@ -327,6 +330,8 @@ extension OperationType {
         switch self {
         case .horizon:
             "found horizon"
+        case .mergedHorizon:
+            "merged horizons"
         case .starKeypoints:
             "have star keypoints"
         case .earthKeypoints:

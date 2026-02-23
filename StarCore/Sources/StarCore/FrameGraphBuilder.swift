@@ -5,6 +5,7 @@ public let frameGraphBuilder = FrameGraphBuilder()
 
 public enum OperationType: String, CaseIterable, Sendable {
     case horizon
+    case mergedHorizon
     case starKeypoints = "star kp"
     case earthKeypoints = "earth kp"
     case starHomography = "star align"
@@ -73,7 +74,9 @@ public final actor FrameGraphBuilder {
         let hasHorizon = config.horizonDetectionEnabled
         let processEarth = config.allowEarthAlignment && 
           config.tripodHeadWasMoving // keypoints not used when stationary
-        
+
+        var horizonOps: [Int: Operation] = [:]
+        var mergedHorizonOps: [Int: Operation] = [:]
         var homographyOps: [Operation] = []
         var mergeOps: [Operation] = []
 
@@ -92,8 +95,6 @@ public final actor FrameGraphBuilder {
 
             let frame = frames[frameIndex]
 
-            var lastOps: [Operation] = []
-
             // 1. Horizon
             if hasHorizon {
                 let horizonOp = HorizonDetectionOp(frame: frame) { errorString in
@@ -102,9 +103,33 @@ public final actor FrameGraphBuilder {
                 }
                 horizonOp.qualityOfService = .userInteractive
                 queue.addOperation(horizonOp)
-                lastOps.append(horizonOp)
+                horizonOps[frameIndex] = horizonOp
             }
+        }
 
+        // next assemble merged horizons if not moving
+        if hasHorizon/*,
+           !config.tripodHeadWasMoving*/
+        {
+            for frameIndex in startIndex...lastIndex {
+                let frame = frames[frameIndex]
+                let horizonOp = HorizonMergeOp(frame: frame) { errorString in
+                    errors.append(errorString)
+                    errorClosure(errorString)
+                }
+                horizonOp.qualityOfService = .userInteractive
+                mergedHorizonOps[frameIndex] = horizonOp
+                for neighborIndex in await frame.getStaticNeighborFrames() {
+                    if let origHorizonOp = horizonOps[neighborIndex] {
+                        horizonOp.addDependency(origHorizonOp)
+                    }
+                }
+                queue.addOperation(horizonOp)
+            }
+        }
+        
+        for frameIndex in startIndex...lastIndex {
+            let frame = frames[frameIndex]
             // 2. Keypoints (always sky)
             let skyKP = KeypointOp(
               forStars: true,
@@ -117,8 +142,19 @@ public final actor FrameGraphBuilder {
             }
 
             skyKP.qualityOfService = .userInteractive
-            lastOps.forEach { skyKP.addDependency($0) }
-            Log.d("\(lastOps.count) lastOps")
+
+            if hasHorizon {
+                if config.tripodHeadWasMoving {
+                    if let horizonOp = horizonOps[frameIndex] {
+                        skyKP.addDependency(horizonOp)
+                    }
+                } else {
+                    if let horizonOp = mergedHorizonOps[frameIndex] {
+                        skyKP.addDependency(horizonOp)
+                    }
+                }
+            }
+            
             queue.addOperation(skyKP)
             skyKeypointOps[frame.frameIndex] = skyKP
             

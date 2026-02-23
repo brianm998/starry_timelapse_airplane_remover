@@ -379,14 +379,14 @@ public struct Config: Codable, Sendable, Transferable {
     public var dpHorizonSobelWeightRange: [Double] = [0.2, 1.2]
 
     // Number of evenly-spaced Sobel weight values to test within the range above.
-    public var dpHorizonSobelWeightCount: Int = 8
+    public var dpHorizonSobelWeightCount: Int = 4
 
     // [min, max] range for the Canny edge presence weight in the DP cost.
     // Higher values make the path follow detected edges more.
     public var dpHorizonCannyWeightRange: [Double] = [0.2, 1.2]
 
     // Number of evenly-spaced Canny weight values to test within the range above.
-    public var dpHorizonCannyWeightCount: Int = 8
+    public var dpHorizonCannyWeightCount: Int = 4
 
     public var alignmentMaxKeypoints: Int = 2000
     public var alignmentWriteDebugImages: Bool = false
