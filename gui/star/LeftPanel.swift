@@ -245,6 +245,10 @@ struct LeftPanel: View {
               ofType: .horizon,
               atMax: viewModel.frames.count
             )
+            let hasMergedHorizonOps = frameGraphViewModel.hasOperations(
+              ofType: .mergedHorizon,
+              atMax: viewModel.frames.count
+            )
             let hasStarKeypointOps = frameGraphViewModel.hasOperations(
               ofType: .starKeypoints,
               atMax: viewModel.frames.count
@@ -272,6 +276,7 @@ struct LeftPanel: View {
             )
 
             if hasHorizonOps ||
+               hasMergedHorizonOps ||
                hasStarKeypointOps ||
                hasEarthKeypointOps ||
                hasEarthKeypointOps ||
@@ -298,6 +303,9 @@ struct LeftPanel: View {
 
                     if hasHorizonOps {
                         operationView(of: .horizon)
+                    }
+                    if hasMergedHorizonOps {
+                        operationView(of: .mergedHorizon)
                     }
                     if hasStarKeypointOps {
                         operationView(of: .starKeypoints)
