@@ -101,6 +101,7 @@ public final actor FrameGraphBuilder {
                     errors.append(errorString)
                     errorClosure(errorString)
                 }
+                horizonOp.queuePriority = .veryLow
                 horizonOp.qualityOfService = .userInteractive
                 queue.addOperation(horizonOp)
                 horizonOps[frameIndex] = horizonOp
@@ -108,20 +109,21 @@ public final actor FrameGraphBuilder {
         }
 
         // next assemble merged horizons if not moving
-        if hasHorizon/*,
-           !config.tripodHeadWasMoving*/
-        {
+        if hasHorizon {
             for frameIndex in startIndex...lastIndex {
                 let frame = frames[frameIndex]
                 let horizonOp = HorizonMergeOp(frame: frame) { errorString in
                     errors.append(errorString)
                     errorClosure(errorString)
                 }
+                horizonOp.queuePriority = .low
                 horizonOp.qualityOfService = .userInteractive
                 mergedHorizonOps[frameIndex] = horizonOp
                 for neighborIndex in await frame.getStaticNeighborFrames() {
                     if let origHorizonOp = horizonOps[neighborIndex] {
                         horizonOp.addDependency(origHorizonOp)
+                    } else {
+                        Log.w("frame \(neighborIndex) had no horizon op")
                     }
                 }
                 queue.addOperation(horizonOp)
@@ -141,18 +143,13 @@ public final actor FrameGraphBuilder {
                 errorClosure(errorString)
             }
 
+            skyKP.queuePriority = .normal
             skyKP.qualityOfService = .userInteractive
 
-            if hasHorizon {
-                if config.tripodHeadWasMoving {
-                    if let horizonOp = horizonOps[frameIndex] {
-                        skyKP.addDependency(horizonOp)
-                    }
-                } else {
-                    if let horizonOp = mergedHorizonOps[frameIndex] {
-                        skyKP.addDependency(horizonOp)
-                    }
-                }
+            if hasHorizon, 
+               let horizonOp = mergedHorizonOps[frameIndex]
+            {
+                skyKP.addDependency(horizonOp)
             }
             
             queue.addOperation(skyKP)
@@ -169,6 +166,7 @@ public final actor FrameGraphBuilder {
                     errors.append(errorString)
                     errorClosure(errorString)
                 }
+                kp.queuePriority = .normal
                 kp.qualityOfService = .userInteractive
                 kp.addDependency(skyKP)
                 queue.addOperation(kp)
@@ -187,6 +185,7 @@ public final actor FrameGraphBuilder {
                 errors.append(errorString)
                 errorClosure(errorString)
             }
+            skyH.queuePriority = .high
             skyH.qualityOfService = .userInteractive
             
             // Depends on this frame's sky keypoints
@@ -216,7 +215,7 @@ public final actor FrameGraphBuilder {
                     errors.append(errorString)
                     errorClosure(errorString)
                 }
-
+                earthH.queuePriority = .high
                 earthH.qualityOfService = .userInteractive
                 earthH.addDependency(selfEarthKP)
 
@@ -237,6 +236,7 @@ public final actor FrameGraphBuilder {
           configManager: configManager
         ) { errorString in
             errors.append(errorString)
+
             errorClosure(errorString)
         }
         validationOp.qualityOfService = .userInteractive
