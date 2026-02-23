@@ -153,6 +153,21 @@ public class FrameViewModel {
                 }
             } else {
                 initialImage
+                  .onAppear {
+                      Task {
+                        if let frame = self.frame {
+                              try await frame.imageAccessor.makeMissingImage(
+                                frameIndex: frame.frameIndex,
+                                ofType: type,
+                                andSize: .preview
+                              )
+                              await MainActor.run {
+                                  self.reloadID = UUID()
+                                  self.existingImages.insert(type)
+                              }
+                          }
+                      }
+                  }
             }
         }
 

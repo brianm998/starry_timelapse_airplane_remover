@@ -9,7 +9,7 @@ import logging
 public struct FrameEditImageView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
-    let frameViewModel: FrameViewModel
+    @Bindable var frameViewModel: FrameViewModel
     
     @State private var localID = 0
     
@@ -152,6 +152,9 @@ public struct FrameEditImageView: View {
     public var body: some View {
         @Bindable var viewModel = viewModel
 
+        // force tracking
+        let _ = frameViewModel.reloadID
+        
         return Group {
             ZStack() {
 
