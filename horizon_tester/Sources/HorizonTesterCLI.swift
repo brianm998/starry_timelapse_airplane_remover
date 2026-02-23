@@ -203,12 +203,12 @@ struct HorizonTesterCli: AsyncParsableCommand {
         let pass1Step = HorizonCropAmounts.firstPassStep(bounds: cropBounds, count: count1)
 
         // Load the input image
-        Log.i("Loading image: \(inputImage)")
+        Log.d("Loading image: \(inputImage)")
         guard let original = PixelatedImage(filename: inputImage) else {
             Log.e("Failed to load image: \(inputImage)")
             throw ExitCode.failure
         }
-        Log.i("Image loaded: \(original.width) x \(original.height), \(original.bitsPerPixel) bpp")
+        Log.d("Image loaded: \(original.width) x \(original.height), \(original.bitsPerPixel) bpp")
 
         // Create output directory
         let fileManager = FileManager.default
@@ -223,7 +223,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
             Log.e("Failed to downscale image by factor \(shrinkFactor)")
             throw ExitCode.failure
         }
-        Log.i("Shrunk image: \(shrunkImage.width) x \(shrunkImage.height) (factor \(shrinkFactor)x)")
+        Log.d("Shrunk image: \(shrunkImage.width) x \(shrunkImage.height) (factor \(shrinkFactor)x)")
 
         // Save the shrunk image for reference
         shrunkImage.writeTIFFEncoding(toFilename: "\(outputDir)/00_shrunk_input.tiff")
@@ -259,7 +259,8 @@ struct HorizonTesterCli: AsyncParsableCommand {
         func scoreHorizonMask(_ mask: HorizonMask, cropBoundaryY: Int? = nil) -> HorizonScore {
             if let edges = shrunkEdges {
                 return HorizonScoring.score(horizonMask: mask, edgeImage: edges,
-                                            cropBoundaryY: cropBoundaryY)
+                                            cropBoundaryY: cropBoundaryY,
+                                            scaleFactor: shrinkFactor)
             } else {
                 return HorizonScoring.score(
                   horizonMask: mask,
@@ -267,7 +268,8 @@ struct HorizonTesterCli: AsyncParsableCommand {
                   cannyMinThreshold: cannyMinThreshold,
                   cannyMaxThreshold: cannyMaxThreshold,
                   useL2Gradient: useL2Gradient,
-                  cropBoundaryY: cropBoundaryY
+                  cropBoundaryY: cropBoundaryY,
+                  scaleFactor: shrinkFactor
                 )
             }
         }
@@ -501,7 +503,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
                     for cannyW in dpCannyValues {
                         dpIndex += 1
                         let label = String(format: "λ=%.2f s=%.2f c=%.2f", lambda, sobelW, cannyW)
-                        Log.i("[\(dpIndex)/\(dpTotal)] DP shrunk \(label) dpSearchBottom \(dpSearchBottom)")
+                        Log.d("[\(dpIndex)/\(dpTotal)] DP shrunk \(label) dpSearchBottom \(dpSearchBottom)")
 
                         guard let dpMask = try? await shrunkImage.dpHorizonMask(
                                 at: 0,
@@ -532,7 +534,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
                             )
                         }
 
-                        Log.i("  -> \(score)")
+                        Log.d("  -> \(score)")
 
                         let result = DPResult(mask: dpMask, score: score,
                                               lambda: lambda, sobelW: sobelW, cannyW: cannyW)
@@ -748,7 +750,6 @@ struct HorizonTesterCli: AsyncParsableCommand {
               edgeAlignmentScore: result.score.edgeAlignmentScore,
               coverageScore: result.score.coverageScore,
               localConsistencyScore: result.score.localConsistencyScore,
-              flatnessScore: result.score.flatnessScore,
               totalScore: result.score.totalScore
             )
         }
@@ -761,7 +762,6 @@ struct HorizonTesterCli: AsyncParsableCommand {
               edgeAlignmentScore: result.score.edgeAlignmentScore,
               coverageScore: result.score.coverageScore,
               localConsistencyScore: result.score.localConsistencyScore,
-              flatnessScore: result.score.flatnessScore,
               totalScore: result.score.totalScore
             )
         }
@@ -886,7 +886,6 @@ struct HorizonTestSummary: Codable {
         let edgeAlignmentScore: Double
         let coverageScore: Double
         let localConsistencyScore: Double
-        let flatnessScore: Double
         let totalScore: Double
     }
 }
