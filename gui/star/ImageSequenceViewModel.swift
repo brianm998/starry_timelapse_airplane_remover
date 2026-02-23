@@ -1214,34 +1214,18 @@ public final class ImageSequenceViewModel {
 
         let acc = frame.imageAccessor
 
-        Task {
-            let otTask = Task.detached {
-                await acc.loadImage(frameIndex: frame.frameIndex,
-                                    type: .original,
-                                    atSize: .thumbnail)
-            }
-            // set list of view modes for this frame
-
-            var existingImages: Set<FrameViewMode> = []
-            for type in FrameViewMode.allCases {
-                if acc.imageExists(frameIndex: frame.frameIndex,
-                                   ofType: type,
-                                   atSize: .original)
-                {
-                    existingImages.insert(type)
-                }
-            }
-            
-            self.frames[frame.frameIndex].existingImages = existingImages
-
-            async let thumbnailImage = otTask.value
-
-            let thumbnail = await thumbnailImage
-            
-            if let image = thumbnail {
-                self.frames[frame.frameIndex].thumbnailImage = image
+        var existingImages: Set<FrameViewMode> = []
+        for type in FrameViewMode.allCases {
+            if acc.imageExists(frameIndex: frame.frameIndex,
+                               ofType: type,
+                               atSize: .original)
+            {
+                existingImages.insert(type)
             }
         }
+        
+        self.frames[frame.frameIndex].existingImages = existingImages
+
         //Log.d("done refreshing frame \(frame.frameIndex)")
     }
 

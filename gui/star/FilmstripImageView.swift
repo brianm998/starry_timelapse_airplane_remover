@@ -16,10 +16,13 @@ struct FilmstripImageView: View {
             return .gray
         }
     }
-    
 
     var body: some View {
         let frameView = viewModel.frames[frameIndex]
+
+        // force tracking
+        let _ = frameView.reloadID
+        
         return VStack(alignment: .center) {
             Spacer().frame(height: 6)
               .layoutPriority(1)
@@ -35,7 +38,7 @@ struct FilmstripImageView: View {
                     // show nothing when unloaded
                     Group { }
                       .layoutPriority(1)
-                    
+
                 case .loading:
                     Image(systemName: "progress.indicator")
                       .layoutPriority(1)
@@ -105,12 +108,9 @@ struct FilmstripImageView: View {
             if frameIndex >= 0 && frameIndex < viewModel.frames.count {
                 ZStack(alignment: .center) {
                     // the actual thumbnail image
-                    if viewModel.currentIndex == frameIndex {
-                        frameView.thumbnailImage
-                          .foregroundColor(.orange)
-                    } else {
-                        frameView.thumbnailImage
-                    }
+
+                    frameView.thumbnailImage
+                    
                     if let frameState = frameView.frameState {
                         // processing state on the bottom left 
                         VStack {

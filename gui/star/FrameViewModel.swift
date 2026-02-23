@@ -100,10 +100,52 @@ public class FrameViewModel {
     var positiveOutlierImage: Image?
     var negativeOutlierImage: Image?
     
-    // we don't keep full resolution images here
-
-    var thumbnailImage: Image = initialImage
-
+    @ViewBuilder
+    public var thumbnailImage: some View {
+        if let frame,
+           let url = frame.imageAccessor.urlForImage(
+             frameIndex: frame.frameIndex,
+             ofType: .original,
+             atSize: .thumbnail
+           )
+        {
+            AsyncImage(
+              url: url.appending(
+                queryItems: [
+                  URLQueryItem(
+                    name: "v",
+                    value: reloadID.uuidString
+                  )
+                ]
+              )
+            ) { image in
+                image
+            } placeholder: {
+                initialImage
+            }
+        } else {
+            ZStack {
+                initialImage
+                ProgressView()
+                  .colorScheme(.dark)
+            }
+              .onAppear {
+                  if let frame = self.frame {
+                      Task {
+                          try await frame.imageAccessor.makeMissingImage(
+                            frameIndex: frame.frameIndex,
+                            ofType: .original,
+                            andSize: .thumbnail
+                          )
+                          await MainActor.run {
+                              self.reloadID = UUID()
+                          }
+                      }
+                  }
+              }
+        }
+    }
+    
     @ViewBuilder
     public func previewImage(type: FrameViewMode) -> some View {
         if let frame,
@@ -131,10 +173,11 @@ public class FrameViewModel {
             ZStack {
                 initialImage
                 ProgressView()
+                  .colorScheme(.dark)
             }
               .onAppear {
-                  Task {
-                      if let frame = self.frame {
+                  if let frame = self.frame {
+                      Task {
                           try await frame.imageAccessor.makeMissingImage(
                             frameIndex: frame.frameIndex,
                             ofType: type,
