@@ -90,7 +90,8 @@ public final actor FrameGraphBuilder {
 
         Log.d("processing from frameIndex \(startIndex) to \(lastIndex)")
 
-        // First assemble horizon, keypoint and outlier operations for all frames
+        // First assemble initial horizon operations,
+        // with no dependencies upon any other operations
         for frameIndex in startIndex...lastIndex {
 
             let frame = frames[frameIndex]
@@ -108,7 +109,8 @@ public final actor FrameGraphBuilder {
             }
         }
 
-        // next assemble merged horizons if not moving
+        // next assemble merged horizons, which each depend upon an array of
+        // original horizon operations from above
         if hasHorizon {
             for frameIndex in startIndex...lastIndex {
                 let frame = frames[frameIndex]
@@ -119,7 +121,7 @@ public final actor FrameGraphBuilder {
                 horizonOp.queuePriority = .low
                 horizonOp.qualityOfService = .userInteractive
                 mergedHorizonOps[frameIndex] = horizonOp
-                for neighborIndex in await frame.getStaticNeighborFrames() {
+                for neighborIndex in await frame.getHorizonMergeIndices() {
                     if let origHorizonOp = horizonOps[neighborIndex] {
                         horizonOp.addDependency(origHorizonOp)
                     } else {
@@ -129,7 +131,8 @@ public final actor FrameGraphBuilder {
                 queue.addOperation(horizonOp)
             }
         }
-        
+
+        // Keypoints depend upon the merged horizon mask for their index
         for frameIndex in startIndex...lastIndex {
             let frame = frames[frameIndex]
             // 2. Keypoints (always sky)
@@ -175,6 +178,7 @@ public final actor FrameGraphBuilder {
         }
 
         // next assemble homography operations that depend upon the keyframes from above
+        // these depend upon an array of self + neighbor keypoints
         for frame in frames {
             // 3. Homographies
             let skyH = HomographyOp(
@@ -231,6 +235,9 @@ public final actor FrameGraphBuilder {
         }
 
         // ---- 4. Global validation barrier ----
+        // depends upon everything above it
+        // knowing all computed neighbor homographies for all frames allows
+        // them to be corrected where necessary.
         let validationOp = AlignmentValidationOp(
           frames: frames,
           configManager: configManager

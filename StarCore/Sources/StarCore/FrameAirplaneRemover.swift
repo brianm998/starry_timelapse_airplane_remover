@@ -430,6 +430,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return try await createMergedHorizonMask()
     }
 
+    public func getHorizonMergeIndices() async -> [Int] {
+        let config = await configManager.config()
+        if config.tripodHeadWasMoving {
+            return alignmentFrames
+        } else {
+            return staticNeighborFrames
+        }
+    }
+    
     public func createMergedHorizonMask() async throws -> HorizonMask? { 
 
         self.set(state: .mergingHorizon)
@@ -440,13 +449,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         let config = await configManager.config()
 
-        var neighborIndices: [Int] = []
+        var neighborIndices = await self.getHorizonMergeIndices()
         
-        if config.tripodHeadWasMoving {
-            neighborIndices = alignmentFrames
-        } else {
-            neighborIndices = staticNeighborFrames
-        }
 
         // get the names of neighboring horizon masks
         let neighboringHorizons = neighborIndices.compactMap {
