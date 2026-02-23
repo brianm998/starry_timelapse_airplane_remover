@@ -58,22 +58,7 @@ public class FrameViewModel {
     {
         existingImages.insert(type)
         if size == .preview {
-            switch type {
-            case .final:
-                if let image = image.nsImage {
-                    self.processedPreviewImage = Image(nsImage: image)
-                      .resizable()
-                }
-                
-            case .original:
-                if let image = image.nsImage {
-                    self.originalPreviewImage = Image(nsImage: image)
-                      .resizable()
-                }
-
-            default: 
-                reloadID = UUID()
-            }
+            reloadID = UUID()
         }
     }
     
@@ -118,59 +103,51 @@ public class FrameViewModel {
     // we don't keep full resolution images here
 
     var thumbnailImage: Image = initialImage
-    var originalPreviewImage: Image = initialImage
-    var processedPreviewImage: Image = initialImage
 
     @ViewBuilder
     public func previewImage(type: FrameViewMode) -> some View {
-
-        switch type {
-        case .original:
-            self.originalPreviewImage
-        case .final:
-            self.processedPreviewImage
-        default: 
-            if let frame,
-               let url = frame.imageAccessor.urlForImage(
-                 frameIndex: frame.frameIndex,
-                 ofType: type,
-                 atSize: .preview
-               )
-            {
-                AsyncImage(
-                  url: url.appending(
-                    queryItems: [
-                      URLQueryItem(
-                        name: "v",
-                        value: reloadID.uuidString
-                      )
-                    ]
+        if let frame,
+           let url = frame.imageAccessor.urlForImage(
+             frameIndex: frame.frameIndex,
+             ofType: type,
+             atSize: .preview
+           )
+        {
+            AsyncImage(
+              url: url.appending(
+                queryItems: [
+                  URLQueryItem(
+                    name: "v",
+                    value: reloadID.uuidString
                   )
-                ) { image in
-                    image.resizable()
-                } placeholder: {
-                    initialImage
-                }
-            } else {
+                ]
+              )
+            ) { image in
+                image.resizable()
+            } placeholder: {
                 initialImage
-                  .onAppear {
-                      Task {
-                        if let frame = self.frame {
-                              try await frame.imageAccessor.makeMissingImage(
-                                frameIndex: frame.frameIndex,
-                                ofType: type,
-                                andSize: .preview
-                              )
-                              await MainActor.run {
-                                  self.reloadID = UUID()
-                                  self.existingImages.insert(type)
-                              }
+            }
+        } else {
+            ZStack {
+                initialImage
+                ProgressView()
+            }
+              .onAppear {
+                  Task {
+                      if let frame = self.frame {
+                          try await frame.imageAccessor.makeMissingImage(
+                            frameIndex: frame.frameIndex,
+                            ofType: type,
+                            andSize: .preview
+                          )
+                          await MainActor.run {
+                              self.reloadID = UUID()
+                              self.existingImages.insert(type)
                           }
                       }
                   }
-            }
+              }
         }
-
     }
 
     // puts view outliers into the trash

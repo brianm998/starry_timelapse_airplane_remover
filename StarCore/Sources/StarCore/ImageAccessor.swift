@@ -111,7 +111,6 @@ public struct ImageAccessor: Sendable {
              ofType: imageType,
              atSize: size
            ),
-
            let image = PixelatedImage(filename: filename),
            let nsImage = image.nsImage
         {
@@ -551,7 +550,7 @@ public struct ImageAccessor: Sendable {
       andSize size: ImageDisplaySize,
       semaphore: AsyncSemaphore? = nil
     ) async throws -> PixelatedImage? {
-        Log.d("start with frame \(frameIndex)")
+        Log.d("frame \(frameIndex) start with frame \(frameIndex)")
         if let filename = nameForImage(frameIndex: frameIndex,
                                        ofType: type,
                                        atSize: size),
@@ -560,7 +559,7 @@ public struct ImageAccessor: Sendable {
                                              type: type,
                                              atSize: .original)
         {
-            Log.d("loaded 1 for frame \(frameIndex)")
+            Log.d("frame \(frameIndex) loaded 1 for frame \(frameIndex)")
 
             semaphore?.signal()
 
@@ -569,7 +568,7 @@ public struct ImageAccessor: Sendable {
                  height: UInt(smallerSize.height)
                )
             {
-                Log.d("loaded 2 for frame \(frameIndex)")
+                Log.d("frame \(frameIndex) loaded 2 for frame \(frameIndex)")
                 
                 if FileManager.default.fileExists(atPath: filename) {
                     Log.i("overwriting already existing file \(filename)")
@@ -581,8 +580,9 @@ public struct ImageAccessor: Sendable {
                 if let eightBitVersion = scaledImage.ensureEightBit {
                     // write to file
                     eightBitVersion.saveJpeg(withQuality: 50, filename: filename)
+                    Log.d("frame \(frameIndex) wrote preview to \(filename)")
                 } else {
-                    Log.w("Unable to create 8 bit version of scaled image")
+                    Log.w("frame \(frameIndex) Unable to create 8 bit version of scaled image")
                 }
                 
                 return scaledImage
@@ -845,4 +845,27 @@ func farthestFirstOrder(range: Range<Int>) -> [Int] {
     }
 
     return result
+}
+
+/// Ensures that all parent directories for the given file path exist.
+/// - Parameter filePath: A file path that may include directories.
+/// - Throws: An error if directory creation fails.
+public func ensureParentDirectoriesExist(for filePath: String) throws {
+    let fileURL = URL(fileURLWithPath: filePath)
+    
+    // If the path ends with a "/", treat it as a directory.
+    let directoryURL: URL
+    if fileURL.hasDirectoryPath {
+        directoryURL = fileURL
+    } else {
+        directoryURL = fileURL.deletingLastPathComponent()
+    }
+    
+    guard !directoryURL.path.isEmpty else { return }
+
+    try FileManager.default.createDirectory(
+        at: directoryURL,
+        withIntermediateDirectories: true,
+        attributes: nil
+    )
 }

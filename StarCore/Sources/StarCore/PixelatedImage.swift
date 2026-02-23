@@ -1002,6 +1002,7 @@ extension PixelatedImage {
     }
 
     public func saveJpeg(withQuality quality: UInt, filename: String) {
+        try? ensureParentDirectoriesExist(for: filename)
         self.mat.saveJpeg(withQuality: quality, filename: filename)
     }
 

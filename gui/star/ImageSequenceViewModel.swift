@@ -1215,18 +1215,6 @@ public final class ImageSequenceViewModel {
         let acc = frame.imageAccessor
 
         Task {
-            
-            let prTask = Task.detached {
-                await acc.loadImage(frameIndex: frame.frameIndex,
-                                    type: .final,
-                                    atSize: .preview)?.resizable()
-            }
-            let opTask = Task.detached {
-                await acc.loadImage(frameIndex: frame.frameIndex,
-                                    type: .original,
-                                    atSize: .preview)?.resizable()
-            }
-
             let otTask = Task.detached {
                 await acc.loadImage(frameIndex: frame.frameIndex,
                                     type: .original,
@@ -1246,23 +1234,10 @@ public final class ImageSequenceViewModel {
             
             self.frames[frame.frameIndex].existingImages = existingImages
 
-            async let processedImage = prTask.value
-            async let originalImage  = opTask.value
             async let thumbnailImage = otTask.value
 
-            let (processed, original, thumbnail) = await (
-              processedImage,
-              originalImage,
-              thumbnailImage
-            )
+            let thumbnail = await thumbnailImage
             
-            if let image = processed {
-                self.frames[frame.frameIndex].processedPreviewImage = image
-            }
-            if let image = original {
-                self.frames[frame.frameIndex].originalPreviewImage = image
-            }
-
             if let image = thumbnail {
                 self.frames[frame.frameIndex].thumbnailImage = image
             }

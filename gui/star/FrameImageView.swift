@@ -10,7 +10,12 @@ public struct FrameImageView: View {
     @State private var size: CGSize = .zero
     
     public var body: some View {
-        self.viewModel.frames[self.viewModel.currentIndex].previewImage(
+        let frameViewModel = self.viewModel.frames[self.viewModel.currentIndex]
+
+        // force tracking
+        let _ = frameViewModel.reloadID
+
+        return frameViewModel.previewImage(
           type: viewModel.frameViewMode
         )
           .aspectRatio(viewModel.frameSize, contentMode: .fit)
