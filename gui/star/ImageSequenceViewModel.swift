@@ -691,7 +691,7 @@ public final class ImageSequenceViewModel {
         
         config.ignoreLowerPixels = 0
         
-        let configFilename = "\(config.basename)-config.json"
+        let configFilename = "config.json"
         
         let configManager = ConfigManager(configFilename: configFilename, config: config)
 

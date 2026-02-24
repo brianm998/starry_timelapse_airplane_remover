@@ -350,7 +350,7 @@ struct StarCli: AsyncParsableCommand {
                 config.tripodHeadWasMoving = movingCamera
                 config.numberOfFramesToProcessConcurrently = Int(numConcurrentRenders)
                 
-                let configFilename = "\(config.basename)-config.json"
+                let configFilename = "config.json"
                 
                 configManager = await ConfigManager(
                   configFilename: configFilename,
