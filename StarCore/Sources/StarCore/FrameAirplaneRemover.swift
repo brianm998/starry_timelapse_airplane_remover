@@ -83,14 +83,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Task {
             await observer.set(cleanMethod: cleanMethod)
             if let results = await self.readEarthNeighborHomographyForThisFrame() {
-                Log.d("frame \(frameIndex) setting number of earth alignments \(results)")
+                //Log.d("frame \(frameIndex) setting number of earth alignments \(results)")
                 await observer.set(earthAlignmentResults: results)
             } else {
                 Log.d("frame \(frameIndex) NO number of earth alignments")
             }
 
             if let results = await self.readStarNeighborHomographyForThisFrame() {
-                Log.d("frame \(frameIndex) setting number of star alignments \(results)")
+                //Log.d("frame \(frameIndex) setting number of star alignments \(results)")
                 await observer.set(starAlignmentResults: results)
             } else {
                 Log.d("frame \(frameIndex) NO number of star alignments")
