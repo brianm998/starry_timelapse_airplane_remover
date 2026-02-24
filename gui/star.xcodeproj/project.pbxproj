@@ -47,6 +47,7 @@
 		D3636C562CE087B000514D39 /* ReProcessCurrentFrameButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3636C552CE087B000514D39 /* ReProcessCurrentFrameButton.swift */; };
 		D364FD7F2C1F4357006FB43A /* libStarDecisionTrees.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */; };
 		D366BB3A2AF84766004C9125 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = D366BB392AF84766004C9125 /* Info.plist */; };
+		D367B33E2F4DF65B00C2160A /* PreviewOp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D367B33D2F4DF65B00C2160A /* PreviewOp.swift */; };
 		D386FA13298B617300878B56 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA12298B617300878B56 /* ContentView.swift */; };
 		D386FA15298B617400878B56 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D386FA14298B617400878B56 /* Assets.xcassets */; };
 		D386FA18298B617400878B56 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D386FA17298B617400878B56 /* Preview Assets.xcassets */; };
@@ -162,6 +163,7 @@
 		D3636C512CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindOutliersOnCurrentFrameButton.swift; sourceTree = "<group>"; };
 		D3636C552CE087B000514D39 /* ReProcessCurrentFrameButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReProcessCurrentFrameButton.swift; sourceTree = "<group>"; };
 		D366BB392AF84766004C9125 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = SOURCE_ROOT; };
+		D367B33D2F4DF65B00C2160A /* PreviewOp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewOp.swift; sourceTree = "<group>"; };
 		D386FA0D298B617300878B56 /* Star.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Star.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D386FA12298B617300878B56 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		D386FA14298B617400878B56 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -289,6 +291,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D367B33D2F4DF65B00C2160A /* PreviewOp.swift */,
 				D39728C52F06CC5400F1CBC2 /* AlignmentWindowView.swift */,
 				D39728C32F05C2D200F1CBC2 /* ExpandDownButton.swift */,
 				D32425802EE5075000CEF78F /* StartupView.swift */,
@@ -568,6 +571,7 @@
 				D3636C522CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift in Sources */,
 				D3058E1B2AC0745C00C58F1D /* MultiSelectSheetView.swift in Sources */,
 				D35309452D0DE4F200C4AFFF /* BlobProcessingView.swift in Sources */,
+				D367B33E2F4DF65B00C2160A /* PreviewOp.swift in Sources */,
 				D3A54A6F29AFAD2C00C50709 /* UserPreferences.swift in Sources */,
 				D33FFC122A2CF92900F38194 /* VideoPlaybackButtons.swift in Sources */,
 				D32F6DAA2A4D17CF00704870 /* ScrubSliderView.swift in Sources */,

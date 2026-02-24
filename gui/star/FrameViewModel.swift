@@ -138,47 +138,23 @@ public class FrameViewModel {
                      ) == nil
                   {
                       Task {
-                          do {
-                              try await frame.imageAccessor.makeMissingImage(
-                                frameIndex: frame.frameIndex,
-                                ofType: .original,
-                                andSize: .thumbnail
-                              )
-                              await MainActor.run {
-                                  self.reloadID = UUID()
-                              }
-                          } catch {
-                              Log.e("frame \(frame.frameIndex) unable to make missing thumbnail image error: \(error)")
+                          let op = PreviewOp(
+                            frameView: self,
+                            imageAccessor: frame.imageAccessor,
+                            frameIndex: frame.frameIndex,
+                            type: .original,
+                            size: .thumbnail
+                          ) { errorString in
+                              Log.e("frame \(frame.frameIndex) unable to create thumbnail: \(errorString)")
                           }
+                          op.queuePriority = .veryHigh
+                          await frameGraphBuilder.add(operation: op)
                       }
                   }
               }
         }
     }
 
-    private func makeMissingImage(
-      of type: FrameViewMode,
-      for frame: FrameAirplaneRemover
-    ) {
-        Task {
-            do {
-                Log.d("frame \(frame.frameIndex) making missing preview image of type \(type)")
-                try await frame.imageAccessor.makeMissingImage(
-                  frameIndex: frame.frameIndex,
-                  ofType: type,
-                  andSize: .preview
-                )
-                Log.d("frame \(frame.frameIndex) made missing preview image of type \(type)")
-                await MainActor.run {
-                    self.reloadID = UUID()
-                    self.existingImages.insert(type)
-                }
-            } catch {
-                Log.e("frame \(frame.frameIndex) unable to make missing preview image of type \(type) error: \(error)")
-            }
-        }
-    }
-    
     @ViewBuilder
     public func previewImage(type: FrameViewMode) -> some View {
         if let frame,
@@ -209,7 +185,6 @@ public class FrameViewModel {
                   .colorScheme(.dark)
             }
               .task(id: reloadID) {
-                  Log.d("frame \(self.frame?.frameIndex ?? -1) missing image did appear")
                   if let frame = self.frame,
                      frame.imageAccessor.urlForImage(
                        frameIndex: frame.frameIndex,
@@ -217,8 +192,19 @@ public class FrameViewModel {
                        atSize: .preview
                      ) == nil
                   {
-                      Log.d("frame \(frame.frameIndex) generating missing image")
-                      self.makeMissingImage(of: type, for: frame)
+                      Task {
+                          let op = PreviewOp(
+                            frameView: self,
+                            imageAccessor: frame.imageAccessor,
+                            frameIndex: frame.frameIndex,
+                            type: type,
+                            size: .preview
+                          ) { errorString in
+                              Log.e("frame \(frame.frameIndex) unable to create thumbnail: \(errorString)")
+                          }
+                          op.queuePriority = .veryHigh
+                          await frameGraphBuilder.add(operation: op)
+                      }
                   }
               }
         }

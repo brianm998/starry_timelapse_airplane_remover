@@ -884,13 +884,13 @@ public final class ImageSequenceViewModel {
             let semaphore = AsyncSemaphore(value: 30) // XXX constant XXX
             for (frameIndex, filename) in filenames.enumerated() {
 
-                Log.d("add task at frameIndex \(frameIndex)")
+                //Log.d("add task at frameIndex \(frameIndex)")
 
                 taskGroup.addTask() {
                     await semaphore.wait()
                     let basename = removePath(fromString: filename)
                     let frame = try await frameLoadMonitor.load() {
-                        Log.d("running task at frameIndex \(frameIndex)")
+                        //Log.d("running task at frameIndex \(frameIndex)")
                         return try await FrameAirplaneRemover(
                           with: configManager,
                           width: imageInfo.imageWidth,
@@ -905,7 +905,7 @@ public final class ImageSequenceViewModel {
                           imageAccessor: imageAccessor
                         )
                     }
-                    Log.d("got frame at frameIndex \(frameIndex)")
+                    //Log.d("got frame at frameIndex \(frameIndex)")
                     if let callback = callbacks.frameCheckClosure { 
                         Task { @MainActor in 
                             callback(frame)
@@ -925,7 +925,7 @@ public final class ImageSequenceViewModel {
             
             for try await frame in taskGroup {
                 numberOfLoadedFrames += 1
-                Log.d("numberOfLoadedFrames \(numberOfLoadedFrames)")
+                //Log.d("numberOfLoadedFrames \(numberOfLoadedFrames)")
                 // call the callback here on the main thread
                 let update = await Double(numberOfLoadedFrames)/Double(imageSequenceSize)
                 closure(numberPreviewsSaved, 1, numberOfLoadedFrames, update)
@@ -952,7 +952,8 @@ public final class ImageSequenceViewModel {
             }
         }
 
-        // Update All Frame View Models
+        let separateFrames = await MainActor.run { frames }
+
         Task { @MainActor in
             for frame in frames {
                 if frame.frameIndex == currentIndex {
@@ -968,7 +969,62 @@ public final class ImageSequenceViewModel {
                 }
             }
         }
+
+        Task.detached(priority: .utility) { [separateFrames] in
+            // make sure we have all previews for all existing original images
+            for frameView in separateFrames {
+                Log.d("frame \(frameView.frameIndex) checking for missing images")
+                var updateFrame = false
+                if let frame = await frameView.frame {
+                    for mode in FrameViewMode.allCases {
+                        if imageAccessor.urlForImage(
+                             frameIndex: frame.frameIndex,
+                             ofType: mode,
+                             atSize: .original
+                           ) != nil,
+                           frame.imageAccessor.urlForImage(
+                             frameIndex: frame.frameIndex,
+                             ofType: mode,
+                             atSize: .preview
+                           ) == nil
+                        {
+                            let op = PreviewOp(
+                              frameView: frameView,
+                              imageAccessor: frame.imageAccessor,
+                              frameIndex: frame.frameIndex,
+                              type: mode,
+                              size: .preview
+                            ) { errorString in
+                                Log.e("frame \(frame.frameIndex) unable to create preview: \(errorString)")
+                            }
+                            op.queuePriority = .veryLow
+                            await frameGraphBuilder.add(operation: op)
+                        }
+                    }
+                    if frame.imageAccessor.urlForImage(
+                         frameIndex: frame.frameIndex,
+                         ofType: .original,
+                         atSize: .thumbnail
+                       ) == nil
+                    {
+                        let op = PreviewOp(
+                          frameView: frameView,
+                          imageAccessor: frame.imageAccessor,
+                          frameIndex: frame.frameIndex,
+                          type: .original,
+                          size: .thumbnail
+                        ) { errorString in
+                            Log.e("frame \(frame.frameIndex) unable to create thumbnail: \(errorString)")
+                        }
+                        op.queuePriority = .veryLow
+                        await frameGraphBuilder.add(operation: op)
+                    }
+                }
+            }
+            Log.d("done checking for missing images")
+        }
     }
+
 
     // nonisolated so it doesn't run on the main thread
     nonisolated func makePreviews(imageAccessor: ImageAccessor) async throws {
