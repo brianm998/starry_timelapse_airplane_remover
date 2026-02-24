@@ -144,7 +144,7 @@ public struct ImageAccessor: Sendable {
                 if let modDate = try? FileManager.default.attributesOfItem(
                      atPath: filename
                    )[.modificationDate] as? Date {
-                    Log.d("appending modDate \(modDate)")
+                    //Log.d("appending modDate \(modDate)")
                     return url.appending(
                       queryItems: [
                         URLQueryItem(
