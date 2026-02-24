@@ -287,7 +287,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 imageAccessor: ImageAccessor,
                 completion: (@Sendable () async -> Void)? = nil) async throws
     {
-        Log.d("frame \(frameIndex) init begin")
+        //Log.d("frame \(frameIndex) init begin")
         self.imageSequence = imageSequence
         self.imageAccessor = imageAccessor
         self.writeOutputFiles = writeOutputFiles
@@ -312,7 +312,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           cleanMethod: config.cleanMethod(for: frameIndex),
           process: false
         )
-        Log.d("frame \(frameIndex) init mid")
+        //Log.d("frame \(frameIndex) init mid")
         
         if imageAccessor.imageExists(frameIndex: frameIndex,
                                      ofType: .final,
@@ -324,14 +324,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // even if some are not classified
             self.state = .userModified
         }
-        Log.d("frame \(frameIndex) init mid 2")
+        //Log.d("frame \(frameIndex) init mid 2")
         
         if let frameStateChangeCallback = callbacks.frameStateChangeCallback {
             frameStateChangeCallback(self, self.state)
         }
 
         await self.updateCombineSubjects()
-        Log.d("frame \(frameIndex) init end")
+        //Log.d("frame \(frameIndex) init end")
 
         // really only needs to happen once
         await frameGraphBuilder.set(configManager: self.configManager)
@@ -384,7 +384,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             ret.append(index)
         }
 
-        Log.d("frame \(frameIndex) has alignment frames \(ret)")
+        //Log.d("frame \(frameIndex) has alignment frames \(ret)")
 
         return ret
     }
