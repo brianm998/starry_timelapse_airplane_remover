@@ -357,7 +357,7 @@ public actor NighttimeAirplaneRemover {
            config.writeFrameProcessedPreviewFiles ||
            config.writeFrameThumbnailFiles
         {
-            config.writeJson(named: "\(self.basename)-config.json")
+            config.writeJson(named: "config.json")
         }
     }
     
