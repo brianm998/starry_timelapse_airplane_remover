@@ -1,12 +1,12 @@
 import Foundation
 
-public class AsyncOperation: Operation, @unchecked Sendable {
+open class AsyncOperation: Operation, @unchecked Sendable {
     private let stateQueue = DispatchQueue(label: "async.op.state")
 
     private var _isExecuting = false
     private var _isFinished = false
 
-    internal var task: Task<Void, any Error>?
+    public var task: Task<Void, any Error>?
     
     override public var isAsynchronous: Bool { true }
 
@@ -61,11 +61,11 @@ public class AsyncOperation: Operation, @unchecked Sendable {
         task?.cancel()
     }
 
-    func execute() {
+    open func execute() {
         fatalError("override")
     }
 
-    func finish() {
+    public func finish() {
         isExecuting = false
         isFinished = true
     }
