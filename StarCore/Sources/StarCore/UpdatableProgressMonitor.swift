@@ -328,6 +328,8 @@ public actor UpdatableProgressMonitor {
 extension OperationType {
     var logName: String {
         switch self {
+        case .preview:
+            "making preview"
         case .horizon:
             "found horizon"
         case .mergedHorizon:

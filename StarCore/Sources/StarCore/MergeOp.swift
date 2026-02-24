@@ -11,7 +11,7 @@ public final class MergeOp: AsyncOperation, @unchecked Sendable {
         super.init(for: .merge)
     }
 
-    override func execute() {
+  public override func execute() {
         task = Task {
             defer {
                 Log.d("frame \(frame.frameIndex) end")

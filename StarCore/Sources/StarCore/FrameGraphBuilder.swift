@@ -4,6 +4,7 @@ import logging
 public let frameGraphBuilder = FrameGraphBuilder()
 
 public enum OperationType: String, CaseIterable, Sendable {
+    case preview
     case horizon
     case mergedHorizon
     case starKeypoints = "star kp"
@@ -52,6 +53,10 @@ public final actor FrameGraphBuilder {
               maxConcurrent: config.maxConcurrentKeypointCalculations
             )
         }
+    }
+
+    public func add(operation: Operation) {
+        queue.addOperation(operation)
     }
     
     public func build(
@@ -102,7 +107,7 @@ public final actor FrameGraphBuilder {
                     errors.append(errorString)
                     errorClosure(errorString)
                 }
-                horizonOp.queuePriority = .veryLow
+                horizonOp.queuePriority = .low
                 horizonOp.qualityOfService = .userInteractive
                 queue.addOperation(horizonOp)
                 horizonOps[frameIndex] = horizonOp
@@ -118,7 +123,7 @@ public final actor FrameGraphBuilder {
                     errors.append(errorString)
                     errorClosure(errorString)
                 }
-                horizonOp.queuePriority = .low
+                horizonOp.queuePriority = .normal
                 horizonOp.qualityOfService = .userInteractive
                 mergedHorizonOps[frameIndex] = horizonOp
                 for neighborIndex in await frame.getHorizonMergeIndices() {
@@ -146,7 +151,7 @@ public final actor FrameGraphBuilder {
                 errorClosure(errorString)
             }
 
-            skyKP.queuePriority = .normal
+            skyKP.queuePriority = .high
             skyKP.qualityOfService = .userInteractive
 
             if hasHorizon, 
@@ -169,7 +174,7 @@ public final actor FrameGraphBuilder {
                     errors.append(errorString)
                     errorClosure(errorString)
                 }
-                kp.queuePriority = .normal
+                kp.queuePriority = .high
                 kp.qualityOfService = .userInteractive
                 kp.addDependency(skyKP)
                 queue.addOperation(kp)
@@ -189,7 +194,7 @@ public final actor FrameGraphBuilder {
                 errors.append(errorString)
                 errorClosure(errorString)
             }
-            skyH.queuePriority = .high
+            skyH.queuePriority = .veryHigh
             skyH.qualityOfService = .userInteractive
             
             // Depends on this frame's sky keypoints
@@ -219,7 +224,7 @@ public final actor FrameGraphBuilder {
                     errors.append(errorString)
                     errorClosure(errorString)
                 }
-                earthH.queuePriority = .high
+                earthH.queuePriority = .veryHigh
                 earthH.qualityOfService = .userInteractive
                 earthH.addDependency(selfEarthKP)
 

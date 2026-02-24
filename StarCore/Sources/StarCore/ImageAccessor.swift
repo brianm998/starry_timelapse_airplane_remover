@@ -157,7 +157,7 @@ public struct ImageAccessor: Sendable {
                 }
                 return url
             } else {
-                Log.w("file does not exist at \(filename)") // XXX DOH!
+                //Log.w("file does not exist at \(filename)") // XXX DOH!
             }
         } else {
             Log.w("no filename for type \(imageType) at size \(size)")
@@ -544,7 +544,7 @@ public struct ImageAccessor: Sendable {
         }
     }
         
-    public func makeMissingImage(
+    public nonisolated func makeMissingImage(
       frameIndex: Int,
       ofType type: FrameViewMode,
       andSize size: ImageDisplaySize,
@@ -559,6 +559,8 @@ public struct ImageAccessor: Sendable {
                                              type: type,
                                              atSize: .original)
         {
+            try ensureParentDirectoriesExist(for: filename)
+            
             Log.d("frame \(frameIndex) loaded 1 for frame \(frameIndex)")
 
             semaphore?.signal()
