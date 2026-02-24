@@ -129,20 +129,53 @@ public class FrameViewModel {
                 ProgressView()
                   .colorScheme(.dark)
             }
-              .onAppear {
-                  if let frame = self.frame {
+              .task(id: reloadID) {
+                  if let frame = self.frame,
+                     frame.imageAccessor.urlForImage(
+                       frameIndex: frame.frameIndex,
+                       ofType: .original,
+                       atSize: .thumbnail
+                     ) == nil
+                  {
                       Task {
-                          try await frame.imageAccessor.makeMissingImage(
-                            frameIndex: frame.frameIndex,
-                            ofType: .original,
-                            andSize: .thumbnail
-                          )
-                          await MainActor.run {
-                              self.reloadID = UUID()
+                          do {
+                              try await frame.imageAccessor.makeMissingImage(
+                                frameIndex: frame.frameIndex,
+                                ofType: .original,
+                                andSize: .thumbnail
+                              )
+                              await MainActor.run {
+                                  self.reloadID = UUID()
+                              }
+                          } catch {
+                              Log.e("frame \(frame.frameIndex) unable to make missing thumbnail image error: \(error)")
                           }
                       }
                   }
               }
+        }
+    }
+
+    private func makeMissingImage(
+      of type: FrameViewMode,
+      for frame: FrameAirplaneRemover
+    ) {
+        Task {
+            do {
+                Log.d("frame \(frame.frameIndex) making missing preview image of type \(type)")
+                try await frame.imageAccessor.makeMissingImage(
+                  frameIndex: frame.frameIndex,
+                  ofType: type,
+                  andSize: .preview
+                )
+                Log.d("frame \(frame.frameIndex) made missing preview image of type \(type)")
+                await MainActor.run {
+                    self.reloadID = UUID()
+                    self.existingImages.insert(type)
+                }
+            } catch {
+                Log.e("frame \(frame.frameIndex) unable to make missing preview image of type \(type) error: \(error)")
+            }
         }
     }
     
@@ -172,22 +205,20 @@ public class FrameViewModel {
         } else {
             ZStack {
                 initialImage
-                ProgressView()
+                ProgressView()  // XXX this is too small :(
                   .colorScheme(.dark)
             }
-              .onAppear {
-                  if let frame = self.frame {
-                      Task {
-                          try await frame.imageAccessor.makeMissingImage(
-                            frameIndex: frame.frameIndex,
-                            ofType: type,
-                            andSize: .preview
-                          )
-                          await MainActor.run {
-                              self.reloadID = UUID()
-                              self.existingImages.insert(type)
-                          }
-                      }
+              .task(id: reloadID) {
+                  Log.d("frame \(self.frame?.frameIndex ?? -1) missing image did appear")
+                  if let frame = self.frame,
+                     frame.imageAccessor.urlForImage(
+                       frameIndex: frame.frameIndex,
+                       ofType: type,
+                       atSize: .preview
+                     ) == nil
+                  {
+                      Log.d("frame \(frame.frameIndex) generating missing image")
+                      self.makeMissingImage(of: type, for: frame)
                   }
               }
         }

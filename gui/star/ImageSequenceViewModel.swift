@@ -1012,7 +1012,7 @@ public final class ImageSequenceViewModel {
         // called when we should check a frame
         callbacks.frameCheckClosure = { [weak self] newFrame in
             guard let self else { return }            
-            Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
+            //Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
             Task { @MainActor [weak self] in
                 await self?.addToViewModel(frame: newFrame)
             }
@@ -1308,7 +1308,7 @@ public final class ImageSequenceViewModel {
 
 
     func addToViewModel(frame newFrame: FrameAirplaneRemover) async {
-        Log.d("addToViewModel(frame: \(newFrame.frameIndex))")
+        //Log.d("addToViewModel(frame: \(newFrame.frameIndex))")
 
         if self.config == nil {
             Log.e("FUCK, config is nil")
