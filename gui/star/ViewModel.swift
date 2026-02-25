@@ -87,8 +87,6 @@ public final class ViewModel {
 
     var numberLoaded = 0
     var amountLoaded = 0.0      // 0.0...1.0
-    var numberPreviewsSaved = 0
-    var amountPreviewsSaved = 0.0 // 0.0...1.0
 
     var numberExtracted = 0
     var amountExtracted = 0.0 // 0.0...1.0
@@ -165,15 +163,11 @@ public final class ViewModel {
 
         numberLoaded = 0
         amountLoaded = 0.0
-        numberPreviewsSaved = 0
-        amountPreviewsSaved = 0.0
 
         let imageSequenceViewModel = try await ImageSequenceViewModel(
           viewModel: self, 
           withConfig: jsonConfigFilename
         ) { [weak self]
-            numberPreviewsSaved,
-            amountPreviewsSaved,
             numberLoaded,
             amountLoaded in
             
@@ -185,12 +179,6 @@ public final class ViewModel {
                 }
                 if numberLoaded != 0 {
                     self.numberLoaded = numberLoaded
-                }
-                if numberPreviewsSaved != 0 {
-                    self.numberPreviewsSaved = numberPreviewsSaved
-                }
-                if amountPreviewsSaved != 0 {
-                    self.amountPreviewsSaved = amountPreviewsSaved
                 }
             }
         }
@@ -207,13 +195,11 @@ public final class ViewModel {
 
         numberLoaded = 0
         amountLoaded = 0.0
-        numberPreviewsSaved = 0
-        amountPreviewsSaved = 0.0
         
         let imageSequenceViewModel = try await ImageSequenceViewModel(
           viewModel: self, 
           with: config
-        ) { [weak self] numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
+        ) { [weak self] numberLoaded, amountLoaded in
             guard let self else { return }
             Task { @MainActor in
                 if amountLoaded != 0 {
@@ -221,12 +207,6 @@ public final class ViewModel {
                 }
                 if numberLoaded != 0 {
                     self.numberLoaded = numberLoaded
-                }
-                if numberPreviewsSaved != 0 {
-                    self.numberPreviewsSaved = numberPreviewsSaved
-                }
-                if amountPreviewsSaved != 0 {
-                    self.amountPreviewsSaved = amountPreviewsSaved
                 }
             }
         }
@@ -246,28 +226,19 @@ public final class ViewModel {
         // XXX check to see if we should create previews here
         numberLoaded = 0
         amountLoaded = 0.0
-        numberPreviewsSaved = 0
-        amountPreviewsSaved = 0.0
-
         
         let imageSequenceViewModel =
           try await ImageSequenceViewModel(
             viewModel: self, 
             withNewImageSequence: imageSequenceDirname,
             and: videoInfo
-          ) { numberPreviewsSaved, amountPreviewsSaved, numberLoaded, amountLoaded in
+          ) { numberLoaded, amountLoaded in
             Task { @MainActor in
                 if amountLoaded != 0 {
                     self.amountLoaded = amountLoaded
                 }
                 if numberLoaded != 0 {
                     self.numberLoaded = numberLoaded
-                }
-                if numberPreviewsSaved != 0 {
-                    self.numberPreviewsSaved = numberPreviewsSaved
-                }
-                if amountPreviewsSaved != 0 {
-                    self.amountPreviewsSaved = amountPreviewsSaved
                 }
             }
         }

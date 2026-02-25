@@ -98,10 +98,6 @@ public enum InteractionMode: String, Equatable, CaseIterable {
 // used to limit processing of frames to this max concurrent number
 public let frameProcessingMonitor = FileSystemMonitor(max: 32) // XXX make this configurable
 
-// used for loading frames, loading 20 at a time is faster than 1000
-fileprivate let frameLoadMonitor = FileSystemMonitor(max: 100) // XXX make this configurable
-
-
 // view model for a sequence of images
 @MainActor @Observable
 public final class ImageSequenceViewModel {
@@ -615,7 +611,7 @@ public final class ImageSequenceViewModel {
     convenience init(
       viewModel: ViewModel,
       withConfig jsonConfigFilename: String,
-      closure: @escaping @Sendable (Int, Double, Int, Double) -> Void) async throws
+      closure: @escaping @Sendable (Int, Double) -> Void) async throws
     {
         Log.d("outlier_json_startup with \(jsonConfigFilename)")
         // first read config from json
@@ -632,7 +628,7 @@ public final class ImageSequenceViewModel {
       viewModel: ViewModel,
       withNewImageSequence imageSequenceDirname: String,
       and videoInfo: VideoInfo? = nil,
-      closure: @Sendable @escaping (Int, Double, Int, Double) -> Void) async throws
+      closure: @Sendable @escaping (Int, Double) -> Void) async throws
     {
         let shouldWriteOutlierGroupFiles = true // XXX see what happens
         
@@ -726,7 +722,7 @@ public final class ImageSequenceViewModel {
     init(
       viewModel: ViewModel,
       with configManager: ConfigManager,
-      closure: @Sendable @escaping (Int, Double, Int, Double) -> Void
+      closure: @Sendable @escaping (Int, Double) -> Void
     ) async throws {
         self.topViewModel = viewModel
         self.trashLevel = await constants.getTrashLevel()
@@ -841,10 +837,8 @@ public final class ImageSequenceViewModel {
       and callbacks: Callbacks,
       configManager: ConfigManager,
       config: Config,
-      closure: @Sendable @escaping (Int, Double, Int, Double) -> Void
+      closure: @Sendable @escaping (Int, Double) -> Void
     ) async throws {
-        var numberPreviewsSaved = 0
-
         Log.d("setup")
 
         var frameIndexToBaseNameMap: [Int: String] = [:]
@@ -869,45 +863,72 @@ public final class ImageSequenceViewModel {
 
 
         let imageInfo = try await imageSequence.getImageInfo()
-        
-        var frames: [FrameAirplaneRemover] = []
-        var numberOfLoadedFrames = 0
 
-        await frameGraphBuilder.set(configManager: configManager)
+
         
-        for (frameIndex, filename) in filenames.enumerated() {
-            let basename = removePath(fromString: filename)
-            let frame = try await frameLoadMonitor.load() {
-                //Log.d("running task at frameIndex \(frameIndex)")
-                return try await FrameAirplaneRemover(
-                  with: configManager,
-                  initialConfig: config,
-                  width: imageInfo.imageWidth,
-                  height: imageInfo.imageHeight,
-                  componentsPerPixel: imageInfo.componentsPerPixel,
-                  callbacks: callbacks,
-                  imageSequence: imageSequence,
-                  atIndex: frameIndex,
-                  outputFilename: "\(config.outputPath)/\(config.basename)",
-                  baseName: basename,
-                  writeOutputFiles: true,
-                  imageAccessor: imageAccessor
-                )
-            }
-            //Log.d("got frame at frameIndex \(frameIndex)")
-            if let callback = callbacks.frameCheckClosure { 
-                Task { @MainActor in 
-                    callback(frame)
+        await frameGraphBuilder.set(configManager: configManager)
+
+        let distributor = IndexDistributor(max: filenames.count)
+
+        func nextIndex() async -> Int? {
+            await distributor.nextIndex()
+        }
+
+        
+        let maxParallelism = min(ProcessInfo.processInfo.activeProcessorCount, 8)
+
+        let accumulator = FrameAccumulator()
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            // Create fixed number of workers
+            for _ in 0..<maxParallelism {
+                group.addTask {
+                    while true {
+                        // Atomically fetch next index
+                        let frameIndex: Int? = await nextIndex()
+                        guard let frameIndex else { break }
+
+                        let filename = filenames[frameIndex]
+                        let basename = removePath(fromString: filename)
+
+                        let frame = try await FrameAirplaneRemover(
+                              with: configManager,
+                              initialConfig: config,
+                              width: imageInfo.imageWidth,
+                              height: imageInfo.imageHeight,
+                              componentsPerPixel: imageInfo.componentsPerPixel,
+                              callbacks: callbacks,
+                              imageSequence: imageSequence,
+                              atIndex: frameIndex,
+                              outputFilename: "\(config.outputPath)/\(config.basename)",
+                              baseName: basename,
+                              writeOutputFiles: true,
+                              imageAccessor: imageAccessor
+                            )
+
+                        if let callback = callbacks.frameCheckClosure {
+                            Task { @MainActor in
+                                callback(frame)
+                            }
+                        }
+
+                        let loadedCount = await accumulator.append(frame)
+
+                        let update = Double(loadedCount) / Double(await self.imageSequenceSize)
+
+                        Task { @MainActor in
+                            self.frames[frameIndex].frame = frame
+                            closure(loadedCount, update)
+                        }
+
+                    }
                 }
             }
-            numberOfLoadedFrames += 1
-            frames.append(frame)
-            Task { @MainActor in
-                self.frames[frameIndex].frame = frame
-            }
-            let update = await Double(numberOfLoadedFrames)/Double(imageSequenceSize)
-            closure(numberPreviewsSaved, 1, numberOfLoadedFrames, update)
+
+            try await group.waitForAll()
         }
+
+        let frames = await accumulator.allFrames()
         
         // doubly link them here
         await doublyLink(frames: frames)
@@ -1895,3 +1916,31 @@ final class AppNapDisabler {
     }
 }
 
+// Shared state protected by actor
+actor FrameAccumulator {
+    var frames: [FrameAirplaneRemover] = []
+    var numberLoaded = 0
+
+    func append(_ frame: FrameAirplaneRemover) -> Int {
+        frames.append(frame)
+        numberLoaded += 1
+        return numberLoaded
+    }
+
+    func allFrames() -> [FrameAirplaneRemover] {
+        frames
+    }
+}
+
+actor IndexDistributor {
+    private var next = 0
+    private let max: Int
+
+    init(max: Int) { self.max = max }
+
+    func nextIndex() -> Int? {
+        guard next < max else { return nil }
+        defer { next += 1 }
+        return next
+    }
+}

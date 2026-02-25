@@ -309,7 +309,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         await self.setNumberOfAlignedFrames(with: initialConfig)
         await self.set(
           cleanMethod: initialConfig.cleanMethod(for: frameIndex),
-          process: false
+          process: false,
+          update: false
         )
         //Log.d("frame \(frameIndex) init mid")
         
@@ -3558,14 +3559,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public func set(cleanMethod: CleanMethod, process: Bool = true) async {
+    public func set(
+      cleanMethod: CleanMethod,
+      process: Bool = true,
+      update: Bool = true
+    ) async {
 
         var hasChanged = false
         
         var config = await configManager.config()
         config.pixelReplacementOverrides[self.frameIndex] = cleanMethod
-        await MainActor.run {
-            configManager.update(config)
+        if update {
+            await MainActor.run {
+                configManager.update(config)
+            }
         }
         hasChanged = await observer?.cleanMethod == cleanMethod
         await observer?.set(cleanMethod: cleanMethod)
