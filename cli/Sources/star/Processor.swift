@@ -79,12 +79,15 @@ public class Processor {
 
         var frames: [FrameAirplaneRemover] = []
         
+        await frameGraphBuilder.set(configManager: configManager)
+        
         for (frameIndex, filename) in filenames.enumerated() {
 
             Log.d("add task at frameIndex \(frameIndex)")
             let basename = removePath(fromString: filename)
             let frame = try await FrameAirplaneRemover(
               with: configManager,
+              initialConfig: config,
               width: imageInfo.imageWidth,
               height: imageInfo.imageHeight,
               componentsPerPixel: imageInfo.componentsPerPixel,
