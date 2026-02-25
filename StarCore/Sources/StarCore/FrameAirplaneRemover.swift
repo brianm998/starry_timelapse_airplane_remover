@@ -275,6 +275,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
     
     public init(with configManager: ConfigManager,
+                initialConfig: Config,
                 width: Int,
                 height: Int,
                 componentsPerPixel: Int,
@@ -304,12 +305,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         // call directly in init becuase didSet() isn't called from here :P
        
-        let config = await configManager.config()
         //Log.d("config.numberAlignedNeighborFrames \(config.numberAlignedNeighborFrames)")
-        await self.setNumberOfAlignedFrames()
-        await self.setNumberOfStaticNeighborFrames()
+        await self.setNumberOfAlignedFrames(with: initialConfig)
+        await self.setNumberOfStaticNeighborFrames(with: initialConfig)
         await self.set(
-          cleanMethod: config.cleanMethod(for: frameIndex),
+          cleanMethod: initialConfig.cleanMethod(for: frameIndex),
           process: false
         )
         //Log.d("frame \(frameIndex) init mid")
@@ -333,8 +333,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         await self.updateCombineSubjects()
         //Log.d("frame \(frameIndex) init end")
 
-        // really only needs to happen once
-        await frameGraphBuilder.set(configManager: self.configManager)
     }
 
     // threshold used for throwing out bad pixels before replacing with them
@@ -345,14 +343,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public func setNumberOfStaticNeighborFrames() async {
-        let config = await configManager.config()
-        self.staticNeighborFrames = calculateNeighborIndices(config.numberStaticNeighborFrames)
+    public func setNumberOfStaticNeighborFrames(with config: Config? = nil) async {
+        if let config {
+            self.staticNeighborFrames = calculateNeighborIndices(config.numberStaticNeighborFrames)
+        } else {
+            let config = await configManager.config()
+            self.staticNeighborFrames = calculateNeighborIndices(config.numberStaticNeighborFrames)
+        }
     }
     
-    public func setNumberOfAlignedFrames() async {
-        let config = await configManager.config()
-        self.alignmentFrames = calculateNeighborIndices(config.numberAlignedNeighborFrames)
+    public func setNumberOfAlignedFrames(with config: Config? = nil) async {
+        if let config {
+            self.alignmentFrames = calculateNeighborIndices(config.numberAlignedNeighborFrames)
+        } else {
+            let config = await configManager.config()
+            self.alignmentFrames = calculateNeighborIndices(config.numberAlignedNeighborFrames)
+        }
     }
     
     public func calculateNeighborIndices(_ alignmentNumber: Int) -> [Int] {
@@ -2335,7 +2341,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 // newer file format, default to this
                 return try await loadOutliersFromBinaryFile()
             } catch {
-                Log.i("frame \(frameIndex) failed to load outliers: \(error)")
+                //Log.i("frame \(frameIndex) failed to load outliers: \(error)")
                 // XXX log here
             }
 
