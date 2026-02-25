@@ -55,7 +55,6 @@ public class FrameSaveQueue {
 
                     // set number of aligned images
                     await frame.setNumberOfAlignedFrames()
-                    await frame.setNumberOfStaticNeighborFrames()
                     
                     try await frame.loadOutliers()
                     try await frame.finish()

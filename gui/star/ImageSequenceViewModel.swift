@@ -326,15 +326,6 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    // used when camera is not moving for merging horizons
-    var numberStaticNeighborFrames: Int {
-        didSet {
-            var realConfig = config.config()
-            realConfig.numberStaticNeighborFrames = numberStaticNeighborFrames
-            config.update(realConfig)
-        }
-    }
-
     // for alignment
     var numberOfAlignedNeighborFrames: Int {
         didSet {
@@ -756,7 +747,6 @@ public final class ImageSequenceViewModel {
         } 
 
         self.numberOfAlignedNeighborFrames = config.numberAlignedNeighborFrames
-        self.numberStaticNeighborFrames = config.numberStaticNeighborFrames
         self.horizonDetectionEnabled = config.horizonDetectionEnabled
         self.useCannyForHorizonDetection = config.useCannyForHorizonDetection ? .yes : .no
         self.horizonStripWidth = config.horizonStripWidth
@@ -1509,8 +1499,7 @@ public final class ImageSequenceViewModel {
             )
 
             await frameToClear.setNumberOfAlignedFrames()
-            await frameToClear.setNumberOfStaticNeighborFrames()
-
+           
             try await frameToClear.removeNumberOfAlignedImagesForThisFrameFile()
             
             Task { @MainActor in

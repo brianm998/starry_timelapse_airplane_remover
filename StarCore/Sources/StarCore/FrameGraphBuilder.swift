@@ -117,21 +117,41 @@ public final actor FrameGraphBuilder {
         // next assemble merged horizons, which each depend upon an array of
         // original horizon operations from above
         if hasHorizon {
-            for frameIndex in startIndex...lastIndex {
-                let frame = frames[frameIndex]
+            if config.tripodHeadWasMoving {
+                for frameIndex in startIndex...lastIndex {
+                    let frame = frames[frameIndex]
+                    let horizonOp = HorizonMergeOp(frame: frame) { errorString in
+                        errors.append(errorString)
+                        errorClosure(errorString)
+                    }
+                    horizonOp.queuePriority = .normal
+                    horizonOp.qualityOfService = .userInteractive
+                    mergedHorizonOps[frameIndex] = horizonOp
+                    for neighborIndex in await frame.getHorizonMergeIndices() {
+                        if let origHorizonOp = horizonOps[neighborIndex] {
+                            horizonOp.addDependency(origHorizonOp)
+                        } else {
+                            Log.w("frame \(neighborIndex) had no horizon op")
+                        }
+                    }
+                    queue.addOperation(horizonOp)
+                }
+            } else {
+                /*
+                 for static tripod:
+                   execute just one horizon merge op that
+                   depends upon all other horizon operations
+                 */
+                let frame = frames[startIndex]
                 let horizonOp = HorizonMergeOp(frame: frame) { errorString in
                     errors.append(errorString)
                     errorClosure(errorString)
                 }
                 horizonOp.queuePriority = .normal
                 horizonOp.qualityOfService = .userInteractive
-                mergedHorizonOps[frameIndex] = horizonOp
-                for neighborIndex in await frame.getHorizonMergeIndices() {
-                    if let origHorizonOp = horizonOps[neighborIndex] {
-                        horizonOp.addDependency(origHorizonOp)
-                    } else {
-                        Log.w("frame \(neighborIndex) had no horizon op")
-                    }
+                mergedHorizonOps[startIndex] = horizonOp
+                for op in horizonOps.values {
+                    horizonOp.addDependency(op)
                 }
                 queue.addOperation(horizonOp)
             }
@@ -154,10 +174,17 @@ public final actor FrameGraphBuilder {
             skyKP.queuePriority = .high
             skyKP.qualityOfService = .userInteractive
 
-            if hasHorizon, 
-               let horizonOp = mergedHorizonOps[frameIndex]
-            {
-                skyKP.addDependency(horizonOp)
+            if hasHorizon {
+                if config.tripodHeadWasMoving {
+                    if let horizonOp = mergedHorizonOps[frameIndex] {
+                        skyKP.addDependency(horizonOp)
+                    }
+                } else {
+                    // static video, single merged horizon op
+                    if let horizonOp = mergedHorizonOps[startIndex] {
+                        skyKP.addDependency(horizonOp)
+                    }
+                }
             }
             
             queue.addOperation(skyKP)

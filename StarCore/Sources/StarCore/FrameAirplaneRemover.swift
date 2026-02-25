@@ -307,7 +307,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
        
         //Log.d("config.numberAlignedNeighborFrames \(config.numberAlignedNeighborFrames)")
         await self.setNumberOfAlignedFrames(with: initialConfig)
-        await self.setNumberOfStaticNeighborFrames(with: initialConfig)
         await self.set(
           cleanMethod: initialConfig.cleanMethod(for: frameIndex),
           process: false
@@ -343,15 +342,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public func setNumberOfStaticNeighborFrames(with config: Config? = nil) async {
-        if let config {
-            self.staticNeighborFrames = calculateNeighborIndices(config.numberStaticNeighborFrames)
-        } else {
-            let config = await configManager.config()
-            self.staticNeighborFrames = calculateNeighborIndices(config.numberStaticNeighborFrames)
-        }
-    }
-    
     public func setNumberOfAlignedFrames(with config: Config? = nil) async {
         if let config {
             self.alignmentFrames = calculateNeighborIndices(config.numberAlignedNeighborFrames)
@@ -455,9 +445,19 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         let config = await configManager.config()
 
-        var neighborIndices = await self.getHorizonMergeIndices()
-        
+        var neighborIndices: [Int] = []
 
+        if config.tripodHeadWasMoving {
+            neighborIndices = await self.getHorizonMergeIndices()
+        } else {
+            // static video uses all frames
+            if let imageSequence {
+                neighborIndices = Array(0..<imageSequence.filenames.count)
+            } else {
+                Log.w("cannot get static neighbor indices without an image sequence")
+            }
+        }
+        
         // get the names of neighboring horizon masks
         let neighboringHorizons = neighborIndices.compactMap {
             self.imageAccessor.nameForImage(frameIndex: $0,
@@ -480,7 +480,48 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               atSizes: await self.outputSizes,
               overwrite: true
             )
+            if !config.tripodHeadWasMoving {
+                // for static videos link all the merged horizons together here
+                for size in await self.outputSizes {
+                    if let fromName = imageAccessor.nameForImage(
+                         frameIndex: frameIndex,
+                         ofType: .mergedHorizon,
+                         atSize: size
+                       )
+                    {
+                        for neighborIndex in neighborIndices {
+                            if neighborIndex != frameIndex {
+                                if let toName = imageAccessor.nameForImage(
+                                     frameIndex: neighborIndex,
+                                     ofType: .mergedHorizon,
+                                     atSize: size
+                                   )
+                                {
+                                    do {
+                                        try createHardLinkReplacingDestination(
+                                          from: fromName,
+                                          to: toName
+                                        )
+                                    } catch {
+                                        Log.w("cannot hard link \(fromName) to \(toName), trying copy")
+                                        try copyReplacingDestination(
+                                          from: fromName,
+                                          to: toName
+                                        )
+                                    }
+                                } else {
+                                    Log.w("unable to get name for merged horizon for frameIndex \(neighborIndex)")
+                                }
+                            }
+                        }
+                    } else {
+                        Log.w("unable to get name for merged horizon for frameIndex \(frameIndex)")
+                    }
+                }
+            }
+            
             let bounds = mergedHorizon.horizonBounds()
+            
             return HorizonMask(
               image: mergedHorizon,
               horizonTopY: bounds.topY,
