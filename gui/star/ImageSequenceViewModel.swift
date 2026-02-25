@@ -880,84 +880,60 @@ public final class ImageSequenceViewModel {
 
         let imageInfo = try await imageSequence.getImageInfo()
         
-        try await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
-            let semaphore = AsyncSemaphore(value: 30) // XXX constant XXX
-            for (frameIndex, filename) in filenames.enumerated() {
+        var frames: [FrameAirplaneRemover] = []
+        var numberOfLoadedFrames = 0
 
-                //Log.d("add task at frameIndex \(frameIndex)")
-
-                taskGroup.addTask() {
-                    await semaphore.wait()
-                    let basename = removePath(fromString: filename)
-                    let frame = try await frameLoadMonitor.load() {
-                        //Log.d("running task at frameIndex \(frameIndex)")
-                        return try await FrameAirplaneRemover(
-                          with: configManager,
-                          width: imageInfo.imageWidth,
-                          height: imageInfo.imageHeight,
-                          componentsPerPixel: imageInfo.componentsPerPixel,
-                          callbacks: callbacks,
-                          imageSequence: imageSequence,
-                          atIndex: frameIndex,
-                          outputFilename: "\(config.outputPath)/\(config.basename)",
-                          baseName: basename,
-                          writeOutputFiles: true,
-                          imageAccessor: imageAccessor
-                        )
-                    }
-                    //Log.d("got frame at frameIndex \(frameIndex)")
-                    if let callback = callbacks.frameCheckClosure { 
-                        Task { @MainActor in 
-                            callback(frame)
-                        }
-                    }
-                    semaphore.signal()
-                    return frame
+        await frameGraphBuilder.set(configManager: configManager)
+        
+        for (frameIndex, filename) in filenames.enumerated() {
+            let basename = removePath(fromString: filename)
+            let frame = try await frameLoadMonitor.load() {
+                //Log.d("running task at frameIndex \(frameIndex)")
+                return try await FrameAirplaneRemover(
+                  with: configManager,
+                  initialConfig: config,
+                  width: imageInfo.imageWidth,
+                  height: imageInfo.imageHeight,
+                  componentsPerPixel: imageInfo.componentsPerPixel,
+                  callbacks: callbacks,
+                  imageSequence: imageSequence,
+                  atIndex: frameIndex,
+                  outputFilename: "\(config.outputPath)/\(config.basename)",
+                  baseName: basename,
+                  writeOutputFiles: true,
+                  imageAccessor: imageAccessor
+                )
+            }
+            //Log.d("got frame at frameIndex \(frameIndex)")
+            if let callback = callbacks.frameCheckClosure { 
+                Task { @MainActor in 
+                    callback(frame)
                 }
             }
-
-            var incomingFrames = await [FrameAirplaneRemover?](
-              repeating: nil,
-              count: imageSequence.filenames.count
-            )
-
-            var numberOfLoadedFrames = 0
-            
-            for try await frame in taskGroup {
-                numberOfLoadedFrames += 1
-                //Log.d("numberOfLoadedFrames \(numberOfLoadedFrames)")
-                // call the callback here on the main thread
-                let update = await Double(numberOfLoadedFrames)/Double(imageSequenceSize)
-                closure(numberPreviewsSaved, 1, numberOfLoadedFrames, update)
-                incomingFrames[frame.frameIndex] = frame
-            }
-
-            var frames: [FrameAirplaneRemover] = []
-
-            for frame in incomingFrames {
-                if let frame {
-                    frames.append(frame)
-                } else {
-                    fatalError("FUCK")
-                }
-            }
-            
-            // doubly link them here
-            await doublyLink(frames: frames)
-
-            Log.d("done loading image sequence")
-            
+            numberOfLoadedFrames += 1
+            frames.append(frame)
             Task { @MainActor in
-                self.initialLoadInProgress = false
+                self.frames[frameIndex].frame = frame
             }
+            let update = await Double(numberOfLoadedFrames)/Double(imageSequenceSize)
+            closure(numberPreviewsSaved, 1, numberOfLoadedFrames, update)
+        }
+        
+        // doubly link them here
+        await doublyLink(frames: frames)
+
+        Log.d("done loading image sequence")
+        
+        Task { @MainActor in
+            self.initialLoadInProgress = false
         }
 
-        let separateFrames = await MainActor.run { frames }
+        let separateFrames = await MainActor.run { self.frames }
 
         Task { @MainActor in
             for frame in frames {
                 if frame.frameIndex == currentIndex {
-                    switch frame.cleanMethod {
+                    switch await frame.cleanMethod {
                     case .automatic(let useOutliers): 
                         currentFrameHighLevelCleanMethod = .automatic
                         currentFrameAutoPreservationMode = useOutliers ? .yes : .no
