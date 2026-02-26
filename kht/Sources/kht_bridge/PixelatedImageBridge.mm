@@ -138,7 +138,7 @@ extern cv::Mat ensure8U(const cv::Mat& input);
 + (MatWrapper *)groundOnlyFrom:(MatWrapper *)image {
   @try {
     try {
-      Log_d(@"groundOnlyFrom started");
+      //Log_d(@"groundOnlyFrom started");
 
       cv::Mat mat = image.mat;
 
@@ -226,7 +226,7 @@ extern cv::Mat ensure8U(const cv::Mat& input);
 + (MatWrapper *)skyOnlyFrom:(MatWrapper *)image {
   @try {
     try {
-      Log_d(@"groundOnlyFrom started");
+      //Log_d(@"groundOnlyFrom started");
 
       cv::Mat mat = image.mat;
 
@@ -281,12 +281,12 @@ extern cv::Mat ensure8U(const cv::Mat& input);
 + (HorizonResult *)horizonExtentsFromImage:(MatWrapper *)image {
   @try {
     try {
-      Log_d(@"horizonExtentsFromImage started");
+      //Log_d(@"horizonExtentsFromImage started");
 
       cv::Mat mat = image.mat;
 
       if (mat.empty()) {
-        Log_d(@"mat was empty :(");
+        Log_w(@"mat was empty :(");
         return nil;
       }
       
@@ -302,7 +302,7 @@ extern cv::Mat ensure8U(const cv::Mat& input);
       } else if (owned.channels() == 1) {
         gray = owned; // already grayscale
       } else {
-        Log_d(@"Unsupported channel count: %d", owned.channels());
+        Log_w(@"Unsupported channel count: %d", owned.channels());
         return nil;
       }
 
@@ -326,7 +326,7 @@ extern cv::Mat ensure8U(const cv::Mat& input);
       }
 
       //delete matPtr;
-      Log_d(@"horizonExtentsFromImage done");
+      //Log_d(@"horizonExtentsFromImage done");
       
       return [[HorizonResult alloc]
                initWithHorizonTopY: horizonTopY
