@@ -9,6 +9,7 @@ public final class OutlierOp: AsyncOperation, @unchecked Sendable {
         self.frame = frame
         self.errorClosure = errorClosure
         super.init(for: .outliers)
+        self.name = "outliers for frame \(frame.frameIndex)"
     }
 
     public override func execute() {

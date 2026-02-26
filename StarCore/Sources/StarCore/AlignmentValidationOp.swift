@@ -19,6 +19,7 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         self.configManager = configManager
         self.errorClosure = errorClosure
         super.init(for: .alignmentValidation)
+        self.name = "alignment validation"
     }
 
     override func execute() {

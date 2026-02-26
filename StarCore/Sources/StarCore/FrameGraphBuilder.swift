@@ -28,7 +28,7 @@ public final actor FrameGraphBuilder {
     // MARK: Queues (user adjustable)
     let queue = OperationQueue()
 
-    let keypointLimiter = KeypointLimiter(maxConcurrent: 10) // XXX use other value
+    let keypointLimiter = KeypointLimiter(max: 10) // XXX use other value
 
     public init() {
         queue.name = "operations"
@@ -48,11 +48,9 @@ public final actor FrameGraphBuilder {
     
     public func update(from config: Config) {
         queue.maxConcurrentOperationCount = config.numberOfFramesToProcessConcurrently
-        Task {
-            await keypointLimiter.set(
-              maxConcurrent: config.maxConcurrentKeypointCalculations
-            )
-        }
+        keypointLimiter.set(
+          max: config.maxConcurrentKeypointCalculations
+        )
     }
 
     public func add(operation: Operation) {

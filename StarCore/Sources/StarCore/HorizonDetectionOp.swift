@@ -12,6 +12,7 @@ final class HorizonDetectionOp: AsyncOperation, @unchecked Sendable {
         self.frame = frame
         self.errorClosure = errorClosure
         super.init(for: .horizon)
+        self.name = "horizon detect frame \(frame.frameIndex)"
     }
 
     override func execute() {

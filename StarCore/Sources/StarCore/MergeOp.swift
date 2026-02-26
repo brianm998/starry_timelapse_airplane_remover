@@ -9,9 +9,10 @@ public final class MergeOp: AsyncOperation, @unchecked Sendable {
         self.frame = frame
         self.errorClosure = errorClosure
         super.init(for: .merge)
+        self.name = "merge frame \(frame.frameIndex)"
     }
 
-  public override func execute() {
+    public override func execute() {
         task = Task {
             defer {
                 Log.d("frame \(frame.frameIndex) end")

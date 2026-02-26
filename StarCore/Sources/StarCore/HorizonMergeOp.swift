@@ -12,11 +12,15 @@ final class HorizonMergeOp: AsyncOperation, @unchecked Sendable {
         self.frame = frame
         self.errorClosure = errorClosure
         super.init(for: .mergedHorizon)
+        self.name = "horizon merge frame \(frame.frameIndex)"
     }
 
     override func execute() {
         task = Task {
-            defer { finish() }
+            defer {
+                Log.d("frame \(frame.frameIndex) end")
+                finish()
+            }
             do {
                 Log.d("frame \(frame.frameIndex) starting")
                 _ = try await frame.loadOrCreateFinalHorizonMask()

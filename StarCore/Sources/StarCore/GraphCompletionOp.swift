@@ -5,6 +5,8 @@ final class GraphCompletionOp: Operation, @unchecked Sendable {
 
     init(completion: @escaping () -> Void) {
         self.completion = completion
+        super.init()
+        self.name = "Completion" 
     }
 
     override func main() {

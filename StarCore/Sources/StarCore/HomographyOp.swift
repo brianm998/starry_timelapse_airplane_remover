@@ -17,8 +17,10 @@ final class HomographyOp: AsyncOperation, @unchecked Sendable {
         self.errorClosure = errorClosure
         if forStars {
             super.init(for: .starHomography)
+            self.name = "star homography for frame \(frame.frameIndex)"
         } else {
             super.init(for: .earthHomography)
+            self.name = "earth homography for frame \(frame.frameIndex)"
         }
     }
 
