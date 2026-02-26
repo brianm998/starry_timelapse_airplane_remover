@@ -93,6 +93,8 @@ public final actor FrameGraphBuilder {
         var lastIndex = frames.count - 1
         if let endIndex { lastIndex = endIndex }
 
+        var allOps: [Operation] = []
+        
         Log.d("processing from frameIndex \(startIndex) to \(lastIndex)")
 
         // First assemble initial horizon operations,
@@ -109,7 +111,7 @@ public final actor FrameGraphBuilder {
                 }
                 horizonOp.queuePriority = .low
                 horizonOp.qualityOfService = .userInteractive
-                queue.addOperation(horizonOp)
+                allOps.append(horizonOp)
                 horizonOps[frameIndex] = horizonOp
             }
         }
@@ -134,7 +136,7 @@ public final actor FrameGraphBuilder {
                             Log.w("frame \(neighborIndex) had no horizon op")
                         }
                     }
-                    queue.addOperation(horizonOp)
+                    allOps.append(horizonOp)
                 }
             } else {
                 /*
@@ -153,7 +155,7 @@ public final actor FrameGraphBuilder {
                 for op in horizonOps.values {
                     horizonOp.addDependency(op)
                 }
-                queue.addOperation(horizonOp)
+                allOps.append(horizonOp)
             }
         }
 
@@ -187,7 +189,7 @@ public final actor FrameGraphBuilder {
                 }
             }
             
-            queue.addOperation(skyKP)
+            allOps.append(skyKP)
             skyKeypointOps[frame.frameIndex] = skyKP
             
             // 2b. Earth keypoints (optional)
@@ -204,7 +206,7 @@ public final actor FrameGraphBuilder {
                 kp.queuePriority = .high
                 kp.qualityOfService = .userInteractive
                 kp.addDependency(skyKP)
-                queue.addOperation(kp)
+                allOps.append(kp)
                 earthKeypointOps[frame.frameIndex] = kp
             }
         }
@@ -236,7 +238,7 @@ public final actor FrameGraphBuilder {
                 }
             }
 
-            queue.addOperation(skyH)
+            allOps.append(skyH)
             homographyOps.append(skyH)
 
             // ---- Earth-aligned homography (optional) ----
@@ -261,7 +263,7 @@ public final actor FrameGraphBuilder {
                     }
                 }
 
-                queue.addOperation(earthH)
+                allOps.append(earthH)
                 homographyOps.append(earthH)
             }
         }
@@ -281,7 +283,7 @@ public final actor FrameGraphBuilder {
         validationOp.qualityOfService = .userInteractive
         Log.d("\(homographyOps.count) homographyOps")
         homographyOps.forEach { validationOp.addDependency($0) }
-        queue.addOperation(validationOp)
+        allOps.append(validationOp)
 
         // how many in each direction for final outlier classification 
         let numOutlierNeighbors = config.numberFinalProcessingNeighborsNeeded            
@@ -298,7 +300,7 @@ public final actor FrameGraphBuilder {
                 }
 
                 outlierOp.addDependency(validationOp)
-                queue.addOperation(outlierOp)
+                allOps.append(outlierOp)
                 outlierOps[frame.frameIndex] = outlierOp
             }
         }
@@ -329,11 +331,9 @@ public final actor FrameGraphBuilder {
                 }
             }
             
-            queue.addOperation(mergeOp)
+            allOps.append(mergeOp)
             mergeOps.append(mergeOp)
         }
-
-        // add a step here for selecive processing 
 
         // 6. runs after all have finished
         let completionOp = GraphCompletionOp {
@@ -342,6 +342,59 @@ public final actor FrameGraphBuilder {
         }
         Log.d("\(mergeOps.count) mergeOps")
         mergeOps.forEach { completionOp.addDependency($0) }
-        queue.addOperation(completionOp)
+        allOps.append(completionOp)
+
+        for op in allOps {
+            queue.addOperation(op)
+        }
+        
+        /*
+         Task {
+         while true {
+         Log.d("OperationQueue Debug start")
+         debugPrint(operationQueue: queue)
+         try? await Task.sleep(nanoseconds: 10_000_000_000)
+         }
+         }
+         */
+    }
+    
+    public func debugPrint() {
+        Log.d("========== OperationQueue ==========")
+        Log.d("Name: \(queue.name ?? "nil")")
+        Log.d("Max Concurrent Operation Count: \(queue.maxConcurrentOperationCount)")
+        Log.d("Quality of Service: \(queue.qualityOfService)")
+        Log.d("Is Suspended: \(queue.isSuspended)")
+        Log.d("Operation Count: \(queue.operationCount)")
+        Log.d("------------------------------------")
+
+        let operations = queue.operations
+
+        for (index, op) in operations.enumerated() {
+            Log.d("Operation #\(index):")
+            Log.d("  Name: \(op.name ?? "nil")")
+            Log.d("  Class: \(type(of: op))")
+            Log.d("  isReady: \(op.isReady)")
+            Log.d("  isExecuting: \(op.isExecuting)")
+            Log.d("  isFinished: \(op.isFinished)")
+            Log.d("  isCancelled: \(op.isCancelled)")
+            Log.d("  queuePriority: \(op.queuePriority)")
+            Log.d("  qualityOfService: \(op.qualityOfService)")
+            Log.d("  completionBlock set: \(op.completionBlock != nil)")
+
+            if !op.dependencies.isEmpty {
+                Log.d("  Dependencies:")
+                for dep in op.dependencies {
+                    Log.d("    - \(dep.name ?? "unnamed") [\(type(of: dep))] finished: \(dep.isFinished)")
+                }
+            } else {
+                Log.d("  Dependencies: none")
+            }
+
+            Log.d("------------------------------------")
+        }
+
+        Log.d("====================================")
     }
 }
+
