@@ -605,6 +605,11 @@ public struct Config: Codable, Sendable, Transferable {
     //        added alignment validation to estimate alignment for frames without enough stars
     //        bug fixes, runs a lot faster, less ram (hopefully)
     //        resurrected CLI
+    // 0.10.7 adaptive horizon detection
+    //        resurrected merged horizons
+    //        finds best static horizon
+    //        much faster preview generation in GUI
+    //        much faster startup in GUI
     
     public var starVersion = Config.latestVersion
 
