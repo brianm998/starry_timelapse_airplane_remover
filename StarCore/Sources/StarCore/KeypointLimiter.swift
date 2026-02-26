@@ -1,35 +1,33 @@
 import Foundation
 
-public actor KeypointLimiter {
-    private var available: Int
+
+final class KeypointLimiter {
     private var max: Int
-    private var waiters: [() -> Void] = []
-    
-    public init(maxConcurrent: Int) {
-        self.available = maxConcurrent
-        self.max = maxConcurrent
+    private let lock = NSLock()
+    private var current = 0
+
+    init(max: Int) {
+        self.max = max
+    }
+
+    func set(max: Int) {
+        lock.lock()
+        self.max = max
+        lock.unlock() 
     }
     
-    public func set(maxConcurrent newMax: Int) {
-        let diff = newMax - max
-        self.available += diff
+    func tryAcquire() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if current >= max { return false }
+        current += 1
+        return true
     }
-    
-    public func acquire(_ block: @escaping () -> Void) {
-        if self.available > 0 {
-            self.available -= 1
-            block()
-        } else {
-            self.waiters.append(block)
-        }
-    }
-    
-    public func release() {
-        if let next = self.waiters.first {
-            self.waiters.removeFirst()
-            next()
-        } else {
-            self.available += 1
-        }
+
+    func release() {
+        lock.lock()
+        current -= 1
+        lock.unlock()
     }
 }

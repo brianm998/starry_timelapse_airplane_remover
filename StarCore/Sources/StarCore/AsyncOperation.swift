@@ -2,7 +2,7 @@ import Foundation
 
 open class AsyncOperation: Operation {
 
-    private enum State: String {
+    internal enum State: String {
         case ready
         case executing
         case finished
@@ -12,7 +12,7 @@ open class AsyncOperation: Operation {
 
     private let stateQueue = DispatchQueue(label: "async.op.state", attributes: .concurrent)
 
-    private let type: OperationType
+    internal let type: OperationType
     public var task: Task<Void, any Error>?
     
     private var _state: State = .ready
@@ -55,9 +55,13 @@ open class AsyncOperation: Operation {
         true
     }
 
+    public func setExecuting() {
+        state = .executing
+    }
+    
     override public func start() {
         if isCancelled {
-            state = .finished
+            self.finish()
             return
         }
 

@@ -20,9 +20,20 @@ final class KeypointOp: AsyncOperation, @unchecked Sendable {
         self.errorClosure = errorClosure
         if forStars {
             super.init(for: .starKeypoints)
+            self.name = "star keypoints for frame \(frame.frameIndex)"
         } else {
             super.init(for: .earthKeypoints)
+            self.name = "earth keypoints for frame \(frame.frameIndex)"
         }
+    }
+
+    override var isReady: Bool {
+        super.isReady && limiter.tryAcquire()
+    }
+
+    override func finish() {
+        limiter.release()
+        super.finish()
     }
 
     override func execute() {
@@ -31,6 +42,7 @@ final class KeypointOp: AsyncOperation, @unchecked Sendable {
                 Log.d("frame \(frame.frameIndex) end")
                 finish()
             }
+
             do {
                 Log.d("frame \(frame.frameIndex) start")
                 _ = try await frame.loadOrCreateOCVFeatures(of: mode)
@@ -43,28 +55,4 @@ final class KeypointOp: AsyncOperation, @unchecked Sendable {
         }
     }
 
-    override public func start() {
-        if isCancelled {
-            isFinished = true
-            return
-        }
-
-        Task {
-            // DO NOT set isExecuting yet.
-            await limiter.acquire { [weak self] in
-                guard let self else { return }
-
-                Task {
-                    if self.isCancelled {
-                        await self.limiter.release()
-                        self.isFinished = true
-                        return
-                    }
-
-                    self.isExecuting = true
-                    self.execute()
-                }
-            }
-        }
-    }
 }
