@@ -477,7 +477,7 @@ static NSUInteger _totalInstances = 0;
 - (void)writeTo:(NSString*)filename {
   @try {
     try {
-      Log_e(@"writeTo: %@", filename);
+      Log_d(@"writeTo: %@", filename);
 
       std::string fname([filename UTF8String]);
 
