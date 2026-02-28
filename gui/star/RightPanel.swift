@@ -326,7 +326,16 @@ struct RightPanel: View {
                               .disabled(frameView.outlierViews == nil ||
                                           viewModel.renderingCurrentFrame)
 
-
+                            // used for debugging stuck operation queue
+/*
+                            Button {
+                                Task { 
+                                   await frameGraphBuilder.debugPrint()
+                                }
+                            } label: {
+                                Text("Log Operation Queue")
+                            }
+  */                          
                             // enable logging
                             HStack(spacing: 0) {
                                 Toggle(isOn: $loggingViewModel.fileLogEnabled) {
