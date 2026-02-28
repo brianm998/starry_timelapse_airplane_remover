@@ -475,8 +475,65 @@ static NSUInteger _totalInstances = 0;
 }
 
 - (void)writeTo:(NSString*)filename {
-  cv::imwrite(std::string([filename UTF8String]), _mat);
+  @try {
+    try {
+      Log_e(@"writeTo: %@", filename);
+
+      std::string fname([filename UTF8String]);
+
+      // ---- Extract extension ----
+      std::string extension;
+      std::string base;
+
+      size_t dotPos = fname.find_last_of('.');
+      if (dotPos != std::string::npos && dotPos > fname.find_last_of("/\\")) {
+        extension = fname.substr(dotPos + 1);   // without the dot
+        base = fname.substr(0, dotPos);
+      } else {
+        // No extension found
+        extension = "";
+        base = fname;
+      }
+
+      // ---- Construct temp filename ----
+      std::string tmp;
+      if (!extension.empty()) {
+        tmp = base + ".tmp." + extension;
+      } else {
+        tmp = fname + ".tmp";
+      }
+
+      if (_mat.empty()) {
+        Log_w(@"not writing empty mat to %@", filename);
+        return;
+      }
+
+      // ---- Write file ----
+      cv::imwrite(tmp, _mat);
+
+      // ---- Ensure data hits disk ----
+      int fd = open(tmp.c_str(), O_RDONLY);
+      if (fd >= 0) {
+        fsync(fd);
+        close(fd);
+      } else {
+        Log_e(@"writeTo: failed to open temp file for fsync: %@", filename);
+      }
+
+      // ---- Atomic rename ----
+      if (rename(tmp.c_str(), fname.c_str()) != 0) {
+        Log_e(@"writeTo: rename failed for %@", filename);
+      }
+
+    } catch (const cv::Exception &e) {
+      Log_e(@"writeTo: %@ OpenCV Exception: %s", filename, e.what());
+    }
+  } @catch (NSException *exception) {
+    Log_e(@"writeTo: %@ Objective-C Exception: %@", filename, exception);
+  }
 }
+
+
 
 - (instancetype)initWithWidth:(NSInteger)width
                        height:(NSInteger)height
