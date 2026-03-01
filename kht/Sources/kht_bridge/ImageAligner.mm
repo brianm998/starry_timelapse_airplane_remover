@@ -90,7 +90,55 @@ static inline T clamp_cast_int(int v) {
 }
 
 // -----------------------------------------------------------------------------
-// Core median logic applied to either CV_8U or CV_16U using templates
+// Sorting networks for small fixed N.
+// A sorting network is a fixed sequence of compare-and-swap operations with no
+// branches or loops. For small N this is much faster than std::sort because:
+//   - no function call overhead or recursion
+//   - fully predictable branch pattern (compiler can use cmov)
+//   - fits in registers / L1 cache
+// Generated with the optimal-network tables from Knuth Vol 3.
+// -----------------------------------------------------------------------------
+#define CSWAP(a,b) do { if ((a)>(b)) { int _t=(a);(a)=(b);(b)=_t; } } while(0)
+
+static inline void sort2(int* v)  { CSWAP(v[0],v[1]); }
+static inline void sort3(int* v)  { CSWAP(v[0],v[1]); CSWAP(v[0],v[2]); CSWAP(v[1],v[2]); }
+static inline void sort4(int* v)  { CSWAP(v[0],v[1]); CSWAP(v[2],v[3]); CSWAP(v[0],v[2]); CSWAP(v[1],v[3]); CSWAP(v[1],v[2]); }
+static inline void sort5(int* v)  { CSWAP(v[0],v[1]); CSWAP(v[2],v[3]); CSWAP(v[0],v[2]); CSWAP(v[1],v[4]); CSWAP(v[0],v[1]); CSWAP(v[2],v[3]); CSWAP(v[1],v[2]); CSWAP(v[3],v[4]); CSWAP(v[2],v[3]); }
+static inline void sort6(int* v)  { CSWAP(v[1],v[2]); CSWAP(v[4],v[5]); CSWAP(v[0],v[2]); CSWAP(v[3],v[5]); CSWAP(v[0],v[1]); CSWAP(v[3],v[4]); CSWAP(v[2],v[5]); CSWAP(v[0],v[3]); CSWAP(v[1],v[4]); CSWAP(v[2],v[4]); CSWAP(v[1],v[3]); CSWAP(v[2],v[3]); }
+static inline void sort7(int* v)  { CSWAP(v[1],v[2]); CSWAP(v[3],v[4]); CSWAP(v[5],v[6]); CSWAP(v[0],v[2]); CSWAP(v[3],v[5]); CSWAP(v[4],v[6]); CSWAP(v[0],v[1]); CSWAP(v[4],v[5]); CSWAP(v[2],v[6]); CSWAP(v[0],v[4]); CSWAP(v[1],v[5]); CSWAP(v[2],v[5]); CSWAP(v[0],v[3]); CSWAP(v[1],v[3]); CSWAP(v[2],v[4]); CSWAP(v[2],v[3]); }
+static inline void sort8(int* v)  { CSWAP(v[0],v[1]); CSWAP(v[2],v[3]); CSWAP(v[4],v[5]); CSWAP(v[6],v[7]); CSWAP(v[0],v[2]); CSWAP(v[1],v[3]); CSWAP(v[4],v[6]); CSWAP(v[5],v[7]); CSWAP(v[1],v[2]); CSWAP(v[5],v[6]); CSWAP(v[0],v[4]); CSWAP(v[3],v[7]); CSWAP(v[1],v[5]); CSWAP(v[2],v[6]); CSWAP(v[1],v[4]); CSWAP(v[3],v[6]); CSWAP(v[2],v[4]); CSWAP(v[3],v[5]); CSWAP(v[3],v[4]); }
+static inline void sort9(int* v)  { CSWAP(v[0],v[1]); CSWAP(v[3],v[4]); CSWAP(v[6],v[7]); CSWAP(v[1],v[2]); CSWAP(v[4],v[5]); CSWAP(v[7],v[8]); CSWAP(v[0],v[1]); CSWAP(v[3],v[4]); CSWAP(v[6],v[7]); CSWAP(v[0],v[3]); CSWAP(v[3],v[6]); CSWAP(v[0],v[3]); CSWAP(v[1],v[4]); CSWAP(v[4],v[7]); CSWAP(v[1],v[4]); CSWAP(v[2],v[5]); CSWAP(v[5],v[8]); CSWAP(v[2],v[5]); CSWAP(v[1],v[3]); CSWAP(v[5],v[7]); CSWAP(v[2],v[6]); CSWAP(v[4],v[6]); CSWAP(v[2],v[4]); CSWAP(v[2],v[3]); CSWAP(v[5],v[6]); }
+static inline void sort10(int* v) { CSWAP(v[0],v[1]); CSWAP(v[2],v[3]); CSWAP(v[4],v[5]); CSWAP(v[6],v[7]); CSWAP(v[8],v[9]); CSWAP(v[0],v[2]); CSWAP(v[1],v[3]); CSWAP(v[4],v[6]); CSWAP(v[5],v[7]); CSWAP(v[0],v[4]); CSWAP(v[1],v[5]); CSWAP(v[2],v[6]); CSWAP(v[3],v[7]); CSWAP(v[0],v[8]); CSWAP(v[1],v[9]); CSWAP(v[1],v[4]); CSWAP(v[3],v[6]); CSWAP(v[2],v[8]); CSWAP(v[3],v[9]); CSWAP(v[2],v[4]); CSWAP(v[3],v[5]); CSWAP(v[6],v[8]); CSWAP(v[7],v[9]); CSWAP(v[3],v[4]); CSWAP(v[5],v[6]); CSWAP(v[7],v[8]); }
+static inline void sort11(int* v) { CSWAP(v[0],v[1]); CSWAP(v[2],v[3]); CSWAP(v[4],v[5]); CSWAP(v[6],v[7]); CSWAP(v[8],v[9]); CSWAP(v[1],v[3]); CSWAP(v[5],v[7]); CSWAP(v[0],v[2]); CSWAP(v[4],v[6]); CSWAP(v[8],v[10]); CSWAP(v[1],v[2]); CSWAP(v[5],v[6]); CSWAP(v[9],v[10]); CSWAP(v[0],v[4]); CSWAP(v[3],v[7]); CSWAP(v[1],v[5]); CSWAP(v[2],v[6]); CSWAP(v[0],v[8]); CSWAP(v[4],v[9]); CSWAP(v[0],v[4]); CSWAP(v[1],v[4]); CSWAP(v[7],v[10]); CSWAP(v[3],v[8]); CSWAP(v[2],v[8]); CSWAP(v[3],v[9]); CSWAP(v[6],v[10]); CSWAP(v[2],v[4]); CSWAP(v[3],v[5]); CSWAP(v[6],v[8]); CSWAP(v[7],v[9]); CSWAP(v[3],v[4]); CSWAP(v[5],v[6]); CSWAP(v[7],v[8]); }
+static inline void sort12(int* v) { CSWAP(v[0],v[1]); CSWAP(v[2],v[3]); CSWAP(v[4],v[5]); CSWAP(v[6],v[7]); CSWAP(v[8],v[9]); CSWAP(v[10],v[11]); CSWAP(v[1],v[3]); CSWAP(v[5],v[7]); CSWAP(v[9],v[11]); CSWAP(v[0],v[2]); CSWAP(v[4],v[6]); CSWAP(v[8],v[10]); CSWAP(v[1],v[2]); CSWAP(v[5],v[6]); CSWAP(v[9],v[10]); CSWAP(v[0],v[4]); CSWAP(v[3],v[7]); CSWAP(v[8],v[11]); CSWAP(v[1],v[5]); CSWAP(v[2],v[6]); CSWAP(v[4],v[8]); CSWAP(v[7],v[11]); CSWAP(v[0],v[4]); CSWAP(v[3],v[8]); CSWAP(v[1],v[4]); CSWAP(v[7],v[10]); CSWAP(v[2],v[8]); CSWAP(v[3],v[9]); CSWAP(v[2],v[4]); CSWAP(v[7],v[9]); CSWAP(v[3],v[5]); CSWAP(v[6],v[8]); CSWAP(v[3],v[4]); CSWAP(v[5],v[6]); CSWAP(v[7],v[8]); }
+static inline void sort13(int* v) { CSWAP(v[1],v[7]); CSWAP(v[9],v[11]); CSWAP(v[3],v[4]); CSWAP(v[5],v[8]); CSWAP(v[0],v[12]); CSWAP(v[2],v[6]); CSWAP(v[0],v[1]); CSWAP(v[2],v[3]); CSWAP(v[4],v[6]); CSWAP(v[8],v[11]); CSWAP(v[7],v[12]); CSWAP(v[5],v[9]); CSWAP(v[0],v[2]); CSWAP(v[3],v[7]); CSWAP(v[10],v[11]); CSWAP(v[1],v[4]); CSWAP(v[6],v[12]); CSWAP(v[7],v[8]); CSWAP(v[11],v[12]); CSWAP(v[4],v[9]); CSWAP(v[6],v[10]); CSWAP(v[3],v[4]); CSWAP(v[5],v[6]); CSWAP(v[8],v[9]); CSWAP(v[10],v[11]); CSWAP(v[1],v[7]); CSWAP(v[2],v[6]); CSWAP(v[9],v[11]); CSWAP(v[1],v[3]); CSWAP(v[4],v[7]); CSWAP(v[8],v[10]); CSWAP(v[0],v[5]); CSWAP(v[2],v[5]); CSWAP(v[6],v[8]); CSWAP(v[9],v[10]); CSWAP(v[1],v[2]); CSWAP(v[3],v[5]); CSWAP(v[7],v[8]); CSWAP(v[4],v[6]); CSWAP(v[2],v[3]); CSWAP(v[4],v[5]); CSWAP(v[6],v[7]); CSWAP(v[8],v[9]); CSWAP(v[3],v[4]); CSWAP(v[5],v[6]); }
+static inline void sort16(int* v) { CSWAP(v[0],v[1]); CSWAP(v[2],v[3]); CSWAP(v[4],v[5]); CSWAP(v[6],v[7]); CSWAP(v[8],v[9]); CSWAP(v[10],v[11]); CSWAP(v[12],v[13]); CSWAP(v[14],v[15]); CSWAP(v[0],v[2]); CSWAP(v[1],v[3]); CSWAP(v[4],v[6]); CSWAP(v[5],v[7]); CSWAP(v[8],v[10]); CSWAP(v[9],v[11]); CSWAP(v[12],v[14]); CSWAP(v[13],v[15]); CSWAP(v[0],v[4]); CSWAP(v[1],v[5]); CSWAP(v[2],v[6]); CSWAP(v[3],v[7]); CSWAP(v[8],v[12]); CSWAP(v[9],v[13]); CSWAP(v[10],v[14]); CSWAP(v[11],v[15]); CSWAP(v[0],v[8]); CSWAP(v[1],v[9]); CSWAP(v[2],v[10]); CSWAP(v[3],v[11]); CSWAP(v[4],v[12]); CSWAP(v[5],v[13]); CSWAP(v[6],v[14]); CSWAP(v[7],v[15]); CSWAP(v[5],v[10]); CSWAP(v[6],v[9]); CSWAP(v[3],v[12]); CSWAP(v[7],v[11]); CSWAP(v[4],v[8]); CSWAP(v[13],v[14]); CSWAP(v[1],v[2]); CSWAP(v[1],v[4]); CSWAP(v[7],v[13]); CSWAP(v[2],v[8]); CSWAP(v[11],v[14]); CSWAP(v[2],v[4]); CSWAP(v[5],v[6]); CSWAP(v[9],v[10]); CSWAP(v[11],v[13]); CSWAP(v[3],v[8]); CSWAP(v[7],v[12]); CSWAP(v[3],v[5]); CSWAP(v[6],v[8]); CSWAP(v[7],v[9]); CSWAP(v[10],v[12]); CSWAP(v[3],v[4]); CSWAP(v[5],v[6]); CSWAP(v[7],v[8]); CSWAP(v[9],v[10]); CSWAP(v[11],v[12]); CSWAP(v[6],v[7]); CSWAP(v[8],v[9]); }
+
+// Dispatch to a sorting network for n <= 16, fall back to std::sort for larger n.
+static inline void small_sort(int* v, int n) {
+    switch (n) {
+        case  1: break;
+        case  2: sort2(v);  break;
+        case  3: sort3(v);  break;
+        case  4: sort4(v);  break;
+        case  5: sort5(v);  break;
+        case  6: sort6(v);  break;
+        case  7: sort7(v);  break;
+        case  8: sort8(v);  break;
+        case  9: sort9(v);  break;
+        case 10: sort10(v); break;
+        case 11: sort11(v); break;
+        case 12: sort12(v); break;
+        case 13: sort13(v); break;
+        case 16: sort16(v); break;
+        default: std::sort(v, v + n); break;
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Core median logic applied to either CV_8U or CV_16U using templates.
+// Single-threaded; the caller (FrameGraphBuilder's mergeQueue) runs many of
+// these concurrently across frames, so intra-frame threading would thrash.
 // -----------------------------------------------------------------------------
 template <typename T>
 static void medianMergeTyped(
@@ -103,53 +151,58 @@ static void medianMergeTyped(
     int ch
 ) {
     const int n = static_cast<int>(mats.size());
+
+    // Pre-extract raw cv::Mat pointers once to avoid ObjC message sends in the
+    // hot loop.
+    std::vector<const cv::Mat*> matPtrs(n);
+    for (int i = 0; i < n; ++i)
+        matPtrs[i] = &mats[i].mat;
+
+    // Allocate vals once per call, reused for every pixel.
     std::vector<int> vals(n);
 
     for (int y = 0; y < rows; ++y) {
-        const T* rowPtrs[n];
+        // Gather row pointers for all input mats once per row.
+        std::vector<const T*> rowPtrs(n);
         for (int i = 0; i < n; ++i)
-          rowPtrs[i] = mats[i].mat.ptr<T>(y);
+            rowPtrs[i] = matPtrs[i]->ptr<T>(y);
 
         T* outRow = output.ptr<T>(y);
 
         for (int x = 0; x < cols; ++x) {
-
             for (int c = 0; c < ch; ++c) {
 
-                // gather values
+                // Gather all N values for this pixel-channel.
+                const int xc = x * ch + c;
+                for (int i = 0; i < n; ++i)
+                    vals[i] = rowPtrs[i][xc];
+
+                // Sort using a network for common sizes, std::sort otherwise.
+                small_sort(vals.data(), n);
+
+                // Welford single-pass mean+variance over the sorted values.
+                // This avoids a second loop compared to computing mean then var.
+                double mean = 0.0, M2 = 0.0;
                 for (int i = 0; i < n; ++i) {
-                    vals[i] = rowPtrs[i][x * ch + c];
+                    double delta = vals[i] - mean;
+                    mean += delta / (i + 1);
+                    M2   += delta * (vals[i] - mean);
                 }
+                // threshold = mean + k * stddev
+                // M2/n = variance; sqrt(M2/n) = stddev
+                const double threshold = mean + k * std::sqrt(M2 / n);
 
-                // sort
-                std::sort(vals.begin(), vals.end());
-
-                // compute mean
-                double sum = 0;
-                for (int v : vals) sum += v;
-                double mean = sum / n;
-
-                // compute stddev
-                double var = 0.0;
-                for (int v : vals) {
-                    double d = v - mean;
-                    var += d * d;
-                }
-                double stddev = std::sqrt(var / n);
-
-                double threshold = mean + k * stddev;
-
-                // determine usable min/max indices
+                // Determine usable min/max indices in the sorted array:
+                //   - skip leading zeros (black / missing pixels)
+                //   - stop before values that exceed the outlier threshold
                 int minIndex = 0;
                 int maxIndex = n;
 
                 if (!includeAll) {
                     for (int z = 0; z < n; ++z) {
-                        int v = vals[z];
-
+                        const int v = vals[z];
                         if (v == 0)
                             minIndex = z + 1;
-
                         if (v < threshold)
                             maxIndex = z;
                         else
@@ -157,11 +210,11 @@ static void medianMergeTyped(
                     }
                 }
 
-                // choose median within the reduced range
+                // Pick the median of the remaining range.
                 int idx = (minIndex + maxIndex) / 2;
                 if (idx >= n) idx = n - 1;
 
-                outRow[x * ch + c] = clamp_cast_int<T>(vals[idx]);
+                outRow[xc] = clamp_cast_int<T>(vals[idx]);
             }
         }
     }
@@ -867,7 +920,7 @@ static MatWrapper * makeStarMask(const cv::Mat &gray, int dilateSize = 3, int th
   }
 }
 
-// just warps with the given homography 
+// just warps with the given homography
 + (id _Nullable)alignWithRequest:(AlignmentRequest * _Nonnull)request {
   @try {
     try {
