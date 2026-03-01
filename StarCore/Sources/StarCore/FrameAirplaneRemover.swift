@@ -907,7 +907,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         // --- 6b: Otsu at shrunk resolution
 
-        guard let shrunkOtsuMask = try await shrunkImage.horizonMask(
+        guard let ogShrunkOtsuMask = try await shrunkImage.horizonMask(
                 at: frameIndex,
                 bottomPercentage: pass2Best.cropAmount,
                 useCannyEdgeDetection: config.useCannyForHorizonDetection,
@@ -919,6 +919,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             throw "cannot create full resolution Otsu horizon mask"
         }
 
+        // re-scale it back up
+        let shrunkOtsuMask = HorizonMask(
+          image: ogShrunkOtsuMask.image
+            .upScaleTo(
+              width: UInt(original.width),
+              height: UInt(original.height)
+            )!,
+          horizonTopY: ogShrunkOtsuMask.horizonTopY,
+          horizonBottomY: ogShrunkOtsuMask.horizonBottomY
+        )
+        
         let shrunkResCropBoundaryY = Int(Double(shrunkImage.height) * pass2Best.cropAmount / 100)
         let shrunkOtsuScore: HorizonScore
         if let edges = shrunkEdgeImage {
@@ -1030,7 +1041,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 // re-scale it back up
                 let dpFullResMask = HorizonMask(
                   image: ogdpShrunkMask.image
-                    .downScaleTo(
+                    .upScaleTo(
                       width: UInt(original.width),
                       height: UInt(original.height)
                     )!,
