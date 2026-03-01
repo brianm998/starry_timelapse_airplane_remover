@@ -82,8 +82,8 @@ public final actor FrameGraphBuilder {
         var homographyOps: [Operation] = []
         var mergeOps: [Operation] = []
 
-        var skyKeypointOps: [Int: KeypointOp] = [:]
-        var earthKeypointOps: [Int: KeypointOp] = [:]
+        var skyKeypointOps: [Int: Operation] = [:]
+        var earthKeypointOps: [Int: Operation] = [:]
 
         var outlierOps: [Int: OutlierOp] = [:]
 
@@ -125,12 +125,20 @@ public final actor FrameGraphBuilder {
             return ret
         }
 
-        allOps.append(contentsOf: horizonOps.values)
+        allOps.append(
+          contentsOf: horizonOps
+            .sorted { $0.key < $1.key }
+            .map { $0.value }
+        )
         
         // next assemble merged horizons, which each depend upon an array of
         // original horizon operations from above
         if hasHorizon {
             if config.tripodHeadWasMoving {
+                /*
+                 Moving tripods have separate HorizonMergsOps for each frame,
+                 gathering the masks of a set of neighbors.
+                 */
                 mergedHorizonOps = await withTaskGroup(
                   of: HorizonMergeOp.self
                 ) { taskGroup in
@@ -155,12 +163,16 @@ public final actor FrameGraphBuilder {
                     }
                     return ret
                 }
-                allOps.append(contentsOf: mergedHorizonOps.values)
+                allOps.append(
+                  contentsOf: mergedHorizonOps
+                    .sorted { $0.key < $1.key }
+                    .map { $0.value }
+                )
             } else {
                 /*
                  for static tripod:
-                   execute just one horizon merge op that
-                   depends upon all other horizon operations
+                 execute just one horizon merge op that
+                 depends upon all other horizon operations
                  */
                 let frame = frames[startIndex]
                 let horizonOp = HorizonMergeOp(frame: frame) { errorString in
@@ -177,56 +189,94 @@ public final actor FrameGraphBuilder {
             }
         }
 
-        // Keypoints depend upon the merged horizon mask for their index
-        for frameIndex in startIndex...lastIndex {
-            let frame = frames[frameIndex]
-            // 2. Keypoints (always sky)
-            let skyKP = KeypointOp(
-              forStars: true,
-              frame: frame,
-              mode: .starAligned,
-              limiter: keypointLimiter
-            ) { errorString in
-                Task { await errors.append(errorString) }
-                errorClosure(errorString)
-            }
-
-            skyKP.queuePriority = .high
-            skyKP.qualityOfService = .userInteractive
-
-            if hasHorizon {
-                if config.tripodHeadWasMoving {
-                    if let horizonOp = mergedHorizonOps[frameIndex] {
-                        skyKP.addDependency(horizonOp)
+        skyKeypointOps = await withTaskGroup(
+          of: KeypointOp.self
+        ) { taskGroup in
+            // Keypoints depend upon the merged horizon mask for their index
+            for frameIndex in startIndex...lastIndex {
+                let frame = frames[frameIndex]
+                taskGroup.addTask {
+                    // 2. Keypoints (always sky)
+                    let skyKP = KeypointOp(
+                      forStars: true,
+                      frame: frame,
+                      mode: .starAligned,
+                      limiter: self.keypointLimiter
+                    ) { errorString in
+                        Task { await errors.append(errorString) }
+                        errorClosure(errorString)
                     }
-                } else {
-                    // static video, single merged horizon op
-                    if let horizonOp = mergedHorizonOps[startIndex] {
-                        skyKP.addDependency(horizonOp)
-                    }
+
+                    skyKP.queuePriority = .high
+                    skyKP.qualityOfService = .userInteractive
+                    return skyKP
                 }
             }
-            
-            allOps.append(skyKP)
-            skyKeypointOps[frame.frameIndex] = skyKP
-            
-            // 2b. Earth keypoints (optional)
-            if hasHorizon && processEarth {
-                let kp = KeypointOp(
-                  forStars: false,
-                  frame: frame,
-                  mode: .earthAligned,
-                  limiter: keypointLimiter
-                ) { errorString in
-                    Task { await errors.append(errorString) }
-                    errorClosure(errorString)
+
+            var ret: [Int: KeypointOp] = [:]
+            for await op in taskGroup {
+                //await op.addDependencies(from: horizonOps)
+
+                if hasHorizon {
+                    if config.tripodHeadWasMoving {
+                        if let horizonOp = mergedHorizonOps[op.frame.frameIndex] {
+                            op.addDependency(horizonOp)
+                        }
+                    } else {
+                        // static video, single merged horizon op
+                        if let horizonOp = mergedHorizonOps[startIndex] {
+                            op.addDependency(horizonOp)
+                        }
+                    }
                 }
-                kp.queuePriority = .high
-                kp.qualityOfService = .userInteractive
-                kp.addDependency(skyKP)
-                allOps.append(kp)
-                earthKeypointOps[frame.frameIndex] = kp
+                
+                ret[op.frame.frameIndex] = op
             }
+            return ret
+        }
+        allOps.append(
+          contentsOf: skyKeypointOps
+            .sorted { $0.key < $1.key }
+            .map { $0.value }
+        )
+            
+        if hasHorizon && processEarth {
+            earthKeypointOps = await withTaskGroup(
+              of: KeypointOp.self
+            ) { taskGroup in
+                // Keypoints depend upon the merged horizon mask for their index
+                for frameIndex in startIndex...lastIndex {
+                    let frame = frames[frameIndex]
+                    taskGroup.addTask {
+                        // 2b. Earth keypoints (optional)
+                        let kp = KeypointOp(
+                          forStars: false,
+                          frame: frame,
+                          mode: .earthAligned,
+                          limiter: self.keypointLimiter
+                        ) { errorString in
+                            Task { await errors.append(errorString) }
+                            errorClosure(errorString)
+                        }
+                        kp.queuePriority = .high
+                        kp.qualityOfService = .userInteractive
+                        return kp
+                    }
+                }
+                var ret: [Int: KeypointOp] = [:]
+                for await op in taskGroup {
+                    if let dep = skyKeypointOps[op.frame.frameIndex] {
+                        op.addDependency(dep)
+                    }
+                    ret[op.frame.frameIndex] = op
+                }
+                return ret
+            }
+            allOps.append(
+              contentsOf: earthKeypointOps
+                .sorted { $0.key < $1.key }
+                .map { $0.value }
+            )
         }
 
         // next assemble homography operations that depend upon the keyframes from above
@@ -365,16 +415,6 @@ public final actor FrameGraphBuilder {
             queue.addOperations(allOps, waitUntilFinished: false)
             continuation.resume()
         }
-        
-        /*
-         Task {
-         while true {
-         Log.d("OperationQueue Debug start")
-         debugPrint(operationQueue: queue)
-         try? await Task.sleep(nanoseconds: 10_000_000_000)
-         }
-         }
-         */
     }
     
     public func debugPrint() {

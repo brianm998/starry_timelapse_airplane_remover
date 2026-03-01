@@ -1,7 +1,7 @@
 import Foundation
 
 
-final class KeypointLimiter {
+final class KeypointLimiter: @unchecked Sendable {
     private var max: Int
     private let lock = NSLock()
     private var current = 0
