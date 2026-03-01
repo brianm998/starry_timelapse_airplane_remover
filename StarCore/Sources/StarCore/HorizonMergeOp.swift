@@ -15,6 +15,16 @@ final class HorizonMergeOp: AsyncOperation, @unchecked Sendable {
         self.name = "horizon merge frame \(frame.frameIndex)"
     }
 
+    func addDependencies(from opMap: [Int: Operation]) async {
+        for neighborIndex in await frame.getHorizonMergeIndices() {
+            if let origHorizonOp = opMap[neighborIndex] {
+                self.addDependency(origHorizonOp)
+            } else {
+                Log.w("frame \(neighborIndex) had no horizon op")
+            }
+        }
+    }
+    
     override func execute() {
         task = Task {
             defer {
