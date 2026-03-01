@@ -7,6 +7,22 @@ import logging
 
 /*
 
+ done: 
+
+ * add a downscaled dp horizon test, quick dirty and actually works better than full res
+ * get rid of and/or otsu/dp tests
+ * make [MatWrapper upscaleTo:] that smooths
+ 
+ Horizon next steps:
+
+ - get rid of strip width entirely (off in config for now)
+ 
+ */
+
+
+
+/*
+
  horizon_tester - Command line tool for testing horizon detection on a single frame.
 
  Runs horizon detection with multiple parameter combinations at both reduced and
@@ -577,8 +593,6 @@ struct HorizonTesterCli: AsyncParsableCommand {
         // We always produce:
         //   03_otsu.tiff  — Otsu+Canny at full res
         //   04_dp.tiff    — DP at full res  (when useDp and shrunk grid found a result)
-        //   04_and.tiff   — Otsu AND DP    (conservative: sky only where both agree)
-        //   04_or.tiff    — Otsu OR  DP    (permissive:  sky where either agrees)
         // All four are scored; the best becomes 05_best_overall_horizon.tiff.
 
         Log.i("")
@@ -635,14 +649,17 @@ struct HorizonTesterCli: AsyncParsableCommand {
         var dpFullResScore: HorizonScore? = nil
 
         // --- DP at full resolution (if enabled and shrunk grid found a winner) ---
-        if useDp, let dpBest = dpBestShrunkResult {
+        if useDp,
+           let dpBest = dpBestShrunkResult
+        {
             let dpSearchTop    = pass2Best.cropAmount / 100.0
             let dpSearchBottom = 1.0
 
             Log.i(String(format: "Running DP at full res: λ=%.2f s=%.2f c=%.2f",
                          dpBest.lambda, dpBest.sobelW, dpBest.cannyW))
 
-            if let dpFullResMask = try? await original.dpHorizonMask(
+            //if let dpFullResMask = try? await original.dpHorizonMask(
+            if let ogdpFullResMask = try? await shrunkImage.dpHorizonMask(
                  at: 0,
                  searchTopFraction: dpSearchTop,
                  searchBottomFraction: dpSearchBottom,
@@ -652,8 +669,19 @@ struct HorizonTesterCli: AsyncParsableCommand {
                  smoothnessLambda: dpBest.lambda,
                  sobelWeight: dpBest.sobelW,
                  cannyWeight: dpBest.cannyW
-               )
+               )                 
             {
+                // re-scale it back up
+                let dpFullResMask = HorizonMask(
+                  image: ogdpFullResMask.image
+                    .downScaleTo(
+                      width: UInt(original.width),
+                      height: UInt(original.height)
+                    )!,
+                  horizonTopY: ogdpFullResMask.horizonTopY,
+                  horizonBottomY: ogdpFullResMask.horizonBottomY
+                )
+
                 let dpScore: HorizonScore
                 if let edges = fullResEdges {
                     dpScore = HorizonScoring.score(horizonMask: dpFullResMask, edgeImage: edges)
@@ -675,61 +703,6 @@ struct HorizonTesterCli: AsyncParsableCommand {
                     fullResScore  = dpScore
                     bestMethod = "dp"
                 }
-
-                // --- AND combination ---
-                if let andImage = try? otsuFullResMask.image.bitwiseAnd(with: dpFullResMask.image) {
-                    let andMask = HorizonMask(andImage)
-                    let andScore: HorizonScore
-                    if let edges = fullResEdges {
-                        andScore = HorizonScoring.score(horizonMask: andMask, edgeImage: edges)
-                    } else {
-                        andScore = HorizonScoring.score(
-                          horizonMask: andMask,
-                          originalImage: original,
-                          cannyMinThreshold: cannyMinThreshold,
-                          cannyMaxThreshold: cannyMaxThreshold,
-                          useL2Gradient: useL2Gradient
-                        )
-                    }
-                    Log.i("AND combination score: \(andScore)")
-                    andImage.writeTIFFEncoding(toFilename: "\(outputDir)/04_and.tiff")
-
-                    if andScore.totalScore > fullResScore.totalScore {
-                        bestMask   = andMask
-                        fullResScore  = andScore
-                        bestMethod = "otsu∧dp"
-                    }
-                } else {
-                    Log.w("AND combination failed")
-                }
-
-                // --- OR combination ---
-                if let orImage = try? otsuFullResMask.image.bitwiseOr(with: dpFullResMask.image) {
-                    let orMask = HorizonMask(orImage)
-                    let orScore: HorizonScore
-                    if let edges = fullResEdges {
-                        orScore = HorizonScoring.score(horizonMask: orMask, edgeImage: edges)
-                    } else {
-                        orScore = HorizonScoring.score(
-                          horizonMask: orMask,
-                          originalImage: original,
-                          cannyMinThreshold: cannyMinThreshold,
-                          cannyMaxThreshold: cannyMaxThreshold,
-                          useL2Gradient: useL2Gradient
-                        )
-                    }
-                    Log.i("OR combination score: \(orScore)")
-                    orImage.writeTIFFEncoding(toFilename: "\(outputDir)/04_or.tiff")
-
-                    if orScore.totalScore > fullResScore.totalScore {
-                        bestMask   = orMask
-                        fullResScore  = orScore
-                        bestMethod = "otsu∨dp"
-                    }
-                } else {
-                    Log.w("OR combination failed")
-                }
-
                 Log.i("Full resolution winner: \(bestMethod) (score=\(fullResScore))")
             } else {
                 Log.w("DP full resolution failed, using Otsu only")
@@ -821,8 +794,6 @@ struct HorizonTesterCli: AsyncParsableCommand {
         Log.i("  03_otsu.tiff                 - Otsu result at full resolution")
         if useDp {
             Log.i("  04_dp.tiff                   - DP result at full resolution")
-            Log.i("  04_and.tiff                  - Otsu AND DP (conservative/intersection)")
-            Log.i("  04_or.tiff                   - Otsu OR  DP (permissive/union)")
         }
         Log.i("  05_best_overall_horizon.tiff - Best of all four candidates")
         Log.i("  summary.json                 - Scores and parameters")

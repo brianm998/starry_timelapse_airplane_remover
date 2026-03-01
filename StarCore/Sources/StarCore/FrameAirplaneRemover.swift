@@ -872,13 +872,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
 
-        // Step 6: Run BOTH Otsu and DP at full resolution, then combine and score all four.
+        // Step 6: Run BOTH Otsu and DP at full resolution, then combine and score all of them.
         //
         // We always generate:
         //   (a) otsuMask  — Otsu + Canny at full res with pass-2 best parameters
         //   (b) dpMask    — DP at full res with shrunk-grid-best parameters (if enabled)
-        //   (c) andMask   — otsuMask AND dpMask  (intersection = conservative: sky only where both agree)
-        //   (d) orMask    — otsuMask OR  dpMask  (union       = permissive: sky where either agrees)
+        //   (c) shrunkDp  — DP at shrunk res with shrunk-grid-best parameters (if enabled)
         //
         // Each of the four is scored independently; the highest-scoring one is returned.
         // When DP is disabled only (a) is produced.
@@ -973,65 +972,70 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     bestMethod = "dp"
                 }
 
-                // --- 6c: AND combination (conservative: sky only where both agree) ---
-                if let andImage = try? otsuFullResMask.image.bitwiseAnd(with: dpFullResMask.image) {
-                    let andMask  = HorizonMask(andImage)
-                    let andScore: HorizonScore
-                    if let edges = fullResEdgeImage {
-                        andScore = HorizonScoring.score(
-                          horizonMask: andMask,
-                          edgeImage: edges
-                        )
-                    } else {
-                        andScore = HorizonScoring.score(
-                          horizonMask: andMask,
-                          originalImage: original,
-                          cannyMinThreshold: config.cannyMinThreshold,
-                          cannyMaxThreshold: config.cannyMaxThreshold,
-                          useL2Gradient: config.cannyUseL2Gradient
-                        )
-                    }
-                    Log.i("frame \(frameIndex) AND combination score=\(andScore)")
-
-                    if andScore.totalScore > bestScore.totalScore {
-                        bestMask   = andMask
-                        bestScore  = andScore
-                        bestMethod = "otsu∧dp"
-                    }
-                } else {
-                    Log.w("frame \(frameIndex) AND combination failed")
-                }
-
-                // --- 6d: OR combination (permissive: sky where either agrees) ---
-                if let orImage = try? otsuFullResMask.image.bitwiseOr(with: dpFullResMask.image) {
-                    let orMask  = HorizonMask(orImage)
-                    let orScore: HorizonScore
-                    if let edges = fullResEdgeImage {
-                        orScore = HorizonScoring.score(
-                          horizonMask: orMask,
-                          edgeImage: edges
-                        )
-                    } else {
-                        orScore = HorizonScoring.score(
-                          horizonMask: orMask,
-                          originalImage: original,
-                          cannyMinThreshold: config.cannyMinThreshold,
-                          cannyMaxThreshold: config.cannyMaxThreshold,
-                          useL2Gradient: config.cannyUseL2Gradient
-                        )
-                    }
-                    Log.i("frame \(frameIndex) OR combination score=\(orScore)")
-
-                    if orScore.totalScore > bestScore.totalScore {
-                        bestMask   = orMask
-                        bestScore  = orScore
-                        bestMethod = "otsu∨dp"
-                    }
-                } else {
-                    Log.w("frame \(frameIndex) OR combination failed")
-                }
             } else {
                 Log.w("frame \(frameIndex) DP full resolution failed, using Otsu only")
+            }
+        }
+
+        // --- 6c: DP at smaller resolution ---
+        if config.useDPHorizonDetection,
+           let dpBest = dpBestShrunkResult,
+           let lambda = dpBest.lambda,
+           let sobelW = dpBest.sobelW,
+           let cannyW = dpBest.cannyW
+        {
+            let dpSearchTop    = pass2Best.cropAmount / 100.0
+            let dpSearchBottom = 1.0
+
+            Log.i("frame \(frameIndex) running DP at smaller resolution: " +
+                  "lambda=\(lambda), sobel=\(sobelW), canny=\(cannyW), " +
+                  "search \(String(format:"%.0f",dpSearchTop*100))%–" +
+                  "\(String(format:"%.0f",dpSearchBottom*100))%")
+
+            if let ogdpFullResMask = try? await shrunkImage.dpHorizonMask(
+                 at: frameIndex,
+                 searchTopFraction: dpSearchTop,
+                 searchBottomFraction: dpSearchBottom,
+                 cannyMinThreshold: config.cannyMinThreshold,
+                 cannyMaxThreshold: config.cannyMaxThreshold,
+                 useL2Gradient: config.cannyUseL2Gradient,
+                 smoothnessLambda: lambda,
+                 sobelWeight: sobelW,
+                 cannyWeight: cannyW
+               )
+            {
+                // re-scale it back up
+                let dpFullResMask = HorizonMask(
+                  image: ogdpFullResMask.image
+                    .downScaleTo(
+                      width: UInt(original.width),
+                      height: UInt(original.height)
+                    )!,
+                  horizonTopY: ogdpFullResMask.horizonTopY,
+                  horizonBottomY: ogdpFullResMask.horizonBottomY
+                )
+                let dpFullResScore: HorizonScore
+                if let edges = fullResEdgeImage {
+                    dpFullResScore = HorizonScoring.score(
+                      horizonMask: dpFullResMask,
+                      edgeImage: edges
+                    )
+                } else {
+                    dpFullResScore = HorizonScoring.score(
+                      horizonMask: dpFullResMask,
+                      originalImage: original,
+                      cannyMinThreshold: config.cannyMinThreshold,
+                      cannyMaxThreshold: config.cannyMaxThreshold,
+                      useL2Gradient: config.cannyUseL2Gradient
+                    )
+                }
+                Log.i("frame \(frameIndex) DP full resolution score=\(dpFullResScore)")
+
+                if dpFullResScore.totalScore > bestScore.totalScore {
+                    bestMask   = dpFullResMask
+                    bestScore  = dpFullResScore
+                    bestMethod = "shrunkDp"
+                }
             }
         }
 
