@@ -57,6 +57,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 -(MatWrapper *)clone;
 
+-(MatWrapper *)upScaleTo:(NSUInteger)width height:(NSUInteger)height;
 -(MatWrapper *)downScaleTo:(NSUInteger)width height:(NSUInteger)height;
 
 -(MatWrapper *)ensureEightBit;

@@ -410,6 +410,21 @@ static NSUInteger _totalInstances = 0;
   cv::imwrite(std::string([filename UTF8String]), eightBit, params);
 }
 
+-(MatWrapper *)upScaleTo:(NSUInteger)width height:(NSUInteger)height {
+  @try {
+    try {
+      cv::Mat output;
+      cv::resize(_mat, output, cv::Size(width, height), 0, 0, cv::INTER_CUBIC);
+      return [[MatWrapper alloc] initWithMat: output]; // returns a new Mat
+    } catch (const cv::Exception &e) {
+      Log_e(@"OpenCV Exception: %s", e.what());
+    }
+  } @catch (NSException *exception) {
+    Log_e(@"Objective-C Exception: %@", exception);
+  }
+  return nil;
+}
+
 -(MatWrapper *)downScaleTo:(NSUInteger)width height:(NSUInteger)height {
   @try {
     try {

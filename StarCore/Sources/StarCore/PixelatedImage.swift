@@ -997,6 +997,10 @@ extension PixelatedImage {
         throw "Unable to apply mask to image"
     }
 
+    public func upScaleTo(width: UInt, height: UInt) -> PixelatedImage? {
+        PixelatedImage(mat: self.mat.upScale(to: width, height: height))
+    }
+
     public func downScaleTo(width: UInt, height: UInt) -> PixelatedImage? {
         PixelatedImage(mat: self.mat.downScale(to: width, height: height))
     }
