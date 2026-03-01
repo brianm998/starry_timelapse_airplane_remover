@@ -342,8 +342,9 @@ public final actor FrameGraphBuilder {
         mergeOps.forEach { completionOp.addDependency($0) }
         allOps.append(completionOp)
 
-        for op in allOps {
-            queue.addOperation(op)
+        await withCheckedContinuation { continuation in
+            queue.addOperations(allOps, waitUntilFinished: false)
+            continuation.resume()
         }
         
         /*
