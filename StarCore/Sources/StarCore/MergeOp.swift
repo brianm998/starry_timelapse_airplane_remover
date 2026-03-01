@@ -21,7 +21,7 @@ public final class MergeOp: AsyncOperation, @unchecked Sendable {
             do {
                 Log.d("frame \(frame.frameIndex) start")
 
-                if frame.processingState() == .complete {
+                if await frame.processingState() == .complete {
                     Log.i("frame \(frame.frameIndex) already complete, skipping merge")
                     return
                 }
