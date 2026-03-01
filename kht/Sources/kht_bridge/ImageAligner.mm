@@ -302,14 +302,22 @@ MatWrapper* medianImageFromArray(const std::vector<MatWrapper*>& mats,
 
 // just median merges the frames without any alignment
 + (MatWrapper* _Nonnull)medianMerge:(NSArray<MatWrapper*>* _Nonnull)frames
- outlierThreshold:(double)k
-       includeAll:(BOOL)includeAll
+                   outlierThreshold:(double)k
+                         includeAll:(BOOL)includeAll
 {
     std::vector<MatWrapper*> array;
     for (size_t i = 0; i < frames.count; ++i) {
       array.push_back(frames[i]);
     }
-    return medianImageFromArray(array, k, includeAll);
+    try {
+      return medianImageFromArray(array, k, includeAll);
+    } catch (const std::exception &e) {
+      Log_e(@"medianMerge exception: %@", [NSString stringWithUTF8String:e.what()]);
+      return [[MatWrapper alloc] initWithMat:cv::Mat()];
+    } catch (...) {
+      Log_e(@"medianMerge unknown exception");
+      return [[MatWrapper alloc] initWithMat:cv::Mat()];
+    }
 }
 
 
