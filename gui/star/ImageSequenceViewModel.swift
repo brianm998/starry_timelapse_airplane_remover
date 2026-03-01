@@ -1106,7 +1106,7 @@ public final class ImageSequenceViewModel {
     }
 
     // enum for how we show each frame
-    var frameViewMode = FrameViewMode.final {
+    var frameViewMode = FrameViewMode.original {
         didSet {
             previousFrameViewMode = oldValue
         }
