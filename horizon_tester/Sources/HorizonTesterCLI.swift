@@ -81,13 +81,6 @@ struct HorizonTesterCli: AsyncParsableCommand {
         """)
     var cropCount2: Int?
 
-    @Option(name: [.customLong("strip-widths")], help: """
-        Comma-separated list of strip widths to test (in full-resolution pixels).
-        0 means use full image width.
-        Default: 0
-        """)
-    var stripWidthsStr: String?
-
     @Option(name: [.customLong("shrink-factor")], help: "Downscale factor for the reduced-resolution search pass. Default: 4")
     var shrinkFactor: Int?
 
@@ -157,13 +150,6 @@ struct HorizonTesterCli: AsyncParsableCommand {
         return values.count >= 2 ? [values[0], values[1]] : defaultRange
     }
 
-    private func parseStripWidths() -> [Int] {
-        if let str = stripWidthsStr {
-            return str.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
-        }
-        return [0]
-    }
-
     // MARK: - Run
 
     mutating func run() async throws {
@@ -192,11 +178,6 @@ struct HorizonTesterCli: AsyncParsableCommand {
         let count2 = cropCount2 ?? config.horizonSearchCropCount2
         // Enforce minimum strip width of 20 pixels at full resolution.
         // Otsu on very narrow strips produces noisy single-pixel-width artifacts.
-        let minFullResStripWidth = 20
-        let rawStripWidths = parseStripWidths()
-        let stripWidths = rawStripWidths.map { w in
-            w == 0 ? 0 : max(minFullResStripWidth, w)
-        }
         let shrinkFactor = self.shrinkFactor ?? config.horizonSearchShrinkFactor
         let cannyMinThreshold = cannyMin ?? config.cannyMinThreshold
         let cannyMaxThreshold = cannyMax ?? config.cannyMaxThreshold
@@ -292,7 +273,6 @@ struct HorizonTesterCli: AsyncParsableCommand {
 
         struct TestResult {
             let cropAmount: Double
-            let stripWidth: Int
             let score: HorizonScore
             let mask: HorizonMask
         }
@@ -300,12 +280,11 @@ struct HorizonTesterCli: AsyncParsableCommand {
         // ===================================================================
         // PASS 1: Coarse search at reduced resolution
         // ===================================================================
-        let pass1Total = pass1CropAmounts.count * stripWidths.count
+        let pass1Total = pass1CropAmounts.count
         Log.i("")
         Log.i("=== PASS 1: Coarse Search (\(shrunkImage.width)x\(shrunkImage.height)) ===")
         Log.i("Crop bounds: \(cropBounds), count1: \(count1), step: \(String(format: "%.1f", pass1Step))")
         Log.i("Crop amounts: \(pass1CropAmounts)")
-        Log.i("Strip widths: \(stripWidths)")
         Log.i("Testing \(pass1Total) combinations")
         Log.i("")
 
@@ -313,50 +292,40 @@ struct HorizonTesterCli: AsyncParsableCommand {
         var testIndex = 0
 
         for cropAmount in pass1CropAmounts {
-            for fullStripWidth in stripWidths {
-                testIndex += 1
+            let label = String(format: "crop=%05.1f", cropAmount)
+            Log.i("[\(testIndex)/\(pass1Total)] Testing \(label) " )
 
-                let shrunkStripWidth: Int
-                if fullStripWidth == 0 {
-                    shrunkStripWidth = Int(shrunkWidth)
-                } else {
-                    shrunkStripWidth = max(20, fullStripWidth / shrinkFactor)
-                }
-
-                let label = String(format: "crop=%05.1f_strip=%04d", cropAmount, fullStripWidth)
-                Log.i("[\(testIndex)/\(pass1Total)] Testing \(label) " +
-                      "(shrunk strip=\(shrunkStripWidth))")
-
-                guard let mask = try await shrunkImage.horizonMask(
-                        at: 0,
-                        bottomPercentage: cropAmount,
-                        stripWidth: shrunkStripWidth,
-                        useCannyEdgeDetection: useCanny,
-                        cannyMinThreshold: cannyMinThreshold,
-                        cannyMaxThreshold: cannyMaxThreshold,
-                        useL2Gradient: useL2Gradient
-                      )
-                else {
-                    Log.w("  -> No horizon mask produced, skipping")
-                    continue
-                }
-
-                // crop boundary Y in shrunk-image coordinates
-                let shrunkCropBoundaryY = Int(Double(shrunkImage.height) * cropAmount / 100.0)
-                let score = scoreHorizonMask(mask, cropBoundaryY: shrunkCropBoundaryY)
-                Log.i("  -> \(score) totalScore \(score.totalScore)")
-
-                let filename = String(
-                  format: "%@/01_pass1_%02d_%@.tiff",
-                  outputDir, testIndex, label
-                )
-                mask.image.writeTIFFEncoding(toFilename: filename)
-
-                pass1Results.append(TestResult(
-                  cropAmount: cropAmount, stripWidth: fullStripWidth,
-                  score: score, mask: mask
-                ))
+            guard let mask = try await shrunkImage.horizonMask(
+                    at: 0,
+                    bottomPercentage: cropAmount,
+                    useCannyEdgeDetection: useCanny,
+                    cannyMinThreshold: cannyMinThreshold,
+                    cannyMaxThreshold: cannyMaxThreshold,
+                    useL2Gradient: useL2Gradient
+                  )
+            else {
+                Log.w("  -> No horizon mask produced, skipping")
+                continue
             }
+
+            // crop boundary Y in shrunk-image coordinates
+            let shrunkCropBoundaryY = Int(Double(shrunkImage.height) * cropAmount / 100.0)
+            let score = scoreHorizonMask(mask, cropBoundaryY: shrunkCropBoundaryY)
+            Log.i("  -> \(score) totalScore \(score.totalScore)")
+
+            let filename = String(
+              format: "%@/01_pass1_%02d_%@.tiff",
+              outputDir, testIndex, label
+            )
+            mask.image.writeTIFFEncoding(toFilename: filename)
+
+            pass1Results.append(
+              TestResult(
+                cropAmount: cropAmount,
+                score: score,
+                mask: mask
+              )
+            )
         }
 
         guard !pass1Results.isEmpty else {
@@ -380,8 +349,8 @@ struct HorizonTesterCli: AsyncParsableCommand {
         for (rank, result) in pass1Ranked.enumerated() {
             let marker = rank == 0 ? " <-- BEST" : ""
             Log.i(String(
-              format: "  #%d: crop=%05.1f strip=%04d  score=%@%@",
-              rank + 1, result.cropAmount, result.stripWidth,
+              format: "  #%d: crop=%05.1f score=%@%@",
+              rank + 1, result.cropAmount,
               result.score.description, marker
             ))
         }
@@ -403,7 +372,6 @@ struct HorizonTesterCli: AsyncParsableCommand {
         Log.i("Search area: \(String(format: "%.1f", pass2CropAmounts.first ?? 0)) to " +
               "\(String(format: "%.1f", pass2CropAmounts.last ?? 0))")
         Log.i("Crop amounts: \(pass2CropAmounts)")
-        Log.i("Strip width: \(pass1Best.stripWidth) (fixed from pass 1)")
         Log.i("Testing \(pass2Total) combinations")
         Log.i("")
 
@@ -413,20 +381,12 @@ struct HorizonTesterCli: AsyncParsableCommand {
         for cropAmount in pass2CropAmounts {
             testIndex += 1
             
-            let shrunkStripWidth: Int
-            if pass1Best.stripWidth == 0 {
-                shrunkStripWidth = Int(shrunkWidth)
-            } else {
-                shrunkStripWidth = max(20, pass1Best.stripWidth / shrinkFactor)
-            }
-
-            let label = String(format: "crop=%05.1f_strip=%04d", cropAmount, pass1Best.stripWidth)
+            let label = String(format: "crop=%05.1f", cropAmount)
             Log.i("[\(testIndex)/\(pass2Total)] Testing \(label)")
 
             guard let mask = try await shrunkImage.horizonMask(
                     at: 0,
                     bottomPercentage: cropAmount,
-                    stripWidth: shrunkStripWidth,
                     useCannyEdgeDetection: useCanny,
                     cannyMinThreshold: cannyMinThreshold,
                     cannyMaxThreshold: cannyMaxThreshold,
@@ -449,7 +409,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
             mask.image.writeTIFFEncoding(toFilename: filename)
 
             pass2Results.append(TestResult(
-              cropAmount: cropAmount, stripWidth: pass1Best.stripWidth,
+              cropAmount: cropAmount,
               score: score, mask: mask
             ))
         }
@@ -474,7 +434,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
             let marker = rank == 0 ? " <-- BEST" : ""
             Log.i(String(
               format: "  #%d: crop=%05.1f strip=%04d  score=%@%@",
-              rank + 1, result.cropAmount, result.stripWidth,
+              rank + 1, result.cropAmount,
               result.score.description, marker
             ))
         }
@@ -599,14 +559,11 @@ struct HorizonTesterCli: AsyncParsableCommand {
         Log.i("=== FULL RESOLUTION (\(original.width)x\(original.height)) ===")
 
         // --- Otsu at full resolution ---
-        Log.i("Running Otsu at full res: crop=\(pass2Best.cropAmount), strip=\(pass2Best.stripWidth)")
-
-        let otsuStripWidth = pass2Best.stripWidth == 0 ? original.width : pass2Best.stripWidth
+        Log.i("Running Otsu at full res: crop=\(pass2Best.cropAmount)")
 
         guard let otsuFullResMask = try await original.horizonMask(
                 at: 0,
                 bottomPercentage: pass2Best.cropAmount,
-                stripWidth: otsuStripWidth,
                 useCannyEdgeDetection: useCanny,
                 cannyMinThreshold: cannyMinThreshold,
                 cannyMaxThreshold: cannyMaxThreshold,
@@ -718,7 +675,6 @@ struct HorizonTesterCli: AsyncParsableCommand {
             HorizonTestSummary.ResultEntry(
               pass: 1,
               cropAmount: result.cropAmount,
-              stripWidth: result.stripWidth,
               smoothnessScore: result.score.smoothnessScore,
               edgeAlignmentScore: result.score.edgeAlignmentScore,
               coverageScore: result.score.coverageScore,
@@ -730,7 +686,6 @@ struct HorizonTesterCli: AsyncParsableCommand {
             HorizonTestSummary.ResultEntry(
               pass: 2,
               cropAmount: result.cropAmount,
-              stripWidth: result.stripWidth,
               smoothnessScore: result.score.smoothnessScore,
               edgeAlignmentScore: result.score.edgeAlignmentScore,
               coverageScore: result.score.coverageScore,
@@ -754,10 +709,8 @@ struct HorizonTesterCli: AsyncParsableCommand {
           pass1Step: pass1Step,
           pass1Results: allPass1Entries,
           pass1BestCrop: pass1Best.cropAmount,
-          pass1BestStrip: pass1Best.stripWidth,
           pass2Results: allPass2Entries,
           pass2BestCrop: pass2Best.cropAmount,
-          pass2BestStrip: pass2Best.stripWidth,
           bestShrunkScore: pass2Best.score.totalScore,
           bestFullResScore: fullResScore.totalScore,
           useDp: useDp,
@@ -798,9 +751,9 @@ struct HorizonTesterCli: AsyncParsableCommand {
         Log.i("  05_best_overall_horizon.tiff - Best of all four candidates")
         Log.i("  summary.json                 - Scores and parameters")
         Log.i("")
-        Log.i("Pass 1 best: crop=\(pass1Best.cropAmount), strip=\(pass1Best.stripWidth), " +
+        Log.i("Pass 1 best: crop=\(pass1Best.cropAmount), " +
               "score=\(pass1Best.score)")
-        Log.i("Pass 2 best: crop=\(pass2Best.cropAmount), strip=\(pass2Best.stripWidth), " +
+        Log.i("Pass 2 best: crop=\(pass2Best.cropAmount), " +
               "score=\(pass2Best.score)")
         if let dpBest = dpBestShrunkResult {
             Log.i(String(format: "DP shrunk best: λ=%.2f s=%.2f c=%.2f  score=%@",
@@ -831,10 +784,8 @@ struct HorizonTestSummary: Codable {
     let pass1Step: Double
     let pass1Results: [ResultEntry]
     let pass1BestCrop: Double
-    let pass1BestStrip: Int
     let pass2Results: [ResultEntry]
     let pass2BestCrop: Double
-    let pass2BestStrip: Int
     let bestShrunkScore: Double
     let bestFullResScore: Double
     // DP horizon detection results
@@ -852,7 +803,6 @@ struct HorizonTestSummary: Codable {
     struct ResultEntry: Codable {
         let pass: Int
         let cropAmount: Double
-        let stripWidth: Int
         let smoothnessScore: Double
         let edgeAlignmentScore: Double
         let coverageScore: Double
