@@ -20,7 +20,11 @@ public final class MergeOp: AsyncOperation, @unchecked Sendable {
             }
             do {
                 Log.d("frame \(frame.frameIndex) start")
-                // XXX this re-writes any existing files, should skip if already there
+
+                if frame.processingState() == .complete {
+                    Log.i("frame \(frame.frameIndex) already complete, skipping merge")
+                    return
+                }
 
                 switch await frame.cleanMethod {
                 case .automatic(let usesOutliers):
