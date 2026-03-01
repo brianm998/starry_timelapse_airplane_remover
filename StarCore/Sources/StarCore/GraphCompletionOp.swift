@@ -1,9 +1,9 @@
 import Foundation
 
 final class GraphCompletionOp: Operation, @unchecked Sendable {
-    private let completion: () -> Void
+    private let completion: () async -> Void
 
-    init(completion: @escaping () -> Void) {
+    init(completion: @escaping () async -> Void) {
         self.completion = completion
         super.init()
         self.name = "Completion" 
@@ -11,7 +11,7 @@ final class GraphCompletionOp: Operation, @unchecked Sendable {
 
     override func main() {
         Task { @MainActor in
-            completion()
+            await completion()
         }
     }
 }

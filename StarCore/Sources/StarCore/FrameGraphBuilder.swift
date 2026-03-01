@@ -62,7 +62,7 @@ public final actor FrameGraphBuilder {
       startIndex: Int = 0,
       endIndex: Int? = nil,      // will be last index of frames
       closure: @escaping ([String]) -> Void,
-      errorClosure: @escaping (String) -> Void
+      errorClosure: @escaping @Sendable (String) -> Void
     ) async {
         guard let configManager else {
             errorClosure("cannot build without config manager")
@@ -70,7 +70,7 @@ public final actor FrameGraphBuilder {
             return
         }
 
-        var errors: [String] = []
+        let errors = ArrayActor<String>([])
         
         let config = await configManager.config()
 
@@ -78,7 +78,6 @@ public final actor FrameGraphBuilder {
         let processEarth = config.allowEarthAlignment && 
           config.tripodHeadWasMoving // keypoints not used when stationary
 
-        var horizonOps: [Int: Operation] = [:]
         var mergedHorizonOps: [Int: Operation] = [:]
         var homographyOps: [Operation] = []
         var mergeOps: [Operation] = []
@@ -97,23 +96,39 @@ public final actor FrameGraphBuilder {
 
         // First assemble initial horizon operations,
         // with no dependencies upon any other operations
-        for frameIndex in startIndex...lastIndex {
+        let horizonOps = await withTaskGroup(
+          of: HorizonDetectionOp?.self
+        ) { taskGroup in
+            for frameIndex in startIndex...lastIndex {
+                taskGroup.addTask() {
+                    let frame = frames[frameIndex]
 
-            let frame = frames[frameIndex]
-
-            // 1. Horizon
-            if hasHorizon {
-                let horizonOp = HorizonDetectionOp(frame: frame) { errorString in
-                    errors.append(errorString)
-                    errorClosure(errorString)
+                    // 1. Horizon
+                    if hasHorizon {
+                        let horizonOp = HorizonDetectionOp(frame: frame) { errorString in
+                            Task {
+                                await errors.append(errorString)
+                            }
+                            errorClosure(errorString)
+                        }
+                        horizonOp.queuePriority = .low
+                        horizonOp.qualityOfService = .userInteractive
+                        return horizonOp
+                    } else {
+                        return nil
+                    }
                 }
-                horizonOp.queuePriority = .low
-                horizonOp.qualityOfService = .userInteractive
-                allOps.append(horizonOp)
-                horizonOps[frameIndex] = horizonOp
             }
+
+            var ret: [Int: Operation] = [:]
+            for await op in taskGroup {
+                if let op { ret[op.frame.frameIndex] = op }
+            }
+            return ret
         }
 
+        allOps.append(contentsOf: horizonOps.values)
+        
         // next assemble merged horizons, which each depend upon an array of
         // original horizon operations from above
         if hasHorizon {
@@ -121,7 +136,9 @@ public final actor FrameGraphBuilder {
                 for frameIndex in startIndex...lastIndex {
                     let frame = frames[frameIndex]
                     let horizonOp = HorizonMergeOp(frame: frame) { errorString in
-                        errors.append(errorString)
+                        Task {
+                            await errors.append(errorString)
+                        }
                         errorClosure(errorString)
                     }
                     horizonOp.queuePriority = .normal
@@ -144,7 +161,9 @@ public final actor FrameGraphBuilder {
                  */
                 let frame = frames[startIndex]
                 let horizonOp = HorizonMergeOp(frame: frame) { errorString in
-                    errors.append(errorString)
+                    Task {
+                        await errors.append(errorString)
+                    }
                     errorClosure(errorString)
                 }
                 horizonOp.queuePriority = .normal
@@ -167,7 +186,9 @@ public final actor FrameGraphBuilder {
               mode: .starAligned,
               limiter: keypointLimiter
             ) { errorString in
-                errors.append(errorString)
+                Task {
+                    await errors.append(errorString)
+                }
                 errorClosure(errorString)
             }
 
@@ -198,7 +219,9 @@ public final actor FrameGraphBuilder {
                   mode: .earthAligned,
                   limiter: keypointLimiter
                 ) { errorString in
-                    errors.append(errorString)
+                    Task {
+                        await errors.append(errorString)
+                    }
                     errorClosure(errorString)
                 }
                 kp.queuePriority = .high
@@ -218,7 +241,9 @@ public final actor FrameGraphBuilder {
               frame: frame,
               mode: .starAligned
             ) { errorString in
-                errors.append(errorString)
+                Task {
+                    await errors.append(errorString)
+                }
                 errorClosure(errorString)
             }
             skyH.queuePriority = .veryHigh
@@ -248,7 +273,9 @@ public final actor FrameGraphBuilder {
                   frame: frame,
                   mode: .earthAligned
                 ) { errorString in
-                    errors.append(errorString)
+                    Task {
+                        await errors.append(errorString)
+                    }
                     errorClosure(errorString)
                 }
                 earthH.queuePriority = .veryHigh
@@ -274,8 +301,9 @@ public final actor FrameGraphBuilder {
           frames: frames,
           configManager: configManager
         ) { errorString in
-            errors.append(errorString)
-
+            Task {
+                await errors.append(errorString)
+            }
             errorClosure(errorString)
         }
         validationOp.qualityOfService = .userInteractive
@@ -293,7 +321,9 @@ public final actor FrameGraphBuilder {
                 let outlierOp = OutlierOp(
                   frame: frame
                 ) { errorString in
-                    errors.append(errorString)
+                    Task {
+                        await errors.append(errorString)
+                    }
                     errorClosure(errorString)
                 }
 
@@ -309,7 +339,9 @@ public final actor FrameGraphBuilder {
             let mergeOp = MergeOp(
               frame: frame
             ) { errorString in
-                errors.append(errorString)
+                Task {
+                    await errors.append(errorString)
+                }
                 errorClosure(errorString)
             }
 
@@ -336,7 +368,7 @@ public final actor FrameGraphBuilder {
         // 6. runs after all have finished
         let completionOp = GraphCompletionOp {
             Log.d("Frame graph fully finished")
-            closure(errors)
+            closure(await errors.elements())
         }
         Log.d("\(mergeOps.count) mergeOps")
         mergeOps.forEach { completionOp.addDependency($0) }
