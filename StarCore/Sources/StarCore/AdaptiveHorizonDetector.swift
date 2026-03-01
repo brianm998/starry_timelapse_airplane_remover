@@ -76,11 +76,10 @@ public struct HorizonScore: Sendable, CustomStringConvertible {
 }
 
 /// The result of a single parameter combination trial during adaptive horizon search.
-/// For Otsu results, `cropAmount` and `stripWidth` are set; `lambda`, `sobelW`, `cannyW` are nil.
+/// For Otsu results, `cropAmount` is set; `lambda`, `sobelW`, `cannyW` are nil.
 /// For DP results, `lambda`, `sobelW`, `cannyW` are set; `cropAmount` is -1 (sentinel).
 struct HorizonSearchResult: Sendable {
     let cropAmount: Double      // the bottomPercentage used (Otsu); -1 for DP results
-    let stripWidth: Int         // the stripWidth used (Otsu); 0 for DP results
     let horizonMask: HorizonMask
     let score: HorizonScore
     // DP-specific parameters (nil for Otsu results)
@@ -89,9 +88,8 @@ struct HorizonSearchResult: Sendable {
     let cannyW: Double?
 
     /// Convenience initialiser for Otsu results (no DP params).
-    init(cropAmount: Double, stripWidth: Int, horizonMask: HorizonMask, score: HorizonScore) {
+    init(cropAmount: Double, horizonMask: HorizonMask, score: HorizonScore) {
         self.cropAmount  = cropAmount
-        self.stripWidth  = stripWidth
         self.horizonMask = horizonMask
         self.score       = score
         self.lambda      = nil
@@ -100,10 +98,9 @@ struct HorizonSearchResult: Sendable {
     }
 
     /// Full initialiser used for DP results (all fields).
-    init(cropAmount: Double, stripWidth: Int, horizonMask: HorizonMask, score: HorizonScore,
+    init(cropAmount: Double, horizonMask: HorizonMask, score: HorizonScore,
          lambda: Double?, sobelW: Double?, cannyW: Double?) {
         self.cropAmount  = cropAmount
-        self.stripWidth  = stripWidth
         self.horizonMask = horizonMask
         self.score       = score
         self.lambda      = lambda
@@ -157,16 +154,14 @@ public enum HorizonCropAmounts {
 /// Tracks the best-known parameters from previous frames to narrow future searches.
 public actor AdaptiveHorizonState {
     private var lastBestCropAmount: Double?
-    private var lastBestStripWidth: Int?
     private var lastFirstPassStep: Double?
     private var frameCount: Int = 0
 
     public init() {}
 
     /// Record the best parameters found for a frame.
-    func recordBest(cropAmount: Double, stripWidth: Int, firstPassStep: Double) {
+    func recordBest(cropAmount: Double, firstPassStep: Double) {
         lastBestCropAmount = cropAmount
-        lastBestStripWidth = stripWidth
         lastFirstPassStep = firstPassStep
         frameCount += 1
     }
@@ -185,17 +180,6 @@ public actor AdaptiveHorizonState {
         let lo = max(0, lastBest - narrowingRange)
         let hi = min(100, lastBest + narrowingRange)
         return [lo, hi]
-    }
-
-    /// Get narrowed strip widths for subsequent frames.
-    /// After the first frame, just reuse the best strip width found.
-    func narrowedStripWidths(defaults: [Int]) -> [Int] {
-        guard let lastBest = lastBestStripWidth, frameCount > 0 else {
-            return defaults
-        }
-        // After we've found a good strip width, stick with it
-        // (strip width tends to be stable across a sequence)
-        return [lastBest]
     }
 
     /// Whether this is the first frame (no prior data).

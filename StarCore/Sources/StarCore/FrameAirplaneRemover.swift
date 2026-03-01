@@ -389,7 +389,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public var numberOfAlignedFrames: Int { alignmentFrames.count }
 
     internal func loadOrCreateFinalHorizonMask() async throws -> HorizonMask? {
-        if let mask = try await self.loadMergedHorizonMask() {
+        if let mask = try await self.loadOrCreateMergedHorizonMask() {
             mask
         } else {
             // fall back to non-merged horizon mask
@@ -399,7 +399,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     
     // this horizon mask has been calculated by a median merge of
     // possibly aligned horizon masks from neighbor frames.
-    public func loadMergedHorizonMask() async throws -> HorizonMask? {
+    public func loadOrCreateMergedHorizonMask() async throws -> HorizonMask? {
         Log.d("frame \(frameIndex) trying to load merged horizon mask")
         // load if possible
         do {
@@ -559,7 +559,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         self.set(state: .horizonDetection)
         let config = await configManager.config()
-        let adaptiveState = await configManager.adaptiveHorizonState
+        let adaptiveState = configManager.adaptiveHorizonState
 
         guard let original = try await imageAccessor.load(
                 frameIndex: frameIndex,
@@ -572,7 +572,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         // Determine if we should use the adaptive multi-parameter search
         let useAdaptiveSearch = config.horizonSearchCropBounds.count >= 2 ||
-                                !config.horizonSearchStripWidths.isEmpty
+          true                  // XXX
 
         let horizonMask: HorizonMask
 
@@ -588,7 +588,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             guard let mask = try await original.horizonMask(
                     at: frameIndex,
                     bottomPercentage: bottomPercentage,
-                    stripWidth: config.horizonStripWidth,
                     useCannyEdgeDetection: config.useCannyForHorizonDetection,
                     cannyMinThreshold: config.cannyMinThreshold,
                     cannyMaxThreshold: config.cannyMaxThreshold,
@@ -671,25 +670,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           bounds: cropBounds,
           count: config.horizonSearchCropCount1
         )
-        // Enforce a minimum strip width of 20 pixels at full resolution.
-        // Otsu thresholding on very narrow strips (< 20 px) produces unreliable
-        // results with isolated spike artifacts. A value of 0 (full width) is kept.
-        let minFullResStripWidth = 20
-        let rawStripWidths: [Int] = await adaptiveState.narrowedStripWidths(
-          defaults: config.horizonSearchStripWidths
-        )
-        let fullResStripWidths: [Int] = rawStripWidths.map { w in
-            w == 0 ? 0 : max(minFullResStripWidth, w)
-        }
 
         Log.i("frame \(frameIndex) adaptive horizon pass 1: " +
-              "cropAmounts=\(pass1CropAmounts), stripWidths=\(fullResStripWidths), " +
+              "cropAmounts=\(pass1CropAmounts), " +
               "shrinkFactor=\(shrinkFactor)")
 
         // Step 3: Run first-pass combinations in parallel at reduced resolution
         let pass1Results = try await runScoredHorizonSearch(
           cropAmounts: pass1CropAmounts,
-          fullResStripWidths: fullResStripWidths,
           shrunkImage: shrunkImage,
           shrunkEdgeImage: shrunkEdgeImage,
           shrunkWidth: shrunkWidth,
@@ -712,12 +700,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         Log.i("frame \(frameIndex) pass 1 best: " +
               "cropAmount=\(pass1Best.cropAmount), " +
-              "stripWidth=\(pass1Best.stripWidth), " +
               "score=\(pass1Best.score)")
 
         for result in pass1Results.sorted(by: { $0.score.totalScore > $1.score.totalScore }) {
             Log.d("frame \(frameIndex) pass 1 result: " +
-                  "crop=\(result.cropAmount), strip=\(result.stripWidth), " +
+                  "crop=\(result.cropAmount)" +
                   "score=\(result.score)")
         }
 
@@ -732,12 +719,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         )
 
         Log.i("frame \(frameIndex) adaptive horizon pass 2: " +
-              "cropAmounts=\(pass2CropAmounts), " +
-              "stripWidth=\(pass1Best.stripWidth)")
+              "cropAmounts=\(pass2CropAmounts)")
 
         let pass2Results = try await runScoredHorizonSearch(
           cropAmounts: pass2CropAmounts,
-          fullResStripWidths: [pass1Best.stripWidth],
           shrunkImage: shrunkImage,
           shrunkEdgeImage: shrunkEdgeImage,
           shrunkWidth: shrunkWidth,
@@ -758,12 +743,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         Log.i("frame \(frameIndex) pass 2 best: " +
               "cropAmount=\(pass2Best.cropAmount), " +
-              "stripWidth=\(pass2Best.stripWidth), " +
               "score=\(pass2Best.score)")
 
         for result in pass2Results.sorted(by: { $0.score.totalScore > $1.score.totalScore }) {
             Log.d("frame \(frameIndex) pass 2 result: " +
-                  "crop=\(result.cropAmount), strip=\(result.stripWidth), " +
+                  "crop=\(result.cropAmount)," +
                   "score=\(result.score)")
         }
 
@@ -850,7 +834,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 // Store as a HorizonSearchResult using cropAmount=-1 as a sentinel
                 // (DP doesn't have a crop amount; the sentinel is only used for logging).
                 let candidate = HorizonSearchResult(
-                  cropAmount: -1, stripWidth: 0,
+                  cropAmount: -1, 
                   horizonMask: dpResult.mask, score: score,
                   lambda: dpResult.lambda, sobelW: dpResult.sobelW, cannyW: dpResult.cannyW
                 )
@@ -883,12 +867,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // When DP is disabled only (a) is produced.
 
         // --- 6a: Otsu at full resolution ---
-        let otsuStripWidth = pass2Best.stripWidth == 0 ? original.width : pass2Best.stripWidth
-
         guard let otsuFullResMask = try await original.horizonMask(
                 at: frameIndex,
                 bottomPercentage: pass2Best.cropAmount,
-                stripWidth: otsuStripWidth,
                 useCannyEdgeDetection: config.useCannyForHorizonDetection,
                 cannyMinThreshold: config.cannyMinThreshold,
                 cannyMaxThreshold: config.cannyMaxThreshold,
@@ -1044,7 +1025,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // Step 7: Record the best parameters for narrowing subsequent frames
         await adaptiveState.recordBest(
           cropAmount: pass2Best.cropAmount,
-          stripWidth: pass2Best.stripWidth,
           firstPassStep: pass1Step
         )
 
@@ -1065,7 +1045,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     ///   will perform better at full resolution).
     private func runScoredHorizonSearch(
       cropAmounts: [Double],
-      fullResStripWidths: [Int],
       shrunkImage: PixelatedImage,
       shrunkEdgeImage: PixelatedImage?,
       shrunkWidth: UInt,
@@ -1076,43 +1055,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // keep only the largest full-res width (it produces the same reduced-res
         // result but will work better at full resolution).
         // The special value 0 (full width) is always kept as a separate entry.
-        var shrunkToFullRes: [Int: Int] = [:]  // shrunkWidth -> largest fullResWidth
-        let hasFullWidth = fullResStripWidths.contains(0)
-        for fullStripWidth in fullResStripWidths where fullStripWidth != 0 {
-            let shrunkStripWidth = max(20, fullStripWidth / shrinkFactor)
-            let existing = shrunkToFullRes[shrunkStripWidth]
-            if existing == nil || fullStripWidth > existing! {
-                shrunkToFullRes[shrunkStripWidth] = fullStripWidth
-            }
-        }
-        var deduplicatedWidths: [(fullRes: Int, shrunk: Int)] = shrunkToFullRes.map {
-            (fullRes: $0.value, shrunk: $0.key)
-        }
-        if hasFullWidth {
-            deduplicatedWidths.append((fullRes: 0, shrunk: Int(shrunkWidth)))
-        }
 
         return try await withThrowingTaskGroup(
-          of: HorizonSearchResult?.self
+          of: Optional<HorizonSearchResult>.self
         ) { taskGroup in
             for cropAmount in cropAmounts {
-                for widthPair in deduplicatedWidths {
-                    let fullStripWidth = widthPair.fullRes
-                    let shrunkStripWidth = widthPair.shrunk
-
-                    taskGroup.addTask { [frameIndex] in
-                        guard let mask = try await shrunkImage.horizonMask(
-                                at: frameIndex,
-                                bottomPercentage: cropAmount,
-                                stripWidth: shrunkStripWidth,
-                                useCannyEdgeDetection: config.useCannyForHorizonDetection,
-                                cannyMinThreshold: config.cannyMinThreshold,
-                                cannyMaxThreshold: config.cannyMaxThreshold,
-                                useL2Gradient: config.cannyUseL2Gradient
-                              )
-                        else {
-                            return nil
-                        }
+                taskGroup.addTask { [frameIndex] in
+                    if let mask = try await shrunkImage.horizonMask(
+                            at: frameIndex,
+                            bottomPercentage: cropAmount,
+                            useCannyEdgeDetection: config.useCannyForHorizonDetection,
+                            cannyMinThreshold: config.cannyMinThreshold,
+                            cannyMaxThreshold: config.cannyMaxThreshold,
+                            useL2Gradient: config.cannyUseL2Gradient
+                          )
+                    {
 
                         // The crop boundary is the first row of the cropped region
                         // in the mask's coordinate space.  The mask has the same
@@ -1144,11 +1101,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
                         return HorizonSearchResult(
                           cropAmount: cropAmount,
-                          stripWidth: fullStripWidth,
                           horizonMask: mask,
                           score: score
                         )
                     }
+                    return nil
                 }
             }
 
@@ -1275,7 +1232,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         {
             Log.d("frame \(frameIndex) loaded aligned frame")
             
-            let horizonMask = try await self.loadMergedHorizonMask()
+            let horizonMask = try await self.loadOrCreateMergedHorizonMask()
             var results: HomographyResultsCodable? = nil
             switch alignmentType {
             case .earth:
@@ -1306,7 +1263,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                    )
                 {
                     Log.d("frame \(frameIndex) trying to load image of type \(failedType) because we were unable to load image of type \(type)")
-                    let horizonMask = try await self.loadMergedHorizonMask()
+                    let horizonMask = try await self.loadOrCreateMergedHorizonMask()
                     var results: HomographyResultsCodable? = nil
                     switch alignmentType {
                     case .earth:
@@ -1447,7 +1404,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 var horizonMask: HorizonMask? = nil
                 if config.horizonDetectionEnabled {
                     // use static merged horizons  
-                    horizonMask = try await createMergedHorizonMask()
+                    horizonMask = try await loadOrCreateMergedHorizonMask()
                 }
                 
                 warpedResult = WarpedImageResult(

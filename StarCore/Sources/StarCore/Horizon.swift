@@ -178,7 +178,6 @@ extension PixelatedImage {
     public func horizonMask(
       at frameIndex: Int,
       bottomPercentage: Double = 50,
-      stripWidth: Int = 400,
       useCannyEdgeDetection: Bool = true,
       cannyMinThreshold: Double = 80,
       cannyMaxThreshold: Double = 250,
@@ -207,7 +206,7 @@ extension PixelatedImage {
         // determine the size of the sky to remove
         let topHeight = Int(Double(self.height)*bottomPercentage/100)
 
-        Log.d("horizonMask: image=\(self.width)×\(self.height) crop=\(String(format:"%.1f",bottomPercentage))% topHeight=\(topHeight) cropHeight=\(self.height-topHeight) stripWidth=\(stripWidth)")
+        Log.d("horizonMask: image=\(self.width)×\(self.height) crop=\(String(format:"%.1f",bottomPercentage))% topHeight=\(topHeight) cropHeight=\(self.height-topHeight)")
 
         // crop out the top part
         guard let bottomCrop = self.bottomCrop(by: topHeight) else {
@@ -216,126 +215,87 @@ extension PixelatedImage {
         }
         
         // split into an array of smaller images
-        let matrix = bottomCrop.splitIntoMatrix(
-          maxWidth: stripWidth,
-          maxHeight: bottomCrop.height,
-          overlapPercent: 0
-        )
+//        let matrix = bottomCrop.splitIntoMatrix(
+
 
         // updated elements go here
-        var newElements: [ImageMatrixElement] = []
+        Log.d("horizonMask: from \(bottomCrop.width)×\(bottomCrop.height) cropped region")
 
-        Log.d("horizonMask: \(matrix.count) strips from \(bottomCrop.width)×\(bottomCrop.height) cropped region")
+        var groundOnly: PixelatedImage? = nil
 
-
-        return try await withThrowingTaskGroup(of: Optional<ImageMatrixElement>.self) { taskGroup in
-            for (_, element) in matrix.enumerated() {
-                taskGroup.addTask {
-                    // calculate Otsu classification for this image element
-                    if let otsu = element.image.binaryOtsuImage {
-                        // apply connect component filtering and ground only logic
-                        let filtered = try otsu.connectedComponentFiltered(keepLargest: 2)
-                        
-                        let groundOnly = try filtered.groundOnly()
-                        
-                        let bounds = groundOnly.horizonBounds()
-
-                        return ImageMatrixElement(
-                          x: element.x,
-                          y: element.y,
-                          image: groundOnly,
-                          horizonTopY: bounds.topY,
-                          horizonBottomY: bounds.bottomY
-                        )
-                    } else {
-                        Log.w("unable to create otsu horizon image")
-                        return nil
-                    }
-                }
-            }
-            for try await result in taskGroup {
-                if let result { newElements.append(result) }
-            }
+        // calculate Otsu classification for this image element
+        if let otsu = bottomCrop.binaryOtsuImage {
+            // apply connect component filtering and ground only logic
+            let filtered = try otsu.connectedComponentFiltered(keepLargest: 2)
             
-            if newElements.count == matrix.count {
+            groundOnly = try filtered.groundOnly()
 
-                // Log the per-strip Otsu horizon extents so we can see if the
-                // Otsu phase is producing variation across crop/strip combinations.
-                let otsuExtents = newElements.map { e -> String in
-                    let t = e.horizonTopY.map { "\($0)" } ?? "nil"
-                    let b = e.horizonBottomY.map { "\($0)" } ?? "nil"
-                    return "[\(t)..\(b)]"
-                }
-                Log.d("horizonMask: Otsu strip extents (in crop-relative coords): \(otsuExtents.joined(separator: " "))")
-
-                // XXX redo this
-                let (horizonTopY, horizonBottomY) = newElements.combinedHorizonExtents()
-
-                if let no_sky_image = PixelatedImage(from: newElements),
-                   let image = no_sky_image.addSky(height: topHeight)
-                {
-                    var combined = image
-
-                    if useCannyEdgeDetection, false {
-                        // find edges 
-                        let edges = try image.cannyEdgeDetect( 
-                          minThreshold: cannyMinThreshold,
-                          maxThreshold: cannyMaxThreshold,
-                          useL2Gradient: useL2Gradient
-                        )
-                          .bitwiseNot()
-                          .growDarkRegions(by: 1)
-
-                        // combine otsu and canny edge detection into one image
-
-                        combined = try image
-                          .bitwiseAnd(with: edges)
-                    }
-                    
-                    // expand the dark areas by one pixel
-                    //let grown = try groundOnly.growDarkRegions(by: 1)
-
-                    // get rid of any bright compoments that don't touch the top
-                    let filtered = try combined.skyOnly()
-
-                    // shrink back down
-                    let shrunk = try filtered.shrinkDarkRegions(by: 1)
-
-                    // get rid of any dark components that don't touch the ground
-                    let groundOnly = try shrunk.groundOnly()
-                    
-                    var _horizonTopY: Int = shrunk.height
-                    if let horizonTopY { _horizonTopY = horizonTopY }
-
-                    var _horizonBottomY: Int = 0
-                    if let horizonBottomY { _horizonBottomY = horizonBottomY }
-                    
-                    let horizonYValues = HorizonScoring.extractHorizonYPerColumn(from: groundOnly)
-                    let definedYs = horizonYValues.compactMap { $0 }
-                    if definedYs.isEmpty {
-                        Log.i("horizonMask: result has no defined horizon columns (all sky or all ground)")
-                    } else {
-                        let minY = definedYs.min()!
-                        let maxY = definedYs.max()!
-                        let avgY = Double(definedYs.reduce(0,+)) / Double(definedYs.count)
-                        Log.d("horizonMask: result horizonY min=\(minY) max=\(maxY) avg=\(String(format:"%.1f",avgY)) defined=\(definedYs.count)/\(horizonYValues.count) cols")
-                    }
-                    
-                    return HorizonMask(
-                      image: groundOnly,
-                      horizonTopY: _horizonTopY, // XXX these are not right anymore :(
-                      horizonBottomY: _horizonBottomY
-                    )
-                } else {
-                    Log.w("unable to add sky to image")
-                }
-            } else {
-                return nil
-            }
+        } else {
+            Log.w("unable to create otsu horizon image")
             return nil
         }
+
+            
+        if let groundOnly,
+           let image = groundOnly.addSky(height: topHeight)
+        {
+            var combined = image
+
+            if useCannyEdgeDetection, false {
+                // find edges 
+                let edges = try image.cannyEdgeDetect( 
+                  minThreshold: cannyMinThreshold,
+                  maxThreshold: cannyMaxThreshold,
+                  useL2Gradient: useL2Gradient
+                )
+                  .bitwiseNot()
+                  .growDarkRegions(by: 1)
+
+                // combine otsu and canny edge detection into one image
+
+                combined = try image
+                  .bitwiseAnd(with: edges)
+            }
+            
+            // expand the dark areas by one pixel
+            //let grown = try groundOnly.growDarkRegions(by: 1)
+
+            // get rid of any bright compoments that don't touch the top
+            let filtered = try combined.skyOnly()
+
+            // shrink back down
+            let shrunk = try filtered.shrinkDarkRegions(by: 1)
+
+            // get rid of any dark components that don't touch the ground
+            let groundOnly = try shrunk.groundOnly()
+            
+            let _horizonTopY = shrunk.height
+
+            let _horizonBottomY = 0
+            
+            let horizonYValues = HorizonScoring.extractHorizonYPerColumn(from: groundOnly)
+            let definedYs = horizonYValues.compactMap { $0 }
+            if definedYs.isEmpty {
+                Log.i("horizonMask: result has no defined horizon columns (all sky or all ground)")
+            } else {
+                let minY = definedYs.min()!
+                let maxY = definedYs.max()!
+                let avgY = Double(definedYs.reduce(0,+)) / Double(definedYs.count)
+                Log.d("horizonMask: result horizonY min=\(minY) max=\(maxY) avg=\(String(format:"%.1f",avgY)) defined=\(definedYs.count)/\(horizonYValues.count) cols")
+            }
+            
+            return HorizonMask(
+              image: groundOnly,
+              horizonTopY: _horizonTopY, // XXX these are not right anymore :(
+              horizonBottomY: _horizonBottomY
+            )
+        } else {
+            Log.w("unable to add sky to image")
+        }
+        return nil
     }
 }
+
 
 extension PixelatedImage {
     /// Dynamic programming horizon detection.

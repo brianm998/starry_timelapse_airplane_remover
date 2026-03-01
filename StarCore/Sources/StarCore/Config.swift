@@ -341,13 +341,6 @@ public struct Config: Codable, Sendable, Transferable {
     // divided into horizonSearchCropCount2 steps.
     public var horizonSearchCropCount2: Int = 24
 
-    // Set of horizonStripWidth values to try during the initial reduced-resolution
-    // parameter search. These are expressed in full-resolution pixels and will be
-    // scaled down by horizonSearchShrinkFactor for the search pass.
-    // An empty array disables the search and uses the single horizonStripWidth value.
-    // A value of 0 means use the full image width.
-    public var horizonSearchStripWidths: [Int] = [0]
-
     // After the first frame's horizon is detected, narrow the search area for
     // subsequent frames. This is the number of percentage points to add above
     // and below the previously detected best crop amount.
@@ -483,7 +476,6 @@ public struct Config: Codable, Sendable, Transferable {
         self.horizonSearchCropBounds = try c.decodeIfPresent([Double].self, forKey: .horizonSearchCropBounds) ?? self.horizonSearchCropBounds
         self.horizonSearchCropCount1 = try c.decodeIfPresent(Int.self, forKey: .horizonSearchCropCount1) ?? self.horizonSearchCropCount1
         self.horizonSearchCropCount2 = try c.decodeIfPresent(Int.self, forKey: .horizonSearchCropCount2) ?? self.horizonSearchCropCount2
-        self.horizonSearchStripWidths = try c.decodeIfPresent([Int].self, forKey: .horizonSearchStripWidths) ?? self.horizonSearchStripWidths
         self.horizonSearchNarrowingRange = try c.decodeIfPresent(Double.self, forKey: .horizonSearchNarrowingRange) ?? self.horizonSearchNarrowingRange
         self.useDPHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useDPHorizonDetection) ?? self.useDPHorizonDetection
         self.dpHorizonSmoothnessLambdaRange = try c.decodeIfPresent([Double].self, forKey: .dpHorizonSmoothnessLambdaRange) ?? self.dpHorizonSmoothnessLambdaRange
