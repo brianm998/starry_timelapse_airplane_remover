@@ -556,7 +556,7 @@ struct EditableNumberOfFramesToProcessConcurrentlyView: View {
         return EditableNumberView(
             value: $viewModel.numberOfFramesToProcessConcurrently,
             minValue: 1,
-            maxValue: viewModel.imageSequenceSize,
+            maxValue: ProcessInfo.processInfo.processorCount,
             fullTextProvider: { "process \($0) frames at once" },
             prefixText: "process",
             suffixTextProvider: { _ in "frames at once" },
