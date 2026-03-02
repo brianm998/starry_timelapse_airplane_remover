@@ -178,7 +178,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
         let count2 = cropCount2 ?? config.horizonSearchCropCount2
         // Enforce minimum strip width of 20 pixels at full resolution.
         // Otsu on very narrow strips produces noisy single-pixel-width artifacts.
-        let shrinkFactor = self.shrinkFactor ?? config.horizonSearchShrinkFactor
+        //let shrinkFactor = self.shrinkFactor ?? config.horizonSearchShrinkFactor
         let cannyMinThreshold = cannyMin ?? config.cannyMinThreshold
         let cannyMaxThreshold = cannyMax ?? config.cannyMaxThreshold
         let useCanny = !noCanny && config.useCannyForHorizonDetection
@@ -214,8 +214,9 @@ struct HorizonTesterCli: AsyncParsableCommand {
         }
 
         // Create the reduced-resolution image
-        let shrunkWidth = UInt(max(1, original.width / shrinkFactor))
-        let shrunkHeight = UInt(max(1, original.height / shrinkFactor))
+        let shrunkWidth = UInt(config.horizonSearchSize[0])
+        let shrunkHeight = UInt(config.horizonSearchSize[1])
+        
         guard let shrunkImage = original.downScaleTo(width: shrunkWidth, height: shrunkHeight) else {
             Log.e("Failed to downscale image by factor \(shrinkFactor)")
             throw ExitCode.failure
@@ -256,8 +257,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
         func scoreHorizonMask(_ mask: HorizonMask, cropBoundaryY: Int? = nil) -> HorizonScore {
             if let edges = shrunkEdges {
                 return HorizonScoring.score(horizonMask: mask, edgeImage: edges,
-                                            cropBoundaryY: cropBoundaryY,
-                                            scaleFactor: shrinkFactor)
+                                            cropBoundaryY: cropBoundaryY)
             } else {
                 return HorizonScoring.score(
                   horizonMask: mask,
@@ -265,8 +265,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
                   cannyMinThreshold: cannyMinThreshold,
                   cannyMaxThreshold: cannyMaxThreshold,
                   useL2Gradient: useL2Gradient,
-                  cropBoundaryY: cropBoundaryY,
-                  scaleFactor: shrinkFactor
+                  cropBoundaryY: cropBoundaryY
                 )
             }
         }
@@ -292,6 +291,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
         var testIndex = 0
 
         for cropAmount in pass1CropAmounts {
+            testIndex += 1
             let label = String(format: "crop=%05.1f", cropAmount)
             Log.i("[\(testIndex)/\(pass1Total)] Testing \(label) " )
 
@@ -433,7 +433,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
         for (rank, result) in pass2Ranked.enumerated() {
             let marker = rank == 0 ? " <-- BEST" : ""
             Log.i(String(
-              format: "  #%d: crop=%05.1f strip=%04d  score=%@%@",
+              format: "  #%d: crop=%05.1f score=%@%@",
               rank + 1, result.cropAmount,
               result.score.description, marker
             ))
@@ -561,7 +561,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
         // --- Otsu at full resolution ---
         Log.i("Running Otsu at full res: crop=\(pass2Best.cropAmount)")
 
-        guard let otsuFullResMask = try await original.horizonMask(
+        guard let ogOtsuFullResMask = try await shrunkImage.horizonMask(
                 at: 0,
                 bottomPercentage: pass2Best.cropAmount,
                 useCannyEdgeDetection: useCanny,
@@ -574,6 +574,19 @@ struct HorizonTesterCli: AsyncParsableCommand {
             throw ExitCode.failure
         }
 
+
+        // re-scale it back up
+        let otsuFullResMask = HorizonMask(
+          image: ogOtsuFullResMask.image
+            .upScaleTo(
+              width: UInt(original.width),
+              height: UInt(original.height)
+            )!,
+          horizonTopY: ogOtsuFullResMask.horizonTopY,
+          horizonBottomY: ogOtsuFullResMask.horizonBottomY
+        )
+
+        
         let fullResCropBoundaryY = Int(Double(original.height) * pass2Best.cropAmount / 100.0)
         let otsuFullResScore: HorizonScore
         if let edges = fullResEdges {
@@ -631,7 +644,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
                 // re-scale it back up
                 let dpFullResMask = HorizonMask(
                   image: ogdpFullResMask.image
-                    .downScaleTo(
+                    .upScaleTo(
                       width: UInt(original.width),
                       height: UInt(original.height)
                     )!,
@@ -698,7 +711,6 @@ struct HorizonTesterCli: AsyncParsableCommand {
           inputImage: inputImage,
           imageWidth: original.width,
           imageHeight: original.height,
-          shrinkFactor: shrinkFactor,
           useCanny: useCanny,
           cannyMinThreshold: cannyMinThreshold,
           cannyMaxThreshold: cannyMaxThreshold,
@@ -773,7 +785,6 @@ struct HorizonTestSummary: Codable {
     let inputImage: String
     let imageWidth: Int
     let imageHeight: Int
-    let shrinkFactor: Int
     let useCanny: Bool
     let cannyMinThreshold: Double
     let cannyMaxThreshold: Double

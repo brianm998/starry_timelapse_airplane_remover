@@ -315,10 +315,10 @@ public struct Config: Codable, Sendable, Transferable {
 
     // --- Adaptive horizon detection parameters ---
 
-    // How much to shrink the image for the initial parameter search pass.
-    // 4 means 1/4 resolution, 8 means 1/8 resolution, etc.
-    // Higher values are faster but less precise for parameter selection.
-    public var horizonSearchShrinkFactor: Int = 4
+    // What size do we detect the horizon at?
+    // Lower values are faster but less precise
+    // expressed as [width, height] 
+    public var horizonSearchSize: [Int] = [384, 384]
 
     // [min, max] bounds for the crop percentage search range.
     // Each value is a percentage (0-100) of the image height to ignore from the top.
@@ -472,7 +472,7 @@ public struct Config: Codable, Sendable, Transferable {
         self.numberAlignedNeighborFrames = try c.decodeIfPresent(Int.self, forKey: .numberAlignedNeighborFrames) ?? self.numberAlignedNeighborFrames
         self.supportedImageFileTypes = try c.decodeIfPresent([String].self, forKey: .supportedImageFileTypes) ?? self.supportedImageFileTypes
 
-        self.horizonSearchShrinkFactor = try c.decodeIfPresent(Int.self, forKey: .horizonSearchShrinkFactor) ?? self.horizonSearchShrinkFactor
+        self.horizonSearchSize = try c.decodeIfPresent([Int].self, forKey: .horizonSearchSize) ?? self.horizonSearchSize
         self.horizonSearchCropBounds = try c.decodeIfPresent([Double].self, forKey: .horizonSearchCropBounds) ?? self.horizonSearchCropBounds
         self.horizonSearchCropCount1 = try c.decodeIfPresent(Int.self, forKey: .horizonSearchCropCount1) ?? self.horizonSearchCropCount1
         self.horizonSearchCropCount2 = try c.decodeIfPresent(Int.self, forKey: .horizonSearchCropCount2) ?? self.horizonSearchCropCount2

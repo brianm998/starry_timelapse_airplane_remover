@@ -448,8 +448,7 @@ public enum HorizonScoring {
       cannyMinThreshold: Double,
       cannyMaxThreshold: Double,
       useL2Gradient: Bool,
-      cropBoundaryY: Int? = nil,
-      scaleFactor: Int = 1
+      cropBoundaryY: Int? = nil
     ) -> HorizonScore {
         let mask = horizonMask.image
         let horizonY = extractHorizonYPerColumn(from: mask)
@@ -498,8 +497,7 @@ public enum HorizonScoring {
     public static func score(
       horizonMask: HorizonMask,
       edgeImage: PixelatedImage,
-      cropBoundaryY: Int? = nil,
-      scaleFactor: Int = 1
+      cropBoundaryY: Int? = nil
     ) -> HorizonScore {
         let mask = horizonMask.image
         let horizonY = extractHorizonYPerColumn(from: mask)
