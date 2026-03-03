@@ -754,102 +754,102 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         //
         var dpBestShrunkResult: HorizonSearchResult? = nil
 
-        if config.useDPHorizonDetection {
-            let dpSearchTop    = pass2Best.cropAmount/100
-            let dpSearchBottom = 1.0
 
-            let lambdaValues = config.dpHorizonSmoothnessLambdaValues
-            let sobelValues  = config.dpHorizonSobelWeightValues
-            let cannyValues  = config.dpHorizonCannyWeightValues
-            let dpTotal      = lambdaValues.count * sobelValues.count * cannyValues.count
+        let dpSearchTop    = pass2Best.cropAmount/100
+        let dpSearchBottom = 1.0
 
-            Log.i("frame \(frameIndex) DP shrunk-image grid: " +
-                  "\(dpTotal) combinations " +
-                  "(lambda×\(lambdaValues.count), sobel×\(sobelValues.count), canny×\(cannyValues.count)), " +
-                  "search \(String(format:"%.0f",dpSearchTop*100))%–" +
-                  "\(String(format:"%.0f",dpSearchBottom*100))% of image height")
+        let lambdaValues = config.dpHorizonSmoothnessLambdaValues
+        let sobelValues  = config.dpHorizonSobelWeightValues
+        let cannyValues  = config.dpHorizonCannyWeightValues
+        let dpTotal      = lambdaValues.count * sobelValues.count * cannyValues.count
 
-            // Run all DP combinations in parallel on the shrunk image.
-            struct DPShrunkResult {
-                let mask: HorizonMask
-                let lambda: Double
-                let sobelW: Double
-                let cannyW: Double
-            }
+        Log.i("frame \(frameIndex) DP shrunk-image grid: " +
+                "\(dpTotal) combinations " +
+                "(lambda×\(lambdaValues.count), sobel×\(sobelValues.count), canny×\(cannyValues.count)), " +
+                "search \(String(format:"%.0f",dpSearchTop*100))%–" +
+                "\(String(format:"%.0f",dpSearchBottom*100))% of image height")
 
-            let dpShrunkResults: [DPShrunkResult] = try await withThrowingTaskGroup(
-              of: DPShrunkResult?.self
-            ) { taskGroup in
-                for lambda in lambdaValues {
-                    for sobelW in sobelValues {
-                        for cannyW in cannyValues {
-                            taskGroup.addTask { [frameIndex] in
-                                guard let mask = try? await shrunkImage.dpHorizonMask(
-                                        at: frameIndex,
-                                        searchTopFraction: dpSearchTop,
-                                        searchBottomFraction: dpSearchBottom,
-                                        cannyMinThreshold: config.cannyMinThreshold,
-                                        cannyMaxThreshold: config.cannyMaxThreshold,
-                                        useL2Gradient: config.cannyUseL2Gradient,
-                                        smoothnessLambda: lambda,
-                                        sobelWeight: sobelW,
-                                        cannyWeight: cannyW
-                                      )
-                                else { return nil }
-                                return DPShrunkResult(mask: mask, lambda: lambda,
-                                                      sobelW: sobelW, cannyW: cannyW)
-                            }
+        // Run all DP combinations in parallel on the shrunk image.
+        struct DPShrunkResult {
+            let mask: HorizonMask
+            let lambda: Double
+            let sobelW: Double
+            let cannyW: Double
+        }
+
+        let dpShrunkResults: [DPShrunkResult] = try await withThrowingTaskGroup(
+          of: DPShrunkResult?.self
+        ) { taskGroup in
+            for lambda in lambdaValues {
+                for sobelW in sobelValues {
+                    for cannyW in cannyValues {
+                        taskGroup.addTask { [frameIndex] in
+                            guard let mask = try? await shrunkImage.dpHorizonMask(
+                                    at: frameIndex,
+                                    searchTopFraction: dpSearchTop,
+                                    searchBottomFraction: dpSearchBottom,
+                                    cannyMinThreshold: config.cannyMinThreshold,
+                                    cannyMaxThreshold: config.cannyMaxThreshold,
+                                    useL2Gradient: config.cannyUseL2Gradient,
+                                    smoothnessLambda: lambda,
+                                    sobelWeight: sobelW,
+                                    cannyWeight: cannyW
+                                  )
+                            else { return nil }
+                            return DPShrunkResult(mask: mask, lambda: lambda,
+                                                  sobelW: sobelW, cannyW: cannyW)
                         }
                     }
                 }
-                var results: [DPShrunkResult] = []
-                for try await result in taskGroup {
-                    if let r = result { results.append(r) }
-                }
-                return results
             }
+            var results: [DPShrunkResult] = []
+            for try await result in taskGroup {
+                if let r = result { results.append(r) }
+            }
+            return results
+        }
 
-            // Score each DP shrunk result and find the best.
-            for dpResult in dpShrunkResults {
-                let score: HorizonScore
-                if let edges = shrunkEdgeImage {
-                    score = HorizonScoring.score(horizonMask: dpResult.mask, edgeImage: edges)
-                } else {
-                    score = HorizonScoring.score(
-                      horizonMask: dpResult.mask,
-                      originalImage: shrunkImage,
-                      cannyMinThreshold: config.cannyMinThreshold,
-                      cannyMaxThreshold: config.cannyMaxThreshold,
-                      useL2Gradient: config.cannyUseL2Gradient
-                    )
-                }
-                Log.d("frame \(frameIndex) DP shrunk score=\(score) " +
-                      "lambda=\(dpResult.lambda) sobel=\(dpResult.sobelW) canny=\(dpResult.cannyW)")
-
-                // Store as a HorizonSearchResult using cropAmount=-1 as a sentinel
-                // (DP doesn't have a crop amount; the sentinel is only used for logging).
-                let candidate = HorizonSearchResult(
-                  cropAmount: -1, 
-                  horizonMask: dpResult.mask, score: score,
-                  lambda: dpResult.lambda, sobelW: dpResult.sobelW, cannyW: dpResult.cannyW
+        // Score each DP shrunk result and find the best.
+        for dpResult in dpShrunkResults {
+            let score: HorizonScore
+            if let edges = shrunkEdgeImage {
+                score = HorizonScoring.score(horizonMask: dpResult.mask, edgeImage: edges)
+            } else {
+                score = HorizonScoring.score(
+                  horizonMask: dpResult.mask,
+                  originalImage: shrunkImage,
+                  cannyMinThreshold: config.cannyMinThreshold,
+                  cannyMaxThreshold: config.cannyMaxThreshold,
+                  useL2Gradient: config.cannyUseL2Gradient
                 )
-                if let current = dpBestShrunkResult {
-                    if score.totalScore > current.score.totalScore {
-                        dpBestShrunkResult = candidate
-                    }
-                } else {
+            }
+            Log.d("frame \(frameIndex) DP shrunk score=\(score) " +
+                    "lambda=\(dpResult.lambda) sobel=\(dpResult.sobelW) canny=\(dpResult.cannyW)")
+
+            // Store as a HorizonSearchResult using cropAmount=-1 as a sentinel
+            // (DP doesn't have a crop amount; the sentinel is only used for logging).
+            let candidate = HorizonSearchResult(
+              cropAmount: -1, 
+              horizonMask: dpResult.mask, score: score,
+              lambda: dpResult.lambda, sobelW: dpResult.sobelW, cannyW: dpResult.cannyW
+            )
+            if let current = dpBestShrunkResult {
+                if score.totalScore > current.score.totalScore {
                     dpBestShrunkResult = candidate
                 }
-            }
-
-            if let best = dpBestShrunkResult {
-                Log.i("frame \(frameIndex) DP shrunk best score=\(best.score) " +
-                      "lambda=\(best.lambda ?? -1) sobel=\(best.sobelW ?? -1) " +
-                      "canny=\(best.cannyW ?? -1)")
             } else {
-                Log.w("frame \(frameIndex) DP shrunk grid produced no valid results")
+                dpBestShrunkResult = candidate
             }
         }
+
+        if let best = dpBestShrunkResult {
+            Log.i("frame \(frameIndex) DP shrunk best score=\(best.score) " +
+                    "lambda=\(best.lambda ?? -1) sobel=\(best.sobelW ?? -1) " +
+                    "canny=\(best.cannyW ?? -1)")
+        } else {
+            Log.w("frame \(frameIndex) DP shrunk grid produced no valid results")
+        }
+
 
         // Step 6: Run BOTH Otsu and DP at full and shrunk resolutions,
         // then combine and score all of them.
@@ -863,59 +863,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // Each of the four is scored independently; the highest-scoring one is returned.
         // When DP is disabled only (a) is produced.
 
-        // --- 6b: Otsu at shrunk resolution
-
-        guard let ogShrunkOtsuMask = try await shrunkImage.horizonMask(
-                at: frameIndex,
-                bottomPercentage: pass2Best.cropAmount,
-                useCannyEdgeDetection: config.useCannyForHorizonDetection,
-                cannyMinThreshold: config.cannyMinThreshold,
-                cannyMaxThreshold: config.cannyMaxThreshold,
-                useL2Gradient: config.cannyUseL2Gradient
-              )
-        else {
-            throw "cannot create full resolution Otsu horizon mask"
-        }
-
-        // re-scale it back up
-        let shrunkOtsuMask = HorizonMask(
-          image: ogShrunkOtsuMask.image
-            .upScaleTo(
-              width: UInt(original.width),
-              height: UInt(original.height)
-            )!,
-          horizonTopY: ogShrunkOtsuMask.horizonTopY,
-          horizonBottomY: ogShrunkOtsuMask.horizonBottomY
-        )
-        
-        let shrunkResCropBoundaryY = Int(Double(shrunkImage.height) * pass2Best.cropAmount / 100)
-        let shrunkOtsuScore: HorizonScore
-        if let edges = shrunkEdgeImage {
-            shrunkOtsuScore = HorizonScoring.score(
-              horizonMask: shrunkOtsuMask,
-              edgeImage: edges,
-              cropBoundaryY: shrunkResCropBoundaryY
-            )
-        } else {
-            shrunkOtsuScore = HorizonScoring.score(
-              horizonMask: shrunkOtsuMask,
-              originalImage: shrunkImage,
-              cannyMinThreshold: config.cannyMinThreshold,
-              cannyMaxThreshold: config.cannyMaxThreshold,
-              useL2Gradient: config.cannyUseL2Gradient,
-              cropBoundaryY: shrunkResCropBoundaryY
-            )
-        }
-        Log.i("frame \(frameIndex) Otsu full resolution score=\(shrunkOtsuScore)")
-
-        var bestMask   = shrunkOtsuMask
-        var bestScore  = shrunkOtsuScore
-        var bestMethod = "shrunkOtsu"
-
-
         // --- 6d: DP at smaller resolution ---
-        if config.useDPHorizonDetection,
-           let dpBest = dpBestShrunkResult,
+        if let dpBest = dpBestShrunkResult,
            let lambda = dpBest.lambda,
            let sobelW = dpBest.sobelW,
            let cannyW = dpBest.cannyW
@@ -951,13 +900,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                   horizonBottomY: ogdpShrunkMask.horizonBottomY
                 )
                 let dpFullResScore: HorizonScore
-
+/*
                 if let edges = shrunkEdgeImage {
                     dpFullResScore = HorizonScoring.score(
                       horizonMask: dpFullResMask,
                       edgeImage: edges
                     )
-                } else {
+                } else {*/
                     dpFullResScore = HorizonScoring.score(
                       horizonMask: dpFullResMask,
                       originalImage: original,
@@ -965,19 +914,77 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                       cannyMaxThreshold: config.cannyMaxThreshold,
                       useL2Gradient: config.cannyUseL2Gradient
                     )
-                }
+//                }
                 Log.i("frame \(frameIndex) DP full resolution score=\(dpFullResScore)")
 
-                if dpFullResScore.totalScore > bestScore.totalScore {
-                    bestMask   = dpFullResMask
-                    bestScore  = dpFullResScore
-                    bestMethod = "shrunkDp"
-                }
+
+                let bestMask   = dpFullResMask
+                let bestScore  = dpFullResScore
+                let bestMethod = "shrunkDp"
+
+
+                Log.i("frame \(frameIndex) final horizon method=\(bestMethod), score=\(bestScore)")
+
+                // Step 7: Record the best parameters for narrowing subsequent frames
+                await adaptiveState.recordBest(
+                  cropAmount: pass2Best.cropAmount,
+                  firstPassStep: pass1Step
+                )
+
+                return bestMask
+                
             }
         }
 
-        Log.i("frame \(frameIndex) final horizon method=\(bestMethod), score=\(bestScore)")
+        // --- 6b: Otsu at shrunk resolution
 
+        guard let ogShrunkOtsuMask = try await shrunkImage.horizonMask(
+                at: frameIndex,
+                bottomPercentage: pass2Best.cropAmount,
+                useCannyEdgeDetection: config.useCannyForHorizonDetection,
+                cannyMinThreshold: config.cannyMinThreshold,
+                cannyMaxThreshold: config.cannyMaxThreshold,
+                useL2Gradient: config.cannyUseL2Gradient
+              )
+        else {
+            throw "cannot create full resolution Otsu horizon mask"
+        }
+
+        // re-scale it back up
+        let shrunkOtsuMask = HorizonMask(
+          image: ogShrunkOtsuMask.image
+            .upScaleTo(
+              width: UInt(original.width),
+              height: UInt(original.height)
+            )!,
+          horizonTopY: ogShrunkOtsuMask.horizonTopY,
+          horizonBottomY: ogShrunkOtsuMask.horizonBottomY
+        )
+        
+        let shrunkResCropBoundaryY = Int(Double(shrunkImage.height) * pass2Best.cropAmount / 100)
+        /*
+         if let edges = shrunkEdgeImage {
+         shrunkOtsuScore = HorizonScoring.score(
+         horizonMask: shrunkOtsuMask,
+         edgeImage: edges,
+         cropBoundaryY: shrunkResCropBoundaryY
+         )
+         } else {*/
+
+        let shrunkOtsuScore = HorizonScoring.score(
+          horizonMask: shrunkOtsuMask,
+          originalImage: shrunkImage,
+          cannyMinThreshold: config.cannyMinThreshold,
+          cannyMaxThreshold: config.cannyMaxThreshold,
+          useL2Gradient: config.cannyUseL2Gradient,
+          cropBoundaryY: shrunkResCropBoundaryY
+        )
+        //        }
+        Log.i("frame \(frameIndex) Otsu full resolution score=\(shrunkOtsuScore)")
+        let bestMask   = shrunkOtsuMask
+        let bestScore  = shrunkOtsuScore
+        let bestMethod = "shrunkOtsu"
+        
         // Step 7: Record the best parameters for narrowing subsequent frames
         await adaptiveState.recordBest(
           cropAmount: pass2Best.cropAmount,
@@ -985,6 +992,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         )
 
         return bestMask
+        
     }
 
     /// Run horizon detection and scoring for all combinations of crop amounts and

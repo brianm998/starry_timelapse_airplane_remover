@@ -347,12 +347,6 @@ public struct Config: Codable, Sendable, Transferable {
     // e.g. if best crop was 50 and this is 15, next frame searches [35, 50, 65].
     public var horizonSearchNarrowingRange: Double = 20
 
-    // --- DP horizon detection parameters ---
-    // Enable the dynamic programming horizon tracing approach.
-    // When true, runs DP horizon detection in parallel with the Otsu-based
-    // approach and picks whichever scores higher.
-    public var useDPHorizonDetection: Bool = true
-
     // [min, max] range for the DP smoothness penalty (cost per pixel of vertical
     // displacement). Higher = smoother horizon line. Typical range: 0.5–5.0.
     // Set both values equal (and count=1) to use a single fixed value.
@@ -477,7 +471,6 @@ public struct Config: Codable, Sendable, Transferable {
         self.horizonSearchCropCount1 = try c.decodeIfPresent(Int.self, forKey: .horizonSearchCropCount1) ?? self.horizonSearchCropCount1
         self.horizonSearchCropCount2 = try c.decodeIfPresent(Int.self, forKey: .horizonSearchCropCount2) ?? self.horizonSearchCropCount2
         self.horizonSearchNarrowingRange = try c.decodeIfPresent(Double.self, forKey: .horizonSearchNarrowingRange) ?? self.horizonSearchNarrowingRange
-        self.useDPHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useDPHorizonDetection) ?? self.useDPHorizonDetection
         self.dpHorizonSmoothnessLambdaRange = try c.decodeIfPresent([Double].self, forKey: .dpHorizonSmoothnessLambdaRange) ?? self.dpHorizonSmoothnessLambdaRange
         self.dpHorizonSmoothnessLambdaCount = try c.decodeIfPresent(Int.self, forKey: .dpHorizonSmoothnessLambdaCount) ?? self.dpHorizonSmoothnessLambdaCount
         self.dpHorizonSobelWeightRange = try c.decodeIfPresent([Double].self, forKey: .dpHorizonSobelWeightRange) ?? self.dpHorizonSobelWeightRange

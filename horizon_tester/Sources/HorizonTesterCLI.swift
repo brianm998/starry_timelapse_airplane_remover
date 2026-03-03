@@ -589,7 +589,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
         
         let fullResCropBoundaryY = Int(Double(original.height) * pass2Best.cropAmount / 100.0)
         let otsuFullResScore: HorizonScore
-        if let edges = fullResEdges {
+        if let edges = shrunkEdges {
             otsuFullResScore = HorizonScoring.score(horizonMask: otsuFullResMask, edgeImage: edges,
                                                     cropBoundaryY: fullResCropBoundaryY)
         } else {
@@ -653,7 +653,7 @@ struct HorizonTesterCli: AsyncParsableCommand {
                 )
 
                 let dpScore: HorizonScore
-                if let edges = fullResEdges {
+                if let edges = shrunkEdges {
                     dpScore = HorizonScoring.score(horizonMask: dpFullResMask, edgeImage: edges)
                 } else {
                     dpScore = HorizonScoring.score(
