@@ -234,8 +234,10 @@ func processImage(
             .appendingPathComponent(filename)
             .path
 
-        // cv::imwrite infers format from the filename extension.
-        imageTile.image.mat.write(to: outputPath)
+        // Convert to 8-bit RGB (÷256 fixed scaling) before writing,
+        // so all tiles are 8-bit regardless of the source image bit depth.
+        // This matches the robust_loader in train_tile_classifier.py (>> 8).
+        imageTile.image.mat.ensure8Bits().write(to: outputPath)
         counts[dirName, default: 0] += 1
     }
 
