@@ -20,8 +20,8 @@
      clear_sky/
      cloudy_sky/
 
- Tile filenames encode their top-left pixel position in the source image:
-   tile_XXXXX_YYYYY.<ext>
+ Tile filenames encode the source directory context and top-left pixel position:
+   [grandparent_]parent_tile_XXXXX_YYYYY.<ext>
 
  Usage:
    tile_extractor <image> <mask> <output-dir> [options]
@@ -38,6 +38,17 @@ import ArgumentParser
 import logging
 import StarCore
 import kht_bridge
+
+// MARK: - Helpers
+
+/// Replaces any character that is not alphanumeric, a dot, a hyphen, or an underscore with `_`.
+/// Used to make directory names safe for embedding in filenames.
+private func safeName(_ s: String) -> String {
+    let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
+    return s.unicodeScalars
+        .map { allowed.contains($0) ? Character($0) : Character("_") }
+        .reduce(into: "") { $0.append($1) }
+}
 
 // MARK: - Sky classification (command-line argument type)
 
@@ -90,7 +101,9 @@ struct TileExtractor: AsyncParsableCommand {
             The horizon mask must be a binary grayscale image the same size as the input.
             White pixels (any non-zero value) represent sky; black pixels represent ground.
 
-            Tile filenames encode their origin in the source image: tile_XXXXX_YYYYY.<ext>
+            Tile filenames encode the source directory context and tile origin:
+              [grandparent_]parent_tile_XXXXX_YYYYY.<ext>
+            where XXXXX/YYYYY are the top-left pixel coordinates in the source image.
             """
     )
 
@@ -159,8 +172,33 @@ struct TileExtractor: AsyncParsableCommand {
         Log.i("Default sky class: \(skyDefault.rawValue) → \(skyDefault.outputDirName)/")
 
         // --- Preserve source file extension ---
-        let sourceExt = URL(fileURLWithPath: imageFilename).pathExtension
+        let imageURL  = URL(fileURLWithPath: imageFilename).standardized
+        let sourceExt = imageURL.pathExtension
         let tileExt   = sourceExt.isEmpty ? "tiff" : sourceExt
+
+        // --- Build filename prefix from the image's directory hierarchy ---
+        //
+        // We include:
+        //   • the immediate parent directory name (always)
+        //   • the grandparent directory name (when it exists and is not the filesystem root)
+        //
+        // Example: /data/session_01/LRT_00042.tiff  →  prefix = "session_01"
+        //          /data/night/session_01/LRT_00042.tiff  →  prefix = "night_session_01"
+        //
+        let parentDir     = imageURL.deletingLastPathComponent().lastPathComponent
+        let grandparentDir: String = {
+            let gp = imageURL
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .lastPathComponent
+            return (gp.isEmpty || gp == "/") ? "" : gp
+        }()
+        let filePrefix: String = {
+            let parts: [String] = grandparentDir.isEmpty
+                ? [parentDir]
+                : [grandparentDir, parentDir]
+            return parts.map { safeName($0) }.joined(separator: "_")
+        }()
 
         // --- Create output directory tree ---
         let outputURL = URL(fileURLWithPath: outputDir)
@@ -201,20 +239,24 @@ struct TileExtractor: AsyncParsableCommand {
         var counts: [String: Int] = [:]
 
         for (imageTile, maskTile) in zip(imageTiles, maskTiles) {
-            let tileClass = classify(maskTile: maskTile.image, defaultSky: skyDefault)
-            let dirName   = tileClass.outputDirName
+            if imageTile.image.width == tileSize,
+               imageTile.image.height == tileSize
+            {
+                let tileClass = classify(maskTile: maskTile.image, defaultSky: skyDefault)
+                let dirName   = tileClass.outputDirName
 
-            // Encode top-left pixel coordinates in the filename.
-            let filename   = String(format: "tile_%05d_%05d.\(tileExt)", imageTile.x, imageTile.y)
-            let outputPath = outputURL
-                .appendingPathComponent(dirName)
-                .appendingPathComponent(filename)
-                .path
+                // Encode source directory context and top-left pixel coordinates.
+                let filename   = String(format: "\(filePrefix)_tile_%05d_%05d.\(tileExt)", imageTile.x, imageTile.y)
+                let outputPath = outputURL
+                  .appendingPathComponent(dirName)
+                  .appendingPathComponent(filename)
+                  .path
 
-            // Write tile in same format as the source image (cv::imwrite uses the extension).
-            imageTile.image.mat.write(to: outputPath)
+                // Write tile in same format as the source image (cv::imwrite uses the extension).
+                imageTile.image.mat.write(to: outputPath)
 
-            counts[dirName, default: 0] += 1
+                counts[dirName, default: 0] += 1
+            }
         }
 
         // --- Summary ---
