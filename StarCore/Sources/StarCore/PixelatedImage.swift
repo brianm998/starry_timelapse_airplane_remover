@@ -12,6 +12,7 @@ You should have received a copy of the GNU General Public License along with sta
 
 import Foundation
 import CoreGraphics
+import CoreVideo
 import KHTSwift
 import logging
 import Cocoa
@@ -1029,6 +1030,89 @@ extension PixelatedImage {
     }
 }
     
+// MARK: - CVPixelBuffer
+
+extension PixelatedImage {
+
+    /// Returns the image as an 8-bit RGB `CVPixelBuffer` (format `kCVPixelFormatType_24RGB`)
+    /// suitable for passing directly to a CoreML model.
+    ///
+    /// Conversions applied automatically:
+    ///  - **Bit depth** — 16-bit / 32-bit images are reduced to 8-bit using a fixed ÷256
+    ///    scale, matching the scaling `tile_extractor` applies when writing tiles.
+    ///  - **Channel order** — OpenCV stores colour images in BGR order internally;
+    ///    this method reorders to RGB as expected by the exported CoreML model
+    ///    (`ct.colorlayout.RGB`).
+    ///  - **Grayscale** (1 channel) — replicated to three identical RGB channels.
+    ///  - **BGRA** (4 channels) — alpha is dropped; BGR reordered to RGB.
+    ///
+    /// Row padding from OpenCV (`mat.step`) and from CoreVideo are both handled
+    /// correctly, so the method is safe for images of any width.
+    ///
+    /// - Returns: A `CVPixelBuffer`, or `nil` if the image is empty or allocation fails.
+    public func toPixelBuffer() -> CVPixelBuffer? {
+        // Ensure 8-bit.  No-op when already 8-bit; ÷256 fixed scale for 16-bit.
+        let src: PixelatedImage
+        if mat.is8Bits() {
+            src = self
+        } else {
+            guard let converted = PixelatedImage(mat: mat.ensure8Bits()) else { return nil }
+            src = converted
+        }
+
+        let w  = src.width
+        let h  = src.height
+        let ch = src.componentsPerPixel
+
+        // Allocate a 24-bit RGB pixel buffer
+        var pb: CVPixelBuffer?
+        guard CVPixelBufferCreate(kCFAllocatorDefault,
+                                  w, h,
+                                  kCVPixelFormatType_24RGB,
+                                  nil,
+                                  &pb) == kCVReturnSuccess,
+              let pb
+        else { return nil }
+
+        CVPixelBufferLockBaseAddress(pb, [])
+        defer { CVPixelBufferUnlockBaseAddress(pb, []) }
+
+        guard let dstBase = CVPixelBufferGetBaseAddress(pb) else { return nil }
+
+        // Source: raw mat bytes. Use mat.step as row stride — it may include
+        // OpenCV alignment padding that mat.lengthInBytes does NOT account for.
+        let srcBytes  = src.mat.dataPtr.assumingMemoryBound(to: UInt8.self)
+        let srcStride = Int(src.mat.step)
+
+        // Destination: CoreVideo may also add per-row padding for its own alignment.
+        let dstBytes  = dstBase.assumingMemoryBound(to: UInt8.self)
+        let dstStride = CVPixelBufferGetBytesPerRow(pb)
+
+        for row in 0 ..< h {
+            let srcRow = srcBytes + row * srcStride
+            let dstRow = dstBytes + row * dstStride
+            for col in 0 ..< w {
+                let s = srcRow + col * ch   // UnsafePointer<UInt8>
+                let d = dstRow + col * 3    // UnsafeMutablePointer<UInt8>
+                switch ch {
+                case 1:          // grayscale → replicate to R, G, B
+                    d[0] = s[0]; d[1] = s[0]; d[2] = s[0]
+                case 3:          // BGR (OpenCV) → RGB (CoreML)
+                    d[0] = s[2]; d[1] = s[1]; d[2] = s[0]
+                case 4:          // BGRA (OpenCV) → RGB (drop alpha)
+                    d[0] = s[2]; d[1] = s[1]; d[2] = s[0]
+                default:         // unexpected channel count — copy first channel to all three
+                    d[0] = s[0]; d[1] = s[0]; d[2] = s[0]
+                }
+            }
+        }
+
+        return pb
+    }
+}
+
+// MARK: - MatWrapper
+
 extension MatWrapper: @unchecked @retroactive Sendable {}
 extension UnsafeBufferPointer: @unchecked @retroactive Sendable {}
 

@@ -17,7 +17,6 @@
 */
 
 import CoreML
-import CoreVideo
 import Foundation
 
 // MARK: - Output label enum
@@ -82,8 +81,8 @@ public final class TileClassifier: Sendable {
 
     /// Classifies a tile supplied as a `CVPixelBuffer`.
     ///
-    /// The pixel buffer must be 8-bit BGRA or RGB, `tileSize × tileSize`.
-    /// CoreML applies the same normalisation that was baked in at export time
+    /// The buffer must be `kCVPixelFormatType_24RGB`, 8-bit.
+    /// CoreML applies the normalisation baked in at export time
     /// (pixel / 127.5 − 1), so **do not** pre-normalise the buffer yourself.
     public func classify(_ pixelBuffer: CVPixelBuffer) throws -> TileMLClass {
         let featureProvider = try MLDictionaryFeatureProvider(
@@ -98,65 +97,16 @@ public final class TileClassifier: Sendable {
         return tileClass
     }
 
-    // MARK: Prediction — raw 8-bit RGB bytes
+    // MARK: Prediction — PixelatedImage
 
-    /// Classifies a tile from a flat `[UInt8]` buffer in **RGB** order,
-    /// with `width × height` pixels.
+    /// Classifies a tile directly from a `PixelatedImage`.
     ///
-    /// This is a convenience wrapper that builds a `CVPixelBuffer` internally.
-    /// Prefer the `CVPixelBuffer` overload in hot loops to avoid repeated
-    /// allocations.
-    public func classify(rgbBytes: UnsafeBufferPointer<UInt8>,
-                         width: Int,
-                         height: Int) throws -> TileMLClass {
-        let pixelBuffer = try makePixelBuffer(from: rgbBytes, width: width, height: height)
+    /// Bit-depth conversion (→ 8-bit) and BGR → RGB channel reordering are
+    /// handled by `PixelatedImage.toPixelBuffer()`.
+    public func classify(_ image: PixelatedImage) throws -> TileMLClass {
+        guard let pixelBuffer = image.toPixelBuffer() else {
+            throw TileClassifierError.pixelBufferCreationFailed
+        }
         return try classify(pixelBuffer)
-    }
-
-    // MARK: - Private helpers
-
-    /// Wraps an 8-bit RGB byte buffer in a `CVPixelBuffer` (kCVPixelFormatType_24RGB).
-    private func makePixelBuffer(from bytes: UnsafeBufferPointer<UInt8>,
-                                 width: Int,
-                                 height: Int) throws -> CVPixelBuffer {
-        var pixelBuffer: CVPixelBuffer?
-        let attrs: [CFString: Any] = [
-            kCVPixelBufferCGImageCompatibilityKey: true,
-            kCVPixelBufferCGBitmapContextCompatibilityKey: true,
-        ]
-        let status = CVPixelBufferCreate(
-            kCFAllocatorDefault,
-            width, height,
-            kCVPixelFormatType_24RGB,
-            attrs as CFDictionary,
-            &pixelBuffer)
-
-        guard status == kCVReturnSuccess, let pb = pixelBuffer else {
-            throw TileClassifierError.pixelBufferCreationFailed
-        }
-
-        CVPixelBufferLockBaseAddress(pb, [])
-        defer { CVPixelBufferUnlockBaseAddress(pb, []) }
-
-        guard let dst = CVPixelBufferGetBaseAddress(pb) else {
-            throw TileClassifierError.pixelBufferCreationFailed
-        }
-
-        let bytesPerRow = CVPixelBufferGetBytesPerRow(pb)
-        let srcBytesPerRow = width * 3   // tightly packed RGB
-
-        if bytesPerRow == srcBytesPerRow {
-            // Fast path: no padding, copy in one shot
-            dst.copyMemory(from: bytes.baseAddress!, byteCount: height * srcBytesPerRow)
-        } else {
-            // Row-by-row copy when the buffer has alignment padding
-            for row in 0 ..< height {
-                let srcRow = bytes.baseAddress! + row * srcBytesPerRow
-                let dstRow = dst + row * bytesPerRow
-                dstRow.copyMemory(from: srcRow, byteCount: srcBytesPerRow)
-            }
-        }
-
-        return pb
     }
 }
