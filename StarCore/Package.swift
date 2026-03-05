@@ -30,6 +30,13 @@ let package = Package(
               .product(name: "Semaphore", package: "Semaphore"),
               .product(name: "KHTSwift", package: "KHTSwift"),
               .product(name: "logging", package: "logging"),
+            ],
+            resources: [
+              // Pre-compiled CoreML tile classifier.
+              // Re-generate with:
+              //   xcrun coremlc compile tile_classifier.mlpackage \
+              //       StarCore/Sources/StarCore/Resources/
+              .copy("Resources/tile_classifier.mlmodelc"),
             ]
         ),
         .testTarget(

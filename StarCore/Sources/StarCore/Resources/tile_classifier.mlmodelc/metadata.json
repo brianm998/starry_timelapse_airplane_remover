@@ -1,0 +1,84 @@
+[
+  {
+    "metadataOutputVersion" : "3.0",
+    "shortDescription" : "Tile classifier (32×32 RGB): earth \/ star_sky \/ clear_sky \/ cloudy_sky",
+    "outputSchema" : [
+      {
+        "isOptional" : "0",
+        "formattedType" : "String",
+        "type" : "String",
+        "name" : "classLabel",
+        "shortDescription" : "Predicted class: earth | star_sky | clear_sky | cloudy_sky"
+      },
+      {
+        "isOptional" : "0",
+        "keyType" : "String",
+        "formattedType" : "Dictionary (String → Double)",
+        "type" : "Dictionary",
+        "name" : "classLabel_probs",
+        "shortDescription" : ""
+      }
+    ],
+    "storagePrecision" : "Float16",
+    "modelParameters" : [
+
+    ],
+    "author" : "nighttime_timelapse_airplane_remover",
+    "specificationVersion" : 7,
+    "mlProgramOperationTypeHistogram" : {
+      "Ios16.cast" : 2,
+      "Ios16.add" : 1,
+      "Ios16.mul" : 1,
+      "Ios16.relu" : 7,
+      "Ios16.reshape" : 1,
+      "Ios16.avgPool" : 1,
+      "Ios16.maxPool" : 2,
+      "Ios16.linear" : 2,
+      "Ios16.conv" : 6
+    },
+    "computePrecision" : "Mixed (Float16, Float32, Int32)",
+    "isUpdatable" : "0",
+    "stateSchema" : [
+
+    ],
+    "availability" : {
+      "macOS" : "13.0",
+      "tvOS" : "16.0",
+      "visionOS" : "1.0",
+      "watchOS" : "9.0",
+      "iOS" : "16.0",
+      "macCatalyst" : "16.0"
+    },
+    "modelType" : {
+      "name" : "MLModelType_mlProgram"
+    },
+    "inputSchema" : [
+      {
+        "height" : "32",
+        "colorspace" : "RGB",
+        "isOptional" : "0",
+        "width" : "32",
+        "isColor" : "1",
+        "formattedType" : "Image (Color 32 × 32)",
+        "hasSizeFlexibility" : "0",
+        "type" : "Image",
+        "shortDescription" : "8-bit RGB tile image, 32×32 px",
+        "name" : "image"
+      }
+    ],
+    "classLabels" : [
+      "clear_sky",
+      "cloudy_sky",
+      "earth",
+      "star_sky"
+    ],
+    "generatedClassName" : "tile_classifier_50_epochs",
+    "userDefinedMetadata" : {
+      "com.github.apple.coremltools.conversion_date" : "2026-03-04",
+      "com.github.apple.coremltools.source" : "torch==2.2.2",
+      "com.github.apple.coremltools.version" : "9.0",
+      "com.github.apple.coremltools.source_dialect" : "TorchScript"
+    },
+    "method" : "predict"
+  }
+]
