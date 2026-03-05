@@ -26,11 +26,12 @@ public struct ImageBuffer<Element: FixedWidthInteger>: @unchecked Sendable {
     let height: Int
     let components: Int
 
-    init(pointer: UnsafeBufferPointer<Element>,
-         width: Int,
-         height: Int,
-         components: Int = 1)
-    {
+    public init(
+      pointer: UnsafeBufferPointer<Element>,
+      width: Int,
+      height: Int,
+      components: Int = 1
+    ) {
         self.width = width
         self.height = height
         //Log.d("width \(width) height \(height)")
@@ -45,10 +46,11 @@ public struct ImageBuffer<Element: FixedWidthInteger>: @unchecked Sendable {
         )
     }
     
-    init(width: Int,
-         height: Int,
-         components: Int = 1)
-    {
+    public init(
+      width: Int,
+      height: Int,
+      components: Int = 1
+    ) {
         self.width = width
         self.height = height
         //Log.d("width \(width) height \(height)")
@@ -74,11 +76,11 @@ public struct ImageBuffer<Element: FixedWidthInteger>: @unchecked Sendable {
     }
     
     /// Raw pointer if needed
-    var pointer: UnsafeMutablePointer<Element> {
+    public var pointer: UnsafeMutablePointer<Element> {
         return holder.buffer!.assumingMemoryBound(to: Element.self)
     }
 
-    var image: PixelatedImage? {
+    public var image: PixelatedImage? {
         if let mat = holder.mat() {
             if Element.self == UInt8.self,
                let buffer = self as? ImageBuffer<UInt8>
