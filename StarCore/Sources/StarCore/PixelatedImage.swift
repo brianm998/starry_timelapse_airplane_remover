@@ -1034,17 +1034,21 @@ extension PixelatedImage {
 
 extension PixelatedImage {
 
-    /// Returns the image as an 8-bit RGB `CVPixelBuffer` (format `kCVPixelFormatType_24RGB`)
+    /// Returns the image as an 8-bit BGRA `CVPixelBuffer` (format `kCVPixelFormatType_32BGRA`)
     /// suitable for passing directly to a CoreML model.
+    ///
+    /// `kCVPixelFormatType_32BGRA` is the pixel format most widely accepted by CoreML's
+    /// `MLFeatureValue(pixelBuffer:)`.  CoreML automatically converts the BGRA buffer to
+    /// whatever channel order the model declares (e.g. `ct.colorlayout.RGB`), so no manual
+    /// channel reordering is required here.
     ///
     /// Conversions applied automatically:
     ///  - **Bit depth** — 16-bit / 32-bit images are reduced to 8-bit using a fixed ÷256
     ///    scale, matching the scaling `tile_extractor` applies when writing tiles.
-    ///  - **Channel order** — OpenCV stores colour images in BGR order internally;
-    ///    this method reorders to RGB as expected by the exported CoreML model
-    ///    (`ct.colorlayout.RGB`).
-    ///  - **Grayscale** (1 channel) — replicated to three identical RGB channels.
-    ///  - **BGRA** (4 channels) — alpha is dropped; BGR reordered to RGB.
+    ///  - **BGR → BGRA** (3-channel OpenCV) — B, G, R channels copied directly into the
+    ///    first three bytes; alpha set to 255.
+    ///  - **Grayscale → BGRA** (1 channel) — value replicated to B, G, R; alpha = 255.
+    ///  - **BGRA** (4 channels) — copied as-is.
     ///
     /// Row padding from OpenCV (`mat.step`) and from CoreVideo are both handled
     /// correctly, so the method is safe for images of any width.
@@ -1064,11 +1068,11 @@ extension PixelatedImage {
         let h  = src.height
         let ch = src.componentsPerPixel
 
-        // Allocate a 24-bit RGB pixel buffer
+        // Allocate a 32-bit BGRA pixel buffer — the format most reliably accepted by CoreML.
         var pb: CVPixelBuffer?
         guard CVPixelBufferCreate(kCFAllocatorDefault,
                                   w, h,
-                                  kCVPixelFormatType_24RGB,
+                                  kCVPixelFormatType_32BGRA,
                                   nil,
                                   &pb) == kCVReturnSuccess,
               let pb
@@ -1093,16 +1097,16 @@ extension PixelatedImage {
             let dstRow = dstBytes + row * dstStride
             for col in 0 ..< w {
                 let s = srcRow + col * ch   // UnsafePointer<UInt8>
-                let d = dstRow + col * 3    // UnsafeMutablePointer<UInt8>
+                let d = dstRow + col * 4    // UnsafeMutablePointer<UInt8>  (4 bytes: B G R A)
                 switch ch {
-                case 1:          // grayscale → replicate to R, G, B
-                    d[0] = s[0]; d[1] = s[0]; d[2] = s[0]
-                case 3:          // BGR (OpenCV) → RGB (CoreML)
-                    d[0] = s[2]; d[1] = s[1]; d[2] = s[0]
-                case 4:          // BGRA (OpenCV) → RGB (drop alpha)
-                    d[0] = s[2]; d[1] = s[1]; d[2] = s[0]
-                default:         // unexpected channel count — copy first channel to all three
-                    d[0] = s[0]; d[1] = s[0]; d[2] = s[0]
+                case 1:          // grayscale → BGRA (replicate, alpha = 255)
+                    d[0] = s[0]; d[1] = s[0]; d[2] = s[0]; d[3] = 255
+                case 3:          // BGR (OpenCV) → BGRA (copy directly, alpha = 255)
+                    d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; d[3] = 255
+                case 4:          // BGRA → BGRA (copy as-is)
+                    d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; d[3] = s[3]
+                default:         // unexpected channel count — replicate first channel
+                    d[0] = s[0]; d[1] = s[0]; d[2] = s[0]; d[3] = 255
                 }
             }
         }

@@ -81,9 +81,9 @@ public final class TileClassifier: Sendable {
 
     /// Classifies a tile supplied as a `CVPixelBuffer`.
     ///
-    /// The buffer must be `kCVPixelFormatType_24RGB`, 8-bit.
-    /// CoreML applies the normalisation baked in at export time
-    /// (pixel / 127.5 − 1), so **do not** pre-normalise the buffer yourself.
+    /// The buffer should be `kCVPixelFormatType_32BGRA`, 8-bit (the format produced
+    /// by `PixelatedImage.toPixelBuffer()`).  CoreML applies the normalisation baked
+    /// in at export time (pixel / 127.5 − 1), so **do not** pre-normalise the buffer.
     public func classify(_ pixelBuffer: CVPixelBuffer) throws -> TileMLClass {
         let featureProvider = try MLDictionaryFeatureProvider(
             dictionary: ["image": MLFeatureValue(pixelBuffer: pixelBuffer)])
@@ -101,8 +101,8 @@ public final class TileClassifier: Sendable {
 
     /// Classifies a tile directly from a `PixelatedImage`.
     ///
-    /// Bit-depth conversion (→ 8-bit) and BGR → RGB channel reordering are
-    /// handled by `PixelatedImage.toPixelBuffer()`.
+    /// Bit-depth conversion (→ 8-bit) and BGR → BGRA packing are handled by
+    /// `PixelatedImage.toPixelBuffer()`; CoreML converts BGRA → RGB internally.
     public func classify(_ image: PixelatedImage) throws -> TileMLClass {
         guard let pixelBuffer = image.toPixelBuffer() else {
             throw TileClassifierError.pixelBufferCreationFailed
