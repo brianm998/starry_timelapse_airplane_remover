@@ -598,7 +598,7 @@ public struct Config: Codable, Sendable, Transferable {
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.10.7"
+    public static let latestVersion = "0.10.8"
 
     // defaults to basename below if not set
     public var finalOutputDir: String? = nil
