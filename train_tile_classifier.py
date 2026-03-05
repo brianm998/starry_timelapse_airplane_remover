@@ -8,18 +8,31 @@ Usage:
 Requires (see requirements_ml.txt):
     pip install torch torchvision coremltools scikit-learn Pillow tqdm numpy
 
+Dataset cache (strongly recommended for large datasets):
+    The first training run automatically builds a memory-mapped cache file
+    (.npy) next to the data directory.  Subsequent runs open the file
+    instantly — no per-epoch disk I/O.  Force rebuild with --prepare.
+
+Speed flags (all enabled by default on MPS / CUDA):
+  --no-amp      Disable automatic mixed precision (bfloat16 on MPS, float16 on CUDA)
+  --no-compile  Disable torch.compile() (PyTorch 2.x)
+  --no-cache    Skip the mmap cache entirely (read from disk every epoch)
+  --prepare     Force-rebuild the mmap cache even if it already exists
+
 Notes:
   • Tile images are expected to be 16-bit RGB TIFFs (as produced by tile_extractor).
     The loader converts them to 8-bit RGB before feeding to the model.
-  • The CoreML model expects 8-bit RGB pixel buffers in Swift; scale your 16-bit
-    tiles to [0,255] before passing them to the model at inference time.
+  • The CoreML model expects 8-bit BGRA pixel buffers in Swift; PixelatedImage.toPixelBuffer()
+    produces kCVPixelFormatType_32BGRA and CoreML converts BGRA → RGB internally.
   • Supports Apple Silicon MPS, CUDA, and CPU.
 """
 
 import argparse
+import copy
 import random
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
@@ -27,7 +40,7 @@ from PIL import Image
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision import datasets, transforms
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.metrics import confusion_matrix, classification_report
@@ -52,9 +65,9 @@ def robust_loader(path: str) -> Image.Image:
         # 16-bit → 8-bit:  keep the upper 8 bits
         arr = (arr >> 8).astype(np.uint8)
         if arr.ndim == 2:                              # grayscale 16-bit
-            return Image.fromarray(arr, mode="L").convert("RGB")
+            return Image.fromarray(arr).convert("RGB")
         else:                                          # RGB / RGBA 16-bit
-            return Image.fromarray(arr[..., :3], mode="RGB")
+            return Image.fromarray(arr[..., :3])
 
     if arr.dtype != np.uint8:
         # Anything else (float32, int32, …): linear rescale to [0, 255]
@@ -64,10 +77,10 @@ def robust_loader(path: str) -> Image.Image:
         arr = arr.clip(0, 255).astype(np.uint8)
 
     if arr.ndim == 2:
-        return Image.fromarray(arr, mode="L").convert("RGB")
+        return Image.fromarray(arr).convert("RGB")
     if arr.shape[2] == 4:
-        return Image.fromarray(arr, mode="RGBA").convert("RGB")
-    return Image.fromarray(arr, mode="RGB")
+        return Image.fromarray(arr).convert("RGB")
+    return Image.fromarray(arr)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -201,6 +214,162 @@ def compute_class_weights(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Memory-mapped dataset cache
+#
+# Strategy: convert all tiles to a single .npy file once (prepare phase), then
+# open it as a numpy memmap on every subsequent run.  Startup is instant and
+# the OS page cache automatically keeps hot tiles in RAM across epochs without
+# needing to load the full dataset up front.
+#
+# Files created next to the data directory (or at --cache-file path):
+#   <data-dir>_cache.npy          — (N, H, W, 3) uint8 image data
+#   <data-dir>_cache.targets.npy  — (N,) int32 class indices
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _default_cache_path(data_dir: str) -> Path:
+    """Derive the default cache .npy path from the data directory path."""
+    p = Path(data_dir).resolve()
+    return p.parent / (p.name + "_cache.npy")
+
+
+def prepare_memmap_cache(
+    image_folder: datasets.ImageFolder,
+    cache_path: Path,
+    targets_path: Path,
+    num_workers: int = 4,
+) -> None:
+    """
+    Convert all images in image_folder to a memory-mapped .npy tile cache.
+
+    This is a one-time operation.  It reads every image, converts to 8-bit
+    RGB, and writes sequentially into a numpy .npy file using
+    np.lib.format.open_memmap so the shape/dtype header is embedded and
+    np.load(mmap_mode='r') can open it on the next run without needing to
+    know the shape in advance.
+
+    Parallel loading is done with ThreadPoolExecutor — file I/O releases the
+    GIL so reads overlap even in CPython.  The main thread serialises writes
+    into the mmap file (numpy mmap writes are not thread-safe).
+    """
+    paths   = [p for p, _ in image_folder.imgs]
+    targets = image_folder.targets
+    n       = len(paths)
+
+    if n == 0:
+        sys.exit("ERROR: ImageFolder contains no images.")
+
+    # Determine tile shape from first image
+    first_arr = np.array(robust_loader(paths[0]), dtype=np.uint8)
+    h, w, c   = first_arr.shape
+    size_gb   = (n * h * w * c) / 1e9
+
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"\nBuilding tile cache  ({n:,} tiles, {h}×{w}×{c}, {size_gb:.2f} GB)")
+    print(f"  → {cache_path}")
+
+    # Create the .npy file with its header so np.load(mmap_mode='r') works later
+    data = np.lib.format.open_memmap(
+        str(cache_path), mode="w+", dtype=np.uint8, shape=(n, h, w, c))
+    data[0] = first_arr
+
+    def _load_one(args: tuple[int, str]) -> tuple[int, np.ndarray]:
+        idx, path = args
+        return idx, np.array(robust_loader(path), dtype=np.uint8)
+
+    t0   = time.time()
+    done = 0
+    workers = max(1, num_workers)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(_load_one, (i, p)): i
+            for i, p in enumerate(paths[1:], start=1)
+        }
+        for fut in as_completed(futures):
+            i, arr = fut.result()
+            data[i] = arr          # serialised write from the main thread
+            done += 1
+            if done % 10_000 == 0 or done == n - 1:
+                elapsed = time.time() - t0
+                rate    = done / elapsed if elapsed > 0 else 1
+                eta     = (n - 1 - done) / rate
+                pct     = 100.0 * done / (n - 1)
+                print(f"\r  {done:>{len(str(n-1))},}/{n-1:,}  "
+                      f"({pct:5.1f}%)  ETA {eta:5.0f}s …",
+                      end="", flush=True)
+
+    data.flush()
+    del data                        # close the mmap write handle
+
+    # Targets: tiny int32 array, stored as a plain .npy alongside the cache
+    np.save(str(targets_path), np.array(targets, dtype=np.int32))
+
+    elapsed = time.time() - t0
+    print(f"\r✅  Cache ready in {elapsed:.0f}s"
+          + " " * 20                # overwrite the ETA line
+          + f"\n  → {cache_path}")
+
+
+class MemmapDataset(Dataset):
+    """
+    Dataset backed by a numpy memory-mapped .npy file.
+
+    After prepare_memmap_cache() has run once, instantiation is instant — it
+    just opens the file descriptor.  Each __getitem__ reads a (H, W, C) tile
+    from the mmap; the OS page cache keeps frequently-accessed tiles in RAM
+    automatically, so repeated epoch accesses are effectively free.
+
+    Multiple DataLoader worker processes map the same file read-only.  Because
+    mmap regions are backed by the OS page cache, worker processes share the
+    same physical pages (no per-process duplication of data in RAM).
+
+    Call .with_transform(tf) to get a lightweight view with a different
+    transform applied — both share the same underlying mmap (no extra memory).
+    """
+
+    def __init__(
+        self,
+        cache_path: Path,
+        targets_path: Path,
+        classes: list[str],
+        transform=None,
+    ) -> None:
+        self.transform    = transform
+        self.classes      = classes
+        self.class_to_idx = {c: i for i, c in enumerate(classes)}
+
+        # np.load with mmap_mode='r' reads shape/dtype from the .npy header
+        # and returns a read-only memmap — no data is loaded into RAM yet.
+        self._data: np.ndarray = np.load(str(cache_path), mmap_mode="r")
+
+        targets_arr  = np.load(str(targets_path))
+        self.targets: list[int] = targets_arr.tolist()
+
+        n, h, w, c  = self._data.shape
+        size_gb      = self._data.nbytes / 1e9
+        print(f"Cache   : {cache_path.name}  "
+              f"({n:,} tiles, {h}×{w}×{c}, {size_gb:.2f} GB)")
+
+    def with_transform(self, transform) -> "MemmapDataset":
+        """Return a lightweight view with a different transform (shares mmap)."""
+        view           = copy.copy(self)   # shallow — _data is NOT duplicated
+        view.transform = transform
+        return view
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def __getitem__(self, idx: int):
+        # np.array() copies the mmap page into a contiguous buffer — necessary
+        # for PIL.  The cost is a page-cache read, not a disk read, once warm.
+        arr   = np.array(self._data[idx])   # (H, W, C) uint8
+        img   = Image.fromarray(arr)
+        label = self.targets[idx]
+        if self.transform is not None:
+            img = self.transform(img)
+        return img, label
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Training / evaluation
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -210,18 +379,32 @@ def train_epoch(
     optimizer: optim.Optimizer,
     criterion: nn.Module,
     device: torch.device,
+    *,
+    use_amp: bool = False,
+    amp_device: str = "cpu",
+    amp_dtype: torch.dtype = torch.float32,
+    scaler=None,                                       # GradScaler | None
 ) -> tuple[float, float]:
     model.train()
     total_loss = correct = total = 0
     for images, labels in loader:
         images, labels = images.to(device), labels.to(device)
         optimizer.zero_grad()
-        out  = model(images)
-        loss = criterion(out, labels)
-        loss.backward()
-        optimizer.step()
+
+        with torch.autocast(device_type=amp_device, dtype=amp_dtype, enabled=use_amp):
+            out  = model(images)
+            loss = criterion(out, labels)
+
+        if scaler is not None:
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            optimizer.step()
+
         total_loss += loss.item() * len(labels)
-        correct    += (out.argmax(1) == labels).sum().item()
+        correct    += (out.detach().float().argmax(1) == labels).sum().item()
         total      += len(labels)
     return total_loss / total, correct / total
 
@@ -232,6 +415,10 @@ def eval_epoch(
     loader: DataLoader,
     criterion: nn.Module,
     device: torch.device,
+    *,
+    use_amp: bool = False,
+    amp_device: str = "cpu",
+    amp_dtype: torch.dtype = torch.float32,
 ) -> tuple[float, float, list[int], list[int]]:
     model.eval()
     total_loss = correct = total = 0
@@ -239,10 +426,13 @@ def eval_epoch(
     all_labels: list[int] = []
     for images, labels in loader:
         images, labels = images.to(device), labels.to(device)
-        out  = model(images)
-        loss = criterion(out, labels)
+
+        with torch.autocast(device_type=amp_device, dtype=amp_dtype, enabled=use_amp):
+            out  = model(images)
+            loss = criterion(out, labels)
+
         total_loss += loss.item() * len(labels)
-        preds = out.argmax(1)
+        preds = out.float().argmax(1)
         correct    += (preds == labels).sum().item()
         total      += len(labels)
         all_preds.extend(preds.cpu().tolist())
@@ -264,8 +454,10 @@ def export_coreml(
     Trace the trained model and save as a CoreML mlpackage.
 
     Input contract (Swift side):
-      Pass an 8-bit RGB CVPixelBuffer / CGImage of size tile_size×tile_size.
-      If your tiles are 16-bit TIFFs, scale them to [0,255] uint8 first.
+      Pass an 8-bit BGRA CVPixelBuffer (kCVPixelFormatType_32BGRA) of size
+      tile_size×tile_size.  CoreML converts BGRA → RGB internally given
+      color_layout=ct.colorlayout.RGB.  PixelatedImage.toPixelBuffer() produces
+      the correct format automatically.
 
     The ImageType preprocessing replicates training normalisation:
         value = pixel * (1/127.5) + (-1)   →  range [-1, 1]
@@ -356,8 +548,24 @@ def parse_args() -> argparse.Namespace:
     g.add_argument("--early-stop",   type=int,   default=10,
                    help="Stop after N epochs with no val-loss improvement")
     g.add_argument("--workers",      type=int,   default=4,
-                   help="DataLoader worker processes (set 0 if multiprocessing issues)")
+                   help="DataLoader worker processes (also parallelises cache build)")
     g.add_argument("--seed",         type=int,   default=42)
+
+    # Speed / cache
+    g = p.add_argument_group("Speed")
+    g.add_argument("--cache-file", default=None, metavar="PATH",
+                   help="Path for the mmap cache .npy file "
+                        "(default: <data-dir>_cache.npy next to the data directory)")
+    g.add_argument("--prepare",    action="store_true",
+                   help="Force rebuild of the mmap cache even if it already exists")
+    g.add_argument("--no-cache",   action="store_true",
+                   help="Disable the mmap cache entirely — reads from disk every epoch "
+                        "(slow for large datasets, useful for debugging)")
+    g.add_argument("--no-amp",     action="store_true",
+                   help="Disable automatic mixed precision "
+                        "(bfloat16 on MPS, float16 on CUDA)")
+    g.add_argument("--no-compile", action="store_true",
+                   help="Disable torch.compile() (PyTorch 2.x)")
 
     # Output
     g = p.add_argument_group("Output")
@@ -398,9 +606,43 @@ def main() -> None:
     else:
         device    = torch.device("cpu")
         dev_label = "CPU"
-    print(f"Device : {dev_label}")
+    print(f"Device  : {dev_label}")
 
-    # ── Dataset ───────────────────────────────────────────────────────────────
+    # CUDA-specific: TF32 matmul (~2× on Ampere+) + cuDNN auto-tuner
+    if device.type == "cuda":
+        torch.set_float32_matmul_precision("high")
+        torch.backends.cudnn.benchmark = True
+
+    # ── Mixed-precision setup ─────────────────────────────────────────────────
+    use_amp    = False
+    # Default to "cpu" — torch.autocast validates device_type in __init__ even
+    # when enabled=False, so passing "mps" on an older PyTorch that doesn't
+    # support MPS autocast raises RuntimeError regardless of enabled=False.
+    amp_device = "cpu"
+    amp_dtype  = torch.float32
+    scaler     = None
+
+    if not args.no_amp:
+        if device.type == "mps":
+            # MPS autocast was added in PyTorch 2.0; probe before committing
+            try:
+                with torch.autocast(device_type="mps", dtype=torch.bfloat16):
+                    _ = torch.zeros(1, device=device) + 1
+                use_amp    = True
+                amp_device = "mps"
+                amp_dtype  = torch.bfloat16   # same dynamic range as float32 → no GradScaler
+            except RuntimeError:
+                print("AMP     : MPS autocast not supported in this PyTorch version — disabled")
+        elif device.type == "cuda":
+            use_amp    = True
+            amp_device = "cuda"
+            amp_dtype  = torch.float16
+            scaler     = torch.cuda.amp.GradScaler()
+
+    amp_label = f"{amp_dtype} autocast on {device.type}" if use_amp else "disabled"
+    print(f"AMP     : {amp_label}")
+
+    # ── Dataset directory ─────────────────────────────────────────────────────
     data_root = Path(args.data_dir)
     if not data_root.is_dir():
         sys.exit(f"ERROR: data directory not found: {data_root.resolve()}")
@@ -408,15 +650,14 @@ def main() -> None:
     base_tf = build_transforms(args.tile_size, augment=False)
     aug_tf  = build_transforms(args.tile_size, augment=not args.no_augment)
 
-    # Load twice: once with aug for training, once without for val/test/indexing
-    full_ds = datasets.ImageFolder(str(data_root), transform=base_tf,
-                                   loader=robust_loader)
-    aug_ds  = datasets.ImageFolder(str(data_root), transform=aug_tf,
-                                   loader=robust_loader)
+    # Fast directory scan — just reads filenames, no image I/O
+    def _dummy_loader(path: str) -> Image.Image:
+        return Image.new("RGB", (2, 2))
 
-    class_names = full_ds.classes
+    scan_ds     = datasets.ImageFolder(str(data_root), loader=_dummy_loader)
+    class_names = scan_ds.classes
     num_classes = len(class_names)
-    targets     = full_ds.targets
+    targets     = scan_ds.targets
 
     counts = np.bincount(targets, minlength=num_classes)
     print(f"\nClasses ({num_classes}):")
@@ -427,17 +668,59 @@ def main() -> None:
     # ── Splits ────────────────────────────────────────────────────────────────
     train_idx, val_idx, test_idx = stratified_split(
         targets, args.val_ratio, args.test_ratio, args.seed)
-    print(f"\nSplit  →  train {len(train_idx):,}  "
+    print(f"\nSplit   →  train {len(train_idx):,}  "
           f"val {len(val_idx):,}  test {len(test_idx):,}")
 
-    train_ds = Subset(aug_ds,  train_idx)
-    val_ds   = Subset(full_ds, val_idx)
-    test_ds  = Subset(full_ds, test_idx)
+    # ── Build train / val / test datasets ─────────────────────────────────────
+    if args.no_cache:
+        # Original behaviour: ImageFolder reads from disk on every __getitem__
+        full_ds = datasets.ImageFolder(str(data_root), transform=base_tf,
+                                       loader=robust_loader)
+        aug_ds  = datasets.ImageFolder(str(data_root), transform=aug_tf,
+                                       loader=robust_loader)
+        train_ds = Subset(aug_ds,  train_idx)
+        val_ds   = Subset(full_ds, val_idx)
+        test_ds  = Subset(full_ds, test_idx)
+        print("Cache   : disabled (--no-cache)")
 
-    # pin_memory speeds up CPU→GPU transfers; avoid on MPS (not supported)
+    else:
+        # Derive cache file paths
+        cache_path   = (Path(args.cache_file) if args.cache_file
+                        else _default_cache_path(args.data_dir))
+        targets_path = cache_path.with_suffix(".targets.npy")
+
+        # Detect stale cache (different tile count than current data dir)
+        stale = False
+        if cache_path.exists() and targets_path.exists() and not args.prepare:
+            cached_n = int(np.load(str(targets_path)).shape[0])
+            if cached_n != len(scan_ds):
+                print(f"\n⚠️  Cache has {cached_n:,} tiles but data dir has "
+                      f"{len(scan_ds):,} — rebuilding.")
+                stale = True
+
+        needs_prepare = args.prepare or stale or not cache_path.exists()
+
+        if needs_prepare:
+            # Rebuild with real loader to get actual pixel data
+            real_scan = datasets.ImageFolder(str(data_root), loader=robust_loader)
+            prepare_memmap_cache(real_scan, cache_path, targets_path, args.workers)
+
+        mmap_ds   = MemmapDataset(cache_path, targets_path, class_names)
+        aug_view  = mmap_ds.with_transform(aug_tf)
+        base_view = mmap_ds.with_transform(base_tf)
+        train_ds  = Subset(aug_view,  train_idx)
+        val_ds    = Subset(base_view, val_idx)
+        test_ds   = Subset(base_view, test_idx)
+
+    # pin_memory speeds up CPU→GPU transfers on CUDA; unsupported on MPS
     pin = (device.type == "cuda")
-    loader_kw = dict(batch_size=args.batch_size, num_workers=args.workers,
-                     pin_memory=pin, persistent_workers=(args.workers > 0))
+    loader_kw = dict(
+        batch_size=args.batch_size,
+        num_workers=args.workers,
+        pin_memory=pin,
+        persistent_workers=(args.workers > 0),
+        prefetch_factor=(4 if args.workers > 0 else None),
+    )
     train_loader = DataLoader(train_ds, shuffle=True,  **loader_kw)
     val_loader   = DataLoader(val_ds,   shuffle=False, **loader_kw)
     test_loader  = DataLoader(test_ds,  shuffle=False, **loader_kw)
@@ -445,7 +728,27 @@ def main() -> None:
     # ── Model ─────────────────────────────────────────────────────────────────
     model = TileClassifier(num_classes=num_classes, in_channels=3).to(device)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"\nModel  →  {model.__class__.__name__}  ({n_params:,} parameters)")
+    print(f"\nModel   →  {model.__class__.__name__}  ({n_params:,} parameters)")
+
+    # torch.compile: fuses ops and generates optimised kernels (PyTorch 2.x)
+    # torch.compile(model) always succeeds — the actual compilation happens on
+    # the first forward pass, which is where backend failures (e.g. inductor
+    # not supporting MPS) surface.  Probe with a dummy forward pass so we get
+    # a clear message at startup rather than a cryptic crash mid-epoch.
+    if not args.no_compile and hasattr(torch, "compile"):
+        try:
+            compiled = torch.compile(model)
+            with torch.no_grad():
+                _dummy = torch.zeros(2, 3, args.tile_size, args.tile_size,
+                                     device=device)
+                compiled(_dummy)
+            model = compiled
+            print("Compile : enabled")
+        except Exception as exc:
+            print(f"Compile : not supported on this device/version — skipped "
+                  f"({type(exc).__name__})")
+    else:
+        print("Compile : skipped")
 
     class_weights = compute_class_weights(targets, train_idx, num_classes).to(device)
     criterion     = nn.CrossEntropyLoss(weight=class_weights)
@@ -454,7 +757,9 @@ def main() -> None:
     scheduler     = optim.lr_scheduler.CosineAnnealingLR(
                         optimizer, T_max=args.epochs, eta_min=1e-6)
 
-    # ── Training loop ────────────────────────────────────────────────────────
+    amp_kw = dict(use_amp=use_amp, amp_device=amp_device, amp_dtype=amp_dtype)
+
+    # ── Training loop ─────────────────────────────────────────────────────────
     best_val_loss  = float("inf")
     patience_count = 0
 
@@ -465,8 +770,11 @@ def main() -> None:
 
     for epoch in range(1, args.epochs + 1):
         t0 = time.time()
-        tr_loss, tr_acc       = train_epoch(model, train_loader, optimizer, criterion, device)
-        va_loss, va_acc, _, _ = eval_epoch(model, val_loader,   criterion, device)
+        tr_loss, tr_acc = train_epoch(
+            model, train_loader, optimizer, criterion, device,
+            **amp_kw, scaler=scaler)
+        va_loss, va_acc, _, _ = eval_epoch(
+            model, val_loader, criterion, device, **amp_kw)
         scheduler.step()
         lr_now = scheduler.get_last_lr()[0]
 
@@ -474,7 +782,9 @@ def main() -> None:
         if va_loss < best_val_loss:
             best_val_loss  = va_loss
             patience_count = 0
-            torch.save(model.state_dict(), args.checkpoint)
+            # Access underlying module through torch.compile wrapper if present
+            raw = getattr(model, "_orig_mod", model)
+            torch.save(raw.state_dict(), args.checkpoint)
             marker = " ✓"
         else:
             patience_count += 1
@@ -489,12 +799,14 @@ def main() -> None:
                   f"(no val improvement for {args.early_stop} epochs)")
             break
 
-    # ── Test evaluation ──────────────────────────────────────────────────────
+    # ── Test evaluation ───────────────────────────────────────────────────────
     print(f"\nLoading best weights from {args.checkpoint} …")
-    model.load_state_dict(torch.load(args.checkpoint, map_location=device,
-                                     weights_only=True))
+    raw = getattr(model, "_orig_mod", model)
+    raw.load_state_dict(torch.load(args.checkpoint, map_location=device,
+                                   weights_only=True))
 
-    te_loss, te_acc, preds, labels = eval_epoch(model, test_loader, criterion, device)
+    te_loss, te_acc, preds, labels = eval_epoch(
+        model, test_loader, criterion, device, **amp_kw)
     print(f"\nTest Loss {te_loss:.4f}   Test Accuracy {te_acc:.2%}\n")
 
     print(classification_report(labels, preds, target_names=class_names, digits=4))
@@ -508,10 +820,11 @@ def main() -> None:
         print(f"  " + " ".join(f"{v:{col_w}d}" for v in row) +
               f"   ← {class_names[i]}")
 
-    # ── CoreML export ─────────────────────────────────────────────────────────
+    # ── CoreML export ──────────────────────────────────────────────────────────
     if not args.no_coreml:
         print(f"\nExporting CoreML mlpackage → {args.output}")
-        export_coreml(model, args.tile_size, class_names, args.output)
+        export_model = getattr(model, "_orig_mod", model)
+        export_coreml(export_model, args.tile_size, class_names, args.output)
     else:
         print("\n(CoreML export skipped — pass without --no-coreml to export)")
 
