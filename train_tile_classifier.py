@@ -322,8 +322,11 @@ class MemmapDataset(Dataset):
     mmap regions are backed by the OS page cache, worker processes share the
     same physical pages (no per-process duplication of data in RAM).
 
-    Call .with_transform(tf) to get a lightweight view with a different
-    transform applied — both share the same underlying mmap (no extra memory).
+    __getitem__ returns a (C, H, W) float32 tensor pre-normalised to [-1, 1]
+    with NO PIL conversion or random transforms — PIL overhead (especially
+    RandomRotation with bilinear interpolation, ~2 ms per 32×32 tile) was the
+    dominant training bottleneck.  Random augmentation is applied batch-wise
+    on the compute device inside train_epoch() via _batch_augment().
     """
 
     def __init__(
@@ -331,9 +334,7 @@ class MemmapDataset(Dataset):
         cache_path: Path,
         targets_path: Path,
         classes: list[str],
-        transform=None,
     ) -> None:
-        self.transform    = transform
         self.classes      = classes
         self.class_to_idx = {c: i for i, c in enumerate(classes)}
 
@@ -349,24 +350,80 @@ class MemmapDataset(Dataset):
         print(f"Cache   : {cache_path.name}  "
               f"({n:,} tiles, {h}×{w}×{c}, {size_gb:.2f} GB)")
 
-    def with_transform(self, transform) -> "MemmapDataset":
-        """Return a lightweight view with a different transform (shares mmap)."""
-        view           = copy.copy(self)   # shallow — _data is NOT duplicated
-        view.transform = transform
-        return view
-
     def __len__(self) -> int:
         return len(self._data)
 
-    def __getitem__(self, idx: int):
-        # np.array() copies the mmap page into a contiguous buffer — necessary
-        # for PIL.  The cost is a page-cache read, not a disk read, once warm.
-        arr   = np.array(self._data[idx])   # (H, W, C) uint8
-        img   = Image.fromarray(arr)
-        label = self.targets[idx]
-        if self.transform is not None:
-            img = self.transform(img)
-        return img, label
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
+        # np.array() copies the read-only mmap page into a writable buffer.
+        # The copy is from the OS page cache (RAM), not from disk once warm.
+        arr = np.array(self._data[idx])               # (H, W, C) uint8, writable
+        # Permute HWC → CHW, cast to float32, normalise to [-1, 1].
+        # All arithmetic here is in numpy on the CPU worker — fast and avoids
+        # any PIL overhead.
+        t = (torch.from_numpy(arr)                    # (H, W, C) uint8 tensor
+                  .permute(2, 0, 1)                   # → (C, H, W)
+                  .to(torch.float32)
+                  .div_(127.5)
+                  .sub_(1.0))                         # → [-1, 1]
+        return t, self.targets[idx]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Batch-level GPU augmentation
+#
+# Applied inside train_epoch() after images arrive on the compute device.
+# All operations are vectorised tensor ops — no Python per-image loops, no PIL.
+#
+# Why not PIL per-tile augmentation in workers?
+#   RandomRotation(180) uses bilinear interpolation: ~2 ms per 32×32 tile.
+#   A batch of 256 tiles × 2 ms = 512 ms of PIL work even with many workers.
+#   torch.rot90 on a (B, C, H, W) tensor takes <1 ms total on GPU.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _batch_augment(images: torch.Tensor) -> torch.Tensor:
+    """
+    Apply random augmentation to a (B, C, H, W) float32 batch on its device.
+
+    Operations applied:
+      • Random horizontal flip  — each image independently
+      • Random vertical flip    — each image independently
+      • Random 90° rotation     — discrete {0, 90, 180, 270}°, each image
+      • Brightness jitter       — one factor per batch ∈ [0.7, 1.3]
+      • Contrast jitter         — one factor per batch ∈ [0.7, 1.3]
+
+    Per-batch (rather than per-image) jitter factors are less diverse but far
+    faster and still provide meaningful augmentation when shuffling is on.
+    Inputs and outputs are in the normalised [-1, 1] range.
+    """
+    B      = images.shape[0]
+    device = images.device
+
+    # ── Horizontal flip ───────────────────────────────────────────────────────
+    mask = (torch.rand(B, device=device) < 0.5).view(B, 1, 1, 1)
+    images = torch.where(mask, images.flip(-1), images)
+
+    # ── Vertical flip ─────────────────────────────────────────────────────────
+    mask = (torch.rand(B, device=device) < 0.5).view(B, 1, 1, 1)
+    images = torch.where(mask, images.flip(-2), images)
+
+    # ── Discrete 90° rotation (no interpolation) ──────────────────────────────
+    # Group images by their rotation count so we issue at most 3 GPU ops.
+    k_vals = torch.randint(0, 4, (B,))          # 0 = no-op, 1/2/3 = 90/180/270°
+    for k in range(1, 4):
+        idx = (k_vals == k).nonzero(as_tuple=True)[0]
+        if idx.numel() > 0:
+            images[idx] = torch.rot90(images[idx], k, dims=[-2, -1])
+
+    # ── Brightness jitter ─────────────────────────────────────────────────────
+    bf = 1.0 + (torch.rand(1).item() * 0.6 - 0.3)   # uniform ∈ [0.7, 1.3]
+    images = (images * bf).clamp_(-1.0, 1.0)
+
+    # ── Contrast jitter ───────────────────────────────────────────────────────
+    cf      = 1.0 + (torch.rand(1).item() * 0.6 - 0.3)
+    channel_mean = images.mean(dim=(-2, -1), keepdim=True)
+    images  = (channel_mean + (images - channel_mean) * cf).clamp_(-1.0, 1.0)
+
+    return images
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -380,15 +437,28 @@ def train_epoch(
     criterion: nn.Module,
     device: torch.device,
     *,
+    augment: bool = False,
     use_amp: bool = False,
     amp_device: str = "cpu",
     amp_dtype: torch.dtype = torch.float32,
     scaler=None,                                       # GradScaler | None
 ) -> tuple[float, float]:
     model.train()
-    total_loss = correct = total = 0
+    # Accumulate loss and correct-count as on-device tensors to avoid calling
+    # .item() (which forces a GPU→CPU sync) inside the hot loop.  A single
+    # sync pair happens at the very end of the epoch instead of every batch.
+    acc_loss    = torch.zeros(1, device=device)
+    acc_correct = torch.zeros(1, device=device)
+    total       = 0
+
     for images, labels in loader:
         images, labels = images.to(device), labels.to(device)
+
+        # Batch-level GPU augmentation (only when using the mmap cache path;
+        # the PIL/--no-cache path already augments per-tile in workers).
+        if augment:
+            images = _batch_augment(images)
+
         optimizer.zero_grad()
 
         with torch.autocast(device_type=amp_device, dtype=amp_dtype, enabled=use_amp):
@@ -403,10 +473,12 @@ def train_epoch(
             loss.backward()
             optimizer.step()
 
-        total_loss += loss.item() * len(labels)
-        correct    += (out.detach().float().argmax(1) == labels).sum().item()
-        total      += len(labels)
-    return total_loss / total, correct / total
+        acc_loss    += loss.detach() * labels.size(0)
+        acc_correct += (out.detach().float().argmax(1) == labels).sum()
+        total       += labels.size(0)
+
+    # Single GPU→CPU sync per epoch instead of one per batch
+    return acc_loss.item() / total, acc_correct.item() / total
 
 
 @torch.no_grad()
@@ -421,9 +493,12 @@ def eval_epoch(
     amp_dtype: torch.dtype = torch.float32,
 ) -> tuple[float, float, list[int], list[int]]:
     model.eval()
-    total_loss = correct = total = 0
+    acc_loss    = torch.zeros(1, device=device)
+    acc_correct = torch.zeros(1, device=device)
+    total       = 0
     all_preds:  list[int] = []
     all_labels: list[int] = []
+
     for images, labels in loader:
         images, labels = images.to(device), labels.to(device)
 
@@ -431,13 +506,17 @@ def eval_epoch(
             out  = model(images)
             loss = criterion(out, labels)
 
-        total_loss += loss.item() * len(labels)
-        preds = out.float().argmax(1)
-        correct    += (preds == labels).sum().item()
-        total      += len(labels)
+        acc_loss    += loss * labels.size(0)
+        preds        = out.float().argmax(1)
+        acc_correct += (preds == labels).sum()
+        total       += labels.size(0)
+        # .cpu().tolist() here is fine — we need the predictions on CPU anyway
+        # for the confusion matrix; this sync only happens once per batch
+        # but only materialises preds, not the loss accumulator.
         all_preds.extend(preds.cpu().tolist())
         all_labels.extend(labels.cpu().tolist())
-    return total_loss / total, correct / total, all_preds, all_labels
+
+    return acc_loss.item() / total, acc_correct.item() / total, all_preds, all_labels
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -573,6 +652,8 @@ def parse_args() -> argparse.Namespace:
                    help="CoreML mlpackage output path")
     g.add_argument("--checkpoint",  default="tile_classifier_best.pt",
                    help="PyTorch checkpoint path for best weights")
+    g.add_argument("--resume",      action="store_true",
+                   help="Resume training from <checkpoint>.state.pt (saved every epoch)")
     g.add_argument("--no-coreml",   action="store_true",
                    help="Skip CoreML export step")
 
@@ -705,12 +786,12 @@ def main() -> None:
             real_scan = datasets.ImageFolder(str(data_root), loader=robust_loader)
             prepare_memmap_cache(real_scan, cache_path, targets_path, args.workers)
 
-        mmap_ds   = MemmapDataset(cache_path, targets_path, class_names)
-        aug_view  = mmap_ds.with_transform(aug_tf)
-        base_view = mmap_ds.with_transform(base_tf)
-        train_ds  = Subset(aug_view,  train_idx)
-        val_ds    = Subset(base_view, val_idx)
-        test_ds   = Subset(base_view, test_idx)
+        mmap_ds  = MemmapDataset(cache_path, targets_path, class_names)
+        # No per-tile PIL transforms — __getitem__ returns a normalised tensor.
+        # _batch_augment() is called inside train_epoch() on the compute device.
+        train_ds = Subset(mmap_ds, train_idx)
+        val_ds   = Subset(mmap_ds, val_idx)
+        test_ds  = Subset(mmap_ds, test_idx)
 
     # pin_memory speeds up CPU→GPU transfers on CUDA; unsupported on MPS
     pin = (device.type == "cuda")
@@ -758,21 +839,49 @@ def main() -> None:
                         optimizer, T_max=args.epochs, eta_min=1e-6)
 
     amp_kw = dict(use_amp=use_amp, amp_device=amp_device, amp_dtype=amp_dtype)
+    # GPU-side batch augmentation only applies when using the mmap cache.
+    # The --no-cache PIL path already augments per-tile inside DataLoader workers.
+    use_batch_augment = (not args.no_cache) and (not args.no_augment)
 
-    # ── Training loop ─────────────────────────────────────────────────────────
+    # ── Training state (supports --resume) ────────────────────────────────────
+    # The "state" checkpoint is written every epoch and stores everything needed
+    # to restart exactly where we left off if the run crashes (Metal errors,
+    # power loss, etc.).  It is separate from --checkpoint which only saves the
+    # best model weights for CoreML export.
+    state_path = Path(args.checkpoint).with_suffix(".state.pt")
+
     best_val_loss  = float("inf")
     patience_count = 0
+    start_epoch    = 1
 
+    if args.resume:
+        if not state_path.exists():
+            sys.exit(f"ERROR: --resume requested but no state file found at {state_path}\n"
+                     f"       Run without --resume to start fresh.")
+        print(f"Resuming from {state_path} …")
+        state = torch.load(str(state_path), map_location=device, weights_only=False)
+        raw_m = getattr(model, "_orig_mod", model)
+        raw_m.load_state_dict(state["model"])
+        optimizer.load_state_dict(state["optimizer"])
+        scheduler.load_state_dict(state["scheduler"])
+        start_epoch    = state["epoch"] + 1
+        best_val_loss  = state["best_val_loss"]
+        patience_count = state["patience_count"]
+        print(f"  Continuing at epoch {start_epoch}  "
+              f"(best val loss so far: {best_val_loss:.4f}, "
+              f"patience: {patience_count}/{args.early_stop})")
+
+    # ── Training loop ─────────────────────────────────────────────────────────
     hdr = (f"{'Ep':>4}  {'TrLoss':>8}  {'TrAcc':>7}  "
            f"{'VaLoss':>8}  {'VaAcc':>7}  {'LR':>9}")
     print(f"\n{hdr}")
     print("─" * len(hdr))
 
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(start_epoch, args.epochs + 1):
         t0 = time.time()
         tr_loss, tr_acc = train_epoch(
             model, train_loader, optimizer, criterion, device,
-            **amp_kw, scaler=scaler)
+            augment=use_batch_augment, **amp_kw, scaler=scaler)
         va_loss, va_acc, _, _ = eval_epoch(
             model, val_loader, criterion, device, **amp_kw)
         scheduler.step()
@@ -782,7 +891,7 @@ def main() -> None:
         if va_loss < best_val_loss:
             best_val_loss  = va_loss
             patience_count = 0
-            # Access underlying module through torch.compile wrapper if present
+            # Save best weights (for CoreML export)
             raw = getattr(model, "_orig_mod", model)
             torch.save(raw.state_dict(), args.checkpoint)
             marker = " ✓"
@@ -793,6 +902,25 @@ def main() -> None:
         print(f"{epoch:4d}  {tr_loss:8.4f}  {tr_acc:6.2%}  "
               f"{va_loss:8.4f}  {va_acc:6.2%}  {lr_now:9.2e}"
               f"  [{elapsed:.1f}s]{marker}")
+
+        # Save full training state every epoch so we can resume after a crash.
+        # This includes optimizer + scheduler state so the LR schedule is exact.
+        raw = getattr(model, "_orig_mod", model)
+        torch.save({
+            "epoch":          epoch,
+            "model":          raw.state_dict(),
+            "optimizer":      optimizer.state_dict(),
+            "scheduler":      scheduler.state_dict(),
+            "best_val_loss":  best_val_loss,
+            "patience_count": patience_count,
+        }, str(state_path))
+
+        # Release Metal heap allocations that accumulate over long runs.
+        # Without this, the Metal command buffer pool can overflow after many
+        # hours and crash the process (kIOAccelCommandBufferCallbackError…).
+        if device.type == "mps":
+            torch.mps.synchronize()    # wait for all pending Metal work
+            torch.mps.empty_cache()    # release cached Metal allocations
 
         if patience_count >= args.early_stop:
             print(f"\n⏹  Early stop at epoch {epoch} "
