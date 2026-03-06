@@ -666,6 +666,13 @@ def parse_args() -> argparse.Namespace:
                         "(bfloat16 on MPS, float16 on CUDA)")
     g.add_argument("--no-compile", action="store_true",
                    help="Disable torch.compile() (PyTorch 2.x)")
+    g.add_argument("--cpu",        action="store_true",
+                   help="Force CPU training even when a GPU is available "
+                        "(useful on Intel Macs where MPS overhead can exceed CPU gains)")
+    g.add_argument("--threads",    type=int, default=0,
+                   help="Override PyTorch CPU thread count (0 = let PyTorch decide, "
+                        "typically physical cores only). Try --threads 36 on a "
+                        "hyperthreaded 18-core machine to test whether logical cores help.")
 
     # Output
     g = p.add_argument_group("Output")
@@ -698,8 +705,19 @@ def main() -> None:
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
+    # ── CPU thread count ───────────────────────────────────────────────────────
+    # PyTorch defaults to physical cores only (ignores hyperthreads).
+    # --threads lets the user override this, e.g. --threads 36 to try all
+    # logical cores on an 18-core hyperthreaded machine.
+    if args.threads > 0:
+        torch.set_num_threads(args.threads)
+        torch.set_num_interop_threads(max(1, args.threads // 2))
+
     # ── Device ────────────────────────────────────────────────────────────────
-    if torch.backends.mps.is_available():
+    if args.cpu:
+        device    = torch.device("cpu")
+        dev_label = f"CPU ({torch.get_num_threads()} threads)"
+    elif torch.backends.mps.is_available():
         device    = torch.device("mps")
         dev_label = "Metal MPS"
     elif torch.cuda.is_available():
@@ -707,7 +725,7 @@ def main() -> None:
         dev_label = torch.cuda.get_device_name()
     else:
         device    = torch.device("cpu")
-        dev_label = "CPU"
+        dev_label = f"CPU ({torch.get_num_threads()} threads)"
     print(f"Device  : {dev_label}")
 
     # CUDA-specific: TF32 matmul (~2× on Ampere+) + cuDNN auto-tuner
