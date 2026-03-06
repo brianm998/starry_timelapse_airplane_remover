@@ -389,6 +389,76 @@ class MemmapDataset(Dataset):
         return [(t[i], self.targets[indices[i]]) for i in range(len(indices))]
 
 
+class SharedMemoryDataset(Dataset):
+    """
+    Dataset backed by a torch.Tensor held in POSIX shared memory.
+
+    Unlike MemmapDataset (numpy memmap), a shared-memory tensor is a single
+    physical allocation that every DataLoader worker process accesses directly
+    with no copy-on-write duplication.  This means you can safely use
+    --workers 4 (or more) without each worker accumulating its own ~9 GB copy
+    of the cache.
+
+    Trade-off: the entire cache must be loaded into RAM at startup (a one-time
+    cost of ~10-60 s depending on SSD speed and OS page-cache warmth).  With
+    128 GB RAM this is never a problem.
+
+    Use this dataset when --workers > 0 so that CPU worker threads can prepare
+    the next batch (memmap → shared tensor slice → float32 → normalise) while
+    the GPU (or CPU BLAS threads) is computing the current batch, giving true
+    CPU+GPU overlap.
+    """
+
+    def __init__(
+        self,
+        cache_path: Path,
+        targets_path: Path,
+        classes: list[str],
+    ) -> None:
+        self.classes      = classes
+        self.class_to_idx = {c: i for i, c in enumerate(classes)}
+
+        n_tiles = np.load(str(cache_path), mmap_mode="r").shape[0]
+        size_gb = (np.load(str(cache_path), mmap_mode="r").nbytes) / 1e9
+        print(f"Shared  : loading {size_gb:.2f} GB into shared memory …",
+              end="", flush=True)
+        t0 = time.time()
+
+        # Load entire cache into RAM, then move to POSIX shared memory.
+        # torch.Tensor.share_memory_() uses MAP_SHARED so all forked/spawned
+        # worker processes access the identical physical pages — no duplication.
+        raw  = np.load(str(cache_path), mmap_mode="r")
+        data = torch.from_numpy(np.array(raw, dtype=np.uint8))  # copies to RAM
+        data.share_memory_()                                      # in-place → shared
+        self._data: torch.Tensor = data
+
+        targets_arr  = np.load(str(targets_path))
+        self.targets: list[int] = targets_arr.tolist()
+
+        elapsed = time.time() - t0
+        print(f" done in {elapsed:.1f}s  ({n_tiles:,} tiles)")
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
+        t = (self._data[idx]               # (H, W, C) uint8 tensor — zero-copy slice
+                  .permute(2, 0, 1)        # → (C, H, W)
+                  .to(torch.float32)
+                  .div_(127.5)
+                  .sub_(1.0))              # → [-1, 1]
+        return t, self.targets[idx]
+
+    def __getitems__(self, indices: list[int]) -> list[tuple[torch.Tensor, int]]:
+        idx_t = torch.tensor(indices, dtype=torch.long)
+        t = (self._data[idx_t]             # (N, H, W, C) uint8 — one shared-memory read
+                  .permute(0, 3, 1, 2)     # → (N, C, H, W)
+                  .to(torch.float32)
+                  .div_(127.5)
+                  .sub_(1.0))              # → [-1, 1]
+        return [(t[i], self.targets[indices[i]]) for i in range(len(indices))]
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Batch-level GPU augmentation
 #
@@ -832,23 +902,38 @@ def main() -> None:
             real_scan = datasets.ImageFolder(str(data_root), loader=robust_loader)
             prepare_memmap_cache(real_scan, cache_path, targets_path, args.workers)
 
-        mmap_ds  = MemmapDataset(cache_path, targets_path, class_names)
-        # No per-tile PIL transforms — __getitem__ returns a normalised tensor.
-        # _batch_augment() is called inside train_epoch() on the compute device.
-        train_ds = Subset(mmap_ds, train_idx)
-        val_ds   = Subset(mmap_ds, val_idx)
-        test_ds  = Subset(mmap_ds, test_idx)
+        # ── Dataset selection: shared memory vs memmap ────────────────────────
+        # With workers=0 the DataLoader runs single-threaded in the main
+        # process, so MemmapDataset + __getitems__ batched reads are fine.
+        #
+        # With workers>0 we need SharedMemoryDataset:
+        #   • MemmapDataset + fork: each worker inherits the parent's full
+        #     address space → copy-on-write → every worker accumulates its own
+        #     ~9 GB physical copy (memory explosion + swap thrashing).
+        #   • MemmapDataset + forkserver: workers open the file independently;
+        #     OS page-cache is shared but macOS RSS accounting still shows
+        #     ~9 GB per worker and startup is slow.
+        #   • SharedMemoryDataset: the tensor is allocated in POSIX shared
+        #     memory (MAP_SHARED) once, then all workers access the exact same
+        #     physical pages — zero duplication regardless of fork/spawn/
+        #     forkserver.  This is the correct solution for CPU+GPU overlap:
+        #     worker threads prepare the next batch from shared memory while
+        #     the GPU (or CPU BLAS pool) processes the current one.
+        if args.workers > 0:
+            full_ds = SharedMemoryDataset(cache_path, targets_path, class_names)
+        else:
+            full_ds = MemmapDataset(cache_path, targets_path, class_names)
+
+        train_ds = Subset(full_ds, train_idx)
+        val_ds   = Subset(full_ds, val_idx)
+        test_ds  = Subset(full_ds, test_idx)
 
     # pin_memory speeds up CPU→GPU transfers on CUDA; unsupported on MPS
     pin = (device.type == "cuda")
-    # Use 'forkserver' (or 'spawn') instead of the default 'fork' when using a
-    # memmap dataset with many workers.  With 'fork', every worker inherits the
-    # parent's full address space (including the mapped cache file), triggering
-    # copy-on-write for every Python allocation and causing each worker to
-    # accumulate its own ~9 GB RSS copy.  'forkserver' starts workers from a
-    # clean server process that has not yet mapped the cache, so workers share
-    # the OS page-cache for the file without duplicating it.
-    mp_ctx = "forkserver" if args.workers > 0 else None
+    # With SharedMemoryDataset workers use the default 'fork' context — the
+    # tensor lives in POSIX shared memory so fork copy-on-write does not
+    # duplicate it.  With MemmapDataset (workers=0) mp_ctx is irrelevant.
+    mp_ctx = None
     loader_kw = dict(
         batch_size=args.batch_size,
         num_workers=args.workers,
