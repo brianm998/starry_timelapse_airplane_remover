@@ -89,18 +89,40 @@ def robust_loader(path: str) -> Image.Image:
 
 class TileClassifier(nn.Module):
     """
-    Small CNN for classifying tiles (default 32×32 RGB).
+    CNN for classifying 32×32 RGB tiles into earth / star_sky / clear_sky / cloudy_sky.
 
-    Architecture:
-      3 × (Conv-BN-ReLU-Conv-BN-ReLU-Pool) blocks followed by a small MLP.
-      AdaptiveAvgPool2d makes the network size-agnostic (works for any tile size).
+    Three architecture presets (--arch):
+
+      small  (~813 K params)   3 conv blocks, channels 32-64-128
+                               AdaptiveAvgPool(4,4) → Linear(2048→256→N)
+                               Fast to train; good baseline.
+
+      medium (~3.2 M params)   3 conv blocks, channels 64-128-256
+                               AdaptiveAvgPool(4,4) → Linear(4096→512→128→N)
+                               More capacity for subtle colour/texture patterns.
+
+      large  (~3.0 M params)   4 conv blocks, channels 64-128-256-256
+                               3 pooling stages (32→16→8→4) + 1 no-pool block
+                               AdaptiveAvgPool(2,2) → Linear(1024→512→128→N)
+                               Deepest option for a 32×32 input; same channel
+                               budget as medium but more layers.
+
+    All variants:
+      • Input is always 3-channel RGB (colour is preserved end-to-end).
+      • AdaptiveAvgPool makes the net tile-size-agnostic.
+      • Dropout2d(0.10) after each pool; Dropout(0.50/0.30) in the MLP.
     """
 
-    def __init__(self, num_classes: int = 4, in_channels: int = 3) -> None:
+    def __init__(
+        self,
+        num_classes: int = 4,
+        in_channels: int = 3,
+        arch: str = "small",
+    ) -> None:
         super().__init__()
 
         def conv_block(in_ch: int, out_ch: int, pool: bool = True) -> list:
-            block: list = [
+            layers: list = [
                 nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, bias=False),
                 nn.BatchNorm2d(out_ch),
                 nn.ReLU(inplace=True),
@@ -109,25 +131,71 @@ class TileClassifier(nn.Module):
                 nn.ReLU(inplace=True),
             ]
             if pool:
-                block.append(nn.MaxPool2d(2))          # halve spatial dims
-                block.append(nn.Dropout2d(0.10))
-            return block
+                layers.append(nn.MaxPool2d(2))        # halve spatial dims
+                layers.append(nn.Dropout2d(0.10))
+            return layers
 
-        self.features = nn.Sequential(
-            *conv_block(in_channels, 32),              # → H/2 × W/2
-            *conv_block(32, 64),                       # → H/4 × W/4
-            *conv_block(64, 128, pool=False),          # keep spatial
-            nn.AdaptiveAvgPool2d((4, 4)),              # → 4×4 always
-        )
+        if arch == "small":
+            # 3 blocks · channels 32-64-128 · AdaptiveAvgPool(4,4) · ~813 K params
+            self.features = nn.Sequential(
+                *conv_block(in_channels, 32),          # → H/2  × W/2
+                *conv_block(32, 64),                   # → H/4  × W/4
+                *conv_block(64, 128, pool=False),      # keep spatial
+                nn.AdaptiveAvgPool2d((4, 4)),          # → 4×4
+            )
+            self.classifier = nn.Sequential(
+                nn.Flatten(),
+                nn.Dropout(0.50),
+                nn.Linear(128 * 4 * 4, 256),
+                nn.ReLU(inplace=True),
+                nn.Dropout(0.30),
+                nn.Linear(256, num_classes),
+            )
 
-        self.classifier = nn.Sequential(
-            nn.Flatten(),
-            nn.Dropout(0.50),
-            nn.Linear(128 * 4 * 4, 256),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.30),
-            nn.Linear(256, num_classes),
-        )
+        elif arch == "medium":
+            # 3 blocks · channels 64-128-256 · AdaptiveAvgPool(4,4) · ~3.2 M params
+            self.features = nn.Sequential(
+                *conv_block(in_channels, 64),          # → H/2  × W/2
+                *conv_block(64, 128),                  # → H/4  × W/4
+                *conv_block(128, 256, pool=False),     # keep spatial
+                nn.AdaptiveAvgPool2d((4, 4)),          # → 4×4
+            )
+            self.classifier = nn.Sequential(
+                nn.Flatten(),
+                nn.Dropout(0.50),
+                nn.Linear(256 * 4 * 4, 512),
+                nn.ReLU(inplace=True),
+                nn.Dropout(0.30),
+                nn.Linear(512, 128),
+                nn.ReLU(inplace=True),
+                nn.Dropout(0.20),
+                nn.Linear(128, num_classes),
+            )
+
+        elif arch == "large":
+            # 4 blocks · channels 64-128-256-256 · AdaptiveAvgPool(2,2) · ~3.0 M params
+            # 3 pooling stages: 32→16→8→4, then 1 no-pool block at 4×4
+            self.features = nn.Sequential(
+                *conv_block(in_channels, 64),          # → H/2  × W/2
+                *conv_block(64, 128),                  # → H/4  × W/4
+                *conv_block(128, 256),                 # → H/8  × W/8
+                *conv_block(256, 256, pool=False),     # keep spatial
+                nn.AdaptiveAvgPool2d((2, 2)),          # → 2×2
+            )
+            self.classifier = nn.Sequential(
+                nn.Flatten(),
+                nn.Dropout(0.50),
+                nn.Linear(256 * 2 * 2, 512),
+                nn.ReLU(inplace=True),
+                nn.Dropout(0.30),
+                nn.Linear(512, 128),
+                nn.ReLU(inplace=True),
+                nn.Dropout(0.20),
+                nn.Linear(128, num_classes),
+            )
+
+        else:
+            raise ValueError(f"Unknown arch '{arch}'. Choose: small, medium, large")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.classifier(self.features(x))
@@ -706,6 +774,12 @@ def parse_args() -> argparse.Namespace:
     g.add_argument("--test-ratio",  type=float, default=0.15)
     g.add_argument("--no-augment",  action="store_true",
                    help="Disable training-time data augmentation")
+    g.add_argument("--arch",        default="small",
+                   choices=["small", "medium", "large"],
+                   help="Model architecture: small (~813K params, 3 blocks 32-64-128), "
+                        "medium (~3.2M params, 3 blocks 64-128-256), "
+                        "large (~3.0M params, 4 blocks 64-128-256-256). "
+                        "All variants train on full RGB colour.")
 
     # Training
     g = p.add_argument_group("Training")
@@ -947,9 +1021,12 @@ def main() -> None:
     test_loader  = DataLoader(test_ds,  shuffle=False, **loader_kw)
 
     # ── Model ─────────────────────────────────────────────────────────────────
-    model = TileClassifier(num_classes=num_classes, in_channels=3).to(device)
+    model = TileClassifier(
+        num_classes=num_classes, in_channels=3, arch=args.arch
+    ).to(device)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"\nModel   →  {model.__class__.__name__}  ({n_params:,} parameters)")
+    print(f"\nModel   →  {model.__class__.__name__}  arch={args.arch}"
+          f"  ({n_params:,} parameters, 3-channel RGB input)")
 
     # torch.compile: fuses ops and generates optimised kernels (PyTorch 2.x)
     # torch.compile(model) always succeeds — the actual compilation happens on
