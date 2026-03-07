@@ -114,7 +114,7 @@ struct TileOptions: ParsableArguments {
 
 /// Counts sky vs ground pixels in a mask tile and returns the tile classification.
 /// Sky wins on exact ties.
-func classify(maskTile: PixelatedImage, defaultSky: SkyClass) -> TileClass {
+func classify(maskTile: PixelatedImage, defaultSky: SkyClass) -> TileClass? {
     var skyPixels    = 0
     var groundPixels = 0
 
@@ -145,8 +145,9 @@ func classify(maskTile: PixelatedImage, defaultSky: SkyClass) -> TileClass {
 
     if skyPixels    == 0 { return .earth }
     if groundPixels == 0 { return .sky(defaultSky) }
-    if groundPixels  > skyPixels { return .earth }
-    return .sky(defaultSky)   // sky wins on ties
+    return nil                // 
+//    if groundPixels  > skyPixels { return .earth }
+//    return .sky(defaultSky)   // sky wins on ties
 }
 
 /// Loads one image+mask pair, splits into tiles, classifies each tile, and writes
@@ -225,20 +226,28 @@ func processImage(
         guard imageTile.image.width  == tileSize,
               imageTile.image.height == tileSize else { continue }
 
-        let tileClass  = classify(maskTile: maskTile.image, defaultSky: skyDefault)
-        let dirName    = tileClass.outputDirName
-        let filename   = String(format: "\(filePrefix)_tile_%05d_%05d.\(tileExt)",
-                                imageTile.x, imageTile.y)
-        let outputPath = outputURL
-            .appendingPathComponent(dirName)
-            .appendingPathComponent(filename)
-            .path
+        if let tileClass = classify(
+             maskTile: maskTile.image,
+             defaultSky: skyDefault
+           )
+        {
+            let dirName  = tileClass.outputDirName
+            let filename = String(
+              format: "\(filePrefix)_tile_%05d_%05d.\(tileExt)",
+              imageTile.x,
+              imageTile.y
+            )
+            let outputPath = outputURL
+              .appendingPathComponent(dirName)
+              .appendingPathComponent(filename)
+              .path
 
-        // Convert to 8-bit RGB (÷256 fixed scaling) before writing,
-        // so all tiles are 8-bit regardless of the source image bit depth.
-        // This matches the robust_loader in train_tile_classifier.py (>> 8).
-        imageTile.image.mat.ensure8Bits().write(to: outputPath)
-        counts[dirName, default: 0] += 1
+            // Convert to 8-bit RGB (÷256 fixed scaling) before writing,
+            // so all tiles are 8-bit regardless of the source image bit depth.
+            // This matches the robust_loader in train_tile_classifier.py (>> 8).
+            imageTile.image.mat.ensure8Bits().write(to: outputPath)
+            counts[dirName, default: 0] += 1
+        }
     }
 
     return counts
