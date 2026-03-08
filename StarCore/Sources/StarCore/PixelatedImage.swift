@@ -885,6 +885,29 @@ extension PixelatedImage {
         }
     }
     
+    /// Warp this image using the given row-major 3×3 homography (9 elements).
+    public func warped(with homography: [Double]) -> PixelatedImage? {
+        let hMat = MatWrapper(homographyValues: homography) 
+        guard let result = PixelatedImageBridge.warpImage(self.mat, withHomography: hMat) else { return nil }
+        return PixelatedImage(mat: result)
+    }
+
+    /// Warp this binary horizon mask using the given row-major 3×3 homography.
+    /// Uses nearest-neighbour interpolation (preserves 0/255) and fills
+    /// out-of-bounds pixels with white (sky = 255) so warp borders are never
+    /// misread as ground.
+    public func warpedAsHorizonMask(with homography: [Double]) -> PixelatedImage? {
+        let hMat = MatWrapper(homographyValues: homography)
+        guard let result = PixelatedImageBridge.warpHorizonMask(self.mat, withHomography: hMat) else { return nil }
+        return PixelatedImage(mat: result)
+    }
+
+    /// Per-pixel absolute difference converted to 8-bit grayscale.
+    public func absDiff(with other: PixelatedImage) -> PixelatedImage? {
+        guard let result = PixelatedImageBridge.absDiffGrayscale(self.mat, withImage: other.mat) else { return nil }
+        return PixelatedImage(mat: result)
+    }
+
     // move image up vertically by some number of pixels
     public func shiftImageUp(by pixels: Int) -> PixelatedImage? {
         let result = PixelatedImageBridge.shiftImageUp(

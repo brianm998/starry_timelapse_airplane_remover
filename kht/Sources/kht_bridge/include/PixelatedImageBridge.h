@@ -68,6 +68,34 @@ NS_ASSUME_NONNULL_BEGIN
 		       mask:(MatWrapper *)mask
 		     border:(int)amount;
 
+/// Warp an image using a 3×3 homography matrix (CV_64F 3×3 MatWrapper).
+/// Uses cv::warpPerspective with INTER_LINEAR and zero-filled borders.
++ (nullable MatWrapper *)warpImage:(MatWrapper *)image
+                    withHomography:(MatWrapper *)homography;
+
+/// Compute the per-pixel absolute difference between two images,
+/// converting both to 8-bit grayscale first.
+/// Returns a CV_8UC1 image of the same spatial dimensions.
++ (nullable MatWrapper *)absDiffGrayscale:(MatWrapper *)image1
+                                withImage:(MatWrapper *)image2;
+
+/// Compute the per-pixel arithmetic mean of an array of CV_8UC1 images.
+/// All images must have the same size. Returns a CV_8UC1 result.
++ (nullable MatWrapper *)meanOfImages:(NSArray<MatWrapper *> *)images;
+
+/// Warp a binary horizon mask using the given homography.
+/// Uses INTER_NEAREST and fills out-of-bounds pixels with white (255 = sky)
+/// so that warp borders are not misread as ground.
++ (nullable MatWrapper *)warpHorizonMask:(MatWrapper *)mask
+                          withHomography:(MatWrapper *)homography;
+
+/// Create a binary horizon mask: white (255) above, black (0) below.
+/// @param horizonY  One NSNumber per column giving the first "ground" row.
+///                  NSNull means "use full sky" (all-white column).
++ (MatWrapper *)binaryHorizonMaskWithWidth:(int)width
+                                    height:(int)height
+                                  horizonY:(NSArray<id> *)horizonY;
+
 /// Dynamic programming horizon tracing.
 /// Finds the optimal left-to-right path through the image that follows
 /// strong horizontal edges (Sobel vertical gradient + Canny edges).

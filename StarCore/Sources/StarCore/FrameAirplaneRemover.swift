@@ -535,6 +535,198 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return nil
     }
 
+    // MARK: - Refined horizon (homography alignment-drop)
+
+    /// Load the refined horizon mask from disk, or create it if absent.
+    ///
+    /// Priority order:
+    /// 1. User-provided reference mask (see `loadHorizonReferenceMask()`).
+    /// 2. Previously computed result cached on disk.
+    /// 3. Run `HomographyHorizonDetector` to produce a new result.
+    ///
+    /// Falls back to the merged horizon mask when no valid star homography
+    /// or neighbour horizon masks are available.
+    public func loadOrCreateRefinedHorizonMask() async throws -> HorizonMask? {
+        Log.d("frame \(frameIndex) trying to load refined horizon mask")
+
+        // 1. User-provided reference mask (highest priority).
+        if let referenceMask = try await loadHorizonReferenceMask() {
+            return referenceMask
+        }
+
+        // 2. Previously computed result on disk.
+        do {
+            if let image = try await imageAccessor.load(
+                 frameIndex: frameIndex,
+                 type: .refinedHorizon,
+                 atSize: .original
+               )
+            {
+                Log.d("frame \(frameIndex) successfully loaded refined horizon mask")
+                return HorizonMask(image)
+            }
+        } catch {
+            Log.w("frame \(frameIndex) unable to load refined horizon mask: \(error)")
+        }
+
+        // 3. Run the algorithm.
+        Log.i("frame \(frameIndex) creating refined horizon mask")
+        return try await createRefinedHorizonMask()
+    }
+
+    /// Checks for a user-provided reference horizon mask in the
+    /// `horizonReference` directory (a sibling of `refinedHorizon`).
+    ///
+    /// Two naming conventions are supported:
+    ///
+    /// - **Frame-specific** — `{outputDir}/horizonReference/{frameName}`:
+    ///   used for that one frame only.  Create one per frame when different
+    ///   frames need different corrections.
+    ///
+    /// - **Global / static-camera** — `{outputDir}/horizonReference/reference.tiff`:
+    ///   used for every frame in the sequence.  Ideal when a single
+    ///   Photoshop-painted mask describes the terrain for the whole timelapse
+    ///   (the camera never moved, so the horizon silhouette is constant).
+    ///
+    /// Returns `nil` when no reference file is found, which causes normal
+    /// algorithm processing to proceed.
+    private func loadHorizonReferenceMask() async throws -> HorizonMask? {
+        // Derive the horizonReference directory from the well-known
+        // refinedHorizon path for this frame.
+        guard let refinedPath = imageAccessor.nameForImage(
+                frameIndex: frameIndex,
+                ofType: .refinedHorizon,
+                atSize: .original)
+        else { return nil }
+
+        let refinedURL    = URL(fileURLWithPath: refinedPath)
+        let frameFileName = refinedURL.lastPathComponent
+        // Go up two levels (.../refinedHorizon → .../output), then into
+        // horizonReference to get the sibling directory.
+        let referenceDir  = refinedURL
+            .deletingLastPathComponent()          // .../refinedHorizon
+            .deletingLastPathComponent()          // .../output
+            .appendingPathComponent("horizonReference")
+
+        // 1. Frame-specific reference (highest priority).
+        let frameRefURL = referenceDir.appendingPathComponent(frameFileName)
+        if FileManager.default.fileExists(atPath: frameRefURL.path),
+           let refImage = PixelatedImage(filename: frameRefURL.path) {
+            Log.i("frame \(frameIndex) using frame-specific reference horizon mask: \(frameRefURL.path)")
+            return HorizonMask(refImage)
+        }
+
+        // 2. Global reference — applies to every frame (static-camera use case).
+        let globalRefURL = referenceDir.appendingPathComponent("reference.tiff")
+        if FileManager.default.fileExists(atPath: globalRefURL.path),
+           let refImage = PixelatedImage(filename: globalRefURL.path) {
+            Log.i("frame \(frameIndex) using global reference horizon mask: \(globalRefURL.path)")
+            return HorizonMask(refImage)
+        }
+
+        return nil
+    }
+
+    internal func createRefinedHorizonMask() async throws -> HorizonMask? {
+        self.set(state: .refiningHorizon)
+
+        // Load the star homography (must have been computed and validated already).
+        var homographyResults = neighborStarHomography
+        if homographyResults == nil {
+            homographyResults =  await readStarNeighborHomographyForThisFrame()
+        }
+        guard let homographyResults else {
+            Log.w("frame \(frameIndex) no star homography available for horizon refinement — falling back to merged horizon")
+            return try await loadOrCreateMergedHorizonMask()
+        }
+
+        // We need the current frame dimensions.  The merged horizon mask has
+        // the same dimensions as the original frame and is already available.
+        guard let mergedMask = try await loadOrCreateMergedHorizonMask() else {
+            Log.w("frame \(frameIndex) no merged horizon available for refinement dimensions")
+            return nil
+        }
+        let currentWidth  = mergedMask.image.width
+        let currentHeight = mergedMask.image.height
+
+        // Collect valid neighbours — gather both the horizon mask filename
+        // (for Pass 1: warped-mask) and the original image filename
+        // (for Pass 2: alignment-error tracking) in one pass so the arrays
+        // stay aligned with each other and with the homography array.
+        let validNeighbors: [(horizonFilename: String, originalFilename: String, homography: [Double])] =
+          homographyResults.neighborHomography.compactMap { entry in
+              guard entry.alignmentState == .homographySuccess ||
+                    entry.alignmentState == .usedExistingHomography,
+                    let h = entry.homography,
+                    h.count == 9
+              else { return nil }
+
+              guard let horizonFilename = imageAccessor.nameForImage(
+                      frameIndex: entry.frameIndex,
+                      ofType: .horizon,
+                      atSize: .original
+                    ) else {
+                  Log.d("frame \(frameIndex) no horizon mask filename for neighbour \(entry.frameIndex)")
+                  return nil
+              }
+              guard let originalFilename = imageAccessor.nameForImage(
+                      frameIndex: entry.frameIndex,
+                      ofType: .original,
+                      atSize: .original
+                    ) else {
+                  Log.d("frame \(frameIndex) no original image filename for neighbour \(entry.frameIndex)")
+                  return nil
+              }
+              return (horizonFilename: horizonFilename,
+                      originalFilename: originalFilename,
+                      homography: h)
+          }
+
+        guard !validNeighbors.isEmpty else {
+            Log.w("frame \(frameIndex) no valid neighbours for refinement — falling back to merged horizon")
+            return mergedMask
+        }
+
+        Log.d("frame \(frameIndex) refining horizon with \(validNeighbors.count) neighbours (warped-mask + alignment-error)")
+
+        // Load the current frame's original image for the alignment-error pass.
+        let currentImage = try? await imageAccessor.load(
+          frameIndex: frameIndex,
+          type: .original,
+          atSize: .original
+        )
+        if currentImage == nil {
+            Log.w("frame \(frameIndex) could not load original image — alignment-error pass will be skipped")
+        }
+
+        let detector = HomographyHorizonDetector()
+        guard let refinedMask = detector.detect(
+                currentWidth:             currentWidth,
+                currentHeight:            currentHeight,
+                neighborHorizonFilenames: validNeighbors.map { $0.horizonFilename },
+                neighborOriginalFilenames: validNeighbors.map { $0.originalFilename },
+                neighborHomographies:     validNeighbors.map { $0.homography },
+                currentImage:             currentImage
+              )
+        else {
+            Log.w("frame \(frameIndex) HomographyHorizonDetector returned nil — falling back to merged horizon")
+            return mergedMask
+        }
+
+        // Persist the refined mask so subsequent runs can skip the computation.
+        try await imageAccessor.save(
+          refinedMask.image,
+          frameIndex: frameIndex,
+          as: .refinedHorizon,
+          atSizes: await self.outputSizes,
+          overwrite: true
+        )
+
+        self.set(state: .horizonRefined)
+        Log.d("frame \(frameIndex) refined horizon saved")
+        return refinedMask
+    }
+
     // this horizon mask is calculated based upon this frame only.
     // Uses adaptive parameter search: runs horizon detection at reduced resolution
     // with multiple parameter combinations, scores each result, then applies the

@@ -334,6 +334,8 @@ extension OperationType {
             "found horizon"
         case .mergedHorizon:
             "merged horizons"
+        case .refinedHorizon:
+            "refined horizon"
         case .starKeypoints:
             "have star keypoints"
         case .earthKeypoints:

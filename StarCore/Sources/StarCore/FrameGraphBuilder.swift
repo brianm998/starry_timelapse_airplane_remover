@@ -7,6 +7,7 @@ public enum OperationType: String, CaseIterable, Sendable {
     case preview
     case horizon
     case mergedHorizon
+    case refinedHorizon = "refine horizon"
     case starKeypoints = "star kp"
     case earthKeypoints = "earth kp"
     case starHomography = "star align"
@@ -85,6 +86,7 @@ public final actor FrameGraphBuilder {
         var skyKeypointOps: [Int: Operation] = [:]
         var earthKeypointOps: [Int: Operation] = [:]
 
+        var horizonRefinementOps: [Int: Operation] = [:]
         var outlierOps: [Int: OutlierOp] = [:]
 
         var lastIndex = frames.count - 1
@@ -352,9 +354,27 @@ public final actor FrameGraphBuilder {
         homographyOps.forEach { validationOp.addDependency($0) }
         allOps.append(validationOp)
 
-        // how many in each direction for final outlier classification 
-        let numOutlierNeighbors = config.numberFinalProcessingNeighborsNeeded            
-        
+        // ---- 4b. Horizon refinement (per-frame, after validated homography) ----
+        // Only run when horizon detection is enabled; HorizonRefinementOp
+        // falls back to the merged horizon when homography is unavailable.
+        if hasHorizon {
+            for frame in frames {
+                let refinementOp = HorizonRefinementOp(
+                  frame: frame
+                ) { errorString in
+                    Task { await errors.append(errorString) }
+                    errorClosure(errorString)
+                }
+                refinementOp.qualityOfService = .userInteractive
+                refinementOp.addDependency(validationOp)
+                allOps.append(refinementOp)
+                horizonRefinementOps[frame.frameIndex] = refinementOp
+            }
+        }
+
+        // how many in each direction for final outlier classification
+        let numOutlierNeighbors = config.numberFinalProcessingNeighborsNeeded
+
         for frame in frames {
             // Outlier operations for selective and auto selective
             // all frames get an op, but it may be a nop for auto only
@@ -367,6 +387,11 @@ public final actor FrameGraphBuilder {
                 }
 
                 outlierOp.addDependency(validationOp)
+                // also depend on this frame's horizon refinement so the
+                // refined horizon is available for outlier classification
+                if let refinementOp = horizonRefinementOps[frame.frameIndex] {
+                    outlierOp.addDependency(refinementOp)
+                }
                 allOps.append(outlierOp)
                 outlierOps[frame.frameIndex] = outlierOp
             }

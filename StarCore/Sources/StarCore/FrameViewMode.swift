@@ -18,6 +18,7 @@ public enum FrameViewMode: String,
     case original               // source frame with no changes
     case horizon                // computed horizon mask
     case mergedHorizon          // median merged and maybe aligned horizon mask from neighbors
+    case refinedHorizon         // homography alignment-drop refined horizon mask
     case starAligned            // star aligned neighbor frame
     case failedStarAligned      // failed star aligned neighbor frame
     case earthAligned           // earth aligned neighbor frame
@@ -68,6 +69,8 @@ public enum FrameViewMode: String,
             "horizon"
         case .mergedHorizon:
             "mergedHorizon"
+        case .refinedHorizon:
+            "refinedHorizon"
         }
     }
 
@@ -103,6 +106,8 @@ public enum FrameViewMode: String,
             "horizon mask"
         case .mergedHorizon:
             "merged horizon"
+        case .refinedHorizon:
+            "homography refined horizon"
         }
     }
 }

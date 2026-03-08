@@ -1188,6 +1188,131 @@ extern cv::Mat ensure8U(const cv::Mat& input);
   return nil;
 }
 
++ (nullable MatWrapper *)warpImage:(MatWrapper *)image
+                    withHomography:(MatWrapper *)homography {
+    @try {
+        try {
+            cv::Mat warped;
+            cv::warpPerspective(image.mat,
+                                warped,
+                                homography.mat,
+                                image.mat.size(),
+                                cv::INTER_LINEAR,
+                                cv::BORDER_CONSTANT,
+                                cv::Scalar(0, 0, 0, 0));
+            return [[MatWrapper alloc] initWithMat:warped];
+        } catch (const cv::Exception &e) {
+            Log_e(@"warpImage: cv exception: %s", e.what());
+        }
+    } @catch (NSException *ex) {
+        Log_e(@"warpImage: exception: %@", ex);
+    }
+    return nil;
+}
+
++ (nullable MatWrapper *)absDiffGrayscale:(MatWrapper *)image1
+                                withImage:(MatWrapper *)image2 {
+    @try {
+        try {
+            cv::Mat gray1, gray2;
+            // Convert both to 8-bit grayscale
+            cv::Mat src1 = ensure8U(image1.mat);
+            cv::Mat src2 = ensure8U(image2.mat);
+            if (src1.channels() == 1) {
+                gray1 = src1;
+            } else if (src1.channels() == 4) {
+                cv::cvtColor(src1, gray1, cv::COLOR_BGRA2GRAY);
+            } else if (src1.channels() == 3) {
+                cv::cvtColor(src1, gray1, cv::COLOR_BGR2GRAY);
+            } else {
+                return nil;
+            }
+            if (src2.channels() == 1) {
+                gray2 = src2;
+            } else if (src2.channels() == 4) {
+                cv::cvtColor(src2, gray2, cv::COLOR_BGRA2GRAY);
+            } else if (src2.channels() == 3) {
+                cv::cvtColor(src2, gray2, cv::COLOR_BGR2GRAY);
+            } else {
+                return nil;
+            }
+            cv::Mat diff;
+            cv::absdiff(gray1, gray2, diff);
+            return [[MatWrapper alloc] initWithMat:diff];
+        } catch (const cv::Exception &e) {
+            Log_e(@"absDiffGrayscale: cv exception: %s", e.what());
+        }
+    } @catch (NSException *ex) {
+        Log_e(@"absDiffGrayscale: exception: %@", ex);
+    }
+    return nil;
+}
+
++ (nullable MatWrapper *)warpHorizonMask:(MatWrapper *)mask
+                          withHomography:(MatWrapper *)homography {
+    @try {
+        try {
+            cv::Mat warped;
+            // INTER_NEAREST preserves binary 0/255 values.
+            // BORDER_CONSTANT with Scalar(255,255,255,255) fills out-of-bounds
+            // regions with white (sky) so warp borders are not confused with ground.
+            cv::warpPerspective(mask.mat, warped, homography.mat,
+                                mask.mat.size(),
+                                cv::INTER_NEAREST,
+                                cv::BORDER_CONSTANT,
+                                cv::Scalar(255, 255, 255, 255));
+            return [[MatWrapper alloc] initWithMat:warped];
+        } catch (const cv::Exception &e) {
+            Log_e(@"warpHorizonMask: cv exception: %s", e.what());
+        }
+    } @catch (NSException *ex) {
+        Log_e(@"warpHorizonMask: exception: %@", ex);
+    }
+    return nil;
+}
+
++ (nullable MatWrapper *)meanOfImages:(NSArray<MatWrapper *> *)images {
+    if (images.count == 0) return nil;
+    @try {
+        try {
+            const cv::Mat &first = images[0].mat;
+            cv::Mat accum = cv::Mat::zeros(first.size(), CV_32F);
+            for (MatWrapper *img in images) {
+                cv::Mat f;
+                img.mat.convertTo(f, CV_32F);
+                accum += f;
+            }
+            accum /= (float)images.count;
+            cv::Mat result;
+            accum.convertTo(result, CV_8U);
+            return [[MatWrapper alloc] initWithMat:result];
+        } catch (const cv::Exception &e) {
+            Log_e(@"meanOfImages: cv exception: %s", e.what());
+        }
+    } @catch (NSException *ex) {
+        Log_e(@"meanOfImages: exception: %@", ex);
+    }
+    return nil;
+}
+
++ (MatWrapper *)binaryHorizonMaskWithWidth:(int)width
+                                    height:(int)height
+                                  horizonY:(NSArray<id> *)horizonY {
+    cv::Mat mask(height, width, CV_8UC1, cv::Scalar(255)); // start all-white (sky)
+    for (int x = 0; x < width && x < (int)horizonY.count; x++) {
+        id val = horizonY[x];
+        if ([val isKindOfClass:[NSNull class]]) continue;
+        int y = [(NSNumber *)val intValue];
+        if (y < 0) y = 0;
+        if (y > height) y = height;
+        // Set rows [y, height) to black (ground)
+        for (int row = y; row < height; row++) {
+            mask.at<uchar>(row, x) = 0;
+        }
+    }
+    return [[MatWrapper alloc] initWithMat:mask];
+}
+
 @end
 
 

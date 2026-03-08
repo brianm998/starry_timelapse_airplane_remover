@@ -723,6 +723,16 @@ public struct Config: Codable, Sendable, Transferable {
             case .thumbnail:
                 return nil
             }
+        case .refinedHorizon:
+            switch size {
+            case .original:
+                return "\(self.tempOutputPath)/refinedHorizon"
+
+            case .preview:
+                return "\(self.tempOutputPath)/refinedHorizon-previews"
+            case .thumbnail:
+                return nil
+            }
         case .subtraction:
             switch size {
             case .original:
@@ -818,6 +828,7 @@ public struct Config: Codable, Sendable, Transferable {
         if let dir = self.dirForImage(ofType: .earthAligned) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .horizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .mergedHorizon) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .refinedHorizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .subtraction) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .validation) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .autoProcessed) { ret.append(dir) }
@@ -832,6 +843,7 @@ public struct Config: Codable, Sendable, Transferable {
             if let dir = self.dirForImage(ofType: .earthAligned, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .horizon, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .mergedHorizon, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .refinedHorizon, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .subtraction, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .validation, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .blobs, atSize: .preview) { ret.append(dir) }
