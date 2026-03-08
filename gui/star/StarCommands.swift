@@ -39,7 +39,7 @@ struct StarCommands: Commands {
                   .environment(viewModel)
             }
             
-            // this is really just here to enable keyboard shortcuts 
+            // this is really just here to enable keyboard shortcuts
             CommandMenu("Tools") {
                 ChangeToolButton(tool: .remove)
                   .environment(viewModel)
@@ -65,6 +65,17 @@ struct StarCommands: Commands {
                 ChangeToolButton(tool: .information)
                   .environment(viewModel)
                   .keyboardShortcut("8", modifiers: [])
+
+                Divider()
+
+                // H — toggle the horizon painter overlay
+                Button(viewModel.isShowingHorizonPainter
+                       ? "Close Horizon Painter"
+                       : "Paint Horizon Reference") {
+                    viewModel.isShowingHorizonPainter.toggle()
+                }
+                .environment(viewModel)
+                .keyboardShortcut("h", modifiers: [])
             }
             
         }

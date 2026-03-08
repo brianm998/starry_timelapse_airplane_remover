@@ -18,7 +18,11 @@ struct FrameEditView: View {
 
     // this one is optional, but it's passed as non-optional below
     @State private var currentZoomScale: CGFloat? = nil
-    
+
+    /// Owned here so both `HorizonPainterView` (canvas, scaled) and
+    /// `HorizonPainterToolbarView` (toolbar, screen-sized) share the same state.
+    @State private var horizonPaintState: HorizonPaintState? = nil
+
     var body: some View {
         // wrap the frame view with a zoomable view
         GeometryReader { geometry in
@@ -106,6 +110,26 @@ struct FrameEditView: View {
                 }
             }
         }
+        // ── Horizon-painter toolbar ───────────────────────────────────────
+        // Placed here, *outside* the GeometryReader / ZoomableView, so it
+        // renders at screen coordinates and is never scaled down with the image.
+        .overlay(alignment: .bottom) {
+            if viewModel.isShowingHorizonPainter, let ps = horizonPaintState {
+                HorizonPainterToolbarView(paintState: ps)
+            }
+        }
+        // Create a fresh HorizonPaintState whenever the painter is opened,
+        // and discard it when closed.
+        .onChange(of: viewModel.isShowingHorizonPainter) { _, isShowing in
+            if isShowing {
+                horizonPaintState = HorizonPaintState(
+                    viewWidth:  viewModel.frameWidth,
+                    viewHeight: viewModel.frameHeight
+                )
+            } else {
+                horizonPaintState = nil
+            }
+        }
     }
 
     var imageView: some View {
@@ -114,7 +138,7 @@ struct FrameEditView: View {
 
             FrameEditImageView(frameViewModel: viewModel.frames[viewModel.currentIndex])
               .frame(width: viewModel.frameWidth, height: viewModel.frameHeight)
-            
+
             // this is the selection overlay
             if let selectionStart = viewModel.selectionStart,
                let selectionEnd = viewModel.selectionEnd
@@ -131,14 +155,24 @@ struct FrameEditView: View {
                     Rectangle()
                       .stroke(style: StrokeStyle(lineWidth: 2))
                       .foregroundColor(viewModel.selectionColor.opacity(0.8))
-                  )                
+                  )
                   .frame(width: width, height: height)
                   .offset(x: drag_x_offset - CGFloat(viewModel.frameWidth/2) + width/2,
                           y: drag_y_offset - CGFloat(viewModel.frameHeight/2) + height/2)
             }
+
+            // Horizon painter canvas — overlaid at image coordinates so that
+            // view-space brush strokes map directly to image pixels.
+            // The toolbar is rendered outside the ZoomableView (see .overlay
+            // in body) so it is never scaled down with the image.
+            if viewModel.isShowingHorizonPainter, let ps = horizonPaintState {
+                HorizonPainterView(paintState: ps)
+                    .frame(width: viewModel.frameWidth, height: viewModel.frameHeight)
+                    .transition(.opacity)
+            }
         }
         //.highPriorityGesture(self.selectionDragGesture)
-          .gesture(self.selectionDragGesture)
+          .gesture(viewModel.isShowingHorizonPainter ? nil : self.selectionDragGesture)
           .cursor(self.currentCrosshairCursor)
     }
 

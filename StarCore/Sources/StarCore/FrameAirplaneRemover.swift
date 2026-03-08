@@ -400,14 +400,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // this horizon mask has been calculated by a median merge of
     // possibly aligned horizon masks from neighbor frames.
     public func loadOrCreateMergedHorizonMask() async throws -> HorizonMask? {
-        Log.d("frame \(frameIndex) trying to load merged horizon mask")
-
-        // User-provided reference mask (highest priority) — skip merge step.
+        // If the user has painted a reference horizon, use it directly.
         if let referenceMask = try await loadHorizonReferenceMask() {
             Log.i("frame \(frameIndex) loadOrCreateMergedHorizonMask: using reference mask (skipping merge)")
             return referenceMask
         }
-
+        Log.d("frame \(frameIndex) trying to load merged horizon mask")
         // load if possible
         do {
             if let horizonMaskImage = try await imageAccessor.load(
@@ -542,29 +540,23 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return nil
     }
 
-    // MARK: - Refined horizon (homography alignment-drop)
+    // MARK: - Refined horizon mask (homography-based refinement)
 
-    /// Load the refined horizon mask from disk, or create it if absent.
+    /// Load (or create) the refined horizon mask for this frame.
     ///
-    /// Priority order:
-    /// 1. User-provided reference mask (see `loadHorizonReferenceMask()`).
-    /// 2. Previously computed result cached on disk.
-    /// 3. Run `HomographyHorizonDetector` to produce a new result.
-    ///
-    /// Falls back to the merged horizon mask when no valid star homography
-    /// or neighbour horizon masks are available.
+    /// If a user-painted reference mask exists it is returned immediately and
+    /// the tuner is given a chance to update `tuned_parameters.json`.
+    /// Otherwise the cached `.refinedHorizon` image is used, falling back to
+    /// `createRefinedHorizonMask()`.
     public func loadOrCreateRefinedHorizonMask() async throws -> HorizonMask? {
-        Log.d("frame \(frameIndex) trying to load refined horizon mask")
-
-        // 1. User-provided reference mask (highest priority).
+        // Reference mask takes priority over everything.
         if let referenceMask = try await loadHorizonReferenceMask() {
-            // Also try to tune parameters using this reference (no-op when
-            // tuned_parameters.json already exists or homography is unavailable).
+            Log.i("frame \(frameIndex) loadOrCreateRefinedHorizonMask: using reference mask")
             await maybeTuneHorizonParameters(referenceMask: referenceMask)
             return referenceMask
         }
 
-        // 2. Previously computed result on disk.
+        // Try the cached refined mask from a previous run.
         do {
             if let image = try await imageAccessor.load(
                  frameIndex: frameIndex,
@@ -572,361 +564,472 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                  atSize: .original
                )
             {
-                Log.d("frame \(frameIndex) successfully loaded refined horizon mask")
+                Log.d("frame \(frameIndex) loadOrCreateRefinedHorizonMask: loaded cached mask")
                 return HorizonMask(image)
             }
         } catch {
-            Log.w("frame \(frameIndex) unable to load refined horizon mask: \(error)")
+            Log.w("frame \(frameIndex) loadOrCreateRefinedHorizonMask: cache load failed: \(error)")
         }
 
-        // 3. Run the algorithm.
-        Log.i("frame \(frameIndex) creating refined horizon mask")
         return try await createRefinedHorizonMask()
     }
 
-    /// Checks for a user-provided reference horizon mask in the
-    /// `horizonReference` directory (a sibling of `refinedHorizon`).
+    /// Look for a user-painted reference horizon mask on disk and return it if found.
     ///
-    /// Two naming conventions are supported:
-    ///
-    /// - **Frame-specific** — `{outputDir}/horizonReference/{frameName}`:
-    ///   used for that one frame only.  Create one per frame when different
-    ///   frames need different corrections.
-    ///
-    /// - **Global / static-camera** — `{outputDir}/horizonReference/reference.tiff`:
-    ///   used for every frame in the sequence.  Ideal when a single
-    ///   Photoshop-painted mask describes the terrain for the whole timelapse
-    ///   (the camera never moved, so the horizon silhouette is constant).
-    ///
-    /// Returns `nil` when no reference file is found, which causes normal
-    /// algorithm processing to proceed.
+    /// Search order:
+    /// 1. `{horizonReference}/{frameFileName}` — per-frame reference (moving sequences)
+    /// 2. `{horizonReference}/reference.tiff`   — global reference (static sequences)
     private func loadHorizonReferenceMask() async throws -> HorizonMask? {
-        // Derive the horizonReference directory from the well-known
-        // refinedHorizon path for this frame.
         guard let refinedPath = imageAccessor.nameForImage(
                 frameIndex: frameIndex,
                 ofType: .refinedHorizon,
-                atSize: .original)
+                atSize: .original
+              )
         else { return nil }
 
-        let refinedURL    = URL(fileURLWithPath: refinedPath)
-        let frameFileName = refinedURL.lastPathComponent
-        // Go up two levels (.../refinedHorizon → .../output), then into
-        // horizonReference to get the sibling directory.
-        let referenceDir  = refinedURL
-            .deletingLastPathComponent()          // .../refinedHorizon
-            .deletingLastPathComponent()          // .../output
+        let refinedURL      = URL(fileURLWithPath: refinedPath)
+        let frameFileName   = refinedURL.lastPathComponent
+        let referenceDir    = refinedURL
+            .deletingLastPathComponent()    // …/refinedHorizon
+            .deletingLastPathComponent()    // …/output (tempOutputPath)
             .appendingPathComponent("horizonReference")
 
-        // 1. Frame-specific reference (highest priority).
+        // 1. Per-frame reference
         let frameRefURL = referenceDir.appendingPathComponent(frameFileName)
         if FileManager.default.fileExists(atPath: frameRefURL.path),
-           let refImage = PixelatedImage(filename: frameRefURL.path) {
-            Log.i("frame \(frameIndex) using frame-specific reference horizon mask: \(frameRefURL.path)")
+           let refImage = PixelatedImage(filename: frameRefURL.path)
+        {
+            Log.d("frame \(frameIndex) loadHorizonReferenceMask: found per-frame reference")
             return HorizonMask(refImage)
         }
 
-        // 2. Global reference — applies to every frame (static-camera use case).
+        // 2. Global reference
         let globalRefURL = referenceDir.appendingPathComponent("reference.tiff")
         if FileManager.default.fileExists(atPath: globalRefURL.path),
-           let refImage = PixelatedImage(filename: globalRefURL.path) {
-            Log.i("frame \(frameIndex) using global reference horizon mask: \(globalRefURL.path)")
+           let refImage = PixelatedImage(filename: globalRefURL.path)
+        {
+            Log.d("frame \(frameIndex) loadHorizonReferenceMask: found global reference")
             return HorizonMask(refImage)
         }
 
         return nil
     }
 
+    /// Create the refined horizon mask using the homography-based two-pass detector.
+    ///
+    /// Loads tuned parameters from `tuned_parameters.json` when available.
     internal func createRefinedHorizonMask() async throws -> HorizonMask? {
         self.set(state: .refiningHorizon)
 
-        // Load the star homography (must have been computed and validated already).
-        var homographyResults = neighborStarHomography
-        if homographyResults == nil {
-            homographyResults =  await readStarNeighborHomographyForThisFrame()
-        }
-        guard let homographyResults else {
-            Log.w("frame \(frameIndex) no star homography available for horizon refinement — falling back to merged horizon")
-            return try await loadOrCreateMergedHorizonMask()
-        }
-
-        // We need the current frame dimensions.  The merged horizon mask has
-        // the same dimensions as the original frame and is already available.
-        guard let mergedMask = try await loadOrCreateMergedHorizonMask() else {
-            Log.w("frame \(frameIndex) no merged horizon available for refinement dimensions")
-            return nil
-        }
-        let currentWidth  = mergedMask.image.width
-        let currentHeight = mergedMask.image.height
-
-        // Collect valid neighbours — gather both the horizon mask filename
-        // (for Pass 1: warped-mask) and the original image filename
-        // (for Pass 2: alignment-error tracking) in one pass so the arrays
-        // stay aligned with each other and with the homography array.
-        let validNeighbors: [(horizonFilename: String, originalFilename: String, homography: [Double])] =
-          homographyResults.neighborHomography.compactMap { entry in
-              guard entry.alignmentState == .homographySuccess ||
-                    entry.alignmentState == .usedExistingHomography,
-                    let h = entry.homography,
-                    h.count == 9
-              else { return nil }
-
-              guard let horizonFilename = imageAccessor.nameForImage(
-                      frameIndex: entry.frameIndex,
-                      ofType: .horizon,
-                      atSize: .original
-                    ) else {
-                  Log.d("frame \(frameIndex) no horizon mask filename for neighbour \(entry.frameIndex)")
-                  return nil
-              }
-              guard let originalFilename = imageAccessor.nameForImage(
-                      frameIndex: entry.frameIndex,
-                      ofType: .original,
-                      atSize: .original
-                    ) else {
-                  Log.d("frame \(frameIndex) no original image filename for neighbour \(entry.frameIndex)")
-                  return nil
-              }
-              return (horizonFilename: horizonFilename,
-                      originalFilename: originalFilename,
-                      homography: h)
-          }
-
-        guard !validNeighbors.isEmpty else {
-            Log.w("frame \(frameIndex) no valid neighbours for refinement — falling back to merged horizon")
-            return mergedMask
-        }
-
-        Log.d("frame \(frameIndex) refining horizon with \(validNeighbors.count) neighbours (warped-mask + alignment-error)")
-
-        // Load the current frame's original image for the alignment-error pass.
-        let currentImage = try? await imageAccessor.load(
-          frameIndex: frameIndex,
-          type: .original,
-          atSize: .original
-        )
-        if currentImage == nil {
-            Log.w("frame \(frameIndex) could not load original image — alignment-error pass will be skipped")
-        }
-
-        // Build the detector, applying tuned parameters when available.
-        var detector = HomographyHorizonDetector()
-        if let paramsDir = tunedParametersDirectory(),
-           let params    = HorizonTunedParameters.load(fromDirectory: paramsDir) {
-            detector.apply(params)
-            Log.d("frame \(frameIndex) applied tuned horizon parameters " +
-                  "(MAE: \(params.tuningMeanAbsoluteError.map { String(format: "%.1f", $0) } ?? "n/a"))")
-        }
-
-        // Stage 1: expensive I/O — load, warp, diff.
-        let prepared = detector.prepare(
-          currentWidth:              currentWidth,
-          currentHeight:             currentHeight,
-          neighborHorizonFilenames:  validNeighbors.map { $0.horizonFilename },
-          neighborOriginalFilenames: validNeighbors.map { $0.originalFilename },
-          neighborHomographies:      validNeighbors.map { $0.homography },
-          currentImage:              currentImage
-        )
-
-        // Stage 2: fast parameter-sensitive scan.
-        guard let refinedMask = detector.detectFromPrepared(prepared) else {
-            Log.w("frame \(frameIndex) HomographyHorizonDetector returned nil — falling back to merged horizon")
-            return mergedMask
-        }
-
-        // Persist the refined mask so subsequent runs can skip the computation.
-        try await imageAccessor.save(
-          refinedMask.image,
-          frameIndex: frameIndex,
-          as: .refinedHorizon,
-          atSizes: await self.outputSizes,
-          overwrite: true
-        )
-
-        self.set(state: .horizonRefined)
-        Log.d("frame \(frameIndex) refined horizon saved")
-        return refinedMask
-    }
-
-    // MARK: - Horizon parameter tuning helpers
-
-    /// Returns the `horizonReference` directory URL derived from the well-known
-    /// `refinedHorizon` path for this frame.  Returns `nil` if the path cannot
-    /// be determined.
-    private func tunedParametersDirectory() -> URL? {
-        guard let refinedPath = imageAccessor.nameForImage(
-                frameIndex: frameIndex,
-                ofType: .refinedHorizon,
-                atSize: .original)
-        else { return nil }
-        return URL(fileURLWithPath: refinedPath)
-            .deletingLastPathComponent()          // .../refinedHorizon
-            .deletingLastPathComponent()          // .../output
-            .appendingPathComponent("horizonReference")
-    }
-
-    /// When a reference mask exists for the current frame **and** no
-    /// `tuned_parameters.json` has been saved yet, run coordinate-descent
-    /// parameter tuning and write the result.
-    ///
-    /// This is a best-effort helper: any failure simply logs a warning and
-    /// returns without throwing, so it never blocks the main pipeline.
-    private func maybeTuneHorizonParameters(referenceMask: HorizonMask) async {
-        guard let paramsDir = tunedParametersDirectory() else { return }
-
-        // Skip if parameters have already been tuned for this video.
-        guard HorizonTunedParameters.load(fromDirectory: paramsDir) == nil else {
-            Log.d("frame \(frameIndex) tuned_parameters.json already exists — skipping tuning")
-            return
-        }
-
-        Log.i("frame \(frameIndex) starting horizon parameter tuning against reference mask")
-
-        // Need star homography to build PreparedData.
+        // Ensure we have homography results.
         var homographyResults = neighborStarHomography
         if homographyResults == nil {
             homographyResults = await readStarNeighborHomographyForThisFrame()
         }
         guard let homographyResults else {
-            Log.w("frame \(frameIndex) no homography for horizon tuning — skipping")
-            return
+            Log.w("frame \(frameIndex) createRefinedHorizonMask: no star homography — falling back to merged")
+            return try await loadOrCreateMergedHorizonMask()
         }
 
-        // Dimensions from the merged horizon (already on disk at this point).
-        guard let mergedMask = try? await loadOrCreateMergedHorizonMask() else {
-            Log.w("frame \(frameIndex) no merged horizon for tuning dimensions — skipping")
-            return
-        }
+        // We need the merged horizon mask as the Pass-1 baseline.
+        guard let mergedMask = try await loadOrCreateMergedHorizonMask() else { return nil }
+
         let currentWidth  = mergedMask.image.width
         let currentHeight = mergedMask.image.height
 
-        // Collect valid neighbours (same logic as createRefinedHorizonMask).
-        let validNeighbors: [(horizonFilename: String, originalFilename: String, homography: [Double])] =
-          homographyResults.neighborHomography.compactMap { entry in
-              guard entry.alignmentState == .homographySuccess ||
-                    entry.alignmentState == .usedExistingHomography,
-                    let h = entry.homography, h.count == 9
-              else { return nil }
-              guard let hf = imageAccessor.nameForImage(
-                      frameIndex: entry.frameIndex,
-                      ofType: .horizon, atSize: .original),
-                    let of = imageAccessor.nameForImage(
-                      frameIndex: entry.frameIndex,
-                      ofType: .original, atSize: .original)
-              else { return nil }
-              return (horizonFilename: hf, originalFilename: of, homography: h)
-          }
+        // Collect valid neighbours that have a homography and original images.
+        var neighborHorizonFilenames:   [String]   = []
+        var neighborOriginalFilenames:  [String]   = []
+        var neighborHomographies:       [[Double]] = []
 
-        guard !validNeighbors.isEmpty else {
-            Log.w("frame \(frameIndex) no valid neighbours for horizon tuning — skipping")
-            return
+        for warpInfo in homographyResults.neighborHomography {
+            guard warpInfo.alignmentState == .homographySuccess ||
+                  warpInfo.alignmentState == .usedExistingHomography,
+                  let homography = warpInfo.homography
+            else { continue }
+
+            let neighborIndex = warpInfo.frameIndex
+            guard let origFilename = imageAccessor.nameForImage(
+                    frameIndex: neighborIndex,
+                    ofType: .original,
+                    atSize: .original
+                  ),
+                  let horizFilename = imageAccessor.nameForImage(
+                    frameIndex: neighborIndex,
+                    ofType: .mergedHorizon,
+                    atSize: .original
+                  )
+            else { continue }
+
+            neighborOriginalFilenames.append(origFilename)
+            neighborHorizonFilenames.append(horizFilename)
+            neighborHomographies.append(homography)
         }
 
-        // Current frame's original image.
-        let currentImage = try? await imageAccessor.load(
-          frameIndex: frameIndex, type: .original, atSize: .original)
+        guard !neighborHomographies.isEmpty else {
+            Log.w("frame \(frameIndex) createRefinedHorizonMask: no valid neighbours — returning merged mask")
+            self.set(state: .horizonRefined)
+            return mergedMask
+        }
 
-        // Prepare: do all expensive I/O with default parameters.
-        let baseDetector = HomographyHorizonDetector()
-        let prepared = baseDetector.prepare(
-          currentWidth:              currentWidth,
-          currentHeight:             currentHeight,
-          neighborHorizonFilenames:  validNeighbors.map { $0.horizonFilename },
-          neighborOriginalFilenames: validNeighbors.map { $0.originalFilename },
-          neighborHomographies:      validNeighbors.map { $0.homography },
-          currentImage:              currentImage
+        // Load the current frame's original image for Pass 2.
+        let currentImage = try await imageAccessor.load(
+            frameIndex: frameIndex,
+            type: .original,
+            atSize: .original
         )
 
-        // Reference horizon Y values.
-        let referenceY = HomographyHorizonDetector.horizonYPerColumn(in: referenceMask)
+        // Build the detector and apply any saved tuned parameters.
+        var detector = HomographyHorizonDetector()
+        if let paramsDir = tunedParametersDirectory(),
+           let params = HorizonTunedParameters.load(fromDirectory: paramsDir)
+        {
+            detector.apply(params)
+            Log.i("frame \(frameIndex) createRefinedHorizonMask: applied tuned parameters (MAE: \(params.tuningMeanAbsoluteError.map { String(format: "%.1f", $0) } ?? "n/a"))")
+        }
 
-        // Run coordinate-descent tuning.
-        var tunedParams = tuneDetector(baseDetector, prepared: prepared, referenceY: referenceY)
-        tunedParams.tuningFrameCount = 1
+        // Stage 1: expensive I/O.
+        let prepared = detector.prepare(
+            currentWidth:              currentWidth,
+            currentHeight:             currentHeight,
+            neighborHorizonFilenames:  neighborHorizonFilenames,
+            neighborOriginalFilenames: neighborOriginalFilenames,
+            neighborHomographies:      neighborHomographies,
+            currentImage:              currentImage
+        )
 
-        // Save (skip if another concurrent frame already wrote the file).
-        guard HorizonTunedParameters.load(fromDirectory: paramsDir) == nil else {
-            Log.d("frame \(frameIndex) tuned_parameters.json appeared during tuning — discarding result")
+        // Stage 2: fast boundary scan.
+        guard let refinedMask = detector.detectFromPrepared(prepared) else {
+            Log.w("frame \(frameIndex) createRefinedHorizonMask: detector returned nil — returning merged mask")
+            self.set(state: .horizonRefined)
+            return mergedMask
+        }
+
+        // Save for future runs.
+        try await imageAccessor.save(
+            refinedMask.image,
+            frameIndex: frameIndex,
+            as: .refinedHorizon,
+            atSizes: await self.outputSizes,
+            overwrite: true
+        )
+
+        self.set(state: .horizonRefined)
+        Log.i("frame \(frameIndex) createRefinedHorizonMask: refined mask created")
+        return refinedMask
+    }
+
+    // MARK: - Horizon parameter tuning
+
+    /// Returns the URL of the `horizonReference/` directory for this sequence,
+    /// or `nil` if the path cannot be determined.
+    private func tunedParametersDirectory() -> URL? {
+        guard let refinedPath = imageAccessor.nameForImage(
+                frameIndex: frameIndex,
+                ofType: .refinedHorizon,
+                atSize: .original
+              )
+        else { return nil }
+        return URL(fileURLWithPath: refinedPath)
+            .deletingLastPathComponent()    // …/refinedHorizon
+            .deletingLastPathComponent()    // …/output
+            .appendingPathComponent("horizonReference")
+    }
+
+    /// If `tuned_parameters.json` does not already exist, run coordinate-descent
+    /// tuning against `referenceMask` and write the winner.
+    private func maybeTuneHorizonParameters(referenceMask: HorizonMask) async {
+        guard let paramsDir = tunedParametersDirectory() else { return }
+
+        // Don't overwrite hand-tuned or previously auto-tuned parameters.
+        let jsonURL = paramsDir.appendingPathComponent(HorizonTunedParameters.jsonFilename)
+        guard !FileManager.default.fileExists(atPath: jsonURL.path) else {
+            Log.d("frame \(frameIndex) maybeTuneHorizonParameters: tuned_parameters.json already exists — skipping")
             return
         }
+
+        // Need homography results for prepare().
+        var homographyResults = neighborStarHomography
+        if homographyResults == nil {
+            homographyResults = await readStarNeighborHomographyForThisFrame()
+        }
+        guard let homographyResults else {
+            Log.w("frame \(frameIndex) maybeTuneHorizonParameters: no star homography — cannot tune")
+            return
+        }
+
+        guard let mergedMask = try? await loadOrCreateMergedHorizonMask() else { return }
+        let currentWidth  = mergedMask.image.width
+        let currentHeight = mergedMask.image.height
+
+        var neighborHorizonFilenames:   [String]   = []
+        var neighborOriginalFilenames:  [String]   = []
+        var neighborHomographies:       [[Double]] = []
+
+        for warpInfo in homographyResults.neighborHomography {
+            guard warpInfo.alignmentState == .homographySuccess ||
+                  warpInfo.alignmentState == .usedExistingHomography,
+                  let homography = warpInfo.homography
+            else { continue }
+            let neighborIndex = warpInfo.frameIndex
+            guard let origFilename = imageAccessor.nameForImage(
+                    frameIndex: neighborIndex, ofType: .original, atSize: .original),
+                  let horizFilename = imageAccessor.nameForImage(
+                    frameIndex: neighborIndex, ofType: .mergedHorizon, atSize: .original)
+            else { continue }
+            neighborOriginalFilenames.append(origFilename)
+            neighborHorizonFilenames.append(horizFilename)
+            neighborHomographies.append(homography)
+        }
+
+        guard !neighborHomographies.isEmpty else { return }
+
+        let currentImage = try? await imageAccessor.load(
+            frameIndex: frameIndex, type: .original, atSize: .original
+        )
+
+        // Prepare once — the expensive I/O stage.
+        var seedDetector = HomographyHorizonDetector()
+        let prepared = seedDetector.prepare(
+            currentWidth:              currentWidth,
+            currentHeight:             currentHeight,
+            neighborHorizonFilenames:  neighborHorizonFilenames,
+            neighborOriginalFilenames: neighborOriginalFilenames,
+            neighborHomographies:      neighborHomographies,
+            currentImage:              currentImage
+        )
+
+        let referenceY = HomographyHorizonDetector.horizonYPerColumn(in: referenceMask)
+        let tunedParams = tuneDetector(seedDetector, prepared: prepared, referenceY: referenceY)
+
         do {
             try tunedParams.save(toDirectory: paramsDir)
-            Log.i("frame \(frameIndex) saved tuned horizon parameters " +
+            Log.i("frame \(frameIndex) maybeTuneHorizonParameters: saved tuned parameters " +
                   "(MAE: \(tunedParams.tuningMeanAbsoluteError.map { String(format: "%.1f", $0) } ?? "n/a"))")
         } catch {
-            Log.w("frame \(frameIndex) could not save tuned horizon parameters: \(error)")
+            Log.w("frame \(frameIndex) maybeTuneHorizonParameters: could not save parameters: \(error)")
         }
     }
 
-    /// Coordinate-descent parameter search over `HomographyHorizonDetector`
-    /// parameters that minimise the mean absolute Y error against `referenceY`.
+    /// Coordinate-descent search over the four detector parameters.
     ///
-    /// Two passes over four parameter axes ≈ 40 fast evaluations.
-    ///
-    /// - Parameters:
-    ///   - baseDetector: Starting point (default parameters unless already tuned).
-    ///   - prepared:     Pre-computed I/O data (from `prepare`).
-    ///   - referenceY:   Ground-truth per-column horizon Y from the reference mask.
-    /// - Returns: Best-found `HorizonTunedParameters` with `tuningMeanAbsoluteError` set.
+    /// Two passes: each pass cycles through all parameters and picks the best
+    /// value within the candidate range while keeping the others fixed.
+    /// About 40 evaluations total — all using the pre-built `prepared` data so
+    /// no disk I/O is required.
     private func tuneDetector(
-      _ baseDetector: HomographyHorizonDetector,
-      prepared: HomographyHorizonDetector.PreparedData,
-      referenceY: [Int?]
+        _ initial: HomographyHorizonDetector,
+        prepared: HomographyHorizonDetector.PreparedData,
+        referenceY: [Int?]
     ) -> HorizonTunedParameters {
 
-        // Parameter grids.
-        let thresholdFactors: [Double] = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0]
-        let searchRanges:     [Int]    = [150, 250, 350, 450, 550]
-        let blurRadii:        [Int]    = [2, 4, 6, 8]
-        let smoothingRadii:   [Int]    = [25, 50, 75, 100]
-
-        // Start from defaults (encoded in a fresh HorizonTunedParameters).
-        var best = HorizonTunedParameters()
-        best.errorSampleHalfWidth = baseDetector.errorSampleHalfWidth
-
-        // Score the default starting point.
-        var bestScore: Double = {
-            var det = HomographyHorizonDetector()
-            det.apply(best)
-            guard let mask = det.detectFromPrepared(prepared) else { return Double.infinity }
-            let algoY = HomographyHorizonDetector.horizonYPerColumn(in: mask)
-            return HomographyHorizonDetector.score(algorithmY: algoY, referenceY: referenceY)
-        }()
-
-        /// Try a candidate parameter set; update `best` and `bestScore` if better.
-        func tryParams(_ candidate: HorizonTunedParameters) {
-            var det = HomographyHorizonDetector()
-            det.apply(candidate)
-            guard let mask = det.detectFromPrepared(prepared) else { return }
-            let algoY = HomographyHorizonDetector.horizonYPerColumn(in: mask)
-            let score = HomographyHorizonDetector.score(algorithmY: algoY, referenceY: referenceY)
-            if score < bestScore {
-                bestScore = score
-                best      = candidate
-            }
+        var best = initial
+        var bestScore = Double.infinity
+        if let mask = best.detectFromPrepared(prepared) {
+            bestScore = HomographyHorizonDetector.score(
+                algorithmY: HomographyHorizonDetector.horizonYPerColumn(in: mask),
+                referenceY: referenceY
+            )
         }
 
-        // Two-pass coordinate descent.
+        let errorThresholdFactors: [Double] = [0.5, 1.0, 2.0, 3.0, 4.0]
+        let errorSearchRanges:     [Int]    = [150, 250, 400, 550]
+        let errorBlurRadii:        [Int]    = [2, 5, 8]
+        let smoothingRadii:        [Int]    = [25, 50, 75, 100]
+
         for _ in 0..<2 {
-            for factor in thresholdFactors {
-                var c = best; c.errorThresholdFactor = factor; tryParams(c)
+            // Tune errorThresholdFactor
+            for v in errorThresholdFactors {
+                var candidate = best
+                candidate.errorThresholdFactor = v
+                if let mask = candidate.detectFromPrepared(prepared) {
+                    let s = HomographyHorizonDetector.score(
+                        algorithmY: HomographyHorizonDetector.horizonYPerColumn(in: mask),
+                        referenceY: referenceY
+                    )
+                    if s < bestScore { bestScore = s; best = candidate }
+                }
             }
-            for range in searchRanges {
-                var c = best; c.errorSearchRange = range; tryParams(c)
+            // Tune errorSearchRange
+            for v in errorSearchRanges {
+                var candidate = best
+                candidate.errorSearchRange = v
+                if let mask = candidate.detectFromPrepared(prepared) {
+                    let s = HomographyHorizonDetector.score(
+                        algorithmY: HomographyHorizonDetector.horizonYPerColumn(in: mask),
+                        referenceY: referenceY
+                    )
+                    if s < bestScore { bestScore = s; best = candidate }
+                }
             }
-            for radius in blurRadii {
-                var c = best; c.errorBlurRadius = radius; tryParams(c)
+            // Tune errorBlurRadius
+            for v in errorBlurRadii {
+                var candidate = best
+                candidate.errorBlurRadius = v
+                if let mask = candidate.detectFromPrepared(prepared) {
+                    let s = HomographyHorizonDetector.score(
+                        algorithmY: HomographyHorizonDetector.horizonYPerColumn(in: mask),
+                        referenceY: referenceY
+                    )
+                    if s < bestScore { bestScore = s; best = candidate }
+                }
             }
-            for radius in smoothingRadii {
-                var c = best; c.smoothingRadius = radius; tryParams(c)
+            // Tune smoothingRadius
+            for v in smoothingRadii {
+                var candidate = best
+                candidate.smoothingRadius = v
+                if let mask = candidate.detectFromPrepared(prepared) {
+                    let s = HomographyHorizonDetector.score(
+                        algorithmY: HomographyHorizonDetector.horizonYPerColumn(in: mask),
+                        referenceY: referenceY
+                    )
+                    if s < bestScore { bestScore = s; best = candidate }
+                }
             }
         }
 
-        best.tuningMeanAbsoluteError = bestScore.isFinite ? bestScore : nil
-        Log.d("frame \(frameIndex) tuning complete: MAE=\(bestScore.isFinite ? String(format: "%.2f", bestScore) : "∞") " +
-              "thresh=\(best.errorThresholdFactor) range=\(best.errorSearchRange) " +
-              "blur=\(best.errorBlurRadius) smooth=\(best.smoothingRadius)")
-        return best
+        var params = HorizonTunedParameters()
+        params.smoothingRadius      = best.smoothingRadius
+        params.errorSearchRange     = best.errorSearchRange
+        params.errorBlurRadius      = best.errorBlurRadius
+        params.errorThresholdFactor = best.errorThresholdFactor
+        params.errorSampleHalfWidth = best.errorSampleHalfWidth
+        params.tuningMeanAbsoluteError = bestScore.isFinite ? bestScore : nil
+        params.tuningFrameCount = 1
+        return params
+    }
+
+    // MARK: - Save user-painted reference horizon mask
+
+    /// Convert a painted horizon (from `HorizonPainterView`) into a binary
+    /// `HorizonMask` TIFF and write it to the `horizonReference/` directory.
+    ///
+    /// - Parameters:
+    ///   - paintedYPerColumn: Per-column painted horizon Y in *view* coordinates.
+    ///   - viewWidth:  Width of the frame view in points (view coordinate space).
+    ///   - viewHeight: Height of the frame view in points.
+    public func saveHorizonReferenceMask(
+        paintedYPerColumn: [Int?],
+        viewWidth:  Int,
+        viewHeight: Int
+    ) async throws {
+        // 1. Load original image to get actual pixel dimensions.
+        guard let original = try await imageAccessor.load(
+                frameIndex: frameIndex,
+                type: .original,
+                atSize: .original
+              )
+        else {
+            throw "saveHorizonReferenceMask: cannot load original image for frame \(frameIndex)"
+        }
+        let imgW = original.width
+        let imgH = original.height
+
+        // 2. Scale painted Y from view coordinates → image pixel coordinates.
+        let scaleX = Double(imgW) / Double(viewWidth)
+        let scaleY = Double(imgH) / Double(viewHeight)
+
+        var scaledY = [Int?](repeating: nil, count: imgW)
+        for ix in 0..<imgW {
+            // Map image column back to nearest painted column.
+            let vx = Int((Double(ix) / scaleX).rounded())
+            let paintedCol = min(max(vx, 0), paintedYPerColumn.count - 1)
+            if let vy = paintedYPerColumn[paintedCol] {
+                scaledY[ix] = Int((Double(vy) * scaleY).rounded())
+            }
+        }
+
+        // 3. Snap each painted column to the nearest Canny edge (±30 px).
+        if let edgeImage = try? original.cannyEdgeDetect(
+                minThreshold: 50,
+                maxThreshold: 120,
+                useL2Gradient: true
+           )
+        {
+            let rowStride = edgeImage.bytesPerRow
+            let bpp       = max(1, edgeImage.bytesPerPixel)
+            let buf       = edgeImage.mat.buffer(of: UInt8.self)
+            let snapRange = 30
+
+            for ix in 0..<imgW {
+                guard let rawY = scaledY[ix] else { continue }
+                var bestDist = snapRange + 1
+                var bestY    = rawY
+                for dy in -snapRange...snapRange {
+                    let iy = rawY + dy
+                    guard iy >= 0 && iy < imgH else { continue }
+                    let offset = iy * rowStride + ix * bpp
+                    if buf[offset] > 128 {
+                        let dist = abs(dy)
+                        if dist < bestDist {
+                            bestDist = dist
+                            bestY    = iy
+                        }
+                    }
+                }
+                scaledY[ix] = bestY
+            }
+        }
+
+        // 4. Linear-interpolate gaps between painted columns.
+        var lastValidIdx: Int? = nil
+        var lastValidY:   Int  = 0
+        for ix in 0..<imgW {
+            if let y = scaledY[ix] {
+                if let prev = lastValidIdx, prev < ix - 1 {
+                    let span = ix - prev
+                    for gap in (prev + 1)..<ix {
+                        let t = Double(gap - prev) / Double(span)
+                        scaledY[gap] = Int((Double(lastValidY) * (1 - t) + Double(y) * t).rounded())
+                    }
+                }
+                lastValidIdx = ix
+                lastValidY   = y
+            }
+        }
+
+        // 5. Build the binary mask image.
+        let nsHorizonY: [Any] = scaledY.map { y -> Any in
+            if let y { return NSNumber(value: y) }
+            return NSNull()
+        }
+        let maskMat = PixelatedImageBridge.binaryHorizonMask(
+            withWidth:  Int32(imgW),
+            height:     Int32(imgH),
+            horizonY:   nsHorizonY
+        )
+        guard let maskPixelated = PixelatedImage(mat: maskMat) else {
+            throw "saveHorizonReferenceMask: could not create mask image for frame \(frameIndex)"
+        }
+
+        // 6. Determine save path inside horizonReference/.
+        guard let refinedPath = imageAccessor.nameForImage(
+                frameIndex: frameIndex,
+                ofType: .refinedHorizon,
+                atSize: .original
+              )
+        else {
+            throw "saveHorizonReferenceMask: cannot determine output path for frame \(frameIndex)"
+        }
+        let refinedURL    = URL(fileURLWithPath: refinedPath)
+        let frameFileName = refinedURL.lastPathComponent
+        let referenceDir  = refinedURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("horizonReference")
+
+        try FileManager.default.createDirectory(
+            at: referenceDir,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
+
+        let config = await configManager.config()
+        let saveName = config.tripodHeadWasMoving ? frameFileName : "reference.tiff"
+        let savePath = referenceDir.appendingPathComponent(saveName).path
+
+        maskPixelated.writeTIFFEncoding(toFilename: savePath)
+        Log.i("frame \(frameIndex) saveHorizonReferenceMask: saved \(savePath)")
     }
 
     // this horizon mask is calculated based upon this frame only.
@@ -934,14 +1037,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // with multiple parameter combinations, scores each result, then applies the
     // best parameters at full resolution.
     internal func loadOrCreateHorizonMask() async throws -> HorizonMask {
-        Log.d("frame \(frameIndex) trying to load horizon mask")
-
-        // User-provided reference mask (highest priority) — skip base detection.
+        // If the user has painted a reference horizon, use it directly.
         if let referenceMask = try await loadHorizonReferenceMask() {
             Log.i("frame \(frameIndex) loadOrCreateHorizonMask: using reference mask (skipping base detection)")
             return referenceMask
         }
-
+        Log.d("frame \(frameIndex) trying to load horizon mask")
         // load if possible
         do {
             if let horizonMaskImage = try await imageAccessor.load(

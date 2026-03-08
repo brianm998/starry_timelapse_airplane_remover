@@ -262,6 +262,9 @@ public final class ImageSequenceViewModel {
 
     var renderVideoSheetShowing = false
 
+    /// When `true` the horizon-painting overlay is shown over the frame view.
+    var isShowingHorizonPainter = false
+
     var showAllFrameViewModes = false
     var showAllFrameProcessingStates = false
     var showAllImageCacheStats = false

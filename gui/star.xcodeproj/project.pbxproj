@@ -72,6 +72,8 @@
 		D3B29CB12B2FE5BE00754C10 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CB02B2FE5BE00754C10 /* StarCore */; };
 		D3B3730A2D50857400B56342 /* ProcessRemainingFramesButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B373092D50857400B56342 /* ProcessRemainingFramesButton.swift */; };
 		D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */; };
+		D3CC7C682F5E1B2400CCCB59 /* HorizonPainterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3CC7C662F5E1B2400CCCB59 /* HorizonPainterView.swift */; };
+		D3CC7C692F5E1B2400CCCB59 /* HorizonPaintState.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3CC7C672F5E1B2400CCCB59 /* HorizonPaintState.swift */; };
 		D3D7F0FC2A2BE10D00658862 /* StarCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */; };
 		D3DC07FC2C077DEB0031A3AE /* EditableFrameNumberView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3DC07FB2C077DEA0031A3AE /* EditableFrameNumberView.swift */; };
 		D3E67E1A2E3E63E000A97C28 /* ffmpeg in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3E67DE22E3E5DE300A97C28 /* ffmpeg */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
@@ -189,6 +191,8 @@
 		D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UserPreferences.swift; sourceTree = "<group>"; };
 		D3B373092D50857400B56342 /* ProcessRemainingFramesButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRemainingFramesButton.swift; sourceTree = "<group>"; };
 		D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupTable.swift; sourceTree = "<group>"; };
+		D3CC7C662F5E1B2400CCCB59 /* HorizonPainterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorizonPainterView.swift; sourceTree = "<group>"; };
+		D3CC7C672F5E1B2400CCCB59 /* HorizonPaintState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorizonPaintState.swift; sourceTree = "<group>"; };
 		D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StarCommands.swift; sourceTree = "<group>"; };
 		D3DC07FB2C077DEA0031A3AE /* EditableFrameNumberView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EditableFrameNumberView.swift; sourceTree = "<group>"; };
 		D3E67DE22E3E5DE300A97C28 /* ffmpeg */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ffmpeg; sourceTree = "<group>"; };
@@ -291,6 +295,8 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D3CC7C662F5E1B2400CCCB59 /* HorizonPainterView.swift */,
+				D3CC7C672F5E1B2400CCCB59 /* HorizonPaintState.swift */,
 				D367B33D2F4DF65B00C2160A /* PreviewOp.swift */,
 				D39728C52F06CC5400F1CBC2 /* AlignmentWindowView.swift */,
 				D39728C32F05C2D200F1CBC2 /* ExpandDownButton.swift */,
@@ -616,6 +622,8 @@
 				D3FBFA1F2CE8FF0500A23FC6 /* ImageSequenceViewModel.swift in Sources */,
 				D392EB6D2E16C6940020E16A /* Space.swift in Sources */,
 				D32425812EE5075000CEF78F /* StartupView.swift in Sources */,
+				D3CC7C682F5E1B2400CCCB59 /* HorizonPainterView.swift in Sources */,
+				D3CC7C692F5E1B2400CCCB59 /* HorizonPaintState.swift in Sources */,
 				D35A284B2E50E176007121E6 /* ZoomableModifier.swift in Sources */,
 				D35A284C2E50E176007121E6 /* ZoomableView.swift in Sources */,
 				D32F6DBA2A4E6FCE00704870 /* BottomRightView.swift in Sources */,
@@ -807,7 +815,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.10.7;
+				MARKETING_VERSION = 0.10.8;
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -850,7 +858,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.10.7;
+				MARKETING_VERSION = 0.10.8;
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -882,7 +890,7 @@
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 12.5;
-				MARKETING_VERSION = 0.10.7;
+				MARKETING_VERSION = 0.10.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -901,7 +909,7 @@
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 12.5;
-				MARKETING_VERSION = 0.10.7;
+				MARKETING_VERSION = 0.10.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -918,7 +926,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.10.7;
+				MARKETING_VERSION = 0.10.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -935,7 +943,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.10.7;
+				MARKETING_VERSION = 0.10.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

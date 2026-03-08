@@ -125,6 +125,28 @@ struct RightPanel: View {
 
                             Toggle("multi choice", isOn: $viewModel.multiChoice)
                               .foregroundColor(.white)
+   
+                            // ── Horizon painting ───────────────────────
+                            Button {
+                                viewModel.isShowingHorizonPainter.toggle()
+                            } label: {
+                                Label(
+                                    viewModel.isShowingHorizonPainter
+                                        ? "Close Horizon Painter"
+                                        : "Paint Horizon Reference",
+                                    systemImage: viewModel.isShowingHorizonPainter
+                                        ? "xmark.circle"
+                                        : "mountain.2"
+                                )
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(viewModel.isShowingHorizonPainter ? .red : .blue)
+                            .help("""
+                                  Open the horizon painting tool to define a reference
+                                  horizon mask for this frame.
+                                  Press H to toggle. Use [ / ] to resize the brush.
+                                  Press - to switch between paint and erase mode.
+                                  """)
 
                             Toggle("Show Trash", isOn: $viewModel.shouldShowTrash)
                               .foregroundColor(.white)
