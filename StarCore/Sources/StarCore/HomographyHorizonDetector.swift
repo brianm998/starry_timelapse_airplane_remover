@@ -28,6 +28,20 @@ import kht_bridge
 ///
 /// The two passes are combined by taking the per-column minimum (topmost
 /// horizon) and a final light smoothing pass is applied.
+///
+/// ## Two-stage API
+///
+/// For parameter tuning the work is split into two stages so that the
+/// expensive I/O (loading and warping images) is not repeated for each
+/// candidate parameter set:
+///
+/// 1. `prepare(...)` — loads and warps all images, precomputes the
+///    horizontally-blurred error arrays.  Returns a `PreparedData` value.
+/// 2. `detectFromPrepared(_:)` — runs the fast per-column boundary scan
+///    using the *current* parameter values stored in the detector.  Can be
+///    called repeatedly with different parameter configurations.
+///
+/// `detect(...)` is a convenience wrapper that calls both stages.
 public struct HomographyHorizonDetector {
 
     // MARK: - Configuration
@@ -54,23 +68,59 @@ public struct HomographyHorizonDetector {
     /// error signal and reducing spurious spikes.  The detected horizon Y is
     /// still assigned per output column; only the *sampling* window is wider
     /// than a single column.
+    ///
+    /// This value is captured at `prepare()` time and is not changed during
+    /// coordinate-descent tuning.
     public var errorSampleHalfWidth: Int = 50
 
     public init() {}
 
-    // MARK: - Public entry point
+    // MARK: - Apply persisted parameters
 
-    /// - Parameters:
-    ///   - currentWidth:             Width of the current frame in pixels.
-    ///   - currentHeight:            Height of the current frame in pixels.
-    ///   - neighborHorizonFilenames: Paths to per-frame horizon mask images for
-    ///     each neighbour (`.horizon` type, `.original` size).  Used in Pass 1.
-    ///   - neighborOriginalFilenames: Paths to original source images for each
-    ///     neighbour (`.original` type, `.original` size).  Used in Pass 2.
-    ///   - neighborHomographies:     One 9-element row-major 3×3 homography per
-    ///     neighbour.  The arrays must all have the same length.
-    ///   - currentImage:             Current frame's original image.  Required
-    ///     for Pass 2; if `nil` only Pass 1 runs.
+    /// Copy all algorithm parameters from a `HorizonTunedParameters` value.
+    public mutating func apply(_ params: HorizonTunedParameters) {
+        smoothingRadius       = params.smoothingRadius
+        errorSearchRange      = params.errorSearchRange
+        errorBlurRadius       = params.errorBlurRadius
+        errorThresholdFactor  = params.errorThresholdFactor
+        errorSampleHalfWidth  = params.errorSampleHalfWidth
+    }
+
+    // MARK: - Prepared data (result of expensive I/O pass)
+
+    /// Cached result of `prepare(...)`.
+    ///
+    /// Stores everything that does not depend on the tunable parameters so
+    /// that `detectFromPrepared(_:)` can be called repeatedly with different
+    /// configurations without re-loading or re-warping any images.
+    public struct PreparedData: Sendable {
+        /// Width of the current frame in pixels.
+        public let currentWidth: Int
+        /// Height of the current frame in pixels.
+        public let currentHeight: Int
+        /// Per-column minimum horizon Y from Pass 1 **before** smoothing.
+        /// Smoothing radius is applied inside `detectFromPrepared`, so the
+        /// raw values are stored here to allow different radii to be tested.
+        public let pass1RawY: [Int?]
+        /// Per-neighbour horizontally-blurred error arrays for Pass 2.
+        ///
+        /// `neighborHBlurred[i]` is a `[Float]` of length
+        /// `currentHeight * currentWidth`, where
+        /// `hBlurred[y * currentWidth + x]` is the mean error in row y over
+        /// the column window `[x-sampleHalfWidth .. x+sampleHalfWidth]`.
+        ///
+        /// Computed with `sampleHalfWidth` that was passed to `prepare()`.
+        public let neighborHBlurred: [[Float]]
+        /// The `errorSampleHalfWidth` used to build `neighborHBlurred`.
+        public let sampleHalfWidth: Int
+    }
+
+    // MARK: - Public entry points
+
+    /// Convenience: calls `prepare` then `detectFromPrepared`.
+    ///
+    /// Use this when you only need a single result.  When tuning, call the
+    /// two stages separately.
     public func detect(
       currentWidth: Int,
       currentHeight: Int,
@@ -79,9 +129,32 @@ public struct HomographyHorizonDetector {
       neighborHomographies: [[Double]],
       currentImage: PixelatedImage? = nil
     ) -> HorizonMask? {
+        let data = prepare(
+          currentWidth:              currentWidth,
+          currentHeight:             currentHeight,
+          neighborHorizonFilenames:  neighborHorizonFilenames,
+          neighborOriginalFilenames: neighborOriginalFilenames,
+          neighborHomographies:      neighborHomographies,
+          currentImage:              currentImage
+        )
+        return detectFromPrepared(data)
+    }
+
+    /// **Stage 1** — load and warp all images; precompute blurred error arrays.
+    ///
+    /// This is the expensive step (disk I/O + homography warps + diff).
+    /// The returned `PreparedData` is parameter-independent and can be reused.
+    public func prepare(
+      currentWidth: Int,
+      currentHeight: Int,
+      neighborHorizonFilenames: [String],
+      neighborOriginalFilenames: [String],
+      neighborHomographies: [[Double]],
+      currentImage: PixelatedImage? = nil
+    ) -> PreparedData {
 
         // ------------------------------------------------------------------
-        // Pass 1: warp each neighbour's horizon mask, take per-column MIN.
+        // Pass 1: warp each neighbour's horizon mask, collect per-column Y.
         // ------------------------------------------------------------------
         var perMaskColumnY: [[Int?]] = []
 
@@ -97,13 +170,14 @@ public struct HomographyHorizonDetector {
             perMaskColumnY.append(perColumnFirstDark(in: warped))
         }
 
-        var maskY: [Int?]
+        // Per-column minimum (topmost horizon) across all warped masks.
+        let pass1RawY: [Int?]
         if perMaskColumnY.isEmpty {
             Log.w("HomographyHorizonDetector: no valid warped masks for Pass 1")
-            maskY = [Int?](repeating: nil, count: currentWidth)
+            pass1RawY = [Int?](repeating: nil, count: currentWidth)
         } else {
             Log.d("HomographyHorizonDetector: Pass 1 – \(perMaskColumnY.count) warped masks, MIN aggregation")
-            let rawY: [Int?] = (0..<currentWidth).map { x in
+            pass1RawY = (0..<currentWidth).map { x in
                 let ys = perMaskColumnY.compactMap { col -> Int? in
                     guard x < col.count else { return nil }
                     return col[x]
@@ -111,22 +185,87 @@ public struct HomographyHorizonDetector {
                 guard !ys.isEmpty else { return nil }
                 return ys[0]    // minimum = topmost horizon = most conservative
             }
-            maskY = smooth(rawY, radius: smoothingRadius)
         }
 
         // ------------------------------------------------------------------
-        // Pass 2: alignment-error sky tracking.
+        // Pass 2: warp neighbour originals, diff, precompute hBlurred.
+        // ------------------------------------------------------------------
+        var neighborHBlurred: [[Float]] = []
+
+        if let currentImage = currentImage, !neighborOriginalFilenames.isEmpty {
+            Log.d("HomographyHorizonDetector: Pass 2 – preparing \(neighborOriginalFilenames.count) neighbours")
+            for (filename, homography) in zip(neighborOriginalFilenames, neighborHomographies) {
+                guard let neighborImage = PixelatedImage(filename: filename) else {
+                    Log.d("HomographyHorizonDetector: could not load original image \(filename)")
+                    continue
+                }
+                guard let warped = neighborImage.warped(with: homography) else {
+                    Log.d("HomographyHorizonDetector: warp failed for original \(filename)")
+                    continue
+                }
+                guard let diff = warped.absDiff(with: currentImage) else {
+                    Log.d("HomographyHorizonDetector: absDiff failed for \(filename)")
+                    continue
+                }
+                let hBlurred = computeHBlurred(diff: diff, sampleHalfWidth: errorSampleHalfWidth)
+                neighborHBlurred.append(hBlurred)
+            }
+        }
+
+        return PreparedData(
+          currentWidth:     currentWidth,
+          currentHeight:    currentHeight,
+          pass1RawY:        pass1RawY,
+          neighborHBlurred: neighborHBlurred,
+          sampleHalfWidth:  errorSampleHalfWidth
+        )
+    }
+
+    /// **Stage 2** — run the fast per-column boundary scan using the current
+    /// parameter values stored in the detector.
+    ///
+    /// This is the cheap step: no disk I/O, only in-memory array operations.
+    /// Call it repeatedly with different `apply(_:)` configurations to tune.
+    public func detectFromPrepared(_ data: PreparedData) -> HorizonMask? {
+        let currentWidth  = data.currentWidth
+        let currentHeight = data.currentHeight
+
+        // ------------------------------------------------------------------
+        // Pass 1: apply smoothing radius to the stored raw per-column min.
+        // ------------------------------------------------------------------
+        let maskY: [Int?]
+        if data.pass1RawY.allSatisfy({ $0 == nil }) {
+            Log.w("HomographyHorizonDetector: Pass 1 produced all-nil — no warped mask data")
+            maskY = [Int?](repeating: nil, count: currentWidth)
+        } else {
+            maskY = smooth(data.pass1RawY, radius: smoothingRadius)
+        }
+
+        // ------------------------------------------------------------------
+        // Pass 2: run boundary detection on each pre-blurred error array.
         // ------------------------------------------------------------------
         var errorY: [Int?]
-        if let currentImage = currentImage, !neighborOriginalFilenames.isEmpty {
-            Log.d("HomographyHorizonDetector: Pass 2 – alignment-error pass with \(neighborOriginalFilenames.count) neighbours")
-            errorY = alignmentErrorBoundary(
-              currentImage: currentImage,
-              currentWidth: currentWidth,
-              neighborOriginalFilenames: neighborOriginalFilenames,
-              neighborHomographies: neighborHomographies,
-              baselineY: maskY
-            )
+        if !data.neighborHBlurred.isEmpty {
+            var perNeighborBoundaryY: [[Int?]] = []
+            for hBlurred in data.neighborHBlurred {
+                let boundaryY = errorBoundaryPerColumnFromHBlurred(
+                  hBlurred:  hBlurred,
+                  height:    currentHeight,
+                  width:     currentWidth,
+                  baselineY: maskY
+                )
+                perNeighborBoundaryY.append(boundaryY)
+            }
+            // Per-column minimum: topmost boundary across all neighbours.
+            let rawY: [Int?] = (0..<currentWidth).map { x in
+                let ys = perNeighborBoundaryY.compactMap { col -> Int? in
+                    guard x < col.count else { return nil }
+                    return col[x]
+                }.sorted()
+                guard !ys.isEmpty else { return nil }
+                return ys[0]
+            }
+            errorY = smooth(rawY, radius: smoothingRadius)
         } else {
             errorY = [Int?](repeating: nil, count: currentWidth)
         }
@@ -164,130 +303,78 @@ public struct HomographyHorizonDetector {
         return HorizonMask(maskImage)
     }
 
-    // MARK: - Pass 2: alignment-error boundary detection
+    // MARK: - Static scoring helpers
 
-    /// For each neighbour, warps the original image with the star homography,
-    /// diffs against the current frame, and finds the per-column y where the
-    /// error first rises above the local sky baseline.  Returns the per-column
-    /// minimum across all neighbours (topmost boundary = most conservative).
-    private func alignmentErrorBoundary(
-      currentImage: PixelatedImage,
-      currentWidth: Int,
-      neighborOriginalFilenames: [String],
-      neighborHomographies: [[Double]],
-      baselineY: [Int?]
-    ) -> [Int?] {
-        var perNeighborBoundaryY: [[Int?]] = []
-
-        for (filename, homography) in zip(neighborOriginalFilenames, neighborHomographies) {
-            guard let neighborImage = PixelatedImage(filename: filename) else {
-                Log.d("HomographyHorizonDetector: could not load original image \(filename)")
-                continue
-            }
-            guard let warped = neighborImage.warped(with: homography) else {
-                Log.d("HomographyHorizonDetector: warp failed for original \(filename)")
-                continue
-            }
-            guard let diff = warped.absDiff(with: currentImage) else {
-                Log.d("HomographyHorizonDetector: absDiff failed for \(filename)")
-                continue
-            }
-            let boundaryY = errorBoundaryPerColumn(
-              in: diff,
-              baselineY: baselineY,
-              sampleHalfWidth: errorSampleHalfWidth
-            )
-            perNeighborBoundaryY.append(boundaryY)
-        }
-
-        guard !perNeighborBoundaryY.isEmpty else {
-            Log.w("HomographyHorizonDetector: no valid error images for Pass 2")
-            return [Int?](repeating: nil, count: currentWidth)
-        }
-
-        // Take per-column minimum: if ANY neighbour shows the sky/mountain
-        // boundary above the warped-mask baseline, use that estimate.
-        let rawY: [Int?] = (0..<currentWidth).map { x in
-            let ys = perNeighborBoundaryY.compactMap { col -> Int? in
-                guard x < col.count else { return nil }
-                return col[x]
-            }.sorted()
-            guard !ys.isEmpty else { return nil }
-            return ys[0]    // minimum
-        }
-        return smooth(rawY, radius: smoothingRadius)
+    /// Extract the per-column horizon Y from a binary horizon mask image.
+    ///
+    /// Returns the Y coordinate of the first dark (ground) pixel in each
+    /// column, scanning from the top.  `nil` for columns that are all-sky.
+    public static func horizonYPerColumn(in mask: HorizonMask) -> [Int?] {
+        HorizonScoring.extractHorizonYPerColumn(from: mask.image)
     }
 
-    /// For each column in the grayscale error image, scans **upward** from the
-    /// warped-mask baseline using a two-phase search:
+    /// Compute the mean absolute Y error between an algorithm result and a
+    /// reference mask.  Only columns where *both* arrays have a non-nil value
+    /// contribute to the mean.
     ///
-    /// 1. **Enter** the high-error zone (error ≥ threshold).  This is the
-    ///    bottom edge of the region where the sky/mountain misalignment is
-    ///    visible.
-    /// 2. **Exit** the high-error zone (error drops back below threshold).
-    ///    This exit point — the first y going upward where the error is no
-    ///    longer bad — is the actual sky/ground boundary (mountain peak).
-    ///
-    /// Why two phases?  The high-error band caused by Earth-rotation-induced
-    /// misalignment is centred on the mountain peak, not the base.  The top
-    /// of that band (phase-2 exit) is the most accurate estimate of the
-    /// skyline.  Clouds higher in the sky also create error bands, but because
-    /// we stop at the *first* exit from the first high-error zone, clouds
-    /// encountered later (higher up) are ignored.
-    ///
-    /// The search is bounded below by `baseline` and above by
-    /// `baseline - errorSearchRange`, so this pass can only move the horizon
-    /// *upward* (more ground), never downward.
-    ///
-    /// **Wide-sample / narrow-apply**: error is averaged over
-    /// `[x-sampleHalfWidth .. x+sampleHalfWidth]` horizontally (to capture
-    /// more stars per sample) via per-row prefix sums, while the output is
-    /// still written per column.
-    ///
-    /// If the error zone is entered but never exited, the column returns `nil`,
-    /// falling back to the merged horizon (sustained high-error = Milky Way,
-    /// aurora, airglow — not a narrow mountain-peak band).
-    private func errorBoundaryPerColumn(
-      in errorImage: PixelatedImage,
-      baselineY: [Int?],
-      sampleHalfWidth: Int
-    ) -> [Int?] {
-        let width     = errorImage.width
-        let height    = errorImage.height
-        let rowStride = errorImage.bytesPerRow
-        // absDiffGrayscale always outputs a 1-channel image; bpp should be 1.
-        let bpp       = max(1, errorImage.bytesPerPixel)
-        let buf       = errorImage.mat.buffer(of: UInt8.self)
-        let blurR     = errorBlurRadius
+    /// Returns `Double.infinity` if no columns can be compared.
+    public static func score(algorithmY: [Int?], referenceY: [Int?]) -> Double {
+        let n = min(algorithmY.count, referenceY.count)
+        var totalError: Double = 0.0
+        var count = 0
+        for x in 0..<n {
+            guard let a = algorithmY[x], let r = referenceY[x] else { continue }
+            totalError += Double(abs(a - r))
+            count += 1
+        }
+        guard count > 0 else { return Double.infinity }
+        return totalError / Double(count)
+    }
 
-        // ------------------------------------------------------------------
-        // Pre-compute horizontally-blurred error image in a single O(W·H) pass.
-        //
-        // hBlurred[y * width + x] = mean of errorImage[y][x-hw .. x+hw]
-        //
-        // Stars are sparse; sampling a wider horizontal strip captures far
-        // more of them per profile point.  Per-row prefix sums make each
-        // horizontal query O(1) regardless of sampleHalfWidth.
-        // ------------------------------------------------------------------
+    // MARK: - Private helpers
+
+    /// Build the horizontally-blurred error array for a diff image using
+    /// per-row prefix sums.
+    ///
+    /// `result[y * width + x]` = mean of `diff[y][x-hw .. x+hw]`, O(1) per
+    /// cell after a single O(W·H) prefix-sum pass.
+    private func computeHBlurred(diff: PixelatedImage, sampleHalfWidth: Int) -> [Float] {
+        let width     = diff.width
+        let height    = diff.height
+        let rowStride = diff.bytesPerRow
+        let bpp       = max(1, diff.bytesPerPixel)
+        let buf       = diff.mat.buffer(of: UInt8.self)
+
         var hBlurred = [Float](repeating: 0.0, count: height * width)
-        do {
-            var psum = [Int](repeating: 0, count: width + 1)
-            for y in 0..<height {
-                psum[0] = 0
-                for x in 0..<width {
-                    psum[x + 1] = psum[x] + Int(buf[y * rowStride + x * bpp])
-                }
-                let base = y * width
-                for x in 0..<width {
-                    let xLo  = max(0, x - sampleHalfWidth)
-                    let xHi  = min(width - 1, x + sampleHalfWidth)
-                    let span = xHi - xLo + 1
-                    let sum  = psum[xHi + 1] - psum[xLo]
-                    hBlurred[base + x] = Float(sum) / Float(span)
-                }
+        var psum = [Int](repeating: 0, count: width + 1)
+        for y in 0..<height {
+            psum[0] = 0
+            for x in 0..<width {
+                psum[x + 1] = psum[x] + Int(buf[y * rowStride + x * bpp])
+            }
+            let base = y * width
+            for x in 0..<width {
+                let xLo  = max(0, x - sampleHalfWidth)
+                let xHi  = min(width - 1, x + sampleHalfWidth)
+                let span = xHi - xLo + 1
+                let sum  = psum[xHi + 1] - psum[xLo]
+                hBlurred[base + x] = Float(sum) / Float(span)
             }
         }
+        return hBlurred
+    }
 
+    /// For each column, run the two-phase upward scan against a pre-blurred
+    /// error array to find the sky/ground boundary.
+    ///
+    /// See the type-level documentation for the two-phase algorithm.
+    private func errorBoundaryPerColumnFromHBlurred(
+      hBlurred: [Float],
+      height: Int,
+      width: Int,
+      baselineY: [Int?]
+    ) -> [Int?] {
+        let blurR = errorBlurRadius
         var result = [Int?](repeating: nil, count: width)
 
         for x in 0..<width {
@@ -295,8 +382,8 @@ public struct HomographyHorizonDetector {
             let searchTop  = max(blurR, baseline - errorSearchRange)
             guard searchTop + blurR < baseline else { continue }
 
-            // Sky-baseline: mean of hBlurred values in the 40-row reference band
-            // at the top of the search range (definite sky).
+            // Sky-baseline: mean of hBlurred values in the 40-row reference
+            // band at the top of the search range (definite sky).
             let refBottom = min(searchTop + 40, baseline - 1)
             var skySum: Float = 0.0
             var skyCount = 0
@@ -346,13 +433,8 @@ public struct HomographyHorizonDetector {
                 }
             }
 
-            // If we entered the zone but never exited, the error is SUSTAINED
-            // all the way to the top of the search range.  This is the
-            // signature of a broad sky feature (Milky Way, aurora, airglow,
-            // city glow spanning a large area) — not a mountain peak, which
-            // produces only a narrow high-error band that exits cleanly into
-            // clear sky above.  Leave result[x] as nil so the merged-horizon
-            // baseline is used unchanged for this column.
+            // If we entered the zone but never exited, leave result[x] = nil
+            // (Milky Way / aurora / airglow fallback — not a mountain peak).
         }
         return result
     }
