@@ -7,7 +7,7 @@ public enum OperationType: String, CaseIterable, Sendable {
     case preview
     case horizon
     case mergedHorizon
-    case refinedHorizon = "refine horizon"
+    case refinedHorizon
     case starKeypoints = "star kp"
     case earthKeypoints = "earth kp"
     case starHomography = "star align"
