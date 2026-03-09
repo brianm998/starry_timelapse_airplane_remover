@@ -915,9 +915,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     ///    The result is always at or below the painted bottom edge, so the
     ///    selection always expands *downward* toward terrain, never upward.
     ///
-    /// Pixel colours are averaged over a ±10 px horizontal window before LAB
-    /// conversion so that stars (1–3 px wide) are averaged away and do not
-    /// trigger the ratio flip.
+    /// Pixel colours are averaged over a ±20 px horizontal window (41 px total)
+    /// before LAB conversion, suppressing stars (1–3 px wide) to ≤ 7 % of the
+    /// window mean.  The scan additionally requires 3 consecutive terrain-like
+    /// rows before declaring the horizon, eliminating false stops on the 1–2 px
+    /// dark gaps between stars.
     ///
     /// - Parameters:
     ///   - topBoundaryY:    Per-column Y of the *top* edge of the painted area
@@ -991,7 +993,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         //    Implementation detail: prefix-sum trick gives O(imgW) per row
         //    instead of O(imgW × windowWidth) for the windowed LAB cache.
 
-        let halfW = 10   // horizontal window half-width (21 px total)
+        let halfW = 20   // horizontal window half-width (41 px total)
+        // Wider window (vs. original 10) averages out more star noise.
+        // A 3 px star now contributes only 3/41 ≈ 7 % of the window mean;
+        // the mountain silhouette spans thousands of pixels and dominates.
 
         let pixelData = Array(original.mat.buffer(of: UInt8.self))
         let pixStride = original.bytesPerRow
@@ -1129,15 +1134,28 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 // down means the result can only be AT or BELOW the brush stroke –
                 // the selection always expands downward toward terrain, never upward.
                 //
-                // Horizon = first row where d_gnd² < d_sky²
-                //         ⟺ pixel is closer to terrain centroid than sky centroid.
+                // We require `minConsecutive` terrain-like rows in a row before
+                // declaring the horizon.  This prevents the scan from stopping on
+                // the 1–2 dark pixel gaps between stars in an otherwise sky region.
+                // Mountain silhouettes span tens-to-hundreds of rows continuously,
+                // so requiring 3 consecutive rows does not affect accuracy there.
+                //
+                // Horizon = first row of the first `minConsecutive`-row run where
+                //   d_gnd² < d_sky²  (pixel closer to terrain centroid than sky).
+                let minConsecutive = 3
+                var consecutiveTerrain = 0
                 var horizonY = bottomY
                 for iy in bottomY ..< imgH {
                     let (L, a, b) = labAt(ix: ix, iy: iy)
                     if dist2(L, a, b, gndL, gndA, gndBB) <
                        dist2(L, a, b, skyL, skyA, skyBB) {
-                        horizonY = iy
-                        break
+                        consecutiveTerrain += 1
+                        if consecutiveTerrain >= minConsecutive {
+                            horizonY = iy - minConsecutive + 1  // first row of the run
+                            break
+                        }
+                    } else {
+                        consecutiveTerrain = 0  // reset on any sky-like row
                     }
                 }
                 result[ix] = horizonY
