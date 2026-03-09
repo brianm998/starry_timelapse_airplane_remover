@@ -11,9 +11,27 @@ import logging
 /// It intentionally contains **no toolbar** — the toolbar lives in
 /// `HorizonPainterToolbarView`, which is placed *outside* the
 /// `ZoomableView` so it renders at screen size and is never scaled down.
+///
+/// ## Object-selection expansion
+///
+/// After each brush gesture ends, an async task loads the current frame
+/// image, runs Canny edge detection, and snaps the bottom boundary of the
+/// band (the full top-to-bottom extent of the brush strokes), finding the
+/// bottommost strong Canny edge in that band as the detected horizon.  This is
+/// robust for any brush size.  The full sky polygon from y = 0 to the detected
+/// horizon is stored in `paintState.expandedPath` and shown via
+/// `paintState.displayPath`.  While the expansion is running,
+/// `paintState.isExpanding` is `true` and the toolbar shows a spinner.
+/// A new stroke immediately updates `expandedPath` incrementally so the
+/// top-of-frame extension is never lost between gestures.  A fresh Canny
+/// expansion is triggered after each gesture ends to further refine the
+/// bottom edge.  A new stroke that arrives while an expansion is in flight
+/// previous expansion so the raw strokes are shown until the next pass
+/// completes.
 struct HorizonPainterView: View {
 
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    @Environment(\.displayScale) private var displayScale
 
     /// Shared state owned by the parent (`FrameEditView`).
     let paintState: HorizonPaintState
@@ -64,7 +82,7 @@ struct HorizonPainterView: View {
     private var paintMaskCanvas: some View {
         Canvas { context, _ in
             context.fill(
-                paintState.unifiedPaintPath,
+                paintState.displayPath,
                 with: .color(.blue.opacity(0.35))
             )
         }
@@ -78,29 +96,58 @@ struct HorizonPainterView: View {
         size: CGSize,
         time: Double
     ) {
-        guard paintState.hasStrokes else { return }
-        let path = paintState.unifiedPaintPath
+        let path = paintState.displayPath
         guard !path.isEmpty else { return }
-        let phase = CGFloat(time * 20).truncatingRemainder(dividingBy: 8)
+
+        // Compute screen-stable stroke widths by reading the current CTM scale.
+        // The canvas lives inside ZoomableView's scaleEffect, so the CTM encodes
+        // the zoom factor.  `ctmScale` is in device pixels per canvas unit.
+        // `cpu` (canvas units per screen point) = displayScale / ctmScale.
+        // Multiplying nominal screen sizes by `cpu` keeps strokes visually constant.
+        var ctmScale: CGFloat = displayScale
+        context.withCGContext { cgCtx in
+            ctmScale = hypot(cgCtx.ctm.a, cgCtx.ctm.c)
+        }
+        let cpu      = max(0.001, displayScale / ctmScale)
+        let lw       = 1.5  * cpu
+        let dashLen  = 4.0  * cpu
+        // Phase advances at 20 screen-points/sec — constant speed regardless of zoom.
+        let phase = CGFloat(time * 20.0 * Double(cpu))
+            .truncatingRemainder(dividingBy: dashLen * 2)
+
         context.stroke(path, with: .color(.white),
-                       style: StrokeStyle(lineWidth: 1.5, dash: [4, 4], dashPhase: phase))
+                       style: StrokeStyle(lineWidth: lw,
+                                          dash: [dashLen, dashLen],
+                                          dashPhase: phase))
         context.stroke(path, with: .color(.black),
-                       style: StrokeStyle(lineWidth: 1.5, dash: [4, 4], dashPhase: phase + 4))
+                       style: StrokeStyle(lineWidth: lw,
+                                          dash: [dashLen, dashLen],
+                                          dashPhase: phase + dashLen))
     }
 
     // MARK: - Cursor
 
     private func drawCursor(_ context: inout GraphicsContext) {
         guard let pos = mousePosition else { return }
-        let r = paintState.brushRadius
+
+        // Same CTM-based screen-stable scaling as drawMarchingAnts.
+        var ctmScale: CGFloat = displayScale
+        context.withCGContext { cgCtx in
+            ctmScale = hypot(cgCtx.ctm.a, cgCtx.ctm.c)
+        }
+        let cpu = max(0.001, displayScale / ctmScale)
+
+        let r    = paintState.brushRadius
         let rect = CGRect(x: pos.x - r, y: pos.y - r, width: r * 2, height: r * 2)
         let ring = Path(ellipseIn: rect)
         let color: Color = paintState.isErasing ? .red : .white
         context.stroke(ring, with: .color(.black.opacity(0.5)),
-                       style: StrokeStyle(lineWidth: 3.0))
+                       style: StrokeStyle(lineWidth: 3.0 * cpu))
         context.stroke(ring, with: .color(color),
-                       style: StrokeStyle(lineWidth: 1.5))
-        let dot = Path(ellipseIn: CGRect(x: pos.x - 2, y: pos.y - 2, width: 4, height: 4))
+                       style: StrokeStyle(lineWidth: 1.5 * cpu))
+        let dotR = 2.0 * cpu
+        let dot  = Path(ellipseIn: CGRect(x: pos.x - dotR, y: pos.y - dotR,
+                                          width: dotR * 2, height: dotR * 2))
         context.fill(dot, with: .color(color))
     }
 
@@ -116,6 +163,10 @@ struct HorizonPainterView: View {
                 paintState.addStroke(at: gesture.location)
                 // Mark end of gesture so the next press won't gap-fill back here.
                 paintState.endSegment()
+                // Trigger async object-selection expansion.
+                let frameView = viewModel.currentFrameView
+                let ps        = paintState
+                Task { await triggerObjectSelection(paintState: ps, frameView: frameView) }
             }
     }
 
@@ -135,6 +186,118 @@ struct HorizonPainterView: View {
             .keyboardShortcut("-", modifiers: [])
             .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
     }
+}
+
+// MARK: - Object-selection expansion
+
+/// Runs the live object-selection pass: computes the bottom boundary of the
+/// painted area, snaps it to Canny edges, and applies the resulting sky mask.
+///
+/// Called on the `@MainActor` after each gesture ends.  The expensive
+/// `computePaintedBoundaries` and `computeLiveObjectSelection` calls run on
+/// detached background tasks inside this function (or within the frame method
+/// itself), so the main actor is never blocked.
+@MainActor
+private func triggerObjectSelection(
+    paintState: HorizonPaintState,
+    frameView: FrameViewModel
+) async {
+    guard paintState.hasStrokes else { return }
+
+    // Capture immutable value types before any suspension point.
+    let rawPath    = paintState.unifiedPaintPath   // Path is a value type — safe copy
+    let vw         = Int(paintState.viewWidth)
+    let vh         = Int(paintState.viewHeight)
+    let generation = paintState.expansionGeneration
+
+    guard let frame = frameView.frame else { return }
+
+    paintState.isExpanding = true
+
+    // 1. Compute both top + bottom boundaries of the painted area off the main thread.
+    //    The full painted band is used as the Canny search window so the horizon is
+    //    found regardless of brush size.  `Path.contains` on a copied Path is thread-safe.
+    let (topBoundary, bottomBoundary) = await Task.detached(priority: .userInitiated) {
+        computePaintedBoundaries(path: rawPath, viewWidth: vw, viewHeight: vh)
+    }.value
+
+    // Bail if a new stroke arrived while we were computing.
+    guard paintState.expansionGeneration == generation else {
+        paintState.isExpanding = false
+        return
+    }
+
+    // 2. Canny snap + interpolation (async, heavy work runs in detached task
+    //    inside `computeLiveObjectSelection`).
+    let snappedHorizon: [Int?]?
+    do {
+        snappedHorizon = try await frame.computeLiveObjectSelection(
+            topBoundaryY:    topBoundary,
+            bottomBoundaryY: bottomBoundary,
+            viewWidth:  vw,
+            viewHeight: vh
+        )
+    } catch {
+        Log.w("HorizonPainterView: object selection failed: \(error)")
+        paintState.isExpanding = false
+        return
+    }
+
+    // 3. Apply result — only if no new stroke arrived while we were expanding.
+    guard paintState.expansionGeneration == generation,
+          let horizon = snappedHorizon
+    else {
+        paintState.isExpanding = false
+        return
+    }
+
+    paintState.applyExpandedHorizonMask(horizon)
+    paintState.isExpanding = false
+}
+
+/// Compute both the top (topmost) and bottom (bottommost) painted-Y per column
+/// for the given `Path` in view coordinates.
+///
+/// Returns a tuple `(top, bottom)` where each element is an `[Int?]` of length
+/// `viewWidth`.  `nil` means that column has no painted pixels.
+///
+/// Runs the scan within the path's bounding rect to avoid unnecessary work.
+/// Safe to call from any thread — `Path` is a value type and `Path.contains`
+/// has no side-effects.
+private func computePaintedBoundaries(
+    path: Path,
+    viewWidth: Int,
+    viewHeight: Int
+) -> (top: [Int?], bottom: [Int?]) {
+    let nils = [Int?](repeating: nil, count: viewWidth)
+    guard !path.isEmpty else { return (top: nils, bottom: nils) }
+
+    // Limit vertical scan to the path's bounding rect (+ a small margin).
+    let bounds   = path.boundingRect
+    let scanMinY = max(0,             Int(bounds.minY) - 4)
+    let scanMaxY = min(viewHeight - 1, Int(bounds.maxY) + 4)
+
+    var topResult    = [Int?](repeating: nil, count: viewWidth)
+    var bottomResult = [Int?](repeating: nil, count: viewWidth)
+
+    for ix in 0..<viewWidth {
+        let vx = CGFloat(ix) + 0.5
+        // Top boundary: scan downward — first hit is the topmost painted row.
+        for iy in scanMinY...scanMaxY {
+            if path.contains(CGPoint(x: vx, y: CGFloat(iy) + 0.5)) {
+                topResult[ix] = iy
+                break
+            }
+        }
+        // Bottom boundary: scan upward — first hit is the bottommost painted row.
+        for iy in stride(from: scanMaxY, through: scanMinY, by: -1) {
+            if path.contains(CGPoint(x: vx, y: CGFloat(iy) + 0.5)) {
+                bottomResult[ix] = iy
+                break
+            }
+        }
+    }
+    return (top: topResult, bottom: bottomResult)
 }
 
 // MARK: - Toolbar (lives outside ZoomableView, always screen-sized)
@@ -221,6 +384,17 @@ struct HorizonPainterToolbarView: View {
 
             Spacer()
 
+            // Object-selection expansion progress indicator.
+            if paintState.isExpanding {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Detecting…")
+                        .foregroundColor(.secondary)
+                        .font(.caption)
+                }
+                .transition(.opacity)
+            }
+
             if let err = saveError {
                 Text(err)
                     .foregroundColor(.red)
@@ -242,7 +416,7 @@ struct HorizonPainterToolbarView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(!paintState.hasStrokes || isSaving)
+            .disabled(!paintState.hasStrokes || isSaving || paintState.isExpanding)
             .help("Snap to Canny edges and save as the reference horizon (Return)")
 
             Button("Cancel") {

@@ -6,7 +6,8 @@ import SwiftUI
 /// Stores all brush strokes as circles so that the painting can be
 /// re-composed on demand.  Works in *view* coordinates (the size the
 /// frame is rendered at on screen); callers scale to image pixel
-/// coordinates at save-time via ``horizonYPerColumn(imageWidth:imageHeight:)``.
+/// coordinates at save-time via ``horizonYPerColumn(imageWidth:imageHeight:)``
+/// or the live-preview expansion via ``applyExpandedHorizonMask(_:)``.
 ///
 /// ## Merged-shape rendering
 ///
@@ -19,6 +20,17 @@ import SwiftUI
 ///   selection, not individual rings per circle).
 /// * `isPainted` hit-testing via `Path.contains` (much faster than the
 ///   previous per-stroke linear scan).
+///
+/// ## Live object-selection expansion
+///
+/// After each gesture ends, `HorizonPainterView` triggers an async
+/// "object selection" pass: the bottom boundary of the painted area is
+/// snapped to Canny edges and interpolated to full width, producing an
+/// `expandedPath` that represents the auto-detected sky region.  While
+/// this pass is running, `isExpanding` is `true`.  The ``displayPath``
+/// property returns `expandedPath` when available, falling back to
+/// `unifiedPaintPath`.  Adding a new stroke invalidates `expandedPath`
+/// so the raw strokes are shown until the next expansion finishes.
 ///
 /// ## Gap filling
 ///
@@ -61,8 +73,30 @@ final class HorizonPaintState {
     /// The incremental update is O(1) per stroke: one CGPath boolean
     /// operation, regardless of how many strokes have been recorded.
     ///
-    /// Use this path for fills, hit-testing, and the marching-ants outline.
+    /// Use this path for fills, hit-testing, and the marching-ants outline
+    /// when no expanded path is available.
     private(set) var unifiedPaintPath: Path = Path()
+
+    // MARK: - Object-selection expanded path
+
+    /// Result of the last async object-selection expansion, or `nil` if not
+    /// yet computed or invalidated by a new stroke.
+    ///
+    /// When non-nil, this shows the full auto-detected sky region (horizon
+    /// snapped to Canny edges, filled from y = 0 to the horizon per column).
+    private(set) var expandedPath: Path? = nil
+
+    /// `true` while an async object-selection expansion is running.
+    var isExpanding: Bool = false
+
+    /// Monotonically increasing counter.  Each new stroke increments this so
+    /// that a stale in-flight expansion can detect it was superseded and skip
+    /// updating `expandedPath`.
+    private(set) var expansionGeneration: Int = 0
+
+    /// The path to display: expanded (object-selection result) when available,
+    /// raw painted strokes otherwise.
+    var displayPath: Path { expandedPath ?? unifiedPaintPath }
 
     // MARK: - View dimensions
 
@@ -136,7 +170,7 @@ final class HorizonPaintState {
         isNewSegment = true
     }
 
-    /// Append a single stroke and update `unifiedPaintPath` incrementally.
+    /// Append a single stroke and update `unifiedPaintPath` and `expandedPath` incrementally.
     private func appendStroke(_ stroke: Stroke) {
         strokes.append(stroke)
         let circle = Path(ellipseIn: CGRect(
@@ -147,15 +181,31 @@ final class HorizonPaintState {
         ))
         if stroke.isErase {
             unifiedPaintPath = unifiedPaintPath.subtracting(circle, eoFill: false)
+            // Keep expandedPath live by subtracting the erased region immediately.
+            // This preserves the top-of-frame extension while showing the erase instantly.
+            if let existing = expandedPath {
+                expandedPath = existing.subtracting(circle, eoFill: false)
+            }
         } else {
             unifiedPaintPath = unifiedPaintPath.union(circle, eoFill: false)
+            // Keep expandedPath live by adding the new stroke immediately.
+            // The top-of-frame extension (and any prior Canny snap) is preserved.
+            // A fresh expansion will refine it again once the gesture ends.
+            if let existing = expandedPath {
+                expandedPath = existing.union(circle, eoFill: false)
+            }
         }
+        // Increment the generation so the in-flight expansion (if any) knows it
+        // is now stale and should not overwrite the updated expandedPath.
+        expansionGeneration += 1
     }
 
     /// Remove all recorded strokes and reset the unified path.
     func clear() {
         strokes.removeAll()
         unifiedPaintPath = Path()
+        expandedPath = nil
+        expansionGeneration += 1
         isNewSegment = true
     }
 
@@ -202,5 +252,60 @@ final class HorizonPaintState {
             }
         }
         return result
+    }
+
+    // MARK: - Object-selection expansion result
+
+    /// Replace `expandedPath` with the full sky mask derived from per-column
+    /// horizon Y values returned by `FrameAirplaneRemover.computeLiveObjectSelection`.
+    ///
+    /// Each column fills from y = 0 down to `horizonY[column]`, representing
+    /// the sky above the detected horizon.  Columns with a `nil` Y value are
+    /// not included (the user has not yet painted there).
+    ///
+    /// - Parameter horizonY: Per-column horizon Y in image/view pixel coordinates
+    ///   (length should equal the image width ≈ `viewWidth`).
+    func applyExpandedHorizonMask(_ horizonY: [Int?]) {
+        let width = horizonY.count
+        guard width > 0 else { return }
+
+        // Build a polygon whose top edge is y = 0 and whose bottom edge
+        // follows the per-column horizon Y values.  Adjacent columns are
+        // connected with straight lines (smooth interpolated horizon).
+        // Contiguous runs of non-nil columns become separate closed subpaths.
+        var poly = Path()
+        var segmentOpen = false
+
+        for (ix, maybeY) in horizonY.enumerated() {
+            let x = CGFloat(ix)
+            if let iy = maybeY {
+                let y = CGFloat(iy)
+                if !segmentOpen {
+                    // Start a new sky segment: move to top-left of this column,
+                    // then draw down to the horizon.
+                    poly.move(to: CGPoint(x: x, y: 0))
+                    poly.addLine(to: CGPoint(x: x, y: y))
+                    segmentOpen = true
+                } else {
+                    // Continue along the horizon bottom edge.
+                    poly.addLine(to: CGPoint(x: x, y: y))
+                }
+            } else {
+                if segmentOpen {
+                    // Close segment: draw back up to the top of the frame.
+                    poly.addLine(to: CGPoint(x: x, y: 0))
+                    poly.closeSubpath()
+                    segmentOpen = false
+                }
+            }
+        }
+
+        if segmentOpen {
+            // Close the final open segment at the right edge.
+            poly.addLine(to: CGPoint(x: CGFloat(width), y: 0))
+            poly.closeSubpath()
+        }
+
+        expandedPath = poly
     }
 }

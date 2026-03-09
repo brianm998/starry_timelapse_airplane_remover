@@ -899,6 +899,283 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return params
     }
 
+    // MARK: - Live object-selection horizon preview
+
+    /// Compute the snapped, interpolated per-column horizon Y for live preview
+    /// in the horizon painter's "object selection" mode.
+    ///
+    /// **Algorithm** (adapted from GIMP's Foreground Select / SIOX):
+    /// 1. Build a *sky centroid* in CIE L\*a\*b\* from the **bottom 20 %** of the
+    ///    painted band (sky immediately adjacent to the ridgeline), and a *ground
+    ///    centroid* from the bottom 5 % of the image (guaranteed terrain regardless
+    ///    of how high up in the sky the user painted).
+    /// 2. For each column scan **downward** from `bottomBoundaryY` computing the
+    ///    SIOX ratio: `confidence = d_gnd / (d_sky + d_gnd)`.  The first row where
+    ///    `confidence < 0.5` (closer to ground than sky) is the horizon.
+    ///    The result is always at or below the painted bottom edge, so the
+    ///    selection always expands *downward* toward terrain, never upward.
+    ///
+    /// Pixel colours are averaged over a ±10 px horizontal window before LAB
+    /// conversion so that stars (1–3 px wide) are averaged away and do not
+    /// trigger the ratio flip.
+    ///
+    /// - Parameters:
+    ///   - topBoundaryY:    Per-column Y of the *top* edge of the painted area
+    ///     (view coordinates, length = `viewWidth`).
+    ///   - bottomBoundaryY: Per-column Y of the *bottom* edge of the painted area
+    ///     (view coordinates, length = `viewWidth`).
+    ///   - viewWidth:  Width of the frame view in points.
+    ///   - viewHeight: Height of the frame view in points.
+    /// - Returns: Per-column horizon Y in **view coordinates**
+    ///   (length = `viewWidth`).  `nil` columns were not painted.
+    public func computeLiveObjectSelection(
+        topBoundaryY:    [Int?],
+        bottomBoundaryY: [Int?],
+        viewWidth:  Int,
+        viewHeight: Int
+    ) async throws -> [Int?] {
+        // 1. Load original image (async I/O — suspends without blocking).
+        guard let original = try await imageAccessor.load(
+                frameIndex: frameIndex,
+                type: .original,
+                atSize: .original
+              )
+        else {
+            throw "computeLiveObjectSelection: cannot load original image for frame \(frameIndex)"
+        }
+        let imgW = original.width
+        let imgH = original.height
+
+        // 2. Scale the painted top + bottom boundaries: view coords → image pixel coords.
+        let scaleX = Double(imgW) / Double(viewWidth)
+        let scaleY = Double(imgH) / Double(viewHeight)
+
+        // scaledTop[ix] / scaledBottom[ix]: image-pixel Y range painted in column ix.
+        // Both are nil when the column was not painted at all.
+        var scaledTop    = [Int?](repeating: nil, count: imgW)
+        var scaledBottom = [Int?](repeating: nil, count: imgW)
+        for ix in 0..<imgW {
+            let vx  = Int((Double(ix) / scaleX).rounded())
+            let col = min(max(vx, 0), topBoundaryY.count - 1)
+            if let topVY = topBoundaryY[col] {
+                scaledTop[ix]    = Int((Double(topVY) * scaleY).rounded())
+            }
+            if let botVY = bottomBoundaryY[col] {
+                scaledBottom[ix] = Int((Double(botVY) * scaleY).rounded())
+            }
+        }
+
+        // 3. Horizon detection — SIOX-inspired LAB colour ratio
+        //    (adapted from GIMP's Foreground Select tool; no Canny).
+        //
+        //    Stars make Canny unreliable: an isolated star produces the same
+        //    high gradient as a mountain ridgeline.  Instead we use the SIOX
+        //    "confidence" ratio from GIMP, applied per-column:
+        //
+        //        confidence = d_gnd / (d_sky + d_gnd)   (in CIE L*a*b*)
+        //
+        //    confidence > 0.5 → pixel closer to sky centroid   → still sky
+        //    confidence < 0.5 → pixel closer to ground centroid → horizon found
+        //
+        //    Stars are suppressed by averaging pixels over a ±halfW horizontal
+        //    window before converting to LAB.  A 3 px star in a 21 px window
+        //    shifts the windowed mean by only ~14 %, not enough to flip the
+        //    ratio.  The mountain silhouette causes a broad, sustained LAB shift
+        //    to dark/desaturated values that reliably flips the ratio.
+        //
+        //    LAB (not RGB) is used because it is perceptually uniform: equal
+        //    Euclidean distances correspond to equal perceived colour differences
+        //    everywhere in the gamut.  This makes the ratio metric well-calibrated
+        //    for any image type (night, dusk, daylight).
+        //
+        //    Implementation detail: prefix-sum trick gives O(imgW) per row
+        //    instead of O(imgW × windowWidth) for the windowed LAB cache.
+
+        let halfW = 10   // horizontal window half-width (21 px total)
+
+        let pixelData = Array(original.mat.buffer(of: UInt8.self))
+        let pixStride = original.bytesPerRow
+        let pxBpp     = max(1, original.bytesPerPixel)
+        // OpenCV convention: channel order is [Blue=0, Green=1, Red=2, (Alpha=3)]
+
+        let snapTop    = scaledTop
+        let snapBottom = scaledBottom
+
+        // Pre-compute the LAB band covering the full image height so we can
+        // scan all the way down to terrain regardless of where the user painted.
+        let globalTop = max(0, snapTop.compactMap { $0 }.min() ?? 0)
+        let globalBot = imgH - 1   // always extend to the bottom of the image
+
+        // `scaledY`: image-pixel horizon Y per image column (length = imgW).
+        var scaledY: [Int?] = await Task.detached(priority: .userInitiated) {
+
+            // ── Phase A: build the windowed-LAB cache ──────────────────────────
+            //
+            // For each row in [globalTop, globalBot]:
+            //   1. Compute prefix sums of linearised R, G, B.
+            //   2. For each column, derive the ±halfW window mean in linear RGB.
+            //   3. Convert that mean to L*a*b* and store in winL/winA/winBB.
+            //
+            // All three helpers are @inline(__always) to avoid closure overhead.
+
+            @inline(__always)
+            func linearise(_ v: UInt8) -> Float {
+                let n = Float(v) / 255.0
+                return n <= 0.04045 ? n / 12.92 : pow((n + 0.055) / 1.055, 2.4)
+            }
+
+            @inline(__always)
+            func linRGBtoLAB(r: Float, g: Float, b: Float) -> (L: Float, a: Float, b: Float) {
+                // Linear sRGB → XYZ (D65 observer)
+                let X = 0.4124564*r + 0.3575761*g + 0.1804375*b
+                let Y = 0.2126729*r + 0.7151522*g + 0.0721750*b
+                let Z = 0.0193339*r + 0.1191920*g + 0.9503041*b
+                // XYZ → L*a*b*
+                let Xn: Float = 0.95047, Yn: Float = 1.0, Zn: Float = 1.08883
+                @inline(__always) func f(_ t: Float) -> Float {
+                    t > 0.008856 ? pow(t, 1.0/3.0) : 7.787*t + (16.0/116.0)
+                }
+                let (fx, fy, fz) = (f(X/Xn), f(Y/Yn), f(Z/Zn))
+                return (116.0*fy - 16.0,  500.0*(fx - fy),  200.0*(fy - fz))
+            }
+
+            let bandH = max(1, globalBot - globalTop + 1)
+            var winL  = [Float](repeating: 0, count: bandH * imgW)
+            var winA  = [Float](repeating: 0, count: bandH * imgW)
+            var winBB = [Float](repeating: 0, count: bandH * imgW)
+
+            for iy in globalTop...globalBot {
+                let ri  = iy - globalTop
+                // Prefix sums of linearised channels for this row.
+                var prefR = [Float](repeating: 0, count: imgW + 1)
+                var prefG = [Float](repeating: 0, count: imgW + 1)
+                var prefB = [Float](repeating: 0, count: imgW + 1)
+                for ix in 0..<imgW {
+                    let base = iy * pixStride + ix * pxBpp
+                    let bV   = linearise(pixelData[base])
+                    let gV   = pxBpp > 1 ? linearise(pixelData[base + 1]) : bV
+                    let rV   = pxBpp > 2 ? linearise(pixelData[base + 2]) : bV
+                    prefR[ix+1] = prefR[ix] + rV
+                    prefG[ix+1] = prefG[ix] + gV
+                    prefB[ix+1] = prefB[ix] + bV
+                }
+                for ix in 0..<imgW {
+                    let lo  = max(0,        ix - halfW)
+                    let hi  = min(imgW - 1, ix + halfW)
+                    let cnt = Float(hi - lo + 1)
+                    let mr  = (prefR[hi+1] - prefR[lo]) / cnt
+                    let mg  = (prefG[hi+1] - prefG[lo]) / cnt
+                    let mb  = (prefB[hi+1] - prefB[lo]) / cnt
+                    let (L, a, lab_b) = linRGBtoLAB(r: mr, g: mg, b: mb)
+                    let idx = ri * imgW + ix
+                    winL[idx] = L;  winA[idx] = a;  winBB[idx] = lab_b
+                }
+            }
+
+            // ── Phase B: per-column SIOX ratio scan ───────────────────────────
+
+            @inline(__always)
+            func labAt(ix: Int, iy: Int) -> (L: Float, a: Float, b: Float) {
+                let idx = (iy - globalTop) * imgW + ix
+                return (winL[idx], winA[idx], winBB[idx])
+            }
+            @inline(__always)
+            func dist2(_ l1: Float, _ a1: Float, _ b1: Float,
+                       _ l2: Float, _ a2: Float, _ b2: Float) -> Float {
+                let dL = l1-l2, da = a1-a2, db = b1-b2
+                return dL*dL + da*da + db*db   // squared Euclidean in LAB
+            }
+
+            var result = [Int?](repeating: nil, count: imgW)
+
+            for ix in 0..<imgW {
+                guard let topY    = snapTop[ix],
+                      let bottomY = snapBottom[ix] else { continue }
+
+                let st = max(0, topY)
+                guard st < bottomY else { result[ix] = bottomY; continue }
+
+                // Sky centroid: bottom ~20 % of the painted band – the sky colour
+                // immediately adjacent to the ridgeline.  This is the most
+                // discriminative reference when scanning downward toward terrain.
+                let skyRows  = max(1, min(50, (bottomY - st) / 5))
+                let skyStart = max(st, bottomY - skyRows)
+                var (skyL, skyA, skyBB): (Float, Float, Float) = (0, 0, 0)
+                var nSkyRows = 0
+                for iy in skyStart ..< bottomY {
+                    let (L, a, b) = labAt(ix: ix, iy: iy)
+                    skyL += L;  skyA += a;  skyBB += b;  nSkyRows += 1
+                }
+                let nSky = Float(max(1, nSkyRows))
+                skyL /= nSky;  skyA /= nSky;  skyBB /= nSky
+
+                // Ground centroid: bottom 5 % of the image – guaranteed terrain
+                // regardless of how high up in the sky the user painted.
+                // (Sampling just below bottomY fails when bottomY is mid-sky.)
+                let groundRows = max(20, imgH / 20)
+                let gndStart   = imgH - groundRows
+                var (gndL, gndA, gndBB): (Float, Float, Float) = (5, 0, 0)
+                var nGndRows = 0
+                for iy in gndStart ..< imgH {
+                    let (L, a, b) = labAt(ix: ix, iy: iy)
+                    gndL += L;  gndA += a;  gndBB += b;  nGndRows += 1
+                }
+                let nGnd = Float(max(1, nGndRows))
+                gndL /= nGnd;  gndA /= nGnd;  gndBB /= nGnd
+
+                // Scan DOWNWARD from bottomY to find the mountain ridgeline.
+                //
+                // Starting at bottomY (bottom of user's painted sky) and moving
+                // down means the result can only be AT or BELOW the brush stroke –
+                // the selection always expands downward toward terrain, never upward.
+                //
+                // Horizon = first row where d_gnd² < d_sky²
+                //         ⟺ pixel is closer to terrain centroid than sky centroid.
+                var horizonY = bottomY
+                for iy in bottomY ..< imgH {
+                    let (L, a, b) = labAt(ix: ix, iy: iy)
+                    if dist2(L, a, b, gndL, gndA, gndBB) <
+                       dist2(L, a, b, skyL, skyA, skyBB) {
+                        horizonY = iy
+                        break
+                    }
+                }
+                result[ix] = horizonY
+            }
+            return result
+        }.value
+
+        // 4. Linear-interpolate gaps between painted image columns.
+        var lastValidIdx: Int? = nil
+        var lastValidY:   Int  = 0
+        for ix in 0..<imgW {
+            if let y = scaledY[ix] {
+                if let prev = lastValidIdx, prev < ix - 1 {
+                    let span = ix - prev
+                    for gap in (prev + 1)..<ix {
+                        let t = Double(gap - prev) / Double(span)
+                        scaledY[gap] = Int((Double(lastValidY) * (1 - t) + Double(y) * t).rounded())
+                    }
+                }
+                lastValidIdx = ix
+                lastValidY   = y
+            }
+        }
+
+        // 5. Convert image-pixel coords → view coords.
+        //    `applyExpandedHorizonMask` renders into a Canvas sized at view dimensions,
+        //    so the returned array MUST have `viewWidth` elements with view-coord Ys.
+        var viewY = [Int?](repeating: nil, count: viewWidth)
+        for vx in 0..<viewWidth {
+            let ix = min(max(0, Int((Double(vx) * scaleX).rounded())), imgW - 1)
+            if let iy = scaledY[ix] {
+                viewY[vx] = Int((Double(iy) / scaleY).rounded())
+            }
+        }
+
+        return viewY
+    }
+
     // MARK: - Save user-painted reference horizon mask
 
     /// Convert a painted horizon (from `HorizonPainterView`) into a binary
