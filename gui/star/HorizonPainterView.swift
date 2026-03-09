@@ -346,10 +346,17 @@ struct HorizonPainterToolbarView: View {
                 else { return }
 
                 let frame = viewModel.currentFrameView.frame
-                let rawY  = paintState.horizonYPerColumn(
-                    imageWidth:  Int(paintState.viewWidth),
-                    imageHeight: Int(paintState.viewHeight)
-                )
+                // Prefer the SIOX-detected horizon from the live preview;
+                // fall back to raw brush strokes if no expansion has run yet.
+                let rawY: [Int?]
+                if let refined = paintState.lastHorizonY {
+                    rawY = refined
+                } else {
+                    rawY = paintState.horizonYPerColumn(
+                        imageWidth:  Int(paintState.viewWidth),
+                        imageHeight: Int(paintState.viewHeight)
+                    )
+                }
                 let w = Int(paintState.viewWidth)
                 let h = Int(paintState.viewHeight)
                 Task {
@@ -480,10 +487,18 @@ struct HorizonPainterToolbarView: View {
         isSaving  = true
         saveError = nil
 
-        let rawY = paintState.horizonYPerColumn(
-            imageWidth:  Int(paintState.viewWidth),
-            imageHeight: Int(paintState.viewHeight)
-        )
+        // Prefer the SIOX-detected per-column horizon from the live preview
+        // (matches what the user sees).  Fall back to scanning raw brush strokes
+        // only when no expansion has run yet.
+        let rawY: [Int?]
+        if let refined = paintState.lastHorizonY {
+            rawY = refined
+        } else {
+            rawY = paintState.horizonYPerColumn(
+                imageWidth:  Int(paintState.viewWidth),
+                imageHeight: Int(paintState.viewHeight)
+            )
+        }
 
         do {
             try await frame.saveHorizonReferenceMask(

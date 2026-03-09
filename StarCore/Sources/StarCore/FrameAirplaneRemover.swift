@@ -1255,39 +1255,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
 
-        // 3. Snap each painted column to the nearest Canny edge (±30 px).
-        if let edgeImage = try? original.cannyEdgeDetect(
-                minThreshold: 50,
-                maxThreshold: 120,
-                useL2Gradient: true
-           )
-        {
-            let rowStride = edgeImage.bytesPerRow
-            let bpp       = max(1, edgeImage.bytesPerPixel)
-            let buf       = edgeImage.mat.buffer(of: UInt8.self)
-            let snapRange = 30
-
-            for ix in 0..<imgW {
-                guard let rawY = scaledY[ix] else { continue }
-                var bestDist = snapRange + 1
-                var bestY    = rawY
-                for dy in -snapRange...snapRange {
-                    let iy = rawY + dy
-                    guard iy >= 0 && iy < imgH else { continue }
-                    let offset = iy * rowStride + ix * bpp
-                    if buf[offset] > 128 {
-                        let dist = abs(dy)
-                        if dist < bestDist {
-                            bestDist = dist
-                            bestY    = iy
-                        }
-                    }
-                }
-                scaledY[ix] = bestY
-            }
-        }
-
-        // 4. Linear-interpolate gaps between painted columns.
+        // 3. Linear-interpolate gaps between painted columns.
         var lastValidIdx: Int? = nil
         var lastValidY:   Int  = 0
         for ix in 0..<imgW {
@@ -1304,7 +1272,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
 
-        // 5. Build the binary mask image.
+        // 4. Build the binary mask image.
         let nsHorizonY: [Any] = scaledY.map { y -> Any in
             if let y { return NSNumber(value: y) }
             return NSNull()
@@ -1318,7 +1286,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             throw "saveHorizonReferenceMask: could not create mask image for frame \(frameIndex)"
         }
 
-        // 6. Determine save path inside horizonReference/.
+        // 5. Determine save path inside horizonReference/.
         guard let refinedPath = imageAccessor.nameForImage(
                 frameIndex: frameIndex,
                 ofType: .refinedHorizon,

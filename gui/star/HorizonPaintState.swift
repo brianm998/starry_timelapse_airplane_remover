@@ -112,6 +112,15 @@ final class HorizonPaintState {
     /// raw painted strokes otherwise.
     var displayPath: Path { expandedPath ?? unifiedPaintPath }
 
+    /// Per-column horizon Y in *view* coordinates, as last computed by the
+    /// SIOX object-selection expansion.  `nil` until the first expansion
+    /// completes; replaced whenever a new expansion finishes.
+    ///
+    /// Use this for saving — it holds the smooth SIOX-detected horizon that
+    /// matches the live preview, rather than the raw top-of-brush-stroke Y
+    /// that `horizonYPerColumn` would return.  Only cleared by `clear()`.
+    private(set) var lastHorizonY: [Int?]? = nil
+
     // MARK: - View dimensions
 
     /// Width of the frame view (view-coordinate points, not image pixels).
@@ -219,6 +228,7 @@ final class HorizonPaintState {
         strokes.removeAll()
         unifiedPaintPath = Path()
         expandedPath = nil
+        lastHorizonY = nil
         expansionGeneration += 1
         isNewSegment = true
     }
@@ -282,6 +292,10 @@ final class HorizonPaintState {
     func applyExpandedHorizonMask(_ horizonY: [Int?]) {
         let width = horizonY.count
         guard width > 0 else { return }
+
+        // Persist the raw per-column values so the save function can use the
+        // smooth SIOX-detected horizon instead of re-scanning raw brush strokes.
+        lastHorizonY = horizonY
 
         // Build a polygon whose top edge is y = 0 and whose bottom edge
         // follows the per-column horizon Y values.  Adjacent columns are
