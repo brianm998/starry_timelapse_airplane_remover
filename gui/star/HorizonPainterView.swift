@@ -36,7 +36,11 @@ struct HorizonPainterView: View {
     /// Shared state owned by the parent (`FrameEditView`).
     let paintState: HorizonPaintState
 
-    @State private var mousePosition: CGPoint? = nil
+    @State private var mousePosition:  CGPoint?               = nil
+    /// The most recently launched expansion task.  Cancelled (and replaced)
+    /// each time a new gesture ends so that only the latest stroke set's
+    /// computation is ever in flight.
+    @State private var expansionTask: Task<Void, Never>? = nil
 
     var body: some View {
         ZStack {
@@ -163,10 +167,17 @@ struct HorizonPainterView: View {
                 paintState.addStroke(at: gesture.location)
                 // Mark end of gesture so the next press won't gap-fill back here.
                 paintState.endSegment()
-                // Trigger async object-selection expansion.
+                // Cancel any in-flight expansion so only the latest gesture's
+                // stroke set is ever being computed.  The cancelled task will
+                // still run to its next cooperative suspension point before
+                // exiting; the generation check inside triggerObjectSelection
+                // ensures a stale result is never applied.
+                expansionTask?.cancel()
                 let frameView = viewModel.currentFrameView
                 let ps        = paintState
-                Task { await triggerObjectSelection(paintState: ps, frameView: frameView) }
+                expansionTask = Task {
+                    await triggerObjectSelection(paintState: ps, frameView: frameView)
+                }
             }
     }
 
@@ -212,23 +223,25 @@ private func triggerObjectSelection(
 
     guard let frame = frameView.frame else { return }
 
-    paintState.isExpanding = true
+    paintState.beginExpanding()
 
     // 1. Compute both top + bottom boundaries of the painted area off the main thread.
-    //    The full painted band is used as the Canny search window so the horizon is
-    //    found regardless of brush size.  `Path.contains` on a copied Path is thread-safe.
+    //    The full painted band is used as the search window so the horizon is found
+    //    regardless of brush size.  `Path.contains` on a copied Path is thread-safe.
     let (topBoundary, bottomBoundary) = await Task.detached(priority: .userInitiated) {
         computePaintedBoundaries(path: rawPath, viewWidth: vw, viewHeight: vh)
     }.value
 
-    // Bail if a new stroke arrived while we were computing.
-    guard paintState.expansionGeneration == generation else {
-        paintState.isExpanding = false
+    // Bail if this task was cancelled or a newer stroke arrived.
+    guard !Task.isCancelled,
+          paintState.expansionGeneration == generation
+    else {
+        paintState.endExpanding()
         return
     }
 
-    // 2. Canny snap + interpolation (async, heavy work runs in detached task
-    //    inside `computeLiveObjectSelection`).
+    // 2. SIOX horizon detection (heavy work runs in a detached task inside
+    //    `computeLiveObjectSelection`).
     let snappedHorizon: [Int?]?
     do {
         snappedHorizon = try await frame.computeLiveObjectSelection(
@@ -239,20 +252,21 @@ private func triggerObjectSelection(
         )
     } catch {
         Log.w("HorizonPainterView: object selection failed: \(error)")
-        paintState.isExpanding = false
+        paintState.endExpanding()
         return
     }
 
-    // 3. Apply result — only if no new stroke arrived while we were expanding.
-    guard paintState.expansionGeneration == generation,
+    // 3. Apply result — only if not cancelled and no newer stroke arrived.
+    guard !Task.isCancelled,
+          paintState.expansionGeneration == generation,
           let horizon = snappedHorizon
     else {
-        paintState.isExpanding = false
+        paintState.endExpanding()
         return
     }
 
     paintState.applyExpandedHorizonMask(horizon)
-    paintState.isExpanding = false
+    paintState.endExpanding()
 }
 
 /// Compute both the top (topmost) and bottom (bottommost) painted-Y per column
@@ -272,15 +286,17 @@ private func computePaintedBoundaries(
     let nils = [Int?](repeating: nil, count: viewWidth)
     guard !path.isEmpty else { return (top: nils, bottom: nils) }
 
-    // Limit vertical scan to the path's bounding rect (+ a small margin).
+    // Limit scan to the path's bounding rect (+ a small margin) in both axes.
     let bounds   = path.boundingRect
+    let scanMinX = max(0,            Int(bounds.minX) - 1)
+    let scanMaxX = min(viewWidth - 1, Int(bounds.maxX) + 1)
     let scanMinY = max(0,             Int(bounds.minY) - 4)
     let scanMaxY = min(viewHeight - 1, Int(bounds.maxY) + 4)
 
     var topResult    = [Int?](repeating: nil, count: viewWidth)
     var bottomResult = [Int?](repeating: nil, count: viewWidth)
 
-    for ix in 0..<viewWidth {
+    for ix in scanMinX...scanMaxX {
         let vx = CGFloat(ix) + 0.5
         // Top boundary: scan downward — first hit is the topmost painted row.
         for iy in scanMinY...scanMaxY {

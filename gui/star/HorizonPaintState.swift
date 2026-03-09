@@ -45,10 +45,10 @@ final class HorizonPaintState {
     // MARK: - Brush settings
 
     /// Radius of the circular brush in view-coordinate points.
-    var brushRadius: CGFloat = 40
+    var brushRadius: CGFloat = 250
 
     static let minBrushRadius: CGFloat = 5
-    static let maxBrushRadius: CGFloat = 250
+    static let maxBrushRadius: CGFloat = 500
 
     /// When `true` the brush removes sky from the selection instead of adding it.
     var isErasing: Bool = false
@@ -86,8 +86,22 @@ final class HorizonPaintState {
     /// snapped to Canny edges, filled from y = 0 to the horizon per column).
     private(set) var expandedPath: Path? = nil
 
-    /// `true` while an async object-selection expansion is running.
-    var isExpanding: Bool = false
+    /// Number of async object-selection expansion tasks currently in flight.
+    ///
+    /// Using a counter instead of a Bool means that when two concurrent tasks
+    /// exist (e.g. a new gesture arrived while the previous expansion was still
+    /// computing), the spinner stays visible until the *last* task finishes —
+    /// rather than disappearing prematurely when the stale task exits.
+    private(set) var expandingTaskCount: Int = 0
+
+    /// `true` while any async object-selection expansion is running.
+    var isExpanding: Bool { expandingTaskCount > 0 }
+
+    /// Call at the **start** of an async expansion task.
+    func beginExpanding() { expandingTaskCount += 1 }
+
+    /// Call at the **end** of an async expansion task (success *or* failure).
+    func endExpanding()   { expandingTaskCount = max(0, expandingTaskCount - 1) }
 
     /// Monotonically increasing counter.  Each new stroke increments this so
     /// that a stale in-flight expansion can detect it was superseded and skip

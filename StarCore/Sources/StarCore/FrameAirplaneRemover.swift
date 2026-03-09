@@ -993,10 +993,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         //    Implementation detail: prefix-sum trick gives O(imgW) per row
         //    instead of O(imgW × windowWidth) for the windowed LAB cache.
 
-        let halfW = 20   // horizontal window half-width (41 px total)
-        // Wider window (vs. original 10) averages out more star noise.
-        // A 3 px star now contributes only 3/41 ≈ 7 % of the window mean;
-        // the mountain silhouette spans thousands of pixels and dominates.
+        let halfW = 30   // horizontal window half-width (61 px total)
+        // A 3 px star contributes only 3/61 ≈ 5 % of the window mean.
+        // Even a 10 px star cluster = 16 %, insufficient to dominate a
+        // region of continuous sky.  Mountain silhouettes are solid over
+        // thousands of pixels and still dominate even with a 61 px window.
 
         let pixelData = Array(original.mat.buffer(of: UInt8.self))
         let pixStride = original.bytesPerRow
@@ -1044,35 +1045,55 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 return (116.0*fy - 16.0,  500.0*(fx - fy),  200.0*(fy - fz))
             }
 
+            // ── Horizontal column range ────────────────────────────────────────
+            // Only process columns that were actually painted.  Columns outside
+            // this range have nil snapTop/snapBottom and produce nil results.
+            // The LAB cache and prefix sums are limited to this range (plus the
+            // halfW overhang on each side needed for the window query), which
+            // dramatically reduces memory and CPU when the user paints a partial
+            // horizontal strip rather than the full frame width.
+            let colLeft  = snapTop.firstIndex(where: { $0 != nil }) ?? 0
+            let colRight = snapTop.lastIndex(where:  { $0 != nil }) ?? (imgW - 1)
+            guard colLeft <= colRight else { return [Int?](repeating: nil, count: imgW) }
+            let colWidth = colRight - colLeft + 1
+
+            // Pixel range whose prefix sums we need (include halfW overhang).
+            let pxLeft  = max(0,        colLeft  - halfW)
+            let pxRight = min(imgW - 1, colRight + halfW)
+            let pxWidth = pxRight - pxLeft + 1
+
             let bandH = max(1, globalBot - globalTop + 1)
-            var winL  = [Float](repeating: 0, count: bandH * imgW)
-            var winA  = [Float](repeating: 0, count: bandH * imgW)
-            var winBB = [Float](repeating: 0, count: bandH * imgW)
+            var winL  = [Float](repeating: 0, count: bandH * colWidth)
+            var winA  = [Float](repeating: 0, count: bandH * colWidth)
+            var winBB = [Float](repeating: 0, count: bandH * colWidth)
 
             for iy in globalTop...globalBot {
                 let ri  = iy - globalTop
-                // Prefix sums of linearised channels for this row.
-                var prefR = [Float](repeating: 0, count: imgW + 1)
-                var prefG = [Float](repeating: 0, count: imgW + 1)
-                var prefB = [Float](repeating: 0, count: imgW + 1)
-                for ix in 0..<imgW {
+                // Prefix sums of linearised channels for the painted pixel range.
+                var prefR = [Float](repeating: 0, count: pxWidth + 1)
+                var prefG = [Float](repeating: 0, count: pxWidth + 1)
+                var prefB = [Float](repeating: 0, count: pxWidth + 1)
+                for i in 0..<pxWidth {
+                    let ix   = pxLeft + i
                     let base = iy * pixStride + ix * pxBpp
                     let bV   = linearise(pixelData[base])
                     let gV   = pxBpp > 1 ? linearise(pixelData[base + 1]) : bV
                     let rV   = pxBpp > 2 ? linearise(pixelData[base + 2]) : bV
-                    prefR[ix+1] = prefR[ix] + rV
-                    prefG[ix+1] = prefG[ix] + gV
-                    prefB[ix+1] = prefB[ix] + bV
+                    prefR[i+1] = prefR[i] + rV
+                    prefG[i+1] = prefG[i] + gV
+                    prefB[i+1] = prefB[i] + bV
                 }
-                for ix in 0..<imgW {
-                    let lo  = max(0,        ix - halfW)
-                    let hi  = min(imgW - 1, ix + halfW)
+                // Store windowed LAB for painted columns only.
+                for ix in colLeft...colRight {
+                    let i   = ix - pxLeft           // index into prefix arrays
+                    let lo  = max(0,          i - halfW)
+                    let hi  = min(pxWidth - 1, i + halfW)
                     let cnt = Float(hi - lo + 1)
                     let mr  = (prefR[hi+1] - prefR[lo]) / cnt
                     let mg  = (prefG[hi+1] - prefG[lo]) / cnt
                     let mb  = (prefB[hi+1] - prefB[lo]) / cnt
                     let (L, a, lab_b) = linRGBtoLAB(r: mr, g: mg, b: mb)
-                    let idx = ri * imgW + ix
+                    let idx = ri * colWidth + (ix - colLeft)
                     winL[idx] = L;  winA[idx] = a;  winBB[idx] = lab_b
                 }
             }
@@ -1081,7 +1102,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             @inline(__always)
             func labAt(ix: Int, iy: Int) -> (L: Float, a: Float, b: Float) {
-                let idx = (iy - globalTop) * imgW + ix
+                let idx = (iy - globalTop) * colWidth + (ix - colLeft)
                 return (winL[idx], winA[idx], winBB[idx])
             }
             @inline(__always)
@@ -1093,7 +1114,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             var result = [Int?](repeating: nil, count: imgW)
 
-            for ix in 0..<imgW {
+            for ix in colLeft...colRight {
                 guard let topY    = snapTop[ix],
                       let bottomY = snapBottom[ix] else { continue }
 
@@ -1142,7 +1163,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 //
                 // Horizon = first row of the first `minConsecutive`-row run where
                 //   d_gnd² < d_sky²  (pixel closer to terrain centroid than sky).
-                let minConsecutive = 3
+                let minConsecutive = 4
                 var consecutiveTerrain = 0
                 var horizonY = bottomY
                 for iy in bottomY ..< imgH {
