@@ -167,16 +167,21 @@ struct HorizonPainterView: View {
                 paintState.addStroke(at: gesture.location)
                 // Mark end of gesture so the next press won't gap-fill back here.
                 paintState.endSegment()
+                // Record per-column constraints from the gesture that just
+                // ended, so the SIOX result respects explicit user actions.
+                let wasErasing = paintState.isErasing
+                paintState.commitGestureConstraints(isErasing: wasErasing)
                 // Cancel any in-flight expansion so only the latest gesture's
                 // stroke set is ever being computed.  The cancelled task will
                 // still run to its next cooperative suspension point before
                 // exiting; the generation check inside triggerObjectSelection
                 // ensures a stale result is never applied.
                 expansionTask?.cancel()
-                let frameView = viewModel.currentFrameView
-                let ps        = paintState
+                let frameView  = viewModel.currentFrameView
+                let ps         = paintState
                 expansionTask = Task {
-                    await triggerObjectSelection(paintState: ps, frameView: frameView)
+                    await triggerObjectSelection(paintState: ps, frameView: frameView,
+                                                 isErasingGesture: wasErasing)
                 }
             }
     }
@@ -211,7 +216,8 @@ struct HorizonPainterView: View {
 @MainActor
 private func triggerObjectSelection(
     paintState: HorizonPaintState,
-    frameView: FrameViewModel
+    frameView: FrameViewModel,
+    isErasingGesture: Bool = false
 ) async {
     guard paintState.hasStrokes else { return }
 
@@ -220,6 +226,12 @@ private func triggerObjectSelection(
     let vw         = Int(paintState.viewWidth)
     let vh         = Int(paintState.viewHeight)
     let generation = paintState.expansionGeneration
+
+    // Capture gesture bounds, previous horizon, and user constraints for
+    // local-effect merging + constraint enforcement.
+    let gestureBounds   = paintState.lastGestureBounds
+    let previousHorizon = paintState.lastHorizonY   // [Int?]? in view coords
+    let constraints     = paintState.userConstraints // [HorizonConstraint?]? in view coords
 
     guard let frame = frameView.frame else { return }
 
@@ -245,10 +257,12 @@ private func triggerObjectSelection(
     let snappedHorizon: [Int?]?
     do {
         snappedHorizon = try await frame.computeLiveObjectSelection(
-            topBoundaryY:    topBoundary,
-            bottomBoundaryY: bottomBoundary,
-            viewWidth:  vw,
-            viewHeight: vh
+            topBoundaryY:     topBoundary,
+            bottomBoundaryY:  bottomBoundary,
+            viewWidth:        vw,
+            viewHeight:       vh,
+            isErasingGesture: isErasingGesture,
+            previousHorizonY: isErasingGesture ? previousHorizon : nil
         )
     } catch {
         Log.w("HorizonPainterView: object selection failed: \(error)")
@@ -265,7 +279,54 @@ private func triggerObjectSelection(
         return
     }
 
-    paintState.applyExpandedHorizonMask(horizon)
+    // 4. Merge locally: only update columns near the gesture; keep the
+    //    previous SIOX-detected horizon everywhere else.
+    //
+    //    This prevents painting/erasing in one area from recalculating the
+    //    horizon across the entire frame width.  A margin (±200 view px)
+    //    around the gesture bounds provides a smooth blend zone.
+    let mergedHorizon: [Int?]
+    if let bounds = gestureBounds, let prev = previousHorizon, prev.count == vw {
+        let margin   = 200
+        let effectLo = max(0,      Int(bounds.minX) - margin)
+        let effectHi = min(vw - 1, Int(bounds.maxX) + margin)
+        var merged   = prev
+        for ix in 0..<vw {
+            if ix >= effectLo && ix <= effectHi {
+                // Inside the gesture's effect zone: use the fresh SIOX result.
+                merged[ix] = horizon[ix]
+            }
+            // Outside: keep the previous value (already in `merged`).
+        }
+        mergedHorizon = merged
+    } else {
+        // No previous horizon or no gesture bounds — use full SIOX result.
+        mergedHorizon = horizon
+    }
+
+    // 5. Enforce per-column user constraints so the SIOX result never
+    //    contradicts explicit paint/erase actions.
+    //
+    //    Paint floors: horizon must be >= y (painted area stays sky).
+    //    Erase ceilings: horizon must be <= y (erased area stays ground).
+    //    Last action wins: if a column was painted then erased, the erase
+    //    ceiling is the only active constraint (and vice versa).
+    var constrained = mergedHorizon
+    if let constraints = constraints {
+        for ix in 0..<vw {
+            guard let y = constrained[ix] else { continue }
+            switch constraints[ix] {
+            case .paintFloor(let floor):
+                constrained[ix] = max(y, floor)
+            case .eraseCeiling(let ceiling):
+                constrained[ix] = min(y, ceiling)
+            case nil:
+                break
+            }
+        }
+    }
+
+    paintState.applyExpandedHorizonMask(constrained)
     paintState.endExpanding()
 }
 

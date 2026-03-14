@@ -934,7 +934,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         topBoundaryY:    [Int?],
         bottomBoundaryY: [Int?],
         viewWidth:  Int,
-        viewHeight: Int
+        viewHeight: Int,
+        isErasingGesture: Bool = false,
+        previousHorizonY: [Int?]? = nil
     ) async throws -> [Int?] {
         // 1. Load original image (async I/O — suspends without blocking).
         guard let original = try await imageAccessor.load(
@@ -965,6 +967,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             if let botVY = bottomBoundaryY[col] {
                 scaledBottom[ix] = Int((Double(botVY) * scaleY).rounded())
             }
+        }
+
+        // Scale previousHorizonY (view coords) → image pixel coords.
+        // Used in erase mode: provides the old detected horizon so the scan
+        // starts from a known-good position rather than from bottomY.
+        var scaledPrevHorizon: [Int?]? = nil
+        if let prevY = previousHorizonY {
+            var sp = [Int?](repeating: nil, count: imgW)
+            for ix in 0..<imgW {
+                let vx  = Int((Double(ix) / scaleX).rounded())
+                let col = min(max(vx, 0), prevY.count - 1)
+                if let vy = prevY[col] {
+                    sp[ix] = Int((Double(vy) * scaleY).rounded())
+                }
+            }
+            scaledPrevHorizon = sp
         }
 
         // 3. Horizon detection — SIOX-inspired LAB colour ratio
@@ -1013,19 +1031,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let globalBot = imgH - 1   // always extend to the bottom of the image
 
         // `scaledY`: image-pixel horizon Y per image column (length = imgW).
+        let prevHorizon = scaledPrevHorizon   // capture for Sendable closure
         var scaledY: [Int?] = await Task.detached(priority: .userInitiated) {
 
-            // ── Phase A: build the windowed-LAB cache ──────────────────────────
-            //
-            // For each row in [globalTop, globalBot]:
-            //   1. Compute prefix sums of linearised R, G, B.
-            //   2. For each column, derive the ±halfW window mean in linear RGB.
-            //   3. Convert that mean to L*a*b* and store in winL/winA/winBB.
-            //
-            // All three helpers are @inline(__always) to avoid closure overhead.
-
-            @inline(__always)
-            func linearise(_ v: UInt8) -> Float {
+            // ── Linearise LUT ─────────────────────────────────────────────────
+            // Pre-computing all 256 gamma-expansion values eliminates O(imgW×imgH)
+            // expensive pow() calls, replacing them with cheap array lookups.
+            let linearLUT: [Float] = (0..<256).map { v in
                 let n = Float(v) / 255.0
                 return n <= 0.04045 ? n / 12.92 : pow((n + 0.055) / 1.055, 2.4)
             }
@@ -1045,6 +1057,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 return (116.0*fy - 16.0,  500.0*(fx - fy),  200.0*(fy - fz))
             }
 
+            // ── Phase A: build the windowed-LAB cache ──────────────────────────
+            //
+            // Processes every other row (rowStep = 2) to halve array sizes and
+            // Phase A work.  labAt snaps any iy to the nearest sampled row via
+            // integer division (floor), giving ~½ the memory and ~2× speed.
+            let rowStep = 2
+
             // ── Horizontal column range ────────────────────────────────────────
             // Only process columns that were actually painted.  Columns outside
             // this range have nil snapTop/snapBottom and produce nil results.
@@ -1062,13 +1081,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             let pxRight = min(imgW - 1, colRight + halfW)
             let pxWidth = pxRight - pxLeft + 1
 
-            let bandH = max(1, globalBot - globalTop + 1)
+            let bandH = (globalBot - globalTop) / rowStep + 1
             var winL  = [Float](repeating: 0, count: bandH * colWidth)
             var winA  = [Float](repeating: 0, count: bandH * colWidth)
             var winBB = [Float](repeating: 0, count: bandH * colWidth)
 
-            for iy in globalTop...globalBot {
-                let ri  = iy - globalTop
+            for iy in stride(from: globalTop, through: globalBot, by: rowStep) {
+                let ri = (iy - globalTop) / rowStep
                 // Prefix sums of linearised channels for the painted pixel range.
                 var prefR = [Float](repeating: 0, count: pxWidth + 1)
                 var prefG = [Float](repeating: 0, count: pxWidth + 1)
@@ -1076,9 +1095,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 for i in 0..<pxWidth {
                     let ix   = pxLeft + i
                     let base = iy * pixStride + ix * pxBpp
-                    let bV   = linearise(pixelData[base])
-                    let gV   = pxBpp > 1 ? linearise(pixelData[base + 1]) : bV
-                    let rV   = pxBpp > 2 ? linearise(pixelData[base + 2]) : bV
+                    let bV   = linearLUT[Int(pixelData[base])]
+                    let gV   = pxBpp > 1 ? linearLUT[Int(pixelData[base + 1])] : bV
+                    let rV   = pxBpp > 2 ? linearLUT[Int(pixelData[base + 2])] : bV
                     prefR[i+1] = prefR[i] + rV
                     prefG[i+1] = prefG[i] + gV
                     prefB[i+1] = prefB[i] + bV
@@ -1102,7 +1121,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             @inline(__always)
             func labAt(ix: Int, iy: Int) -> (L: Float, a: Float, b: Float) {
-                let idx = (iy - globalTop) * colWidth + (ix - colLeft)
+                // Integer division floors to the nearest sampled row (rowStep=2).
+                let ri  = min((iy - globalTop) / rowStep, bandH - 1)
+                let idx = ri * colWidth + (ix - colLeft)
                 return (winL[idx], winA[idx], winBB[idx])
             }
             @inline(__always)
@@ -1112,6 +1133,29 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 return dL*dL + da*da + db*db   // squared Euclidean in LAB
             }
 
+            // Ground centroid: bottom 5 % of the image – guaranteed terrain
+            // regardless of how high up in the sky the user painted.
+            // Computed once here and shared across all columns (terrain colour
+            // is roughly constant across the frame; recomputing per-column
+            // wastes CPU and gives the same value).
+            let groundRows = max(20, imgH / 20)
+            let gndStart   = imgH - groundRows
+            var gndLSum: Float = 0, gndASum: Float = 0, gndBBSum: Float = 0
+            var nGndRows = 0
+            // Sample every 4th column to keep this O(groundRows × colWidth/4).
+            let gndColStep = max(1, (colRight - colLeft + 1) / 40)
+            for iy in gndStart ..< imgH {
+                for ix in stride(from: colLeft, through: colRight, by: gndColStep) {
+                    let (L, a, b) = labAt(ix: ix, iy: iy)
+                    gndLSum += L;  gndASum += a;  gndBBSum += b;  nGndRows += 1
+                }
+            }
+            let gndNF = Float(max(1, nGndRows))
+            let globalGndL  = gndLSum  / gndNF
+            let globalGndA  = gndASum  / gndNF
+            let globalGndBB = gndBBSum / gndNF
+
+            let minConsecutive = 4
             var result = [Int?](repeating: nil, count: imgW)
 
             for ix in colLeft...colRight {
@@ -1121,65 +1165,93 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 let st = max(0, topY)
                 guard st < bottomY else { result[ix] = bottomY; continue }
 
-                // Sky centroid: bottom ~20 % of the painted band – the sky colour
-                // immediately adjacent to the ridgeline.  This is the most
-                // discriminative reference when scanning downward toward terrain.
-                let skyRows  = max(1, min(50, (bottomY - st) / 5))
-                let skyStart = max(st, bottomY - skyRows)
+                // Sky centroid:
+                //   paint mode → bottom ~20 % of painted band (sky adjacent to
+                //                the ridgeline; most discriminative for a downward
+                //                scan toward terrain)
+                //   erase mode → top ~20 % of painted band (far from the erased
+                //                region, guaranteed to be sky even when bottomY
+                //                is at or below the actual terrain line)
+                let skyRows = max(1, min(50, (bottomY - st) / 5))
                 var (skyL, skyA, skyBB): (Float, Float, Float) = (0, 0, 0)
                 var nSkyRows = 0
-                for iy in skyStart ..< bottomY {
-                    let (L, a, b) = labAt(ix: ix, iy: iy)
-                    skyL += L;  skyA += a;  skyBB += b;  nSkyRows += 1
+                if isErasingGesture {
+                    let skyEnd = min(bottomY, st + skyRows)
+                    for iy in st ..< skyEnd {
+                        let (L, a, b) = labAt(ix: ix, iy: iy)
+                        skyL += L;  skyA += a;  skyBB += b;  nSkyRows += 1
+                    }
+                } else {
+                    let skyStart = max(st, bottomY - skyRows)
+                    for iy in skyStart ..< bottomY {
+                        let (L, a, b) = labAt(ix: ix, iy: iy)
+                        skyL += L;  skyA += a;  skyBB += b;  nSkyRows += 1
+                    }
                 }
                 let nSky = Float(max(1, nSkyRows))
                 skyL /= nSky;  skyA /= nSky;  skyBB /= nSky
 
-                // Ground centroid: bottom 5 % of the image – guaranteed terrain
-                // regardless of how high up in the sky the user painted.
-                // (Sampling just below bottomY fails when bottomY is mid-sky.)
-                let groundRows = max(20, imgH / 20)
-                let gndStart   = imgH - groundRows
-                var (gndL, gndA, gndBB): (Float, Float, Float) = (5, 0, 0)
-                var nGndRows = 0
-                for iy in gndStart ..< imgH {
-                    let (L, a, b) = labAt(ix: ix, iy: iy)
-                    gndL += L;  gndA += a;  gndBB += b;  nGndRows += 1
-                }
-                let nGnd = Float(max(1, nGndRows))
-                gndL /= nGnd;  gndA /= nGnd;  gndBB /= nGnd
-
-                // Scan DOWNWARD from bottomY to find the mountain ridgeline.
-                //
-                // Starting at bottomY (bottom of user's painted sky) and moving
-                // down means the result can only be AT or BELOW the brush stroke –
-                // the selection always expands downward toward terrain, never upward.
-                //
-                // We require `minConsecutive` terrain-like rows in a row before
-                // declaring the horizon.  This prevents the scan from stopping on
-                // the 1–2 dark pixel gaps between stars in an otherwise sky region.
-                // Mountain silhouettes span tens-to-hundreds of rows continuously,
-                // so requiring 3 consecutive rows does not affect accuracy there.
-                //
-                // Horizon = first row of the first `minConsecutive`-row run where
-                //   d_gnd² < d_sky²  (pixel closer to terrain centroid than sky).
-                let minConsecutive = 4
-                var consecutiveTerrain = 0
-                var horizonY = bottomY
-                for iy in bottomY ..< imgH {
-                    let (L, a, b) = labAt(ix: ix, iy: iy)
-                    if dist2(L, a, b, gndL, gndA, gndBB) <
-                       dist2(L, a, b, skyL, skyA, skyBB) {
-                        consecutiveTerrain += 1
-                        if consecutiveTerrain >= minConsecutive {
-                            horizonY = iy - minConsecutive + 1  // first row of the run
-                            break
-                        }
+                if isErasingGesture {
+                    // ── ERASE mode: scan UPWARD from old horizon ────────────
+                    //
+                    // Start from the previous SIOX-detected horizon position
+                    // (if available), which sits right at the terrain–sky
+                    // boundary.  Scanning upward from there finds the first
+                    // run of sky-like rows, revealing where the horizon has
+                    // moved after the user's erase gesture.
+                    //
+                    // If no previous horizon exists for this column, fall back
+                    // to bottomY (bottom of the painted area).
+                    let scanStart: Int
+                    if let prev = prevHorizon?[ix] {
+                        scanStart = min(prev, imgH - 1)
                     } else {
-                        consecutiveTerrain = 0  // reset on any sky-like row
+                        scanStart = bottomY
                     }
+                    var consecutiveSky = 0
+                    var horizonY = scanStart
+                    for iy in stride(from: scanStart, through: globalTop, by: -1) {
+                        let (L, a, b) = labAt(ix: ix, iy: iy)
+                        if dist2(L, a, b, skyL, skyA, skyBB) <
+                           dist2(L, a, b, globalGndL, globalGndA, globalGndBB) {
+                            consecutiveSky += 1
+                            if consecutiveSky >= minConsecutive {
+                                // bottom row of this sky run = actual horizon
+                                horizonY = min(scanStart, iy + minConsecutive - 1)
+                                break
+                            }
+                        } else {
+                            consecutiveSky = 0
+                        }
+                    }
+                    result[ix] = horizonY
+                } else {
+                    // ── PAINT mode: scan DOWNWARD from bottomY ────────────────
+                    //
+                    // Starting at bottomY (bottom of user's painted sky) and
+                    // moving down means the result can only be AT or BELOW the
+                    // brush stroke – the selection always expands downward toward
+                    // terrain, never upward.
+                    //
+                    // Require `minConsecutive` terrain-like rows to prevent the
+                    // scan from stopping on the 1-2 dark pixel gaps between stars.
+                    var consecutiveTerrain = 0
+                    var horizonY = bottomY
+                    for iy in bottomY ..< imgH {
+                        let (L, a, b) = labAt(ix: ix, iy: iy)
+                        if dist2(L, a, b, globalGndL, globalGndA, globalGndBB) <
+                           dist2(L, a, b, skyL, skyA, skyBB) {
+                            consecutiveTerrain += 1
+                            if consecutiveTerrain >= minConsecutive {
+                                horizonY = iy - minConsecutive + 1
+                                break
+                            }
+                        } else {
+                            consecutiveTerrain = 0
+                        }
+                    }
+                    result[ix] = horizonY
                 }
-                result[ix] = horizonY
             }
             return result
         }.value
@@ -1200,6 +1272,28 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 lastValidY   = y
             }
         }
+
+        // 4b. Median filter — removes isolated per-column spikes caused by snow
+        //     patches, bright terrain features, or stray dark/bright pixels that
+        //     shift the SIOX ratio for only a few individual columns.
+        //     A ±medW window replaces each column's value with the median of its
+        //     neighbours, eliminating narrow outliers while preserving the broad
+        //     horizon curve.
+        let medW = 40
+        var smoothedY = scaledY
+        for ix in 0..<imgW {
+            guard scaledY[ix] != nil else { continue }
+            let lo = max(0, ix - medW)
+            let hi = min(imgW - 1, ix + medW)
+            var window: [Int] = []
+            window.reserveCapacity(hi - lo + 1)
+            for jx in lo...hi { if let y = scaledY[jx] { window.append(y) } }
+            if !window.isEmpty {
+                window.sort()
+                smoothedY[ix] = window[window.count / 2]
+            }
+        }
+        scaledY = smoothedY
 
         // 5. Convert image-pixel coords → view coords.
         //    `applyExpandedHorizonMask` renders into a Canvas sized at view dimensions,

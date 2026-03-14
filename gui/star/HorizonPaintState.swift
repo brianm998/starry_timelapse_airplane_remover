@@ -1,6 +1,20 @@
 import Foundation
 import SwiftUI
 
+/// Per-column horizon constraint from an explicit user gesture.
+///
+/// Paint floors ensure the horizon stays at or below where the user painted
+/// (the painted area is sky).  Erase ceilings ensure the horizon stays at
+/// or above where the user erased (the erased area is ground).  When both
+/// kinds exist for the same column, only the most recent one is kept ("last
+/// action wins").
+enum HorizonConstraint: Sendable {
+    /// Horizon must be >= y (user painted here — sky extends at least this far).
+    case paintFloor(Int)
+    /// Horizon must be <= y (user erased here — ground starts at most here).
+    case eraseCeiling(Int)
+}
+
 /// Mutable state for a single horizon-painting session.
 ///
 /// Stores all brush strokes as circles so that the painting can be
@@ -131,6 +145,9 @@ final class HorizonPaintState {
     init(viewWidth: CGFloat, viewHeight: CGFloat) {
         self.viewWidth  = viewWidth
         self.viewHeight = viewHeight
+        let vw = Int(viewWidth)
+        self.gestureColumnBottom = [Int](repeating: Int.min, count: vw)
+        self.gestureColumnTop    = [Int](repeating: Int.max, count: vw)
     }
 
     // MARK: - Brush resize ([ and ] keys)
@@ -151,6 +168,31 @@ final class HorizonPaintState {
     /// clicking somewhere else does not draw a line between the two spots.
     private var isNewSegment: Bool = true
 
+    /// Bounding rect of all strokes in the **current** drag gesture (view
+    /// coordinates).  Reset at the start of each new gesture; accumulates
+    /// every stroke circle added during the gesture.  Captured in `onEnded`
+    /// to determine the horizontal region affected by this gesture so that
+    /// only nearby columns are updated by the SIOX horizon pass.
+    private(set) var lastGestureBounds: CGRect? = nil
+
+    // MARK: - Per-column user constraints
+
+    /// Per-column constraints from explicit user gestures (length = Int(viewWidth)).
+    /// Updated each time a gesture ends via ``commitGestureConstraints(isErasing:)``.
+    /// `nil` columns have no constraint.  Last action wins: if the user paints
+    /// then erases the same column, the erase ceiling replaces the paint floor.
+    private(set) var userConstraints: [HorizonConstraint?]? = nil
+
+    /// Per-column bottom Y (max Y) of strokes in the current gesture.
+    /// Used to compute paint-floor constraints (horizon >= bottom of paint).
+    /// Reset at gesture start, updated in `appendStroke`.
+    private var gestureColumnBottom: [Int]
+
+    /// Per-column top Y (min Y) of strokes in the current gesture.
+    /// Used to compute erase-ceiling constraints (horizon <= top of erase).
+    /// Reset at gesture start, updated in `appendStroke`.
+    private var gestureColumnTop: [Int]
+
     /// Record a brush stroke at the given view-coordinate point.
     ///
     /// If this is a continuation of the **current gesture** (not a new press)
@@ -159,6 +201,14 @@ final class HorizonPaintState {
     /// gap.  This produces a continuous band rather than two isolated circles.
     /// Gap-filling is **never** applied across a gesture boundary.
     func addStroke(at center: CGPoint) {
+        // Reset gesture bounds and per-column extent at the start of a new
+        // segment so each gesture tracks only its own affected region.
+        if isNewSegment {
+            lastGestureBounds = nil
+            let vw = Int(viewWidth)
+            gestureColumnBottom = [Int](repeating: Int.min, count: vw)
+            gestureColumnTop    = [Int](repeating: Int.max, count: vw)
+        }
         // Gap-fill only within the same continuous gesture segment.
         if !isNewSegment, let prev = strokes.last, prev.isErase == isErasing {
             let dx   = center.x - prev.center.x
@@ -196,6 +246,27 @@ final class HorizonPaintState {
     /// Append a single stroke and update `unifiedPaintPath` and `expandedPath` incrementally.
     private func appendStroke(_ stroke: Stroke) {
         strokes.append(stroke)
+
+        // Accumulate gesture bounding rect.
+        let sr = CGRect(x: stroke.center.x - stroke.radius,
+                        y: stroke.center.y - stroke.radius,
+                        width: stroke.radius * 2, height: stroke.radius * 2)
+        lastGestureBounds = lastGestureBounds?.union(sr) ?? sr
+
+        // Track per-column vertical extent of this gesture's strokes.
+        // Used by `commitGestureConstraints` to set precise per-column
+        // paint-floor / erase-ceiling constraints.
+        let colLo = max(0, Int(stroke.center.x - stroke.radius))
+        let colHi = min(gestureColumnBottom.count - 1, Int(stroke.center.x + stroke.radius))
+        if colLo <= colHi {
+            let strokeBottom = Int(stroke.center.y + stroke.radius)
+            let strokeTop    = Int(stroke.center.y - stroke.radius)
+            for col in colLo...colHi {
+                if gestureColumnBottom[col] < strokeBottom { gestureColumnBottom[col] = strokeBottom }
+                if gestureColumnTop[col]    > strokeTop    { gestureColumnTop[col]    = strokeTop    }
+            }
+        }
+
         let circle = Path(ellipseIn: CGRect(
             x: stroke.center.x - stroke.radius,
             y: stroke.center.y - stroke.radius,
@@ -223,12 +294,42 @@ final class HorizonPaintState {
         expansionGeneration += 1
     }
 
+    /// Record per-column constraints from the gesture that just ended.
+    ///
+    /// For paint gestures, each column touched by the brush gets a "paint floor"
+    /// constraint: the horizon must be at or below the bottommost painted Y.
+    /// For erase gestures, each column gets an "erase ceiling": the horizon must
+    /// be at or above the topmost erased Y.
+    ///
+    /// Call this after `endSegment()` and before triggering the SIOX expansion
+    /// so the constraints are ready when the result arrives.
+    func commitGestureConstraints(isErasing: Bool) {
+        let vw = Int(viewWidth)
+        if userConstraints == nil {
+            userConstraints = [HorizonConstraint?](repeating: nil, count: vw)
+        }
+        for col in 0..<vw {
+            // Only process columns that were actually touched by this gesture.
+            guard gestureColumnBottom[col] != Int.min else { continue }
+            if isErasing {
+                userConstraints![col] = .eraseCeiling(gestureColumnTop[col])
+            } else {
+                userConstraints![col] = .paintFloor(gestureColumnBottom[col])
+            }
+        }
+    }
+
     /// Remove all recorded strokes and reset the unified path.
     func clear() {
         strokes.removeAll()
         unifiedPaintPath = Path()
         expandedPath = nil
         lastHorizonY = nil
+        lastGestureBounds = nil
+        userConstraints = nil
+        let vw = Int(viewWidth)
+        gestureColumnBottom = [Int](repeating: Int.min, count: vw)
+        gestureColumnTop    = [Int](repeating: Int.max, count: vw)
         expansionGeneration += 1
         isNewSegment = true
     }
