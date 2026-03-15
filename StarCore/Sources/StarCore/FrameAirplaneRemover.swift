@@ -936,7 +936,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         viewWidth:  Int,
         viewHeight: Int,
         isErasingGesture: Bool = false,
-        previousHorizonY: [Int?]? = nil
+        previousHorizonY: [Int?]? = nil,
+        bandMode: Bool = false,
+        reverseScanColumns: [Bool]? = nil
     ) async throws -> [Int?] {
         // 1. Load original image (async I/O — suspends without blocking).
         guard let original = try await imageAccessor.load(
@@ -983,6 +985,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
             scaledPrevHorizon = sp
+        }
+
+        // Scale reverseScanColumns from view coords to image pixel coords.
+        // Columns flagged true get a bottom-up scan during refinement so that
+        // user paint gestures produce a terrain-following horizon instead of a
+        // flat line at the brush bottom.
+        var scaledReverseScan: [Bool]? = nil
+        if let revScan = reverseScanColumns {
+            var sr = [Bool](repeating: false, count: imgW)
+            for ix in 0..<imgW {
+                let vx  = Int((Double(ix) / scaleX).rounded())
+                let col = min(max(vx, 0), revScan.count - 1)
+                sr[ix] = revScan[col]
+            }
+            scaledReverseScan = sr
         }
 
         // 3. Horizon detection — SIOX-inspired LAB colour ratio
@@ -1133,29 +1150,136 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 return dL*dL + da*da + db*db   // squared Euclidean in LAB
             }
 
-            // Ground centroid: bottom 5 % of the image – guaranteed terrain
-            // regardless of how high up in the sky the user painted.
-            // Computed once here and shared across all columns (terrain colour
-            // is roughly constant across the frame; recomputing per-column
-            // wastes CPU and gives the same value).
-            let groundRows = max(20, imgH / 20)
-            let gndStart   = imgH - groundRows
-            var gndLSum: Float = 0, gndASum: Float = 0, gndBBSum: Float = 0
-            var nGndRows = 0
-            // Sample every 4th column to keep this O(groundRows × colWidth/4).
-            let gndColStep = max(1, (colRight - colLeft + 1) / 40)
-            for iy in gndStart ..< imgH {
-                for ix in stride(from: colLeft, through: colRight, by: gndColStep) {
-                    let (L, a, b) = labAt(ix: ix, iy: iy)
-                    gndLSum += L;  gndASum += a;  gndBBSum += b;  nGndRows += 1
+            // ── Centroid computation ──────────────────────────────────────
+            //
+            // Band mode uses per-column-GROUP sky centroids: the sky colour
+            // varies dramatically across the frame (dark blue edges vs bright
+            // milky way centre).  A single global centroid is a poor match
+            // for the sky at the frame edges, causing the SIOX to misclassify
+            // dark-blue sky as terrain.  Per-group centroids (groups of ~50
+            // image columns) capture this lateral variation while remaining
+            // robust to star noise thanks to the group averaging.
+            //
+            // Each group's centroid is computed from the FULL sky area above
+            // the band (row 0 → band top), not just a narrow strip.  This
+            // includes the full range of sky colours (high dark-blue sky,
+            // near-horizon lighter sky, milky way glow).
+            //
+            // The ground centroid is global (terrain colour varies less) but
+            // samples ALL rows below the band bottom, not just 20 %.
+
+            // Helper: compute LAB centroid directly from pixel data
+            // (for rows outside the windowed-LAB cache).
+            func rawLABCentroid(
+                yStart: Int, yEnd: Int,
+                xStart: Int, xEnd: Int, xStep: Int,
+                yStep: Int = 1
+            ) -> (L: Float, a: Float, b: Float) {
+                var lSum: Float = 0, aSum: Float = 0, bSum: Float = 0
+                var n = 0
+                for iy in stride(from: yStart, to: yEnd, by: yStep) {
+                    for ix in stride(from: xStart, through: xEnd, by: xStep) {
+                        let base = iy * pixStride + ix * pxBpp
+                        let bV = linearLUT[Int(pixelData[base])]
+                        let gV = pxBpp > 1 ? linearLUT[Int(pixelData[base + 1])] : bV
+                        let rV = pxBpp > 2 ? linearLUT[Int(pixelData[base + 2])] : bV
+                        let (L, a, b) = linRGBtoLAB(r: rV, g: gV, b: bV)
+                        lSum += L; aSum += a; bSum += b; n += 1
+                    }
+                }
+                let nf = Float(max(1, n))
+                return (lSum / nf, aSum / nf, bSum / nf)
+            }
+
+            let centroidColStep = max(1, (colRight - colLeft + 1) / 40)
+
+            // ── Per-column-group sky centroids (band mode) ─────────────────
+            //
+            // Each group spans ~50 image columns.  The centroid for a group
+            // is computed from ALL sky rows (row 0 → min band top in group)
+            // using row subsampling (every 4th row) for speed.  Groups are
+            // linearly interpolated per-column in the scan loop via
+            // `skyCentroidAt`.
+
+            let skyGroupSize = 50
+            let numSkyGroups = bandMode ? max(1, (colWidth + skyGroupSize - 1) / skyGroupSize) : 0
+            var groupSkyL = [Float](repeating: 0, count: numSkyGroups)
+            var groupSkyA = [Float](repeating: 0, count: numSkyGroups)
+            var groupSkyB = [Float](repeating: 0, count: numSkyGroups)
+
+            if bandMode {
+                for g in 0..<numSkyGroups {
+                    let gStart = colLeft + g * skyGroupSize
+                    let gEnd   = min(colRight, gStart + skyGroupSize - 1)
+                    // Use the minimum band top in this group as the sky extent.
+                    // All rows above this are guaranteed sky for the whole group.
+                    let minBandTop = (gStart...gEnd).compactMap { snapTop[$0] }.min() ?? globalTop
+                    let skyEnd = max(1, minBandTop)
+                    let colStep = max(1, (gEnd - gStart + 1) / 10)
+                    let c = rawLABCentroid(yStart: 0, yEnd: skyEnd,
+                                           xStart: gStart, xEnd: gEnd,
+                                           xStep: colStep, yStep: 4)
+                    groupSkyL[g] = c.L; groupSkyA[g] = c.a; groupSkyB[g] = c.b
                 }
             }
-            let gndNF = Float(max(1, nGndRows))
-            let globalGndL  = gndLSum  / gndNF
-            let globalGndA  = gndASum  / gndNF
-            let globalGndBB = gndBBSum / gndNF
+
+            /// Interpolate per-column sky centroid from group centroids.
+            @inline(__always)
+            func skyCentroidAt(_ ix: Int) -> (L: Float, a: Float, b: Float) {
+                guard numSkyGroups > 1 else {
+                    return numSkyGroups == 1
+                        ? (groupSkyL[0], groupSkyA[0], groupSkyB[0])
+                        : (0, 0, 0)
+                }
+                let relCol = Float(ix - colLeft)
+                let gIdx   = relCol / Float(skyGroupSize)
+                let g0     = max(0, min(numSkyGroups - 1, Int(gIdx)))
+                let g1     = min(numSkyGroups - 1, g0 + 1)
+                if g0 == g1 { return (groupSkyL[g0], groupSkyA[g0], groupSkyB[g0]) }
+                let t = gIdx - Float(g0)
+                return (
+                    groupSkyL[g0] * (1 - t) + groupSkyL[g1] * t,
+                    groupSkyA[g0] * (1 - t) + groupSkyA[g1] * t,
+                    groupSkyB[g0] * (1 - t) + groupSkyB[g1] * t
+                )
+            }
+
+            // ── Global ground centroid ─────────────────────────────────────
+
+            let globalGndL:  Float
+            let globalGndA:  Float
+            let globalGndBB: Float
+            if bandMode {
+                // ALL rows below the band bottom (guaranteed terrain).
+                let bandBotMax = snapBottom.compactMap { $0 }.max() ?? (imgH - 1)
+                let gndStart   = min(bandBotMax + 1, imgH)
+                let c = rawLABCentroid(yStart: gndStart, yEnd: imgH,
+                                       xStart: colLeft, xEnd: colRight,
+                                       xStep: centroidColStep, yStep: 4)
+                globalGndL = c.L; globalGndA = c.a; globalGndBB = c.b
+            } else {
+                // Bottom 5 % of image (existing refinement-mode logic).
+                let groundRows = max(20, imgH / 20)
+                let gndStart   = imgH - groundRows
+                var gndLSum: Float = 0, gndASum: Float = 0, gndBBSum: Float = 0
+                var nGndRows = 0
+                let gndColStep = max(1, (colRight - colLeft + 1) / 40)
+                for iy in gndStart ..< imgH {
+                    for ix in stride(from: colLeft, through: colRight, by: gndColStep) {
+                        let (L, a, b) = labAt(ix: ix, iy: iy)
+                        gndLSum += L;  gndASum += a;  gndBBSum += b;  nGndRows += 1
+                    }
+                }
+                let gndNF = Float(max(1, nGndRows))
+                globalGndL  = gndLSum  / gndNF
+                globalGndA  = gndASum  / gndNF
+                globalGndBB = gndBBSum / gndNF
+            }
+
+            // ── Per-column scan ──────────────────────────────────────────────
 
             let minConsecutive = 4
+            let revScan = scaledReverseScan   // capture for inner scope
             var result = [Int?](repeating: nil, count: imgW)
 
             for ix in colLeft...colRight {
@@ -1165,92 +1289,123 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 let st = max(0, topY)
                 guard st < bottomY else { result[ix] = bottomY; continue }
 
-                // Sky centroid:
-                //   paint mode → bottom ~20 % of painted band (sky adjacent to
-                //                the ridgeline; most discriminative for a downward
-                //                scan toward terrain)
-                //   erase mode → top ~20 % of painted band (far from the erased
-                //                region, guaranteed to be sky even when bottomY
-                //                is at or below the actual terrain line)
-                let skyRows = max(1, min(50, (bottomY - st) / 5))
-                var (skyL, skyA, skyBB): (Float, Float, Float) = (0, 0, 0)
-                var nSkyRows = 0
-                if isErasingGesture {
-                    let skyEnd = min(bottomY, st + skyRows)
-                    for iy in st ..< skyEnd {
-                        let (L, a, b) = labAt(ix: ix, iy: iy)
-                        skyL += L;  skyA += a;  skyBB += b;  nSkyRows += 1
-                    }
-                } else {
-                    let skyStart = max(st, bottomY - skyRows)
-                    for iy in skyStart ..< bottomY {
-                        let (L, a, b) = labAt(ix: ix, iy: iy)
-                        skyL += L;  skyA += a;  skyBB += b;  nSkyRows += 1
-                    }
-                }
-                let nSky = Float(max(1, nSkyRows))
-                skyL /= nSky;  skyA /= nSky;  skyBB /= nSky
+                if bandMode {
+                    // Per-column sky centroid (interpolated from group centroids).
+                    let (skyL, skyA, skyBB) = skyCentroidAt(ix)
 
-                if isErasingGesture {
-                    // ── ERASE mode: scan UPWARD from old horizon ────────────
-                    //
-                    // Start from the previous SIOX-detected horizon position
-                    // (if available), which sits right at the terrain–sky
-                    // boundary.  Scanning upward from there finds the first
-                    // run of sky-like rows, revealing where the horizon has
-                    // moved after the user's erase gesture.
-                    //
-                    // If no previous horizon exists for this column, fall back
-                    // to bottomY (bottom of the painted area).
-                    let scanStart: Int
-                    if let prev = prevHorizon?[ix] {
-                        scanStart = min(prev, imgH - 1)
+                    if revScan?[ix] == true {
+                        // ── REVERSE scan: bottom-up (user painted here) ─────
+                        //
+                        // Scan upward from band bottom looking for the first
+                        // run of consecutive sky-like rows.  This finds the
+                        // natural terrain boundary from the ground side,
+                        // producing a contour that follows the ridgeline
+                        // rather than a flat line at the brush bottom.
+                        var consecutiveSky = 0
+                        var horizonY = st   // default: all terrain
+                        for iy in stride(from: bottomY - 1, through: st, by: -1) {
+                            let (L, a, b) = labAt(ix: ix, iy: iy)
+                            if dist2(L, a, b, skyL, skyA, skyBB) <
+                               dist2(L, a, b, globalGndL, globalGndA, globalGndBB) {
+                                consecutiveSky += 1
+                                if consecutiveSky >= minConsecutive {
+                                    horizonY = iy + minConsecutive - 1
+                                    break
+                                }
+                            } else {
+                                consecutiveSky = 0
+                            }
+                        }
+                        result[ix] = max(st, min(horizonY, bottomY))
+
                     } else {
-                        scanStart = bottomY
-                    }
-                    var consecutiveSky = 0
-                    var horizonY = scanStart
-                    for iy in stride(from: scanStart, through: globalTop, by: -1) {
-                        let (L, a, b) = labAt(ix: ix, iy: iy)
-                        if dist2(L, a, b, skyL, skyA, skyBB) <
-                           dist2(L, a, b, globalGndL, globalGndA, globalGndBB) {
-                            consecutiveSky += 1
-                            if consecutiveSky >= minConsecutive {
-                                // bottom row of this sky run = actual horizon
-                                horizonY = min(scanStart, iy + minConsecutive - 1)
-                                break
+                        // ── Normal scan: top-down ───────────────────────────
+                        //
+                        // Scan downward from band top to band bottom looking
+                        // for the first run of terrain-like rows.
+                        var consecutiveTerrain = 0
+                        var horizonY = bottomY   // default if no terrain found
+                        for iy in st ..< bottomY {
+                            let (L, a, b) = labAt(ix: ix, iy: iy)
+                            if dist2(L, a, b, globalGndL, globalGndA, globalGndBB) <
+                               dist2(L, a, b, skyL, skyA, skyBB) {
+                                consecutiveTerrain += 1
+                                if consecutiveTerrain >= minConsecutive {
+                                    horizonY = iy - minConsecutive + 1
+                                    break
+                                }
+                            } else {
+                                consecutiveTerrain = 0
                             }
-                        } else {
-                            consecutiveSky = 0
                         }
+                        result[ix] = max(st, min(horizonY, bottomY))
                     }
-                    result[ix] = horizonY
+
                 } else {
-                    // ── PAINT mode: scan DOWNWARD from bottomY ────────────────
-                    //
-                    // Starting at bottomY (bottom of user's painted sky) and
-                    // moving down means the result can only be AT or BELOW the
-                    // brush stroke – the selection always expands downward toward
-                    // terrain, never upward.
-                    //
-                    // Require `minConsecutive` terrain-like rows to prevent the
-                    // scan from stopping on the 1-2 dark pixel gaps between stars.
-                    var consecutiveTerrain = 0
-                    var horizonY = bottomY
-                    for iy in bottomY ..< imgH {
-                        let (L, a, b) = labAt(ix: ix, iy: iy)
-                        if dist2(L, a, b, globalGndL, globalGndA, globalGndBB) <
-                           dist2(L, a, b, skyL, skyA, skyBB) {
-                            consecutiveTerrain += 1
-                            if consecutiveTerrain >= minConsecutive {
-                                horizonY = iy - minConsecutive + 1
-                                break
-                            }
-                        } else {
-                            consecutiveTerrain = 0
+                    // ── Non-band refinement modes (legacy) ──────────────────
+                    // Kept for backward compatibility; new code always uses
+                    // bandMode with per-column-group centroids.
+
+                    let skyRows = max(1, min(50, (bottomY - st) / 5))
+                    var (skyL, skyA, skyBB): (Float, Float, Float) = (0, 0, 0)
+                    var nSkyRows = 0
+                    if isErasingGesture {
+                        let skyEnd = min(bottomY, st + skyRows)
+                        for iy in st ..< skyEnd {
+                            let (L, a, b) = labAt(ix: ix, iy: iy)
+                            skyL += L;  skyA += a;  skyBB += b;  nSkyRows += 1
+                        }
+                    } else {
+                        let skyStart = max(st, bottomY - skyRows)
+                        for iy in skyStart ..< bottomY {
+                            let (L, a, b) = labAt(ix: ix, iy: iy)
+                            skyL += L;  skyA += a;  skyBB += b;  nSkyRows += 1
                         }
                     }
-                    result[ix] = horizonY
+                    let nSky = Float(max(1, nSkyRows))
+                    skyL /= nSky;  skyA /= nSky;  skyBB /= nSky
+
+                    if isErasingGesture {
+                        let scanStart: Int
+                        if let prev = prevHorizon?[ix] {
+                            scanStart = min(prev, imgH - 1)
+                        } else {
+                            scanStart = bottomY
+                        }
+                        var consecutiveSky = 0
+                        var horizonY = scanStart
+                        for iy in stride(from: scanStart, through: globalTop, by: -1) {
+                            let (L, a, b) = labAt(ix: ix, iy: iy)
+                            if dist2(L, a, b, skyL, skyA, skyBB) <
+                               dist2(L, a, b, globalGndL, globalGndA, globalGndBB) {
+                                consecutiveSky += 1
+                                if consecutiveSky >= minConsecutive {
+                                    horizonY = min(scanStart, iy + minConsecutive - 1)
+                                    break
+                                }
+                            } else {
+                                consecutiveSky = 0
+                            }
+                        }
+                        result[ix] = horizonY
+                    } else {
+                        var consecutiveTerrain = 0
+                        var horizonY = bottomY
+                        for iy in bottomY ..< imgH {
+                            let (L, a, b) = labAt(ix: ix, iy: iy)
+                            if dist2(L, a, b, globalGndL, globalGndA, globalGndBB) <
+                               dist2(L, a, b, skyL, skyA, skyBB) {
+                                consecutiveTerrain += 1
+                                if consecutiveTerrain >= minConsecutive {
+                                    horizonY = iy - minConsecutive + 1
+                                    break
+                                }
+                            } else {
+                                consecutiveTerrain = 0
+                            }
+                        }
+                        result[ix] = horizonY
+                    }
                 }
             }
             return result

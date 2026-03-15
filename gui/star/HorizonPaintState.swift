@@ -1,6 +1,20 @@
 import Foundation
 import SwiftUI
 
+/// Phase of the horizon painter workflow.
+///
+/// The user starts by painting a yellow **band** that brackets the horizon,
+/// then the system computes the precise horizon within that band, and
+/// finally the user can **refine** the result with paint/erase gestures.
+enum HorizonPainterPhase: Sendable {
+    /// Painting the yellow horizon band (no SIOX yet).
+    case bandSelection
+    /// SIOX is running within the band to detect the horizon.
+    case computing
+    /// Horizon detected — user can paint/erase to refine.
+    case refinement
+}
+
 /// Per-column horizon constraint from an explicit user gesture.
 ///
 /// Paint floors ensure the horizon stays at or below where the user painted
@@ -56,6 +70,39 @@ enum HorizonConstraint: Sendable {
 @MainActor @Observable
 final class HorizonPaintState {
 
+    // MARK: - Phase
+
+    /// Current phase of the three-step workflow: band → compute → refine.
+    private(set) var phase: HorizonPainterPhase = .bandSelection
+
+    /// Transition to the given phase.  Used by the view layer to move to
+    /// `.computing` once the band is complete.
+    func setPhase(_ newPhase: HorizonPainterPhase) { phase = newPhase }
+
+    // MARK: - Band boundaries
+
+    /// Per-column top Y of the horizon band (view coords).
+    /// Accumulated across all band-selection gestures; `nil` = column not yet painted.
+    private(set) var bandColumnTop: [Int?]
+
+    /// Per-column bottom Y of the horizon band (view coords).
+    private(set) var bandColumnBottom: [Int?]
+
+    /// `true` when the band spans the full frame width (within a small edge margin).
+    var isBandComplete: Bool {
+        let vw = Int(viewWidth)
+        guard vw > 0 else { return false }
+        let edgeMargin = max(10, vw / 50)   // ~2 % margin
+        let first = bandColumnTop.firstIndex(where: { $0 != nil }) ?? Int.max
+        let last  = bandColumnTop.lastIndex(where: { $0 != nil })  ?? 0
+        return first <= edgeMargin && last >= vw - 1 - edgeMargin
+    }
+
+    /// Fraction of columns covered by the band (0.0 to 1.0).
+    var bandCoverage: Double {
+        Double(bandColumnTop.compactMap { $0 }.count) / Double(max(1, Int(viewWidth)))
+    }
+
     // MARK: - Brush settings
 
     /// Radius of the circular brush in view-coordinate points.
@@ -65,7 +112,12 @@ final class HorizonPaintState {
     static let maxBrushRadius: CGFloat = 500
 
     /// When `true` the brush removes sky from the selection instead of adding it.
-    var isErasing: Bool = false
+    /// Forced to `false` during band selection (the band is always additive).
+    var isErasing: Bool = false {
+        didSet {
+            if phase == .bandSelection && isErasing { isErasing = false }
+        }
+    }
 
     // MARK: - Stroke list
 
@@ -146,8 +198,10 @@ final class HorizonPaintState {
         self.viewWidth  = viewWidth
         self.viewHeight = viewHeight
         let vw = Int(viewWidth)
-        self.gestureColumnBottom = [Int](repeating: Int.min, count: vw)
-        self.gestureColumnTop    = [Int](repeating: Int.max, count: vw)
+        self.bandColumnTop       = [Int?](repeating: nil,     count: vw)
+        self.bandColumnBottom    = [Int?](repeating: nil,     count: vw)
+        self.gestureColumnBottom = [Int](repeating: Int.min,  count: vw)
+        self.gestureColumnTop    = [Int](repeating: Int.max,  count: vw)
     }
 
     // MARK: - Brush resize ([ and ] keys)
@@ -265,6 +319,15 @@ final class HorizonPaintState {
                 if gestureColumnBottom[col] < strokeBottom { gestureColumnBottom[col] = strokeBottom }
                 if gestureColumnTop[col]    > strokeTop    { gestureColumnTop[col]    = strokeTop    }
             }
+
+            // During band selection, also accumulate the cumulative band
+            // boundaries (not reset per gesture).
+            if phase == .bandSelection {
+                for col in colLo...colHi {
+                    bandColumnTop[col]    = min(bandColumnTop[col]    ?? Int.max, strokeTop)
+                    bandColumnBottom[col] = max(bandColumnBottom[col] ?? Int.min, strokeBottom)
+                }
+            }
         }
 
         let circle = Path(ellipseIn: CGRect(
@@ -319,7 +382,25 @@ final class HorizonPaintState {
         }
     }
 
-    /// Remove all recorded strokes and reset the unified path.
+    /// Transition from `.computing` to `.refinement` after the initial
+    /// band-mode SIOX completes.
+    ///
+    /// Clears the band strokes/paths (they are no longer needed for display)
+    /// and applies the SIOX result as the new sky mask.  The band boundaries
+    /// are preserved so refinement stays constrained within them.
+    func transitionToRefinement(horizon: [Int?]) {
+        strokes.removeAll()
+        unifiedPaintPath = Path()
+        applyExpandedHorizonMask(horizon)
+        phase = .refinement
+        isNewSegment = true
+        let vw = Int(viewWidth)
+        gestureColumnBottom = [Int](repeating: Int.min, count: vw)
+        gestureColumnTop    = [Int](repeating: Int.max, count: vw)
+        userConstraints = nil
+    }
+
+    /// Remove all recorded strokes and reset to the band-selection phase.
     func clear() {
         strokes.removeAll()
         unifiedPaintPath = Path()
@@ -327,9 +408,13 @@ final class HorizonPaintState {
         lastHorizonY = nil
         lastGestureBounds = nil
         userConstraints = nil
+        phase = .bandSelection
+        isErasing = false
         let vw = Int(viewWidth)
-        gestureColumnBottom = [Int](repeating: Int.min, count: vw)
-        gestureColumnTop    = [Int](repeating: Int.max, count: vw)
+        bandColumnTop       = [Int?](repeating: nil,     count: vw)
+        bandColumnBottom    = [Int?](repeating: nil,     count: vw)
+        gestureColumnBottom = [Int](repeating: Int.min,  count: vw)
+        gestureColumnTop    = [Int](repeating: Int.max,  count: vw)
         expansionGeneration += 1
         isNewSegment = true
     }

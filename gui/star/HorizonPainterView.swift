@@ -85,9 +85,12 @@ struct HorizonPainterView: View {
 
     private var paintMaskCanvas: some View {
         Canvas { context, _ in
+            let fillColor: Color = paintState.phase == .refinement
+                ? .blue.opacity(0.35)
+                : .yellow.opacity(0.35)
             context.fill(
                 paintState.displayPath,
-                with: .color(.blue.opacity(0.35))
+                with: .color(fillColor)
             )
         }
         .allowsHitTesting(false)
@@ -160,28 +163,41 @@ struct HorizonPainterView: View {
     private var paintGesture: some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .local)
             .onChanged { gesture in
+                guard paintState.phase != .computing else { return }
                 paintState.addStroke(at: gesture.location)
                 mousePosition = gesture.location
             }
             .onEnded { gesture in
                 paintState.addStroke(at: gesture.location)
-                // Mark end of gesture so the next press won't gap-fill back here.
                 paintState.endSegment()
-                // Record per-column constraints from the gesture that just
-                // ended, so the SIOX result respects explicit user actions.
-                let wasErasing = paintState.isErasing
-                paintState.commitGestureConstraints(isErasing: wasErasing)
-                // Cancel any in-flight expansion so only the latest gesture's
-                // stroke set is ever being computed.  The cancelled task will
-                // still run to its next cooperative suspension point before
-                // exiting; the generation check inside triggerObjectSelection
-                // ensures a stale result is never applied.
-                expansionTask?.cancel()
-                let frameView  = viewModel.currentFrameView
-                let ps         = paintState
-                expansionTask = Task {
-                    await triggerObjectSelection(paintState: ps, frameView: frameView,
-                                                 isErasingGesture: wasErasing)
+
+                let frameView = viewModel.currentFrameView
+                let ps        = paintState
+
+                switch paintState.phase {
+                case .bandSelection:
+                    // Check if the band now spans the full frame width.
+                    if paintState.isBandComplete {
+                        paintState.setPhase(.computing)
+                        expansionTask?.cancel()
+                        expansionTask = Task {
+                            await triggerBandComputation(paintState: ps,
+                                                         frameView: frameView)
+                        }
+                    }
+                    // No SIOX triggered per-gesture during band selection.
+
+                case .computing:
+                    break   // Ignore gestures while computing.
+
+                case .refinement:
+                    let wasErasing = paintState.isErasing
+                    paintState.commitGestureConstraints(isErasing: wasErasing)
+                    expansionTask?.cancel()
+                    expansionTask = Task {
+                        await triggerObjectSelection(paintState: ps,
+                                                     frameView: frameView)
+                    }
                 }
             }
     }
@@ -198,71 +214,137 @@ struct HorizonPainterView: View {
             .keyboardShortcut("]", modifiers: [])
             .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
 
-        Button("") { paintState.isErasing.toggle() }
-            .keyboardShortcut("-", modifiers: [])
-            .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+        Button("") {
+            if paintState.phase == .refinement { paintState.isErasing.toggle() }
+        }
+        .keyboardShortcut("-", modifiers: [])
+        .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
     }
 }
 
-// MARK: - Object-selection expansion
+// MARK: - Band computation (initial horizon detection)
 
-/// Runs the live object-selection pass: computes the bottom boundary of the
-/// painted area, snaps it to Canny edges, and applies the resulting sky mask.
+/// Runs the initial SIOX horizon detection using the painted band as the
+/// search window.  Areas above the band are treated as known sky, areas
+/// below as known ground.
 ///
-/// Called on the `@MainActor` after each gesture ends.  The expensive
-/// `computePaintedBoundaries` and `computeLiveObjectSelection` calls run on
-/// detached background tasks inside this function (or within the frame method
-/// itself), so the main actor is never blocked.
+/// Called once when the band first spans the full frame width.  After the
+/// computation completes, transitions the paint state to `.refinement`.
+@MainActor
+private func triggerBandComputation(
+    paintState: HorizonPaintState,
+    frameView: FrameViewModel
+) async {
+    let bandTop    = paintState.bandColumnTop
+    let bandBottom = paintState.bandColumnBottom
+    let vw = Int(paintState.viewWidth)
+    let vh = Int(paintState.viewHeight)
+
+    guard let frame = frameView.frame else {
+        paintState.setPhase(.bandSelection)
+        return
+    }
+
+    paintState.beginExpanding()
+
+    let horizon: [Int?]?
+    do {
+        horizon = try await frame.computeLiveObjectSelection(
+            topBoundaryY:    bandTop,
+            bottomBoundaryY: bandBottom,
+            viewWidth:       vw,
+            viewHeight:      vh,
+            bandMode:        true
+        )
+    } catch {
+        Log.w("HorizonPainterView: band computation failed: \(error)")
+        paintState.setPhase(.bandSelection)
+        paintState.endExpanding()
+        return
+    }
+
+    guard let h = horizon else {
+        paintState.setPhase(.bandSelection)
+        paintState.endExpanding()
+        return
+    }
+
+    paintState.transitionToRefinement(horizon: h)
+    paintState.endExpanding()
+}
+
+// MARK: - Object-selection expansion (refinement)
+
+/// Runs the live object-selection pass during the **refinement** phase:
+/// re-runs band-mode SIOX using the original band boundaries (not brush
+/// stroke boundaries), merges locally, enforces user constraints, and
+/// clamps to the band.
+///
+/// Using band boundaries ensures that **all** columns within the band are
+/// processed by SIOX — preventing vertical unselected gaps.  The sky and
+/// ground centroids are computed from the full regions above and below the
+/// band, giving the most reliable colour references.  User refinements
+/// (paint / erase) are honoured through the per-column constraint mechanism
+/// rather than by altering the SIOX scan direction.
+///
+/// Called on the `@MainActor` after each refinement gesture ends.
 @MainActor
 private func triggerObjectSelection(
     paintState: HorizonPaintState,
-    frameView: FrameViewModel,
-    isErasingGesture: Bool = false
+    frameView: FrameViewModel
 ) async {
-    guard paintState.hasStrokes else { return }
-
-    // Capture immutable value types before any suspension point.
-    let rawPath    = paintState.unifiedPaintPath   // Path is a value type — safe copy
     let vw         = Int(paintState.viewWidth)
     let vh         = Int(paintState.viewHeight)
     let generation = paintState.expansionGeneration
 
-    // Capture gesture bounds, previous horizon, and user constraints for
-    // local-effect merging + constraint enforcement.
+    // Capture gesture bounds, previous horizon, user constraints, and band
+    // boundaries for local-effect merging + constraint enforcement + clamping.
     let gestureBounds   = paintState.lastGestureBounds
     let previousHorizon = paintState.lastHorizonY   // [Int?]? in view coords
     let constraints     = paintState.userConstraints // [HorizonConstraint?]? in view coords
+    let bandTop         = paintState.bandColumnTop   // [Int?] in view coords
+    let bandBot         = paintState.bandColumnBottom
 
     guard let frame = frameView.frame else { return }
 
     paintState.beginExpanding()
 
-    // 1. Compute both top + bottom boundaries of the painted area off the main thread.
-    //    The full painted band is used as the search window so the horizon is found
-    //    regardless of brush size.  `Path.contains` on a copied Path is thread-safe.
-    let (topBoundary, bottomBoundary) = await Task.detached(priority: .userInitiated) {
-        computePaintedBoundaries(path: rawPath, viewWidth: vw, viewHeight: vh)
-    }.value
-
-    // Bail if this task was cancelled or a newer stroke arrived.
-    guard !Task.isCancelled,
-          paintState.expansionGeneration == generation
-    else {
-        paintState.endExpanding()
-        return
+    // Build reverse-scan flags from user constraints.
+    //
+    // Paint constraints → reverse scan (bottom-up).  Instead of scanning
+    // from the band top down and potentially misclassifying lighter sky as
+    // terrain, the reverse scan starts from the band bottom (clear ground)
+    // and scans upward to find where sky begins.  This produces a natural
+    // terrain-following contour rather than a flat line at the brush bottom.
+    //
+    // Erase constraints → normal top-down scan; the result is clamped to
+    // the erase ceiling afterward.
+    var reverseScan: [Bool]? = nil
+    if let constraints = constraints {
+        var rs = [Bool](repeating: false, count: vw)
+        var hasAny = false
+        for ix in 0..<vw {
+            if case .paintFloor = constraints[ix] {
+                rs[ix] = true
+                hasAny = true
+            }
+        }
+        if hasAny { reverseScan = rs }
     }
 
-    // 2. SIOX horizon detection (heavy work runs in a detached task inside
-    //    `computeLiveObjectSelection`).
+    // SIOX horizon detection using band boundaries as the search window.
+    // Band mode gives per-column-group sky centroids (capturing lateral
+    // colour variation like dark edges vs bright milky way) and scans
+    // all columns — preventing vertical gaps.
     let snappedHorizon: [Int?]?
     do {
         snappedHorizon = try await frame.computeLiveObjectSelection(
-            topBoundaryY:     topBoundary,
-            bottomBoundaryY:  bottomBoundary,
-            viewWidth:        vw,
-            viewHeight:       vh,
-            isErasingGesture: isErasingGesture,
-            previousHorizonY: isErasingGesture ? previousHorizon : nil
+            topBoundaryY:       bandTop,
+            bottomBoundaryY:    bandBot,
+            viewWidth:          vw,
+            viewHeight:         vh,
+            bandMode:           true,
+            reverseScanColumns: reverseScan
         )
     } catch {
         Log.w("HorizonPainterView: object selection failed: \(error)")
@@ -270,7 +352,7 @@ private func triggerObjectSelection(
         return
     }
 
-    // 3. Apply result — only if not cancelled and no newer stroke arrived.
+    // Apply result — only if not cancelled and no newer stroke arrived.
     guard !Task.isCancelled,
           paintState.expansionGeneration == generation,
           let horizon = snappedHorizon
@@ -279,12 +361,12 @@ private func triggerObjectSelection(
         return
     }
 
-    // 4. Merge locally: only update columns near the gesture; keep the
-    //    previous SIOX-detected horizon everywhere else.
+    // Merge locally: only update columns near the gesture; keep the
+    // previous SIOX-detected horizon everywhere else.
     //
-    //    This prevents painting/erasing in one area from recalculating the
-    //    horizon across the entire frame width.  A margin (±200 view px)
-    //    around the gesture bounds provides a smooth blend zone.
+    // This prevents painting/erasing in one area from recalculating the
+    // horizon across the entire frame width.  A margin (±200 view px)
+    // around the gesture bounds provides a smooth blend zone.
     let mergedHorizon: [Int?]
     if let bounds = gestureBounds, let prev = previousHorizon, prev.count == vw {
         let margin   = 200
@@ -304,77 +386,34 @@ private func triggerObjectSelection(
         mergedHorizon = horizon
     }
 
-    // 5. Enforce per-column user constraints so the SIOX result never
-    //    contradicts explicit paint/erase actions.
+    // Enforce erase-ceiling constraints only.
     //
-    //    Paint floors: horizon must be >= y (painted area stays sky).
-    //    Erase ceilings: horizon must be <= y (erased area stays ground).
-    //    Last action wins: if a column was painted then erased, the erase
-    //    ceiling is the only active constraint (and vice versa).
+    // Paint constraints are handled by the reverse scan (bottom-up) in the
+    // SIOX function — they produce a terrain-following contour naturally.
+    // Erase constraints remain hard ceilings: the user definitively said
+    // "this area is NOT sky", so the horizon must stay at or above the
+    // erased Y position.
     var constrained = mergedHorizon
     if let constraints = constraints {
         for ix in 0..<vw {
             guard let y = constrained[ix] else { continue }
-            switch constraints[ix] {
-            case .paintFloor(let floor):
-                constrained[ix] = max(y, floor)
-            case .eraseCeiling(let ceiling):
+            if case .eraseCeiling(let ceiling) = constraints[ix] {
                 constrained[ix] = min(y, ceiling)
-            case nil:
-                break
             }
         }
+    }
+
+    // Clamp to band boundaries — the horizon must stay within
+    // the user's originally selected horizon band.
+    for ix in 0..<vw {
+        guard let y = constrained[ix] else { continue }
+        let top = bandTop[ix] ?? 0
+        let bot = bandBot[ix] ?? (vh - 1)
+        constrained[ix] = max(top, min(y, bot))
     }
 
     paintState.applyExpandedHorizonMask(constrained)
     paintState.endExpanding()
-}
-
-/// Compute both the top (topmost) and bottom (bottommost) painted-Y per column
-/// for the given `Path` in view coordinates.
-///
-/// Returns a tuple `(top, bottom)` where each element is an `[Int?]` of length
-/// `viewWidth`.  `nil` means that column has no painted pixels.
-///
-/// Runs the scan within the path's bounding rect to avoid unnecessary work.
-/// Safe to call from any thread — `Path` is a value type and `Path.contains`
-/// has no side-effects.
-private func computePaintedBoundaries(
-    path: Path,
-    viewWidth: Int,
-    viewHeight: Int
-) -> (top: [Int?], bottom: [Int?]) {
-    let nils = [Int?](repeating: nil, count: viewWidth)
-    guard !path.isEmpty else { return (top: nils, bottom: nils) }
-
-    // Limit scan to the path's bounding rect (+ a small margin) in both axes.
-    let bounds   = path.boundingRect
-    let scanMinX = max(0,            Int(bounds.minX) - 1)
-    let scanMaxX = min(viewWidth - 1, Int(bounds.maxX) + 1)
-    let scanMinY = max(0,             Int(bounds.minY) - 4)
-    let scanMaxY = min(viewHeight - 1, Int(bounds.maxY) + 4)
-
-    var topResult    = [Int?](repeating: nil, count: viewWidth)
-    var bottomResult = [Int?](repeating: nil, count: viewWidth)
-
-    for ix in scanMinX...scanMaxX {
-        let vx = CGFloat(ix) + 0.5
-        // Top boundary: scan downward — first hit is the topmost painted row.
-        for iy in scanMinY...scanMaxY {
-            if path.contains(CGPoint(x: vx, y: CGFloat(iy) + 0.5)) {
-                topResult[ix] = iy
-                break
-            }
-        }
-        // Bottom boundary: scan upward — first hit is the bottommost painted row.
-        for iy in stride(from: scanMaxY, through: scanMinY, by: -1) {
-            if path.contains(CGPoint(x: vx, y: CGFloat(iy) + 0.5)) {
-                bottomResult[ix] = iy
-                break
-            }
-        }
-    }
-    return (top: topResult, bottom: bottomResult)
 }
 
 // MARK: - Toolbar (lives outside ZoomableView, always screen-sized)
@@ -400,7 +439,8 @@ struct HorizonPainterToolbarView: View {
         bottomToolbar
             .onDisappear {
                 // Auto-save when dismissed via toggle (not Cancel / Escape).
-                guard paintState.hasStrokes,
+                // Only save during refinement — band selection has no horizon.
+                guard paintState.phase == .refinement,
                       !savedAlready,
                       !cancelledExplicitly,
                       !isSaving
@@ -432,82 +472,18 @@ struct HorizonPainterToolbarView: View {
             .background(actionKeyboardHandlers)
     }
 
-    // MARK: - Toolbar layout
+    // MARK: - Toolbar layout (phase-aware)
 
     private var bottomToolbar: some View {
         HStack(spacing: 16) {
-
-            Label("Brush: \(Int(paintState.brushRadius))px",
-                  systemImage: "circle.dashed")
-                .foregroundColor(.white)
-                .font(.system(.caption, design: .monospaced))
-                .help("Use [ and ] to shrink / grow the brush")
-
-            Divider().frame(height: 24)
-
-            Toggle(isOn: Binding(
-                get: { paintState.isErasing },
-                set: { paintState.isErasing = $0 }
-            )) {
-                Label(
-                    paintState.isErasing ? "Erasing" : "Painting",
-                    systemImage: paintState.isErasing ? "eraser.fill" : "paintbrush.fill"
-                )
+            switch paintState.phase {
+            case .bandSelection:
+                bandSelectionToolbar
+            case .computing:
+                computingToolbar
+            case .refinement:
+                refinementToolbar
             }
-            .toggleStyle(.button)
-            .tint(paintState.isErasing ? .red : .blue)
-            .help("Press - to toggle between paint and erase mode")
-
-            Button {
-                paintState.clear()
-            } label: {
-                Label("Clear", systemImage: "trash")
-            }
-            .disabled(!paintState.hasStrokes)
-            .help("Remove all painted strokes")
-
-            Spacer()
-
-            // Object-selection expansion progress indicator.
-            if paintState.isExpanding {
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
-                    Text("Detecting…")
-                        .foregroundColor(.secondary)
-                        .font(.caption)
-                }
-                .transition(.opacity)
-            }
-
-            if let err = saveError {
-                Text(err)
-                    .foregroundColor(.red)
-                    .font(.caption)
-                    .lineLimit(1)
-                    .help(err)
-            }
-
-            Button {
-                Task { await saveHorizonReference() }
-            } label: {
-                if isSaving {
-                    HStack(spacing: 6) {
-                        ProgressView().controlSize(.small)
-                        Text("Saving…")
-                    }
-                } else {
-                    Label("Save Reference Horizon", systemImage: "checkmark.circle.fill")
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(!paintState.hasStrokes || isSaving || paintState.isExpanding)
-            .help("Snap to Canny edges and save as the reference horizon (Return)")
-
-            Button("Cancel") {
-                cancelledExplicitly = true
-                viewModel.isShowingHorizonPainter = false
-            }
-            .help("Discard painting and close without saving (Esc)")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -518,6 +494,133 @@ struct HorizonPainterToolbarView: View {
         )
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
+    }
+
+    // MARK: Band-selection toolbar
+
+    @ViewBuilder
+    private var bandSelectionToolbar: some View {
+        Label("Brush: \(Int(paintState.brushRadius))px",
+              systemImage: "circle.dashed")
+            .foregroundColor(.white)
+            .font(.system(.caption, design: .monospaced))
+            .help("Use [ and ] to shrink / grow the brush")
+
+        Divider().frame(height: 24)
+
+        let pct = Int(paintState.bandCoverage * 100)
+        Label("Paint across the horizon — \(pct)%",
+              systemImage: "mountain.2")
+            .foregroundColor(.yellow)
+            .font(.caption)
+
+        Spacer()
+
+        Button {
+            paintState.clear()
+        } label: {
+            Label("Clear", systemImage: "trash")
+        }
+        .disabled(!paintState.hasStrokes)
+
+        Button("Cancel") {
+            cancelledExplicitly = true
+            viewModel.isShowingHorizonPainter = false
+        }
+        .help("Discard and close (Esc)")
+    }
+
+    // MARK: Computing toolbar
+
+    @ViewBuilder
+    private var computingToolbar: some View {
+        Spacer()
+        HStack(spacing: 6) {
+            ProgressView().controlSize(.small)
+            Text("Computing horizon…")
+                .foregroundColor(.secondary)
+                .font(.caption)
+        }
+        Spacer()
+        Button("Cancel") {
+            cancelledExplicitly = true
+            viewModel.isShowingHorizonPainter = false
+        }
+    }
+
+    // MARK: Refinement toolbar
+
+    @ViewBuilder
+    private var refinementToolbar: some View {
+        Label("Brush: \(Int(paintState.brushRadius))px",
+              systemImage: "circle.dashed")
+            .foregroundColor(.white)
+            .font(.system(.caption, design: .monospaced))
+            .help("Use [ and ] to shrink / grow the brush")
+
+        Divider().frame(height: 24)
+
+        Toggle(isOn: Binding(
+            get: { paintState.isErasing },
+            set: { paintState.isErasing = $0 }
+        )) {
+            Label(
+                paintState.isErasing ? "Erasing" : "Painting",
+                systemImage: paintState.isErasing ? "eraser.fill" : "paintbrush.fill"
+            )
+        }
+        .toggleStyle(.button)
+        .tint(paintState.isErasing ? .red : .blue)
+        .help("Press - to toggle between paint and erase mode")
+
+        Button {
+            paintState.clear()
+        } label: {
+            Label("Clear", systemImage: "trash")
+        }
+        .help("Start over from band selection")
+
+        Spacer()
+
+        if paintState.isExpanding {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Detecting…")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            }
+            .transition(.opacity)
+        }
+
+        if let err = saveError {
+            Text(err)
+                .foregroundColor(.red)
+                .font(.caption)
+                .lineLimit(1)
+                .help(err)
+        }
+
+        Button {
+            Task { await saveHorizonReference() }
+        } label: {
+            if isSaving {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Saving…")
+                }
+            } else {
+                Label("Save Reference Horizon", systemImage: "checkmark.circle.fill")
+            }
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(paintState.lastHorizonY == nil || isSaving || paintState.isExpanding)
+        .help("Save the horizon reference (Return)")
+
+        Button("Cancel") {
+            cancelledExplicitly = true
+            viewModel.isShowingHorizonPainter = false
+        }
+        .help("Discard and close (Esc)")
     }
 
     // MARK: - Keyboard shortcuts (save / cancel actions)
@@ -531,9 +634,11 @@ struct HorizonPainterToolbarView: View {
         .keyboardShortcut(.escape, modifiers: [])
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
 
-        Button("") { Task { await saveHorizonReference() } }
-            .keyboardShortcut(.return, modifiers: [])
-            .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+        Button("") {
+            if paintState.phase == .refinement { Task { await saveHorizonReference() } }
+        }
+        .keyboardShortcut(.return, modifiers: [])
+        .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
     }
 
     // MARK: - Save
