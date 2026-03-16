@@ -192,11 +192,11 @@ struct HorizonPainterView: View {
 
                 case .refinement:
                     let wasErasing = paintState.isErasing
-                    paintState.commitGestureConstraints(isErasing: wasErasing)
                     expansionTask?.cancel()
                     expansionTask = Task {
                         await triggerObjectSelection(paintState: ps,
-                                                     frameView: frameView)
+                                                     frameView: frameView,
+                                                     isErasingGesture: wasErasing)
                     }
                 }
             }
@@ -275,76 +275,56 @@ private func triggerBandComputation(
 
 // MARK: - Object-selection expansion (refinement)
 
-/// Runs the live object-selection pass during the **refinement** phase:
-/// re-runs band-mode SIOX using the original band boundaries (not brush
-/// stroke boundaries), merges locally, enforces user constraints, and
-/// clamps to the band.
+/// Runs the SIOX three-region scan during the **refinement** phase.
 ///
-/// Using band boundaries ensures that **all** columns within the band are
-/// processed by SIOX — preventing vertical unselected gaps.  The sky and
-/// ground centroids are computed from the full regions above and below the
-/// band, giving the most reliable colour references.  User refinements
-/// (paint / erase) are honoured through the per-column constraint mechanism
-/// rather than by altering the SIOX scan direction.
+/// Before calling SIOX, the gesture's affected columns are permanently
+/// committed to the known-region map via `commitRefinementGesture`:
+///   - **Paint** → marks brushed pixels as known-background (sky),
+///     pushing `knownSkyFloor` downward and shrinking the unknown gap.
+///   - **Erase** → marks brushed pixels as known-foreground (ground),
+///     pushing `knownGroundCeiling` upward.
 ///
-/// Called on the `@MainActor` after each refinement gesture ends.
+/// SIOX then re-runs globally with updated centroids computed from ALL
+/// known-sky and known-ground pixels.  It only classifies the remaining
+/// unknown gap — known regions are never reclassified.
 @MainActor
 private func triggerObjectSelection(
     paintState: HorizonPaintState,
-    frameView: FrameViewModel
+    frameView: FrameViewModel,
+    isErasingGesture: Bool = false
 ) async {
     let vw         = Int(paintState.viewWidth)
     let vh         = Int(paintState.viewHeight)
     let generation = paintState.expansionGeneration
 
-    // Capture gesture bounds, previous horizon, user constraints, and band
-    // boundaries for local-effect merging + constraint enforcement + clamping.
-    let gestureBounds   = paintState.lastGestureBounds
-    let previousHorizon = paintState.lastHorizonY   // [Int?]? in view coords
-    let constraints     = paintState.userConstraints // [HorizonConstraint?]? in view coords
-    let bandTop         = paintState.bandColumnTop   // [Int?] in view coords
-    let bandBot         = paintState.bandColumnBottom
+    let bandTop = paintState.bandColumnTop
+    let bandBot = paintState.bandColumnBottom
+
+    // Commit the gesture to the known-region map BEFORE running SIOX.
+    // This permanently shrinks the unknown gap so that painting/erasing
+    // has an immediate, lasting effect on the SIOX classification.
+    paintState.commitRefinementGesture(isErasing: isErasingGesture)
+
+    // Snapshot the known regions after committing the gesture.
+    let skyFloor    = paintState.knownSkyFloor
+    let gndCeiling  = paintState.knownGroundCeiling
 
     guard let frame = frameView.frame else { return }
 
     paintState.beginExpanding()
 
-    // Build reverse-scan flags from user constraints.
-    //
-    // Paint constraints → reverse scan (bottom-up).  Instead of scanning
-    // from the band top down and potentially misclassifying lighter sky as
-    // terrain, the reverse scan starts from the band bottom (clear ground)
-    // and scans upward to find where sky begins.  This produces a natural
-    // terrain-following contour rather than a flat line at the brush bottom.
-    //
-    // Erase constraints → normal top-down scan; the result is clamped to
-    // the erase ceiling afterward.
-    var reverseScan: [Bool]? = nil
-    if let constraints = constraints {
-        var rs = [Bool](repeating: false, count: vw)
-        var hasAny = false
-        for ix in 0..<vw {
-            if case .paintFloor = constraints[ix] {
-                rs[ix] = true
-                hasAny = true
-            }
-        }
-        if hasAny { reverseScan = rs }
-    }
-
-    // SIOX horizon detection using band boundaries as the search window.
-    // Band mode gives per-column-group sky centroids (capturing lateral
-    // colour variation like dark edges vs bright milky way) and scans
-    // all columns — preventing vertical gaps.
+    // SIOX three-region horizon detection: global sky/ground centroids
+    // computed from all known pixels, scan only the unknown gap.
     let snappedHorizon: [Int?]?
     do {
         snappedHorizon = try await frame.computeLiveObjectSelection(
-            topBoundaryY:       bandTop,
-            bottomBoundaryY:    bandBot,
-            viewWidth:          vw,
-            viewHeight:         vh,
-            bandMode:           true,
-            reverseScanColumns: reverseScan
+            topBoundaryY:        bandTop,
+            bottomBoundaryY:     bandBot,
+            viewWidth:           vw,
+            viewHeight:          vh,
+            bandMode:            true,
+            knownSkyFloorY:      skyFloor,
+            knownGroundCeilingY: gndCeiling
         )
     } catch {
         Log.w("HorizonPainterView: object selection failed: \(error)")
@@ -352,7 +332,6 @@ private func triggerObjectSelection(
         return
     }
 
-    // Apply result — only if not cancelled and no newer stroke arrived.
     guard !Task.isCancelled,
           paintState.expansionGeneration == generation,
           let horizon = snappedHorizon
@@ -361,58 +340,7 @@ private func triggerObjectSelection(
         return
     }
 
-    // Merge locally: only update columns near the gesture; keep the
-    // previous SIOX-detected horizon everywhere else.
-    //
-    // This prevents painting/erasing in one area from recalculating the
-    // horizon across the entire frame width.  A margin (±200 view px)
-    // around the gesture bounds provides a smooth blend zone.
-    let mergedHorizon: [Int?]
-    if let bounds = gestureBounds, let prev = previousHorizon, prev.count == vw {
-        let margin   = 200
-        let effectLo = max(0,      Int(bounds.minX) - margin)
-        let effectHi = min(vw - 1, Int(bounds.maxX) + margin)
-        var merged   = prev
-        for ix in 0..<vw {
-            if ix >= effectLo && ix <= effectHi {
-                // Inside the gesture's effect zone: use the fresh SIOX result.
-                merged[ix] = horizon[ix]
-            }
-            // Outside: keep the previous value (already in `merged`).
-        }
-        mergedHorizon = merged
-    } else {
-        // No previous horizon or no gesture bounds — use full SIOX result.
-        mergedHorizon = horizon
-    }
-
-    // Enforce erase-ceiling constraints only.
-    //
-    // Paint constraints are handled by the reverse scan (bottom-up) in the
-    // SIOX function — they produce a terrain-following contour naturally.
-    // Erase constraints remain hard ceilings: the user definitively said
-    // "this area is NOT sky", so the horizon must stay at or above the
-    // erased Y position.
-    var constrained = mergedHorizon
-    if let constraints = constraints {
-        for ix in 0..<vw {
-            guard let y = constrained[ix] else { continue }
-            if case .eraseCeiling(let ceiling) = constraints[ix] {
-                constrained[ix] = min(y, ceiling)
-            }
-        }
-    }
-
-    // Clamp to band boundaries — the horizon must stay within
-    // the user's originally selected horizon band.
-    for ix in 0..<vw {
-        guard let y = constrained[ix] else { continue }
-        let top = bandTop[ix] ?? 0
-        let bot = bandBot[ix] ?? (vh - 1)
-        constrained[ix] = max(top, min(y, bot))
-    }
-
-    paintState.applyExpandedHorizonMask(constrained)
+    paintState.applyExpandedHorizonMask(horizon)
     paintState.endExpanding()
 }
 

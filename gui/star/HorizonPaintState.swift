@@ -15,19 +15,6 @@ enum HorizonPainterPhase: Sendable {
     case refinement
 }
 
-/// Per-column horizon constraint from an explicit user gesture.
-///
-/// Paint floors ensure the horizon stays at or below where the user painted
-/// (the painted area is sky).  Erase ceilings ensure the horizon stays at
-/// or above where the user erased (the erased area is ground).  When both
-/// kinds exist for the same column, only the most recent one is kept ("last
-/// action wins").
-enum HorizonConstraint: Sendable {
-    /// Horizon must be >= y (user painted here — sky extends at least this far).
-    case paintFloor(Int)
-    /// Horizon must be <= y (user erased here — ground starts at most here).
-    case eraseCeiling(Int)
-}
 
 /// Mutable state for a single horizon-painting session.
 ///
@@ -87,6 +74,20 @@ final class HorizonPaintState {
 
     /// Per-column bottom Y of the horizon band (view coords).
     private(set) var bandColumnBottom: [Int?]
+
+    // MARK: - Known-region boundaries (SIOX three-region model)
+
+    /// Per-column lowest Y known to be sky (view coords).
+    /// Initialised from `bandColumnTop` when entering refinement.
+    /// Painting extends this downward (enlarges the known-sky region).
+    /// SIOX only classifies pixels between `knownSkyFloor` and
+    /// `knownGroundCeiling` — everything outside is locked.
+    private(set) var knownSkyFloor: [Int?]
+
+    /// Per-column highest Y known to be ground (view coords).
+    /// Initialised from `bandColumnBottom` when entering refinement.
+    /// Erasing extends this upward (enlarges the known-ground region).
+    private(set) var knownGroundCeiling: [Int?]
 
     /// `true` when the band spans the full frame width (within a small edge margin).
     var isBandComplete: Bool {
@@ -200,6 +201,8 @@ final class HorizonPaintState {
         let vw = Int(viewWidth)
         self.bandColumnTop       = [Int?](repeating: nil,     count: vw)
         self.bandColumnBottom    = [Int?](repeating: nil,     count: vw)
+        self.knownSkyFloor       = [Int?](repeating: nil,     count: vw)
+        self.knownGroundCeiling  = [Int?](repeating: nil,     count: vw)
         self.gestureColumnBottom = [Int](repeating: Int.min,  count: vw)
         self.gestureColumnTop    = [Int](repeating: Int.max,  count: vw)
     }
@@ -229,23 +232,13 @@ final class HorizonPaintState {
     /// only nearby columns are updated by the SIOX horizon pass.
     private(set) var lastGestureBounds: CGRect? = nil
 
-    // MARK: - Per-column user constraints
-
-    /// Per-column constraints from explicit user gestures (length = Int(viewWidth)).
-    /// Updated each time a gesture ends via ``commitGestureConstraints(isErasing:)``.
-    /// `nil` columns have no constraint.  Last action wins: if the user paints
-    /// then erases the same column, the erase ceiling replaces the paint floor.
-    private(set) var userConstraints: [HorizonConstraint?]? = nil
-
     /// Per-column bottom Y (max Y) of strokes in the current gesture.
-    /// Used to compute paint-floor constraints (horizon >= bottom of paint).
     /// Reset at gesture start, updated in `appendStroke`.
-    private var gestureColumnBottom: [Int]
+    private(set) var gestureColumnBottom: [Int]
 
     /// Per-column top Y (min Y) of strokes in the current gesture.
-    /// Used to compute erase-ceiling constraints (horizon <= top of erase).
     /// Reset at gesture start, updated in `appendStroke`.
-    private var gestureColumnTop: [Int]
+    private(set) var gestureColumnTop: [Int]
 
     /// Record a brush stroke at the given view-coordinate point.
     ///
@@ -308,14 +301,26 @@ final class HorizonPaintState {
         lastGestureBounds = lastGestureBounds?.union(sr) ?? sr
 
         // Track per-column vertical extent of this gesture's strokes.
-        // Used by `commitGestureConstraints` to set precise per-column
-        // paint-floor / erase-ceiling constraints.
-        let colLo = max(0, Int(stroke.center.x - stroke.radius))
-        let colHi = min(gestureColumnBottom.count - 1, Int(stroke.center.x + stroke.radius))
+        // Used by `commitRefinementGesture` to update known-region
+        // boundaries (knownSkyFloor / knownGroundCeiling).
+        //
+        // Compute the actual circle Y-extent per column using the circle
+        // equation: dy = sqrt(r² - dx²).  This avoids including corners
+        // of the bounding box that are outside the circular brush.
+        let cx = stroke.center.x
+        let cy = stroke.center.y
+        let r  = stroke.radius
+        let r2 = r * r
+        let colLo = max(0, Int(cx - r))
+        let colHi = min(gestureColumnBottom.count - 1, Int(cx + r))
         if colLo <= colHi {
-            let strokeBottom = Int(stroke.center.y + stroke.radius)
-            let strokeTop    = Int(stroke.center.y - stroke.radius)
             for col in colLo...colHi {
+                let dx = CGFloat(col) - cx
+                let dy2 = r2 - dx * dx
+                guard dy2 >= 0 else { continue }
+                let dy = dy2.squareRoot()
+                let strokeTop    = Int(cy - dy)
+                let strokeBottom = Int(cy + dy)
                 if gestureColumnBottom[col] < strokeBottom { gestureColumnBottom[col] = strokeBottom }
                 if gestureColumnTop[col]    > strokeTop    { gestureColumnTop[col]    = strokeTop    }
             }
@@ -324,6 +329,12 @@ final class HorizonPaintState {
             // boundaries (not reset per gesture).
             if phase == .bandSelection {
                 for col in colLo...colHi {
+                    let dx = CGFloat(col) - cx
+                    let dy2 = r2 - dx * dx
+                    guard dy2 >= 0 else { continue }
+                    let dy = dy2.squareRoot()
+                    let strokeTop    = Int(cy - dy)
+                    let strokeBottom = Int(cy + dy)
                     bandColumnTop[col]    = min(bandColumnTop[col]    ?? Int.max, strokeTop)
                     bandColumnBottom[col] = max(bandColumnBottom[col] ?? Int.min, strokeBottom)
                 }
@@ -357,27 +368,38 @@ final class HorizonPaintState {
         expansionGeneration += 1
     }
 
-    /// Record per-column constraints from the gesture that just ended.
+    /// Update known-region boundaries from a refinement gesture.
     ///
-    /// For paint gestures, each column touched by the brush gets a "paint floor"
-    /// constraint: the horizon must be at or below the bottommost painted Y.
-    /// For erase gestures, each column gets an "erase ceiling": the horizon must
-    /// be at or above the topmost erased Y.
+    /// **Paint** gestures label brushed pixels as known-background (sky):
+    /// `knownSkyFloor[col]` is pushed downward to the brush bottom, enlarging
+    /// the known-sky region and shrinking the unknown gap that SIOX will scan.
     ///
-    /// Call this after `endSegment()` and before triggering the SIOX expansion
-    /// so the constraints are ready when the result arrives.
-    func commitGestureConstraints(isErasing: Bool) {
+    /// **Erase** gestures label brushed pixels as known-foreground (ground):
+    /// `knownGroundCeiling[col]` is pushed upward to the brush top.
+    ///
+    /// SIOX never reclassifies known regions — only the remaining unknown gap
+    /// between `knownSkyFloor` and `knownGroundCeiling` is subject to the
+    /// colour-distance scan.
+    func commitRefinementGesture(isErasing: Bool) {
         let vw = Int(viewWidth)
-        if userConstraints == nil {
-            userConstraints = [HorizonConstraint?](repeating: nil, count: vw)
-        }
         for col in 0..<vw {
-            // Only process columns that were actually touched by this gesture.
             guard gestureColumnBottom[col] != Int.min else { continue }
             if isErasing {
-                userConstraints![col] = .eraseCeiling(gestureColumnTop[col])
+                // Erase → mark as known ground: ceiling moves up.
+                let brushTop = gestureColumnTop[col]
+                if let current = knownGroundCeiling[col] {
+                    knownGroundCeiling[col] = min(current, brushTop)
+                } else {
+                    knownGroundCeiling[col] = brushTop
+                }
             } else {
-                userConstraints![col] = .paintFloor(gestureColumnBottom[col])
+                // Paint → mark as known sky: floor moves down.
+                let brushBottom = gestureColumnBottom[col]
+                if let current = knownSkyFloor[col] {
+                    knownSkyFloor[col] = max(current, brushBottom)
+                } else {
+                    knownSkyFloor[col] = brushBottom
+                }
             }
         }
     }
@@ -397,7 +419,10 @@ final class HorizonPaintState {
         let vw = Int(viewWidth)
         gestureColumnBottom = [Int](repeating: Int.min, count: vw)
         gestureColumnTop    = [Int](repeating: Int.max, count: vw)
-        userConstraints = nil
+        // Initialize known regions from band boundaries:
+        // above band = known sky, below band = known ground, band = unknown.
+        knownSkyFloor      = bandColumnTop
+        knownGroundCeiling = bandColumnBottom
     }
 
     /// Remove all recorded strokes and reset to the band-selection phase.
@@ -407,12 +432,13 @@ final class HorizonPaintState {
         expandedPath = nil
         lastHorizonY = nil
         lastGestureBounds = nil
-        userConstraints = nil
         phase = .bandSelection
         isErasing = false
         let vw = Int(viewWidth)
         bandColumnTop       = [Int?](repeating: nil,     count: vw)
         bandColumnBottom    = [Int?](repeating: nil,     count: vw)
+        knownSkyFloor       = [Int?](repeating: nil,     count: vw)
+        knownGroundCeiling  = [Int?](repeating: nil,     count: vw)
         gestureColumnBottom = [Int](repeating: Int.min,  count: vw)
         gestureColumnTop    = [Int](repeating: Int.max,  count: vw)
         expansionGeneration += 1
