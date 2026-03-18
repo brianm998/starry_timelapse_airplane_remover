@@ -945,9 +945,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     ///
     /// The algorithm classifies each pixel in the **unknown** region
     /// (between `knownSkyFloor` and `knownGroundCeiling`) by comparing its
-    /// CIE L*a*b* colour to a single global sky centroid (computed from ALL
-    /// known-sky pixels) and a single global ground centroid (computed from
-    /// ALL known-ground pixels).  Known regions are never reclassified.
+    /// 4D feature vector (CIE L*a*b* colour + weighted linear luminance) to
+    /// a single global sky centroid and a single global ground centroid,
+    /// both computed from ALL known pixels.  The intensity channel provides
+    /// Otsu-like brightness discrimination alongside perceptual colour.
+    /// Known regions are never reclassified.
     public func computeLiveObjectSelection(
         topBoundaryY:    [Int?],
         bottomBoundaryY: [Int?],
@@ -1006,37 +1008,47 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
 
-        // 3. Horizon detection — SIOX-inspired LAB colour ratio
+        // 3. Horizon detection — SIOX-inspired LAB+intensity ratio
         //    (adapted from GIMP's Foreground Select tool; no Canny).
         //
         //    Stars make Canny unreliable: an isolated star produces the same
         //    high gradient as a mountain ridgeline.  Instead we use the SIOX
         //    "confidence" ratio from GIMP, applied per-column:
         //
-        //        confidence = d_gnd / (d_sky + d_gnd)   (in CIE L*a*b*)
+        //        confidence = d_gnd / (d_sky + d_gnd)   (in CIE L*a*b* + I)
         //
         //    confidence > 0.5 → pixel closer to sky centroid   → still sky
         //    confidence < 0.5 → pixel closer to ground centroid → horizon found
         //
-        //    Stars are suppressed by averaging pixels over a ±halfW horizontal
-        //    window before converting to LAB.  A 3 px star in a 21 px window
-        //    shifts the windowed mean by only ~14 %, not enough to flip the
-        //    ratio.  The mountain silhouette causes a broad, sustained LAB shift
-        //    to dark/desaturated values that reliably flips the ratio.
+        //    The feature space is 4D: L*a*b* (perceptually uniform colour)
+        //    plus linear luminance I (absolute brightness, Otsu-like).
+        //    L* is a cube-root transform of luminance — perceptually uniform
+        //    but compresses bright regions.  Adding linear luminance I as a
+        //    4th channel preserves absolute brightness differences that help
+        //    separate sky from terrain in difficult cases (similar-hue horizons,
+        //    twilight scenes, very dark terrain against very dark sky).
         //
-        //    LAB (not RGB) is used because it is perceptually uniform: equal
-        //    Euclidean distances correspond to equal perceived colour differences
-        //    everywhere in the gamut.  This makes the ratio metric well-calibrated
-        //    for any image type (night, dusk, daylight).
+        //    Stars are suppressed by averaging pixels over a ±halfW horizontal
+        //    window before converting to LAB+I.  A 3 px star in a 61 px window
+        //    shifts the windowed mean by only ~5 %, not enough to flip the
+        //    ratio.  The mountain silhouette causes a broad, sustained shift
+        //    that reliably flips the ratio.
         //
         //    Implementation detail: prefix-sum trick gives O(imgW) per row
-        //    instead of O(imgW × windowWidth) for the windowed LAB cache.
+        //    instead of O(imgW × windowWidth) for the windowed cache.
 
         let halfW = 30   // horizontal window half-width (61 px total)
         // A 3 px star contributes only 3/61 ≈ 5 % of the window mean.
         // Even a 10 px star cluster = 16 %, insufficient to dominate a
         // region of continuous sky.  Mountain silhouettes are solid over
         // thousands of pixels and still dominate even with a 61 px window.
+
+        // Weight for the linear-luminance intensity channel in the 4D
+        // distance calculation.  Linear Y ranges [0,1]; L* ranges [0,100].
+        // Multiplying Y by this weight puts it on a comparable scale to L*.
+        // Higher values give more Otsu-like emphasis to raw brightness
+        // differences; lower values rely more on perceptual colour.
+        let intensityWeight: Float = 100.0
 
         let pixelData = Array(original.mat.buffer(of: UInt8.self))
         let pixStride = original.bytesPerRow
@@ -1064,7 +1076,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
 
             @inline(__always)
-            func linRGBtoLAB(r: Float, g: Float, b: Float) -> (L: Float, a: Float, b: Float) {
+            func linRGBtoLABI(r: Float, g: Float, b: Float)
+                -> (L: Float, a: Float, b: Float, I: Float)
+            {
                 let X = 0.4124564*r + 0.3575761*g + 0.1804375*b
                 let Y = 0.2126729*r + 0.7151522*g + 0.0721750*b
                 let Z = 0.0193339*r + 0.1191920*g + 0.9503041*b
@@ -1073,7 +1087,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     t > 0.008856 ? pow(t, 1.0/3.0) : 7.787*t + (16.0/116.0)
                 }
                 let (fx, fy, fz) = (f(X/Xn), f(Y/Yn), f(Z/Zn))
-                return (116.0*fy - 16.0,  500.0*(fx - fy),  200.0*(fy - fz))
+                // L*a*b* for perceptual colour + linear luminance Y for
+                // Otsu-like intensity discrimination.
+                return (116.0*fy - 16.0,  500.0*(fx - fy),  200.0*(fy - fz),  Y)
             }
 
             // ── Phase A: build the windowed-LAB cache ──────────────────────────
@@ -1093,6 +1109,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             var winL  = [Float](repeating: 0, count: bandH * colWidth)
             var winA  = [Float](repeating: 0, count: bandH * colWidth)
             var winBB = [Float](repeating: 0, count: bandH * colWidth)
+            var winI  = [Float](repeating: 0, count: bandH * colWidth)
 
             for iy in stride(from: globalTop, through: globalBot, by: rowStep) {
                 let ri = (iy - globalTop) / rowStep
@@ -1117,57 +1134,37 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     let mr  = (prefR[hi+1] - prefR[lo]) / cnt
                     let mg  = (prefG[hi+1] - prefG[lo]) / cnt
                     let mb  = (prefB[hi+1] - prefB[lo]) / cnt
-                    let (L, a, lab_b) = linRGBtoLAB(r: mr, g: mg, b: mb)
+                    let (L, a, lab_b, intensity) = linRGBtoLABI(r: mr, g: mg, b: mb)
                     let idx = ri * colWidth + (ix - colLeft)
                     winL[idx] = L;  winA[idx] = a;  winBB[idx] = lab_b
+                    winI[idx] = intensity * intensityWeight
                 }
             }
 
             // ── Phase B: SIOX three-region scan ───────────────────────────────
 
             @inline(__always)
-            func labAt(ix: Int, iy: Int) -> (L: Float, a: Float, b: Float) {
+            func labiAt(ix: Int, iy: Int) -> (L: Float, a: Float, b: Float, I: Float) {
                 let ri  = min((iy - globalTop) / rowStep, bandH - 1)
                 let idx = ri * colWidth + (ix - colLeft)
-                return (winL[idx], winA[idx], winBB[idx])
+                return (winL[idx], winA[idx], winBB[idx], winI[idx])
             }
             @inline(__always)
-            func dist2(_ l1: Float, _ a1: Float, _ b1: Float,
-                       _ l2: Float, _ a2: Float, _ b2: Float) -> Float {
-                let dL = l1-l2, da = a1-a2, db = b1-b2
-                return dL*dL + da*da + db*db
-            }
-
-            // Helper: compute LAB centroid directly from pixel data.
-            func rawLABCentroid(
-                yStart: Int, yEnd: Int,
-                xStart: Int, xEnd: Int, xStep: Int,
-                yStep: Int = 1
-            ) -> (L: Float, a: Float, b: Float) {
-                var lSum: Float = 0, aSum: Float = 0, bSum: Float = 0
-                var n = 0
-                for iy in stride(from: yStart, to: yEnd, by: yStep) {
-                    for ix in stride(from: xStart, through: xEnd, by: xStep) {
-                        let base = iy * pixStride + ix * pxBpp
-                        let bV = linearLUT[Int(pixelData[base])]
-                        let gV = pxBpp > 1 ? linearLUT[Int(pixelData[base + 1])] : bV
-                        let rV = pxBpp > 2 ? linearLUT[Int(pixelData[base + 2])] : bV
-                        let (L, a, b) = linRGBtoLAB(r: rV, g: gV, b: bV)
-                        lSum += L; aSum += a; bSum += b; n += 1
-                    }
-                }
-                let nf = Float(max(1, n))
-                return (lSum / nf, aSum / nf, bSum / nf)
+            func dist2(_ l1: Float, _ a1: Float, _ b1: Float, _ i1: Float,
+                       _ l2: Float, _ a2: Float, _ b2: Float, _ i2: Float) -> Float {
+                let dL = l1-l2, da = a1-a2, db = b1-b2, di = i1-i2
+                return dL*dL + da*da + db*db + di*di
             }
 
             let centroidColStep = max(1, (colRight - colLeft + 1) / 40)
 
-            // ── Global sky centroid ─────────────────────────────────────────
+            // ── Global sky centroid (4D: L*a*b* + intensity) ──────────────
             //
             // Computed from ALL known-sky pixels: everything from row 0 down
             // to knownSkyFloor[col] for each column.  This is a single global
             // centroid (no per-group segmentation) to avoid banding effects.
             var skyLSum: Float = 0, skyASum: Float = 0, skyBBSum: Float = 0
+            var skyISum: Float = 0
             var nSky = 0
             for ix in stride(from: colLeft, through: colRight, by: centroidColStep) {
                 let floor = skyFloor[ix] ?? snapTop[ix] ?? globalTop
@@ -1178,20 +1175,24 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     let bV = linearLUT[Int(pixelData[base])]
                     let gV = pxBpp > 1 ? linearLUT[Int(pixelData[base + 1])] : bV
                     let rV = pxBpp > 2 ? linearLUT[Int(pixelData[base + 2])] : bV
-                    let (L, a, b) = linRGBtoLAB(r: rV, g: gV, b: bV)
-                    skyLSum += L; skyASum += a; skyBBSum += b; nSky += 1
+                    let (L, a, b, rawI) = linRGBtoLABI(r: rV, g: gV, b: bV)
+                    skyLSum += L; skyASum += a; skyBBSum += b
+                    skyISum += rawI * intensityWeight
+                    nSky += 1
                 }
             }
             let nSkyF = Float(max(1, nSky))
             let globalSkyL  = skyLSum  / nSkyF
             let globalSkyA  = skyASum  / nSkyF
             let globalSkyBB = skyBBSum / nSkyF
+            let globalSkyI  = skyISum  / nSkyF
 
-            // ── Global ground centroid ─────────────────────────────────────
+            // ── Global ground centroid (4D: L*a*b* + intensity) ──────────
             //
             // Computed from ALL known-ground pixels: everything from
             // knownGroundCeiling[col] down to imgH for each column.
             var gndLSum: Float = 0, gndASum: Float = 0, gndBBSum: Float = 0
+            var gndISum: Float = 0
             var nGnd = 0
             for ix in stride(from: colLeft, through: colRight, by: centroidColStep) {
                 let ceiling = gndCeiling[ix] ?? snapBottom[ix] ?? (imgH - 1)
@@ -1203,14 +1204,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     let bV = linearLUT[Int(pixelData[base])]
                     let gV = pxBpp > 1 ? linearLUT[Int(pixelData[base + 1])] : bV
                     let rV = pxBpp > 2 ? linearLUT[Int(pixelData[base + 2])] : bV
-                    let (L, a, b) = linRGBtoLAB(r: rV, g: gV, b: bV)
-                    gndLSum += L; gndASum += a; gndBBSum += b; nGnd += 1
+                    let (L, a, b, rawI) = linRGBtoLABI(r: rV, g: gV, b: bV)
+                    gndLSum += L; gndASum += a; gndBBSum += b
+                    gndISum += rawI * intensityWeight
+                    nGnd += 1
                 }
             }
             let nGndF = Float(max(1, nGnd))
             let globalGndL  = gndLSum  / nGndF
             let globalGndA  = gndASum  / nGndF
             let globalGndBB = gndBBSum / nGndF
+            let globalGndI  = gndISum  / nGndF
 
             // ── Per-column scan (unknown region only) ────────────────────────
             //
@@ -1243,9 +1247,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 var consecutiveTerrain = 0
                 var horizonY = unknownBot   // default: all unknown is sky
                 for iy in unknownTop ..< unknownBot {
-                    let (L, a, b) = labAt(ix: ix, iy: iy)
-                    if dist2(L, a, b, globalGndL, globalGndA, globalGndBB) <
-                       dist2(L, a, b, globalSkyL, globalSkyA, globalSkyBB) {
+                    let (L, a, b, I) = labiAt(ix: ix, iy: iy)
+                    if dist2(L, a, b, I, globalGndL, globalGndA, globalGndBB, globalGndI) <
+                       dist2(L, a, b, I, globalSkyL, globalSkyA, globalSkyBB, globalSkyI) {
                         consecutiveTerrain += 1
                         if consecutiveTerrain >= minConsecutive {
                             horizonY = iy - minConsecutive + 1
