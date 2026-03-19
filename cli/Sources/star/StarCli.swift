@@ -1,6 +1,6 @@
 import ArgumentParser
 import CoreGraphics
-import Cocoa
+import Foundation
 import StarCore
 import logging
 import StarDecisionTrees
