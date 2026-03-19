@@ -10,22 +10,26 @@ open class AsyncOperation: Operation, @unchecked Sendable {
         var keyPath: String { "is" + rawValue.capitalized }
     }
 
-    private let stateQueue = DispatchQueue(label: "async.op.state", attributes: .concurrent)
+    private let stateLock = NSLock()
 
     internal let type: OperationType
     public var task: Task<Void, any Error>?
-    
+
     private var _state: State = .ready
 
     private var state: State {
-        get { stateQueue.sync { _state } }
+        get {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            return _state
+        }
         set {
             willChangeValue(forKey: newValue.keyPath)
             willChangeValue(forKey: state.keyPath)
 
-            stateQueue.sync(flags: .barrier) {
-                _state = newValue
-            }
+            stateLock.lock()
+            _state = newValue
+            stateLock.unlock()
 
             didChangeValue(forKey: state.keyPath)
             didChangeValue(forKey: newValue.keyPath)

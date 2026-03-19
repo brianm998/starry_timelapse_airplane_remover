@@ -220,15 +220,17 @@ public func runFFmpegWithProgress(
 
 final class StderrCollector: @unchecked Sendable {
     private var data = Data()
-    private let queue = DispatchQueue(label: "stderr.sync.queue")
+    private let lock = NSLock()
 
     func append(_ newData: Data) {
-        queue.sync {
-            data.append(newData)
-        }
+        lock.lock()
+        data.append(newData)
+        lock.unlock()
     }
 
     func collectedData() -> Data {
-        queue.sync { data }
+        lock.lock()
+        defer { lock.unlock() }
+        return data
     }
 }
