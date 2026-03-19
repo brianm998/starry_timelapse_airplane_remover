@@ -1,6 +1,6 @@
 import Foundation
 import logging
-import kht_bridge
+import KHTSwift
 
 /// Refines the horizon mask for a single frame using two complementary passes:
 ///
@@ -291,14 +291,10 @@ public struct HomographyHorizonDetector {
           .map { x -> String in finalY[x].map { "x\(x)→y\($0)" } ?? "x\(x)→nil" }
         Log.d("HomographyHorizonDetector final samples: \(samples)")
 
-        let nsHorizonY: [Any] = finalY.map { y -> Any in
-            if let y { return NSNumber(value: y) }
-            return NSNull()
-        }
         let maskMat = PixelatedImageBridge.binaryHorizonMask(
-          withWidth:  Int32(currentWidth),
-          height:     Int32(currentHeight),
-          horizonY:   nsHorizonY)
+          width:  Int32(currentWidth),
+          height: Int32(currentHeight),
+          horizonY: finalY)
         guard let maskImage = PixelatedImage(mat: maskMat) else { return nil }
         return HorizonMask(maskImage)
     }

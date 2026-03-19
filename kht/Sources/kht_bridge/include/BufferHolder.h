@@ -1,32 +1,40 @@
-// BufferHolder.h
-#import <Foundation/Foundation.h>
-#import "MatWrapper.h"
+// BufferHolder.h — Pure C API for pixel buffer management
+#pragma once
 
-@interface BufferHolder : NSObject
+#include "kht_bridge_types.h"
 
-@property (nonatomic, readonly) void *buffer;
-@property (nonatomic, readonly) NSUInteger length;
-@property (nonatomic, readonly) NSUInteger width;
-@property (nonatomic, readonly) NSUInteger height;
-@property (nonatomic, readonly) NSUInteger components;
-@property (nonatomic, readonly) NSUInteger bitsPerComponent;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-// allocates and owns a new buffer
-- (instancetype)initWithWidth:(NSUInteger)width
-		       height:(NSUInteger)height
-		   components:(NSInteger)components
-	     bitsPerComponent:(NSUInteger)bitsPerComponent;
+// --- Create / Destroy ---
+// Allocates a new zero-filled buffer
+BufferHolderRef buffer_holder_create(uint64_t width, uint64_t height,
+                                     int64_t components, uint64_t bitsPerComponent);
 
-// copies and owns an existing buffer
-- (instancetype)initWithCopiedBuffer:(const void *)buffer
-                               width:(NSUInteger)width
-                              height:(NSUInteger)height
-                          components:(NSInteger)components
-                    bitsPerComponent:(NSUInteger)bitsPerComponent;
+// Copies an existing buffer
+BufferHolderRef buffer_holder_create_copy(const void *buffer, uint64_t width,
+                                          uint64_t height, int64_t components,
+                                          uint64_t bitsPerComponent);
 
-- (uint8_t *)asUInt8;
-- (uint16_t *)asUInt16;
-- (uint32_t *)asUInt32;
-- (MatWrapper *)mat;
+void buffer_holder_release(BufferHolderRef ref);
 
-@end
+// --- Properties ---
+void    *buffer_holder_buffer(BufferHolderRef ref);
+uint64_t buffer_holder_length(BufferHolderRef ref);
+uint64_t buffer_holder_width(BufferHolderRef ref);
+uint64_t buffer_holder_height(BufferHolderRef ref);
+uint64_t buffer_holder_components(BufferHolderRef ref);
+uint64_t buffer_holder_bits_per_component(BufferHolderRef ref);
+
+// --- Typed access ---
+uint8_t  *buffer_holder_as_uint8(BufferHolderRef ref);
+uint16_t *buffer_holder_as_uint16(BufferHolderRef ref);
+uint32_t *buffer_holder_as_uint32(BufferHolderRef ref);
+
+// --- Convert to MatWrapper ---
+MatWrapperRef buffer_holder_to_mat(BufferHolderRef ref);
+
+#ifdef __cplusplus
+}
+#endif

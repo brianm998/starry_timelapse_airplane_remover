@@ -4,7 +4,7 @@ import Cocoa
 import StarCore
 import Semaphore
 import logging
-import kht_bridge
+import KHTSwift
 
 public enum VideoPlayMode: String, Equatable, CaseIterable {
     case forward

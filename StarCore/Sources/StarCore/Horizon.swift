@@ -3,7 +3,6 @@ import CoreGraphics
 import KHTSwift
 import logging
 import Cocoa
-import kht_bridge
 
 // this file has logic for horizon detection and analysis
 
@@ -12,9 +11,9 @@ public struct HorizonMask: Sendable {
     public let horizonTopY: Int // this is the bottom 
     public let horizonBottomY: Int // this is the top :( swap these names
 
-    public init(_ image: PixelatedImage) {
+    public init?(_ image: PixelatedImage) {
         self.image = image
-        let bounds = image.horizonBounds() 
+        guard let bounds = image.horizonBounds() else { return nil }
         self.horizonTopY = bounds.topY
         self.horizonBottomY = bounds.bottomY
     }
@@ -128,10 +127,10 @@ extension PixelatedImage {
     // connected component filtering.  Returns HorizonMask, including the Y bounds of the horizon
     public func groundOnly() throws -> PixelatedImage {
         let matWrapper = self.mat
-        if let ret = PixelatedImage(
-             mat: PixelatedImageBridge.groundOnly(from: matWrapper)
-           )
-        {
+        guard let resultMat = PixelatedImageBridge.groundOnly(from: matWrapper) else {
+            throw "groundOnly returned nil"
+        }
+        if let ret = PixelatedImage(mat: resultMat) {
             return ret
         }
         throw "cannot get ground only from image without mat wrapper"
@@ -139,10 +138,10 @@ extension PixelatedImage {
 
     public func skyOnly() throws -> PixelatedImage {
         let matWrapper = self.mat
-        if let ret = PixelatedImage(
-             mat: PixelatedImageBridge.skyOnly(from: matWrapper)
-           )
-        {
+        guard let resultMat = PixelatedImageBridge.skyOnly(from: matWrapper) else {
+            throw "skyOnly returned nil"
+        }
+        if let ret = PixelatedImage(mat: resultMat) {
             return ret
         }
         throw "cannot get sky only from image without mat wrapper"
@@ -150,10 +149,10 @@ extension PixelatedImage {
 
     public func growDarkRegions(by radius: Int32) throws -> PixelatedImage {
         let matWrapper = self.mat
-        if let ret = PixelatedImage(
-             mat: PixelatedImageBridge.growDarkRegions(matWrapper, by: radius)
-           )
-        {
+        guard let resultMat = PixelatedImageBridge.growDarkRegions(matWrapper, by: radius) else {
+            throw "growDarkRegions returned nil"
+        }
+        if let ret = PixelatedImage(mat: resultMat) {
             return ret
         }
         throw "cannot grow dark regions"
@@ -161,10 +160,10 @@ extension PixelatedImage {
 
     public func shrinkDarkRegions(by radius: Int32) throws -> PixelatedImage {
         let matWrapper = self.mat
-        if let ret = PixelatedImage(
-             mat: PixelatedImageBridge.shrinkDarkRegions(matWrapper, by: radius)
-           )
-        {
+        guard let resultMat = PixelatedImageBridge.shrinkDarkRegions(matWrapper, by: radius) else {
+            throw "shrinkDarkRegions returned nil"
+        }
+        if let ret = PixelatedImage(mat: resultMat) {
             return ret
         }
         throw "cannot shrink dark regions"
@@ -352,8 +351,10 @@ extension PixelatedImage {
     public func connectedComponentFiltered(keepLargest n: Int = 2) throws -> PixelatedImage {
 
         // first convert self to MatWrapper
-        let baseMat = self.mat 
-        let filtered = PixelatedImageBridge.filterConnectedComponents(baseMat, keepLargest: n) 
+        let baseMat = self.mat
+        guard let filtered = PixelatedImageBridge.filterConnectedComponents(baseMat, keepLargest: n) else {
+            throw "filterConnectedComponents returned nil"
+        }
         // then convert back in to PixelatedImage
         if let ret = PixelatedImage(mat: filtered) { return ret }
 

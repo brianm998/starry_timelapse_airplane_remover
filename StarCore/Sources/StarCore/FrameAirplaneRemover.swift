@@ -2,7 +2,6 @@ import Foundation
 import CoreGraphics
 import KHTSwift
 import Semaphore
-import kht_bridge
 import logging
 import Cocoa
 import Combine
@@ -416,12 +415,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             {
                 Log.d("frame \(frameIndex) successfully loaded merged horizon mask")
 
-                let bounds = horizonMaskImage.horizonBounds()
-                return HorizonMask(
-                  image: horizonMaskImage,
-                  horizonTopY: bounds.topY,
-                  horizonBottomY: bounds.bottomY
-                )
+                if let bounds = horizonMaskImage.horizonBounds() {
+                    return HorizonMask(
+                      image: horizonMaskImage,
+                      horizonTopY: bounds.topY,
+                      horizonBottomY: bounds.bottomY
+                    )
+                }
+                Log.w("frame \(frameIndex) loaded merged horizon mask image but could not compute bounds")
             }
         } catch {
             Log.w("frame \(frameIndex) unable to load merged horizon mask")
@@ -526,13 +527,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
             
-            let bounds = mergedHorizon.horizonBounds()
-            
-            return HorizonMask(
-              image: mergedHorizon,
-              horizonTopY: bounds.topY,
-              horizonBottomY: bounds.bottomY
-            )
+            if let bounds = mergedHorizon.horizonBounds() {
+                return HorizonMask(
+                  image: mergedHorizon,
+                  horizonTopY: bounds.topY,
+                  horizonBottomY: bounds.bottomY
+                )
+            }
+            Log.w("frame \(frameIndex) merged horizon has no computable bounds")
         }
         
         Log.w("frame \(frameIndex) unable to calculate merged horizon")
@@ -1375,14 +1377,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         // 4. Build the binary mask image.
-        let nsHorizonY: [Any] = scaledY.map { y -> Any in
-            if let y { return NSNumber(value: y) }
-            return NSNull()
-        }
         let maskMat = PixelatedImageBridge.binaryHorizonMask(
-            withWidth:  Int32(imgW),
-            height:     Int32(imgH),
-            horizonY:   nsHorizonY
+            width:  Int32(imgW),
+            height: Int32(imgH),
+            horizonY: scaledY
         )
         guard let maskPixelated = PixelatedImage(mat: maskMat) else {
             throw "saveHorizonReferenceMask: could not create mask image for frame \(frameIndex)"
@@ -1438,7 +1436,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                )
             {
                 Log.d("frame \(frameIndex) successfully loaded horizon mask")
-                return HorizonMask(horizonMaskImage)
+                if let mask = HorizonMask(horizonMaskImage) {
+                    return mask
+                }
+                Log.w("frame \(frameIndex) loaded horizon mask image but could not compute bounds")
             }
         } catch {
             Log.i("frame \(frameIndex) unable to load horizon mask: \(error)")
@@ -2192,8 +2193,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     Log.e("not loading keypoints for type \(type)")
                 }
 
-                let keypoints = try? OCVFeatureSet(
-                  file: "\(config.dirForKeypointData)/\(keypointFilename)"
+                let keypoints = OCVFeatureSet.load(
+                  fromFilename: "\(config.dirForKeypointData)/\(keypointFilename)"
                 )
                 
                 switch alignmentType {
@@ -2274,7 +2275,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             
             Log.d("frame \(frameIndex) doing real alignment for type \(alignmentType)")
             // do real alignment
-            var homography: [NSNumber: MatWrapper]? = nil
+            var homography: [Int: MatWrapper]? = nil
             switch type {
             case .starAligned:
                 homography = neighborStarHomography?.mappedHomography()
@@ -2285,39 +2286,32 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
             Log.d("frame \(frameIndex) using homography \(homography)")
             if let homography {
-                let request = AlignmentRequest(
-                  frameIndex: Int32(frameIndex),
+                let result = ImageAligner.align(
+                  baseFrameIndex: Int32(frameIndex),
                   neighbors: neighbors,
                   homography: homography
                 )
 
-                if let result = ImageAligner.align(
-                     with: request
-                   ) {
-                    Log.d("frame \(frameIndex) got alignment result \(result)")
-                    if let error = result as? String {
-                        Log.e("frame \(frameIndex) error: \(error)")
-                    } else if let result = result as? [kht_bridge.WarpedImageResult] {
-                        Log.d("frame \(frameIndex) got \(result) back from alignment")
+                if !result.isEmpty {
+                    Log.d("frame \(frameIndex) got \(result.count) results back from alignment")
 
-                        // include the original frame so we don't miss any edges
-                        var imagesToMerge: [MatWrapper] = [originalFrame.mat]
+                    // include the original frame so we don't miss any edges
+                    var imagesToMerge: [MatWrapper] = [originalFrame.mat]
 
-                        // merge in all the warped neighbor frames
-                        imagesToMerge += result.compactMap { $0.warpedFrame }
+                    // merge in all the warped neighbor frames
+                    imagesToMerge += result.compactMap { $0.warpedFrame }
 
-                        // median merge the frames and package as a result
-                        warpedResult = WarpedImageResult(
-                          warpedFrame: ImageAligner.medianMerge(
-                            imagesToMerge,
-                            outlierThreshold: config.pixelThreshold,
-                            includeAll: false
-                          ),
-                          warpedHorizon: nil // XXX
-                        )
-                    } else {
-                        Log.w("frame \(frameIndex) fell off the end with request \(result)")
-                    }
+                    // median merge the frames and package as a result
+                    warpedResult = WarpedImageResult(
+                      warpedFrame: ImageAligner.medianMerge(
+                        imagesToMerge,
+                        outlierThreshold: config.pixelThreshold,
+                        includeAll: false
+                      ),
+                      warpedHorizon: nil // XXX
+                    )
+                } else {
+                    Log.w("frame \(frameIndex) alignment returned no results")
                 }
             } else {
                 Log.w("frame \(frameIndex) cannot align without homography")
@@ -2485,8 +2479,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     Log.e("not loading keypoints for type \(type)")
                 }
 
-                let keypoints = try? OCVFeatureSet(
-                  file: "\(config.dirForKeypointData)/\(keypointFilename)"
+                let keypoints = OCVFeatureSet.load(
+                  fromFilename: "\(config.dirForKeypointData)/\(keypointFilename)"
                 )
                 switch alignmentType {
                 case .earth:
@@ -2550,25 +2544,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         Log.d("frame \(frameIndex) has base keypoints \(baseKeypoints)")
         
-        let request = HomographyRequest(
-          baseKeypoints: baseKeypoints,
-          frameIndex: Int32(frameIndex),
-          neighbors: neighbors,
-          matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
-          alignmentType: alignmentType,
-          maxKeypoints: Int32(config.alignmentMaxKeypoints), 
-          writeDebugImages: config.alignmentWriteDebugImages
-        )
-
-        if let result = ImageAligner.homography(
-             with: request,
+        if let result = ImageAligner.computeHomography(
+             baseKeypoints: baseKeypoints,
+             frameIndex: Int32(frameIndex),
+             neighbors: neighbors,
+             matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
+             alignmentType: alignmentType,
+             maxKeypoints: Int32(config.alignmentMaxKeypoints),
+             writeDebugImages: config.alignmentWriteDebugImages,
              handler: { frameIndex,
                         alignmentType,
                         alignmentStep,
                         neighborNumber in
 
                  // XXX this handler is out of date now
-                 
+
                  Log.d("frame \(frameIndex) got alignment step update \(alignmentStep)")
                  // update frame state while processing
                  var processingState: FrameProcessingState? = nil
@@ -2580,12 +2570,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                      switch alignmentType {
                      case .sky:
                          processingState = .starAlignment(step)
-                         break
                      case .earth:
                          processingState = .earthAlignment(step)
+                     default:
                          break
-                         @unknown default:
-                             break
                      }
                  } else {
                      Log.w("frame \(frameIndex) unable to process alignment step \(alignmentStep)")
@@ -2598,35 +2586,29 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
              })
         {
             Log.d("frame \(frameIndex) got homography result")
-            if let error = result as? String {
-                Log.e("frame \(frameIndex) error: \(error)")
-            } else if let result = result as? HomographyResult {
-                let alignedWarps = result.warpInfo.map { $0.toCodable() }
+            let alignedWarps = result.warpInfo.map { $0.toCodable() }
 
-                let ret = HomographyResultsCodable(from: result)
-                
-                // save homography results for later
-                switch type {
-                case .starAligned:
-                    try self.write(
-                      neighborStarHomography: alignedWarps
-                    )
-                    // store results in ram for lookup later
-                    self.neighborStarHomography = ret
-                case .earthAligned:
-                    try self.write(
-                      neighborEarthHomography: alignedWarps
-                    )
-                    // store results in ram for lookup later
-                    self.neighborEarthHomography = ret
-                default:
-                    break
-                }
-                
-                return ret
-            } else {
-                Log.w("frame \(frameIndex) cannot handle result \(result)")
+            let ret = HomographyResultsCodable(from: result)
+
+            // save homography results for later
+            switch type {
+            case .starAligned:
+                try self.write(
+                  neighborStarHomography: alignedWarps
+                )
+                // store results in ram for lookup later
+                self.neighborStarHomography = ret
+            case .earthAligned:
+                try self.write(
+                  neighborEarthHomography: alignedWarps
+                )
+                // store results in ram for lookup later
+                self.neighborEarthHomography = ret
+            default:
+                break
             }
+
+            return ret
         }
         
         return nil
@@ -2679,7 +2661,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let config = await configManager.config()
 
         let fullPath = "\(config.dirForKeypointData)/\(filename)"
-        if let features = try? OCVFeatureSet(file: fullPath) {
+        if let features = OCVFeatureSet.load(fromFilename: fullPath) {
             return features
         }
 
@@ -2718,47 +2700,38 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         Log.d("frame \(frameIndex) finding keypoints of type \(alignmentType)")
 
-        let request = OCVFeatureRequest(
-          baseImage: originalFrame.mat,
-          frameIndex: Int32(frameIndex),
-          matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
-          mask: horizonMask?.image.mat,
-          alignmentType: alignmentType,       // earth is zero in mask
-          maxKeypoints: Int32(config.alignmentMaxKeypoints), 
-          writeDebugImages: config.alignmentWriteDebugImages,
-          groundHorizonExtension: Int32(config.alignmentGroundHorizonExtension), // extend the horizon for ground by this amount to get more keypoints
-          baseImageDilateSize: Int32(config.alignmentBaseImageDilateSize),
-          baseImageThresholdValue: Int32(config.alignmentBaseImageThresholdValue)
-        )
+        if let results = ImageAligner.findFeatures(
+             baseImage: originalFrame.mat,
+             frameIndex: Int32(frameIndex),
+             matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
+             mask: horizonMask?.image.mat,
+             alignmentType: alignmentType,       // earth is zero in mask
+             maxKeypoints: Int32(config.alignmentMaxKeypoints),
+             writeDebugImages: config.alignmentWriteDebugImages,
+             groundHorizonExtension: Int32(config.alignmentGroundHorizonExtension),
+             baseImageDilateSize: Int32(config.alignmentBaseImageDilateSize),
+             baseImageThresholdValue: Int32(config.alignmentBaseImageThresholdValue)
+           )
+        {
+            Log.d("frame \(frameIndex) got \(results.keypointCount) keypoints")
 
-        if let result = ImageAligner.findFeatures(request) {
-            if let error = result as? String {
-                Log.e("frame \(frameIndex) error: \(error)")
-            } else if let results = result as? kht_bridge.OCVFeatureSet {
-                Log.d("frame \(frameIndex) got \(results.keypointCount) keypoints")
-
-                do {
-                    try results.write(toFile: fullPath)
-                    
-                    Log.d("frame \(frameIndex) wrote results to \(fullPath)")
-                } catch {
-                    Log.w("frame \(frameIndex) failed to write results to \(fullPath): error: \(error)")
-                }
-
-                // save results in RAM
-                switch type {
-                case .starAligned:
-                    self.skyKeyPoints = results
-                case .earthAligned:
-                    self.earthKeyPoints = results
-                default:
-                    throw "unknown type \(type)"
-                }
-                
-                return results
+            if results.write(toFilename: fullPath) {
+                Log.d("frame \(frameIndex) wrote results to \(fullPath)")
             } else {
-                Log.e("frame \(frameIndex) cannot handle aligned result \(result)")
+                Log.w("frame \(frameIndex) failed to write results to \(fullPath)")
             }
+
+            // save results in RAM
+            switch type {
+            case .starAligned:
+                self.skyKeyPoints = results
+            case .earthAligned:
+                self.earthKeyPoints = results
+            default:
+                throw "unknown type \(type)"
+            }
+
+            return results
         }
         return nil
     }    

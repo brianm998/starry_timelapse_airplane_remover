@@ -1,7 +1,6 @@
 import Foundation
 import logging
 import KHTSwift
-import kht_bridge
 
 /*
 

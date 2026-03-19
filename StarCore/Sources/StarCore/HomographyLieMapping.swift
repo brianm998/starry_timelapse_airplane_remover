@@ -1,12 +1,12 @@
 import Foundation
-import kht_bridge
+import KHTSwift
 
 public class HomographyLieMapping {
     static func log(_ h: [Double]) -> [Double] {
-        kht_bridge.HomographyLie.logHomography(h.map(NSNumber.init)).map { $0.doubleValue }
+        HomographyLie.log(h)
     }
 
     static func exp(_ v: [Double]) -> [Double] {
-        kht_bridge.HomographyLie.expHomography(v.map(NSNumber.init)).map { $0.doubleValue }
+        HomographyLie.exp(v)
     }
 }

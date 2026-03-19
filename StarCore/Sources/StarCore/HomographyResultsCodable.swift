@@ -1,6 +1,6 @@
 import Foundation
 import logging
-import kht_bridge
+import KHTSwift
 
 public struct HomographyResultsCodable: Codable, Sendable {
     public let frameIndex: Int
@@ -37,12 +37,12 @@ public struct HomographyResultsCodable: Codable, Sendable {
         )
     }
 
-    func mappedHomography() -> [NSNumber: MatWrapper] {
-        var ret: [NSNumber: MatWrapper] = [:]
+    func mappedHomography() -> [Int: MatWrapper] {
+        var ret: [Int: MatWrapper] = [:]
         for homography in neighborHomography {
-            let warpInfo = AlignmentWarpInfo(from: homography)
+            let warpInfo = AlignmentWarpInfo.from(codable: homography)
             let offset = homography.frameIndex - frameIndex
-            ret[NSNumber(value: offset)] = warpInfo.homography
+            ret[offset] = warpInfo.homography
         }
         return ret
     }

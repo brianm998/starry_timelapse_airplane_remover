@@ -1,5 +1,5 @@
 import Foundation
-import kht_bridge
+import KHTSwift
 import CoreGraphics
 import logging
 import Cocoa

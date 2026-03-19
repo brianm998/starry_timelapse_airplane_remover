@@ -1,6 +1,6 @@
 import Foundation
 import logging
-import kht_bridge
+import KHTSwift
 
 // allows construction of an accessable buffer that can then be converted into
 // a PixelatedImage with a cv::Mat holding the buffer
@@ -38,11 +38,11 @@ public struct ImageBuffer<Element: FixedWidthInteger>: @unchecked Sendable {
         self.components = components
         self.count = width * height * components
         self.holder = BufferHolder(
-          copiedBuffer: pointer.baseAddress,
-          width: UInt(width),
-          height: UInt(height),
-          components: components,
-          bitsPerComponent: UInt(MemoryLayout<Element>.stride)*8
+          copyingBuffer: UnsafeRawPointer(pointer.baseAddress!),
+          width: UInt64(width),
+          height: UInt64(height),
+          components: Int64(components),
+          bitsPerComponent: UInt64(MemoryLayout<Element>.stride)*8
         )
     }
     
@@ -57,10 +57,10 @@ public struct ImageBuffer<Element: FixedWidthInteger>: @unchecked Sendable {
         self.components = components
         self.count = width * height * components
         self.holder = BufferHolder(
-          width: UInt(width),
-          height: UInt(height),
-          components: components,
-          bitsPerComponent: UInt(MemoryLayout<Element>.stride)*8
+          width: UInt64(width),
+          height: UInt64(height),
+          components: Int64(components),
+          bitsPerComponent: UInt64(MemoryLayout<Element>.stride)*8
         )
     }
     
@@ -81,36 +81,33 @@ public struct ImageBuffer<Element: FixedWidthInteger>: @unchecked Sendable {
     }
 
     public var image: PixelatedImage? {
-        if let mat = holder.mat() {
-            if Element.self == UInt8.self,
-               let buffer = self as? ImageBuffer<UInt8>
-            {
-                if let ret = PixelatedImage(mat: mat, eightBitBuffer: buffer) {
-                    return ret
-                } else {
-                    Log.w("couldn't create 8 bit image")
-                }
-            } else if Element.self == UInt16.self,
-                      let buffer = self as? ImageBuffer<UInt16>
-            {
-                if let ret = PixelatedImage(mat: mat, sixteenBitBuffer: buffer) {
-                    return ret
-                } else {
-                    Log.w("couldn't create 16 bit image")
-                }
-            } else if Element.self == Int32.self,
-                      let buffer = self as? ImageBuffer<Int32>
-            {
-                if let ret = PixelatedImage(mat: mat, thirtyTwoBitBuffer: buffer) {
-                    return ret
-                } else {
-                    Log.w("couldn't create 32 bit image")
-                }
+        let mat = holder.toMat()
+        if Element.self == UInt8.self,
+           let buffer = self as? ImageBuffer<UInt8>
+        {
+            if let ret = PixelatedImage(mat: mat, eightBitBuffer: buffer) {
+                return ret
             } else {
-                Log.w("cannot create image from unsupported element type \(Element.self)")
+                Log.w("couldn't create 8 bit image")
+            }
+        } else if Element.self == UInt16.self,
+                  let buffer = self as? ImageBuffer<UInt16>
+        {
+            if let ret = PixelatedImage(mat: mat, sixteenBitBuffer: buffer) {
+                return ret
+            } else {
+                Log.w("couldn't create 16 bit image")
+            }
+        } else if Element.self == Int32.self,
+                  let buffer = self as? ImageBuffer<Int32>
+        {
+            if let ret = PixelatedImage(mat: mat, thirtyTwoBitBuffer: buffer) {
+                return ret
+            } else {
+                Log.w("couldn't create 32 bit image")
             }
         } else {
-            Log.w("cannot create image: no cv::Mat")
+            Log.w("cannot create image from unsupported element type \(Element.self)")
         }
         return nil
     }

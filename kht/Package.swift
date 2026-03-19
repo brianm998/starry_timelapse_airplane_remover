@@ -16,22 +16,15 @@ let package = Package(
             targets: ["KHTSwift"])
     ],
     dependencies: [
-      .package(name: "LoggingObjC", path: "../logging-objc"),
       .package(name: "logging", path: "../logging"),
     ],
     targets: [                  // C++
       .target(name: "kht",
               linkerSettings: [
-                .linkedFramework("AVFoundation"),
-                .linkedFramework("CoreImage"),
-                .linkedFramework("CoreMedia"),
                 .linkedFramework("Accelerate"),
                 .linkedFramework("OpenCL"),
                 .unsafeFlags([
-                               // use old, slower linker for now to avoid so many linker warnings
-      //                         "-Xlinker", "-ld_classic",
-                               
-                               // link in pre compiled .a file for opencv2 
+                               // link in pre compiled .a file for opencv2
                                "-L../opencv/lib/",
                                "-Xlinker", "../opencv/lib/libopencv2.a"
                              ]
@@ -39,9 +32,9 @@ let package = Package(
                 .linkedLibrary("opencv2")
               ]
 
-      ),      
-      .target(name: "kht_bridge", // Objective C
-              dependencies: ["kht", "LoggingObjC"],
+      ),
+      .target(name: "kht_bridge", // C++ (was Objective-C)
+              dependencies: ["kht"],
               publicHeadersPath: "include",
               cSettings: [
                 .unsafeFlags([
@@ -49,11 +42,11 @@ let package = Package(
                                "-I/usr/local/include/eigen3"     // intel
                              ]),
                 .headerSearchPath("../../opencv/include"),   // for headers
-              ] 
-      ),   
+              ]
+      ),
       .target(name: "KHTSwift", // Swift
               dependencies: [
-                "kht_bridge", 
+                "kht_bridge",
                 .product(name: "logging", package: "logging")
               ]
       )
