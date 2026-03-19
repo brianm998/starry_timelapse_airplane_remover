@@ -26,7 +26,7 @@ public struct ProcessorUsage {
                 sys: Double,
                 idle: Double)
     {
-        self.date = NSDate().timeIntervalSince1970
+        self.date = Date().timeIntervalSince1970
 
         // keep values in the range of 0...100
         
@@ -79,7 +79,7 @@ public struct ProcessorUsage {
             self.user = user
             self.sys = sys
             self.idle = idle
-            self.date = NSDate().timeIntervalSince1970
+            self.date = Date().timeIntervalSince1970
         } else {
             return nil
         }

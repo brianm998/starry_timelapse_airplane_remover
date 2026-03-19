@@ -1,10 +1,16 @@
 import Foundation
 import KHTSwift
-import CoreGraphics
 import logging
-import Cocoa
-import SwiftUI
 import Semaphore
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
+#if canImport(SwiftUI)
+import SwiftUI
+#endif
+#if canImport(AppKit)
+import AppKit
+#endif
 
 /*
 
@@ -69,16 +75,16 @@ public struct ImageAccessor: Sendable {
         mkdirs()                // XXX called more than needed
     }
 
-    var previewSize: NSSize {
+    var previewSize: CGSize {
         let previewWidth = config.previewWidth
         let previewHeight = config.previewHeight
-        return NSSize(width: previewWidth, height: previewHeight)
+        return CGSize(width: previewWidth, height: previewHeight)
     }
 
-    var thumbnailSize: NSSize {
+    var thumbnailSize: CGSize {
         let thumbnailWidth = config.thumbnailWidth
         let thumbnailHeight = config.thumbnailHeight
-        return NSSize(width: thumbnailWidth, height: thumbnailHeight)
+        return CGSize(width: thumbnailWidth, height: thumbnailHeight)
     }
 
     func mkdir(ofType type: FrameViewMode,
@@ -101,6 +107,7 @@ public struct ImageAccessor: Sendable {
     }
 
     // load for display as SwiftUI Image
+    #if canImport(SwiftUI) && canImport(AppKit)
     nonisolated public func loadImage(
       frameIndex: Int,
       type imageType: FrameViewMode,
@@ -127,6 +134,7 @@ public struct ImageAccessor: Sendable {
         }
         return nil
     }
+    #endif
 
     public func urlForImage(frameIndex: Int,
                             ofType imageType: FrameViewMode,
@@ -459,7 +467,7 @@ public struct ImageAccessor: Sendable {
         return nil
     }
 
-    private func sizeOf(_ size: ImageDisplaySize) -> NSSize? {
+    private func sizeOf(_ size: ImageDisplaySize) -> CGSize? {
         switch size {
         case .original:
             return nil

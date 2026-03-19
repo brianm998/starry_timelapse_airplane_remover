@@ -11,12 +11,20 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 import Foundation
-import CoreGraphics
-import CoreVideo
 import KHTSwift
 import logging
-import Cocoa
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
+#if canImport(CoreVideo)
+import CoreVideo
+#endif
+#if canImport(ImageIO)
 import ImageIO
+#endif
+#if canImport(AppKit)
+import AppKit
+#endif
 
 /*
 
@@ -401,8 +409,9 @@ extension PixelatedImage {
         }
     }
 
-    /// Create an NSImage from this image's pixel data.
-    public var nsImage: NSImage? {
+    #if canImport(CoreGraphics)
+    /// Create a CGImage from this image's pixel data.
+    public var cgImage: CGImage? {
         let src = mat.is8Bits ? mat : mat.ensure8Bits()
         let w = Int(src.cols)
         let h = Int(src.rows)
@@ -460,18 +469,28 @@ extension PixelatedImage {
                                              data: data,
                                              size: h * bytesPerRow,
                                              releaseData: { _, _, _ in }) else { return nil }
-        guard let cgImage = CGImage(width: w, height: h,
-                                     bitsPerComponent: bitsPerComponent,
-                                     bitsPerPixel: bitsPerPixel,
-                                     bytesPerRow: bytesPerRow,
-                                     space: colorSpace,
-                                     bitmapInfo: bitmapInfo,
-                                     provider: provider,
-                                     decode: nil,
-                                     shouldInterpolate: false,
-                                     intent: .defaultIntent) else { return nil }
+        return CGImage(width: w, height: h,
+                       bitsPerComponent: bitsPerComponent,
+                       bitsPerPixel: bitsPerPixel,
+                       bytesPerRow: bytesPerRow,
+                       space: colorSpace,
+                       bitmapInfo: bitmapInfo,
+                       provider: provider,
+                       decode: nil,
+                       shouldInterpolate: false,
+                       intent: .defaultIntent)
+    }
+    #endif
+
+    #if canImport(AppKit)
+    /// Create an NSImage from this image's pixel data.
+    public var nsImage: NSImage? {
+        guard let cgImage = self.cgImage else { return nil }
+        let w = Int(mat.cols)
+        let h = Int(mat.rows)
         return NSImage(cgImage: cgImage, size: NSSize(width: w, height: h))
     }
+    #endif
 
     // write out the base image data
     public func writeTIFFEncoding(toFilename imageFilename: String) {
@@ -1120,6 +1139,7 @@ extension PixelatedImage {
     }
 }
     
+#if canImport(CoreVideo)
 // MARK: - CVPixelBuffer
 
 extension PixelatedImage {
@@ -1204,6 +1224,7 @@ extension PixelatedImage {
         return pb
     }
 }
+#endif
 
 // MARK: - MatWrapper
 

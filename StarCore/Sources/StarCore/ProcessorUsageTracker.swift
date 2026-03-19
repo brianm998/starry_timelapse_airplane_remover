@@ -99,7 +99,7 @@ public actor ProcessorUsageTracker {
     // complicated logic to determine how idle the system is,
     // without checking constantly, which degrades performance.
     public func percentIdle() -> Double {
-        let now = NSDate().timeIntervalSince1970
+        let now = Date().timeIntervalSince1970
 
         // first check out list of stored real usages
         if realUsages.count > 0,

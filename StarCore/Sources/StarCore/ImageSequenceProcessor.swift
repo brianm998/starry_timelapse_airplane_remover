@@ -1,14 +1,12 @@
 import Foundation
-import CoreGraphics
 import logging
-import Cocoa
 
 
 // XXX move this shit
 
 public func mkdir(_ path: String) {
     // Expand ~ and resolve any relative bits
-    let expanded = (path as NSString).expandingTildeInPath
+    let expanded = NSString(string: path).expandingTildeInPath
 
     // Use FileManager to create directory with intermediate directories (like `mkdir -p`)
     do {

@@ -15,8 +15,10 @@ You should have received a copy of the GNU General Public License along with sta
 import Foundation
 import KHTSwift
 import logging
-import Cocoa
 import Combine
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 // these need to be setup at startup so the decision tree values are right
 // XXX these suck, find a better way
@@ -332,7 +334,8 @@ public actor OutlierGroup: CustomStringConvertible,
         }
     }
     
-    private var cachedTestImage: CGImage? 
+    #if canImport(CoreGraphics)
+    private var cachedTestImage: CGImage?
 
     fileprivate func testRemoveAt(x: Int, y: Int, pixel: Pixel, imageData: inout Data) -> Bool {
         
@@ -437,7 +440,8 @@ public actor OutlierGroup: CustomStringConvertible,
             return nil
         }
     }
-    
+    #endif
+
     // how many pixels actually overlap between the groups ?  returns 0-1 value of overlap amount
     func pixelOverlap(with group2: OutlierGroup) -> Double // 1 means total overlap, 0 means none
     {
@@ -493,13 +497,13 @@ public actor OutlierGroup: CustomStringConvertible,
         var ret: [Double] = []
         ret.append(Double(self.id))
         for type in OutlierGroupFeature.allCases { // XXX sort order?
-            //let t0 = NSDate().timeIntervalSince1970
+            //let t0 = Date().timeIntervalSince1970
             if type.isUsed(for: treeType) {
                 ret.append(await self.decisionTreeValueAsync(for: type))
             } else {
                 ret.append(0)
             }
-            //let t1 = NSDate().timeIntervalSince1970
+            //let t1 = Date().timeIntervalSince1970
             //Log.i("frame \(frameIndex) group \(self) took \(t1-t0) seconds to calculate value for \(type)")
         }
         return ret
@@ -517,9 +521,9 @@ public actor OutlierGroup: CustomStringConvertible,
     public func decisionTreeGroupValues() async -> OutlierFeatureData {
         var rawValues = OutlierFeatureData.rawValues()
         for type in OutlierGroupFeature.allCases {
-            let t0 = NSDate().timeIntervalSince1970
+            let t0 = Date().timeIntervalSince1970
             let value = await self.decisionTreeValueAsync(for: type)
-            let t1 = NSDate().timeIntervalSince1970
+            let t1 = Date().timeIntervalSince1970
             Log.i("frame \(frameIndex) group \(self) took \(t1-t0) seconds to calculate value for \(type)")
             rawValues[type.sortOrder] = value
             //Log.d("frame \(frameIndex) type \(type) value \(value)")
@@ -535,10 +539,10 @@ public actor OutlierGroup: CustomStringConvertible,
     nonisolated public func decisionTreeValue(for type: OutlierGroupFeature) -> Double {
 //        if let value = featureValueCache[type] { return value }
 
-        //let t0 = NSDate().timeIntervalSince1970
+        //let t0 = Date().timeIntervalSince1970
 
         let ret = type.decisionTreeValueSync(of: self)
-        //let t1 = NSDate().timeIntervalSince1970
+        //let t1 = Date().timeIntervalSince1970
         //Log.d("group \(id) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
 
 //        featureValueCache[type] = ret
@@ -548,7 +552,7 @@ public actor OutlierGroup: CustomStringConvertible,
     public func decisionTreeValueAsync(for type: OutlierGroupFeature) async -> Double {
         if let value = featureValueCache[type] { return value }
 
-        //let t0 = NSDate().timeIntervalSince1970
+        //let t0 = Date().timeIntervalSince1970
         let ret = await Task.detached(priority: .userInitiated) {
             await type.decisionTreeValue(of: self)
         }.value

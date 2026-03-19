@@ -13,7 +13,6 @@ You should have received a copy of the GNU General Public License along with sta
 import Foundation
 import KHTSwift
 import logging
-import Cocoa
 import Combine
 
 // how far pixels have to be from eachother to be considered as separate bunch

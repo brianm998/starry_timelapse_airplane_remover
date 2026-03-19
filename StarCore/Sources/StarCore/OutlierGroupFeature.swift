@@ -13,7 +13,6 @@ You should have received a copy of the GNU General Public License along with sta
 import Foundation
 import KHTSwift
 import logging
-import Cocoa
 import Combine
 
 public enum TreeType: String, CaseIterable, Sendable {

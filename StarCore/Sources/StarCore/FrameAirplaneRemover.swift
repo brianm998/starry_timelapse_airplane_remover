@@ -3,7 +3,6 @@ import CoreGraphics
 import KHTSwift
 import Semaphore
 import logging
-import Cocoa
 import Combine
 
 /*
@@ -4074,7 +4073,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
       minimumSize: Int? = nil
     ) async {
       Log.d("frame \(self.frameIndex) applyDecisionTreeToAll \(await self.outlierGroups?.members.count ?? 0) Outliers")
-        let startTime = NSDate().timeIntervalSince1970
+        let startTime = Date().timeIntervalSince1970
         if let outlierGroups {
             let groups = await outlierGroups.getMembers()
             await Task.detached(priority: .userInitiated) {
@@ -4087,7 +4086,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
                 
                 await classifier.classifyAll(values, overwrite: overwrite)
-                let endTime = NSDate().timeIntervalSince1970
+                let endTime = Date().timeIntervalSince1970
                 Task { @MainActor in
                     await self.updateCombineSubjects()
                 }
@@ -4841,12 +4840,12 @@ fileprivate func writeOutlierValuesCSVPrivate(to csvFilename: String,
 
         if let outliers = await frame.outlierGroupList() {
             Log.d("frame \(frame.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")
-            let startTime = NSDate().timeIntervalSince1970
+            let startTime = Date().timeIntervalSince1970
             // XXX start time
             
             for (index, outlier) in outliers.enumerated() {
                 if index % 100 == 0 {
-                    let duration = NSDate().timeIntervalSince1970 - startTime
+                    let duration = Date().timeIntervalSince1970 - startTime
                     Log.d("frame \(frame.frameIndex) writeOutlierValuesCSV 1b \(index) after \(duration) seconds")
                 }
                 await valueMatrix.append(outlierGroup: outlier)

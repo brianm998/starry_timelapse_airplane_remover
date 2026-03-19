@@ -2,7 +2,6 @@ import Foundation
 import CoreGraphics
 import KHTSwift
 import logging
-import Cocoa
 
 // this file has logic for horizon detection and analysis
 
