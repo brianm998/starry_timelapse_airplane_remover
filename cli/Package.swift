@@ -3,6 +3,21 @@
 
 import PackageDescription
 
+// Platform-specific paths for pre-compiled StarDecisionTrees
+#if os(macOS)
+let dtIncludeDebug   = "../StarDecisionTrees/include/debug/macos"
+let dtLibDebug       = "../StarDecisionTrees/lib/debug/macos"
+let dtLibDebugFile   = "../StarDecisionTrees/lib/debug/macos/libStarDecisionTrees.a"
+#elseif os(Linux)
+let dtIncludeDebug   = "../StarDecisionTrees/include/debug/linux"
+let dtLibDebug       = "../StarDecisionTrees/lib/debug/linux"
+let dtLibDebugFile   = "../StarDecisionTrees/lib/debug/linux/libStarDecisionTrees.a"
+#else
+let dtIncludeDebug   = "../StarDecisionTrees/include/debug"
+let dtLibDebug       = "../StarDecisionTrees/lib/debug"
+let dtLibDebugFile   = "../StarDecisionTrees/lib/debug/libStarDecisionTrees.a"
+#endif
+
 let package = Package(
     name: "star",
     platforms: [
@@ -26,14 +41,14 @@ let package = Package(
               .unsafeFlags([
                              // import StarDecisionTrees swift module
                              "-l", "StarDecisionTrees",
-                             "-I", "../StarDecisionTrees/include/debug"
+                             "-I", dtIncludeDebug
                            ]),
             ],
             linkerSettings: [
               .unsafeFlags([
-                             // link in pre compiled .a file for the decision trees 
-                             "-L../StarDecisionTrees/lib/debug",
-                             "-Xlinker", "../StarDecisionTrees/lib/debug/libStarDecisionTrees.a"
+                             // link in pre compiled .a file for the decision trees
+                             "-L\(dtLibDebug)",
+                             "-Xlinker", dtLibDebugFile
                            ]),
               .linkedLibrary("StarDecisionTrees")
             ]),
@@ -42,4 +57,3 @@ let package = Package(
             dependencies: ["star"]),
     ]
 )
-

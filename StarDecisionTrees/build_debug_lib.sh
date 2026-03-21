@@ -3,25 +3,29 @@
 
 set -e
 
+# detect platform
+PLATFORM="$(uname -s)"
+case "$PLATFORM" in
+    Darwin) PLATFORM_DIR="macos" ;;
+    Linux)  PLATFORM_DIR="linux" ;;
+    *)      echo "Unsupported platform: $PLATFORM"; exit 1 ;;
+esac
+
 # clean previous builds
 rm -rf .build
-rm -rf lib/debug
-rm -rf include/debug
+rm -rf lib/debug/$PLATFORM_DIR
+rm -rf include/debug/$PLATFORM_DIR
 
 # generate current list of all decision trees in StarDecisionTrees.swift
 ./makeList.pl
-
-# build with optimization, for the current arch only
-#swift build -j 2 --arch `uname -m` -Xswiftc -O
 
 # build without optimization, for the current arch only
 swift build -j 10 --arch `uname -m`
 
 # create output dirs
-mkdir -p lib/debug
-mkdir -p include/debug
+mkdir -p lib/debug/$PLATFORM_DIR
+mkdir -p include/debug/$PLATFORM_DIR
 
-# copy output dylib and swiftmodule to output dirs
-mv .build/debug/libStarDecisionTrees.a lib/debug
-mv .build/debug/Modules/StarDecisionTrees.swiftmodule include/debug
-
+# copy output lib and swiftmodule to platform-specific output dirs
+mv .build/debug/libStarDecisionTrees.a lib/debug/$PLATFORM_DIR
+mv .build/debug/Modules/StarDecisionTrees.swiftmodule include/debug/$PLATFORM_DIR
