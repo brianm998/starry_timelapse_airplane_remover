@@ -14,6 +14,12 @@
 # apple's signing of frameworks included in apps is obtuse, and can be hard to satisfy.
 # Building opencv as a .a file means that it gets linked directly into the star binary,
 # making separate signing of opencv2 unnecessary.
+#
+# Build caching:
+#   The opencv source and build directories are preserved between runs so that
+#   cmake's feature-test results (the slow "Looking for ..." checks) are cached.
+#   Only a fresh git clone happens when the version changes.
+#   Pass CLEAN=1 to force a full rebuild:  CLEAN=1 ./build.sh
 
 set -e
 
@@ -31,14 +37,32 @@ if [ -z ${ARCHS+x} ]; then export ARCHS=`uname -m`; fi
 # in theory we could track later versions, but this seems to work fine for what we need.
 export OPENCV_VERSION="4.12.0"
 
-# clean any prior build for this platform
-rm -rf lib/$PLATFORM_DIR
-rm -rf opencv
+# ── decide whether to do a clean build ────────────────────────────────
+NEED_CLONE=0
 
-# output dirs
+if [ "${CLEAN:-0}" = "1" ]; then
+    echo "==> CLEAN=1 requested, doing full rebuild"
+    rm -rf lib/$PLATFORM_DIR
+    rm -rf include
+    rm -rf opencv
+    rm -rf opencv2.framework
+    NEED_CLONE=1
+elif [ ! -d opencv ]; then
+    NEED_CLONE=1
+else
+    # check if existing clone is at the right version
+    CURRENT_VERSION=$(cd opencv && git describe --tags --exact-match 2>/dev/null || echo "unknown")
+    if [ "$CURRENT_VERSION" != "$OPENCV_VERSION" ]; then
+        echo "==> OpenCV version changed ($CURRENT_VERSION -> $OPENCV_VERSION), doing fresh clone"
+        rm -rf opencv
+        NEED_CLONE=1
+    else
+        echo "==> Reusing existing OpenCV $OPENCV_VERSION source and build caches"
+    fi
+fi
+
+# always ensure output dirs exist
 mkdir -p lib/$PLATFORM_DIR
-
-# the include/ dir is platform-independent (headers are the same)
 mkdir -p include
 
 # the default MACOSX deployment target is too low, so set it higher here for a successful compile
@@ -46,20 +70,46 @@ if [ "$PLATFORM" = "Darwin" ]; then
     export MACOSX_DEPLOYMENT_TARGET='14'
 fi
 
-# clone latest opencv
-git clone https://github.com/opencv/opencv.git
-cd opencv
+# ── clone and patch if needed ─────────────────────────────────────────
+if [ "$NEED_CLONE" = "1" ]; then
+    git clone https://github.com/opencv/opencv.git
+    cd opencv
+    git checkout $OPENCV_VERSION
 
-# checkout release tag
-git checkout $OPENCV_VERSION
-
-# this is the only reliable way to set the C++ standard to 17, which is required for this to compile
-if [ "$PLATFORM" = "Darwin" ]; then
-    sed -i '' '1i\
+    # this is the only reliable way to set the C++ standard to 17, which is required for this to compile
+    if [ "$PLATFORM" = "Darwin" ]; then
+        sed -i '' '1i\
 set(CMAKE_CXX_STANDARD 17) ## HACK HACK
 ' CMakeLists.txt
+
+        # Fix OpenCV 4.12.0 cmake bug: ocv_add_definition macro fails when Eigen
+        # version variables are empty (e.g. "ver ..").  The macro requires exactly
+        # 2 args, but empty ${EIGEN_*_VERSION} expands to nothing.
+        # Fix: quote the Eigen version variables at the call sites.
+        sed -i '' \
+            's/ocv_add_definition(EIGEN_WORLD_VERSION ${EIGEN_WORLD_VERSION})/ocv_add_definition(EIGEN_WORLD_VERSION "${EIGEN_WORLD_VERSION}")/' \
+            cmake/OpenCVBindingsPreprocessorDefinitions.cmake
+        sed -i '' \
+            's/ocv_add_definition(EIGEN_MAJOR_VERSION ${EIGEN_MAJOR_VERSION})/ocv_add_definition(EIGEN_MAJOR_VERSION "${EIGEN_MAJOR_VERSION}")/' \
+            cmake/OpenCVBindingsPreprocessorDefinitions.cmake
+        sed -i '' \
+            's/ocv_add_definition(EIGEN_MINOR_VERSION ${EIGEN_MINOR_VERSION})/ocv_add_definition(EIGEN_MINOR_VERSION "${EIGEN_MINOR_VERSION}")/' \
+            cmake/OpenCVBindingsPreprocessorDefinitions.cmake
+    else
+        sed -i '1i set(CMAKE_CXX_STANDARD 17) ## HACK HACK' CMakeLists.txt
+
+        sed -i \
+            's/ocv_add_definition(EIGEN_WORLD_VERSION ${EIGEN_WORLD_VERSION})/ocv_add_definition(EIGEN_WORLD_VERSION "${EIGEN_WORLD_VERSION}")/' \
+            cmake/OpenCVBindingsPreprocessorDefinitions.cmake
+        sed -i \
+            's/ocv_add_definition(EIGEN_MAJOR_VERSION ${EIGEN_MAJOR_VERSION})/ocv_add_definition(EIGEN_MAJOR_VERSION "${EIGEN_MAJOR_VERSION}")/' \
+            cmake/OpenCVBindingsPreprocessorDefinitions.cmake
+        sed -i \
+            's/ocv_add_definition(EIGEN_MINOR_VERSION ${EIGEN_MINOR_VERSION})/ocv_add_definition(EIGEN_MINOR_VERSION "${EIGEN_MINOR_VERSION}")/' \
+            cmake/OpenCVBindingsPreprocessorDefinitions.cmake
+    fi
 else
-    sed -i '1i set(CMAKE_CXX_STANDARD 17) ## HACK HACK' CMakeLists.txt
+    cd opencv
 fi
 
 if [ "$PLATFORM" = "Darwin" ]; then
@@ -100,6 +150,7 @@ if [ "$PLATFORM" = "Darwin" ]; then
         cp "FRAMEWORK_BUILD_${ARCH_ARRAY[0]}/build/build-${ARCH_ARRAY[0]}-macosx/lib/Release/libopencv_merged.a" ../lib/$PLATFORM_DIR/libopencv2.a
     fi
 
+    rm -rf ../opencv2.framework
     mv "FRAMEWORK_BUILD_${ARCH_ARRAY[0]}/opencv2.framework" ..
     cd ..
 
