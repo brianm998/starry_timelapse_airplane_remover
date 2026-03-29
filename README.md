@@ -49,7 +49,7 @@ Star contains three applications:
 
 These three applications are all based upon the same core logic and data models.
 
-The code is all written in swift.
+The code is mostly written in swift, with low level image processing in c++.
 
 ### Algorithm
 
