@@ -11,13 +11,20 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 import Foundation
-import CoreGraphics
-import CoreVideo
 import KHTSwift
 import logging
-import Cocoa
-import kht_bridge
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
+#if canImport(CoreVideo)
+import CoreVideo
+#endif
+#if canImport(ImageIO)
 import ImageIO
+#endif
+#if canImport(AppKit)
+import AppKit
+#endif
 
 /*
 
@@ -402,7 +409,88 @@ extension PixelatedImage {
         }
     }
 
-    public var nsImage: NSImage? { mat.nsImage() }
+    #if canImport(CoreGraphics)
+    /// Create a CGImage from this image's pixel data.
+    public var cgImage: CGImage? {
+        let src = mat.is8Bits ? mat : mat.ensure8Bits()
+        let w = Int(src.cols)
+        let h = Int(src.rows)
+        let ch = Int(src.channels)
+        guard w > 0 && h > 0, let ptr = src.dataPtr else { return nil }
+
+        let bitsPerComponent = 8
+        let bitsPerPixel = bitsPerComponent * ch
+        let bytesPerRow = Int(src.step)
+
+        // OpenCV uses BGR order; CoreGraphics needs RGB
+        let colorSpace: CGColorSpace
+        let bitmapInfo: CGBitmapInfo
+        switch ch {
+        case 1:
+            colorSpace = CGColorSpaceCreateDeviceGray()
+            bitmapInfo = CGBitmapInfo(rawValue: 0)
+        case 3:
+            colorSpace = CGColorSpaceCreateDeviceRGB()
+            // BGR → we'll swap below
+            bitmapInfo = CGBitmapInfo(rawValue: 0)
+        case 4:
+            colorSpace = CGColorSpaceCreateDeviceRGB()
+            bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue)
+        default:
+            return nil
+        }
+
+        // For BGR(A), swap to RGB(A) into a temporary buffer
+        let data: UnsafeRawPointer
+        let tempBuffer: UnsafeMutableRawPointer?
+        if ch >= 3 {
+            let totalBytes = h * bytesPerRow
+            let buf = UnsafeMutablePointer<UInt8>.allocate(capacity: totalBytes)
+            let srcPtr = ptr.assumingMemoryBound(to: UInt8.self)
+            for row in 0..<h {
+                for col in 0..<w {
+                    let si = row * bytesPerRow + col * ch
+                    let di = row * bytesPerRow + col * ch
+                    buf[di]     = srcPtr[si + 2]  // R ← B
+                    buf[di + 1] = srcPtr[si + 1]  // G ← G
+                    buf[di + 2] = srcPtr[si]      // B ← R
+                    if ch == 4 { buf[di + 3] = srcPtr[si + 3] }
+                }
+            }
+            data = UnsafeRawPointer(buf)
+            tempBuffer = UnsafeMutableRawPointer(buf)
+        } else {
+            data = ptr
+            tempBuffer = nil
+        }
+        defer { tempBuffer?.deallocate() }
+
+        guard let provider = CGDataProvider(dataInfo: nil,
+                                             data: data,
+                                             size: h * bytesPerRow,
+                                             releaseData: { _, _, _ in }) else { return nil }
+        return CGImage(width: w, height: h,
+                       bitsPerComponent: bitsPerComponent,
+                       bitsPerPixel: bitsPerPixel,
+                       bytesPerRow: bytesPerRow,
+                       space: colorSpace,
+                       bitmapInfo: bitmapInfo,
+                       provider: provider,
+                       decode: nil,
+                       shouldInterpolate: false,
+                       intent: .defaultIntent)
+    }
+    #endif
+
+    #if canImport(AppKit)
+    /// Create an NSImage from this image's pixel data.
+    public var nsImage: NSImage? {
+        guard let cgImage = self.cgImage else { return nil }
+        let w = Int(mat.cols)
+        let h = Int(mat.rows)
+        return NSImage(cgImage: cgImage, size: NSSize(width: w, height: h))
+    }
+    #endif
 
     // write out the base image data
     public func writeTIFFEncoding(toFilename imageFilename: String) {
@@ -411,7 +499,9 @@ extension PixelatedImage {
 
     public func horizonTest() throws -> PixelatedImage {
         let selfMat = self.mat
-        let resultMat = PixelatedImageBridge.detectHorizon(selfMat)
+        guard let resultMat = PixelatedImageBridge.detectHorizon(selfMat) else {
+            throw "detectHorizon returned nil"
+        }
         if let ret = PixelatedImage(mat: resultMat) {
             return ret
         } else {
@@ -421,7 +511,9 @@ extension PixelatedImage {
 
     public func bitwiseNot() throws -> PixelatedImage {
         let selfMat = self.mat
-        let resultMat = PixelatedImageBridge.bitwiseNot(selfMat)
+        guard let resultMat = PixelatedImageBridge.bitwiseNot(selfMat) else {
+            throw "bitwiseNot returned nil"
+        }
         if let ret = PixelatedImage(mat: resultMat) {
             return ret
         } else {
@@ -432,7 +524,9 @@ extension PixelatedImage {
     public func bitwiseAnd(with image: PixelatedImage) throws -> PixelatedImage {
         let selfMat = self.mat
         let otherMat = image.mat
-        let resultMat = PixelatedImageBridge.bitwiseAnd(selfMat, withImage: otherMat)
+        guard let resultMat = PixelatedImageBridge.bitwiseAnd(selfMat, withImage: otherMat) else {
+            throw "bitwiseAnd returned nil"
+        }
         if let ret = PixelatedImage(mat: resultMat) {
             return ret
         } else {
@@ -443,7 +537,9 @@ extension PixelatedImage {
     public func bitwiseOr(with image: PixelatedImage) throws -> PixelatedImage {
         let selfMat = self.mat
         let otherMat = image.mat
-        let resultMat = PixelatedImageBridge.bitwiseOr(selfMat, withImage: otherMat)
+        guard let resultMat = PixelatedImageBridge.bitwiseOr(selfMat, withImage: otherMat) else {
+            throw "bitwiseOr returned nil"
+        }
         if let ret = PixelatedImage(mat: resultMat) {
             return ret
         } else {
@@ -457,12 +553,14 @@ extension PixelatedImage {
       useL2Gradient: Bool
     ) throws -> PixelatedImage {
         let selfMat = self.mat
-        let resultMat = PixelatedImageBridge.cannyEdgeDetect(
+        guard let resultMat = PixelatedImageBridge.cannyEdgeDetect(
           selfMat,
           minThreshold: minThreshold,
           maxThreshold: maxThreshold,
           useL2Gradient: useL2Gradient
-        )
+        ) else {
+            throw "cannyEdgeDetect returned nil"
+        }
         if let ret = PixelatedImage(mat: resultMat) {
             return ret
         } else {
@@ -524,7 +622,9 @@ extension PixelatedImage {
         let otherMat = otherFrame.mat
         Log.d("subtract \(otherMat) from \(selfMat)")
         // jump into c++ land for the actual subtraction
-        let resultMat = PixelatedImageBridge.subtractImage(otherMat, fromImage: selfMat)
+        guard let resultMat = PixelatedImageBridge.subtractImage(otherMat, fromImage: selfMat) else {
+            throw "subtractImage returned nil"
+        }
 
         // reconstruct a PixelatedImage from the returned cv::Mat
         if let ret = PixelatedImage(mat: resultMat) {
@@ -597,10 +697,13 @@ extension PixelatedImage {
                                 maxHeight: Int,
                                 overlapPercent: Double = 0) -> [ImageMatrixElement]
     {
-        let ret = self.mat.split(withTileWidth: Int32(maxWidth),
+        let ret = self.mat.split(tileWidth: Int32(maxWidth),
                                  tileHeight: Int32(maxHeight),
                                  overlapPercent: overlapPercent)
-          .compactMap { ImageMatrixElement(objcElement: $0) }
+          .compactMap { tile in
+              guard let img = PixelatedImage(mat: tile.image) else { return nil as ImageMatrixElement? }
+              return ImageMatrixElement(x: tile.x, y: tile.y, image: img)
+          }
 
         Log.d("split into matrix returning \(ret)")
 
@@ -705,7 +808,8 @@ extension PixelatedImage {
 public extension PixelatedImage {
     
     func bottomCrop(by numberOfPixels: Int) -> PixelatedImage? {
-        PixelatedImage(mat: mat.bottomCrop(Int32(numberOfPixels)))
+        guard let cropped = mat.bottomCrop(Int32(numberOfPixels)) else { return nil }
+        return PixelatedImage(mat: cropped)
     }
 }
 
@@ -775,33 +879,6 @@ public class ImageMatrixElement: @unchecked Sendable, Hashable, CustomStringConv
     
     public let image: PixelatedImage
 
-    public var objcElement: ObjcImageMatrixElement {
-        let ret = ObjcImageMatrixElement()
-        ret.x = Int32(self.x)
-        ret.y = Int32(self.y)
-        ret.width = Int32(self.width)
-        ret.height = Int32(self.height)
-        //ret.horizonTopY = self.horizonTopY
-        //ret.horizonBottomY = self.horizonBottomY
-        ret.image = image.mat
-        return ret
-    }
-
-    public init?(objcElement: ObjcImageMatrixElement) {
-        if let image = PixelatedImage(mat: objcElement.image) {
-            self.image = image
-        } else {
-            Log.w("unable to make image")
-            return nil
-        }
-        self.x = Int(objcElement.x)
-        self.y = Int(objcElement.y)
-        self.width = Int(objcElement.width)
-        self.height = Int(objcElement.height)
-        self.horizonTopY = nil
-        self.horizonBottomY = nil
-    }
-    
     public init(x: Int,
                 y: Int,
                 image: PixelatedImage,
@@ -861,7 +938,10 @@ extension PixelatedImage {
     public convenience init?(from matrixElements: [ImageMatrixElement]) {
         precondition(!matrixElements.isEmpty, "Matrix must contain at least one element")
         Log.d("combine from \(matrixElements)")
-        let mat = MatWrapper.combine(from: matrixElements.map { $0.objcElement })
+        let tiles = matrixElements.map { e in
+            MatTileElement(x: e.x, y: e.y, width: e.width, height: e.height, image: e.image.mat)
+        }
+        guard let mat = MatWrapper.combine(from: tiles) else { return nil }
         self.init(mat: mat)
     }
 }
@@ -872,17 +952,13 @@ extension PixelatedImage {
       outlierThreshold: Double = 1.2,
       includeAll: Bool = false
     ) -> PixelatedImage? {
-        if let mat = ImageAligner.medianMergeImage(
-             self.mat,
-             withFilenames: frames,
-             outlierThreshold: outlierThreshold,
-             includeAll: includeAll
-           ) as? MatWrapper
-        {
-            return PixelatedImage(mat: mat)
-        } else {
-            return nil
-        }
+        let mat = ImageAligner.medianMergeImage(
+            self.mat,
+            withFilenames: frames,
+            outlierThreshold: outlierThreshold,
+            includeAll: includeAll
+        )
+        return PixelatedImage(mat: mat)
     }
     
     /// Warp this image using the given row-major 3×3 homography (9 elements).
@@ -910,10 +986,10 @@ extension PixelatedImage {
 
     // move image up vertically by some number of pixels
     public func shiftImageUp(by pixels: Int) -> PixelatedImage? {
-        let result = PixelatedImageBridge.shiftImageUp(
+        guard let result = PixelatedImageBridge.shiftImageUp(
           self.mat,
           shiftPixels: Int32(pixels)
-        )
+        ) else { return nil }
         return PixelatedImage(mat: result)
     }
     
@@ -922,8 +998,8 @@ extension PixelatedImage {
     // will be part of the gradient
     public func raiseMaskBy(_ borderAmount: Int) -> PixelatedImage? {
         PixelatedImage(
-          mat: ImageAligner.createGradientMask(
-            intoSky: self.mat,
+          mat: ImageAligner.createGradientMaskIntoSky(
+            self.mat,
             gradientDistance: Int32(borderAmount)
           )
         )
@@ -934,17 +1010,19 @@ extension PixelatedImage {
     // will be part of the gradient
     public func raiseLoweredBy(_ borderAmount: Int) -> PixelatedImage? {
         PixelatedImage(
-          mat: ImageAligner.createGradientMask(
-            intoGround: self.mat,
+          mat: ImageAligner.createGradientMaskIntoGround(
+            self.mat,
             gradientDistance: Int32(borderAmount)
           )
         )
     }
     
-    public func horizonBounds() -> HorizonBounds {
+    public func horizonBounds() -> HorizonBounds? {
         // first convert images to cv::Mat
-        let baseMat = self.mat 
-        let bounds = PixelatedImageBridge.horizonExtents(fromImage: baseMat)
+        let baseMat = self.mat
+        guard let bounds = PixelatedImageBridge.horizonExtents(fromImage: baseMat) else {
+            return nil
+        }
 
         return HorizonBounds(
           topY: bounds.horizonTopY,
@@ -970,11 +1048,13 @@ extension PixelatedImage {
         let maskMat = darksMask.mat
 
         // then process in cv world
-        let processedMat = PixelatedImageBridge.brightenDarks(
+        guard let processedMat = PixelatedImageBridge.brightenDarks(
           baseMat,
           mask: maskMat,
           amount: amount
-        )
+        ) else {
+            throw "brightenDarks returned nil"
+        }
 
         // then convert back in to PixelatedImage
         if let ret = PixelatedImage(mat: processedMat) { return ret }
@@ -989,11 +1069,13 @@ extension PixelatedImage {
         let maskMat = darksMask.mat
             
         // then process in cv world
-        let processedMat = PixelatedImageBridge.darkenDarks(
+        guard let processedMat = PixelatedImageBridge.darkenDarks(
           baseMat,
           mask: maskMat,
           amount: amount
-        )
+        ) else {
+            throw "darkenDarks returned nil"
+        }
 
         // then convert back in to PixelatedImage
         if let ret = PixelatedImage(mat: processedMat) { return ret }
@@ -1010,34 +1092,38 @@ extension PixelatedImage {
         let maskMat = mask.mat
         Log.d("apply self \(selfMat) background \(backgroundMat) mask \(maskMat)")
 
-        let combinedMat =
+        guard let combinedMat =
           PixelatedImageBridge.combineImage(
             selfMat,
             mask: maskMat,
             background: backgroundMat
-          )
+          ) else {
+            throw "combineImage returned nil"
+        }
         if let ret = PixelatedImage(mat: combinedMat) { return ret }
 
         throw "Unable to apply mask to image"
     }
 
     public func upScaleTo(width: UInt, height: UInt) -> PixelatedImage? {
-        PixelatedImage(mat: self.mat.upScale(to: width, height: height))
+        guard let scaled = self.mat.upScale(to: width, height: height) else { return nil }
+        return PixelatedImage(mat: scaled)
     }
 
     public func downScaleTo(width: UInt, height: UInt) -> PixelatedImage? {
-        PixelatedImage(mat: self.mat.downScale(to: width, height: height))
+        guard let scaled = self.mat.downScale(to: width, height: height) else { return nil }
+        return PixelatedImage(mat: scaled)
     }
 
     public func saveJpeg(withQuality quality: UInt, filename: String) {
         try? ensureParentDirectoriesExist(for: filename)
-        self.mat.saveJpeg(withQuality: quality, filename: filename)
+        self.mat.saveJpeg(quality: UInt32(quality), filename: filename)
     }
 
     public var description: String { "PixelatedImage: \(self.mat)" }
 
     public var ensure16Bits: PixelatedImage {
-        if self.mat.is16Bits() {
+        if self.mat.is16Bits {
             return self
         } else {
             return PixelatedImage(mat: self.mat.ensure16Bits()) ?? self
@@ -1045,7 +1131,7 @@ extension PixelatedImage {
     }
 
     public var ensure8Bits: PixelatedImage {
-        if self.mat.is8Bits() {
+        if self.mat.is8Bits {
             return self
         } else {
             return PixelatedImage(mat: self.mat.ensure8Bits()) ?? self
@@ -1053,6 +1139,7 @@ extension PixelatedImage {
     }
 }
     
+#if canImport(CoreVideo)
 // MARK: - CVPixelBuffer
 
 extension PixelatedImage {
@@ -1080,7 +1167,7 @@ extension PixelatedImage {
     public func toPixelBuffer() -> CVPixelBuffer? {
         // Ensure 8-bit.  No-op when already 8-bit; ÷256 fixed scale for 16-bit.
         let src: PixelatedImage
-        if mat.is8Bits() {
+        if mat.is8Bits {
             src = self
         } else {
             guard let converted = PixelatedImage(mat: mat.ensure8Bits()) else { return nil }
@@ -1108,7 +1195,7 @@ extension PixelatedImage {
 
         // Source: raw mat bytes. Use mat.step as row stride — it may include
         // OpenCV alignment padding that mat.lengthInBytes does NOT account for.
-        let srcBytes  = src.mat.dataPtr.assumingMemoryBound(to: UInt8.self)
+        let srcBytes  = src.mat.dataPtr!.assumingMemoryBound(to: UInt8.self)
         let srcStride = Int(src.mat.step)
 
         // Destination: CoreVideo may also add per-row padding for its own alignment.
@@ -1137,27 +1224,28 @@ extension PixelatedImage {
         return pb
     }
 }
+#endif
 
 // MARK: - MatWrapper
 
 extension MatWrapper: @unchecked @retroactive Sendable {}
 extension UnsafeBufferPointer: @unchecked @retroactive Sendable {}
 
-extension MatWrapper {
+extension MatWrapper: @retroactive CustomStringConvertible {
     func buffer<T>(of type: T.Type) -> UnsafeBufferPointer<T> {
         let count = self.lengthInBytes / MemoryLayout<T>.stride
-        return UnsafeBufferPointer(start: dataPtr.assumingMemoryBound(to: T.self),
+        return UnsafeBufferPointer(start: dataPtr!.assumingMemoryBound(to: T.self),
                                    count: count)
     }
 
     func mutableBuffer<T>(of type: T.Type) -> UnsafeMutableBufferPointer<T> {
         let count = self.lengthInBytes / MemoryLayout<T>.stride
-        return UnsafeMutableBufferPointer(start: UnsafeMutableRawPointer(mutating: dataPtr)!
+        return UnsafeMutableBufferPointer(start: UnsafeMutableRawPointer(mutating: dataPtr!)
                                             .assumingMemoryBound(to: T.self),
                                           count: count)
     }
 
-    override public var description: String {
+    public var description: String {
         if self.isEmpty {
             return "mat: empty"
         } else {

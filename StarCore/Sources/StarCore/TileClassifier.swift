@@ -1,3 +1,4 @@
+#if canImport(CoreML)
 /*
 
  TileClassifier.swift — CoreML tile classifier wrapper for use in SPM targets.
@@ -110,3 +111,4 @@ public final class TileClassifier: Sendable {
         return try classify(pixelBuffer)
     }
 }
+#endif

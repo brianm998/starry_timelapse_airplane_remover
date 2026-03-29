@@ -42,8 +42,5 @@ let package = Package(
                            ]),
               .linkedLibrary("StarDecisionTrees")
             ]),
-        .testTarget(
-            name: "decision_tree_generatorTests",
-            dependencies: ["decision_tree_generator"]),
     ]
 )

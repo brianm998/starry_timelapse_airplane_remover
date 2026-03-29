@@ -1,13 +1,12 @@
+import Foundation
 import kht_bridge
-import CoreGraphics
 import logging
-import Cocoa
 
 public let DEGREES_TO_RADIANS = atan(1.0) / 45.0
 public let RADIANS_TO_DEGREES = 45 / atan(1.0)
 
 
-// this swift method wraps an objc method which wraps a c++ implementation
+// this swift method wraps a c++ implementation
 // of kernel based hough transformation
 // we convert the coordinate system of the returned lines, and filter them a bit
 // these default parameter values need more documentation.  All but the last
@@ -21,94 +20,79 @@ public func kernelHoughTransform(image: MatWrapper,
 {
     var ret: [Line] = []
 
-    // first get a list of lines from the kernel based hough transform
-    if let lines = KHTBridge.translate(image) {
-        //Log.d("got \(lines.count) lines")
+    var outLines: UnsafeMutablePointer<KHTLine>?
+    let count = kht_translate(image.ref, &outLines)
 
-        for line in lines {
-            if let line = line as? KHTBridgeLine {
-                if let maxResults,
-                   ret.count >= maxResults { return ret }
-                
-                // change how each line is represented
+    if count > 0, let lines = outLines {
+        for i in 0..<Int(count) {
+            if let maxResults,
+               ret.count >= maxResults { break }
 
-                // convert kht polar central origin polar coord line
-                // two a line polar coord origin at [0, 0]
-                let newLine = line.leftCenterOriginLine(
-                  width: Int32(width),
-                  height: Int32(height)
-                )
-                
-                ret.append(newLine)
-            }
+            let khtLine = lines[i]
+
+            // change how each line is represented
+            // convert kht polar central origin polar coord line
+            // to a line polar coord origin at [0, 0]
+            let newLine = leftCenterOriginLine(
+                rho: khtLine.rho, theta: khtLine.theta, votes: Int(khtLine.votes),
+                width: Int32(width), height: Int32(height)
+            )
+
+            ret.append(newLine)
         }
+        kht_free_lines(lines)
     }
+
     return ret
 }
 
+// returns a line with polar coord origin at [0, 0]
+private func leftCenterOriginLine(rho: Double, theta: Double, votes: Int,
+                                   width: Int32, height: Int32) -> Line {
+    let (p1, p2) = khtCoords(rho: rho, theta: theta, width: width, height: height)
+    return Line(point1: p1, point2: p2, votes: votes)
+}
 
-extension KHTBridgeLine {
+private func khtCoords(rho: Double, theta: Double,
+                        width: Int32, height: Int32) -> (DoubleCoord, DoubleCoord) {
+    // this logic is copied from main.cpp
+    // it converts the central origin polar coords
+    // returned from kht to two points on the line
 
-    // returns a line with polar coord origin at [0, 0]
-    func leftCenterOriginLine(width: Int32, height: Int32) -> Line {
+    var p1x = 0.0
+    var p1y = 0.0
+    var p2x = 0.0
+    var p2y = 0.0
 
-        // the kht lib uses polar coordinates with
-        // the origin centered on the image
-        
-        // the star app uses polar coordinates with
-        // the origin at pixel [0, 0]
-        
-        // get two points that are on this line
-        let (p1, p2) = self.coords(width: width, height: height)
+    let widthD = Double(width)
+    let heightD = Double(height)
 
-        // construct a new line based upon these points
-        return Line(point1: p1,
-                    point2: p2,
-                    votes: Int(self.votes))
+    let thetaRad = theta * DEGREES_TO_RADIANS
+    let cos_theta = cos(thetaRad)
+    let sin_theta = sin(thetaRad)
+
+    if sin_theta != 0.0 {
+        p1x = -widthD * 0.5
+        p1y = (rho - p1x * cos_theta) / sin_theta
+
+        p2x = widthD * 0.5 - 1
+        p2y = (rho - p2x * cos_theta) / sin_theta
+    } else {
+        // vertical
+        p1x = rho
+        p1y = -heightD * 0.5
+
+        p2x = rho
+        p2y = heightD * 0.5 - 1
     }
 
-    
-    func coords(width: Int32, height: Int32) -> (DoubleCoord, DoubleCoord) {
-        // this logic is copied from main.cpp
-        // it converts the central origin polar coords
-        // returned from kht to two points on the line
+    p1x += widthD * 0.5
+    p1y += heightD * 0.5
+    p2x += widthD * 0.5
+    p2y += heightD * 0.5
 
-        var p1x = 0.0
-        var p1y = 0.0
-        var p2x = 0.0
-        var p2y = 0.0
+    let p1 = DoubleCoord(x: p1x, y: p1y)
+    let p2 = DoubleCoord(x: p2x, y: p2y)
 
-        let widthD = Double(width)
-        let heightD = Double(height)
-
-        let rho = self.rho
-        let theta = self.theta * DEGREES_TO_RADIANS
-        let cos_theta = cos(theta)
-        let sin_theta = sin(theta)
-
-        if sin_theta != 0.0 {
-            p1x = -widthD * 0.5
-	    p1y = (rho - p1x * cos_theta) / sin_theta
-	    
-            p2x = widthD * 0.5 - 1
-	    p2y = (rho - p2x * cos_theta) / sin_theta
-        } else {
-            // vertical
-            p1x = rho
-	    p1y = -heightD * 0.5
-	    
-            p2x = rho
-	    p2y = heightD * 0.5 - 1
-        }
-        
-        p1x += widthD * 0.5
-        p1y += heightD * 0.5
-        p2x += widthD * 0.5
-        p2y += heightD * 0.5
-
-        let p1 = DoubleCoord(x: p1x, y: p1y)
-        let p2 = DoubleCoord(x: p2x, y: p2y)
-        
-        return (p1, p2)
-    }
+    return (p1, p2)
 }

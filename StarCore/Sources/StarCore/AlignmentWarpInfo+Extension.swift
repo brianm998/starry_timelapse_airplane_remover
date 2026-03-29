@@ -1,5 +1,5 @@
 import Foundation
-import kht_bridge
+import KHTSwift
 
 public extension AlignmentWarpInfo {
 
@@ -7,8 +7,8 @@ public extension AlignmentWarpInfo {
         let homographyArray: [Double]?
 
         if let wrapper = homography,
-           let values = wrapper.homographyValues() {
-            homographyArray = values.map { $0.doubleValue }
+           let values = wrapper.homographyValues {
+            homographyArray = values
         } else {
             homographyArray = nil
         }
@@ -17,31 +17,25 @@ public extension AlignmentWarpInfo {
             homography: homographyArray,
             deviation: deviation,
             alignmentState: AlignmentState(objcState: alignmentState) ?? .unknown,
-            frameIndex: Int(frameIndex)
+            frameIndex: frameIndex
         )
     }
-}
-
-public extension AlignmentWarpInfo {
 
     /// Reconstruct from Codable representation
-    convenience init(from codable: AlignmentWarpInfoCodable) {
+    static func from(codable: AlignmentWarpInfoCodable) -> AlignmentWarpInfo {
         let homographyWrapper: MatWrapper?
 
         if let h = codable.homography {
             precondition(h.count == 9, "Homography must have 9 elements")
-
-            homographyWrapper = h.withUnsafeBufferPointer { buffer in
-                MatWrapper(homographyValues: buffer.baseAddress!)
-            }
+            homographyWrapper = MatWrapper.fromHomographyValues(h)
         } else {
             homographyWrapper = nil
         }
 
-        self.init(
+        return AlignmentWarpInfo(
           homography: homographyWrapper,
           deviation: codable.deviation,
-          alignmentState: codable.alignmentState.objcValue ?? AlignmentStateObjC.unknown,
+          alignmentState: codable.alignmentState.objcValue ?? .unknown,
           frameIndex: codable.frameIndex
         )
     }

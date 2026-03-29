@@ -1,101 +1,72 @@
-// MatWrapper.h
-#import <Foundation/Foundation.h>
-#import <CoreGraphics/CoreGraphics.h>
-#import "ObjcImageMatrixElement.h"
+// MatWrapper.h — Pure C API for OpenCV Mat wrapper
+#pragma once
 
-NS_ASSUME_NONNULL_BEGIN
+#include "kht_bridge_types.h"
 
-@class ObjcImageMatrixElement;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-@interface MatWrapper : NSObject
+// --- Create / Destroy ---
+MatWrapperRef mat_wrapper_load(const char *filename);
+MatWrapperRef mat_wrapper_clone(MatWrapperRef ref);
+void          mat_wrapper_release(MatWrapperRef ref);
 
-@property (class, atomic, assign) NSUInteger totalBytes;
-@property (class, atomic, assign) NSUInteger totalInstances;
+// Create from external data buffer
+MatWrapperRef mat_wrapper_create(int64_t width, int64_t height, int cvType,
+                                 size_t bytesPerRow, void *data,
+                                 bool takeOwnership);
 
-/// Dimensions
-@property (nonatomic, readonly) NSInteger rows;
-@property (nonatomic, readonly) NSInteger cols;
-@property (nonatomic, readonly) NSInteger channels;
+// --- Properties ---
+int64_t    mat_wrapper_rows(MatWrapperRef ref);
+int64_t    mat_wrapper_cols(MatWrapperRef ref);
+int64_t    mat_wrapper_channels(MatWrapperRef ref);
+int        mat_wrapper_type(MatWrapperRef ref);
+size_t     mat_wrapper_step(MatWrapperRef ref);
+size_t     mat_wrapper_data_length(MatWrapperRef ref);
+size_t     mat_wrapper_length_in_bytes(MatWrapperRef ref);
+bool       mat_wrapper_is_empty(MatWrapperRef ref);
+const void *mat_wrapper_data_ptr(MatWrapperRef ref);
+int64_t    mat_wrapper_bits_per_pixel(MatWrapperRef ref);
+int64_t    mat_wrapper_bits_per_component(MatWrapperRef ref);
+bool       mat_wrapper_owns_data(MatWrapperRef ref);
 
-/// OpenCV type (CV_8UC3, CV_32F, etc.)
-@property (nonatomic, readonly) int type;
+// --- Operations ---
+void          mat_wrapper_write_to(MatWrapperRef ref, const char *filename);
+void          mat_wrapper_save_jpeg(MatWrapperRef ref, uint32_t quality,
+                                    const char *filename);
+MatWrapperRef mat_wrapper_bottom_crop(MatWrapperRef ref, int n);
+MatWrapperRef mat_wrapper_up_scale(MatWrapperRef ref, uint64_t width, uint64_t height);
+MatWrapperRef mat_wrapper_down_scale(MatWrapperRef ref, uint64_t width, uint64_t height);
+MatWrapperRef mat_wrapper_ensure_eight_bit(MatWrapperRef ref);
+MatWrapperRef mat_wrapper_add_white_rows_on_top(MatWrapperRef ref, int rows);
+bool          mat_wrapper_is_16_bits(MatWrapperRef ref);
+bool          mat_wrapper_is_8_bits(MatWrapperRef ref);
+MatWrapperRef mat_wrapper_ensure_16_bits(MatWrapperRef ref);
+MatWrapperRef mat_wrapper_ensure_8_bits(MatWrapperRef ref);
+double        mat_wrapper_at_double(MatWrapperRef ref, int row, int col);
 
-@property (nonatomic, readonly) size_t step;      // bytes per row
+// --- Homography helpers ---
+// Writes 9 doubles (row-major 3x3) to out. Returns false if not 3x3 CV_64F.
+bool          mat_wrapper_get_homography_values(MatWrapperRef ref, double *out9);
+MatWrapperRef mat_wrapper_from_homography_values(const double *values9);
 
-/// Length of contiguous data buffer in bytes
-@property (nonatomic, readonly) size_t dataLength;
+// --- Matrix split/combine ---
+// Returns count of tiles. Caller must free results with mat_wrapper_free_split.
+int  mat_wrapper_split(MatWrapperRef ref, int tileWidth, int tileHeight,
+                       double overlapPercent,
+                       CImageMatrixElement **outElements);
+void mat_wrapper_free_split(CImageMatrixElement *elements, int count);
 
-@property (nonatomic, readonly) BOOL isEmpty;
+MatWrapperRef mat_wrapper_combine(const CImageMatrixElement *elements, int count);
 
-/// Raw data pointer (optional, unsafe!)
-@property (nonatomic, readonly) const void *dataPtr;
+// --- CV type helper ---
+int mat_wrapper_cv_type_for(int bitsPerComponent, int componentsPerPixel);
 
-@property (nonatomic, readonly) size_t lengthInBytes;
+// --- Memory tracking ---
+uint64_t mat_wrapper_total_bytes(void);
+uint64_t mat_wrapper_total_instances(void);
 
-@property (nonatomic, readonly) NSInteger bitsPerPixel;
-@property (nonatomic, readonly) NSInteger bitsPerComponent;
-
-@property (nonatomic, readonly) CGColorSpaceRef colorSpace;
-
-@property (nonatomic, readonly) CGBitmapInfo bitmapInfo;
-
-- (void)writeTo:(NSString*)filename;
-
-/// Debug info
-- (NSString *)debugDescription;
-
-+ (int)cvTypeForBitsPerComponent:(int)bits componentsPerPixel:(int)components;
-
-+ (nullable MatWrapper*)loadFromFilename:(NSString*)filename;
-
-// removes N rows of pixels from the top of the image
--(MatWrapper *) bottomCrop:(int) N;
-
--(void)saveJpegWithQuality:(NSUInteger)quality filename:(NSString*)filename;
-
--(NSImage*)nsImage;
-
--(MatWrapper *)clone;
-
--(MatWrapper *)upScaleTo:(NSUInteger)width height:(NSUInteger)height;
--(MatWrapper *)downScaleTo:(NSUInteger)width height:(NSUInteger)height;
-
--(MatWrapper *)ensureEightBit;
-
-- (MatWrapper *)addWhiteRowsOnTop:(int)rows;
-
-- (BOOL)ownsData;
-
-- (double)atDoubleRow:(int)row col:(int)col;
-
-- (BOOL)is16Bits;
-
-- (MatWrapper *)ensure16Bits;
-
-- (BOOL)is8Bits;
-
-- (MatWrapper *)ensure8Bits;
-
-
-- (NSArray<ObjcImageMatrixElement*>*)splitWithTileWidth:(int)tileWidth
-                                             tileHeight:(int)tileHeight
-                                         overlapPercent:(double)overlapPercent;
-
-+ (MatWrapper*)combineFromMatrixElements:(NSArray<ObjcImageMatrixElement*>*)elements;
-
-/// Returns 9 doubles (row-major) if this is a 3x3 CV_64F matrix
-/// Returns nil otherwise
-- (nullable NSArray<NSNumber *> *)homographyValues;
-
-+ (instancetype)wrapperWithHomographyValues:(const double *)values;
-
-- (instancetype)initWithWidth:(NSInteger)width
-                       height:(NSInteger)height
-                       cvType:(int)cvType
-                  bytesPerRow:(size_t)step
-                         data:(void *)data
-                takeOwnership:(BOOL)takeOwnership;
-
-@end
-
-NS_ASSUME_NONNULL_END
+#ifdef __cplusplus
+}
+#endif

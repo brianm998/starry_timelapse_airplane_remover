@@ -3,7 +3,6 @@ import StarCore
 import CoreGraphics
 import logging
 import Semaphore
-import Cocoa
 
 /*
 

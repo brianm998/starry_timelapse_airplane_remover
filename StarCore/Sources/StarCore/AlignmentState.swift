@@ -1,5 +1,5 @@
 import Foundation
-import kht_bridge
+import KHTSwift
 
 public enum AlignmentState: Int, Codable, CaseIterable, Sendable, CustomStringConvertible {
     case unableToDetectKeypoints = 0
@@ -31,11 +31,11 @@ public enum AlignmentState: Int, Codable, CaseIterable, Sendable, CustomStringCo
     
     // MARK: - Init from Objective-C enum
     public init?(objcState: AlignmentStateObjC) {
-        self.init(rawValue: objcState.rawValue)
+        self.init(rawValue: Int(objcState.rawValue))
     }
 
     // MARK: - Convert to Objective-C enum
     public var objcValue: AlignmentStateObjC? {
-        AlignmentStateObjC(rawValue: self.rawValue)
+        AlignmentStateObjC(rawValue: UInt32(self.rawValue))
     }
 }

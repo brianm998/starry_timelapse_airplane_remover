@@ -1,7 +1,7 @@
 import Foundation
 import CoreGraphics
 import logging
-import kht_bridge
+import KHTSwift
 
 
 public let imageCache = ImageCache()
@@ -35,18 +35,9 @@ public actor ImageCache {
     private var imageLoadFailures: UInt = 0
 
     init() {
-        ObjcImageCache.imageLoader = { [weak self] name, completion in
-            guard let self else {
-                completion(nil)
-                return
-            }
-
-            let box = CompletionBox(completion)
-            
-            Task { 
-                let mat = await self.loadImage(filename: name)?.mat
-                box.completion(mat)
-            }
+        // Register our loader with the C++ image cache
+        KHTSwift.ImageCache.setLoader { filename in
+            MatWrapper.load(fromFilename: filename)
         }
     }
 

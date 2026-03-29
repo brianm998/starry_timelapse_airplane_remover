@@ -4,7 +4,7 @@ import Cocoa
 import StarCore
 import Semaphore
 import logging
-import kht_bridge
+import KHTSwift
 
 public enum VideoPlayMode: String, Equatable, CaseIterable {
     case forward
@@ -321,6 +321,15 @@ public final class ImageSequenceViewModel {
         didSet {
             var realConfig = config.config()
             realConfig.numberFinalProcessingNeighborsNeeded = numberOfNeighborFrames
+            config.update(realConfig)
+        }
+    }
+
+    // used when camera is not moving for merging earth
+    var numberStaticNeighborFrames: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.numberStaticNeighborFrames = numberStaticNeighborFrames
             config.update(realConfig)
         }
     }
@@ -744,8 +753,9 @@ public final class ImageSequenceViewModel {
         if !config.cleanMethod.usesOutliers {
             self.selectionMode = .none
         } 
-
+        
         self.numberOfAlignedNeighborFrames = config.numberAlignedNeighborFrames
+        self.numberStaticNeighborFrames = config.numberStaticNeighborFrames
         self.horizonDetectionEnabled = config.horizonDetectionEnabled
         self.useCannyForHorizonDetection = config.useCannyForHorizonDetection ? .yes : .no
         self.horizonStripWidth = config.horizonStripWidth
@@ -1523,7 +1533,8 @@ public final class ImageSequenceViewModel {
             )
 
             await frameToClear.setNumberOfAlignedFrames()
-           
+            await frameToClear.setNumberOfStaticNeighborFrames()
+
             try await frameToClear.removeNumberOfAlignedImagesForThisFrameFile()
             
             Task { @MainActor in

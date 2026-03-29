@@ -1,6 +1,4 @@
 import Foundation
-import CoreGraphics
-import Cocoa
 import logging
 
 /*
@@ -77,11 +75,10 @@ public actor UpdatableProgressMonitor {
     }
 
     private func startLoop() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            Task.detached {
-                await self.redraw()
-                await self.startLoop()
-            }
+        Task.detached {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            await self.redraw()
+            await self.startLoop()
         }
     }
 

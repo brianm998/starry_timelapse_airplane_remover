@@ -1,6 +1,5 @@
 import Foundation
 import SwiftUI
-import Cocoa
 import logging
 
 fileprivate let frameSaveMonitor = FileSystemMonitor(max: 16) // guess, make configurable?

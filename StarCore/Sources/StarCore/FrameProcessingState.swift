@@ -1,8 +1,7 @@
 import Foundation
 import CoreGraphics
-import Cocoa
 import SwiftUI
-import kht_bridge
+import KHTSwift
 
 /*
 
@@ -42,9 +41,9 @@ public enum AlignmentStep: Equatable,
             self = .baseKeypointDetection
         case .baseKeypointDetectionComplete:
             self = .baseKeypointDetectionComplete
-        case .neighborKeypointDetection: 
+        case .neighborKeypointDetection:
             self = .neighborKeypointDetection(neighborNumber)
-        case .neighborKeypointMatch: 
+        case .neighborKeypointMatch:
             self = .neighborKeypointMatch(neighborNumber)
         case .aligningNeighbor:
             self = .aligningNeighbor(neighborNumber)
@@ -52,7 +51,7 @@ public enum AlignmentStep: Equatable,
             self = .loadingNeighbor(neighborNumber)
         case .complete:
             self = .complete
-        @unknown default:
+        default:
             return nil
         }
     }

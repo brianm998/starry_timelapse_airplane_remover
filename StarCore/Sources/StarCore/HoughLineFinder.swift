@@ -12,7 +12,6 @@ You should have received a copy of the GNU General Public License along with sta
 
 import Foundation
 import KHTSwift
-import kht_bridge
 import logging
 
 

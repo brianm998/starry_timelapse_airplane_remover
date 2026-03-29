@@ -36,7 +36,7 @@ public class OutlierGroupValueMatrix {
             let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url as URL))
             let positive_string = String(decoding: data, as: UTF8.self)
             var values = positive_string.components(separatedBy: "\n").map { line in
-                return line.components(separatedBy: ",").map { NSString(string: $0).doubleValue }
+                return line.components(separatedBy: ",").map { Double($0) ?? 0.0 }
             }
             // a trailing newline can cause a bad entry at the very end
             if values[values.count-1].count != self.types.count {
@@ -58,7 +58,7 @@ public class OutlierGroupValueMatrix {
 
 
             var values = negative_string.components(separatedBy: "\n").map { line in
-                line.components(separatedBy: ",").map { NSString(string: $0).doubleValue }
+                line.components(separatedBy: ",").map { Double($0) ?? 0.0 }
             }
             // a trailing newline can cause a bad entry at the very end
             if values[values.count-1].count != self.types.count {

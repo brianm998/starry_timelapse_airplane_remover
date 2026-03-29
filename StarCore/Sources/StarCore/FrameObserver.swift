@@ -1,6 +1,6 @@
 import Foundation
 import CoreGraphics
-import kht_bridge
+import KHTSwift
 import Combine
 
 @MainActor

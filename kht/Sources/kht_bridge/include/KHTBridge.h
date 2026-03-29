@@ -1,27 +1,26 @@
-
+// KHTBridge.h — Pure C API for Kernel Hough Transform + umbrella header
 #pragma once
-#import <Foundation/Foundation.h>
-#import "MatWrapper.h"
 
-#import "PixelatedImageBridge.h"
-#import "HorizonResult.h"
-#import "ImageAligner.h"
-#import "HomographyLie.h"
+// Include all kht_bridge headers
+#include "kht_bridge_logging.h"
+#include "kht_bridge_types.h"
+#include "MatWrapper.h"
+#include "BufferHolder.h"
+#include "PixelatedImageBridge.h"
+#include "ImageAligner.h"
+#include "HomographyLie.h"
+#include "OCVFeatureSet.h"
+#include "ImageCache_C.h"
 
-@interface KHTBridgeLine : NSObject
-@property (nonatomic) double theta;
-@property (nonatomic) double rho;
-@property (nonatomic) int votes;
-@end
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-@interface KHTBridge : NSObject
-+(NSArray *) translate:(MatWrapper *)image;
-@end
+// --- Kernel Hough Transform ---
+// Returns count of lines found. Caller must free outLines with kht_free_lines.
+int kht_translate(MatWrapperRef image, KHTLine **outLines);
+void kht_free_lines(KHTLine *lines);
 
-
-
-@interface ObjC : NSObject
-
-+ (BOOL)catchException:(void (NS_NOESCAPE ^)(NSError **))tryBlock error:(NSError **)error NS_REFINED_FOR_SWIFT;
-
-@end
+#ifdef __cplusplus
+}
+#endif
