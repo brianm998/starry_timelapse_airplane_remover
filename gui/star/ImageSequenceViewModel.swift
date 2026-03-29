@@ -502,6 +502,14 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    var useHomographyRefinedHorizon: Bool {
+        didSet {
+            var realConfig = config.config()
+            realConfig.useHomographyRefinedHorizon = useHomographyRefinedHorizon
+            config.update(realConfig)
+        }
+    }
+
     public var alignmentMaxKeypoints: Int {
         didSet {
             var realConfig = config.config()
@@ -771,6 +779,7 @@ public final class ImageSequenceViewModel {
         self.homographySmoothingEpsilon = config.homographySmoothingEpsilon
         self.horizonVerticalShiftAmount = config.horizonVerticalShiftAmount
         self.allowEarthAlignment = config.allowEarthAlignment
+        self.useHomographyRefinedHorizon = config.useHomographyRefinedHorizon
 
         self.alignmentMaxKeypoints = config.alignmentMaxKeypoints
         self.alignmentGroundHorizonExtension = config.alignmentGroundHorizonExtension

@@ -76,8 +76,9 @@ public final actor FrameGraphBuilder {
         let config = await configManager.config()
 
         let hasHorizon = config.horizonDetectionEnabled
-        let processEarth = config.allowEarthAlignment && 
+        let processEarth = config.allowEarthAlignment &&
           config.tripodHeadWasMoving // keypoints not used when stationary
+        let useHomographyRefinedHorizon = config.useHomographyRefinedHorizon
 
         var mergedHorizonOps: [Int: Operation] = [:]
         var homographyOps: [Operation] = []
@@ -355,9 +356,9 @@ public final actor FrameGraphBuilder {
         allOps.append(validationOp)
 
         // ---- 4b. Horizon refinement (per-frame, after validated homography) ----
-        // Only run when horizon detection is enabled; HorizonRefinementOp
-        // falls back to the merged horizon when homography is unavailable.
-        if hasHorizon {
+        // Only run when horizon detection is enabled and homography refined
+        // horizon is turned on (experimental, off by default).
+        if hasHorizon && useHomographyRefinedHorizon {
             for frame in frames {
                 let refinementOp = HorizonRefinementOp(
                   frame: frame

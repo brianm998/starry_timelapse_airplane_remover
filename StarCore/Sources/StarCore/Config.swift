@@ -317,6 +317,10 @@ public struct Config: Codable, Sendable, Transferable {
     // turned off by default as it's still expermintal
     public var allowEarthAlignment: Bool = false
 
+    // use homography-based horizon refinement after star alignment?
+    // turned off by default as it's still experimental
+    public var useHomographyRefinedHorizon: Bool = false
+
     // --- Adaptive horizon detection parameters ---
 
     // What size do we detect the horizon at?
@@ -454,6 +458,8 @@ public struct Config: Codable, Sendable, Transferable {
         self.horizonVerticalShiftAmount = try c.decodeIfPresent(Int.self, forKey: .horizonVerticalShiftAmount) ?? self.horizonVerticalShiftAmount
 
         self.allowEarthAlignment = try c.decodeIfPresent(Bool.self, forKey: .allowEarthAlignment) ?? self.allowEarthAlignment
+
+        self.useHomographyRefinedHorizon = try c.decodeIfPresent(Bool.self, forKey: .useHomographyRefinedHorizon) ?? self.useHomographyRefinedHorizon
 
         
         self.alignmentMaxKeypoints = try c.decodeIfPresent(Int.self, forKey: .alignmentMaxKeypoints) ?? self.alignmentMaxKeypoints
