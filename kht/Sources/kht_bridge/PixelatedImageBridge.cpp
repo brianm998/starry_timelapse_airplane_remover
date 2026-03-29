@@ -43,6 +43,23 @@ MatWrapperRef pib_combine_image(MatWrapperRef image1, MatWrapperRef mask,
         cv::Mat mat2 = image2->mat;
         cv::Mat matMask = mask->mat;
 
+        // Ensure single channel
+        if (matMask.channels() > 1) {
+          cv::cvtColor(matMask, matMask, cv::COLOR_BGR2GRAY);
+        }
+
+        // Ensure 8-bit
+        if (matMask.type() != CV_8U) {
+          double minVal, maxVal;
+          cv::minMaxLoc(matMask, &minVal, &maxVal);
+
+          if (maxVal > 0) {
+            matMask.convertTo(matMask, CV_8U, 255.0 / maxVal);
+          } else {
+            matMask = cv::Mat::zeros(matMask.size(), CV_8U);
+          }
+        }
+
         if (mat1.size() != mat2.size() || mat1.size() != matMask.size()) {
             Log_e("combineWithMask: Input Mats must have the same size.");
             return nullptr;
