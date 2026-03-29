@@ -9,6 +9,7 @@ import SwiftUI
 import StarCore
 import logging
 import StarDecisionTrees
+import KHTSwift
 
 /*
 
@@ -231,7 +232,10 @@ struct StarApp: App {
               .environment(viewModel)
               .environment(loggingViewModel)
               .environment(StarCore.frameGraphViewModel)
-              .onAppear { enableGUILogs() }
+              .onAppear {
+                  enableGUILogs()
+                  setupKHTLogging()
+              }
               .onChange(of: loggingViewModel.level) {
                   enableGUILogs()
               }

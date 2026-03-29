@@ -5,6 +5,7 @@ import StarCore
 import logging
 import StarDecisionTrees
 import Observation
+import KHTSwift
 
 /*
 
@@ -406,6 +407,8 @@ struct StarCli: AsyncParsableCommand {
                 }
             }
             
+            setupKHTLogging()
+        
             signal(SIGKILL) { foo in
                 print("caught SIGKILL \(foo)")
             }
