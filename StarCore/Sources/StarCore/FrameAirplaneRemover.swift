@@ -305,6 +305,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
        
         //Log.d("config.numberAlignedNeighborFrames \(config.numberAlignedNeighborFrames)")
         await self.setNumberOfAlignedFrames(with: initialConfig)
+        await self.setNumberOfStaticNeighborFrames(with: initialConfig)
         await self.set(
           cleanMethod: initialConfig.cleanMethod(for: frameIndex),
           process: false,
@@ -341,6 +342,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
+    public func setNumberOfStaticNeighborFrames(with config: Config? = nil) async {
+        if let config {
+            self.staticNeighborFrames = calculateNeighborIndices(config.numberStaticNeighborFrames)
+        } else {
+            let config = await configManager.config()
+            self.staticNeighborFrames = calculateNeighborIndices(config.numberStaticNeighborFrames)
+        }
+    }
+          
     public func setNumberOfAlignedFrames(with config: Config? = nil) async {
         if let config {
             self.alignmentFrames = calculateNeighborIndices(config.numberAlignedNeighborFrames)
@@ -2244,9 +2254,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             Log.d("frame \(frameIndex) not aliging earth, just merging") 
             // don't try to align if we're combining not moving earth,
             // just median merge them all
-            
+
             if let mergedImage = originalFrame.medianMerge(
-                 with: neighbors.map { $0.filename },
+                 with: self.getStaticNeighborFilenames(),
                  outlierThreshold: pixelThreshold
                )
             {
@@ -2889,6 +2899,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     private var staticNeighborFrames: [Int] = []
 
     public func getStaticNeighborFrames() -> [Int] { staticNeighborFrames }
+
+    public func getStaticNeighborFilenames() -> [String] {
+        var ret: [String] = []
+        for neighborIndex in staticNeighborFrames {
+            if let filename = self.imageAccessor.nameForImage(
+                 frameIndex: neighborIndex,
+                 ofType: .original,
+                 atSize: .original
+               )
+            {
+                ret.append(filename)
+            }
+        }
+        return ret
+    }
 
     // the filenames of the original files that we should align with this frame
     private var alignmentFilenames: [Int:String] {
