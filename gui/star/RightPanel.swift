@@ -26,6 +26,7 @@ struct RightPanel: View {
     var body: some View {
         @Bindable var viewModel = viewModel
         @Bindable var loggingViewModel = loggingViewModel
+        let config = viewModel.config.config()
         return Group {
             if viewModel.rightPanelShowing {
                 VStack(alignment: .leading) {
@@ -275,6 +276,12 @@ struct RightPanel: View {
                               textColor: .white,
                               alwaysOpen: false
                             )
+                            
+                            if !config.tripodHeadWasMoving {
+                                StaticNeighborFrameOverrideView(
+                                  focusedField: $focusedField
+                                )
+                            }
 
                             EditableNumberOfFramesToProcessConcurrentlyView(
                               focusedField: $focusedField,
@@ -614,8 +621,76 @@ struct EditableNumberOfFramesToProcessView: View {
             textColor: textColor,
             focusedField: focusedField,
             focusField: .numberOfFramesToProcess,
-            alwaysOpen: alwaysOpen            
+            alwaysOpen: alwaysOpen
             // no extra commit side‐effects here
         )
+    }
+}
+
+/// Shows and edits the per-frame override for numberStaticNeighborFrames.
+/// When the current frame has an override, a "Reset" button reverts it to the
+/// global default.  Changing the value triggers an immediate merged-horizon
+/// recompute if the horizon has already been computed for that frame.
+struct StaticNeighborFrameOverrideView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    let focusedField: FocusState<FocusedField?>.Binding
+
+    /// Local editable copy, kept in sync with the effective count for the
+    /// current frame (override if present, otherwise global default).
+    @State private var localCount: Int = 16
+
+    var body: some View {
+        @Bindable var viewModel = viewModel
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                /*
+                if viewModel.currentFrameHasStaticNeighborOverride {
+                    Text("Custom")
+                      .foregroundColor(.yellow)
+                      .font(.caption)
+                } else {
+                    Text("Default")
+                      .foregroundColor(.white)
+                      .font(.caption)
+                }*/
+//                Spacer()
+                if viewModel.currentFrameHasStaticNeighborOverride {
+                    Button("Reset") {
+                        viewModel.clearStaticNeighborFrameOverride(forFrame: viewModel.currentIndex)
+                    }
+                    .font(.caption)
+                    .buttonStyle(.bordered)
+                    .tint(.orange)
+                }
+            }
+            EditableNumberView(
+              value: $localCount,
+              minValue: 1,
+              maxValue: viewModel.imageSequenceSize,
+              fullTextProvider: { "merge with \($0) static neighbors" },
+              prefixText: "static merge",
+              suffixTextProvider: { _ in "neighbors" },
+              textColor: viewModel.currentFrameHasStaticNeighborOverride ? .yellow : .white,
+              focusedField: focusedField,
+              focusField: .frameStaticNeighborFrames,
+              alwaysOpen: false,
+              commitAction: { newVal in
+                  viewModel.set(staticNeighborFrames: newVal, forFrame: viewModel.currentIndex)
+              }
+            )
+        }
+        .onAppear { localCount = viewModel.currentFrameStaticNeighborCount }
+        .onChange(of: viewModel.currentIndex) {
+            localCount = viewModel.currentFrameStaticNeighborCount
+        }
+        .onChange(of: viewModel.staticNeighborFrameOverrides) {
+            localCount = viewModel.currentFrameStaticNeighborCount
+        }
+        .onChange(of: viewModel.numberStaticNeighborFrames) {
+            // if the global default changes, update display when not overridden
+            if !viewModel.currentFrameHasStaticNeighborOverride {
+                localCount = viewModel.numberStaticNeighborFrames
+            }
+        }
     }
 }

@@ -478,6 +478,64 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    // per-frame overrides for numberStaticNeighborFrames
+    var staticNeighborFrameOverrides: [Int:Int] {
+        didSet {
+            var realConfig = config.config()
+            realConfig.staticNeighborFrameOverrides = staticNeighborFrameOverrides
+            config.update(realConfig)
+        }
+    }
+
+    /// The static-neighbor-frame count actually in effect for the current frame
+    /// (either an override or the global default).
+    var currentFrameStaticNeighborCount: Int {
+        staticNeighborFrameOverrides[currentIndex] ?? numberStaticNeighborFrames
+    }
+
+    /// True when the current frame has a per-frame override for numberStaticNeighborFrames.
+    var currentFrameHasStaticNeighborOverride: Bool {
+        staticNeighborFrameOverrides[currentIndex] != nil
+    }
+
+    /// Set a per-frame override for numberStaticNeighborFrames on `frameIndex`.
+    /// If a merged horizon already exists for that frame, it is invalidated and
+    /// recomputed immediately using the new neighbor count.
+    func set(staticNeighborFrames count: Int, forFrame frameIndex: Int) {
+        staticNeighborFrameOverrides[frameIndex] = count
+        var realConfig = config.config()
+        realConfig.staticNeighborFrameOverrides = staticNeighborFrameOverrides
+        config.update(realConfig)
+
+        Task {
+            if frameIndex < frames.count,
+               let frame = frames[frameIndex].frame
+            {
+                await frame.setNumberOfStaticNeighborFrames()
+                try? await frame.recomputeMergedHorizonIfExists()
+            }
+        }
+    }
+
+    /// Remove any per-frame override for numberStaticNeighborFrames on `frameIndex`,
+    /// reverting it to the global default.  Invalidates and recomputes the merged
+    /// horizon if one already exists.
+    func clearStaticNeighborFrameOverride(forFrame frameIndex: Int) {
+        staticNeighborFrameOverrides.removeValue(forKey: frameIndex)
+        var realConfig = config.config()
+        realConfig.staticNeighborFrameOverrides = staticNeighborFrameOverrides
+        config.update(realConfig)
+
+        Task {
+            if frameIndex < frames.count,
+               let frame = frames[frameIndex].frame
+            {
+                await frame.setNumberOfStaticNeighborFrames()
+                try? await frame.recomputeMergedHorizonIfExists()
+            }
+        }
+    }
+
     var cameraMotion: CameraMotion {
         didSet {
             var realConfig = config.config()
@@ -773,6 +831,7 @@ public final class ImageSequenceViewModel {
         self.numberOfNeighborFrames = config.numberFinalProcessingNeighborsNeeded
         self.cleanMethod = config.cleanMethod
         self.pixelReplacementOverrides = config.pixelReplacementOverrides
+        self.staticNeighborFrameOverrides = config.staticNeighborFrameOverrides
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.numberOfFramesToProcessConcurrently = config.numberOfFramesToProcessConcurrently
         self.maxConcurrentKeypointCalculations = config.maxConcurrentKeypointCalculations

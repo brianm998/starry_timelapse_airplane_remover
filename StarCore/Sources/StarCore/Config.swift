@@ -157,7 +157,7 @@ public struct Config: Codable, Sendable, Transferable {
     // the default pixel replement method for this sequence
     public var cleanMethod: CleanMethod
 
-    // any frame specific overrides to the default pixel replacement method 
+    // any frame specific overrides to the default pixel replacement method
     // indexed by frame number
     public var pixelReplacementOverrides: [Int:CleanMethod] = [:]
 
@@ -166,6 +166,19 @@ public struct Config: Codable, Sendable, Transferable {
             method
         } else {
             cleanMethod
+        }
+    }
+
+    // per-frame overrides for numberStaticNeighborFrames, indexed by frame number.
+    // allows specific frames to use a larger (or smaller) neighbor count for the
+    // merged horizon computation without slowing down the whole sequence.
+    public var staticNeighborFrameOverrides: [Int:Int] = [:]
+
+    public func numberStaticNeighborFrames(for frameIndex: Int) -> Int {
+        if let override = staticNeighborFrameOverrides[frameIndex] {
+            override
+        } else {
+            numberStaticNeighborFrames
         }
     }
     
@@ -422,7 +435,8 @@ public struct Config: Codable, Sendable, Transferable {
         self.tempOutputPath = try c.decodeIfPresent(String.self, forKey: .tempOutputPath) ?? self.tempOutputPath
         self.outputPath = try c.decodeIfPresent(String.self, forKey: .outputPath) ?? self.outputPath
         self.cleanMethod = try c.decodeIfPresent(CleanMethod.self, forKey: .cleanMethod) ?? self.cleanMethod
-        self.pixelReplacementOverrides = try c.decodeIfPresent([Int:CleanMethod].self, forKey: .pixelReplacementOverrides) ?? self.pixelReplacementOverrides        
+        self.pixelReplacementOverrides = try c.decodeIfPresent([Int:CleanMethod].self, forKey: .pixelReplacementOverrides) ?? self.pixelReplacementOverrides
+        self.staticNeighborFrameOverrides = try c.decodeIfPresent([Int:Int].self, forKey: .staticNeighborFrameOverrides) ?? self.staticNeighborFrameOverrides        
         self.detectionType = try c.decodeIfPresent(DetectionType.self, forKey: .detectionType) ?? self.detectionType
         self.tripodHeadWasMoving = try c.decodeIfPresent(Bool.self, forKey: .tripodHeadWasMoving) ?? self.tripodHeadWasMoving
 

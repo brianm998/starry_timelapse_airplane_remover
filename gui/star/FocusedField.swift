@@ -17,6 +17,7 @@ enum FocusedField: Hashable {
     case maxConcurrentHomographys
     case maxConcurrentMerges
     case numberStaticNeighborFrames
+    case frameStaticNeighborFrames
     case horizonVerticalShiftAmount
     case minAlignmentFrames
     case alignmentMaxKeypoints

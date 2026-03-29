@@ -344,11 +344,29 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func setNumberOfStaticNeighborFrames(with config: Config? = nil) async {
         if let config {
-            self.staticNeighborFrames = calculateNeighborIndices(config.numberStaticNeighborFrames)
+            self.staticNeighborFrames = calculateNeighborIndices(config.numberStaticNeighborFrames(for: frameIndex))
         } else {
             let config = await configManager.config()
-            self.staticNeighborFrames = calculateNeighborIndices(config.numberStaticNeighborFrames)
+            self.staticNeighborFrames = calculateNeighborIndices(config.numberStaticNeighborFrames(for: frameIndex))
         }
+    }
+
+    /// If the merged horizon has already been computed for this frame, deletes the
+    /// cached image and recomputes it using the current staticNeighborFrames count.
+    /// Call this after changing the per-frame staticNeighborFrames override so that
+    /// already-processed frames get an updated merged horizon without a full reprocess.
+    public func recomputeMergedHorizonIfExists() async throws {
+        guard imageAccessor.imageExists(
+          frameIndex: frameIndex,
+          ofType: .mergedHorizon,
+          atSize: .original
+        ) else { return }
+        imageAccessor.deleteImages(
+          frameIndex: frameIndex,
+          ofTypes: [.mergedHorizon],
+          atSizes: [.original, .preview]
+        )
+        _ = try await loadOrCreateFinalHorizonMask()
     }
           
     public func setNumberOfAlignedFrames(with config: Config? = nil) async {
