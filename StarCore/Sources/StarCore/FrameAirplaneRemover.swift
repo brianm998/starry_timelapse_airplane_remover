@@ -371,11 +371,30 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           
     public func setNumberOfAlignedFrames(with config: Config? = nil) async {
         if let config {
-            self.alignmentFrames = calculateNeighborIndices(config.numberAlignedNeighborFrames)
+            self.alignmentFrames = calculateNeighborIndices(config.numberAlignedNeighborFrames(for: frameIndex))
         } else {
             let config = await configManager.config()
-            self.alignmentFrames = calculateNeighborIndices(config.numberAlignedNeighborFrames)
+            self.alignmentFrames = calculateNeighborIndices(config.numberAlignedNeighborFrames(for: frameIndex))
         }
+    }
+
+    /// Deletes star-alignment-related cached images and keypoint files for this
+    /// frame if they have already been computed.  Returns `true` when something
+    /// was invalidated so the caller knows whether to trigger reprocessing.
+    /// Only alignment files are removed; horizon masks are left intact.
+    public func invalidateStarAlignmentIfExists() async throws -> Bool {
+        guard imageAccessor.imageExists(
+          frameIndex: frameIndex,
+          ofType: .starAligned,
+          atSize: .original
+        ) else { return false }
+        imageAccessor.deleteImages(
+          frameIndex: frameIndex,
+          ofTypes: [.starAligned, .earthAligned, .subtraction],
+          atSizes: [.original, .preview]
+        )
+        try removeNumberOfAlignedImagesForThisFrameFile()
+        return true
     }
     
     public func calculateNeighborIndices(_ alignmentNumber: Int) -> [Int] {

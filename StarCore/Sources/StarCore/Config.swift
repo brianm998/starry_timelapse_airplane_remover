@@ -181,6 +181,19 @@ public struct Config: Codable, Sendable, Transferable {
             numberStaticNeighborFrames
         }
     }
+
+    // per-frame overrides for numberAlignedNeighborFrames, indexed by frame number.
+    // allows specific frames to use a different neighbor count for star alignment
+    // without changing the default for the whole sequence.
+    public var alignedNeighborFrameOverrides: [Int:Int] = [:]
+
+    public func numberAlignedNeighborFrames(for frameIndex: Int) -> Int {
+        if let override = alignedNeighborFrameOverrides[frameIndex] {
+            override
+        } else {
+            numberAlignedNeighborFrames
+        }
+    }
     
     // used with CleanMethod.selective and .automatic(true)
     public var detectionType: DetectionType
@@ -436,7 +449,8 @@ public struct Config: Codable, Sendable, Transferable {
         self.outputPath = try c.decodeIfPresent(String.self, forKey: .outputPath) ?? self.outputPath
         self.cleanMethod = try c.decodeIfPresent(CleanMethod.self, forKey: .cleanMethod) ?? self.cleanMethod
         self.pixelReplacementOverrides = try c.decodeIfPresent([Int:CleanMethod].self, forKey: .pixelReplacementOverrides) ?? self.pixelReplacementOverrides
-        self.staticNeighborFrameOverrides = try c.decodeIfPresent([Int:Int].self, forKey: .staticNeighborFrameOverrides) ?? self.staticNeighborFrameOverrides        
+        self.staticNeighborFrameOverrides = try c.decodeIfPresent([Int:Int].self, forKey: .staticNeighborFrameOverrides) ?? self.staticNeighborFrameOverrides
+        self.alignedNeighborFrameOverrides = try c.decodeIfPresent([Int:Int].self, forKey: .alignedNeighborFrameOverrides) ?? self.alignedNeighborFrameOverrides        
         self.detectionType = try c.decodeIfPresent(DetectionType.self, forKey: .detectionType) ?? self.detectionType
         self.tripodHeadWasMoving = try c.decodeIfPresent(Bool.self, forKey: .tripodHeadWasMoving) ?? self.tripodHeadWasMoving
 

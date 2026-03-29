@@ -536,6 +536,70 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    // per-frame overrides for numberAlignedNeighborFrames
+    var alignedNeighborFrameOverrides: [Int:Int] {
+        didSet {
+            var realConfig = config.config()
+            realConfig.alignedNeighborFrameOverrides = alignedNeighborFrameOverrides
+            config.update(realConfig)
+        }
+    }
+
+    /// The aligned-neighbor-frame count actually in effect for the current frame
+    /// (either an override or the global default).
+    var currentFrameAlignedNeighborCount: Int {
+        alignedNeighborFrameOverrides[currentIndex] ?? numberOfAlignedNeighborFrames
+    }
+
+    /// True when the current frame has a per-frame override for numberAlignedNeighborFrames.
+    var currentFrameHasAlignedNeighborOverride: Bool {
+        alignedNeighborFrameOverrides[currentIndex] != nil
+    }
+
+    /// Set a per-frame override for numberAlignedNeighborFrames on `frameIndex`.
+    /// If star-alignment images already exist for that frame, they are invalidated
+    /// and reprocessing is triggered immediately using the new neighbor count.
+    func set(alignedNeighborFrames count: Int, forFrame frameIndex: Int) {
+        alignedNeighborFrameOverrides[frameIndex] = count
+        var realConfig = config.config()
+        realConfig.alignedNeighborFrameOverrides = alignedNeighborFrameOverrides
+        config.update(realConfig)
+
+        Task {
+            if frameIndex < frames.count,
+               let frame = frames[frameIndex].frame
+            {
+                await frame.setNumberOfAlignedFrames()
+                let wasInvalidated = (try? await frame.invalidateStarAlignmentIfExists()) ?? false
+                if wasInvalidated {
+                    processFrames(from: frameIndex, to: frameIndex, performClean: false)
+                }
+            }
+        }
+    }
+
+    /// Remove any per-frame override for numberAlignedNeighborFrames on `frameIndex`,
+    /// reverting it to the global default.  Invalidates and re-triggers star
+    /// alignment if it has already been computed.
+    func clearAlignedNeighborFrameOverride(forFrame frameIndex: Int) {
+        alignedNeighborFrameOverrides.removeValue(forKey: frameIndex)
+        var realConfig = config.config()
+        realConfig.alignedNeighborFrameOverrides = alignedNeighborFrameOverrides
+        config.update(realConfig)
+
+        Task {
+            if frameIndex < frames.count,
+               let frame = frames[frameIndex].frame
+            {
+                await frame.setNumberOfAlignedFrames()
+                let wasInvalidated = (try? await frame.invalidateStarAlignmentIfExists()) ?? false
+                if wasInvalidated {
+                    processFrames(from: frameIndex, to: frameIndex, performClean: false)
+                }
+            }
+        }
+    }
+
     var cameraMotion: CameraMotion {
         didSet {
             var realConfig = config.config()
@@ -832,6 +896,7 @@ public final class ImageSequenceViewModel {
         self.cleanMethod = config.cleanMethod
         self.pixelReplacementOverrides = config.pixelReplacementOverrides
         self.staticNeighborFrameOverrides = config.staticNeighborFrameOverrides
+        self.alignedNeighborFrameOverrides = config.alignedNeighborFrameOverrides
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.numberOfFramesToProcessConcurrently = config.numberOfFramesToProcessConcurrently
         self.maxConcurrentKeypointCalculations = config.maxConcurrentKeypointCalculations
