@@ -1,23 +1,29 @@
 // RandomWalkerHorizon.cpp — Edge-aware Random Walker horizon detection
 //
-// Implements a Random Walker segmentation algorithm optimised for horizon
-// detection in astronomical timelapse images.  The algorithm:
+// Implements a Random Walker segmentation with a **data term** (color model)
+// optimised for horizon detection in astronomical timelapse images.
 //
-//   1. Converts the image to grayscale, crops to the ROI around the user's
-//      painted band, and downsamples to a working resolution.
-//   2. Computes edge weights: w(i,j) = exp(-beta * |g_i - g_j|^2), where
-//      strong gradients (horizon edges) produce near-zero weights (barriers).
-//   3. Seeds: above the band = sky (prob=1), below = ground (prob=0).
-//   4. Solves for the unknown region via Gauss-Seidel iteration on the
-//      graph Laplacian — no explicit matrix assembly required.
-//   5. Extracts per-column horizon Y by scanning upward from ground until
-//      prob >= 0.5 (the sky/ground boundary).
-//   6. Snaps to the nearest strong vertical edge, then median-filters.
-//   7. Upsamples back to the original image resolution.
+// The standard Random Walker (Grady 2006) uses only pairwise edge weights,
+// producing a probability field whose 0.5 contour sits at the geodesic
+// midpoint between seed sets.  For horizons this is insufficient — the
+// boundary just averages the band rather than snapping to the ridgeline.
 //
-// Stars are suppressed by a Gaussian pre-blur: a 1-3 px star is smeared
-// across ~5-7 px, drastically reducing its gradient magnitude, while the
-// spatially extended horizon edge retains ~90% of its strength.
+// The extended formulation adds a per-pixel data/prior term:
+//
+//   prob(r,c) = [ Σ w_ij·prob(j) + λ·dataTerm(r,c) ] / [ Σ w_ij + λ ]
+//
+// where dataTerm ∈ [0,1] is the probability of "sky" based on the pixel's
+// CIE L*a*b* colour distance to sky vs ground centroids (SIOX-like).
+// This combines:
+//   • Random Walker's edge awareness (strong gradients resist crossing)
+//   • SIOX's colour modelling (knows what sky/ground look like)
+//
+// Additional horizon-specific enhancements:
+//   • LAB colour-space edge weights (more distinctive than grayscale)
+//   • Anisotropic weighting (vertical edges boosted for horizontal horizons)
+//   • Gentle star suppression via small median blur (preserves horizon edge)
+//   • Sobel edge snapping with wider search window
+//   • Multi-scale solve for performance on large images
 
 #include "PixelatedImageBridge.h"
 #include "MatWrapper.h"
@@ -35,6 +41,57 @@
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// Convert to LAB float32 (3-channel, L in [0,100], a/b in ~[-128,127])
+static cv::Mat toLAB32F(const cv::Mat& input) {
+    cv::Mat bgr8;
+
+    // First ensure 8-bit BGR
+    if (input.channels() == 4) {
+        cv::Mat temp;
+        cv::cvtColor(input, temp, cv::COLOR_BGRA2BGR);
+        if (temp.depth() != CV_8U) {
+            double minVal, maxVal;
+            cv::minMaxLoc(temp.reshape(1), &minVal, &maxVal);
+            if (maxVal > 255.0)
+                temp.convertTo(bgr8, CV_8UC3, 255.0 / maxVal);
+            else
+                temp.convertTo(bgr8, CV_8UC3);
+        } else {
+            bgr8 = temp;
+        }
+    } else if (input.channels() == 3) {
+        if (input.depth() != CV_8U) {
+            double minVal, maxVal;
+            cv::minMaxLoc(input.reshape(1), &minVal, &maxVal);
+            if (maxVal > 255.0)
+                input.convertTo(bgr8, CV_8UC3, 255.0 / maxVal);
+            else
+                input.convertTo(bgr8, CV_8UC3);
+        } else {
+            bgr8 = input;
+        }
+    } else {
+        // Grayscale → fake BGR
+        cv::Mat gray = input;
+        if (gray.depth() != CV_8U) {
+            double minVal, maxVal;
+            cv::minMaxLoc(gray, &minVal, &maxVal);
+            if (maxVal > 255.0)
+                gray.convertTo(gray, CV_8U, 255.0 / maxVal);
+            else
+                gray.convertTo(gray, CV_8U);
+        }
+        cv::cvtColor(gray, bgr8, cv::COLOR_GRAY2BGR);
+    }
+
+    cv::Mat lab;
+    cv::cvtColor(bgr8, lab, cv::COLOR_BGR2Lab);
+
+    cv::Mat labF;
+    lab.convertTo(labF, CV_32FC3);  // L in [0,255], a/b in [0,255] (OpenCV convention)
+    return labF;
+}
 
 static cv::Mat toGray32F(const cv::Mat& input) {
     cv::Mat gray;
@@ -57,39 +114,75 @@ static cv::Mat toGray32F(const cv::Mat& input) {
     return f;
 }
 
-// Compute edge weights between horizontally and vertically adjacent pixels.
-// wRight(r,c) = weight between (r,c) and (r,c+1).
-// wDown(r,c)  = weight between (r,c) and (r+1,c).
-static void computeEdgeWeights(const cv::Mat& gray, double beta,
-                               cv::Mat& wRight, cv::Mat& wDown) {
-    int rows = gray.rows, cols = gray.cols;
+// Compute edge weights using LAB colour distance.
+// Anisotropic: vertical edges (wDown) use a boosted beta to make
+// horizontal boundaries (horizons) harder to cross.
+static void computeEdgeWeightsLAB(const cv::Mat& lab, double beta,
+                                  double verticalBoost,
+                                  cv::Mat& wRight, cv::Mat& wDown) {
+    int rows = lab.rows, cols = lab.cols;
     wRight = cv::Mat::zeros(rows, cols, CV_32F);
     wDown  = cv::Mat::zeros(rows, cols, CV_32F);
 
+    float betaH = (float)beta;
+    float betaV = (float)(beta * verticalBoost);
+
     for (int r = 0; r < rows; r++) {
-        const float* g = gray.ptr<float>(r);
+        const cv::Vec3f* row = lab.ptr<cv::Vec3f>(r);
         float* wr = wRight.ptr<float>(r);
         float* wd = wDown.ptr<float>(r);
-        const float* gNext = (r + 1 < rows) ? gray.ptr<float>(r + 1) : nullptr;
+        const cv::Vec3f* rowNext = (r + 1 < rows) ? lab.ptr<cv::Vec3f>(r + 1) : nullptr;
 
         for (int c = 0; c < cols; c++) {
             if (c + 1 < cols) {
-                float d = g[c] - g[c + 1];
-                wr[c] = std::exp(-(float)beta * d * d);
+                cv::Vec3f d = row[c] - row[c + 1];
+                float dist2 = d[0]*d[0] + d[1]*d[1] + d[2]*d[2];
+                // Normalise: L in [0,255], a/b in [0,255] in OpenCV LAB
+                // Max dist² ≈ 3 * 255² ≈ 195075.  Scale to [0,~1] range.
+                wr[c] = std::exp(-betaH * dist2 / 65025.0f);
             }
-            if (gNext) {
-                float d = g[c] - gNext[c];
-                wd[c] = std::exp(-(float)beta * d * d);
+            if (rowNext) {
+                cv::Vec3f d = row[c] - rowNext[c];
+                float dist2 = d[0]*d[0] + d[1]*d[1] + d[2]*d[2];
+                // Boosted beta for vertical edges → horizontal boundaries
+                // are harder to cross.
+                wd[c] = std::exp(-betaV * dist2 / 65025.0f);
             }
         }
     }
 }
 
-// In-place Gauss-Seidel iteration.
-// Updates only pixels where seedMask == 0.
-// Returns max absolute change (convergence metric).
-static float gaussSeidelIteration(cv::Mat& prob, const cv::Mat& seedMask,
-                                  const cv::Mat& wRight, const cv::Mat& wDown) {
+// Compute per-pixel data term: probability of being sky based on LAB
+// colour distance to sky vs ground centroids.
+// Returns a CV_32F image in [0,1] where 1.0 = sky, 0.0 = ground.
+static cv::Mat computeDataTerm(const cv::Mat& lab,
+                               const cv::Vec3f& skyCentroid,
+                               const cv::Vec3f& gndCentroid) {
+    int rows = lab.rows, cols = lab.cols;
+    cv::Mat data(rows, cols, CV_32F);
+
+    for (int r = 0; r < rows; r++) {
+        const cv::Vec3f* labRow = lab.ptr<cv::Vec3f>(r);
+        float* dataRow = data.ptr<float>(r);
+        for (int c = 0; c < cols; c++) {
+            cv::Vec3f dSky = labRow[c] - skyCentroid;
+            cv::Vec3f dGnd = labRow[c] - gndCentroid;
+            float distSky = std::sqrt(dSky[0]*dSky[0] + dSky[1]*dSky[1] + dSky[2]*dSky[2]);
+            float distGnd = std::sqrt(dGnd[0]*dGnd[0] + dGnd[1]*dGnd[1] + dGnd[2]*dGnd[2]);
+            float total = distSky + distGnd;
+            // P(sky) = distGnd / (distSky + distGnd)
+            dataRow[c] = (total > 1e-6f) ? (distGnd / total) : 0.5f;
+        }
+    }
+    return data;
+}
+
+// Gauss-Seidel iteration WITH data term.
+// For each unknown pixel:
+//   prob = (Σ w·prob_neighbor + lambda·dataTerm) / (Σ w + lambda)
+static float gaussSeidelWithData(cv::Mat& prob, const cv::Mat& seedMask,
+                                 const cv::Mat& wRight, const cv::Mat& wDown,
+                                 const cv::Mat& dataTerm, float lambda) {
     int rows = prob.rows, cols = prob.cols;
     float maxDelta = 0.0f;
 
@@ -98,56 +191,54 @@ static float gaussSeidelIteration(cv::Mat& prob, const cv::Mat& seedMask,
         const uchar* s = seedMask.ptr<uchar>(r);
         const float* wr = wRight.ptr<float>(r);
         const float* wd = wDown.ptr<float>(r);
+        const float* dt = dataTerm.ptr<float>(r);
 
-        // Pointers to adjacent rows
-        const float* pUp   = (r > 0)         ? prob.ptr<float>(r - 1)  : nullptr;
-        const float* pDown = (r + 1 < rows)  ? prob.ptr<float>(r + 1)  : nullptr;
-        const float* wdUp  = (r > 0)         ? wDown.ptr<float>(r - 1) : nullptr;
+        const float* pUp   = (r > 0)        ? prob.ptr<float>(r - 1)  : nullptr;
+        const float* pDown = (r + 1 < rows) ? prob.ptr<float>(r + 1)  : nullptr;
+        const float* wdUp  = (r > 0)        ? wDown.ptr<float>(r - 1) : nullptr;
 
         for (int c = 0; c < cols; c++) {
-            if (s[c] != 0) continue;  // seeded — locked
+            if (s[c] != 0) continue;
 
             float sumW = 0.0f;
             float sumWP = 0.0f;
 
-            // Left neighbor
+            // Left
             if (c > 0) {
                 float w = wRight.ptr<float>(r)[c - 1];
-                sumW += w;
-                sumWP += w * p[c - 1];
+                sumW += w;  sumWP += w * p[c - 1];
             }
-            // Right neighbor
+            // Right
             if (c + 1 < cols) {
                 float w = wr[c];
-                sumW += w;
-                sumWP += w * p[c + 1];
+                sumW += w;  sumWP += w * p[c + 1];
             }
-            // Up neighbor
+            // Up
             if (pUp) {
                 float w = wdUp[c];
-                sumW += w;
-                sumWP += w * pUp[c];
+                sumW += w;  sumWP += w * pUp[c];
             }
-            // Down neighbor
+            // Down
             if (pDown) {
                 float w = wd[c];
-                sumW += w;
-                sumWP += w * pDown[c];
+                sumW += w;  sumWP += w * pDown[c];
             }
 
-            if (sumW > 1e-12f) {
-                float newVal = sumWP / sumW;
-                float delta = std::abs(newVal - p[c]);
-                if (delta > maxDelta) maxDelta = delta;
-                p[c] = newVal;
-            }
+            // Data term
+            float denom = sumW + lambda;
+            float newVal = (denom > 1e-12f)
+                ? (sumWP + lambda * dt[c]) / denom
+                : dt[c];
+
+            float delta = std::abs(newVal - p[c]);
+            if (delta > maxDelta) maxDelta = delta;
+            p[c] = newVal;
         }
     }
     return maxDelta;
 }
 
-// Scale an array of ints from full-res column indices to working-res.
-// -1 values are preserved.
+// Scale column array from full-res to working-res coords (ROI-relative).
 static std::vector<int> scaleColumnArray(const int* src, int srcWidth,
                                           int dstWidth, double scaleX,
                                           double scaleY, int roiTop) {
@@ -175,7 +266,6 @@ void pib_random_walker_horizon(MatWrapperRef img,
                                double beta,
                                int maxWorkingWidth,
                                int *outHorizonY) {
-    // Default output: all -1 (no result)
     std::memset(outHorizonY, -1, width * sizeof(int));
 
     if (!img || !bandTopY || !bandBottomY || !skyFloorY || !groundCeilY || width <= 0) {
@@ -195,7 +285,6 @@ void pib_random_walker_horizon(MatWrapperRef img,
 
         // ── 1. Determine ROI ─────────────────────────────────────────────
 
-        // Find the global extent of the painted band.
         int globalTop = imgH, globalBot = 0;
         int colLeft = imgW, colRight = -1;
         for (int c = 0; c < width; c++) {
@@ -213,21 +302,22 @@ void pib_random_walker_horizon(MatWrapperRef img,
             return;
         }
 
-        // Add margin above sky seeds and below ground seeds.
+        // Margin: enough to sample sky/ground centroids from seed regions.
         int bandHeight = globalBot - globalTop;
-        int margin = std::max(20, bandHeight / 5);
+        int margin = std::max(40, bandHeight / 2);
         int roiTop = std::max(0, globalTop - margin);
         int roiBot = std::min(imgH - 1, globalBot + margin);
         int roiH   = roiBot - roiTop + 1;
 
         Log_i("pib_random_walker_horizon: ROI [%d..%d] (%d rows), "
-              "columns [%d..%d], beta=%.1f",
+              "cols [%d..%d], beta=%.1f",
               roiTop, roiBot, roiH, colLeft, colRight, beta);
 
-        // ── 2. Convert to grayscale, crop ROI ────────────────────────────
+        // ── 2. Crop ROI, convert to LAB and grayscale ────────────────────
 
-        cv::Mat grayFull = toGray32F(input);
-        cv::Mat grayROI = grayFull(cv::Range(roiTop, roiBot + 1), cv::Range::all()).clone();
+        cv::Mat roiColor = input(cv::Range(roiTop, roiBot + 1), cv::Range::all()).clone();
+        cv::Mat labROI = toLAB32F(roiColor);
+        cv::Mat grayROI = toGray32F(roiColor);
 
         // ── 3. Downsample to working resolution ──────────────────────────
 
@@ -236,23 +326,38 @@ void pib_random_walker_horizon(MatWrapperRef img,
 
         if (imgW > maxWorkingWidth) {
             scaleX = (double)maxWorkingWidth / imgW;
-            scaleY = scaleX;  // uniform scale
+            scaleY = scaleX;
             workW = maxWorkingWidth;
             workH = std::max(2, (int)(roiH * scaleY + 0.5));
+            cv::resize(labROI,  labROI,  cv::Size(workW, workH), 0, 0, cv::INTER_AREA);
             cv::resize(grayROI, grayROI, cv::Size(workW, workH), 0, 0, cv::INTER_AREA);
         }
 
         Log_d("pib_random_walker_horizon: working size %dx%d (scale %.3f)",
               workW, workH, scaleX);
 
-        // ── 4. Gaussian blur to suppress stars ───────────────────────────
+        // ── 4. Gentle star suppression ───────────────────────────────────
+        // Use a small median filter (3×3) which removes point-source stars
+        // without blurring the horizon edge like Gaussian does.
 
-        cv::GaussianBlur(grayROI, grayROI, cv::Size(5, 5), 1.2);
+        cv::Mat grayBlurred;
+        cv::medianBlur(grayROI, grayBlurred, 3);
 
-        // ── 5. Compute edge weights ──────────────────────────────────────
+        // For LAB, use a small bilateral filter to preserve edges while
+        // smoothing star noise.  (Too expensive at full res, fine at working res.)
+        cv::Mat lab8u;
+        labROI.convertTo(lab8u, CV_8UC3);
+        cv::Mat labSmooth;
+        cv::bilateralFilter(lab8u, labSmooth, 5, 20, 20);
+        labSmooth.convertTo(labROI, CV_32FC3);
+
+        // ── 5. Compute LAB edge weights (anisotropic) ────────────────────
+        // Vertical boost: horizontal boundaries (horizons) are 2x harder to
+        // cross than vertical features.
 
         cv::Mat wRight, wDown;
-        computeEdgeWeights(grayROI, beta, wRight, wDown);
+        double verticalBoost = 2.0;
+        computeEdgeWeightsLAB(labROI, beta, verticalBoost, wRight, wDown);
 
         // ── 6. Scale per-column arrays to working resolution ─────────────
 
@@ -261,14 +366,72 @@ void pib_random_walker_horizon(MatWrapperRef img,
         auto wBandTop    = scaleColumnArray(bandTopY,    width, workW, scaleX, scaleY, roiTop);
         auto wBandBot    = scaleColumnArray(bandBottomY, width, workW, scaleX, scaleY, roiTop);
 
-        // ── 7. Build seed mask and initial probabilities ─────────────────
+        // ── 7. Compute sky/ground centroids from seed regions ────────────
 
-        cv::Mat prob(workH, workW, CV_32F, cv::Scalar(0.5f));
+        cv::Vec3d skySum(0,0,0), gndSum(0,0,0);
+        int nSky = 0, nGnd = 0;
+
+        // Sample every Nth column/row for speed
+        int colStep = std::max(1, workW / 200);
+        for (int c = 0; c < workW; c += colStep) {
+            if (wBandTop[c] < 0) continue;
+
+            int skyF = std::max(0, std::min(workH - 1, wSkyFloor[c]));
+            int gndC = std::max(0, std::min(workH - 1, wGndCeiling[c]));
+
+            // Sky: sample from top of ROI to sky floor
+            int skyStep = std::max(1, skyF / 10);
+            for (int r = 0; r < skyF; r += skyStep) {
+                cv::Vec3f v = labROI.at<cv::Vec3f>(r, c);
+                skySum += cv::Vec3d(v[0], v[1], v[2]);
+                nSky++;
+            }
+
+            // Ground: sample from ground ceiling to bottom of ROI
+            int gndSpan = workH - gndC;
+            int gndStep = std::max(1, gndSpan / 10);
+            for (int r = gndC; r < workH; r += gndStep) {
+                cv::Vec3f v = labROI.at<cv::Vec3f>(r, c);
+                gndSum += cv::Vec3d(v[0], v[1], v[2]);
+                nGnd++;
+            }
+        }
+
+        cv::Vec3f skyCentroid(0,0,0), gndCentroid(0,0,0);
+        if (nSky > 0) skyCentroid = cv::Vec3f((float)(skySum[0]/nSky),
+                                               (float)(skySum[1]/nSky),
+                                               (float)(skySum[2]/nSky));
+        if (nGnd > 0) gndCentroid = cv::Vec3f((float)(gndSum[0]/nGnd),
+                                               (float)(gndSum[1]/nGnd),
+                                               (float)(gndSum[2]/nGnd));
+
+        Log_d("pib_random_walker_horizon: sky centroid LAB=(%.1f, %.1f, %.1f) "
+              "ground centroid LAB=(%.1f, %.1f, %.1f) "
+              "(nSky=%d, nGnd=%d)",
+              skyCentroid[0], skyCentroid[1], skyCentroid[2],
+              gndCentroid[0], gndCentroid[1], gndCentroid[2],
+              nSky, nGnd);
+
+        // ── 8. Compute data term ─────────────────────────────────────────
+
+        cv::Mat dataTerm = computeDataTerm(labROI, skyCentroid, gndCentroid);
+
+        // Data term strength (lambda).  Higher values make the colour model
+        // dominate over diffusion; lower values rely more on edges.
+        // For astro images: terrain and sky often have very different colours
+        // (blue sky vs dark/brown ground), so a moderate lambda works well.
+        float lambda = 0.5f;
+
+        // ── 9. Build seed mask and initial probabilities ─────────────────
+
+        cv::Mat prob(workH, workW, CV_32F);
         cv::Mat seedMask(workH, workW, CV_8UC1, cv::Scalar(0));
+
+        // Initialise prob from data term (colour-model prior)
+        dataTerm.copyTo(prob);
 
         for (int c = 0; c < workW; c++) {
             if (wBandTop[c] < 0 || wBandBot[c] < 0) {
-                // Unpainted column: mark entire column as seeded (won't participate)
                 for (int r = 0; r < workH; r++) {
                     seedMask.at<uchar>(r, c) = 1;
                     prob.at<float>(r, c) = 0.5f;
@@ -279,47 +442,44 @@ void pib_random_walker_horizon(MatWrapperRef img,
             int skyF = std::max(0, wSkyFloor[c]);
             int gndC = std::min(workH - 1, wGndCeiling[c]);
 
-            // Sky seeds: from top of ROI to sky floor
             for (int r = 0; r <= skyF && r < workH; r++) {
                 prob.at<float>(r, c) = 1.0f;
                 seedMask.at<uchar>(r, c) = 1;
             }
-
-            // Ground seeds: from ground ceiling to bottom of ROI
             for (int r = gndC; r < workH; r++) {
                 prob.at<float>(r, c) = 0.0f;
                 seedMask.at<uchar>(r, c) = 1;
             }
         }
 
-        // ── 8. Multi-scale Gauss-Seidel solve ────────────────────────────
+        // ── 10. Multi-scale Gauss-Seidel solve WITH data term ────────────
 
-        // Coarse solve (half resolution)
+        // Coarse solve
         if (workW > 64 && workH > 16) {
             int coarseW = workW / 2;
             int coarseH = workH / 2;
 
-            cv::Mat coarseProb, coarseSeed, coarseWR, coarseWD;
+            cv::Mat coarseProb, coarseSeed, coarseData;
             cv::resize(prob,     coarseProb, cv::Size(coarseW, coarseH), 0, 0, cv::INTER_NEAREST);
             cv::resize(seedMask, coarseSeed, cv::Size(coarseW, coarseH), 0, 0, cv::INTER_NEAREST);
+            cv::resize(dataTerm, coarseData, cv::Size(coarseW, coarseH), 0, 0, cv::INTER_LINEAR);
 
-            // Recompute edge weights at coarse resolution
-            cv::Mat coarseGray;
-            cv::resize(grayROI, coarseGray, cv::Size(coarseW, coarseH), 0, 0, cv::INTER_AREA);
-            computeEdgeWeights(coarseGray, beta, coarseWR, coarseWD);
+            cv::Mat coarseLab;
+            cv::resize(labROI, coarseLab, cv::Size(coarseW, coarseH), 0, 0, cv::INTER_AREA);
+            cv::Mat coarseWR, coarseWD;
+            computeEdgeWeightsLAB(coarseLab, beta, verticalBoost, coarseWR, coarseWD);
 
-            // Iterate at coarse level
-            for (int iter = 0; iter < 100; iter++) {
-                float maxDelta = gaussSeidelIteration(coarseProb, coarseSeed, coarseWR, coarseWD);
-                if (maxDelta < 1e-3f) {
-                    Log_d("pib_random_walker_horizon: coarse converged at iter %d (delta %.6f)",
-                          iter, maxDelta);
+            for (int iter = 0; iter < 150; iter++) {
+                float maxDelta = gaussSeidelWithData(coarseProb, coarseSeed,
+                                                     coarseWR, coarseWD,
+                                                     coarseData, lambda);
+                if (maxDelta < 5e-4f) {
+                    Log_d("pib_random_walker_horizon: coarse converged at iter %d", iter);
                     break;
                 }
             }
 
-            // Upsample coarse solution as initial guess for fine level.
-            // Only overwrite non-seeded pixels.
+            // Upsample coarse → fine initial guess (unknown pixels only)
             cv::Mat upsampled;
             cv::resize(coarseProb, upsampled, cv::Size(workW, workH), 0, 0, cv::INTER_LINEAR);
             for (int r = 0; r < workH; r++) {
@@ -333,16 +493,17 @@ void pib_random_walker_horizon(MatWrapperRef img,
         }
 
         // Fine solve
-        for (int iter = 0; iter < 200; iter++) {
-            float maxDelta = gaussSeidelIteration(prob, seedMask, wRight, wDown);
+        for (int iter = 0; iter < 300; iter++) {
+            float maxDelta = gaussSeidelWithData(prob, seedMask,
+                                                 wRight, wDown,
+                                                 dataTerm, lambda);
             if (maxDelta < 1e-4f) {
-                Log_d("pib_random_walker_horizon: fine converged at iter %d (delta %.6f)",
-                      iter, maxDelta);
+                Log_d("pib_random_walker_horizon: fine converged at iter %d", iter);
                 break;
             }
         }
 
-        // ── 9. Extract per-column horizon Y (scan UP from ground) ────────
+        // ── 11. Extract per-column horizon Y (scan UP from ground) ───────
 
         std::vector<int> workHorizon(workW, -1);
         for (int c = 0; c < workW; c++) {
@@ -351,9 +512,8 @@ void pib_random_walker_horizon(MatWrapperRef img,
             int gndRow = std::min(workH - 1, wGndCeiling[c]);
             int skyRow = std::max(0, wSkyFloor[c]);
 
-            // Scan upward from ground ceiling to sky floor.
-            // Find the first row (going up) where prob >= 0.5.
-            int horizonR = skyRow;  // default: top of unknown region
+            // Scan upward from ground: find where prob crosses 0.5
+            int horizonR = skyRow;
             for (int r = gndRow; r >= skyRow; r--) {
                 if (prob.at<float>(r, c) >= 0.5f) {
                     horizonR = r;
@@ -363,17 +523,16 @@ void pib_random_walker_horizon(MatWrapperRef img,
             workHorizon[c] = horizonR;
         }
 
-        // ── 10. Edge snapping ────────────────────────────────────────────
-        // Snap each column's horizon to the nearest strong vertical edge
-        // within a small window.
+        // ── 12. Edge snapping ────────────────────────────────────────────
+        // Search a wider window for the strongest vertical gradient.
 
         cv::Mat sobelY;
-        cv::Sobel(grayROI, sobelY, CV_32F, 0, 1, 3);
-        // Use absolute value of vertical gradient
+        cv::Sobel(grayBlurred, sobelY, CV_32F, 0, 1, 3);
         sobelY = cv::abs(sobelY);
 
-        int snapRadius = std::max(3, (int)(5 * scaleY + 0.5));  // ~5 pixels at original res
-        float snapThreshold = 0.03f;  // minimum gradient to snap to
+        // Wider snap radius — up to 15px at working resolution
+        int snapRadius = std::max(5, (int)(15 * scaleY + 0.5));
+        float snapThreshold = 0.015f;
 
         for (int c = 0; c < workW; c++) {
             int hr = workHorizon[c];
@@ -395,9 +554,9 @@ void pib_random_walker_horizon(MatWrapperRef img,
             }
         }
 
-        // ── 11. Median filter at working resolution ──────────────────────
+        // ── 13. Median filter ────────────────────────────────────────────
 
-        int medW = std::max(5, workW / 100);  // ~1% of width, minimum 5
+        int medW = std::max(5, workW / 80);
         std::vector<int> smoothed = workHorizon;
         for (int c = 0; c < workW; c++) {
             if (workHorizon[c] < 0) continue;
@@ -416,10 +575,9 @@ void pib_random_walker_horizon(MatWrapperRef img,
             }
         }
 
-        // ── 12. Upsample horizon Y to full image resolution ─────────────
+        // ── 14. Upsample horizon Y to full image resolution ─────────────
 
         for (int fc = 0; fc < width; fc++) {
-            // Map full-res column to working column
             double wc_f = fc * scaleX;
             int wc0 = (int)wc_f;
             int wc1 = std::min(wc0 + 1, workW - 1);
@@ -440,13 +598,11 @@ void pib_random_walker_horizon(MatWrapperRef img,
             }
         }
 
-        // Fill gaps via linear interpolation between painted columns
-        int lastValid = -1;
-        int lastY = -1;
+        // Fill gaps via linear interpolation
+        int lastValid = -1, lastY = -1;
         for (int c = 0; c < width; c++) {
             if (outHorizonY[c] >= 0) {
                 if (lastValid >= 0 && lastValid < c - 1) {
-                    // Interpolate the gap
                     int span = c - lastValid;
                     for (int g = lastValid + 1; g < c; g++) {
                         double t2 = (double)(g - lastValid) / span;
@@ -459,7 +615,7 @@ void pib_random_walker_horizon(MatWrapperRef img,
             }
         }
 
-        Log_i("pib_random_walker_horizon: done, columns [%d..%d]", colLeft, colRight);
+        Log_i("pib_random_walker_horizon: done, cols [%d..%d]", colLeft, colRight);
 
     } KHT_CATCH_LOG("pib_random_walker_horizon")
 }
