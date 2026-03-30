@@ -133,10 +133,16 @@ static MatWrapperRef medianImageFromMats(const std::vector<cv::Mat>& mats,
 static MatWrapperRef createGradientMaskIntoSky(const cv::Mat &binaryMask, int gradientDistance) {
     cv::Mat skyMask;
     cv::threshold(binaryMask, skyMask, 1, 255, cv::THRESH_BINARY);
-    cv::Mat inverted;
-    cv::bitwise_not(skyMask, inverted);
+    // distanceTransform requires CV_8UC1; convert regardless of input depth/channels
+    cv::Mat skyMask8u;
+    if (skyMask.type() != CV_8UC1) {
+        if (skyMask.channels() > 1) cv::cvtColor(skyMask, skyMask, cv::COLOR_BGR2GRAY);
+        skyMask.convertTo(skyMask8u, CV_8U);
+    } else {
+        skyMask8u = skyMask;
+    }
     cv::Mat dist;
-    cv::distanceTransform(skyMask, dist, cv::DIST_L2, 3);
+    cv::distanceTransform(skyMask8u, dist, cv::DIST_L2, 3);
     cv::Mat distNormalized;
     dist.convertTo(distNormalized, CV_32F);
     distNormalized = cv::min(distNormalized, (float)gradientDistance);
@@ -144,13 +150,23 @@ static MatWrapperRef createGradientMaskIntoSky(const cv::Mat &binaryMask, int gr
     distNormalized *= 255.0f;
     cv::Mat gradientMask;
     distNormalized.convertTo(gradientMask, CV_8UC1);
-    cv::Mat output = cv::min(binaryMask, gradientMask);
+    cv::Mat output = cv::min(skyMask8u, gradientMask);
     return wrap(output);
 }
 
 static MatWrapperRef createGradientMaskIntoGround(const cv::Mat &binaryMask, int gradientDistance) {
+    cv::Mat earthMask;
+    cv::threshold(binaryMask, earthMask, 1, 255, cv::THRESH_BINARY);
+    // distanceTransform requires CV_8UC1; convert regardless of input depth/channels
+    cv::Mat earthMask8u;
+    if (earthMask.type() != CV_8UC1) {
+        if (earthMask.channels() > 1) cv::cvtColor(earthMask, earthMask, cv::COLOR_BGR2GRAY);
+        earthMask.convertTo(earthMask8u, CV_8U);
+    } else {
+        earthMask8u = earthMask;
+    }
     cv::Mat inverted;
-    cv::bitwise_not(binaryMask, inverted);
+    cv::bitwise_not(earthMask8u, inverted);
     cv::Mat edges;
     cv::Canny(inverted, edges, 50, 150);
     cv::Mat dist;
@@ -162,7 +178,7 @@ static MatWrapperRef createGradientMaskIntoGround(const cv::Mat &binaryMask, int
     distNormalized *= 255.0f;
     cv::Mat gradientMask;
     distNormalized.convertTo(gradientMask, CV_8UC1);
-    cv::Mat output = cv::max(binaryMask, gradientMask);
+    cv::Mat output = cv::max(earthMask8u, gradientMask);
     return wrap(output);
 }
 
