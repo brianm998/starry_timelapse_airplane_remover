@@ -1374,6 +1374,109 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return viewY
     }
 
+    // MARK: - Random Walker horizon detection
+
+    /// Edge-aware Random Walker horizon detection within the user's painted band.
+    ///
+    /// This is an alternative to the SIOX method in `computeLiveObjectSelection`.
+    /// It solves a graph-based diffusion problem where:
+    /// - Above the band = sky seeds (probability 1.0)
+    /// - Below the band = ground seeds (probability 0.0)
+    /// - Within the band = unknown, solved via Gauss-Seidel iteration
+    /// - Edge weights = exp(-beta * gradient^2): strong edges resist crossing
+    ///
+    /// The horizon is found by scanning **upward** from the ground seeds,
+    /// locating where the sky probability crosses 0.5.  Results are edge-snapped
+    /// to the nearest strong vertical gradient and median-filtered.
+    ///
+    /// The algorithm operates on a downsampled copy (max 2048px wide) for
+    /// performance, with multi-scale solving for fast convergence.
+    /// Stars are suppressed via Gaussian pre-blur.
+    ///
+    /// - Parameters:
+    ///   - topBoundaryY:         Per-column top of painted band (view coords).
+    ///   - bottomBoundaryY:      Per-column bottom of painted band (view coords).
+    ///   - viewWidth:            Width of the view.
+    ///   - viewHeight:           Height of the view.
+    ///   - knownSkyFloorY:       Per-column lowest Y known sky (view coords).
+    ///   - knownGroundCeilingY:  Per-column highest Y known ground (view coords).
+    ///   - beta:                 Edge weight sensitivity (default 90).
+    /// - Returns: Per-column horizon Y in view coordinates. `nil` = unpainted.
+    public func computeRandomWalkerHorizon(
+        topBoundaryY:    [Int?],
+        bottomBoundaryY: [Int?],
+        viewWidth:  Int,
+        viewHeight: Int,
+        knownSkyFloorY:      [Int?]? = nil,
+        knownGroundCeilingY: [Int?]? = nil,
+        beta: Double = 90.0
+    ) async throws -> [Int?] {
+        // 1. Load original image.
+        guard let original = try await imageAccessor.load(
+                frameIndex: frameIndex,
+                type: .original,
+                atSize: .original
+              )
+        else {
+            throw "computeRandomWalkerHorizon: cannot load original image for frame \(frameIndex)"
+        }
+        let imgW = original.width
+        let imgH = original.height
+
+        // 2. Scale view coords → image pixel coords.
+        let scaleX = Double(imgW) / Double(viewWidth)
+        let scaleY = Double(imgH) / Double(viewHeight)
+
+        let skyFloorSrc   = knownSkyFloorY     ?? topBoundaryY
+        let gndCeilingSrc = knownGroundCeilingY ?? bottomBoundaryY
+
+        // Build Int32 arrays for C bridge.  -1 = unpainted column.
+        var bandTop    = [Int32](repeating: -1, count: imgW)
+        var bandBottom = [Int32](repeating: -1, count: imgW)
+        var skyFloor   = [Int32](repeating: -1, count: imgW)
+        var gndCeiling = [Int32](repeating: -1, count: imgW)
+
+        for ix in 0..<imgW {
+            let vx  = Int((Double(ix) / scaleX).rounded())
+            let col = min(max(vx, 0), topBoundaryY.count - 1)
+
+            if let topVY = topBoundaryY[col] {
+                bandTop[ix] = Int32(min(max(Int((Double(topVY) * scaleY).rounded()), 0), imgH - 1))
+            }
+            if let botVY = bottomBoundaryY[col] {
+                bandBottom[ix] = Int32(min(max(Int((Double(botVY) * scaleY).rounded()), 0), imgH - 1))
+            }
+            if let skyVY = skyFloorSrc[col] {
+                skyFloor[ix] = Int32(min(max(Int((Double(skyVY) * scaleY).rounded()), 0), imgH - 1))
+            }
+            if let gndVY = gndCeilingSrc[col] {
+                gndCeiling[ix] = Int32(min(max(Int((Double(gndVY) * scaleY).rounded()), 0), imgH - 1))
+            }
+        }
+
+        // 3. Call Random Walker C++ implementation.
+        let horizonY = PixelatedImageBridge.randomWalkerHorizon(
+            original.mat,
+            bandTopY: bandTop,
+            bandBottomY: bandBottom,
+            skyFloorY: skyFloor,
+            groundCeilY: gndCeiling,
+            beta: beta
+        )
+
+        // 4. Convert image pixel coords → view coords.
+        var viewY = [Int?](repeating: nil, count: viewWidth)
+        for vx in 0..<viewWidth {
+            let ix = min(max(0, Int((Double(vx) * scaleX).rounded())), imgW - 1)
+            let iy = horizonY[ix]
+            if iy >= 0 {
+                viewY[vx] = Int((Double(iy) / scaleY).rounded())
+            }
+        }
+
+        return viewY
+    }
+
     // MARK: - Save user-painted reference horizon mask
 
     /// Convert a painted horizon (from `HorizonPainterView`) into a binary

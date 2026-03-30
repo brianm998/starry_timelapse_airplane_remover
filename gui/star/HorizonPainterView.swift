@@ -249,12 +249,11 @@ private func triggerBandComputation(
 
     let horizon: [Int?]?
     do {
-        horizon = try await frame.computeLiveObjectSelection(
+        horizon = try await frame.computeRandomWalkerHorizon(
             topBoundaryY:    bandTop,
             bottomBoundaryY: bandBottom,
             viewWidth:       vw,
-            viewHeight:      vh,
-            bandMode:        true
+            viewHeight:      vh
         )
     } catch {
         Log.w("HorizonPainterView: band computation failed: \(error)")
@@ -313,16 +312,15 @@ private func triggerObjectSelection(
 
     paintState.beginExpanding()
 
-    // SIOX three-region horizon detection: global sky/ground centroids
-    // computed from all known pixels, scan only the unknown gap.
+    // Random Walker edge-aware horizon detection: solve diffusion problem
+    // with sky/ground seeds, scan up from ground to find 0.5 boundary.
     let snappedHorizon: [Int?]?
     do {
-        snappedHorizon = try await frame.computeLiveObjectSelection(
+        snappedHorizon = try await frame.computeRandomWalkerHorizon(
             topBoundaryY:        bandTop,
             bottomBoundaryY:     bandBot,
             viewWidth:           vw,
             viewHeight:          vh,
-            bandMode:            true,
             knownSkyFloorY:      skyFloor,
             knownGroundCeilingY: gndCeiling
         )

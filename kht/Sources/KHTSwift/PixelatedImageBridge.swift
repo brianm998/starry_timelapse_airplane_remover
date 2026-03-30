@@ -148,6 +148,55 @@ public enum PixelatedImageBridge {
                                            searchTopFraction, searchBottomFraction) else { return nil }
         return MatWrapper(ref: r)
     }
+    /// Random Walker horizon detection within a user-painted band.
+    ///
+    /// Solves an edge-weighted diffusion on a downsampled ROI, then
+    /// extracts per-column horizon Y by scanning upward from ground
+    /// seeds.  Stars are suppressed by Gaussian pre-blur.
+    ///
+    /// - Parameters:
+    ///   - img:            Full image (any channel count).
+    ///   - bandTopY:       Per-column top of painted band (image pixels). -1 = unpainted.
+    ///   - bandBottomY:    Per-column bottom of painted band.
+    ///   - skyFloorY:      Per-column lowest Y known sky (seed boundary).
+    ///   - groundCeilY:    Per-column highest Y known ground (seed boundary).
+    ///   - beta:           Edge weight sensitivity. Default 90.
+    ///   - maxWorkingWidth: Working resolution width. Default 2048.
+    /// - Returns: Per-column horizon Y in image pixel coords. -1 = no result.
+    public static func randomWalkerHorizon(
+        _ img: MatWrapper,
+        bandTopY: [Int32],
+        bandBottomY: [Int32],
+        skyFloorY: [Int32],
+        groundCeilY: [Int32],
+        beta: Double = 90.0,
+        maxWorkingWidth: Int32 = 2048
+    ) -> [Int32] {
+        let width = Int32(img.cols)
+        var result = [Int32](repeating: -1, count: Int(width))
+        bandTopY.withUnsafeBufferPointer { topBuf in
+            bandBottomY.withUnsafeBufferPointer { botBuf in
+                skyFloorY.withUnsafeBufferPointer { skyBuf in
+                    groundCeilY.withUnsafeBufferPointer { gndBuf in
+                        result.withUnsafeMutableBufferPointer { outBuf in
+                            pib_random_walker_horizon(
+                                img.ref,
+                                topBuf.baseAddress,
+                                botBuf.baseAddress,
+                                skyBuf.baseAddress,
+                                gndBuf.baseAddress,
+                                width,
+                                beta,
+                                maxWorkingWidth,
+                                outBuf.baseAddress
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        return result
+    }
 }
 
 // MARK: - Simple result types

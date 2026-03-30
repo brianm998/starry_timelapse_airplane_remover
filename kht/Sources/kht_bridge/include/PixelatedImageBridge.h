@@ -73,6 +73,33 @@ MatWrapperRef pib_dp_horizon_mask(MatWrapperRef img,
                                   double searchTopFraction,
                                   double searchBottomFraction);
 
+// Random Walker horizon detection within a user-painted band.
+// Solves an edge-weighted diffusion on a downsampled ROI, then extracts
+// per-column horizon Y by scanning upward from ground seeds.
+//
+// img:          Full image (BGR/BGRA/gray; converted to grayscale internally).
+// bandTopY:     Per-column top Y of the painted band (image pixel coords).
+//               -1 = unpainted column.
+// bandBottomY:  Per-column bottom Y of the painted band.
+// skyFloorY:    Per-column lowest Y known to be sky (locked seed boundary).
+// groundCeilY:  Per-column highest Y known to be ground (locked seed boundary).
+// width:        Number of columns (length of every per-column array).
+// beta:         Edge weight sensitivity.  Higher = sharper edges matter more.
+//               Recommended range: 30–200.  Default: 90.
+// maxWorkingWidth: Max width of the downsampled working image (e.g. 2048).
+// outHorizonY:  Caller-allocated int array of length `width`.
+//               Filled with per-column horizon Y in image pixel coords.
+//               -1 = unpainted / no result.
+void pib_random_walker_horizon(MatWrapperRef img,
+                               const int *bandTopY,
+                               const int *bandBottomY,
+                               const int *skyFloorY,
+                               const int *groundCeilY,
+                               int width,
+                               double beta,
+                               int maxWorkingWidth,
+                               int *outHorizonY);
+
 #ifdef __cplusplus
 }
 #endif
