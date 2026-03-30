@@ -52,6 +52,12 @@ public final actor FrameGraphBuilder {
         keypointLimiter.set(
           max: config.maxConcurrentKeypointCalculations
         )
+        Task {
+            await MemoryMonitor.shared.configure(
+                maxMemoryFraction: config.maxMatMemoryFraction,
+                minAvailableMemoryBytes: config.minAvailableMemoryBytes
+            )
+        }
     }
 
     public func add(operation: Operation) {
@@ -430,7 +436,8 @@ public final actor FrameGraphBuilder {
 
         // 6. runs after all have finished
         let completionOp = GraphCompletionOp {
-            Log.d("Frame graph fully finished")
+            Log.i("Frame graph fully finished")
+            Log.i(await MemoryMonitor.shared.stats())
             closure(await errors.elements())
         }
         Log.d("\(mergeOps.count) mergeOps")

@@ -669,6 +669,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     internal func createRefinedHorizonMask() async throws -> HorizonMask? {
         self.set(state: .refiningHorizon)
 
+        // Gate on memory — horizon refinement loads neighbor images
+        let estimatedBytes = MemoryMonitor.estimatedImageBytes(
+            width: width,
+            height: height,
+            componentsPerPixel: 1,  // horizon masks are single-channel 8-bit
+            bytesPerComponent: 1
+        )
+        await MemoryMonitor.shared.waitForMemory(needed: estimatedBytes)
+
         // Ensure we have homography results.
         var homographyResults = neighborStarHomography
         if homographyResults == nil {
@@ -2087,6 +2096,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     ) async throws -> WarpedImageResult {
         var alignmentType: AlignmentType = .sky
 
+        // Gate on memory before loading full-resolution images for alignment.
+        // Each aligned image is roughly width × height × cpp × 2 bytes (16-bit).
+        let estimatedBytes = MemoryMonitor.estimatedImageBytes(
+            width: width,
+            height: height,
+            componentsPerPixel: componentsPerPixel
+        )
+        await MemoryMonitor.shared.waitForMemory(needed: estimatedBytes)
+
         Log.d("frame \(frameIndex) loadOrCreateAlignedImage of type \(type)")
         
         switch type {
@@ -2988,11 +3006,19 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
-    // run after shouldRemove has been set for each group, 
+    // run after shouldRemove has been set for each group,
     // does the final removing and then writes out the output files
     public func finishSelective() async throws {
         Log.d("frame \(self.frameIndex) starting to finish")
-        
+
+        // Gate on memory before loading the original image for final output
+        let estimatedBytes = MemoryMonitor.estimatedImageBytes(
+            width: width,
+            height: height,
+            componentsPerPixel: componentsPerPixel
+        )
+        await MemoryMonitor.shared.waitForMemory(needed: estimatedBytes)
+
         mkdir(await self.outliersDirname)
         
         await self.writeOutliersRemoveReasons()
@@ -3175,8 +3201,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
         self.set(state: .complete)
+        await MemoryMonitor.shared.memoryFreed()
         if let completion { await completion() }
-        
+
         Log.i("frame \(self.frameIndex) complete")
     }
 
@@ -4253,6 +4280,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
      */
     func createAutoProcessedImage() async throws -> PixelatedImage? {
         Log.i("frame \(frameIndex) creating auto processed image")
+
+        // Gate on memory — this method loads star-aligned (and possibly earth-aligned)
+        // plus the original image, so estimate ~2 full images worth
+        let estimatedBytes = MemoryMonitor.estimatedImageBytes(
+            width: width,
+            height: height,
+            componentsPerPixel: componentsPerPixel
+        ) * 2
+        await MemoryMonitor.shared.waitForMemory(needed: estimatedBytes)
+
         let result = try await loadOrCreateStarAlignedImage()
         let starAlignedImage = result.warpedFrame
 
@@ -4671,6 +4708,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               overwrite: false
             )*/
             self.set(state: .complete)
+            await MemoryMonitor.shared.memoryFreed()
         }
     }
 

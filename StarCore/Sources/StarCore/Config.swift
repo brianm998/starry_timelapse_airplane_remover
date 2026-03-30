@@ -243,11 +243,15 @@ public struct Config: Codable, Sendable, Transferable {
     // and it is not specific to an image sequence, move it elsewhere
     public var supportedImageFileTypes = [".tif", ".tiff", "jpg", "jpeg", "png", "bmp", "ndr", "ppm", "pgm", "pdm"]
 
-    // XXX use this to try to avoid running out of memory somehow
-    // maybe determine megapixels of images, and guestimate usage and
-    // avoid spawaning too many threads?
-//    public var memorySizeBytes = ProcessInfo.processInfo.physicalMemory
-//    public var memorySizeGigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
+    // Memory management: fraction of physical memory that star is allowed to use.
+    // Value between 0.1 and 0.95.  MemoryMonitor will gate large allocations
+    // when mat memory exceeds this fraction of physical RAM.
+    public var maxMatMemoryFraction: Double = 0.75
+
+    // Memory management: minimum bytes of available system memory to preserve.
+    // MemoryMonitor will delay allocations if available memory drops below this.
+    // Default 1 GB.
+    public var minAvailableMemoryBytes: UInt64 = 1_073_741_824
 
     // used by updatable log
     public var progressBarLength = 35
@@ -516,6 +520,9 @@ public struct Config: Codable, Sendable, Transferable {
         self.dpHorizonSobelWeightCount = try c.decodeIfPresent(Int.self, forKey: .dpHorizonSobelWeightCount) ?? self.dpHorizonSobelWeightCount
         self.dpHorizonCannyWeightRange = try c.decodeIfPresent([Double].self, forKey: .dpHorizonCannyWeightRange) ?? self.dpHorizonCannyWeightRange
         self.dpHorizonCannyWeightCount = try c.decodeIfPresent(Int.self, forKey: .dpHorizonCannyWeightCount) ?? self.dpHorizonCannyWeightCount
+
+        self.maxMatMemoryFraction = try c.decodeIfPresent(Double.self, forKey: .maxMatMemoryFraction) ?? self.maxMatMemoryFraction
+        self.minAvailableMemoryBytes = try c.decodeIfPresent(UInt64.self, forKey: .minAvailableMemoryBytes) ?? self.minAvailableMemoryBytes
     }
 
     /// Expand a [min, max] range and a step count into an array of evenly-spaced values.
