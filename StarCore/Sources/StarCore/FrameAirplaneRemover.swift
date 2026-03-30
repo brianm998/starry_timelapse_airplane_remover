@@ -242,7 +242,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     private var skyKeyPoints: OCVFeatureSet? = nil {
         didSet {
-            Log.d("frame \(frameIndex) did set skyKeyPoints \(skyKeyPoints)")
+            Log.d("frame \(frameIndex) did set skyKeyPoints \(skyKeyPoints as Any)")
             Task { 
                 await observer?.set(numberOfSkyKeyPoints: self.skyKeyPointCount())
             }
@@ -837,7 +837,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         )
 
         // Prepare once — the expensive I/O stage.
-        var seedDetector = HomographyHorizonDetector()
+        let seedDetector = HomographyHorizonDetector()
         let prepared = seedDetector.prepare(
             currentWidth:              currentWidth,
             currentHeight:             currentHeight,
@@ -1518,7 +1518,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             )
         } else {
             // Fallback: single parameter set, same as original behavior
-            var bottomPercentage: Double = 50
+            let bottomPercentage: Double = 50
             guard let mask = try await original.horizonMask(
                     at: frameIndex,
                     bottomPercentage: bottomPercentage,
@@ -1578,16 +1578,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           maxThreshold: config.cannyMaxThreshold,
           useL2Gradient: config.cannyUseL2Gradient
         )
-
-        // Pre-compute Canny edges on the full-resolution image once so all full-res
-        // candidates (Otsu, DP, AND, OR) are scored using the same edge image.
-        let fullResEdgeImage: PixelatedImage? = config.useCannyForHorizonDetection
-          ? try? original.cannyEdgeDetect(
-              minThreshold: config.cannyMinThreshold,
-              maxThreshold: config.cannyMaxThreshold,
-              useL2Gradient: config.cannyUseL2Gradient
-            )
-          : nil
 
         // Step 2: Determine first-pass parameter search space.
         // After the first frame, narrow the bounds based on what worked before.
@@ -1916,17 +1906,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         )
         //        }
         Log.i("frame \(frameIndex) Otsu full resolution score=\(shrunkOtsuScore)")
-        let bestMask   = shrunkOtsuMask
-        let bestScore  = shrunkOtsuScore
-        let bestMethod = "shrunkOtsu"
-        
+
         // Step 7: Record the best parameters for narrowing subsequent frames
         await adaptiveState.recordBest(
           cropAmount: pass2Best.cropAmount,
           firstPassStep: pass1Step
         )
 
-        return bestMask
+        return shrunkOtsuMask
         
     }
 
@@ -2019,32 +2006,24 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
       progressClosure: @Sendable @escaping (SequenceProcessingState) -> Void
     ) async {
         Log.d("processAll")
-        
-        let config = await configManager.config()
 
         Task.detached(priority: .userInitiated) {
-            do {
-                // build with a graph of dependencies between different frames at
-                // different steps of the process
-                await frameGraphBuilder.build(
-                  frames: await self.allFrames,
-                  startIndex: startIndex,
-                  endIndex: endIndex
-                ) { errorArray in
-                    if errorArray.count == 0 {
-                        // success
-                        progressClosure(.done) // XXX make more of these
-                    } else {
-                        // some failures, also reported in errorClosure first
-                        progressClosure(.error(String(errorArray.joined(separator: "\n"))))
-                    }
-                } errorClosure: { errorString in
-                    Log.e("handle this error: \(errorString)")
+            // build with a graph of dependencies between different frames at
+            // different steps of the process
+            await frameGraphBuilder.build(
+              frames: await self.allFrames,
+              startIndex: startIndex,
+              endIndex: endIndex
+            ) { errorArray in
+                if errorArray.count == 0 {
+                    // success
+                    progressClosure(.done) // XXX make more of these
+                } else {
+                    // some failures, also reported in errorClosure first
+                    progressClosure(.error(String(errorArray.joined(separator: "\n"))))
                 }
-
-            } catch {
-                Log.e("ERROR: \(error)")
-                progressClosure(.error("\(error)"))
+            } errorClosure: { errorString in
+                Log.e("handle this error: \(errorString)")
             }
         }
     }
@@ -2330,7 +2309,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             default:
                 break
             }
-            Log.d("frame \(frameIndex) using homography \(homography)")
+            Log.d("frame \(frameIndex) using homography \(homography as Any)")
             if let homography {
                 let result = ImageAligner.align(
                   baseFrameIndex: Int32(frameIndex),
@@ -2363,7 +2342,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 Log.w("frame \(frameIndex) cannot align without homography")
             }
         }
-        Log.i("frame \(frameIndex) got alignment result \(warpedResult) for type \(type)")
+        Log.i("frame \(frameIndex) got alignment result \(warpedResult as Any) for type \(type)")
         guard let warpedResult else {
             Log.e("frame \(frameIndex) got no alignment result")
             // XXX report his error to the UI
@@ -2677,7 +2656,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             return skyKeyPoints
         } else {
             self.skyKeyPoints = try await loadOrCreateOCVFeatures(of: .starAligned)
-            Log.d("frame \(frameIndex) loaded \(self.skyKeyPoints) skyKeyPoints")
+            Log.d("frame \(frameIndex) loaded \(self.skyKeyPoints as Any) skyKeyPoints")
             return self.skyKeyPoints
         } 
     }
@@ -4766,10 +4745,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             let earthAlignedImage = alignmentResult.warpedFrame
             let horizonMask = alignmentResult.warpedHorizon
 
-            var earthImage = earthAlignedImage
-//            if earthImage == nil {
-//                earthImage = failedAlignmentImage
-//            }
+            let earthImage = earthAlignedImage
 
             if let earthImage,
                let earth = PixelatedImage(mat: earthImage)
@@ -5196,7 +5172,7 @@ public actor CountActor {
 }
 
 
-extension OCVFeatureSet: @unchecked Sendable {}
+// OCVFeatureSet is already @unchecked Sendable in KHTSwift
 
 public func doublyLink(frames: [FrameAirplaneRemover]) async {
     // doubly link frames here so that the decision tree can have acess to other frames

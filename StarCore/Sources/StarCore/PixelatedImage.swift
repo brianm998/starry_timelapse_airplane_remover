@@ -127,7 +127,9 @@ public final class PixelatedImage: Sendable {
     // enum to bridge between Data and direct individual component access
     // do we have 8 bits per component, or 16?
     // pixels could have multiple components, or just one.
-    public enum DataFormat: Sendable {
+    // @unchecked because the UnsafeBufferPointer lifetimes are managed
+    // by the owning MatWrapper, which keeps the cv::Mat memory alive.
+    public enum DataFormat: @unchecked Sendable {
 
         // the number of bits per component, not per pixel
         case eightBit(UnsafeBufferPointer<UInt8>)
@@ -1236,8 +1238,8 @@ extension PixelatedImage {
 
 // MARK: - MatWrapper
 
-extension MatWrapper: @unchecked @retroactive Sendable {}
-extension UnsafeBufferPointer: @unchecked @retroactive Sendable {}
+// MatWrapper is already @unchecked Sendable in KHTSwift
+// UnsafeBufferPointer is already Sendable in the Swift stdlib
 
 extension MatWrapper: @retroactive CustomStringConvertible {
     func buffer<T>(of type: T.Type) -> UnsafeBufferPointer<T> {

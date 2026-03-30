@@ -87,8 +87,6 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 
 
     func validateMovingStarAlignment() async {
-        let config = await configManager.config()
-
         Log.d("validateMovingStarAlignment (gap-fill approach) \(frames.count) frames")
 
         // Collect results ordered by frame index

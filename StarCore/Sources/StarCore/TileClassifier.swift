@@ -51,9 +51,7 @@ public enum TileClassifierError: Error, CustomStringConvertible {
     }
 }
 
-extension MLModel: @unchecked Sendable {
-    
-}
+extension MLModel: @unchecked @retroactive Sendable {}
 
 // MARK: - Classifier
 

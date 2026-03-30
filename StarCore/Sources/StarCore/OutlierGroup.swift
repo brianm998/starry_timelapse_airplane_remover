@@ -370,31 +370,22 @@ public actor OutlierGroup: CustomStringConvertible,
         
         var imageData = Data(count: self.bounds.width*self.bounds.height*bytesPerPixel)
 
-        let writeLine = false   // XXX this is nice to see for debugging, but slow
-        
-        // maybe write out the line
-        if writeLine,
-           //           self.size > 150,
-           let line = await self.line()
-        {
-            //Log.d("have LINE \(line)")
-            var pixel = Pixel(numberOfComponents: 3)
-            pixel.blue = 0xFFFF
-            //            pixel.green = 0xFFFF
-            //            pixel.red = 0xFFFF
-            pixel.alpha = 0xFFFF
-            
-            let centralCoord = DoubleCoord(x: Double(self.bounds.width/2),
-                                           y: Double(self.bounds.height/2))
-
-            //Log.d("centralCoord \(centralCoord)")
-            line.iterate(.forwards, from: centralCoord) { x, y, iterationDirection in
-                testRemoveAt(x: x, y: y, pixel: pixel, imageData: &imageData)
-            }
-            line.iterate(.backwards, from: centralCoord) { x, y, iterationDirection in
-                testRemoveAt(x: x, y: y, pixel: pixel, imageData: &imageData)
-            }
-        }
+        // XXX this is nice to see for debugging, but slow
+        // Uncomment to visualize line detection in test images:
+        //
+        // if let line = await self.line() {
+        //     var pixel = Pixel(numberOfComponents: 3)
+        //     pixel.blue = 0xFFFF
+        //     pixel.alpha = 0xFFFF
+        //     let centralCoord = DoubleCoord(x: Double(self.bounds.width/2),
+        //                                    y: Double(self.bounds.height/2))
+        //     line.iterate(.forwards, from: centralCoord) { x, y, iterationDirection in
+        //         testRemoveAt(x: x, y: y, pixel: pixel, imageData: &imageData)
+        //     }
+        //     line.iterate(.backwards, from: centralCoord) { x, y, iterationDirection in
+        //         testRemoveAt(x: x, y: y, pixel: pixel, imageData: &imageData)
+        //     }
+        // }
         
 
         for pixel in pixelSet {
