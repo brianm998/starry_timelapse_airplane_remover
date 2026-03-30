@@ -233,33 +233,42 @@ static cv::Mat makeStarMask(const cv::Mat &gray, int dilateSize = 3, int thresho
 
 MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
                                          double outlierThreshold, bool includeAll) {
-    std::vector<cv::Mat> mats;
-    for (int i = 0; i < count; i++) {
-        MatWrapperRef img = image_cache_load(filenames[i]);
-        if (img) { mats.push_back(img->mat.clone()); mat_wrapper_release(img); }
-    }
-    return medianImageFromMats(mats, outlierThreshold, includeAll);
+    try {
+        std::vector<cv::Mat> mats;
+        for (int i = 0; i < count; i++) {
+            MatWrapperRef img = image_cache_load(filenames[i]);
+            if (img) { mats.push_back(img->mat.clone()); mat_wrapper_release(img); }
+        }
+        return medianImageFromMats(mats, outlierThreshold, includeAll);
+    } KHT_CATCH_LOG("ia_median_merge_filenames")
+    return nullptr;
 }
 
 MatWrapperRef ia_median_merge_image_with_filenames(MatWrapperRef baseImage,
                                                     const char **filenames, int count,
                                                     double outlierThreshold, bool includeAll) {
-    std::vector<cv::Mat> mats;
-    if (baseImage) mats.push_back(baseImage->mat);
-    for (int i = 0; i < count; i++) {
-        MatWrapperRef img = image_cache_load(filenames[i]);
-        if (img) { mats.push_back(img->mat.clone()); mat_wrapper_release(img); }
-    }
-    return medianImageFromMats(mats, outlierThreshold, includeAll);
+    try {
+        std::vector<cv::Mat> mats;
+        if (baseImage) mats.push_back(baseImage->mat);
+        for (int i = 0; i < count; i++) {
+            MatWrapperRef img = image_cache_load(filenames[i]);
+            if (img) { mats.push_back(img->mat.clone()); mat_wrapper_release(img); }
+        }
+        return medianImageFromMats(mats, outlierThreshold, includeAll);
+    } KHT_CATCH_LOG("ia_median_merge_image_with_filenames")
+    return nullptr;
 }
 
 MatWrapperRef ia_median_merge(MatWrapperRef *frames, int count,
                               double outlierThreshold, bool includeAll) {
-    std::vector<cv::Mat> mats;
-    for (int i = 0; i < count; i++) {
-        if (frames[i]) mats.push_back(frames[i]->mat);
-    }
-    return medianImageFromMats(mats, outlierThreshold, includeAll);
+    try {
+        std::vector<cv::Mat> mats;
+        for (int i = 0; i < count; i++) {
+            if (frames[i]) mats.push_back(frames[i]->mat);
+        }
+        return medianImageFromMats(mats, outlierThreshold, includeAll);
+    } KHT_CATCH_LOG("ia_median_merge")
+    return nullptr;
 }
 
 OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
@@ -506,10 +515,16 @@ int ia_align_with_homography(int baseFrameIndex,
 
 MatWrapperRef ia_gradient_mask_into_sky(MatWrapperRef binaryMask, int gradientDistance) {
     if (!binaryMask) return nullptr;
-    return createGradientMaskIntoSky(binaryMask->mat, gradientDistance);
+    try {
+        return createGradientMaskIntoSky(binaryMask->mat, gradientDistance);
+    } KHT_CATCH_LOG("ia_gradient_mask_into_sky")
+    return nullptr;
 }
 
 MatWrapperRef ia_gradient_mask_into_ground(MatWrapperRef binaryMask, int gradientDistance) {
     if (!binaryMask) return nullptr;
-    return createGradientMaskIntoGround(binaryMask->mat, gradientDistance);
+    try {
+        return createGradientMaskIntoGround(binaryMask->mat, gradientDistance);
+    } KHT_CATCH_LOG("ia_gradient_mask_into_ground")
+    return nullptr;
 }

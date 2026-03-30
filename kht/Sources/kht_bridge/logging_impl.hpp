@@ -28,3 +28,10 @@ static inline void kht_log_formatted(const char *level, const char *file,
 #define Log_i(fmt, ...) kht_log_formatted("info",    __FILE__, __PRETTY_FUNCTION__, __LINE__, fmt, ##__VA_ARGS__)
 #define Log_w(fmt, ...) kht_log_formatted("warn",    __FILE__, __PRETTY_FUNCTION__, __LINE__, fmt, ##__VA_ARGS__)
 #define Log_e(fmt, ...) kht_log_formatted("error",   __FILE__, __PRETTY_FUNCTION__, __LINE__, fmt, ##__VA_ARGS__)
+
+// Catch blocks for C++ bridge functions.
+// cv::Exception inherits from std::exception, so we catch everything.
+// Usage: try { ... } KHT_CATCH_LOG("func_name") return default_value;
+#define KHT_CATCH_LOG(func) \
+    catch (const std::exception& e) { Log_e("%s: C++ exception: %s", func, e.what()); } \
+    catch (...) { Log_e("%s: unknown C++ exception", func); }

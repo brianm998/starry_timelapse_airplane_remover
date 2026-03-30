@@ -32,11 +32,13 @@ MatWrapperRef image_cache_load(const char *filename) {
         Log_e("cannot load images with no loader");
         return nullptr;
     }
+    try {
+        LoadContext ctx;
+        g_imageLoader(filename, loadCompletion, &ctx);
 
-    LoadContext ctx;
-    g_imageLoader(filename, loadCompletion, &ctx);
-
-    std::unique_lock<std::mutex> lock(ctx.mtx);
-    ctx.cv.wait(lock, [&] { return ctx.done; });
-    return ctx.result;
+        std::unique_lock<std::mutex> lock(ctx.mtx);
+        ctx.cv.wait(lock, [&] { return ctx.done; });
+        return ctx.result;
+    } KHT_CATCH_LOG("image_cache_load")
+    return nullptr;
 }

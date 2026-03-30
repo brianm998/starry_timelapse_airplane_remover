@@ -608,15 +608,18 @@ MatWrapperRef pib_warp_horizon_mask(MatWrapperRef mask, MatWrapperRef homography
 }
 
 MatWrapperRef pib_binary_horizon_mask(int width, int height, const int *horizonY) {
-    cv::Mat mask(height, width, CV_8UC1, cv::Scalar(255));
-    for (int x = 0; x < width; x++) {
-        int y = horizonY[x];
-        if (y < 0) continue; // -1 means all sky
-        if (y > height) y = height;
-        for (int row = y; row < height; row++)
-            mask.at<uchar>(row, x) = 0;
-    }
-    return wrap(mask);
+    try {
+        cv::Mat mask(height, width, CV_8UC1, cv::Scalar(255));
+        for (int x = 0; x < width; x++) {
+            int y = horizonY[x];
+            if (y < 0) continue; // -1 means all sky
+            if (y > height) y = height;
+            for (int row = y; row < height; row++)
+                mask.at<uchar>(row, x) = 0;
+        }
+        return wrap(mask);
+    } KHT_CATCH_LOG("pib_binary_horizon_mask")
+    return nullptr;
 }
 
 MatWrapperRef pib_dp_horizon_mask(MatWrapperRef img,

@@ -8,18 +8,24 @@
 
 BufferHolderRef buffer_holder_create(uint64_t width, uint64_t height,
                                      int64_t components, uint64_t bitsPerComponent) {
-    auto *bh = new BufferHolderImpl(width, height, components, bitsPerComponent);
-    if (!bh->buffer && (width * height * components * bitsPerComponent / 8) > 0) {
-        delete bh;
-        return nullptr;
-    }
-    return bh;
+    try {
+        auto *bh = new BufferHolderImpl(width, height, components, bitsPerComponent);
+        if (!bh->buffer && (width * height * components * bitsPerComponent / 8) > 0) {
+            delete bh;
+            return nullptr;
+        }
+        return bh;
+    } KHT_CATCH_LOG("buffer_holder_create")
+    return nullptr;
 }
 
 BufferHolderRef buffer_holder_create_copy(const void *buffer, uint64_t width,
                                           uint64_t height, int64_t components,
                                           uint64_t bitsPerComponent) {
-    return new BufferHolderImpl(buffer, width, height, components, bitsPerComponent);
+    try {
+        return new BufferHolderImpl(buffer, width, height, components, bitsPerComponent);
+    } KHT_CATCH_LOG("buffer_holder_create_copy")
+    return nullptr;
 }
 
 void buffer_holder_release(BufferHolderRef ref) { delete ref; }
@@ -37,31 +43,33 @@ uint32_t *buffer_holder_as_uint32(BufferHolderRef ref) { return ref ? (uint32_t*
 
 MatWrapperRef buffer_holder_to_mat(BufferHolderRef ref) {
     if (!ref || !ref->buffer) return nullptr;
+    try {
+        int cvType = -1;
+        uint64_t bpc = ref->bitsPerComponent;
+        int64_t comp = ref->components;
 
-    int cvType = -1;
-    uint64_t bpc = ref->bitsPerComponent;
-    int64_t comp = ref->components;
+        if (bpc == 8) {
+            if (comp == 1) cvType = CV_8UC1;
+            else if (comp == 3) cvType = CV_8UC3;
+            else if (comp == 4) cvType = CV_8UC4;
+        } else if (bpc == 16) {
+            if (comp == 1) cvType = CV_16UC1;
+            else if (comp == 3) cvType = CV_16UC3;
+            else if (comp == 4) cvType = CV_16UC4;
+        } else if (bpc == 32) {
+            if (comp == 1) cvType = CV_32SC1;
+            else if (comp == 3) cvType = CV_32SC3;
+            else if (comp == 4) cvType = CV_32SC4;
+        }
 
-    if (bpc == 8) {
-        if (comp == 1) cvType = CV_8UC1;
-        else if (comp == 3) cvType = CV_8UC3;
-        else if (comp == 4) cvType = CV_8UC4;
-    } else if (bpc == 16) {
-        if (comp == 1) cvType = CV_16UC1;
-        else if (comp == 3) cvType = CV_16UC3;
-        else if (comp == 4) cvType = CV_16UC4;
-    } else if (bpc == 32) {
-        if (comp == 1) cvType = CV_32SC1;
-        else if (comp == 3) cvType = CV_32SC3;
-        else if (comp == 4) cvType = CV_32SC4;
-    }
+        if (cvType < 0) {
+            Log_w("cannot create mat with components %lld and bitsPerComponent %llu",
+                  (long long)comp, (unsigned long long)bpc);
+            return nullptr;
+        }
 
-    if (cvType < 0) {
-        Log_w("cannot create mat with components %lld and bitsPerComponent %llu",
-              (long long)comp, (unsigned long long)bpc);
-        return nullptr;
-    }
-
-    cv::Mat img((int)ref->height, (int)ref->width, cvType, ref->buffer);
-    return new MatWrapperImpl(img); // clones the data
+        cv::Mat img((int)ref->height, (int)ref->width, cvType, ref->buffer);
+        return new MatWrapperImpl(img); // clones the data
+    } KHT_CATCH_LOG("buffer_holder_to_mat")
+    return nullptr;
 }

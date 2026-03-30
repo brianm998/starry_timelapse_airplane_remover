@@ -57,7 +57,10 @@ MatWrapperRef mat_wrapper_load(const char *filename) {
 
 MatWrapperRef mat_wrapper_clone(MatWrapperRef ref) {
     if (!ref) return nullptr;
-    return new MatWrapperImpl(ref->mat);
+    try {
+        return new MatWrapperImpl(ref->mat);
+    } KHT_CATCH_LOG("mat_wrapper_clone")
+    return nullptr;
 }
 
 void mat_wrapper_release(MatWrapperRef ref) {
@@ -67,12 +70,15 @@ void mat_wrapper_release(MatWrapperRef ref) {
 MatWrapperRef mat_wrapper_create(int64_t width, int64_t height, int cvType,
                                  size_t bytesPerRow, void *data,
                                  bool takeOwnership) {
-    if (takeOwnership) {
-        cv::Mat mat((int)height, (int)width, cvType, data, bytesPerRow);
-        return new MatWrapperImpl(mat); // clones
-    } else {
-        return new MatWrapperImpl((int)height, (int)width, cvType, data, bytesPerRow);
-    }
+    try {
+        if (takeOwnership) {
+            cv::Mat mat((int)height, (int)width, cvType, data, bytesPerRow);
+            return new MatWrapperImpl(mat); // clones
+        } else {
+            return new MatWrapperImpl((int)height, (int)width, cvType, data, bytesPerRow);
+        }
+    } KHT_CATCH_LOG("mat_wrapper_create")
+    return nullptr;
 }
 
 // --- Properties ---
@@ -142,20 +148,25 @@ void mat_wrapper_write_to(MatWrapperRef ref, const char *filename) {
 
 void mat_wrapper_save_jpeg(MatWrapperRef ref, uint32_t quality, const char *filename) {
     if (!ref) return;
-    cv::Mat eightBit = ensure8U(ref->mat);
-    std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, (int)quality};
-    cv::imwrite(std::string(filename), eightBit, params);
+    try {
+        cv::Mat eightBit = ensure8U(ref->mat);
+        std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, (int)quality};
+        cv::imwrite(std::string(filename), eightBit, params);
+    } KHT_CATCH_LOG("mat_wrapper_save_jpeg")
 }
 
 MatWrapperRef mat_wrapper_bottom_crop(MatWrapperRef ref, int n) {
     if (!ref) return nullptr;
-    int newHeight = ref->mat.rows - n;
-    if (newHeight <= 0) {
-        Log_w("invalid newHeight %d", newHeight);
-        return wrap(cv::Mat());
-    }
-    cv::Rect roi(0, n, ref->mat.cols, newHeight);
-    return wrap(ref->mat(roi));
+    try {
+        int newHeight = ref->mat.rows - n;
+        if (newHeight <= 0) {
+            Log_w("invalid newHeight %d", newHeight);
+            return wrap(cv::Mat());
+        }
+        cv::Rect roi(0, n, ref->mat.cols, newHeight);
+        return wrap(ref->mat(roi));
+    } KHT_CATCH_LOG("mat_wrapper_bottom_crop")
+    return nullptr;
 }
 
 MatWrapperRef mat_wrapper_up_scale(MatWrapperRef ref, uint64_t width, uint64_t height) {
@@ -184,35 +195,44 @@ MatWrapperRef mat_wrapper_down_scale(MatWrapperRef ref, uint64_t width, uint64_t
 
 MatWrapperRef mat_wrapper_ensure_eight_bit(MatWrapperRef ref) {
     if (!ref) return nullptr;
-    return wrap(ensure8U(ref->mat));
+    try {
+        return wrap(ensure8U(ref->mat));
+    } KHT_CATCH_LOG("mat_wrapper_ensure_eight_bit")
+    return nullptr;
 }
 
 // Convert to single-channel 8-bit grayscale — required for horizon masks
 MatWrapperRef mat_wrapper_ensure_gray_8u(MatWrapperRef ref) {
     if (!ref) return nullptr;
-    cv::Mat result = ensure8U(ref->mat);
-    if (result.channels() > 1) {
-        cv::Mat gray;
-        if (result.channels() == 4)      cv::cvtColor(result, gray, cv::COLOR_BGRA2GRAY);
-        else if (result.channels() == 3) cv::cvtColor(result, gray, cv::COLOR_BGR2GRAY);
-        else                             gray = result;   // shouldn't happen, but be safe
-        return wrap(gray);
-    }
-    return wrap(result);
+    try {
+        cv::Mat result = ensure8U(ref->mat);
+        if (result.channels() > 1) {
+            cv::Mat gray;
+            if (result.channels() == 4)      cv::cvtColor(result, gray, cv::COLOR_BGRA2GRAY);
+            else if (result.channels() == 3) cv::cvtColor(result, gray, cv::COLOR_BGR2GRAY);
+            else                             gray = result;   // shouldn't happen, but be safe
+            return wrap(gray);
+        }
+        return wrap(result);
+    } KHT_CATCH_LOG("mat_wrapper_ensure_gray_8u")
+    return nullptr;
 }
 
 MatWrapperRef mat_wrapper_add_white_rows_on_top(MatWrapperRef ref, int rows) {
     if (!ref) return nullptr;
-    cv::Scalar white;
-    int ch = ref->mat.channels();
-    if (ch == 1) white = cv::Scalar(255);
-    else if (ch == 3) white = cv::Scalar(255, 255, 255);
-    else if (ch == 4) white = cv::Scalar(255, 255, 255, 255);
-    else white = cv::Scalar(255);
+    try {
+        cv::Scalar white;
+        int ch = ref->mat.channels();
+        if (ch == 1) white = cv::Scalar(255);
+        else if (ch == 3) white = cv::Scalar(255, 255, 255);
+        else if (ch == 4) white = cv::Scalar(255, 255, 255, 255);
+        else white = cv::Scalar(255);
 
-    cv::Mat result;
-    cv::copyMakeBorder(ref->mat, result, rows, 0, 0, 0, cv::BORDER_CONSTANT, white);
-    return wrap(result);
+        cv::Mat result;
+        cv::copyMakeBorder(ref->mat, result, rows, 0, 0, 0, cv::BORDER_CONSTANT, white);
+        return wrap(result);
+    } KHT_CATCH_LOG("mat_wrapper_add_white_rows_on_top")
+    return nullptr;
 }
 
 bool mat_wrapper_is_16_bits(MatWrapperRef ref) {
@@ -225,27 +245,36 @@ bool mat_wrapper_is_8_bits(MatWrapperRef ref) {
 
 MatWrapperRef mat_wrapper_ensure_16_bits(MatWrapperRef ref) {
     if (!ref) return nullptr;
-    if (ref->mat.depth() != CV_16U) {
-        cv::Mat img16;
-        ref->mat.convertTo(img16, CV_16U, 256.0);
-        return wrap(img16);
-    }
-    return mat_wrapper_clone(ref);
+    try {
+        if (ref->mat.depth() != CV_16U) {
+            cv::Mat img16;
+            ref->mat.convertTo(img16, CV_16U, 256.0);
+            return wrap(img16);
+        }
+        return mat_wrapper_clone(ref);
+    } KHT_CATCH_LOG("mat_wrapper_ensure_16_bits")
+    return nullptr;
 }
 
 MatWrapperRef mat_wrapper_ensure_8_bits(MatWrapperRef ref) {
     if (!ref) return nullptr;
-    if (ref->mat.depth() != CV_8U) {
-        cv::Mat img8;
-        ref->mat.convertTo(img8, CV_8U, 1.0/256.0);
-        return wrap(img8);
-    }
-    return mat_wrapper_clone(ref);
+    try {
+        if (ref->mat.depth() != CV_8U) {
+            cv::Mat img8;
+            ref->mat.convertTo(img8, CV_8U, 1.0/256.0);
+            return wrap(img8);
+        }
+        return mat_wrapper_clone(ref);
+    } KHT_CATCH_LOG("mat_wrapper_ensure_8_bits")
+    return nullptr;
 }
 
 double mat_wrapper_at_double(MatWrapperRef ref, int row, int col) {
     if (!ref) return 0.0;
-    return ref->mat.at<double>(row, col);
+    try {
+        return ref->mat.at<double>(row, col);
+    } KHT_CATCH_LOG("mat_wrapper_at_double")
+    return 0.0;
 }
 
 // --- Homography ---
@@ -253,18 +282,24 @@ double mat_wrapper_at_double(MatWrapperRef ref, int row, int col) {
 bool mat_wrapper_get_homography_values(MatWrapperRef ref, double *out9) {
     if (!ref || ref->mat.empty() || ref->mat.rows != 3 || ref->mat.cols != 3 || ref->mat.type() != CV_64F)
         return false;
-    for (int r = 0; r < 3; r++)
-        for (int c = 0; c < 3; c++)
-            out9[r * 3 + c] = ref->mat.at<double>(r, c);
-    return true;
+    try {
+        for (int r = 0; r < 3; r++)
+            for (int c = 0; c < 3; c++)
+                out9[r * 3 + c] = ref->mat.at<double>(r, c);
+        return true;
+    } KHT_CATCH_LOG("mat_wrapper_get_homography_values")
+    return false;
 }
 
 MatWrapperRef mat_wrapper_from_homography_values(const double *values9) {
-    cv::Mat H(3, 3, CV_64F);
-    for (int r = 0, i = 0; r < 3; r++)
-        for (int c = 0; c < 3; c++, i++)
-            H.at<double>(r, c) = values9[i];
-    return wrap(H);
+    try {
+        cv::Mat H(3, 3, CV_64F);
+        for (int r = 0, i = 0; r < 3; r++)
+            for (int c = 0; c < 3; c++, i++)
+                H.at<double>(r, c) = values9[i];
+        return wrap(H);
+    } KHT_CATCH_LOG("mat_wrapper_from_homography_values")
+    return nullptr;
 }
 
 // --- Matrix split/combine ---
@@ -272,35 +307,37 @@ MatWrapperRef mat_wrapper_from_homography_values(const double *values9) {
 int mat_wrapper_split(MatWrapperRef ref, int tileWidth, int tileHeight,
                       double overlapPercent, CImageMatrixElement **outElements) {
     if (!ref || outElements == nullptr) return 0;
+    try {
+        int stepX = (int)(tileWidth * (1.0 - overlapPercent));
+        int stepY = (int)(tileHeight * (1.0 - overlapPercent));
+        if (stepX <= 0 || stepY <= 0) return 0;
 
-    int stepX = (int)(tileWidth * (1.0 - overlapPercent));
-    int stepY = (int)(tileHeight * (1.0 - overlapPercent));
-    if (stepX <= 0 || stepY <= 0) return 0;
+        // Count tiles
+        int count = 0;
+        for (int y = 0; y < ref->mat.rows; y += stepY)
+            for (int x = 0; x < ref->mat.cols; x += stepX)
+                count++;
 
-    // Count tiles
-    int count = 0;
-    for (int y = 0; y < ref->mat.rows; y += stepY)
-        for (int x = 0; x < ref->mat.cols; x += stepX)
-            count++;
-
-    auto *elems = (CImageMatrixElement *)malloc(sizeof(CImageMatrixElement) * count);
-    int idx = 0;
-    for (int y = 0; y < ref->mat.rows; y += stepY) {
-        for (int x = 0; x < ref->mat.cols; x += stepX) {
-            int w = std::min(tileWidth, ref->mat.cols - x);
-            int h = std::min(tileHeight, ref->mat.rows - y);
-            cv::Rect roi(x, y, w, h);
-            elems[idx].x = x;
-            elems[idx].y = y;
-            elems[idx].width = w;
-            elems[idx].height = h;
-            elems[idx].image = wrap(ref->mat(roi));
-            idx++;
+        auto *elems = (CImageMatrixElement *)malloc(sizeof(CImageMatrixElement) * count);
+        int idx = 0;
+        for (int y = 0; y < ref->mat.rows; y += stepY) {
+            for (int x = 0; x < ref->mat.cols; x += stepX) {
+                int w = std::min(tileWidth, ref->mat.cols - x);
+                int h = std::min(tileHeight, ref->mat.rows - y);
+                cv::Rect roi(x, y, w, h);
+                elems[idx].x = x;
+                elems[idx].y = y;
+                elems[idx].width = w;
+                elems[idx].height = h;
+                elems[idx].image = wrap(ref->mat(roi));
+                idx++;
+            }
         }
-    }
 
-    *outElements = elems;
-    return count;
+        *outElements = elems;
+        return count;
+    } KHT_CATCH_LOG("mat_wrapper_split")
+    return 0;
 }
 
 void mat_wrapper_free_split(CImageMatrixElement *elements, int count) {
@@ -313,23 +350,25 @@ void mat_wrapper_free_split(CImageMatrixElement *elements, int count) {
 
 MatWrapperRef mat_wrapper_combine(const CImageMatrixElement *elements, int count) {
     if (!elements || count <= 0) return nullptr;
+    try {
+        int maxX = 0, maxY = 0;
+        for (int i = 0; i < count; i++) {
+            maxX = std::max(maxX, elements[i].x + elements[i].width);
+            maxY = std::max(maxY, elements[i].y + elements[i].height);
+        }
 
-    int maxX = 0, maxY = 0;
-    for (int i = 0; i < count; i++) {
-        maxX = std::max(maxX, elements[i].x + elements[i].width);
-        maxY = std::max(maxY, elements[i].y + elements[i].height);
-    }
+        const cv::Mat& first = elements[0].image->mat;
+        cv::Mat combined(maxY, maxX, first.type(), cv::Scalar::all(0));
 
-    const cv::Mat& first = elements[0].image->mat;
-    cv::Mat combined(maxY, maxX, first.type(), cv::Scalar::all(0));
+        for (int i = 0; i < count; i++) {
+            const cv::Mat& tile = elements[i].image->mat;
+            cv::Rect roi(elements[i].x, elements[i].y, elements[i].width, elements[i].height);
+            tile.copyTo(combined(roi));
+        }
 
-    for (int i = 0; i < count; i++) {
-        const cv::Mat& tile = elements[i].image->mat;
-        cv::Rect roi(elements[i].x, elements[i].y, elements[i].width, elements[i].height);
-        tile.copyTo(combined(roi));
-    }
-
-    return wrap(combined);
+        return wrap(combined);
+    } KHT_CATCH_LOG("mat_wrapper_combine")
+    return nullptr;
 }
 
 // --- CV type helper ---
