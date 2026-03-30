@@ -170,7 +170,7 @@ public enum PixelatedImageBridge {
         skyFloorY: [Int32],
         groundCeilY: [Int32],
         beta: Double = 90.0,
-        maxWorkingWidth: Int32 = 2048
+        maxWorkingWidth: Int32 = 4096
     ) -> [Int32] {
         let width = Int32(img.cols)
         var result = [Int32](repeating: -1, count: Int(width))

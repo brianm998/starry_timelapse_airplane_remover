@@ -337,26 +337,26 @@ void pib_random_walker_horizon(MatWrapperRef img,
               workW, workH, scaleX);
 
         // ── 4. Gentle star suppression ───────────────────────────────────
-        // Use a small median filter (3×3) which removes point-source stars
-        // without blurring the horizon edge like Gaussian does.
+        // Median 3×3 kills point-source stars without blurring horizon.
 
         cv::Mat grayBlurred;
         cv::medianBlur(grayROI, grayBlurred, 3);
 
-        // For LAB, use a small bilateral filter to preserve edges while
-        // smoothing star noise.  (Too expensive at full res, fine at working res.)
+        // Gentle bilateral on LAB: small spatial sigma (3px), moderate
+        // colour sigma (15) to blur star colour noise while preserving
+        // the horizon edge.
         cv::Mat lab8u;
         labROI.convertTo(lab8u, CV_8UC3);
         cv::Mat labSmooth;
-        cv::bilateralFilter(lab8u, labSmooth, 5, 20, 20);
+        cv::bilateralFilter(lab8u, labSmooth, 3, 15, 10);
         labSmooth.convertTo(labROI, CV_32FC3);
 
         // ── 5. Compute LAB edge weights (anisotropic) ────────────────────
-        // Vertical boost: horizontal boundaries (horizons) are 2x harder to
-        // cross than vertical features.
+        // Mild vertical boost: horizontal boundaries are slightly harder
+        // to cross, but not so much that peaks/valleys get smoothed.
 
         cv::Mat wRight, wDown;
-        double verticalBoost = 2.0;
+        double verticalBoost = 1.5;
         computeEdgeWeightsLAB(labROI, beta, verticalBoost, wRight, wDown);
 
         // ── 6. Scale per-column arrays to working resolution ─────────────
@@ -524,14 +524,16 @@ void pib_random_walker_horizon(MatWrapperRef img,
         }
 
         // ── 12. Edge snapping ────────────────────────────────────────────
-        // Search a wider window for the strongest vertical gradient.
+        // Snap to the nearest strong vertical edge within a tight window.
+        // Too wide a window causes the snap to jump to wrong edges,
+        // smoothing over peaks and valleys.
 
         cv::Mat sobelY;
         cv::Sobel(grayBlurred, sobelY, CV_32F, 0, 1, 3);
         sobelY = cv::abs(sobelY);
 
-        // Wider snap radius — up to 15px at working resolution
-        int snapRadius = std::max(5, (int)(15 * scaleY + 0.5));
+        // Tight snap: ±8 pixels at working resolution
+        int snapRadius = std::max(3, (int)(8 * scaleY + 0.5));
         float snapThreshold = 0.015f;
 
         for (int c = 0; c < workW; c++) {
@@ -555,8 +557,10 @@ void pib_random_walker_horizon(MatWrapperRef img,
         }
 
         // ── 13. Median filter ────────────────────────────────────────────
+        // Small window: just enough to remove isolated 1-2 column spikes
+        // from star noise, without smoothing real peaks/valleys.
 
-        int medW = std::max(5, workW / 80);
+        int medW = std::max(3, workW / 250);
         std::vector<int> smoothed = workHorizon;
         for (int c = 0; c < workW; c++) {
             if (workHorizon[c] < 0) continue;
