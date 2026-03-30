@@ -187,6 +187,20 @@ MatWrapperRef mat_wrapper_ensure_eight_bit(MatWrapperRef ref) {
     return wrap(ensure8U(ref->mat));
 }
 
+// Convert to single-channel 8-bit grayscale — required for horizon masks
+MatWrapperRef mat_wrapper_ensure_gray_8u(MatWrapperRef ref) {
+    if (!ref) return nullptr;
+    cv::Mat result = ensure8U(ref->mat);
+    if (result.channels() > 1) {
+        cv::Mat gray;
+        if (result.channels() == 4)      cv::cvtColor(result, gray, cv::COLOR_BGRA2GRAY);
+        else if (result.channels() == 3) cv::cvtColor(result, gray, cv::COLOR_BGR2GRAY);
+        else                             gray = result;   // shouldn't happen, but be safe
+        return wrap(gray);
+    }
+    return wrap(result);
+}
+
 MatWrapperRef mat_wrapper_add_white_rows_on_top(MatWrapperRef ref, int rows) {
     if (!ref) return nullptr;
     cv::Scalar white;

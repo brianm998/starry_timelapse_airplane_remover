@@ -159,7 +159,7 @@ public struct HomographyHorizonDetector {
         var perMaskColumnY: [[Int?]] = []
 
         for (filename, homography) in zip(neighborHorizonFilenames, neighborHomographies) {
-            guard let mask = PixelatedImage(filename: filename) else {
+            guard let mask = PixelatedImage(filename: filename)?.asHorizonMask else {
                 Log.d("HomographyHorizonDetector: could not load horizon mask \(filename)")
                 continue
             }

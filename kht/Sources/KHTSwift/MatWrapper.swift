@@ -79,6 +79,12 @@ public final class MatWrapper: @unchecked Sendable {
         MatWrapper(ref: mat_wrapper_ensure_eight_bit(ref))
     }
 
+    /// Convert to single-channel 8-bit grayscale (CV_8UC1).
+    /// This is required for images used as horizon masks.
+    public func ensureGray8U() -> MatWrapper {
+        MatWrapper(ref: mat_wrapper_ensure_gray_8u(ref))
+    }
+
     public func addWhiteRows(onTop rows: Int32) -> MatWrapper {
         MatWrapper(ref: mat_wrapper_add_white_rows_on_top(ref, rows))
     }

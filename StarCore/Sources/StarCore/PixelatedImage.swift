@@ -157,6 +157,14 @@ public final class PixelatedImage: Sendable {
             return nil
         }
     }
+
+    /// Return a CV_8UC1 (single-channel 8-bit grayscale) version of this image.
+    /// Used whenever an image is about to be used as a horizon mask, ensuring
+    /// all downstream OpenCV operations (e.g. distanceTransform) receive the
+    /// correct type regardless of how the file was written to disk.
+    public var asHorizonMask: PixelatedImage? {
+        PixelatedImage(mat: mat.ensureGray8U())
+    }
     
     public init?(mat: MatWrapper,
                  eightBitBuffer: ImageBuffer<UInt8>? = nil,

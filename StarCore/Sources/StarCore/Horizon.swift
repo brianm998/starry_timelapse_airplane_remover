@@ -11,18 +11,21 @@ public struct HorizonMask: Sendable {
     public let horizonBottomY: Int // this is the top :( swap these names
 
     public init?(_ image: PixelatedImage) {
-        self.image = image
-        guard let bounds = image.horizonBounds() else { return nil }
+        // Always normalise to CV_8UC1 — all downstream OpenCV operations require it
+        let mask = image.asHorizonMask ?? image
+        self.image = mask
+        guard let bounds = mask.horizonBounds() else { return nil }
         self.horizonTopY = bounds.topY
         self.horizonBottomY = bounds.bottomY
     }
-    
+
     public init(
       image: PixelatedImage,
-      horizonTopY: Int, // this is the bottom 
+      horizonTopY: Int, // this is the bottom
       horizonBottomY: Int // this is the top :( swap these names
     ) {
-        self.image = image
+        // Always normalise to CV_8UC1 — all downstream OpenCV operations require it
+        self.image = image.asHorizonMask ?? image
         self.horizonTopY = horizonTopY
         self.horizonBottomY = horizonBottomY
     }

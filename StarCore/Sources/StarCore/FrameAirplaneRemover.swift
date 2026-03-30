@@ -645,7 +645,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // 1. Per-frame reference
         let frameRefURL = referenceDir.appendingPathComponent(frameFileName)
         if FileManager.default.fileExists(atPath: frameRefURL.path),
-           let refImage = PixelatedImage(filename: frameRefURL.path)
+           let refImage = PixelatedImage(filename: frameRefURL.path)?.asHorizonMask
         {
             Log.d("frame \(frameIndex) loadHorizonReferenceMask: found per-frame reference")
             return HorizonMask(refImage)
@@ -654,7 +654,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // 2. Global reference
         let globalRefURL = referenceDir.appendingPathComponent("reference.tiff")
         if FileManager.default.fileExists(atPath: globalRefURL.path),
-           let refImage = PixelatedImage(filename: globalRefURL.path)
+           let refImage = PixelatedImage(filename: globalRefURL.path)?.asHorizonMask
         {
             Log.d("frame \(frameIndex) loadHorizonReferenceMask: found global reference")
             return HorizonMask(refImage)

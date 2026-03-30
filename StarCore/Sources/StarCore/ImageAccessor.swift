@@ -221,6 +221,10 @@ public struct ImageAccessor: Sendable {
                        let image = await imageCache.loadImage(filename: filename)
                     {
                         Log.d("filename \(filename) exists, returning \(image.description)")
+                        // Horizon masks must always be CV_8UC1 for OpenCV operations
+                        if imageType.isHorizonMask {
+                            return image.asHorizonMask ?? image
+                        }
                         return image
                     } else {
                         // no file
@@ -238,8 +242,11 @@ public struct ImageAccessor: Sendable {
                                )
                             {
                                 Log.d("created filename \(filename), returning \(image.description)")
-                                await imageCache.add(image: image, named: filename)
-                                return image
+                                let result = imageType.isHorizonMask
+                                    ? (image.asHorizonMask ?? image)
+                                    : image
+                                await imageCache.add(image: result, named: filename)
+                                return result
                             }
                             return nil
                         }

@@ -36,6 +36,15 @@ public enum FrameViewMode: String,
         LocalizedStringKey(rawValue)
     }
 
+    /// True for image types that represent horizon masks.
+    /// These must always be CV_8UC1 (single-channel 8-bit grayscale).
+    public var isHorizonMask: Bool {
+        switch self {
+        case .horizon, .mergedHorizon, .refinedHorizon: true
+        default: false
+        }
+    }
+
     public var shortName: String {
         switch self {
         case .original:
