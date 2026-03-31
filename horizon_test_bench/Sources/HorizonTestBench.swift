@@ -44,9 +44,118 @@ struct HorizonTestBench: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "horizon_test_bench",
         abstract: "Benchmark and optimize horizon detection methods",
-        subcommands: [Benchmark.self, Optimize.self, Evaluate.self],
+        subcommands: [Benchmark.self, Optimize.self, Evaluate.self, DataFormat.self],
         defaultSubcommand: Benchmark.self
     )
+}
+
+// MARK: - Data format help subcommand
+
+struct DataFormat: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "data-format",
+        abstract: "Print the expected test data directory layout"
+    )
+
+    mutating func run() {
+        print("""
+        HORIZON TEST BENCH — Expected Data Format
+        ==========================================
+
+        The test data root directory must contain one or both of:
+
+          <data-dir>/
+            stationary/          (videos where the camera does not move)
+            moving/              (videos where the camera moves over time)
+
+        STATIONARY SEQUENCES
+        --------------------
+        Each subdirectory under stationary/ is one video sequence.
+        It contains a single horizon mask that applies to every frame:
+
+          stationary/
+            sequence_name/
+              horizon.tiff       ← binary horizon mask (required, exactly one)
+              frame001.tiff      ← original frame image
+              frame002.tiff
+              ...
+              frameNNN.tiff
+
+        • The horizon mask MUST be named "horizon" with an image extension
+          (.tiff, .tif, .png, .jpg, .jpeg, .bmp).
+        • All other image files in the directory are treated as test frames.
+        • Every frame is scored against the single horizon.tiff.
+
+        MOVING SEQUENCES
+        ----------------
+        Each subdirectory under moving/ contains two parallel subdirectories
+        with identically named files:
+
+          moving/
+            sequence_name/
+              original/
+                frame001.tiff    ← original frame image
+                frame002.tiff
+                ...
+              horizon/
+                frame001.tiff    ← horizon mask for frame001
+                frame002.tiff    ← horizon mask for frame002
+                ...
+
+        • Each file in original/ must have a matching file in horizon/
+          with the same name (extension may differ).
+        • Frames without a matching mask are skipped with a warning.
+
+        HORIZON MASK FORMAT
+        -------------------
+        • Binary image, same dimensions as the original frame.
+        • White (255) = sky.
+        • Black (0)   = ground.
+        • Single-channel grayscale (CV_8UC1) is preferred.
+          Multi-channel images are converted automatically.
+        • Any standard image format is accepted:
+          .tiff, .tif, .png, .jpg, .jpeg, .bmp
+
+        EXAMPLE
+        -------
+          horizon_test_data/
+            stationary/
+              backyard_timelapse/
+                horizon.tiff
+                LRT_00100.tiff
+                LRT_00200.tiff
+                LRT_00300.tiff
+              mountain_fixed_cam/
+                horizon.png
+                IMG_0001.tiff
+                IMG_0050.tiff
+            moving/
+              road_trip/
+                original/
+                  DSC_0001.tiff
+                  DSC_0002.tiff
+                horizon/
+                  DSC_0001.tiff
+                  DSC_0002.tiff
+
+        USAGE
+        -----
+          # Run all base methods on every sample:
+          horizon_test_bench benchmark <data-dir> --use-all -v
+
+          # Include base+random_walker combinations:
+          horizon_test_bench benchmark <data-dir> --use-all -v --include-combined
+
+          # Find optimal parameters (train/test split):
+          horizon_test_bench optimize <data-dir> -v
+
+          # Test a single image against all methods:
+          horizon_test_bench evaluate <image> <mask> --method all
+
+          # Control parallelism (default: physical CPU count):
+          horizon_test_bench benchmark <data-dir> --use-all -j 8
+        """)
+    }
 }
 
 // MARK: - Benchmark subcommand
