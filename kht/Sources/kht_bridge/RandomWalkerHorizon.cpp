@@ -340,16 +340,23 @@ void pib_random_walker_horizon(MatWrapperRef img,
         // Median 3×3 kills point-source stars without blurring horizon.
 
         cv::Mat grayBlurred;
-        cv::medianBlur(grayROI, grayBlurred, 3);
+        cv::medianBlur(grayROI, grayBlurred, 5);
 
-        // Gentle bilateral on LAB: small spatial sigma (3px), moderate
-        // colour sigma (15) to blur star colour noise while preserving
-        // the horizon edge.
+        // Two-pass bilateral on LAB for robust noise suppression.
+        // First pass: gentle, preserves fine detail.
+        // Second pass: catches remaining noise while the horizon edge
+        // (already strengthened by the first pass) is preserved.
+        // This iterative approach removes more noise than a single
+        // aggressive pass would, without blurring the horizon.
         cv::Mat lab8u;
         labROI.convertTo(lab8u, CV_8UC3);
-        cv::Mat labSmooth;
-        cv::bilateralFilter(lab8u, labSmooth, 3, 15, 10);
-        labSmooth.convertTo(labROI, CV_32FC3);
+        cv::Mat labSmooth1, labSmooth2;
+        cv::bilateralFilter(lab8u, labSmooth1, 5, 25, 12);
+        cv::bilateralFilter(labSmooth1, labSmooth2, 5, 25, 12);
+        cv::Mat labSmooth3;
+        cv::bilateralFilter(labSmooth2, labSmooth3, 5, 25, 12);
+        labSmooth2 = labSmooth3;
+        labSmooth2.convertTo(labROI, CV_32FC3);
 
         // ── 5. Compute LAB edge weights (anisotropic) ────────────────────
         // Mild vertical boost: horizontal boundaries are slightly harder

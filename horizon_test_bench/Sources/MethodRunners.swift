@@ -22,6 +22,8 @@ enum HorizonMethod: String, CaseIterable, Sendable, CustomStringConvertible {
     case dpThenRW = "dp+rw"
     case sioxThenRW = "siox+rw"
     case combinedThenRW = "combined+rw"
+    case bestOfRW = "bestof+rw"      // best of otsu+rw, dp+rw, siox+rw per-sample
+    case oracleRW = "oracle+rw"      // oracle: max(combined+rw, bestof+rw) per-sample
 
     var description: String { rawValue }
 
@@ -29,7 +31,7 @@ enum HorizonMethod: String, CaseIterable, Sendable, CustomStringConvertible {
     static let baseMethods: [HorizonMethod] = [.otsu, .dp, .siox]
 
     /// Combined methods
-    static let combinedMethods: [HorizonMethod] = [.otsuThenRW, .dpThenRW, .sioxThenRW, .combinedThenRW]
+    static let combinedMethods: [HorizonMethod] = [.otsuThenRW, .dpThenRW, .sioxThenRW, .combinedThenRW, .bestOfRW, .oracleRW]
 }
 
 // MARK: - Method parameters
@@ -53,6 +55,9 @@ struct RWParams: Sendable {
     var beta: Double = 90.0
     var maxWorkingWidth: Int32 = 4096
     var brushRadius: Int = 40   // simulated brush size (pixels at working resolution)
+    var seedMargin: Int = 0     // extra pixels beyond brush for sky/ground seed regions
+                                // 0 = seeds start right at band edge (default)
+                                // >0 = seeds start `seedMargin` pixels outside the band
 }
 
 // MARK: - Working resolution helper
@@ -545,11 +550,43 @@ enum RWRunner {
         baseHorizonY: [Int?],
         params: RWParams = RWParams()
     ) -> PixelatedImage {
+        return runWithBands(
+            image: image,
+            baseHorizonY: baseHorizonY,
+            perColumnBrush: nil,
+            params: params
+        )
+    }
+
+    /// Run Random Walker with per-column adaptive brush widths.
+    /// `perColumnBrush` provides a brush radius for each column.
+    /// Falls back to `params.brushRadius` for columns without a custom value.
+    static func runAdaptive(
+        image: PixelatedImage,
+        baseHorizonY: [Int?],
+        perColumnBrush: [Int],
+        params: RWParams = RWParams()
+    ) -> PixelatedImage {
+        return runWithBands(
+            image: image,
+            baseHorizonY: baseHorizonY,
+            perColumnBrush: perColumnBrush,
+            params: params
+        )
+    }
+
+    private static func runWithBands(
+        image: PixelatedImage,
+        baseHorizonY: [Int?],
+        perColumnBrush: [Int]?,
+        params: RWParams
+    ) -> PixelatedImage {
         let imgW = image.width
         let imgH = image.height
-        let brush = params.brushRadius
+        let defaultBrush = params.brushRadius
+        let seedMargin = params.seedMargin
 
-        // Build band arrays: paint a brush-radius band around the base horizon
+        // Build band arrays: paint a brush-radius band around the base horizon.
         var bandTop = [Int32](repeating: -1, count: imgW)
         var bandBot = [Int32](repeating: -1, count: imgW)
         var skyFloor = [Int32](repeating: -1, count: imgW)
@@ -557,14 +594,14 @@ enum RWRunner {
 
         for x in 0..<imgW {
             guard let y = baseHorizonY[x] else { continue }
+            let brush = perColumnBrush != nil && x < perColumnBrush!.count
+                ? perColumnBrush![x] : defaultBrush
             let top = max(0, y - brush)
             let bot = min(imgH - 1, y + brush)
             bandTop[x] = Int32(top)
             bandBot[x] = Int32(bot)
-            // Sky seeds: everything above the band
-            skyFloor[x] = Int32(top)
-            // Ground seeds: everything below the band
-            groundCeil[x] = Int32(bot)
+            skyFloor[x] = Int32(max(0, top - seedMargin))
+            groundCeil[x] = Int32(min(imgH - 1, bot + seedMargin))
         }
 
         // Run Random Walker
@@ -596,8 +633,44 @@ enum BandSimulator {
         MaskScorer.extractHorizonY(from: mask)
     }
 
-    /// Combine multiple horizon Y arrays by taking the median at each column.
-    static func medianCombine(_ arrays: [[Int?]]) -> [Int?] {
+    /// Compute per-column adaptive brush width based on disagreement between
+    /// multiple base method horizons.  Where methods agree (low spread), use a
+    /// tight brush for precision.  Where they disagree (high spread), widen the
+    /// brush so the RW solver has room to find the correct edge.
+    static func adaptiveBrushWidths(
+        _ arrays: [[Int?]],
+        baseBrush: Int,
+        minBrush: Int = 30,
+        maxBrushMultiplier: Double = 4.0
+    ) -> [Int] {
+        guard let first = arrays.first else { return [] }
+        let w = first.count
+        var brushes = [Int](repeating: baseBrush, count: w)
+        let maxBrush = Int(Double(baseBrush) * maxBrushMultiplier)
+
+        for x in 0..<w {
+            var vals: [Int] = []
+            for arr in arrays {
+                if x < arr.count, let y = arr[x] { vals.append(y) }
+            }
+            guard vals.count >= 2 else { continue }
+
+            vals.sort()
+            let spread = vals.last! - vals.first!
+
+            // Brush should be at least half the spread (to cover the range of
+            // estimates) plus baseBrush (for solver margin).
+            let needed = spread / 2 + baseBrush
+            brushes[x] = min(maxBrush, max(minBrush, needed))
+        }
+        return brushes
+    }
+
+    /// Combine multiple horizon Y arrays with outlier-robust median.
+    /// If any value deviates more than `outlierThreshold` from the initial
+    /// median, it is excluded and the median is recomputed.  This handles
+    /// catastrophic failure of one base method (e.g. Otsu on bright images).
+    static func medianCombine(_ arrays: [[Int?]], outlierThreshold: Int = 80) -> [Int?] {
         guard let first = arrays.first else { return [] }
         let w = first.count
         var result = [Int?](repeating: nil, count: w)
@@ -606,9 +679,23 @@ enum BandSimulator {
             for arr in arrays {
                 if x < arr.count, let y = arr[x] { vals.append(y) }
             }
-            if !vals.isEmpty {
-                vals.sort()
-                result[x] = vals[vals.count / 2]
+            guard !vals.isEmpty else { continue }
+
+            // First median
+            vals.sort()
+            let med = vals[vals.count / 2]
+
+            // Filter outliers
+            if vals.count >= 3 {
+                let filtered = vals.filter { abs($0 - med) <= outlierThreshold }
+                if filtered.count >= 2 {
+                    // Recompute median from inliers
+                    result[x] = filtered[filtered.count / 2]
+                } else {
+                    result[x] = med
+                }
+            } else {
+                result[x] = med
             }
         }
         return result

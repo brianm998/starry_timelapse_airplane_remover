@@ -19,6 +19,7 @@ import Semaphore
 struct OptimizationResult: Sendable {
     let bestMethod: HorizonMethod
     let bestBrushRadius: Int
+    let bestSeedMargin: Int
     let bestOtsuParams: OtsuParams
     let bestDPParams: DPParams
     let bestRWParams: RWParams
@@ -29,9 +30,10 @@ struct OptimizationResult: Sendable {
         print("\nOptimization Results:")
         print("  Best method: \(bestMethod.rawValue)")
         print("  Best brush radius: \(bestBrushRadius)")
+        print("  Best seed margin: \(bestSeedMargin)")
         print("  DP params: lambda=\(bestDPParams.smoothnessLambda) " +
               "sobel=\(bestDPParams.sobelWeight) canny=\(bestDPParams.cannyWeight)")
-        print("  RW params: beta=\(bestRWParams.beta)")
+        print("  RW params: beta=\(bestRWParams.beta) seedMargin=\(bestRWParams.seedMargin)")
         print("  Train combined score: \(String(format: "%.4f", trainScore))")
         print("  Test combined score:  \(String(format: "%.4f", testScore))")
     }
@@ -69,7 +71,8 @@ actor ParameterOptimizer {
         // Step 2: For each base method, try Random Walker refinement with different brush sizes
         print("\n--- Phase 2: Testing base+RW combinations on training data ---")
 
-        let brushRadii = [10, 20, 30, 40, 60, 80, 100]
+        let brushRadii = [15, 25, 40, 60, 80, 100]
+        let seedMargins = [0, 20, 50, 100]
         let bestDPParams = DPParams(
             smoothnessLambda: dpTrainScores.bestLambda,
             sobelWeight: dpTrainScores.bestSobel,
@@ -77,48 +80,57 @@ actor ParameterOptimizer {
         )
         let bestOtsuCrop = otsuTrainScores.bestCrop
 
-        // Evaluate all base+brush combos in parallel (each combo evaluates samples in parallel too)
+        // Evaluate all base+brush+seedMargin combos in parallel
         struct ComboCandidate: Sendable {
             let method: HorizonMethod
             let brush: Int
+            let seedMargin: Int
             let score: Double
         }
 
         let comboCandidates: [ComboCandidate] = await withTaskGroup(of: ComboCandidate.self) { group in
-            // base methods × brush radii
+            // base methods × brush radii × seed margins
             for baseMethod in HorizonMethod.baseMethods {
                 for brush in brushRadii {
-                    let comboMethod: HorizonMethod
-                    switch baseMethod {
-                    case .otsu: comboMethod = .otsuThenRW
-                    case .dp: comboMethod = .dpThenRW
-                    case .siox: comboMethod = .sioxThenRW
-                    default: continue
-                    }
-                    group.addTask { [concurrency] in
-                        let score = await Self.evaluateComboStatic(
-                            baseMethod: baseMethod,
-                            brushRadius: brush,
-                            samples: trainSamples,
-                            dpParams: bestDPParams,
-                            otsuCrop: bestOtsuCrop,
-                            concurrency: concurrency
-                        )
-                        return ComboCandidate(method: comboMethod, brush: brush, score: score)
+                    for margin in seedMargins {
+                        let comboMethod: HorizonMethod
+                        switch baseMethod {
+                        case .otsu: comboMethod = .otsuThenRW
+                        case .dp: comboMethod = .dpThenRW
+                        case .siox: comboMethod = .sioxThenRW
+                        default: continue
+                        }
+                        group.addTask { [concurrency] in
+                            let score = await Self.evaluateComboStatic(
+                                baseMethod: baseMethod,
+                                brushRadius: brush,
+                                seedMargin: margin,
+                                samples: trainSamples,
+                                dpParams: bestDPParams,
+                                otsuCrop: bestOtsuCrop,
+                                concurrency: concurrency
+                            )
+                            return ComboCandidate(method: comboMethod, brush: brush,
+                                                  seedMargin: margin, score: score)
+                        }
                     }
                 }
             }
             // combined (median of all three) → RW
             for brush in brushRadii {
-                group.addTask { [concurrency] in
-                    let score = await Self.evaluateCombinedComboStatic(
-                        brushRadius: brush,
-                        samples: trainSamples,
-                        dpParams: bestDPParams,
-                        otsuCrop: bestOtsuCrop,
-                        concurrency: concurrency
-                    )
-                    return ComboCandidate(method: .combinedThenRW, brush: brush, score: score)
+                for margin in seedMargins {
+                    group.addTask { [concurrency] in
+                        let score = await Self.evaluateCombinedComboStatic(
+                            brushRadius: brush,
+                            seedMargin: margin,
+                            samples: trainSamples,
+                            dpParams: bestDPParams,
+                            otsuCrop: bestOtsuCrop,
+                            concurrency: concurrency
+                        )
+                        return ComboCandidate(method: .combinedThenRW, brush: brush,
+                                              seedMargin: margin, score: score)
+                    }
                 }
             }
 
@@ -129,18 +141,18 @@ actor ParameterOptimizer {
             return results
         }
 
-        var bestCombo: (method: HorizonMethod, brush: Int, score: Double) = (.otsu, 40, 0)
+        var bestCombo: (method: HorizonMethod, brush: Int, seedMargin: Int, score: Double) = (.otsu, 40, 0, 0)
         for c in comboCandidates.sorted(by: { $0.score > $1.score }) {
             if verbose {
-                print("  \(c.method.rawValue) brush=\(c.brush): \(String(format: "%.4f", c.score))")
+                print("  \(c.method.rawValue) brush=\(c.brush) margin=\(c.seedMargin): \(String(format: "%.4f", c.score))")
             }
             if c.score > bestCombo.score {
-                bestCombo = (c.method, c.brush, c.score)
+                bestCombo = (c.method, c.brush, c.seedMargin, c.score)
             }
         }
 
         print("\nBest combination on training data:")
-        print("  \(bestCombo.method.rawValue) brush=\(bestCombo.brush): \(String(format: "%.4f", bestCombo.score))")
+        print("  \(bestCombo.method.rawValue) brush=\(bestCombo.brush) margin=\(bestCombo.seedMargin): \(String(format: "%.4f", bestCombo.score))")
 
         // Step 3: Evaluate best combination on test data
         print("\n--- Phase 3: Evaluating best combination on test data ---")
@@ -149,6 +161,7 @@ actor ParameterOptimizer {
         if bestCombo.method == .combinedThenRW {
             testScore = await Self.evaluateCombinedComboStatic(
                 brushRadius: bestCombo.brush,
+                seedMargin: bestCombo.seedMargin,
                 samples: testSamples,
                 dpParams: bestDPParams,
                 otsuCrop: bestOtsuCrop,
@@ -165,6 +178,7 @@ actor ParameterOptimizer {
             testScore = await Self.evaluateComboStatic(
                 baseMethod: baseMethod,
                 brushRadius: bestCombo.brush,
+                seedMargin: bestCombo.seedMargin,
                 samples: testSamples,
                 dpParams: bestDPParams,
                 otsuCrop: bestOtsuCrop,
@@ -177,9 +191,11 @@ actor ParameterOptimizer {
         return OptimizationResult(
             bestMethod: bestCombo.method,
             bestBrushRadius: bestCombo.brush,
+            bestSeedMargin: bestCombo.seedMargin,
             bestOtsuParams: OtsuParams(bottomPercentage: bestOtsuCrop),
             bestDPParams: bestDPParams,
-            bestRWParams: RWParams(beta: 90.0, brushRadius: bestCombo.brush),
+            bestRWParams: RWParams(beta: 90.0, brushRadius: bestCombo.brush,
+                                   seedMargin: bestCombo.seedMargin),
             trainScore: bestCombo.score,
             testScore: testScore
         )
@@ -282,6 +298,7 @@ actor ParameterOptimizer {
     static func evaluateComboStatic(
         baseMethod: HorizonMethod,
         brushRadius: Int,
+        seedMargin: Int = 0,
         samples: [TestSample],
         dpParams: DPParams,
         otsuCrop: Double,
@@ -303,7 +320,7 @@ actor ParameterOptimizer {
             }
             guard let base = baseMask else { return nil }
             let baseY = BandSimulator.horizonYFromMask(base)
-            let rwParams = RWParams(brushRadius: brushRadius)
+            let rwParams = RWParams(brushRadius: brushRadius, seedMargin: seedMargin)
             let result = RWRunner.run(image: image, baseHorizonY: baseY, params: rwParams)
             return MaskScorer.score(computed: result, reference: refMask).combinedScore
         }
@@ -312,6 +329,7 @@ actor ParameterOptimizer {
     /// Evaluate combined (median of all three) + RW across samples in parallel.
     static func evaluateCombinedComboStatic(
         brushRadius: Int,
+        seedMargin: Int = 0,
         samples: [TestSample],
         dpParams: DPParams,
         otsuCrop: Double,
@@ -331,7 +349,7 @@ actor ParameterOptimizer {
             guard !arrays.isEmpty else { return nil }
             let combinedY = BandSimulator.medianCombine(arrays)
 
-            let rwParams = RWParams(brushRadius: brushRadius)
+            let rwParams = RWParams(brushRadius: brushRadius, seedMargin: seedMargin)
             let result = RWRunner.run(image: image, baseHorizonY: combinedY, params: rwParams)
             return MaskScorer.score(computed: result, reference: refMask).combinedScore
         }

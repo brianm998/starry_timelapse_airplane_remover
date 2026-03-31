@@ -65,6 +65,10 @@ struct MaskScore: Sendable, CustomStringConvertible {
     /// Number of valid (non-nil) reference columns
     let validColumns: Int
 
+    /// Signed mean error: positive = computed horizon is BELOW reference (too much sky).
+    /// Negative = computed horizon is ABOVE reference (too little sky).
+    let signedMeanError: Double
+
     /// Combined score [0,1]. Higher = better.
     var combinedScore: Double {
         // Weight pixel accuracy heavily, but also reward precise horizon tracking
@@ -72,15 +76,19 @@ struct MaskScore: Sendable, CustomStringConvertible {
     }
 
     var description: String {
-        String(format: "pxAcc=%.4f skyIoU=%.4f meanErr=%.1fpx ±5=%.3f ±10=%.3f combined=%.4f",
-               pixelAccuracy, skyIoU, meanHorizonError,
-               columnsWithin5px, columnsWithin10px, combinedScore)
+        let signStr = signedMeanError >= 0 ? "+" : ""
+        let base = String(format: "pxAcc=%.4f skyIoU=%.4f meanErr=%.1fpx",
+                          pixelAccuracy, skyIoU, meanHorizonError)
+        let signed = String(format: "(%@%.0f)", signStr, signedMeanError)
+        let rest = String(format: " within5=%.3f within10=%.3f combined=%.4f",
+                          columnsWithin5px, columnsWithin10px, combinedScore)
+        return base + signed + rest
     }
 
     /// Short single-line format
     var shortDescription: String {
-        String(format: "%.3f (px=%.3f IoU=%.3f err=%.1f)",
-               combinedScore, pixelAccuracy, skyIoU, meanHorizonError)
+        let signStr = signedMeanError >= 0 ? "+" : ""
+        return String(format: "%.3f (px=%.3f IoU=%.3f err=%.1f)", combinedScore, pixelAccuracy, skyIoU, meanHorizonError) + " \(signStr)\(String(format: "%.0f", signedMeanError))"
     }
 }
 
@@ -136,6 +144,7 @@ enum MaskScorer {
 
         // Per-column horizon error
         var totalError = 0.0
+        var totalSignedError = 0.0
         var within5 = 0
         var within10 = 0
         var validCols = 0
@@ -145,12 +154,15 @@ enum MaskScorer {
             validCols += 1
             let cy = compY[x] ?? (ry > h / 2 ? h : 0) // treat missing as worst case
             let err = abs(ry - cy)
+            let signedErr = cy - ry  // positive = computed is below ref (too much sky)
             totalError += Double(err)
+            totalSignedError += Double(signedErr)
             if err <= 5 { within5 += 1 }
             if err <= 10 { within10 += 1 }
         }
 
         let meanError = validCols > 0 ? totalError / Double(validCols) : Double(h)
+        let signedMean = validCols > 0 ? totalSignedError / Double(validCols) : 0
         let frac5 = validCols > 0 ? Double(within5) / Double(validCols) : 0
         let frac10 = validCols > 0 ? Double(within10) / Double(validCols) : 0
 
@@ -160,7 +172,8 @@ enum MaskScorer {
             meanHorizonError: meanError,
             columnsWithin5px: frac5,
             columnsWithin10px: frac10,
-            validColumns: validCols
+            validColumns: validCols,
+            signedMeanError: signedMean
         )
     }
 
@@ -176,19 +189,23 @@ enum MaskScorer {
         )
         guard let maskImage = PixelatedImage(mat: maskMat) else {
             return MaskScore(pixelAccuracy: 0, skyIoU: 0, meanHorizonError: Double(imageHeight),
-                             columnsWithin5px: 0, columnsWithin10px: 0, validColumns: 0)
+                             columnsWithin5px: 0, columnsWithin10px: 0, validColumns: 0,
+                             signedMeanError: 0)
         }
         return score(computed: maskImage, reference: reference)
     }
 
-    /// Extract per-column horizon Y (topmost ground pixel) from a binary mask.
+    /// Extract per-column horizon Y (topmost ground pixel) from a mask.
+    /// Uses the same threshold (127) as the pixel-level scoring: anything
+    /// ≤ 127 is ground, > 127 is sky.  This handles both pure binary masks
+    /// (0/255) and antialiased/soft-edge masks consistently.
     static func extractHorizonY(from mask: PixelatedImage) -> [Int?] {
         let w = mask.width
         let h = mask.height
         var result = [Int?](repeating: nil, count: w)
         for x in 0..<w {
             for y in 0..<h {
-                if pixelIntensity(mask, x: x, y: y) == 0 {
+                if pixelIntensity(mask, x: x, y: y) <= 127 {
                     result[x] = y
                     break
                 }

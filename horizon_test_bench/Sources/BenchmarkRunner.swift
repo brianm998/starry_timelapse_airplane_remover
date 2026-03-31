@@ -46,7 +46,8 @@ struct BenchmarkReport: Sendable {
                 meanHorizonError: scores.map(\.meanHorizonError).reduce(0, +) / Double(scores.count),
                 columnsWithin5px: scores.map(\.columnsWithin5px).reduce(0, +) / Double(scores.count),
                 columnsWithin10px: scores.map(\.columnsWithin10px).reduce(0, +) / Double(scores.count),
-                validColumns: scores.map(\.validColumns).reduce(0, +) / scores.count
+                validColumns: scores.map(\.validColumns).reduce(0, +) / scores.count,
+                signedMeanError: scores.map(\.signedMeanError).reduce(0, +) / Double(scores.count)
             )
             return (method, avg, scores.count)
         }.sorted { $0.avg.combinedScore > $1.avg.combinedScore }
@@ -110,7 +111,7 @@ enum SampleProcessor {
         total: Int,
         includeCombined: Bool,
         saveMasks: String?,
-        brushRadii: [Int] = [20, 40, 60, 80]
+        brushRadii: [Int] = [40, 80, 160]
     ) async -> SampleResults {
         guard let image = PixelatedImage(filename: sample.imagePath) else {
             return SampleResults(
@@ -275,6 +276,8 @@ enum SampleProcessor {
                     if let y = dpY { arrays.append(y) }
                     arrays.append(sioxY)
                     baseY = arrays.isEmpty ? nil : BandSimulator.medianCombine(arrays)
+                case .bestOfRW, .oracleRW:
+                    baseY = nil  // handled separately below
                 default:
                     baseY = nil
                 }
@@ -287,6 +290,26 @@ enum SampleProcessor {
                 if bestScore == nil || score.combinedScore > bestScore!.combinedScore {
                     bestScore = score
                     bestMask = mask
+                }
+            }
+
+            // For bestOfRW: pick the best result from otsu+rw, dp+rw, siox+rw
+            if combo == .bestOfRW {
+                let candidates = results.filter {
+                    [.otsuThenRW, .dpThenRW, .sioxThenRW].contains($0.method)
+                }
+                if let best = candidates.max(by: { $0.score.combinedScore < $1.score.combinedScore }) {
+                    bestScore = best.score
+                }
+            }
+
+            // For oracleRW: pick best of combined+rw, otsu+rw, dp+rw, siox+rw
+            if combo == .oracleRW {
+                let candidates = results.filter {
+                    [.otsuThenRW, .dpThenRW, .sioxThenRW, .combinedThenRW].contains($0.method)
+                }
+                if let best = candidates.max(by: { $0.score.combinedScore < $1.score.combinedScore }) {
+                    bestScore = best.score
                 }
             }
 
