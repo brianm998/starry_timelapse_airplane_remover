@@ -47,15 +47,29 @@ struct BenchmarkReport: Sendable {
         print("HORIZON DETECTION BENCHMARK RESULTS")
         print(String(repeating: "=", count: 100))
         print()
-        print(String(format: "%-18s %6s %8s %8s %8s %8s %8s %8s",
-                     "Method", "N", "Combined", "PxAcc", "IoU", "MeanErr", "±5px", "±10px"))
+
+        // Header
+        let header = "Method".padding(toLength: 18, withPad: " ", startingAt: 0) +
+            "N".padding(toLength: 8, withPad: " ", startingAt: 0) +
+            "Combined".padding(toLength: 10, withPad: " ", startingAt: 0) +
+            "PxAcc".padding(toLength: 10, withPad: " ", startingAt: 0) +
+            "IoU".padding(toLength: 10, withPad: " ", startingAt: 0) +
+            "MeanErr".padding(toLength: 10, withPad: " ", startingAt: 0) +
+            "±5px".padding(toLength: 10, withPad: " ", startingAt: 0) +
+            "±10px"
+        print(header)
         print(String(repeating: "-", count: 100))
 
         for (method, avg, count) in avgs {
-            print(String(format: "%-18s %6d %8.4f %8.4f %8.4f %8.1f %8.3f %8.3f",
-                         method.rawValue, count,
-                         avg.combinedScore, avg.pixelAccuracy, avg.skyIoU,
-                         avg.meanHorizonError, avg.columnsWithin5px, avg.columnsWithin10px))
+            let line = method.rawValue.padding(toLength: 18, withPad: " ", startingAt: 0) +
+                "\(count)".padding(toLength: 8, withPad: " ", startingAt: 0) +
+                String(format: "%.4f", avg.combinedScore).padding(toLength: 10, withPad: " ", startingAt: 0) +
+                String(format: "%.4f", avg.pixelAccuracy).padding(toLength: 10, withPad: " ", startingAt: 0) +
+                String(format: "%.4f", avg.skyIoU).padding(toLength: 10, withPad: " ", startingAt: 0) +
+                String(format: "%.1f", avg.meanHorizonError).padding(toLength: 10, withPad: " ", startingAt: 0) +
+                String(format: "%.3f", avg.columnsWithin5px).padding(toLength: 10, withPad: " ", startingAt: 0) +
+                String(format: "%.3f", avg.columnsWithin10px)
+            print(line)
         }
         print(String(repeating: "=", count: 100))
 
@@ -63,9 +77,11 @@ struct BenchmarkReport: Sendable {
         print("\nWorst 10 results (by combined score):")
         let sorted = results.sorted { $0.score.combinedScore < $1.score.combinedScore }
         for r in sorted.prefix(10) {
-            print("  \(r.method.rawValue.padding(toLength: 16, withPad: " ", startingAt: 0)) " +
-                  "\(r.sample.description.padding(toLength: 40, withPad: " ", startingAt: 0)) " +
-                  r.score.shortDescription)
+            let line = "  " +
+                r.method.rawValue.padding(toLength: 16, withPad: " ", startingAt: 0) + " " +
+                r.sample.description.padding(toLength: 40, withPad: " ", startingAt: 0) + " " +
+                r.score.shortDescription
+            print(line)
         }
     }
 }
