@@ -83,6 +83,10 @@ struct Benchmark: AsyncParsableCommand {
     @Flag(name: .long, help: "Run on ALL data (no train/test split)")
     var useAll: Bool = false
 
+    @Option(name: .shortAndLong,
+            help: "Max concurrent samples (default: physical CPU count)")
+    var jobs: Int?
+
     mutating func run() async throws {
         Log.add(handler: ConsoleLogHandler(at: .warn), for: .console)
 
@@ -97,27 +101,21 @@ struct Benchmark: AsyncParsableCommand {
         print(split.summary)
 
         let samples = useAll ? split.allSamples : split.test
-        print("\nRunning benchmark on \(samples.count) samples...")
+        let concurrency = jobs ?? ParallelBenchmark.defaultConcurrency
 
         // Create save directory if needed
         if let dir = saveMasks {
             try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         }
 
-        let runner = BenchmarkRunner(verbose: verbose, saveMasks: saveMasks)
+        let results = await ParallelBenchmark.run(
+            samples: samples,
+            maxConcurrency: concurrency,
+            verbose: verbose,
+            includeCombined: includeCombined,
+            saveMasks: saveMasks
+        )
 
-        // Run base methods on each sample
-        for (i, sample) in samples.enumerated() {
-            print("[\(i+1)/\(samples.count)] \(sample.description)")
-            await runner.runBaseMethods(sample: sample)
-
-            if includeCombined {
-                await runner.runCombinedMethods(sample: sample)
-            }
-        }
-
-        // Report
-        let results = await runner.getResults()
         let report = BenchmarkReport(results: results)
         report.printReport()
 
@@ -151,8 +149,14 @@ struct Optimize: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Verbose output")
     var verbose: Bool = false
 
+    @Option(name: .shortAndLong,
+            help: "Max concurrent samples (default: physical CPU count)")
+    var jobs: Int?
+
     mutating func run() async throws {
         Log.add(handler: ConsoleLogHandler(at: .warn), for: .console)
+
+        let concurrency = jobs ?? ParallelBenchmark.defaultConcurrency
 
         print("Loading test data from: \(dataDir)")
         let split = try TestDataLoader.load(
@@ -164,7 +168,7 @@ struct Optimize: AsyncParsableCommand {
         )
         print(split.summary)
 
-        let optimizer = ParameterOptimizer(verbose: verbose)
+        let optimizer = ParameterOptimizer(verbose: verbose, maxConcurrency: concurrency)
 
         let result = await optimizer.optimize(
             trainSamples: split.train,
@@ -175,12 +179,13 @@ struct Optimize: AsyncParsableCommand {
         // If we have validation data, evaluate on that too
         if !split.validation.isEmpty {
             print("\n--- Validation set evaluation ---")
-            let valRunner = BenchmarkRunner(verbose: verbose)
-            for sample in split.validation {
-                await valRunner.runBaseMethods(sample: sample)
-                await valRunner.runCombinedMethods(sample: sample)
-            }
-            let valResults = await valRunner.getResults()
+            let valResults = await ParallelBenchmark.run(
+                samples: split.validation,
+                maxConcurrency: concurrency,
+                verbose: verbose,
+                includeCombined: true,
+                saveMasks: nil
+            )
             let report = BenchmarkReport(results: valResults)
             report.printReport()
         }
