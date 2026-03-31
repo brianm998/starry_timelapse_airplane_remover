@@ -371,26 +371,37 @@ void pib_random_walker_horizon(MatWrapperRef img,
         cv::Vec3d skySum(0,0,0), gndSum(0,0,0);
         int nSky = 0, nGnd = 0;
 
-        // Sample every Nth column/row for speed
-        int colStep = std::max(1, workW / 200);
+        // Sample sky/ground centroids from pixels NEAR the band boundary,
+        // not from the full sky/ground region.  The sky just above the
+        // horizon is what matters for classification — not the bright
+        // blue sky 1000 pixels overhead.  Similarly, the ground just below
+        // the horizon is what matters, not dark foreground far below.
+        //
+        // Sample band: a strip of `nearBand` rows immediately above the
+        // sky floor (sky side) and immediately below the ground ceiling
+        // (ground side).
+        int nearBand = std::max(5, workH / 8);
+
+        int colStep = std::max(1, workW / 300);
         for (int c = 0; c < workW; c += colStep) {
             if (wBandTop[c] < 0) continue;
 
             int skyF = std::max(0, std::min(workH - 1, wSkyFloor[c]));
             int gndC = std::max(0, std::min(workH - 1, wGndCeiling[c]));
 
-            // Sky: sample from top of ROI to sky floor
-            int skyStep = std::max(1, skyF / 10);
-            for (int r = 0; r < skyF; r += skyStep) {
+            // Sky: sample nearBand rows ABOVE the sky floor
+            // (the sky closest to the horizon)
+            int skyStart = std::max(0, skyF - nearBand);
+            for (int r = skyStart; r < skyF; r++) {
                 cv::Vec3f v = labROI.at<cv::Vec3f>(r, c);
                 skySum += cv::Vec3d(v[0], v[1], v[2]);
                 nSky++;
             }
 
-            // Ground: sample from ground ceiling to bottom of ROI
-            int gndSpan = workH - gndC;
-            int gndStep = std::max(1, gndSpan / 10);
-            for (int r = gndC; r < workH; r += gndStep) {
+            // Ground: sample nearBand rows BELOW the ground ceiling
+            // (the ground closest to the horizon)
+            int gndEnd = std::min(workH, gndC + nearBand);
+            for (int r = gndC; r < gndEnd; r++) {
                 cv::Vec3f v = labROI.at<cv::Vec3f>(r, c);
                 gndSum += cv::Vec3d(v[0], v[1], v[2]);
                 nGnd++;
@@ -407,10 +418,10 @@ void pib_random_walker_horizon(MatWrapperRef img,
 
         Log_d("pib_random_walker_horizon: sky centroid LAB=(%.1f, %.1f, %.1f) "
               "ground centroid LAB=(%.1f, %.1f, %.1f) "
-              "(nSky=%d, nGnd=%d)",
+              "(nSky=%d, nGnd=%d, nearBand=%d)",
               skyCentroid[0], skyCentroid[1], skyCentroid[2],
               gndCentroid[0], gndCentroid[1], gndCentroid[2],
-              nSky, nGnd);
+              nSky, nGnd, nearBand);
 
         // ── 8. Compute data term ─────────────────────────────────────────
 
@@ -418,9 +429,9 @@ void pib_random_walker_horizon(MatWrapperRef img,
 
         // Data term strength (lambda).  Higher values make the colour model
         // dominate over diffusion; lower values rely more on edges.
-        // For astro images: terrain and sky often have very different colours
-        // (blue sky vs dark/brown ground), so a moderate lambda works well.
-        float lambda = 0.5f;
+        // With local centroids (near-horizon colours), a moderate lambda
+        // balances colour model and edge awareness.
+        float lambda = 0.3f;
 
         // ── 9. Build seed mask and initial probabilities ─────────────────
 
@@ -430,14 +441,23 @@ void pib_random_walker_horizon(MatWrapperRef img,
         // Initialise prob from data term (colour-model prior)
         dataTerm.copyTo(prob);
 
+        // Track the leftmost and rightmost painted columns at working res.
+        int wColLeft = workW, wColRight = -1;
+
         for (int c = 0; c < workW; c++) {
             if (wBandTop[c] < 0 || wBandBot[c] < 0) {
+                // Unpainted columns: lock entire column as seeded.
+                // Use data term values so they provide a neutral colour-
+                // based prior without pulling the horizon in any direction.
                 for (int r = 0; r < workH; r++) {
                     seedMask.at<uchar>(r, c) = 1;
-                    prob.at<float>(r, c) = 0.5f;
+                    // prob stays at data term value (already copied)
                 }
                 continue;
             }
+
+            if (c < wColLeft)  wColLeft  = c;
+            if (c > wColRight) wColRight = c;
 
             int skyF = std::max(0, wSkyFloor[c]);
             int gndC = std::min(workH - 1, wGndCeiling[c]);
@@ -576,6 +596,64 @@ void pib_random_walker_horizon(MatWrapperRef img,
                                  window.begin() + window.size() / 2,
                                  window.end());
                 smoothed[c] = window[window.size() / 2];
+            }
+        }
+
+        // ── 13b. Edge stabilization ──────────────────────────────────────
+        // The solver is unreliable at the edges of the painted band because
+        // there's no lateral context on one side.  Compute a robust anchor
+        // from a median of interior columns, then blend the edge toward it.
+
+        if (wColLeft >= 0 && wColRight > wColLeft) {
+            int paintedSpan = wColRight - wColLeft + 1;
+            // Anchor zone: 5-10% in from each edge, take median of that zone
+            int anchorStart = std::max(8, paintedSpan / 15);  // ~7% in
+            int anchorWidth = std::max(5, paintedSpan / 20);  // ~5% wide strip
+
+            // Left anchor: median of columns [wColLeft+anchorStart .. +anchorStart+anchorWidth]
+            {
+                std::vector<int> anchorVals;
+                int aLeft = wColLeft + anchorStart;
+                int aRight = std::min(wColRight, aLeft + anchorWidth);
+                for (int c = aLeft; c <= aRight; c++) {
+                    if (smoothed[c] >= 0) anchorVals.push_back(smoothed[c]);
+                }
+                if (!anchorVals.empty()) {
+                    std::nth_element(anchorVals.begin(),
+                                     anchorVals.begin() + anchorVals.size()/2,
+                                     anchorVals.end());
+                    int anchorY = anchorVals[anchorVals.size()/2];
+
+                    // Blend from wColLeft (100% anchor) to aLeft (100% solver)
+                    for (int c = wColLeft; c < aLeft; c++) {
+                        if (smoothed[c] < 0) continue;
+                        float t = (float)(c - wColLeft) / (float)(aLeft - wColLeft);
+                        smoothed[c] = (int)(anchorY * (1.0f - t) + smoothed[c] * t + 0.5f);
+                    }
+                }
+            }
+
+            // Right anchor: median of columns [wColRight-anchorStart-anchorWidth .. -anchorStart]
+            {
+                std::vector<int> anchorVals;
+                int aRight = wColRight - anchorStart;
+                int aLeft = std::max(wColLeft, aRight - anchorWidth);
+                for (int c = aLeft; c <= aRight; c++) {
+                    if (smoothed[c] >= 0) anchorVals.push_back(smoothed[c]);
+                }
+                if (!anchorVals.empty()) {
+                    std::nth_element(anchorVals.begin(),
+                                     anchorVals.begin() + anchorVals.size()/2,
+                                     anchorVals.end());
+                    int anchorY = anchorVals[anchorVals.size()/2];
+
+                    // Blend from aRight (100% solver) to wColRight (100% anchor)
+                    for (int c = aRight + 1; c <= wColRight; c++) {
+                        if (smoothed[c] < 0) continue;
+                        float t = (float)(wColRight - c) / (float)(wColRight - aRight);
+                        smoothed[c] = (int)(anchorY * (1.0f - t) + smoothed[c] * t + 0.5f);
+                    }
+                }
             }
         }
 
