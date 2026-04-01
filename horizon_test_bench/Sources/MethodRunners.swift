@@ -516,6 +516,29 @@ enum SIOXRunner {
                         consecutiveTerrain = 0
                     }
                 }
+
+                // Gradient-aware correction: search upward from the color-based
+                // horizon for a strong vertical L* gradient within 30 rows.
+                let gradSearchUp = min(30, horizonY - skyFloorY)
+                if gradSearchUp > 2 {
+                    var bestGradY = horizonY
+                    var bestGrad: Float = 0
+                    for checkY in (horizonY - gradSearchUp)..<horizonY {
+                        let iy0 = max(globalTop, checkY - 1)
+                        let iy1 = min(globalBot, checkY + 1)
+                        let (L0, _, _, _) = labiAt(ix: ix, iy: iy0)
+                        let (L1, _, _, _) = labiAt(ix: ix, iy: iy1)
+                        let grad = abs(L1 - L0)
+                        if grad > bestGrad {
+                            bestGrad = grad
+                            bestGradY = checkY
+                        }
+                    }
+                    if bestGrad > 5.0 {
+                        horizonY = bestGradY
+                    }
+                }
+
                 result[ix] = max(skyFloorY, min(horizonY, groundCeilingY))
             }
 

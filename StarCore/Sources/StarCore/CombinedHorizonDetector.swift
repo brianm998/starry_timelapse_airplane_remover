@@ -81,11 +81,36 @@ public enum CombinedHorizonDetector {
         Log.i("CombinedHorizonDetector: base methods — " +
               "otsu=\(otsuDefined)/\(imgW) dp=\(dpDefined)/\(imgW) siox=\(sioxDefined)/\(imgW) columns")
 
-        // Median-combine with outlier filtering
+        // Median-combine with outlier filtering.
+        // Before adding, check each base method for catastrophic failure:
+        // if the mean horizon Y is implausible (outside 10-90% of height)
+        // or the stddev is wildly high (>15% of image height), skip it.
         var arrays: [[Int?]] = []
-        if let y = otsuY { arrays.append(y) }
-        if let y = dpY { arrays.append(y) }
-        arrays.append(sioxResult)
+
+        if let y = otsuY, isPlausibleHorizon(y, imageHeight: imgH) {
+            arrays.append(y)
+        } else if otsuY != nil {
+            Log.w("CombinedHorizonDetector: Otsu result excluded (implausible)")
+        }
+        if let y = dpY, isPlausibleHorizon(y, imageHeight: imgH) {
+            arrays.append(y)
+        } else if dpY != nil {
+            Log.w("CombinedHorizonDetector: DP result excluded (implausible)")
+        }
+        if isPlausibleHorizon(sioxResult, imageHeight: imgH) {
+            arrays.append(sioxResult)
+        } else {
+            Log.w("CombinedHorizonDetector: SIOX result excluded (implausible)")
+        }
+
+        // If all base methods were excluded as implausible, fall back to
+        // using them all anyway (better than nothing).
+        if arrays.isEmpty {
+            Log.w("CombinedHorizonDetector: all base methods implausible, using all anyway")
+            if let y = otsuY { arrays.append(y) }
+            if let y = dpY { arrays.append(y) }
+            arrays.append(sioxResult)
+        }
 
         guard !arrays.isEmpty else {
             throw "CombinedHorizonDetector: all base methods failed"
@@ -404,6 +429,32 @@ public enum CombinedHorizonDetector {
                     consecutiveTerrain = 0
                 }
             }
+
+            // Gradient-aware correction: search upward from the color-based
+            // horizon for a strong vertical L* gradient within 30 rows.
+            // This pulls the horizon back up to the true ridgeline when
+            // bright snow/canopy was classified as sky by the color scan.
+            let gradSearchUp = min(30, horizonY - skyFloorY)
+            if gradSearchUp > 2 {
+                var bestGradY = horizonY
+                var bestGrad: Float = 0
+                for checkY in (horizonY - gradSearchUp)..<horizonY {
+                    let iy0 = max(globalTop, checkY - 1)
+                    let iy1 = min(globalBot, checkY + 1)
+                    let (L0, _, _, _) = labiAt(ix: ix, iy: iy0)
+                    let (L1, _, _, _) = labiAt(ix: ix, iy: iy1)
+                    let grad = abs(L1 - L0)
+                    if grad > bestGrad {
+                        bestGrad = grad
+                        bestGradY = checkY
+                    }
+                }
+                // Only snap if there's a meaningful gradient (>5 L* units)
+                if bestGrad > 5.0 {
+                    horizonY = bestGradY
+                }
+            }
+
             scaledResult[ix] = max(skyFloorY, min(horizonY, groundCeilingY))
         }
 
@@ -595,6 +646,26 @@ public enum CombinedHorizonDetector {
         let clampedPlausibility = max(0.1, min(1.0, plausibility))
 
         return 0.3 * coverage + 0.4 * smoothness + 0.3 * clampedPlausibility
+    }
+
+    /// Check if a horizon Y array is plausible: mean Y within 10-90% of height,
+    /// stddev < 15% of height, and reasonable coverage.
+    private static func isPlausibleHorizon(_ horizonY: [Int?], imageHeight: Int) -> Bool {
+        let defined = horizonY.compactMap { $0 }
+        guard defined.count > horizonY.count / 10 else { return false } // <10% coverage
+
+        let avg = Double(defined.reduce(0, +)) / Double(defined.count)
+        let heightFrac = avg / Double(imageHeight)
+
+        // Mean horizon Y must be in [10%, 90%] of image height
+        guard heightFrac > 0.1 && heightFrac < 0.9 else { return false }
+
+        // Stddev must be < 15% of image height (not wildly noisy)
+        let variance = defined.map { pow(Double($0) - avg, 2) }.reduce(0, +) / Double(defined.count)
+        let stddev = sqrt(variance)
+        guard stddev < Double(imageHeight) * 0.15 else { return false }
+
+        return true
     }
 
     /// Scale image for processing.

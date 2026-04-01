@@ -12,9 +12,10 @@ import kht_bridge
 
 // MARK: - Pixel access helper (since intensity is internal on PixelatedImage)
 
-/// Read a single pixel's intensity from a PixelatedImage.
+/// Read a single pixel's intensity from a PixelatedImage, normalized to 0–255.
 /// For multi-channel images, averages the first three channels (BGR).
 /// For single-channel, returns the value directly.
+/// 16-bit values are scaled to 8-bit range so that the 127 threshold works correctly.
 func pixelIntensity(_ img: PixelatedImage, x: Int, y: Int) -> UInt {
     switch img.imageData {
     case .eightBit(let buf):
@@ -31,16 +32,17 @@ func pixelIntensity(_ img: PixelatedImage, x: Int, y: Int) -> UInt {
         let cpp = img.componentsPerPixel
         let offset = y * img.width * cpp + x * cpp
         guard offset < buf.count else { return 0 }
-        if cpp == 1 { return UInt(buf[offset]) }
+        if cpp == 1 { return UInt(buf[offset] >> 8) }
         let n = min(3, cpp)
         var sum: UInt = 0
-        for c in 0..<n { sum += UInt(buf[offset + c]) }
+        for c in 0..<n { sum += UInt(buf[offset + c] >> 8) }
         return sum / UInt(n)
     case .thirtyTwoBit(let buf):
         let cpp = img.componentsPerPixel
         let offset = y * img.width * cpp + x * cpp
         guard offset < buf.count else { return 0 }
-        return UInt(max(0, buf[offset]))
+        // Clamp to 0–255 range
+        return UInt(min(255, max(0, buf[offset])))
     }
 }
 
