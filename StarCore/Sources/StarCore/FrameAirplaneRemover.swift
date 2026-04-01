@@ -1617,32 +1617,39 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             throw "cannot load original image for horizon detection"
         }
 
-        // Determine if we should use the adaptive multi-parameter search
-        let useAdaptiveSearch = config.horizonSearchCropBounds.count >= 2
-
         let horizonMask: HorizonMask
 
-        if useAdaptiveSearch {
-            horizonMask = try await adaptiveHorizonSearch(
-              original: original,
-              config: config,
-              adaptiveState: adaptiveState
-            )
+        if config.useCombinedHorizonDetection {
+            // Combined+RW pipeline: run Otsu, DP, SIOX in parallel, median-combine,
+            // then refine with Random Walker. Best-performing method as of 2026-03.
+            Log.i("frame \(frameIndex) using combined+RW horizon detection")
+            horizonMask = try await CombinedHorizonDetector.detect(image: original)
         } else {
-            // Fallback: single parameter set, same as original behavior
-            let bottomPercentage: Double = 50
-            guard let mask = try await original.horizonMask(
-                    at: frameIndex,
-                    bottomPercentage: bottomPercentage,
-                    useCannyEdgeDetection: config.useCannyForHorizonDetection,
-                    cannyMinThreshold: config.cannyMinThreshold,
-                    cannyMaxThreshold: config.cannyMaxThreshold,
-                    useL2Gradient: config.cannyUseL2Gradient
-                  )
-            else {
-                throw "cannot create horizon mask"
+            // Legacy adaptive search: Otsu multi-crop + DP grid search
+            let useAdaptiveSearch = config.horizonSearchCropBounds.count >= 2
+
+            if useAdaptiveSearch {
+                horizonMask = try await adaptiveHorizonSearch(
+                  original: original,
+                  config: config,
+                  adaptiveState: adaptiveState
+                )
+            } else {
+                // Fallback: single parameter set, same as original behavior
+                let bottomPercentage: Double = 50
+                guard let mask = try await original.horizonMask(
+                        at: frameIndex,
+                        bottomPercentage: bottomPercentage,
+                        useCannyEdgeDetection: config.useCannyForHorizonDetection,
+                        cannyMinThreshold: config.cannyMinThreshold,
+                        cannyMaxThreshold: config.cannyMaxThreshold,
+                        useL2Gradient: config.cannyUseL2Gradient
+                      )
+                else {
+                    throw "cannot create horizon mask"
+                }
+                horizonMask = mask
             }
-            horizonMask = mask
         }
 
         Log.d("frame \(frameIndex) horizon mask image \(horizonMask.image) created")

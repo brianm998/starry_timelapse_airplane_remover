@@ -311,6 +311,11 @@ public struct Config: Codable, Sendable, Transferable {
     // if not set, defaults to true
     public var horizonDetectionEnabled: Bool = true
 
+    // use the combined+RW horizon detector (Otsu + DP + SIOX → median → Random Walker)?
+    // when true, this replaces the legacy adaptive Otsu/DP search in loadOrCreateHorizonMask.
+    // set to false to fall back to the previous adaptive search approach.
+    public var useCombinedHorizonDetection: Bool = true
+
     // the max size of each strip used to calculate the horizon image.
     // smaller strips can help reduce noise especially around the edges of the frame
     // too small and the horizon can get calculated wrong
@@ -476,7 +481,8 @@ public struct Config: Codable, Sendable, Transferable {
         self.hasAudio = try c.decodeIfPresent(Bool.self, forKey: .hasAudio) ?? self.hasAudio
 
         self.horizonDetectionEnabled = try c.decodeIfPresent(Bool.self, forKey: .horizonDetectionEnabled) ?? self.horizonDetectionEnabled
-        self.horizonStripWidth = try c.decodeIfPresent(Int.self, forKey: .horizonStripWidth) ?? self.horizonStripWidth 
+        self.useCombinedHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useCombinedHorizonDetection) ?? self.useCombinedHorizonDetection
+        self.horizonStripWidth = try c.decodeIfPresent(Int.self, forKey: .horizonStripWidth) ?? self.horizonStripWidth
         self.useCannyForHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useCannyForHorizonDetection) ?? self.useCannyForHorizonDetection
         self.cannyMinThreshold = try c.decodeIfPresent(Double.self, forKey: .cannyMinThreshold) ?? self.cannyMinThreshold
         self.cannyMaxThreshold = try c.decodeIfPresent(Double.self, forKey: .cannyMaxThreshold) ?? self.cannyMaxThreshold
