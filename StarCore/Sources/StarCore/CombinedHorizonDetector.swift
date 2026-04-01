@@ -70,6 +70,7 @@ public enum CombinedHorizonDetector {
         async let otsuResult = runOtsu(scaled: scaled, image: image)
         async let dpResult = runDP(scaled: scaled, image: image, params: params)
         let sioxResult = runSIOX(scaled: scaled, image: image, params: params)
+        let gradResult = runGradProfile(scaled: scaled, image: image)
 
         let otsuY = await otsuResult
         let dpY = await dpResult
@@ -78,8 +79,9 @@ public enum CombinedHorizonDetector {
         let otsuDefined = otsuY?.compactMap({ $0 }).count ?? 0
         let dpDefined = dpY?.compactMap({ $0 }).count ?? 0
         let sioxDefined = sioxResult.compactMap({ $0 }).count
+        let gradDefined = gradResult.compactMap({ $0 }).count
         Log.i("CombinedHorizonDetector: base methods — " +
-              "otsu=\(otsuDefined)/\(imgW) dp=\(dpDefined)/\(imgW) siox=\(sioxDefined)/\(imgW) columns")
+              "otsu=\(otsuDefined)/\(imgW) dp=\(dpDefined)/\(imgW) siox=\(sioxDefined)/\(imgW) grad=\(gradDefined)/\(imgW) columns")
 
         // Confidence-weighted combine with outlier filtering.
         // Each base method gets a confidence score based on smoothness,
@@ -120,6 +122,15 @@ public enum CombinedHorizonDetector {
                 Log.w("CombinedHorizonDetector: SIOX excluded (confidence=\(String(format: "%.3f", conf)))")
             }
         }
+        do {
+            let conf = horizonConfidence(gradResult, imageHeight: imgH)
+            if conf > 0.05 {
+                methods.append(WeightedMethod(name: "grad", horizonY: gradResult, confidence: conf))
+                Log.d("CombinedHorizonDetector: Grad confidence=\(String(format: "%.3f", conf))")
+            } else {
+                Log.w("CombinedHorizonDetector: Grad excluded (confidence=\(String(format: "%.3f", conf)))")
+            }
+        }
 
         // If all methods were excluded, fall back to using them all with equal weight
         if methods.isEmpty {
@@ -127,6 +138,7 @@ public enum CombinedHorizonDetector {
             if let y = otsuY { methods.append(WeightedMethod(name: "otsu", horizonY: y, confidence: 1.0)) }
             if let y = dpY { methods.append(WeightedMethod(name: "dp", horizonY: y, confidence: 1.0)) }
             methods.append(WeightedMethod(name: "siox", horizonY: sioxResult, confidence: 1.0))
+            methods.append(WeightedMethod(name: "grad", horizonY: gradResult, confidence: 1.0))
         }
 
         guard !methods.isEmpty else {
@@ -492,6 +504,133 @@ public enum CombinedHorizonDetector {
             if !window.isEmpty {
                 window.sort()
                 smoothed[ix] = window[window.count / 2]
+            }
+        }
+
+        // Scale back to original resolution
+        return scaleHorizonY(smoothed, fromWidth: sW, toWidth: imgW,
+                             scaleY: Double(sH) / Double(imgH))
+    }
+
+    // MARK: - Vertical Gradient Profile
+
+    /// Run vertical gradient profile horizon detection.
+    /// For each column, finds the strongest sustained vertical gradient transition
+    /// in a smoothed brightness profile — the sky→ground boundary.
+    /// Complementary to color-based methods because it relies purely on edge structure.
+    private static func runGradProfile(
+        scaled: PixelatedImage,
+        image: PixelatedImage,
+        searchTopFraction: Double = 0.05,
+        searchBottomFraction: Double = 0.95,
+        verticalSmoothRadius: Int = 5,
+        columnSmoothRadius: Int = 20
+    ) -> [Int?] {
+        let sW = scaled.width
+        let sH = scaled.height
+        let imgW = image.width
+        let imgH = image.height
+
+        let searchTop = max(0, Int(Double(sH) * searchTopFraction))
+        let searchBot = min(sH - 1, Int(Double(sH) * searchBottomFraction))
+
+        // Ensure 8-bit for gradient computation
+        let img8 = PixelatedImage(mat: scaled.mat.ensureEightBit()) ?? scaled
+        let pixelData: [UInt8]
+        let cpp: Int
+        switch img8.imageData {
+        case .eightBit(let buf):
+            pixelData = Array(buf)
+            cpp = img8.componentsPerPixel
+        default:
+            return [Int?](repeating: nil, count: imgW)
+        }
+        let pixStride = img8.bytesPerRow
+
+        var horizonYScaled = [Int?](repeating: nil, count: sW)
+
+        for x in 0..<sW {
+            // Extract column brightness (average of channels)
+            var colBrightness = [Float](repeating: 0, count: sH)
+            for y in 0..<sH {
+                let base = y * pixStride + x * cpp
+                if cpp >= 3 && base + 2 < pixelData.count {
+                    colBrightness[y] = (Float(pixelData[base]) + Float(pixelData[base+1]) + Float(pixelData[base+2])) / 3.0
+                } else if base < pixelData.count {
+                    colBrightness[y] = Float(pixelData[base])
+                }
+            }
+
+            // Smooth column brightness to suppress noise/stars
+            let smoothR = verticalSmoothRadius
+            var smoothBright = [Float](repeating: 0, count: sH)
+            for y in 0..<sH {
+                let lo = max(0, y - smoothR)
+                let hi = min(sH - 1, y + smoothR)
+                var sum: Float = 0
+                for j in lo...hi { sum += colBrightness[j] }
+                smoothBright[y] = sum / Float(hi - lo + 1)
+            }
+
+            // Absolute vertical gradient
+            var gradProfile = [Float](repeating: 0, count: sH)
+            for y in 1..<(sH - 1) {
+                gradProfile[y] = abs(smoothBright[y + 1] - smoothBright[y - 1]) / 2.0
+            }
+
+            // Smooth gradient profile to find sustained transitions
+            let gradSmoothR = smoothR * 2
+            var smoothGrad = [Float](repeating: 0, count: sH)
+            for y in searchTop...searchBot {
+                let lo = max(searchTop, y - gradSmoothR)
+                let hi = min(searchBot, y + gradSmoothR)
+                var sum: Float = 0
+                for j in lo...hi { sum += gradProfile[j] }
+                smoothGrad[y] = sum / Float(hi - lo + 1)
+            }
+
+            // Find peak gradient in search band
+            var bestY = (searchTop + searchBot) / 2
+            var bestGrad: Float = 0
+            for y in searchTop...searchBot {
+                if smoothGrad[y] > bestGrad {
+                    bestGrad = smoothGrad[y]
+                    bestY = y
+                }
+            }
+
+            // Refine to exact peak within ±smoothR
+            var refinedY = bestY
+            var refinedGrad: Float = 0
+            let refLo = max(searchTop, bestY - smoothR)
+            let refHi = min(searchBot, bestY + smoothR)
+            for y in refLo...refHi {
+                if gradProfile[y] > refinedGrad {
+                    refinedGrad = gradProfile[y]
+                    refinedY = y
+                }
+            }
+
+            // Only accept if gradient is meaningful
+            if bestGrad >= 2.0 {
+                horizonYScaled[x] = refinedY
+            }
+        }
+
+        // Column-wise median filter
+        let medW = columnSmoothRadius
+        var smoothed = horizonYScaled
+        for x in 0..<sW {
+            guard horizonYScaled[x] != nil else { continue }
+            let lo = max(0, x - medW)
+            let hi = min(sW - 1, x + medW)
+            var window: [Int] = []
+            for jx in lo...hi {
+                if let y = horizonYScaled[jx] { window.append(y) }
+            }
+            if !window.isEmpty {
+                window.sort()
+                smoothed[x] = window[window.count / 2]
             }
         }
 

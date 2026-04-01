@@ -15,23 +15,25 @@ enum HorizonMethod: String, CaseIterable, Sendable, CustomStringConvertible {
     case otsu = "otsu"
     case dp = "dp"
     case siox = "siox"
+    case gradProfile = "grad"
     case randomWalker = "rw"
 
     // Combinations
     case otsuThenRW = "otsu+rw"
     case dpThenRW = "dp+rw"
     case sioxThenRW = "siox+rw"
+    case gradThenRW = "grad+rw"
     case combinedThenRW = "combined+rw"
-    case bestOfRW = "bestof+rw"      // best of otsu+rw, dp+rw, siox+rw per-sample
+    case bestOfRW = "bestof+rw"      // best of otsu+rw, dp+rw, siox+rw, grad+rw per-sample
     case oracleRW = "oracle+rw"      // oracle: max(combined+rw, bestof+rw) per-sample
 
     var description: String { rawValue }
 
     /// Base methods (no combination)
-    static let baseMethods: [HorizonMethod] = [.otsu, .dp, .siox]
+    static let baseMethods: [HorizonMethod] = [.otsu, .dp, .siox, .gradProfile]
 
     /// Combined methods
-    static let combinedMethods: [HorizonMethod] = [.otsuThenRW, .dpThenRW, .sioxThenRW, .combinedThenRW, .bestOfRW, .oracleRW]
+    static let combinedMethods: [HorizonMethod] = [.otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW, .combinedThenRW, .bestOfRW, .oracleRW]
 }
 
 // MARK: - Method parameters
@@ -559,6 +561,160 @@ enum SIOXRunner {
 
             return smoothed
         }.value
+    }
+}
+
+// MARK: - Vertical Gradient Profile runner
+
+enum GradProfileRunner {
+
+    /// Run vertical gradient profile horizon detection.
+    ///
+    /// For each column, computes a smoothed vertical gradient profile (Sobel-Y),
+    /// then finds the strongest sustained gradient transition — the sky→ground
+    /// boundary. This is complementary to color-based methods (Otsu, SIOX) because
+    /// it works purely on edge structure, making it robust to snow/water that
+    /// has similar color to sky but a clear gradient at the actual ridgeline.
+    static func run(
+        image: PixelatedImage,
+        workingSize: Int = 512,
+        searchTopFraction: Double = 0.05,
+        searchBottomFraction: Double = 0.95,
+        verticalSmoothRadius: Int = 5,
+        columnSmoothRadius: Int = 20
+    ) -> PixelatedImage {
+        let imgW = image.width
+        let imgH = image.height
+
+        // Scale down for processing
+        let (scaled, _, scaleY) = ImageScaler.scaleForProcessing(image, maxDim: workingSize)
+        let sW = scaled.width
+        let sH = scaled.height
+
+        let searchTop = max(0, Int(Double(sH) * searchTopFraction))
+        let searchBot = min(sH - 1, Int(Double(sH) * searchBottomFraction))
+
+        // Ensure 8-bit grayscale for gradient computation
+        let img8 = PixelatedImage(mat: scaled.mat.ensureEightBit()) ?? scaled
+        let grayData: [UInt8]
+        let cpp: Int
+        switch img8.imageData {
+        case .eightBit(let buf):
+            grayData = Array(buf)
+            cpp = img8.componentsPerPixel
+        default:
+            // Fallback: return all-sky
+            let yArray = [Int?](repeating: nil, count: imgW)
+            let mat = PixelatedImageBridge.binaryHorizonMask(
+                width: Int32(imgW), height: Int32(imgH), horizonY: yArray)
+            return PixelatedImage(mat: mat)!
+        }
+        let stride = img8.bytesPerRow
+
+        // Compute per-column vertical gradient profile using Sobel-like 1D kernel.
+        // For each (x, y), gradient = weighted sum of brightness differences in a
+        // vertical window. We use a Gaussian-weighted window of radius verticalSmoothRadius.
+        //
+        // The key insight: at the horizon, there's a sustained bright→dark (or dark→bright)
+        // transition across multiple rows. We want the peak of the smoothed |gradient|.
+
+        var horizonYScaled = [Int?](repeating: nil, count: sW)
+
+        for x in 0..<sW {
+            // Extract column brightness (average of channels)
+            var colBrightness = [Float](repeating: 0, count: sH)
+            for y in 0..<sH {
+                let base = y * stride + x * cpp
+                if cpp >= 3 && base + 2 < grayData.count {
+                    colBrightness[y] = (Float(grayData[base]) + Float(grayData[base+1]) + Float(grayData[base+2])) / 3.0
+                } else if base < grayData.count {
+                    colBrightness[y] = Float(grayData[base])
+                }
+            }
+
+            // Smooth the column brightness to reduce noise (stars, etc.)
+            let smoothR = verticalSmoothRadius
+            var smoothBright = [Float](repeating: 0, count: sH)
+            for y in 0..<sH {
+                let lo = max(0, y - smoothR)
+                let hi = min(sH - 1, y + smoothR)
+                var sum: Float = 0
+                for j in lo...hi { sum += colBrightness[j] }
+                smoothBright[y] = sum / Float(hi - lo + 1)
+            }
+
+            // Compute absolute vertical gradient at each row
+            var gradProfile = [Float](repeating: 0, count: sH)
+            for y in 1..<(sH - 1) {
+                gradProfile[y] = abs(smoothBright[y + 1] - smoothBright[y - 1]) / 2.0
+            }
+
+            // Smooth the gradient profile to find sustained transitions (not spikes)
+            let gradSmoothR = smoothR * 2
+            var smoothGrad = [Float](repeating: 0, count: sH)
+            for y in searchTop...searchBot {
+                let lo = max(searchTop, y - gradSmoothR)
+                let hi = min(searchBot, y + gradSmoothR)
+                var sum: Float = 0
+                for j in lo...hi { sum += gradProfile[j] }
+                smoothGrad[y] = sum / Float(hi - lo + 1)
+            }
+
+            // Find the peak gradient within the search band
+            var bestY = (searchTop + searchBot) / 2
+            var bestGrad: Float = 0
+            for y in searchTop...searchBot {
+                if smoothGrad[y] > bestGrad {
+                    bestGrad = smoothGrad[y]
+                    bestY = y
+                }
+            }
+
+            // Refine: snap to the exact peak within ±smoothR of the smoothed peak
+            var refinedY = bestY
+            var refinedGrad: Float = 0
+            let refLo = max(searchTop, bestY - smoothR)
+            let refHi = min(searchBot, bestY + smoothR)
+            for y in refLo...refHi {
+                if gradProfile[y] > refinedGrad {
+                    refinedGrad = gradProfile[y]
+                    refinedY = y
+                }
+            }
+
+            // Only accept if the gradient is meaningful (not noise)
+            // Threshold: at least 2 brightness units of gradient
+            if bestGrad >= 2.0 {
+                horizonYScaled[x] = refinedY
+            }
+        }
+
+        // Column-wise median filter to smooth outliers
+        let medW = columnSmoothRadius
+        var smoothed = horizonYScaled
+        for x in 0..<sW {
+            guard horizonYScaled[x] != nil else { continue }
+            let lo = max(0, x - medW)
+            let hi = min(sW - 1, x + medW)
+            var window: [Int] = []
+            for jx in lo...hi {
+                if let y = horizonYScaled[jx] { window.append(y) }
+            }
+            if !window.isEmpty {
+                window.sort()
+                smoothed[x] = window[window.count / 2]
+            }
+        }
+
+        // Scale back to original resolution
+        let horizonYOrig = ImageScaler.scaleHorizonY(
+            smoothed, fromWidth: sW, toWidth: imgW, scaleY: scaleY
+        )
+
+        let maskMat = PixelatedImageBridge.binaryHorizonMask(
+            width: Int32(imgW), height: Int32(imgH), horizonY: horizonYOrig
+        )
+        return PixelatedImage(mat: maskMat)!
     }
 }
 
