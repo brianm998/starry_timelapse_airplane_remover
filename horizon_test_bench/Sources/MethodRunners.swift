@@ -16,6 +16,7 @@ enum HorizonMethod: String, CaseIterable, Sendable, CustomStringConvertible {
     case dp = "dp"
     case siox = "siox"
     case gradProfile = "grad"
+    case texture = "tex"
     case randomWalker = "rw"
 
     // Combinations
@@ -23,17 +24,18 @@ enum HorizonMethod: String, CaseIterable, Sendable, CustomStringConvertible {
     case dpThenRW = "dp+rw"
     case sioxThenRW = "siox+rw"
     case gradThenRW = "grad+rw"
+    case textureThenRW = "tex+rw"
     case combinedThenRW = "combined+rw"
-    case bestOfRW = "bestof+rw"      // best of otsu+rw, dp+rw, siox+rw, grad+rw per-sample
+    case bestOfRW = "bestof+rw"      // best of all single+rw per-sample
     case oracleRW = "oracle+rw"      // oracle: max(combined+rw, bestof+rw) per-sample
 
     var description: String { rawValue }
 
     /// Base methods (no combination)
-    static let baseMethods: [HorizonMethod] = [.otsu, .dp, .siox, .gradProfile]
+    static let baseMethods: [HorizonMethod] = [.otsu, .dp, .siox, .gradProfile, .texture]
 
     /// Combined methods
-    static let combinedMethods: [HorizonMethod] = [.otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW, .combinedThenRW, .bestOfRW, .oracleRW]
+    static let combinedMethods: [HorizonMethod] = [.otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW, .textureThenRW, .combinedThenRW, .bestOfRW, .oracleRW]
 }
 
 // MARK: - Method parameters
@@ -690,6 +692,166 @@ enum GradProfileRunner {
         }
 
         // Column-wise median filter to smooth outliers
+        let medW = columnSmoothRadius
+        var smoothed = horizonYScaled
+        for x in 0..<sW {
+            guard horizonYScaled[x] != nil else { continue }
+            let lo = max(0, x - medW)
+            let hi = min(sW - 1, x + medW)
+            var window: [Int] = []
+            for jx in lo...hi {
+                if let y = horizonYScaled[jx] { window.append(y) }
+            }
+            if !window.isEmpty {
+                window.sort()
+                smoothed[x] = window[window.count / 2]
+            }
+        }
+
+        // Scale back to original resolution
+        let horizonYOrig = ImageScaler.scaleHorizonY(
+            smoothed, fromWidth: sW, toWidth: imgW, scaleY: scaleY
+        )
+
+        let maskMat = PixelatedImageBridge.binaryHorizonMask(
+            width: Int32(imgW), height: Int32(imgH), horizonY: horizonYOrig
+        )
+        return PixelatedImage(mat: maskMat)!
+    }
+}
+
+// MARK: - Texture/Entropy runner
+
+enum TextureRunner {
+
+    /// Run texture-based horizon detection.
+    ///
+    /// Computes local variance in a sliding window for each column. Sky regions
+    /// (even with stars) have low texture variance; ground (terrain, trees, snow)
+    /// has high variance. The horizon is the transition from low→high variance.
+    ///
+    /// This is complementary to gradient-based methods because it doesn't look
+    /// for a single edge — it detects the *change in texture regime* between
+    /// sky and ground, which is robust to gradual transitions and water reflections.
+    static func run(
+        image: PixelatedImage,
+        workingSize: Int = 512,
+        searchTopFraction: Double = 0.05,
+        searchBottomFraction: Double = 0.95,
+        windowRadius: Int = 8,
+        columnSmoothRadius: Int = 20
+    ) -> PixelatedImage {
+        let imgW = image.width
+        let imgH = image.height
+
+        // Scale down for processing
+        let (scaled, _, scaleY) = ImageScaler.scaleForProcessing(image, maxDim: workingSize)
+        let sW = scaled.width
+        let sH = scaled.height
+
+        let searchTop = max(0, Int(Double(sH) * searchTopFraction))
+        let searchBot = min(sH - 1, Int(Double(sH) * searchBottomFraction))
+
+        // Ensure 8-bit
+        let img8 = PixelatedImage(mat: scaled.mat.ensureEightBit()) ?? scaled
+        let pixelData: [UInt8]
+        let cpp: Int
+        switch img8.imageData {
+        case .eightBit(let buf):
+            pixelData = Array(buf)
+            cpp = img8.componentsPerPixel
+        default:
+            let yArray = [Int?](repeating: nil, count: imgW)
+            let mat = PixelatedImageBridge.binaryHorizonMask(
+                width: Int32(imgW), height: Int32(imgH), horizonY: yArray)
+            return PixelatedImage(mat: mat)!
+        }
+        let stride = img8.bytesPerRow
+
+        var horizonYScaled = [Int?](repeating: nil, count: sW)
+        let winR = windowRadius
+
+        for x in 0..<sW {
+            // Extract column brightness
+            var colBright = [Float](repeating: 0, count: sH)
+            for y in 0..<sH {
+                let base = y * stride + x * cpp
+                if cpp >= 3 && base + 2 < pixelData.count {
+                    colBright[y] = (Float(pixelData[base]) + Float(pixelData[base+1]) + Float(pixelData[base+2])) / 3.0
+                } else if base < pixelData.count {
+                    colBright[y] = Float(pixelData[base])
+                }
+            }
+
+            // Compute local variance at each row using a sliding window.
+            // variance = E[x^2] - E[x]^2
+            // Use prefix sums for O(1) per-row computation.
+            var prefSum = [Float](repeating: 0, count: sH + 1)
+            var prefSqSum = [Float](repeating: 0, count: sH + 1)
+            for y in 0..<sH {
+                prefSum[y + 1] = prefSum[y] + colBright[y]
+                prefSqSum[y + 1] = prefSqSum[y] + colBright[y] * colBright[y]
+            }
+
+            var localVar = [Float](repeating: 0, count: sH)
+            for y in searchTop...searchBot {
+                let lo = max(0, y - winR)
+                let hi = min(sH - 1, y + winR)
+                let n = Float(hi - lo + 1)
+                let mean = (prefSum[hi + 1] - prefSum[lo]) / n
+                let meanSq = (prefSqSum[hi + 1] - prefSqSum[lo]) / n
+                localVar[y] = max(0, meanSq - mean * mean)
+            }
+
+            // Smooth the variance profile to find sustained transitions
+            let smoothR = winR
+            var smoothVar = [Float](repeating: 0, count: sH)
+            for y in searchTop...searchBot {
+                let lo = max(searchTop, y - smoothR)
+                let hi = min(searchBot, y + smoothR)
+                var sum: Float = 0
+                for j in lo...hi { sum += localVar[j] }
+                smoothVar[y] = sum / Float(hi - lo + 1)
+            }
+
+            // Find the horizon as the row where variance transitions from
+            // low (sky) to high (ground). We look for the point of maximum
+            // variance increase (derivative of smoothed variance).
+            var varDeriv = [Float](repeating: 0, count: sH)
+            let derivR = 3
+            for y in (searchTop + derivR)...(searchBot - derivR) {
+                varDeriv[y] = smoothVar[y + derivR] - smoothVar[y - derivR]
+            }
+
+            // Smooth the derivative to avoid spikes
+            var smoothDeriv = [Float](repeating: 0, count: sH)
+            let derivSmoothR = 4
+            for y in searchTop...searchBot {
+                let lo = max(searchTop, y - derivSmoothR)
+                let hi = min(searchBot, y + derivSmoothR)
+                var sum: Float = 0
+                for j in lo...hi { sum += varDeriv[j] }
+                smoothDeriv[y] = sum / Float(hi - lo + 1)
+            }
+
+            // Peak of positive derivative = transition from low to high variance
+            var bestY = (searchTop + searchBot) / 2
+            var bestDeriv: Float = 0
+            for y in searchTop...searchBot {
+                if smoothDeriv[y] > bestDeriv {
+                    bestDeriv = smoothDeriv[y]
+                    bestY = y
+                }
+            }
+
+            // Only accept if the variance transition is meaningful
+            // (derivative significantly positive)
+            if bestDeriv > 5.0 {
+                horizonYScaled[x] = bestY
+            }
+        }
+
+        // Column-wise median filter
         let medW = columnSmoothRadius
         var smoothed = horizonYScaled
         for x in 0..<sW {

@@ -193,6 +193,8 @@ enum SampleProcessor {
             computedMask = await SIOXRunner.run(image: image)
         case .gradProfile:
             computedMask = GradProfileRunner.run(image: image)
+        case .texture:
+            computedMask = TextureRunner.run(image: image)
         default:
             computedMask = nil
         }
@@ -251,11 +253,13 @@ enum SampleProcessor {
         let dpMask = try? await DPRunner.run(image: image, gridSearch: true)
         let sioxMask = await SIOXRunner.run(image: image)
         let gradMask = GradProfileRunner.run(image: image)
+        let texMask = TextureRunner.run(image: image)
 
         let otsuY = otsuMask.map { BandSimulator.horizonYFromMask($0) }
         let dpY = dpMask.map { BandSimulator.horizonYFromMask($0) }
         let sioxY = BandSimulator.horizonYFromMask(sioxMask)
         let gradY = BandSimulator.horizonYFromMask(gradMask)
+        let texY = BandSimulator.horizonYFromMask(texMask)
 
         var results: [MethodResult] = []
 
@@ -276,6 +280,8 @@ enum SampleProcessor {
                     baseY = sioxY
                 case .gradThenRW:
                     baseY = gradY
+                case .textureThenRW:
+                    baseY = texY
                 case .combinedThenRW:
                     let imgH = image.height
                     var weightedMethods: [([Int?], Double)] = []
@@ -295,12 +301,17 @@ enum SampleProcessor {
                         let conf = BandSimulator.horizonConfidence(gradY, imageHeight: imgH)
                         if conf > 0.05 { weightedMethods.append((gradY, conf)) }
                     }
+                    do {
+                        let conf = BandSimulator.horizonConfidence(texY, imageHeight: imgH)
+                        if conf > 0.05 { weightedMethods.append((texY, conf)) }
+                    }
                     // Fallback: if all excluded, use equal weights
                     if weightedMethods.isEmpty {
                         if let y = otsuY { weightedMethods.append((y, 1.0)) }
                         if let y = dpY { weightedMethods.append((y, 1.0)) }
                         weightedMethods.append((sioxY, 1.0))
                         weightedMethods.append((gradY, 1.0))
+                        weightedMethods.append((texY, 1.0))
                     }
                     baseY = weightedMethods.isEmpty ? nil :
                         BandSimulator.confidenceWeightedCombine(weightedMethods)
@@ -321,20 +332,20 @@ enum SampleProcessor {
                 }
             }
 
-            // For bestOfRW: pick the best result from otsu+rw, dp+rw, siox+rw, grad+rw
+            // For bestOfRW: pick the best result from all single+rw methods
             if combo == .bestOfRW {
                 let candidates = results.filter {
-                    [.otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW].contains($0.method)
+                    [.otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW, .textureThenRW].contains($0.method)
                 }
                 if let best = candidates.max(by: { $0.score.combinedScore < $1.score.combinedScore }) {
                     bestScore = best.score
                 }
             }
 
-            // For oracleRW: pick best of combined+rw, otsu+rw, dp+rw, siox+rw, grad+rw
+            // For oracleRW: pick best of combined+rw and all single+rw methods
             if combo == .oracleRW {
                 let candidates = results.filter {
-                    [.otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW, .combinedThenRW].contains($0.method)
+                    [.otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW, .textureThenRW, .combinedThenRW].contains($0.method)
                 }
                 if let best = candidates.max(by: { $0.score.combinedScore < $1.score.combinedScore }) {
                     bestScore = best.score
