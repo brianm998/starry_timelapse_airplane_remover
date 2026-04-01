@@ -723,4 +723,77 @@ enum BandSimulator {
         }
         return result
     }
+
+    /// Compute a confidence score for a horizon Y array.
+    /// Based on smoothness (low column-to-column variation), coverage, and plausibility.
+    static func horizonConfidence(_ horizonY: [Int?], imageHeight: Int) -> Double {
+        let defined = horizonY.compactMap { $0 }
+        guard defined.count > horizonY.count / 20 else { return 0 }
+
+        let coverage = Double(defined.count) / Double(max(1, horizonY.count))
+
+        let diffs = zip(defined.dropLast(), defined.dropFirst()).map { abs($0 - $1) }
+        let meanDiff = diffs.isEmpty ? 0.0 : Double(diffs.reduce(0, +)) / Double(diffs.count)
+        let normalizedDiff = meanDiff / Double(max(1, imageHeight))
+        let smoothness = 1.0 / (1.0 + normalizedDiff * 200.0)
+
+        let avg = Double(defined.reduce(0, +)) / Double(defined.count)
+        let heightFrac = avg / Double(imageHeight)
+        let plausibility: Double
+        if heightFrac < 0.05 || heightFrac > 0.95 {
+            plausibility = 0.0
+        } else if heightFrac < 0.15 || heightFrac > 0.85 {
+            plausibility = 0.3
+        } else {
+            plausibility = 1.0 - abs(heightFrac - 0.5) * 1.2
+        }
+        let clampedPlausibility = max(0.05, min(1.0, plausibility))
+
+        return coverage * smoothness * clampedPlausibility
+    }
+
+    /// Confidence-weighted combine: each method contributes proportionally
+    /// to its confidence score, with outlier filtering.
+    static func confidenceWeightedCombine(
+        _ methodsAndWeights: [([Int?], Double)],
+        outlierThreshold: Int = 80
+    ) -> [Int?] {
+        guard let (first, _) = methodsAndWeights.first else { return [] }
+        let w = first.count
+        var result = [Int?](repeating: nil, count: w)
+
+        for x in 0..<w {
+            var entries: [(y: Int, weight: Double)] = []
+            for (arr, conf) in methodsAndWeights {
+                if x < arr.count, let y = arr[x] {
+                    entries.append((y, conf))
+                }
+            }
+            guard !entries.isEmpty else { continue }
+
+            if entries.count == 1 {
+                result[x] = entries[0].y
+                continue
+            }
+
+            let sortedY = entries.map(\.y).sorted()
+            let med = sortedY[sortedY.count / 2]
+
+            let filtered = entries.filter { abs($0.y - med) <= outlierThreshold }
+
+            if filtered.isEmpty {
+                result[x] = med
+                continue
+            }
+
+            let totalWeight = filtered.reduce(0.0) { $0 + $1.weight }
+            if totalWeight > 1e-10 {
+                let weightedSum = filtered.reduce(0.0) { $0 + Double($1.y) * $1.weight }
+                result[x] = Int((weightedSum / totalWeight).rounded())
+            } else {
+                result[x] = filtered[filtered.count / 2].y
+            }
+        }
+        return result
+    }
 }

@@ -153,17 +153,31 @@ static void computeEdgeWeightsLAB(const cv::Mat& lab, double beta,
 }
 
 // Compute per-pixel data term: probability of being sky based on LAB
-// colour distance to sky vs ground centroids.
+// colour distance to sky vs ground centroids, modulated by vertical
+// gradient magnitude.  Where a strong vertical edge exists, the colour
+// model is made less confident (pushed toward 0.5) so that the RW edge
+// weights can dominate at the actual ridgeline.  This prevents bright
+// snow / tree canopies from being confidently classified as sky.
+//
 // Returns a CV_32F image in [0,1] where 1.0 = sky, 0.0 = ground.
 static cv::Mat computeDataTerm(const cv::Mat& lab,
                                const cv::Vec3f& skyCentroid,
-                               const cv::Vec3f& gndCentroid) {
+                               const cv::Vec3f& gndCentroid,
+                               const cv::Mat& sobelY,
+                               float gradientWeight = 0.5f) {
     int rows = lab.rows, cols = lab.cols;
     cv::Mat data(rows, cols, CV_32F);
+
+    // Compute a robust gradient scale: use the 95th percentile of |sobelY|
+    // so that the modulation adapts to each image's contrast.
+    double minG, maxG;
+    cv::minMaxLoc(sobelY, &minG, &maxG);
+    float gradientScale = std::max(0.01f, (float)(maxG * 0.5));
 
     for (int r = 0; r < rows; r++) {
         const cv::Vec3f* labRow = lab.ptr<cv::Vec3f>(r);
         float* dataRow = data.ptr<float>(r);
+        const float* gradRow = sobelY.ptr<float>(r);
         for (int c = 0; c < cols; c++) {
             cv::Vec3f dSky = labRow[c] - skyCentroid;
             cv::Vec3f dGnd = labRow[c] - gndCentroid;
@@ -171,7 +185,12 @@ static cv::Mat computeDataTerm(const cv::Mat& lab,
             float distGnd = std::sqrt(dGnd[0]*dGnd[0] + dGnd[1]*dGnd[1] + dGnd[2]*dGnd[2]);
             float total = distSky + distGnd;
             // P(sky) = distGnd / (distSky + distGnd)
-            dataRow[c] = (total > 1e-6f) ? (distGnd / total) : 0.5f;
+            float colorProb = (total > 1e-6f) ? (distGnd / total) : 0.5f;
+
+            // Modulate by gradient: at strong edges, nudge toward 0.5
+            float gradNorm = std::min(1.0f, std::abs(gradRow[c]) / gradientScale);
+            float gw = gradientWeight * gradNorm;
+            dataRow[c] = colorProb * (1.0f - gw) + 0.5f * gw;
         }
     }
     return data;
@@ -359,11 +378,11 @@ void pib_random_walker_horizon(MatWrapperRef img,
         labSmooth2.convertTo(labROI, CV_32FC3);
 
         // ── 5. Compute LAB edge weights (anisotropic) ────────────────────
-        // Mild vertical boost: horizontal boundaries are slightly harder
-        // to cross, but not so much that peaks/valleys get smoothed.
+        // Moderate vertical boost: horizontal boundaries (horizons) are
+        // harder to cross, encouraging the 0.5 contour to follow ridgelines.
 
         cv::Mat wRight, wDown;
-        double verticalBoost = 1.5;
+        double verticalBoost = 2.0;
         computeEdgeWeightsLAB(labROI, beta, verticalBoost, wRight, wDown);
 
         // ── 6. Scale per-column arrays to working resolution ─────────────
@@ -430,15 +449,20 @@ void pib_random_walker_horizon(MatWrapperRef img,
               gndCentroid[0], gndCentroid[1], gndCentroid[2],
               nSky, nGnd, nearBand);
 
-        // ── 8. Compute data term ─────────────────────────────────────────
+        // ── 8. Compute data term (gradient-modulated) ────────────────────
+        // Compute Sobel vertical gradient on the smoothed gray for both
+        // the data term modulation and later edge snapping.
 
-        cv::Mat dataTerm = computeDataTerm(labROI, skyCentroid, gndCentroid);
+        cv::Mat sobelY;
+        cv::Sobel(grayBlurred, sobelY, CV_32F, 0, 1, 3);
+        cv::Mat absSobelY = cv::abs(sobelY);
 
-        // Data term strength (lambda).  Higher values make the colour model
-        // dominate over diffusion; lower values rely more on edges.
-        // With local centroids (near-horizon colours), a moderate lambda
-        // balances colour model and edge awareness.
-        float lambda = 0.3f;
+        cv::Mat dataTerm = computeDataTerm(labROI, skyCentroid, gndCentroid,
+                                           absSobelY, 0.5f);
+
+        // Data term strength (lambda).  Lower values rely more on edges,
+        // reducing colour-model confusion from snow/bright canopy.
+        float lambda = 0.2f;
 
         // ── 9. Build seed mask and initial probabilities ─────────────────
 
@@ -551,16 +575,20 @@ void pib_random_walker_horizon(MatWrapperRef img,
         }
 
         // ── 12. Edge snapping ────────────────────────────────────────────
-        // Snap to the nearest strong vertical edge within a tight window.
-        // Too wide a window causes the snap to jump to wrong edges,
-        // smoothing over peaks and valleys.
+        // Snap to the nearest strong vertical edge.  Uses the pre-computed
+        // absSobelY from step 8.
+        //
+        // Asymmetric search: look further upward than downward to compensate
+        // for the systematic downward bias from snow/canopy/tree confusion.
+        // The detection pipeline consistently places the horizon below the
+        // true ridgeline, so the strongest edge is usually above the initial
+        // estimate.
+        //
+        // Upward bias: when a candidate above the current position has ≥75%
+        // of the best gradient magnitude, prefer it.
 
-        cv::Mat sobelY;
-        cv::Sobel(grayBlurred, sobelY, CV_32F, 0, 1, 3);
-        sobelY = cv::abs(sobelY);
-
-        // Tight snap: ±8 pixels at working resolution
-        int snapRadius = std::max(3, (int)(8 * scaleY + 0.5));
+        int snapRadiusUp   = std::max(8, (int)(30 * scaleY + 0.5));
+        int snapRadiusDown = std::max(5, (int)(15 * scaleY + 0.5));
         float snapThreshold = 0.015f;
 
         for (int c = 0; c < workW; c++) {
@@ -569,13 +597,18 @@ void pib_random_walker_horizon(MatWrapperRef img,
 
             int bestR = hr;
             float bestGrad = 0.0f;
-            int lo = std::max(0, hr - snapRadius);
-            int hi = std::min(workH - 1, hr + snapRadius);
+            int lo = std::max(0, hr - snapRadiusUp);
+            int hi = std::min(workH - 1, hr + snapRadiusDown);
             for (int r = lo; r <= hi; r++) {
-                float g = sobelY.at<float>(r, c);
+                float g = absSobelY.at<float>(r, c);
                 if (g > bestGrad) {
                     bestGrad = g;
                     bestR = r;
+                } else if (g > bestGrad * 0.75f && r < bestR) {
+                    // Upward bias: prefer higher position when gradient
+                    // is within 75% of the best seen so far.
+                    bestR = r;
+                    bestGrad = std::max(bestGrad, g);
                 }
             }
             if (bestGrad >= snapThreshold) {

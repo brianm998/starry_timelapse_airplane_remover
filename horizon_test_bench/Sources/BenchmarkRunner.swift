@@ -271,11 +271,28 @@ enum SampleProcessor {
                 case .sioxThenRW:
                     baseY = sioxY
                 case .combinedThenRW:
-                    var arrays: [[Int?]] = []
-                    if let y = otsuY { arrays.append(y) }
-                    if let y = dpY { arrays.append(y) }
-                    arrays.append(sioxY)
-                    baseY = arrays.isEmpty ? nil : BandSimulator.medianCombine(arrays)
+                    let imgH = image.height
+                    var weightedMethods: [([Int?], Double)] = []
+                    if let y = otsuY {
+                        let conf = BandSimulator.horizonConfidence(y, imageHeight: imgH)
+                        if conf > 0.05 { weightedMethods.append((y, conf)) }
+                    }
+                    if let y = dpY {
+                        let conf = BandSimulator.horizonConfidence(y, imageHeight: imgH)
+                        if conf > 0.05 { weightedMethods.append((y, conf)) }
+                    }
+                    do {
+                        let conf = BandSimulator.horizonConfidence(sioxY, imageHeight: imgH)
+                        if conf > 0.05 { weightedMethods.append((sioxY, conf)) }
+                    }
+                    // Fallback: if all excluded, use equal weights
+                    if weightedMethods.isEmpty {
+                        if let y = otsuY { weightedMethods.append((y, 1.0)) }
+                        if let y = dpY { weightedMethods.append((y, 1.0)) }
+                        weightedMethods.append((sioxY, 1.0))
+                    }
+                    baseY = weightedMethods.isEmpty ? nil :
+                        BandSimulator.confidenceWeightedCombine(weightedMethods)
                 case .bestOfRW, .oracleRW:
                     baseY = nil  // handled separately below
                 default:

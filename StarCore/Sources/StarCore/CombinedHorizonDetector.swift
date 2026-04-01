@@ -81,42 +81,64 @@ public enum CombinedHorizonDetector {
         Log.i("CombinedHorizonDetector: base methods — " +
               "otsu=\(otsuDefined)/\(imgW) dp=\(dpDefined)/\(imgW) siox=\(sioxDefined)/\(imgW) columns")
 
-        // Median-combine with outlier filtering.
-        // Before adding, check each base method for catastrophic failure:
-        // if the mean horizon Y is implausible (outside 10-90% of height)
-        // or the stddev is wildly high (>15% of image height), skip it.
-        var arrays: [[Int?]] = []
-
-        if let y = otsuY, isPlausibleHorizon(y, imageHeight: imgH) {
-            arrays.append(y)
-        } else if otsuY != nil {
-            Log.w("CombinedHorizonDetector: Otsu result excluded (implausible)")
-        }
-        if let y = dpY, isPlausibleHorizon(y, imageHeight: imgH) {
-            arrays.append(y)
-        } else if dpY != nil {
-            Log.w("CombinedHorizonDetector: DP result excluded (implausible)")
-        }
-        if isPlausibleHorizon(sioxResult, imageHeight: imgH) {
-            arrays.append(sioxResult)
-        } else {
-            Log.w("CombinedHorizonDetector: SIOX result excluded (implausible)")
+        // Confidence-weighted combine with outlier filtering.
+        // Each base method gets a confidence score based on smoothness,
+        // coverage, and plausibility. Methods with higher confidence
+        // contribute more to the final horizon Y at each column.
+        struct WeightedMethod {
+            let name: String
+            let horizonY: [Int?]
+            let confidence: Double
         }
 
-        // If all base methods were excluded as implausible, fall back to
-        // using them all anyway (better than nothing).
-        if arrays.isEmpty {
-            Log.w("CombinedHorizonDetector: all base methods implausible, using all anyway")
-            if let y = otsuY { arrays.append(y) }
-            if let y = dpY { arrays.append(y) }
-            arrays.append(sioxResult)
+        var methods: [WeightedMethod] = []
+
+        if let y = otsuY {
+            let conf = horizonConfidence(y, imageHeight: imgH)
+            if conf > 0.05 {
+                methods.append(WeightedMethod(name: "otsu", horizonY: y, confidence: conf))
+                Log.d("CombinedHorizonDetector: Otsu confidence=\(String(format: "%.3f", conf))")
+            } else {
+                Log.w("CombinedHorizonDetector: Otsu excluded (confidence=\(String(format: "%.3f", conf)))")
+            }
+        }
+        if let y = dpY {
+            let conf = horizonConfidence(y, imageHeight: imgH)
+            if conf > 0.05 {
+                methods.append(WeightedMethod(name: "dp", horizonY: y, confidence: conf))
+                Log.d("CombinedHorizonDetector: DP confidence=\(String(format: "%.3f", conf))")
+            } else {
+                Log.w("CombinedHorizonDetector: DP excluded (confidence=\(String(format: "%.3f", conf)))")
+            }
+        }
+        do {
+            let conf = horizonConfidence(sioxResult, imageHeight: imgH)
+            if conf > 0.05 {
+                methods.append(WeightedMethod(name: "siox", horizonY: sioxResult, confidence: conf))
+                Log.d("CombinedHorizonDetector: SIOX confidence=\(String(format: "%.3f", conf))")
+            } else {
+                Log.w("CombinedHorizonDetector: SIOX excluded (confidence=\(String(format: "%.3f", conf)))")
+            }
         }
 
-        guard !arrays.isEmpty else {
+        // If all methods were excluded, fall back to using them all with equal weight
+        if methods.isEmpty {
+            Log.w("CombinedHorizonDetector: all base methods low-confidence, using all")
+            if let y = otsuY { methods.append(WeightedMethod(name: "otsu", horizonY: y, confidence: 1.0)) }
+            if let y = dpY { methods.append(WeightedMethod(name: "dp", horizonY: y, confidence: 1.0)) }
+            methods.append(WeightedMethod(name: "siox", horizonY: sioxResult, confidence: 1.0))
+        }
+
+        guard !methods.isEmpty else {
             throw "CombinedHorizonDetector: all base methods failed"
         }
 
-        let combinedY = medianCombine(arrays, outlierThreshold: params.outlierThreshold)
+        let combinedY = confidenceWeightedCombine(
+            methods.map { ($0.horizonY, $0.confidence) },
+            outlierThreshold: params.outlierThreshold
+        )
+
+        Log.i("CombinedHorizonDetector: combined using \(methods.map { "\($0.name)(\(String(format: "%.2f", $0.confidence)))" }.joined(separator: ", "))")
 
         // Try each brush radius and pick the best result
         var bestMask: PixelatedImage? = nil
@@ -525,30 +547,86 @@ public enum CombinedHorizonDetector {
 
     // MARK: - Helpers
 
-    /// Combine multiple horizon Y arrays with outlier-robust median.
-    private static func medianCombine(_ arrays: [[Int?]], outlierThreshold: Int) -> [Int?] {
-        guard let first = arrays.first else { return [] }
+    /// Compute a confidence score for a horizon Y array: smoothness × coverage × plausibility.
+    /// Returns a value in [0, 1] where higher = more confident.
+    private static func horizonConfidence(_ horizonY: [Int?], imageHeight: Int) -> Double {
+        let defined = horizonY.compactMap { $0 }
+        guard defined.count > horizonY.count / 20 else { return 0 }
+
+        // Coverage: fraction of columns with a defined horizon
+        let coverage = Double(defined.count) / Double(max(1, horizonY.count))
+
+        // Smoothness: 1 / (1 + mean absolute column-to-column diff / imageHeight)
+        // Normalized by image height so it's scale-invariant.
+        let diffs = zip(defined.dropLast(), defined.dropFirst()).map { abs($0 - $1) }
+        let meanDiff = diffs.isEmpty ? 0.0 : Double(diffs.reduce(0, +)) / Double(diffs.count)
+        let normalizedDiff = meanDiff / Double(max(1, imageHeight))
+        // A meanDiff of ~0.5% of height = very smooth, ~5% = quite rough
+        let smoothness = 1.0 / (1.0 + normalizedDiff * 200.0)
+
+        // Plausibility: horizon should be in a reasonable range, not at top/bottom
+        let avg = Double(defined.reduce(0, +)) / Double(defined.count)
+        let heightFrac = avg / Double(imageHeight)
+        // Best at 0.5 (center), worst at 0 or 1
+        let plausibility: Double
+        if heightFrac < 0.05 || heightFrac > 0.95 {
+            plausibility = 0.0
+        } else if heightFrac < 0.15 || heightFrac > 0.85 {
+            plausibility = 0.3
+        } else {
+            plausibility = 1.0 - abs(heightFrac - 0.5) * 1.2
+        }
+        let clampedPlausibility = max(0.05, min(1.0, plausibility))
+
+        return coverage * smoothness * clampedPlausibility
+    }
+
+    /// Confidence-weighted combine: merge multiple horizon Y arrays, weighting
+    /// each method's contribution by its confidence score. Falls back to median
+    /// when only one method contributes at a column.
+    private static func confidenceWeightedCombine(
+        _ methodsAndWeights: [([Int?], Double)],
+        outlierThreshold: Int
+    ) -> [Int?] {
+        guard let (first, _) = methodsAndWeights.first else { return [] }
         let w = first.count
         var result = [Int?](repeating: nil, count: w)
+
         for x in 0..<w {
-            var vals: [Int] = []
-            for arr in arrays {
-                if x < arr.count, let y = arr[x] { vals.append(y) }
-            }
-            guard !vals.isEmpty else { continue }
-
-            vals.sort()
-            let med = vals[vals.count / 2]
-
-            if vals.count >= 3 {
-                let filtered = vals.filter { abs($0 - med) <= outlierThreshold }
-                if filtered.count >= 2 {
-                    result[x] = filtered[filtered.count / 2]
-                } else {
-                    result[x] = med
+            // Collect (value, weight) pairs for this column
+            var entries: [(y: Int, weight: Double)] = []
+            for (arr, conf) in methodsAndWeights {
+                if x < arr.count, let y = arr[x] {
+                    entries.append((y, conf))
                 }
-            } else {
+            }
+            guard !entries.isEmpty else { continue }
+
+            if entries.count == 1 {
+                result[x] = entries[0].y
+                continue
+            }
+
+            // Compute median for outlier filtering
+            let sortedY = entries.map(\.y).sorted()
+            let med = sortedY[sortedY.count / 2]
+
+            // Filter outliers
+            let filtered = entries.filter { abs($0.y - med) <= outlierThreshold }
+
+            if filtered.isEmpty {
                 result[x] = med
+                continue
+            }
+
+            // Confidence-weighted average of non-outlier values
+            let totalWeight = filtered.reduce(0.0) { $0 + $1.weight }
+            if totalWeight > 1e-10 {
+                let weightedSum = filtered.reduce(0.0) { $0 + Double($1.y) * $1.weight }
+                result[x] = Int((weightedSum / totalWeight).rounded())
+            } else {
+                // Equal weight fallback
+                result[x] = filtered[filtered.count / 2].y
             }
         }
         return result
