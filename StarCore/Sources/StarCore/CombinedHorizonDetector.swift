@@ -83,7 +83,8 @@ public enum CombinedHorizonDetector {
         let gradDefined = gradResult.compactMap({ $0 }).count
         let texDefined = texResult.compactMap({ $0 }).count
         Log.i("CombinedHorizonDetector: base methods — " +
-              "otsu=\(otsuDefined)/\(imgW) dp=\(dpDefined)/\(imgW) siox=\(sioxDefined)/\(imgW) grad=\(gradDefined)/\(imgW) tex=\(texDefined)/\(imgW) columns")
+              "otsu=\(otsuDefined)/\(imgW) dp=\(dpDefined)/\(imgW) siox=\(sioxDefined)/\(imgW) " +
+              "grad=\(gradDefined)/\(imgW) tex=\(texDefined)/\(imgW) columns")
 
         // Confidence-weighted combine with outlier filtering.
         // Each base method gets a confidence score based on smoothness,
@@ -142,7 +143,6 @@ public enum CombinedHorizonDetector {
                 Log.w("CombinedHorizonDetector: Tex excluded (confidence=\(String(format: "%.3f", conf)))")
             }
         }
-
         // If all methods were excluded, fall back to using them all with equal weight
         if methods.isEmpty {
             Log.w("CombinedHorizonDetector: all base methods low-confidence, using all")
@@ -758,6 +758,189 @@ public enum CombinedHorizonDetector {
             if bestDeriv > 5.0 {
                 horizonYScaled[x] = bestY
             }
+        }
+
+        // Column-wise median filter
+        let medW = columnSmoothRadius
+        var smoothed = horizonYScaled
+        for x in 0..<sW {
+            guard horizonYScaled[x] != nil else { continue }
+            let lo = max(0, x - medW)
+            let hi = min(sW - 1, x + medW)
+            var window: [Int] = []
+            for jx in lo...hi {
+                if let y = horizonYScaled[jx] { window.append(y) }
+            }
+            if !window.isEmpty {
+                window.sort()
+                smoothed[x] = window[window.count / 2]
+            }
+        }
+
+        return scaleHorizonY(smoothed, fromWidth: sW, toWidth: imgW,
+                             scaleY: Double(sH) / Double(imgH))
+    }
+
+    // MARK: - GrabCut
+
+    /// Run GrabCut horizon detection using OpenCV's iterative graph-cut with GMMs.
+    private static func runGrabCut(
+        scaled: PixelatedImage,
+        image: PixelatedImage,
+        gcWorkingWidth: Int32 = 384,
+        iterations: Int32 = 3
+    ) -> [Int?] {
+        let sW = scaled.width
+        let sH = scaled.height
+        let imgW = image.width
+        let imgH = image.height
+
+        // Quick initial horizon estimate from row brightness
+        let img8 = PixelatedImage(mat: scaled.mat.ensureEightBit()) ?? scaled
+        let pixelData: [UInt8]
+        let cpp: Int
+        switch img8.imageData {
+        case .eightBit(let buf):
+            pixelData = Array(buf)
+            cpp = img8.componentsPerPixel
+        default:
+            return [Int?](repeating: nil, count: imgW)
+        }
+        let pixStride = img8.bytesPerRow
+
+        var rowBrightness = [Float](repeating: 0, count: sH)
+        for y in 0..<sH {
+            var sum: Float = 0
+            let sampleStep = max(1, sW / 50)
+            var count = 0
+            for x in stride(from: 0, to: sW, by: sampleStep) {
+                let base = y * pixStride + x * cpp
+                if cpp >= 3 && base + 2 < pixelData.count {
+                    sum += (Float(pixelData[base]) + Float(pixelData[base+1]) + Float(pixelData[base+2])) / 3.0
+                } else if base < pixelData.count {
+                    sum += Float(pixelData[base])
+                }
+                count += 1
+            }
+            rowBrightness[y] = count > 0 ? sum / Float(count) : 0
+        }
+
+        let smoothR = 5
+        var dropY = sH / 2
+        var maxDrop: Float = 0
+        for y in smoothR..<(sH - smoothR) {
+            let absDrop = abs(rowBrightness[y - smoothR] - rowBrightness[y + smoothR])
+            if absDrop > maxDrop { maxDrop = absDrop; dropY = y }
+        }
+
+        let scaleY = Double(sH) / Double(imgH)
+        let fullInitY: [Int32] = (0..<imgW).map { x in
+            return Int32(Double(dropY) / scaleY)
+        }
+
+        let resultY32 = PixelatedImageBridge.grabCutHorizon(
+            image.mat,
+            initHorizonY: fullInitY,
+            iterations: iterations,
+            maxWorkingWidth: gcWorkingWidth
+        )
+
+        return resultY32.map { $0 < 0 ? nil : Int($0) }
+    }
+
+    // MARK: - FFT Column Profile
+
+    /// Run FFT-based horizon detection using high-frequency energy transition.
+    private static func runFFT(
+        scaled: PixelatedImage,
+        image: PixelatedImage,
+        searchTopFraction: Double = 0.05,
+        searchBottomFraction: Double = 0.95,
+        lowpassRadius: Int = 4,
+        energyWindowRadius: Int = 12,
+        columnSmoothRadius: Int = 20
+    ) -> [Int?] {
+        let sW = scaled.width
+        let sH = scaled.height
+        let imgW = image.width
+        let imgH = image.height
+
+        let searchTop = max(0, Int(Double(sH) * searchTopFraction))
+        let searchBot = min(sH - 1, Int(Double(sH) * searchBottomFraction))
+
+        let img8 = PixelatedImage(mat: scaled.mat.ensureEightBit()) ?? scaled
+        let pixelData: [UInt8]
+        let cpp: Int
+        switch img8.imageData {
+        case .eightBit(let buf):
+            pixelData = Array(buf)
+            cpp = img8.componentsPerPixel
+        default:
+            return [Int?](repeating: nil, count: imgW)
+        }
+        let pixStride = img8.bytesPerRow
+        let lpR = lowpassRadius
+        let ewR = energyWindowRadius
+
+        var horizonYScaled = [Int?](repeating: nil, count: sW)
+
+        for x in 0..<sW {
+            var colBright = [Float](repeating: 0, count: sH)
+            for y in 0..<sH {
+                let base = y * pixStride + x * cpp
+                if cpp >= 3 && base + 2 < pixelData.count {
+                    colBright[y] = (Float(pixelData[base]) + Float(pixelData[base+1]) + Float(pixelData[base+2])) / 3.0
+                } else if base < pixelData.count {
+                    colBright[y] = Float(pixelData[base])
+                }
+            }
+
+            // Lowpass via prefix sum
+            var prefSum = [Float](repeating: 0, count: sH + 1)
+            for y in 0..<sH { prefSum[y + 1] = prefSum[y] + colBright[y] }
+            var lowpass = [Float](repeating: 0, count: sH)
+            for y in 0..<sH {
+                let lo = max(0, y - lpR)
+                let hi = min(sH - 1, y + lpR)
+                lowpass[y] = (prefSum[hi + 1] - prefSum[lo]) / Float(hi - lo + 1)
+            }
+
+            // Highpass squared energy via prefix sum
+            var prefSqHP = [Float](repeating: 0, count: sH + 1)
+            for y in 0..<sH {
+                let hp = colBright[y] - lowpass[y]
+                prefSqHP[y + 1] = prefSqHP[y] + hp * hp
+            }
+            var hfEnergy = [Float](repeating: 0, count: sH)
+            for y in searchTop...searchBot {
+                let lo = max(0, y - ewR)
+                let hi = min(sH - 1, y + ewR)
+                hfEnergy[y] = (prefSqHP[hi + 1] - prefSqHP[lo]) / Float(hi - lo + 1)
+            }
+
+            // Derivative + smooth
+            let derivR = 4
+            let dSmoothR = 4
+            var smoothDeriv = [Float](repeating: 0, count: sH)
+            for y in searchTop...searchBot {
+                let lo = max(searchTop, y - dSmoothR)
+                let hi = min(searchBot, y + dSmoothR)
+                var sum: Float = 0
+                for j in lo...hi {
+                    if j - derivR >= searchTop && j + derivR <= searchBot {
+                        sum += hfEnergy[j + derivR] - hfEnergy[j - derivR]
+                    }
+                }
+                smoothDeriv[y] = sum / Float(hi - lo + 1)
+            }
+
+            var bestY = (searchTop + searchBot) / 2
+            var bestDeriv: Float = 0
+            for y in searchTop...searchBot {
+                if smoothDeriv[y] > bestDeriv { bestDeriv = smoothDeriv[y]; bestY = y }
+            }
+
+            if bestDeriv > 1.0 { horizonYScaled[x] = bestY }
         }
 
         // Column-wise median filter

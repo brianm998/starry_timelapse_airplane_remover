@@ -195,6 +195,10 @@ enum SampleProcessor {
             computedMask = GradProfileRunner.run(image: image)
         case .texture:
             computedMask = TextureRunner.run(image: image)
+        case .grabCut:
+            computedMask = GrabCutRunner.run(image: image)
+        case .fft:
+            computedMask = FFTRunner.run(image: image)
         default:
             computedMask = nil
         }
@@ -254,12 +258,16 @@ enum SampleProcessor {
         let sioxMask = await SIOXRunner.run(image: image)
         let gradMask = GradProfileRunner.run(image: image)
         let texMask = TextureRunner.run(image: image)
+        let gcMask = GrabCutRunner.run(image: image)
+        let fftMask = FFTRunner.run(image: image)
 
         let otsuY = otsuMask.map { BandSimulator.horizonYFromMask($0) }
         let dpY = dpMask.map { BandSimulator.horizonYFromMask($0) }
         let sioxY = BandSimulator.horizonYFromMask(sioxMask)
         let gradY = BandSimulator.horizonYFromMask(gradMask)
         let texY = BandSimulator.horizonYFromMask(texMask)
+        let gcY = BandSimulator.horizonYFromMask(gcMask)
+        let fftY = BandSimulator.horizonYFromMask(fftMask)
 
         var results: [MethodResult] = []
 
@@ -282,6 +290,10 @@ enum SampleProcessor {
                     baseY = gradY
                 case .textureThenRW:
                     baseY = texY
+                case .grabCutThenRW:
+                    baseY = gcY
+                case .fftThenRW:
+                    baseY = fftY
                 case .combinedThenRW:
                     let imgH = image.height
                     var weightedMethods: [([Int?], Double)] = []
@@ -305,6 +317,9 @@ enum SampleProcessor {
                         let conf = BandSimulator.horizonConfidence(texY, imageHeight: imgH)
                         if conf > 0.05 { weightedMethods.append((texY, conf)) }
                     }
+                    // Note: gc and fft are excluded from the combine — benchmarking
+                    // showed they hurt the confidence-weighted average despite having
+                    // some niche value as standalone+rw methods.
                     // Fallback: if all excluded, use equal weights
                     if weightedMethods.isEmpty {
                         if let y = otsuY { weightedMethods.append((y, 1.0)) }
@@ -335,7 +350,7 @@ enum SampleProcessor {
             // For bestOfRW: pick the best result from all single+rw methods
             if combo == .bestOfRW {
                 let candidates = results.filter {
-                    [.otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW, .textureThenRW].contains($0.method)
+                    [.otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW, .textureThenRW, .grabCutThenRW, .fftThenRW].contains($0.method)
                 }
                 if let best = candidates.max(by: { $0.score.combinedScore < $1.score.combinedScore }) {
                     bestScore = best.score
@@ -345,7 +360,7 @@ enum SampleProcessor {
             // For oracleRW: pick best of combined+rw and all single+rw methods
             if combo == .oracleRW {
                 let candidates = results.filter {
-                    [.otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW, .textureThenRW, .combinedThenRW].contains($0.method)
+                    [.otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW, .textureThenRW, .grabCutThenRW, .fftThenRW, .combinedThenRW].contains($0.method)
                 }
                 if let best = candidates.max(by: { $0.score.combinedScore < $1.score.combinedScore }) {
                     bestScore = best.score

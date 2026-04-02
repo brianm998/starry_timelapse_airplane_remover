@@ -17,6 +17,8 @@ enum HorizonMethod: String, CaseIterable, Sendable, CustomStringConvertible {
     case siox = "siox"
     case gradProfile = "grad"
     case texture = "tex"
+    case grabCut = "gc"
+    case fft = "fft"
     case randomWalker = "rw"
 
     // Combinations
@@ -25,6 +27,8 @@ enum HorizonMethod: String, CaseIterable, Sendable, CustomStringConvertible {
     case sioxThenRW = "siox+rw"
     case gradThenRW = "grad+rw"
     case textureThenRW = "tex+rw"
+    case grabCutThenRW = "gc+rw"
+    case fftThenRW = "fft+rw"
     case combinedThenRW = "combined+rw"
     case bestOfRW = "bestof+rw"      // best of all single+rw per-sample
     case oracleRW = "oracle+rw"      // oracle: max(combined+rw, bestof+rw) per-sample
@@ -32,10 +36,10 @@ enum HorizonMethod: String, CaseIterable, Sendable, CustomStringConvertible {
     var description: String { rawValue }
 
     /// Base methods (no combination)
-    static let baseMethods: [HorizonMethod] = [.otsu, .dp, .siox, .gradProfile, .texture]
+    static let baseMethods: [HorizonMethod] = [.otsu, .dp, .siox, .gradProfile, .texture, .grabCut, .fft]
 
     /// Combined methods
-    static let combinedMethods: [HorizonMethod] = [.otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW, .textureThenRW, .combinedThenRW, .bestOfRW, .oracleRW]
+    static let combinedMethods: [HorizonMethod] = [.otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW, .textureThenRW, .grabCutThenRW, .fftThenRW, .combinedThenRW, .bestOfRW, .oracleRW]
 }
 
 // MARK: - Method parameters
@@ -869,6 +873,267 @@ enum TextureRunner {
         }
 
         // Scale back to original resolution
+        let horizonYOrig = ImageScaler.scaleHorizonY(
+            smoothed, fromWidth: sW, toWidth: imgW, scaleY: scaleY
+        )
+
+        let maskMat = PixelatedImageBridge.binaryHorizonMask(
+            width: Int32(imgW), height: Int32(imgH), horizonY: horizonYOrig
+        )
+        return PixelatedImage(mat: maskMat)!
+    }
+}
+
+// MARK: - GrabCut runner
+
+enum GrabCutRunner {
+
+    /// Run GrabCut horizon detection. Uses SIOX as initial estimate, then refines
+    /// with OpenCV's GrabCut (iterative graph-cut with GMM color models).
+    /// GrabCut's GMM models can separate overlapping color distributions better
+    /// than simple LAB distance, potentially helping with snow and water reflections.
+    static func run(
+        image: PixelatedImage,
+        workingSize: Int = 512,
+        gcWorkingWidth: Int32 = 384,
+        iterations: Int32 = 3
+    ) -> PixelatedImage {
+        let imgW = image.width
+        let imgH = image.height
+
+        // Get initial horizon from SIOX (quick, cheap)
+        let (scaled, _, scaleY) = ImageScaler.scaleForProcessing(image, maxDim: workingSize)
+        let sW = scaled.width
+        let sH = scaled.height
+
+        // Simple fast SIOX-like initial estimate: Otsu threshold on grayscale
+        let img8 = PixelatedImage(mat: scaled.mat.ensureEightBit()) ?? scaled
+        var initY = [Int?](repeating: nil, count: sW)
+
+        // Use brightness threshold as rough initial guess
+        let pixelData: [UInt8]
+        let cpp: Int
+        switch img8.imageData {
+        case .eightBit(let buf):
+            pixelData = Array(buf)
+            cpp = img8.componentsPerPixel
+        default:
+            let yArray = [Int?](repeating: nil, count: imgW)
+            let mat = PixelatedImageBridge.binaryHorizonMask(
+                width: Int32(imgW), height: Int32(imgH), horizonY: yArray)
+            return PixelatedImage(mat: mat)!
+        }
+        let stride = img8.bytesPerRow
+
+        // Compute mean brightness per row to find rough horizon
+        var rowBrightness = [Float](repeating: 0, count: sH)
+        for y in 0..<sH {
+            var sum: Float = 0
+            let sampleStep = max(1, sW / 50)
+            var count = 0
+            for x in Swift.stride(from: 0, to: sW, by: sampleStep) {
+                let base = y * stride + x * cpp
+                if cpp >= 3 && base + 2 < pixelData.count {
+                    sum += (Float(pixelData[base]) + Float(pixelData[base+1]) + Float(pixelData[base+2])) / 3.0
+                } else if base < pixelData.count {
+                    sum += Float(pixelData[base])
+                }
+                count += 1
+            }
+            rowBrightness[y] = count > 0 ? sum / Float(count) : 0
+        }
+
+        // Find biggest brightness transition
+        var maxDrop: Float = 0
+        var dropY = sH / 2
+        let smoothR = 5
+        for y in smoothR..<(sH - smoothR) {
+            let above = rowBrightness[y - smoothR]
+            let below = rowBrightness[y + smoothR]
+            let drop = above - below  // positive = sky brighter than ground (common)
+            let absDrop = abs(drop)
+            if absDrop > maxDrop {
+                maxDrop = absDrop
+                dropY = y
+            }
+        }
+
+        // Use this as uniform initial estimate
+        for x in 0..<sW {
+            initY[x] = dropY
+        }
+
+        // Run GrabCut via C++ bridge on the full image
+        let initY32: [Int32] = initY.map { Int32($0 ?? -1) }
+
+        // Scale init horizon to full image coords for GrabCut
+        let fullInitY: [Int32] = (0..<imgW).map { x in
+            let srcX = min(max(Int(Double(x) * Double(sW) / Double(imgW)), 0), sW - 1)
+            if let sy = initY[srcX] {
+                return Int32(Double(sy) / scaleY)
+            }
+            return -1
+        }
+
+        let resultY32 = PixelatedImageBridge.grabCutHorizon(
+            image.mat,
+            initHorizonY: fullInitY,
+            iterations: iterations,
+            maxWorkingWidth: gcWorkingWidth
+        )
+
+        let horizonYOrig: [Int?] = resultY32.map { $0 < 0 ? nil : Int($0) }
+        let maskMat = PixelatedImageBridge.binaryHorizonMask(
+            width: Int32(imgW), height: Int32(imgH), horizonY: horizonYOrig
+        )
+        return PixelatedImage(mat: maskMat)!
+    }
+}
+
+// MARK: - FFT Column Profile runner
+
+enum FFTRunner {
+
+    /// Run FFT-based horizon detection using frequency domain analysis.
+    ///
+    /// For each column, computes the high-frequency energy ratio in a sliding
+    /// window. Sky has predominantly low-frequency content (smooth darkness or
+    /// gradient); ground has high-frequency content (texture, edges, features).
+    /// The horizon is where the high-frequency ratio transitions from low to high.
+    ///
+    /// Uses a simple bandpass approach: lowpass = running average, highpass =
+    /// original - lowpass, energy = sum of squared highpass values in window.
+    static func run(
+        image: PixelatedImage,
+        workingSize: Int = 512,
+        searchTopFraction: Double = 0.05,
+        searchBottomFraction: Double = 0.95,
+        lowpassRadius: Int = 4,
+        energyWindowRadius: Int = 12,
+        columnSmoothRadius: Int = 20
+    ) -> PixelatedImage {
+        let imgW = image.width
+        let imgH = image.height
+
+        let (scaled, _, scaleY) = ImageScaler.scaleForProcessing(image, maxDim: workingSize)
+        let sW = scaled.width
+        let sH = scaled.height
+
+        let searchTop = max(0, Int(Double(sH) * searchTopFraction))
+        let searchBot = min(sH - 1, Int(Double(sH) * searchBottomFraction))
+
+        let img8 = PixelatedImage(mat: scaled.mat.ensureEightBit()) ?? scaled
+        let pixelData: [UInt8]
+        let cpp: Int
+        switch img8.imageData {
+        case .eightBit(let buf):
+            pixelData = Array(buf)
+            cpp = img8.componentsPerPixel
+        default:
+            let yArray = [Int?](repeating: nil, count: imgW)
+            let mat = PixelatedImageBridge.binaryHorizonMask(
+                width: Int32(imgW), height: Int32(imgH), horizonY: yArray)
+            return PixelatedImage(mat: mat)!
+        }
+        let stride = img8.bytesPerRow
+        let lpR = lowpassRadius
+        let ewR = energyWindowRadius
+
+        var horizonYScaled = [Int?](repeating: nil, count: sW)
+
+        for x in 0..<sW {
+            // Extract column brightness
+            var colBright = [Float](repeating: 0, count: sH)
+            for y in 0..<sH {
+                let base = y * stride + x * cpp
+                if cpp >= 3 && base + 2 < pixelData.count {
+                    colBright[y] = (Float(pixelData[base]) + Float(pixelData[base+1]) + Float(pixelData[base+2])) / 3.0
+                } else if base < pixelData.count {
+                    colBright[y] = Float(pixelData[base])
+                }
+            }
+
+            // Lowpass filter: running average
+            var lowpass = [Float](repeating: 0, count: sH)
+            var prefSum = [Float](repeating: 0, count: sH + 1)
+            for y in 0..<sH {
+                prefSum[y + 1] = prefSum[y] + colBright[y]
+            }
+            for y in 0..<sH {
+                let lo = max(0, y - lpR)
+                let hi = min(sH - 1, y + lpR)
+                lowpass[y] = (prefSum[hi + 1] - prefSum[lo]) / Float(hi - lo + 1)
+            }
+
+            // Highpass = original - lowpass
+            var highpass = [Float](repeating: 0, count: sH)
+            for y in 0..<sH {
+                highpass[y] = colBright[y] - lowpass[y]
+            }
+
+            // High-frequency energy in sliding window = sum of squared highpass
+            var hfEnergy = [Float](repeating: 0, count: sH)
+            var prefSqHP = [Float](repeating: 0, count: sH + 1)
+            for y in 0..<sH {
+                prefSqHP[y + 1] = prefSqHP[y] + highpass[y] * highpass[y]
+            }
+            for y in searchTop...searchBot {
+                let lo = max(0, y - ewR)
+                let hi = min(sH - 1, y + ewR)
+                hfEnergy[y] = (prefSqHP[hi + 1] - prefSqHP[lo]) / Float(hi - lo + 1)
+            }
+
+            // Find transition: derivative of HF energy (low→high = horizon)
+            var energyDeriv = [Float](repeating: 0, count: sH)
+            let derivR = 4
+            for y in (searchTop + derivR)...(searchBot - derivR) {
+                energyDeriv[y] = hfEnergy[y + derivR] - hfEnergy[y - derivR]
+            }
+
+            // Smooth derivative
+            var smoothDeriv = [Float](repeating: 0, count: sH)
+            let dSmoothR = 4
+            for y in searchTop...searchBot {
+                let lo = max(searchTop, y - dSmoothR)
+                let hi = min(searchBot, y + dSmoothR)
+                var sum: Float = 0
+                for j in lo...hi { sum += energyDeriv[j] }
+                smoothDeriv[y] = sum / Float(hi - lo + 1)
+            }
+
+            // Peak positive derivative = horizon
+            var bestY = (searchTop + searchBot) / 2
+            var bestDeriv: Float = 0
+            for y in searchTop...searchBot {
+                if smoothDeriv[y] > bestDeriv {
+                    bestDeriv = smoothDeriv[y]
+                    bestY = y
+                }
+            }
+
+            // Threshold: meaningful transition
+            if bestDeriv > 1.0 {
+                horizonYScaled[x] = bestY
+            }
+        }
+
+        // Column-wise median filter
+        let medW = columnSmoothRadius
+        var smoothed = horizonYScaled
+        for x in 0..<sW {
+            guard horizonYScaled[x] != nil else { continue }
+            let lo = max(0, x - medW)
+            let hi = min(sW - 1, x + medW)
+            var window: [Int] = []
+            for jx in lo...hi {
+                if let y = horizonYScaled[jx] { window.append(y) }
+            }
+            if !window.isEmpty {
+                window.sort()
+                smoothed[x] = window[window.count / 2]
+            }
+        }
+
         let horizonYOrig = ImageScaler.scaleHorizonY(
             smoothed, fromWidth: sW, toWidth: imgW, scaleY: scaleY
         )
