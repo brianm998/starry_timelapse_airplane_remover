@@ -14,6 +14,7 @@
 #include <limits>
 #include <cmath>
 
+
 static cv::Mat ensure8U(const cv::Mat& input) {
     if (input.depth() == CV_8U) return input;
     cv::Mat output;
@@ -737,4 +738,131 @@ MatWrapperRef pib_dp_horizon_mask(MatWrapperRef img,
         Log_e("OpenCV Exception in dpHorizonMask: %s", e.what());
     }
     return nullptr;
+}
+
+void pib_grabcut_horizon(MatWrapperRef img,
+                         const int *initHorizonY,
+                         int width,
+                         int iterations,
+                         int maxWorkingWidth,
+                         int *outHorizonY) {
+    if (!img || !initHorizonY || !outHorizonY) return;
+    for (int i = 0; i < width; i++) outHorizonY[i] = -1;
+
+    try {
+        cv::Mat input = img->mat;
+        int rows = input.rows, cols = input.cols;
+        if (rows < 2 || cols < 2) return;
+
+        // Downscale if needed
+        double scale = 1.0;
+        cv::Mat working;
+        if (cols > maxWorkingWidth) {
+            scale = (double)maxWorkingWidth / cols;
+            int newW = maxWorkingWidth;
+            int newH = std::max(2, (int)(rows * scale));
+            cv::resize(input, working, cv::Size(newW, newH), 0, 0, cv::INTER_AREA);
+        } else {
+            working = input;
+        }
+        int wRows = working.rows, wCols = working.cols;
+
+        // Convert to 8-bit BGR (GrabCut requires CV_8UC3)
+        cv::Mat bgr8;
+        if (working.channels() == 4) {
+            cv::cvtColor(working, bgr8, cv::COLOR_BGRA2BGR);
+        } else if (working.channels() == 1) {
+            cv::cvtColor(working, bgr8, cv::COLOR_GRAY2BGR);
+        } else {
+            bgr8 = working;
+        }
+        if (bgr8.depth() != CV_8U) {
+            cv::Mat tmp;
+            bgr8.convertTo(tmp, CV_8U, 255.0 / (bgr8.depth() == CV_16U ? 65535.0 : 1.0));
+            bgr8 = tmp;
+        }
+
+        // Build initial mask from horizon estimate.
+        // Above horizon = probable foreground (sky), below = probable background (ground).
+        // GrabCut convention: GC_PR_FGD = probable foreground, GC_PR_BGD = probable background
+        // We mark definite sky/ground at the edges for stability.
+        cv::Mat gcMask(wRows, wCols, CV_8UC1, cv::Scalar(cv::GC_PR_BGD));
+
+        int validCount = 0;
+        long sumY = 0;
+        for (int x = 0; x < cols; x++) {
+            if (initHorizonY[x] >= 0) { sumY += initHorizonY[x]; validCount++; }
+        }
+        if (validCount == 0) return;
+        int avgHorizonY = (int)((double)sumY / validCount * scale);
+
+        // Seed margin: top 10% of above-horizon = definite sky, bottom 10% below = definite ground
+        int definiteMargin = std::max(5, wRows / 20);
+
+        for (int x = 0; x < wCols; x++) {
+            int srcX = (int)(x / scale);
+            srcX = std::min(std::max(srcX, 0), cols - 1);
+            int hy = initHorizonY[srcX];
+            int wHy = (hy >= 0) ? (int)(hy * scale) : avgHorizonY;
+            wHy = std::min(std::max(wHy, 0), wRows - 1);
+
+            for (int y = 0; y < wRows; y++) {
+                if (y < wHy) {
+                    gcMask.at<uchar>(y, x) = (y < definiteMargin) ?
+                        (uchar)cv::GC_FGD : (uchar)cv::GC_PR_FGD;
+                } else {
+                    gcMask.at<uchar>(y, x) = (y > wRows - definiteMargin) ?
+                        (uchar)cv::GC_BGD : (uchar)cv::GC_PR_BGD;
+                }
+            }
+        }
+
+        cv::Mat bgdModel, fgdModel;
+        cv::Rect dummyRect;  // not used with GC_INIT_WITH_MASK
+        cv::grabCut(bgr8, gcMask, dummyRect, bgdModel, fgdModel,
+                    iterations, cv::GC_INIT_WITH_MASK);
+
+        // Extract per-column horizon from the GrabCut result.
+        // Scan downward: first row that is background = horizon.
+        for (int x = 0; x < wCols; x++) {
+            for (int y = 0; y < wRows; y++) {
+                uchar v = gcMask.at<uchar>(y, x);
+                if (v == cv::GC_BGD || v == cv::GC_PR_BGD) {
+                    // Map back to original coords
+                    int origX = (int)(x / scale);
+                    origX = std::min(std::max(origX, 0), cols - 1);
+                    int origY = (int)(y / scale);
+                    origY = std::min(std::max(origY, 0), rows - 1);
+                    if (outHorizonY[origX] < 0 || origY < outHorizonY[origX]) {
+                        outHorizonY[origX] = origY;
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Median filter the result
+        int medW = std::max(3, wCols / 50);
+        std::vector<int> smoothed(cols);
+        for (int x = 0; x < cols; x++) smoothed[x] = outHorizonY[x];
+        for (int x = 0; x < cols; x++) {
+            if (outHorizonY[x] < 0) continue;
+            int lo = std::max(0, x - medW);
+            int hi = std::min(cols - 1, x + medW);
+            std::vector<int> window;
+            for (int j = lo; j <= hi; j++) {
+                if (outHorizonY[j] >= 0) window.push_back(outHorizonY[j]);
+            }
+            if (!window.empty()) {
+                std::sort(window.begin(), window.end());
+                smoothed[x] = window[window.size() / 2];
+            }
+        }
+        for (int x = 0; x < cols; x++) outHorizonY[x] = smoothed[x];
+
+    } catch (const cv::Exception &e) {
+        Log_e("OpenCV Exception in grabCutHorizon: %s", e.what());
+    } catch (...) {
+        Log_e("Unknown exception in grabCutHorizon");
+    }
 }

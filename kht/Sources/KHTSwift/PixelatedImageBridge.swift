@@ -148,6 +148,31 @@ public enum PixelatedImageBridge {
                                            searchTopFraction, searchBottomFraction) else { return nil }
         return MatWrapper(ref: r)
     }
+    /// GrabCut horizon detection. Uses OpenCV's GrabCut with an initial
+    /// horizon estimate to segment sky from ground.
+    public static func grabCutHorizon(
+        _ img: MatWrapper,
+        initHorizonY: [Int32],
+        iterations: Int32 = 3,
+        maxWorkingWidth: Int32 = 512
+    ) -> [Int32] {
+        let width = Int32(img.cols)
+        var result = [Int32](repeating: -1, count: Int(width))
+        initHorizonY.withUnsafeBufferPointer { initBuf in
+            result.withUnsafeMutableBufferPointer { outBuf in
+                pib_grabcut_horizon(
+                    img.ref,
+                    initBuf.baseAddress,
+                    width,
+                    iterations,
+                    maxWorkingWidth,
+                    outBuf.baseAddress
+                )
+            }
+        }
+        return result
+    }
+
     /// Random Walker horizon detection within a user-painted band.
     ///
     /// Solves an edge-weighted diffusion on a downsampled ROI, then

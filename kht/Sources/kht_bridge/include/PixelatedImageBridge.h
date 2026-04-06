@@ -90,6 +90,19 @@ MatWrapperRef pib_dp_horizon_mask(MatWrapperRef img,
 // outHorizonY:  Caller-allocated int array of length `width`.
 //               Filled with per-column horizon Y in image pixel coords.
 //               -1 = unpainted / no result.
+// GrabCut horizon detection. Initializes from a rough horizon estimate,
+// runs GrabCut, and returns per-column horizon Y.
+// initHorizonY: Per-column initial horizon estimate (-1 = unknown).
+// width:        Number of columns.
+// iterations:   GrabCut iterations (default 3).
+// outHorizonY:  Filled with per-column horizon Y. -1 = no result.
+void pib_grabcut_horizon(MatWrapperRef img,
+                         const int *initHorizonY,
+                         int width,
+                         int iterations,
+                         int maxWorkingWidth,
+                         int *outHorizonY);
+
 void pib_random_walker_horizon(MatWrapperRef img,
                                const int *bandTopY,
                                const int *bandBottomY,
