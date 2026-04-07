@@ -187,6 +187,14 @@ public struct Config: Codable, Sendable, Transferable {
     // without changing the default for the whole sequence.
     public var alignedNeighborFrameOverrides: [Int:Int] = [:]
 
+    public func overriddenNeighborCount(for frameIndex: Int) -> Bool {
+        if let _ = alignedNeighborFrameOverrides[frameIndex] {
+            return true
+        } else {
+            return false
+        }
+    }
+    
     public func numberAlignedNeighborFrames(for frameIndex: Int) -> Int {
         if let override = alignedNeighborFrameOverrides[frameIndex] {
             override

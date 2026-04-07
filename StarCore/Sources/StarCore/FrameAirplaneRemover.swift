@@ -376,6 +376,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             let config = await configManager.config()
             self.alignmentFrames = calculateNeighborIndices(config.numberAlignedNeighborFrames(for: frameIndex))
         }
+        Log.d("frame \(frameIndex) set alignedNeighborFrames \(self.alignmentFrames)")
     }
 
     /// Deletes star-alignment-related cached images and keypoint files for this
@@ -383,21 +384,31 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     /// was invalidated so the caller knows whether to trigger reprocessing.
     /// Only alignment files are removed; horizon masks are left intact.
     public func invalidateStarAlignmentIfExists() async throws -> Bool {
+        /*
         guard imageAccessor.imageExists(
           frameIndex: frameIndex,
           ofType: .starAligned,
           atSize: .original
-        ) else { return false }
+          ) else { return false }
+         */
         imageAccessor.deleteImages(
           frameIndex: frameIndex,
-          ofTypes: [.starAligned, .earthAligned, .subtraction],
+          ofTypes: [.starAligned, .earthAligned, .subtraction,
+                    .autoProcessed, .autoSelectiveProcessed, .selectiveProcessed, .final],
           atSizes: [.original, .preview]
         )
         try removeNumberOfAlignedImagesForThisFrameFile()
+        try removeNeighborStarHomography()
+        // Clear in-memory homography caches so reprocessing recomputes them
+        // rather than reusing the stale cached values.
+        self.neighborStarHomography = nil
+        self.neighborEarthHomography = nil
+        self.state = .unprocessed
         return true
     }
     
     public func calculateNeighborIndices(_ alignmentNumber: Int) -> [Int] {
+        Log.d("frame \(frameIndex) calculateNeighborIndices(alignmentNumber: \(alignmentNumber))")
         guard let imageSequence else {
             Log.e("cannot set number of alignment images without an image sequence")
             return []
@@ -2695,7 +2706,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             return nil
         }
 
-        Log.d("frame \(frameIndex) has base keypoints \(baseKeypoints)")
+        Log.d("frame \(frameIndex) has base keypoints \(baseKeypoints) and \(neighbors.count) neighbors")
         
         if let result = ImageAligner.computeHomography(
              baseKeypoints: baseKeypoints,
@@ -2738,9 +2749,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                  }
              })
         {
-            Log.d("frame \(frameIndex) got homography result")
+            Log.d("frame \(frameIndex) got homography result \(result)")
             let alignedWarps = result.warpInfo.map { $0.toCodable() }
-
+            Log.d("frame \(frameIndex) alignedWarps \(alignedWarps)")
+            
             let ret = HomographyResultsCodable(from: result)
 
             // save homography results for later
@@ -2789,6 +2801,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         } 
     }
 
+    // key points detected in the image are OpenCV features 
     func loadOrCreateOCVFeatures(
       of type: FrameViewMode
     ) async throws -> OCVFeatureSet? {
@@ -2890,10 +2903,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }    
     
     let neighborStarHomographyFilename = "neighbor_star_homography.json"
+
+    public func removeNeighborStarHomography() throws {
+        if FileManager.default.fileExists(atPath: neighborStarHomographyFilename) {
+            try FileManager.default.removeItem(atPath: neighborStarHomographyFilename)
+        }
+    }
     
     private func write(
       neighborStarHomography: [AlignmentWarpInfoCodable]
     ) throws {
+        Log.d("frame \(frameIndex) writing \(neighborStarHomography.count) neighborStarHomographies")
         if let results = try write(
              homography: neighborStarHomography,
              to: neighborStarHomographyFilename
@@ -2913,6 +2933,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           ofType: .starAligned,
           atSize: .original
         ) {
+            Log.d("frame \(frameIndex) write \(homography.count) homographies to \(filename)")
             let dirname = "\(dirname)/\(frameIndex)"
             StarCore.mkdir(dirname)
             // write a text file with
@@ -2921,11 +2942,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               for: frameIndex,
               with: homography
             )
-
+            
             let encoder = JSONEncoder()
             do {
                 let jsonData = try encoder.encode(results)
-
+                
                 let fullPath = "\(dirname)/\(filename)"
                 if FileManager.default.fileExists(atPath: fullPath) {
                     try FileManager.default.removeItem(atPath: fullPath)

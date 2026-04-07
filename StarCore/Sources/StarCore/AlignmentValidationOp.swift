@@ -72,15 +72,21 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 
         let medianHomography = homographies[homographies.count/2]
         Log.d("found median homography at frameIndex \(medianHomography.frameIndex)")
-        
+
+        let config = await configManager.config()
+
         // apply the chosen median homography to all frames 
         for frame in frames {
-            await frame.set(
-              neighborStarHomography:
-                medianHomography.adjust(
-                  for: frame.frameIndex
+            // only if this frame has the standard number of neighbor frames
+            // ignore ones which have been set differently 
+            if !config.overriddenNeighborCount(for: frame.frameIndex) {
+                await frame.set(
+                  neighborStarHomography:
+                    medianHomography.adjust(
+                      for: frame.frameIndex
+                    )
                 )
-            )
+            }
         }
         Log.d("done validating static star alignment")
     }
