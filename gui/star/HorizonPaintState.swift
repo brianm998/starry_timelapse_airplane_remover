@@ -492,12 +492,25 @@ final class HorizonPaintState {
 
     // MARK: - Object-selection expansion result
 
+    /// Fill leading/trailing nil runs with nearest-neighbour extrapolation.
+    private static func fillEdgeNils(_ arr: [Int?]) -> [Int?] {
+        var result = arr
+        if let first = result.first(where: { $0 != nil }) {
+            for i in result.indices { if result[i] != nil { break }; result[i] = first }
+        }
+        if let last = result.last(where: { $0 != nil }) {
+            for i in result.indices.reversed() { if result[i] != nil { break }; result[i] = last }
+        }
+        return result
+    }
+
     /// Replace `expandedPath` with the full sky mask derived from per-column
-    /// horizon Y values returned by `FrameAirplaneRemover.computeLiveObjectSelection`.
+    /// horizon Y values returned by `FrameAirplaneRemover.computeCombinedHorizonInBand`.
     ///
+    /// Edge columns with nil Y values are filled by nearest-neighbour
+    /// extrapolation so the horizon always spans the full frame width.
     /// Each column fills from y = 0 down to `horizonY[column]`, representing
-    /// the sky above the detected horizon.  Columns with a `nil` Y value are
-    /// not included (the user has not yet painted there).
+    /// the sky above the detected horizon.
     ///
     /// - Parameter horizonY: Per-column horizon Y in image/view pixel coordinates
     ///   (length should equal the image width ≈ `viewWidth`).
@@ -505,9 +518,13 @@ final class HorizonPaintState {
         let width = horizonY.count
         guard width > 0 else { return }
 
-        // Persist the raw per-column values so the save function can use the
-        // smooth SIOX-detected horizon instead of re-scanning raw brush strokes.
-        lastHorizonY = horizonY
+        // Edge-extrapolate so the horizon spans the full frame width before
+        // both storing the values and building the display polygon.
+        let filledY = HorizonPaintState.fillEdgeNils(horizonY)
+
+        // Persist the per-column values so the save function can use the
+        // smooth detected horizon instead of re-scanning raw brush strokes.
+        lastHorizonY = filledY
 
         // Build a polygon whose top edge is y = 0 and whose bottom edge
         // follows the per-column horizon Y values.  Adjacent columns are
@@ -516,7 +533,7 @@ final class HorizonPaintState {
         var poly = Path()
         var segmentOpen = false
 
-        for (ix, maybeY) in horizonY.enumerated() {
+        for (ix, maybeY) in filledY.enumerated() {
             let x = CGFloat(ix)
             if let iy = maybeY {
                 let y = CGFloat(iy)

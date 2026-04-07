@@ -224,9 +224,10 @@ struct HorizonPainterView: View {
 
 // MARK: - Band computation (initial horizon detection)
 
-/// Runs the initial SIOX horizon detection using the painted band as the
-/// search window.  Areas above the band are treated as known sky, areas
-/// below as known ground.
+/// Runs the initial horizon detection using `CombinedHorizonDetector` within
+/// the user's painted band.  Areas above the band top are always sky; areas
+/// below the band bottom are always earth.  The detector runs only on the band
+/// region.  Edge columns that were not painted are filled automatically.
 ///
 /// Called once when the band first spans the full frame width.  After the
 /// computation completes, transitions the paint state to `.refinement`.
@@ -247,9 +248,9 @@ private func triggerBandComputation(
 
     paintState.beginExpanding()
 
-    let horizon: [Int?]?
+    let horizon: [Int?]
     do {
-        horizon = try await frame.computeRandomWalkerHorizon(
+        horizon = try await frame.computeCombinedHorizonInBand(
             topBoundaryY:    bandTop,
             bottomBoundaryY: bandBottom,
             viewWidth:       vw,
@@ -262,30 +263,27 @@ private func triggerBandComputation(
         return
     }
 
-    guard let h = horizon else {
-        paintState.setPhase(.bandSelection)
-        paintState.endExpanding()
-        return
-    }
-
-    paintState.transitionToRefinement(horizon: h)
+    paintState.transitionToRefinement(horizon: horizon)
     paintState.endExpanding()
 }
 
 // MARK: - Object-selection expansion (refinement)
 
-/// Runs the SIOX three-region scan during the **refinement** phase.
+/// Re-runs horizon detection during the **refinement** phase using the
+/// edge-aware Random Walker, constrained to the remaining unknown gap (area #2).
 ///
-/// Before calling SIOX, the gesture's affected columns are permanently
+/// Before detecting, the gesture's affected columns are permanently
 /// committed to the known-region map via `commitRefinementGesture`:
-///   - **Paint** → marks brushed pixels as known-background (sky),
-///     pushing `knownSkyFloor` downward and shrinking the unknown gap.
-///   - **Erase** → marks brushed pixels as known-foreground (ground),
-///     pushing `knownGroundCeiling` upward.
+///   - **Paint** → marks brushed pixels as known sky, pushing
+///     `knownSkyFloor` downward and shrinking the unknown gap.
+///   - **Erase** → marks brushed pixels as known ground, pushing
+///     `knownGroundCeiling` upward.
 ///
-/// SIOX then re-runs globally with updated centroids computed from ALL
-/// known-sky and known-ground pixels.  It only classifies the remaining
-/// unknown gap — known regions are never reclassified.
+/// The Random Walker solves a diffusion problem across the ENTIRE gap using
+/// the updated sky/ground seeds.  Because the solution is global, changing
+/// seeds in brushed columns propagates and re-shapes the horizon across ALL
+/// columns in area #2 — not just the directly brushed ones.  Brushed regions
+/// are locked as seeds and will never be reclassified.
 @MainActor
 private func triggerObjectSelection(
     paintState: HorizonPaintState,
@@ -299,30 +297,56 @@ private func triggerObjectSelection(
     let bandTop = paintState.bandColumnTop
     let bandBot = paintState.bandColumnBottom
 
-    // Commit the gesture to the known-region map BEFORE running SIOX.
-    // This permanently shrinks the unknown gap so that painting/erasing
-    // has an immediate, lasting effect on the SIOX classification.
+    // Permanently commit the gesture to the known-region map.
+    // This shrinks the unknown gap so that brushed areas become seeds.
     paintState.commitRefinementGesture(isErasing: isErasingGesture)
 
-    // Snapshot the known regions after committing the gesture.
-    let skyFloor    = paintState.knownSkyFloor
-    let gndCeiling  = paintState.knownGroundCeiling
+    // Snapshot locked regions after committing.
+    let skyFloor   = paintState.knownSkyFloor
+    let gndCeiling = paintState.knownGroundCeiling
 
     guard let frame = frameView.frame else { return }
 
     paintState.beginExpanding()
 
-    // Random Walker edge-aware horizon detection: solve diffusion problem
-    // with sky/ground seeds, scan up from ground to find 0.5 boundary.
+    // Determine the column range to re-solve: gesture footprint + 20 px margin
+    // on each side.  Columns outside this window keep their value from
+    // lastHorizonY unchanged, so a brush stroke never corrupts the horizon
+    // more than 20 pixels beyond where it actually touched.
+    let margin = 20
+    let affectedMin: Int
+    let affectedMax: Int
+    if let bounds = paintState.lastGestureBounds {
+        affectedMin = max(0,      Int(bounds.minX) - margin)
+        affectedMax = min(vw - 1, Int(bounds.maxX) + margin)
+    } else {
+        affectedMin = 0
+        affectedMax = vw - 1
+    }
+
+    // Build band/lock arrays with nil outside the affected range.
+    // The C++ Random Walker solver only processes columns with non-nil band values,
+    // so the diffusion stays local to the brush region.
+    var localBandTop    = [Int?](repeating: nil, count: vw)
+    var localBandBot    = [Int?](repeating: nil, count: vw)
+    var localSkyFloor   = [Int?](repeating: nil, count: vw)
+    var localGndCeiling = [Int?](repeating: nil, count: vw)
+    for col in affectedMin...affectedMax {
+        localBandTop[col]    = bandTop[col]
+        localBandBot[col]    = bandBot[col]
+        localSkyFloor[col]   = skyFloor[col]
+        localGndCeiling[col] = gndCeiling[col]
+    }
+
     let snappedHorizon: [Int?]?
     do {
         snappedHorizon = try await frame.computeRandomWalkerHorizon(
-            topBoundaryY:        bandTop,
-            bottomBoundaryY:     bandBot,
+            topBoundaryY:        localBandTop,
+            bottomBoundaryY:     localBandBot,
             viewWidth:           vw,
             viewHeight:          vh,
-            knownSkyFloorY:      skyFloor,
-            knownGroundCeilingY: gndCeiling
+            knownSkyFloorY:      localSkyFloor,
+            knownGroundCeilingY: localGndCeiling
         )
     } catch {
         Log.w("HorizonPainterView: object selection failed: \(error)")
@@ -332,13 +356,22 @@ private func triggerObjectSelection(
 
     guard !Task.isCancelled,
           paintState.expansionGeneration == generation,
-          let horizon = snappedHorizon
+          let local = snappedHorizon
     else {
         paintState.endExpanding()
         return
     }
 
-    paintState.applyExpandedHorizonMask(horizon)
+    // Merge: replace the affected column range with fresh RW values;
+    // columns outside the range keep their value from lastHorizonY.
+    // This prevents a local brush stroke from corrupting the horizon in
+    // distant areas that were already detected correctly.
+    var merged: [Int?] = paintState.lastHorizonY ?? [Int?](repeating: nil, count: vw)
+    for col in affectedMin...affectedMax {
+        if let y = local[col] { merged[col] = y }
+    }
+
+    paintState.applyExpandedHorizonMask(merged)
     paintState.endExpanding()
 }
 

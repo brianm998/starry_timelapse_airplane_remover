@@ -1097,7 +1097,7 @@ public enum CombinedHorizonDetector {
     }
 
     /// Extract per-column horizon Y (topmost ground pixel) from a mask.
-    private static func extractHorizonY(from mask: PixelatedImage) -> [Int?] {
+    static func extractHorizonY(from mask: PixelatedImage) -> [Int?] {
         let w = mask.width
         let h = mask.height
         var result = [Int?](repeating: nil, count: w)

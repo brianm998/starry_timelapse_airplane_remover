@@ -1387,6 +1387,119 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     // MARK: - Random Walker horizon detection
 
+    // MARK: - CombinedHorizonDetector interactive detection
+
+    /// Fill nil values at the leading and trailing edges of an array with
+    /// nearest-neighbour extrapolation.  Interior nil runs are left unchanged.
+    private static func fillEdgeNils(_ arr: [Int?]) -> [Int?] {
+        var result = arr
+        if let first = result.first(where: { $0 != nil }) {
+            for i in result.indices { if result[i] != nil { break }; result[i] = first }
+        }
+        if let last = result.last(where: { $0 != nil }) {
+            for i in result.indices.reversed() { if result[i] != nil { break }; result[i] = last }
+        }
+        return result
+    }
+
+    /// Horizon detection within the user's painted band using `CombinedHorizonDetector`.
+    ///
+    /// Runs the full multi-method pipeline (Otsu, DP, SIOX, gradient, texture)
+    /// constrained to the painted band region.  Locked sky/ground regions —
+    /// set by user brush strokes during refinement — are honoured in the output
+    /// and are never re-classified by the detector.  Edge columns that were not
+    /// painted are filled by nearest-neighbour extrapolation so the horizon
+    /// always covers the full frame width.
+    ///
+    /// - Parameters:
+    ///   - topBoundaryY:         Per-column top of painted band (view coords).
+    ///   - bottomBoundaryY:      Per-column bottom of painted band (view coords).
+    ///   - viewWidth:            Width of the view in points.
+    ///   - viewHeight:           Height of the view in points.
+    ///   - knownSkyFloorY:       Per-column lowest Y confirmed as sky (view coords).
+    ///   - knownGroundCeilingY:  Per-column highest Y confirmed as ground (view coords).
+    /// - Returns: Per-column horizon Y in view coordinates, edge-extrapolated.
+    public func computeCombinedHorizonInBand(
+        topBoundaryY: [Int?],
+        bottomBoundaryY: [Int?],
+        viewWidth: Int,
+        viewHeight: Int,
+        knownSkyFloorY: [Int?]? = nil,
+        knownGroundCeilingY: [Int?]? = nil
+    ) async throws -> [Int?] {
+        guard let original = try await imageAccessor.load(
+                frameIndex: frameIndex,
+                type: .original,
+                atSize: .original
+              )
+        else {
+            throw "computeCombinedHorizonInBand: cannot load original image for frame \(frameIndex)"
+        }
+        let imgW = original.width
+        let imgH = original.height
+        let scaleX = Double(imgW) / Double(viewWidth)
+        let scaleY = Double(imgH) / Double(viewHeight)
+
+        // Edge-fill the band boundaries so all columns have a value.
+        let topFilled = FrameAirplaneRemover.fillEdgeNils(topBoundaryY)
+        let botFilled = FrameAirplaneRemover.fillEdgeNils(bottomBoundaryY)
+
+        // Per-column effective detection window:
+        // top = max(knownSkyFloor, bandTop)   — narrowed by user painting sky downward
+        // bot = min(knownGroundCeiling, bandBot) — narrowed by user erasing upward
+        let skyFloorSrc = FrameAirplaneRemover.fillEdgeNils(
+            knownSkyFloorY ?? topFilled
+        )
+        let gndCeilSrc = FrameAirplaneRemover.fillEdgeNils(
+            knownGroundCeilingY ?? botFilled
+        )
+
+        var effectiveTop = [Int?](repeating: nil, count: viewWidth)
+        var effectiveBot = [Int?](repeating: nil, count: viewWidth)
+        for vx in 0..<viewWidth {
+            let sf = skyFloorSrc[vx]
+            let tb = topFilled[vx]
+            effectiveTop[vx] = (sf != nil && tb != nil) ? max(sf!, tb!) : (sf ?? tb)
+
+            let gc = gndCeilSrc[vx]
+            let bb = botFilled[vx]
+            effectiveBot[vx] = (gc != nil && bb != nil) ? min(gc!, bb!) : (gc ?? bb)
+        }
+
+        // Set SIOX band fractions from the global effective window.
+        let globalTopView  = effectiveTop.compactMap { $0 }.min() ?? 0
+        let globalBotView  = effectiveBot.compactMap { $0 }.max() ?? viewHeight
+        var params = CombinedHorizonDetector.Params()
+        params.sioxBandTopFraction    = max(0.0, Double(globalTopView)  / Double(viewHeight) - 0.02)
+        params.sioxBandBottomFraction = min(1.0, Double(globalBotView)  / Double(viewHeight) + 0.02)
+
+        // Run the full combined detection pipeline.
+        let horizonMask = try await CombinedHorizonDetector.detect(image: original, params: params)
+
+        // Extract per-column Y (image-pixel coords) from the binary mask.
+        let detectedImgY = CombinedHorizonDetector.extractHorizonY(from: horizonMask.image)
+
+        // Map to view coords and clamp each column to its effective window.
+        var result = [Int?](repeating: nil, count: viewWidth)
+        for vx in 0..<viewWidth {
+            let ix = min(max(0, Int((Double(vx) * scaleX).rounded())), imgW - 1)
+            guard var iy = detectedImgY[ix] else { continue }
+
+            // Clamp to per-column effective window (image-pixel coords).
+            if let topVY = effectiveTop[vx] {
+                iy = max(iy, Int((Double(topVY) * scaleY).rounded()))
+            }
+            if let botVY = effectiveBot[vx] {
+                iy = min(iy, Int((Double(botVY) * scaleY).rounded()))
+            }
+
+            result[vx] = Int((Double(iy) / scaleY).rounded())
+        }
+
+        // Edge-extrapolate so the horizon spans the full frame width.
+        return FrameAirplaneRemover.fillEdgeNils(result)
+    }
+
     /// Edge-aware Random Walker horizon detection within the user's painted band.
     ///
     /// This is an alternative to the SIOX method in `computeLiveObjectSelection`.
