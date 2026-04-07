@@ -1601,6 +1601,40 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return viewY
     }
 
+    // MARK: - Load existing reference horizon for interactive editing
+
+    /// Return the existing user-painted reference horizon as per-column Y values
+    /// in **view** coordinates, or `nil` if no reference mask exists on disk.
+    ///
+    /// Used by `HorizonPainterView` to pre-populate the painter when the user
+    /// opens the tool on a frame that already has a saved reference, so they
+    /// can jump straight into refinement rather than re-painting the band.
+    public func loadExistingHorizonReferenceAsViewY(
+        viewWidth:  Int,
+        viewHeight: Int
+    ) async throws -> [Int?]? {
+        guard let mask = try await loadHorizonReferenceMask() else { return nil }
+
+        let imgW = mask.image.width
+        let imgH = mask.image.height
+        let scaleX = Double(imgW) / Double(viewWidth)
+        let scaleY = Double(imgH) / Double(viewHeight)
+
+        // Extract per-column horizon Y in image-pixel coordinates.
+        let imgY = CombinedHorizonDetector.extractHorizonY(from: mask.image)
+
+        // Convert to view coordinates.
+        var viewY = [Int?](repeating: nil, count: viewWidth)
+        for vx in 0..<viewWidth {
+            let ix = min(max(0, Int((Double(vx) * scaleX).rounded())), imgW - 1)
+            if let iy = imgY[ix] {
+                viewY[vx] = Int((Double(iy) / scaleY).rounded())
+            }
+        }
+        // Edge-extrapolate so every column has a value.
+        return FrameAirplaneRemover.fillEdgeNils(viewY)
+    }
+
     // MARK: - Save user-painted reference horizon mask
 
     /// Convert a painted horizon (from `HorizonPainterView`) into a binary

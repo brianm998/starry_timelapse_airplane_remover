@@ -122,10 +122,36 @@ struct FrameEditView: View {
         // and discard it when closed.
         .onChange(of: viewModel.isShowingHorizonPainter) { _, isShowing in
             if isShowing {
-                horizonPaintState = HorizonPaintState(
+                let ps = HorizonPaintState(
                     viewWidth:  viewModel.frameWidth,
                     viewHeight: viewModel.frameHeight
                 )
+                // Show a spinner while we check for an existing reference mask.
+                ps.setPhase(.computing)
+                horizonPaintState = ps
+
+                let frameView = viewModel.currentFrameView
+                let w = Int(viewModel.frameWidth)
+                let h = Int(viewModel.frameHeight)
+
+                Task { @MainActor in
+                    guard let frame = frameView.frame else {
+                        ps.setPhase(.bandSelection)
+                        return
+                    }
+                    if let existingY = try? await frame.loadExistingHorizonReferenceAsViewY(
+                        viewWidth:  w,
+                        viewHeight: h
+                    ) {
+                        // Existing reference found — jump straight to refinement
+                        // with a ±10 % margin band so the user can adjust freely.
+                        let margin = max(50, h / 10)
+                        ps.loadExistingHorizon(existingY, margin: margin)
+                    } else {
+                        // No reference yet — start from band selection as normal.
+                        ps.setPhase(.bandSelection)
+                    }
+                }
             } else {
                 horizonPaintState = nil
             }

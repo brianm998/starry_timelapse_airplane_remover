@@ -416,12 +416,35 @@ final class HorizonPaintState {
         }
     }
 
+    /// Skip band-selection and computation entirely by loading a pre-existing
+    /// per-column horizon (e.g. from a saved reference mask on disk).
+    ///
+    /// Synthesises band boundaries with `margin` view-points above and below
+    /// the loaded horizon so the user can still adjust the result with brushes.
+    /// Jumps straight to `.refinement` phase — the marching-ants outline and
+    /// blue sky fill are shown immediately from the saved values.
+    func loadExistingHorizon(_ horizonY: [Int?], margin: Int) {
+        let vw = Int(viewWidth)
+        let vh = Int(viewHeight)
+        var top    = [Int?](repeating: nil, count: vw)
+        var bottom = [Int?](repeating: nil, count: vw)
+        for col in 0..<vw {
+            if let y = horizonY[col] {
+                top[col]    = max(0,      y - margin)
+                bottom[col] = min(vh - 1, y + margin)
+            }
+        }
+        bandColumnTop    = HorizonPaintState.fillEdgeNils(top)
+        bandColumnBottom = HorizonPaintState.fillEdgeNils(bottom)
+        transitionToRefinement(horizon: horizonY)
+    }
+
     /// Transition from `.computing` to `.refinement` after the initial
-    /// band-mode SIOX completes.
+    /// band-mode detection completes.
     ///
     /// Clears the band strokes/paths (they are no longer needed for display)
-    /// and applies the SIOX result as the new sky mask.  The band boundaries
-    /// are preserved so refinement stays constrained within them.
+    /// and applies the detection result as the new sky mask.  The band
+    /// boundaries are preserved so refinement stays constrained within them.
     func transitionToRefinement(horizon: [Int?]) {
         strokes.removeAll()
         unifiedPaintPath = Path()
