@@ -111,8 +111,14 @@ enum SampleProcessor {
         total: Int,
         includeCombined: Bool,
         saveMasks: String?,
-        brushRadii: [Int] = [40, 80, 160]
+        brushRadii: [Int] = [40]
     ) async -> SampleResults {
+        let startTime = CFAbsoluteTimeGetCurrent()
+        FileHandle.standardError.write("  START [\(index+1)/\(total)] \(sample.description)\n".data(using: .utf8)!)
+        defer {
+            let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+            FileHandle.standardError.write("  DONE  [\(index+1)/\(total)] \(sample.description) (\(String(format: "%.1f", elapsed))s)\n".data(using: .utf8)!)
+        }
         guard let image = PixelatedImage(filename: sample.imagePath) else {
             return SampleResults(
                 sampleIndex: index,
@@ -135,30 +141,34 @@ enum SampleProcessor {
         let imageSize = "\(image.width)x\(image.height)"
         var methodResults: [MethodResult] = []
 
-        // Run base methods
-        for method in HorizonMethod.baseMethods {
-            let result = await runMethod(
-                method, image: image, refMask: refMask,
-                sample: sample, index: index
-            )
-            if let r = result {
-                methodResults.append(r)
+        // Compute all base masks ONCE and share them
+        let t0 = CFAbsoluteTimeGetCurrent()
+        let baseMasks = await computeAllBaseMasks(image: image)
+        let baseTime = CFAbsoluteTimeGetCurrent() - t0
+        FileHandle.standardError.write("    base masks [\(index+1)] in \(String(format: "%.1f", baseTime))s\n".data(using: .utf8)!)
 
-                // Save mask if requested
-                if let dir = saveMasks {
-                    let mask = computeMask(method: method, image: image)
-                    if let m = mask {
-                        saveMaskToDisk(mask: m, method: method, sample: sample, dir: dir)
-                    }
-                }
+        // Score base methods
+        for method in HorizonMethod.baseMethods {
+            guard let mask = baseMasks[method] else { continue }
+            let score = MaskScorer.score(computed: mask, reference: refMask)
+            methodResults.append(MethodResult(
+                method: method,
+                sampleIndex: index,
+                sampleDescription: sample.description,
+                score: score,
+                durationMs: 0
+            ))
+            if let dir = saveMasks {
+                saveMaskToDisk(mask: mask, method: method, sample: sample, dir: dir)
             }
         }
 
-        // Run combined methods if requested
+        // Run combined methods if requested, reusing base masks
         if includeCombined {
             let comboResults = await runCombinedMethods(
                 image: image, refMask: refMask, sample: sample,
-                index: index, brushRadii: brushRadii, saveMasks: saveMasks
+                index: index, brushRadii: brushRadii, saveMasks: saveMasks,
+                baseMasks: baseMasks
             )
             methodResults.append(contentsOf: comboResults)
         }
@@ -172,74 +182,17 @@ enum SampleProcessor {
         )
     }
 
-    // MARK: - Base method execution
-
-    private static func runMethod(
-        _ method: HorizonMethod,
-        image: PixelatedImage,
-        refMask: PixelatedImage,
-        sample: TestSample,
-        index: Int
-    ) async -> MethodResult? {
-        let start = CFAbsoluteTimeGetCurrent()
-
-        let computedMask: PixelatedImage?
-        switch method {
-        case .otsu:
-            computedMask = try? await OtsuRunner.run(image: image)
-        case .dp:
-            computedMask = try? await DPRunner.run(image: image, gridSearch: true)
-        case .siox:
-            computedMask = await SIOXRunner.run(image: image)
-        case .gradProfile:
-            computedMask = GradProfileRunner.run(image: image)
-        case .texture:
-            computedMask = TextureRunner.run(image: image)
-        case .grabCut:
-            computedMask = GrabCutRunner.run(image: image)
-        case .fft:
-            computedMask = FFTRunner.run(image: image)
-        default:
-            computedMask = nil
-        }
-
-        let durationMs = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
-
-        guard let mask = computedMask else { return nil }
-
-        let score = MaskScorer.score(computed: mask, reference: refMask)
-        return MethodResult(
-            method: method,
-            sampleIndex: index,
-            sampleDescription: sample.description,
-            score: score,
-            durationMs: durationMs
-        )
-    }
-
-    private static func computeMask(method: HorizonMethod, image: PixelatedImage) -> PixelatedImage? {
-        switch method {
-        case .otsu:
-            return try? syncRunOtsu(image: image)
-        case .dp:
-            return try? DPRunner.runSingle(image: image, params: DPParams())
-        default:
-            return nil
-        }
-    }
-
-    // Synchronous otsu for save-only path (already computed above, but simpler than caching)
-    private static func syncRunOtsu(image: PixelatedImage) throws -> PixelatedImage {
-        // Just use default params for saving
-        let (scaled, _, _) = ImageScaler.scaleForProcessing(image, maxDim: 512)
-        if let mask = scaled.binaryOtsuImage {
-            if let up = mask.mat.upScale(to: UInt(image.width), height: UInt(image.height)),
-               let pi = PixelatedImage(mat: up) {
-                return OtsuRunner.thresholdToBinary(pi)
-            }
-            return mask
-        }
-        throw "Otsu failed"
+    /// Compute all 7 base method masks once.
+    private static func computeAllBaseMasks(image: PixelatedImage) async -> [HorizonMethod: PixelatedImage] {
+        var masks: [HorizonMethod: PixelatedImage] = [:]
+        if let m = try? await OtsuRunner.run(image: image) { masks[.otsu] = m }
+        if let m = try? await DPRunner.run(image: image, gridSearch: true) { masks[.dp] = m }
+        masks[.siox] = await SIOXRunner.run(image: image)
+        masks[.gradProfile] = GradProfileRunner.run(image: image)
+        masks[.texture] = TextureRunner.run(image: image)
+        masks[.grabCut] = GrabCutRunner.run(image: image)
+        masks[.fft] = FFTRunner.run(image: image)
+        return masks
     }
 
     // MARK: - Combined methods
@@ -250,33 +203,36 @@ enum SampleProcessor {
         sample: TestSample,
         index: Int,
         brushRadii: [Int],
-        saveMasks: String?
+        saveMasks: String?,
+        baseMasks: [HorizonMethod: PixelatedImage]
     ) async -> [MethodResult] {
-        // Get base horizons
-        let otsuMask = try? await OtsuRunner.run(image: image)
-        let dpMask = try? await DPRunner.run(image: image, gridSearch: true)
-        let sioxMask = await SIOXRunner.run(image: image)
-        let gradMask = GradProfileRunner.run(image: image)
-        let texMask = TextureRunner.run(image: image)
-        let gcMask = GrabCutRunner.run(image: image)
-        let fftMask = FFTRunner.run(image: image)
+        // Use pre-computed base masks
+        let otsuMask = baseMasks[.otsu]
+        let dpMask = baseMasks[.dp]
+        let sioxMask = baseMasks[.siox]
+        let gradMask = baseMasks[.gradProfile]
+        let texMask = baseMasks[.texture]
+        let gcMask = baseMasks[.grabCut]
+        let fftMask = baseMasks[.fft]
 
         let otsuY = otsuMask.map { BandSimulator.horizonYFromMask($0) }
         let dpY = dpMask.map { BandSimulator.horizonYFromMask($0) }
-        let sioxY = BandSimulator.horizonYFromMask(sioxMask)
-        let gradY = BandSimulator.horizonYFromMask(gradMask)
-        let texY = BandSimulator.horizonYFromMask(texMask)
-        let gcY = BandSimulator.horizonYFromMask(gcMask)
-        let fftY = BandSimulator.horizonYFromMask(fftMask)
+        let sioxY = sioxMask.map { BandSimulator.horizonYFromMask($0) }
+        let gradY = gradMask.map { BandSimulator.horizonYFromMask($0) }
+        let texY = texMask.map { BandSimulator.horizonYFromMask($0) }
+        let gcY = gcMask.map { BandSimulator.horizonYFromMask($0) }
+        let fftY = fftMask.map { BandSimulator.horizonYFromMask($0) }
 
         var results: [MethodResult] = []
+        // Cache best masks from individual method+rw runs for selectBestRW
+        var cachedBestMasks: [HorizonMethod: PixelatedImage] = [:]
 
         for combo in HorizonMethod.combinedMethods {
             var bestScore: MaskScore? = nil
             var bestMask: PixelatedImage? = nil
 
             for brush in brushRadii {
-                let params = RWParams(brushRadius: brush)
+                let params = RWParams(maxWorkingWidth: 512, brushRadius: brush)
                 let baseY: [Int?]?
 
                 switch combo {
@@ -297,40 +253,28 @@ enum SampleProcessor {
                 case .combinedThenRW:
                     let imgH = image.height
                     var weightedMethods: [([Int?], Double)] = []
-                    if let y = otsuY {
-                        let conf = BandSimulator.horizonConfidence(y, imageHeight: imgH)
-                        if conf > 0.05 { weightedMethods.append((y, conf)) }
-                    }
-                    if let y = dpY {
-                        let conf = BandSimulator.horizonConfidence(y, imageHeight: imgH)
-                        if conf > 0.05 { weightedMethods.append((y, conf)) }
-                    }
-                    do {
-                        let conf = BandSimulator.horizonConfidence(sioxY, imageHeight: imgH)
-                        if conf > 0.05 { weightedMethods.append((sioxY, conf)) }
-                    }
-                    do {
-                        let conf = BandSimulator.horizonConfidence(gradY, imageHeight: imgH)
-                        if conf > 0.05 { weightedMethods.append((gradY, conf)) }
-                    }
-                    do {
-                        let conf = BandSimulator.horizonConfidence(texY, imageHeight: imgH)
-                        if conf > 0.05 { weightedMethods.append((texY, conf)) }
+                    // 5 production methods: otsu, dp, siox, grad, tex
+                    let prodMethods: [(y: [Int?]?, name: String)] = [
+                        (otsuY, "otsu"), (dpY, "dp"), (sioxY, "siox"),
+                        (gradY, "grad"), (texY, "tex")
+                    ]
+                    for (yOpt, _) in prodMethods {
+                        if let y = yOpt {
+                            let conf = BandSimulator.horizonConfidence(y, imageHeight: imgH)
+                            if conf > 0.05 { weightedMethods.append((y, conf)) }
+                        }
                     }
                     // Note: gc and fft are excluded from the combine — benchmarking
-                    // showed they hurt the confidence-weighted average despite having
-                    // some niche value as standalone+rw methods.
+                    // showed they hurt the confidence-weighted average.
                     // Fallback: if all excluded, use equal weights
                     if weightedMethods.isEmpty {
-                        if let y = otsuY { weightedMethods.append((y, 1.0)) }
-                        if let y = dpY { weightedMethods.append((y, 1.0)) }
-                        weightedMethods.append((sioxY, 1.0))
-                        weightedMethods.append((gradY, 1.0))
-                        weightedMethods.append((texY, 1.0))
+                        for (yOpt, _) in prodMethods {
+                            if let y = yOpt { weightedMethods.append((y, 1.0)) }
+                        }
                     }
                     baseY = weightedMethods.isEmpty ? nil :
                         BandSimulator.confidenceWeightedCombine(weightedMethods)
-                case .bestOfRW, .oracleRW:
+                case .bestOfRW, .oracleRW, .selectBestRW, .selectEdgeRW, .select7RW:
                     baseY = nil  // handled separately below
                 default:
                     baseY = nil
@@ -344,6 +288,57 @@ enum SampleProcessor {
                 if bestScore == nil || score.combinedScore > bestScore!.combinedScore {
                     bestScore = score
                     bestMask = mask
+                }
+            }
+
+            // Cache the best mask for single method+rw runs
+            let singleMethodRWs: Set<HorizonMethod> = [
+                .otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW,
+                .textureThenRW, .grabCutThenRW, .fftThenRW
+            ]
+            if singleMethodRWs.contains(combo), let mask = bestMask {
+                cachedBestMasks[combo] = mask
+            }
+
+            // For select* methods: self-score each method+rw mask (no reference),
+            // pick the one with the highest self-score, then report its reference score.
+            if combo == .selectBestRW || combo == .selectEdgeRW || combo == .select7RW {
+                let imgH = image.height
+                let candidates: [HorizonMethod]
+                if combo == .select7RW {
+                    // All 7 methods
+                    candidates = [
+                        .otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW,
+                        .textureThenRW, .grabCutThenRW, .fftThenRW
+                    ]
+                } else {
+                    // 5 production methods only
+                    candidates = [
+                        .otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW, .textureThenRW
+                    ]
+                }
+                var bestSelfScore: Double = -1.0
+                var selectedMethod: HorizonMethod? = nil
+                for method in candidates {
+                    guard let mask = cachedBestMasks[method] else { continue }
+                    let selfScore: Double
+                    if combo == .selectBestRW {
+                        // Basic self-score (smoothness × coverage × plausibility)
+                        selfScore = BandSimulator.selfScoreMask(mask, imageHeight: imgH)
+                    } else {
+                        // Edge-aware self-score (also checks image gradients)
+                        selfScore = BandSimulator.selfScoreWithImage(mask, image: image)
+                    }
+                    if selfScore > bestSelfScore {
+                        bestSelfScore = selfScore
+                        selectedMethod = method
+                    }
+                }
+                // Look up the reference score for the selected method
+                if let sel = selectedMethod,
+                   let selResult = results.first(where: { $0.method == sel }) {
+                    bestScore = selResult.score
+                    bestMask = cachedBestMasks[sel]
                 }
             }
 

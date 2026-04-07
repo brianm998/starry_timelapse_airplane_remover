@@ -30,8 +30,11 @@ enum HorizonMethod: String, CaseIterable, Sendable, CustomStringConvertible {
     case grabCutThenRW = "gc+rw"
     case fftThenRW = "fft+rw"
     case combinedThenRW = "combined+rw"
-    case bestOfRW = "bestof+rw"      // best of all single+rw per-sample
-    case oracleRW = "oracle+rw"      // oracle: max(combined+rw, bestof+rw) per-sample
+    case selectBestRW = "select+rw"   // self-score 5 prod method+rw outputs (basic), pick best
+    case selectEdgeRW = "seledge+rw"   // self-score 5 prod method+rw outputs (edge-aware), pick best
+    case select7RW = "sel7+rw"         // self-score all 7 method+rw outputs (edge-aware), pick best
+    case bestOfRW = "bestof+rw"        // best of all single+rw per-sample (oracle)
+    case oracleRW = "oracle+rw"        // oracle: max(combined+rw, all single+rw)
 
     var description: String { rawValue }
 
@@ -39,7 +42,7 @@ enum HorizonMethod: String, CaseIterable, Sendable, CustomStringConvertible {
     static let baseMethods: [HorizonMethod] = [.otsu, .dp, .siox, .gradProfile, .texture, .grabCut, .fft]
 
     /// Combined methods
-    static let combinedMethods: [HorizonMethod] = [.otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW, .textureThenRW, .grabCutThenRW, .fftThenRW, .combinedThenRW, .bestOfRW, .oracleRW]
+    static let combinedMethods: [HorizonMethod] = [.otsuThenRW, .dpThenRW, .sioxThenRW, .gradThenRW, .textureThenRW, .grabCutThenRW, .fftThenRW, .combinedThenRW, .selectBestRW, .selectEdgeRW, .select7RW, .bestOfRW, .oracleRW]
 }
 
 // MARK: - Method parameters
@@ -1333,6 +1336,126 @@ enum BandSimulator {
         let clampedPlausibility = max(0.05, min(1.0, plausibility))
 
         return coverage * smoothness * clampedPlausibility
+    }
+
+    /// Self-score a binary horizon mask: smoothness + coverage + plausibility.
+    /// Used for selecting the best method output without a reference mask.
+    static func selfScoreMask(_ mask: PixelatedImage, imageHeight: Int) -> Double {
+        let horizonY = horizonYFromMask(mask)
+        return horizonConfidence(horizonY, imageHeight: imageHeight)
+    }
+
+    /// Enhanced self-score that also checks edge alignment with the source image.
+    /// Measures how well the detected horizon aligns with brightness gradients.
+    /// Returns a composite score in [0, 1].
+    static func selfScoreWithImage(_ mask: PixelatedImage, image: PixelatedImage) -> Double {
+        let horizonY = horizonYFromMask(mask)
+        let imgH = image.height
+        let imgW = image.width
+
+        // Base confidence (smoothness × coverage × plausibility)
+        let baseConf = horizonConfidence(horizonY, imageHeight: imgH)
+        guard baseConf > 0.01 else { return 0 }
+
+        // Extract brightness per pixel (grayscale approximation)
+        // Sample every Nth column for speed
+        let sampleStep = max(1, imgW / 200)
+        var edgeStrengths: [Double] = []
+        var contrastScores: [Double] = []
+
+        switch image.imageData {
+        case .eightBit(let buf):
+            let cpp = image.componentsPerPixel
+            for x in stride(from: 0, to: imgW, by: sampleStep) {
+                guard x < horizonY.count, let hy = horizonY[x] else { continue }
+                guard hy > 5 && hy < imgH - 5 else { continue }
+
+                // Measure vertical gradient strength at horizon
+                // Average brightness in a small window above and below
+                let windowSize = 5
+                var aboveSum = 0.0
+                var belowSum = 0.0
+                for dy in 1...windowSize {
+                    let aboveIdx = ((hy - dy) * imgW + x) * cpp
+                    let belowIdx = ((hy + dy) * imgW + x) * cpp
+                    if aboveIdx >= 0 && aboveIdx < buf.count {
+                        aboveSum += Double(buf[aboveIdx])
+                    }
+                    if belowIdx >= 0 && belowIdx < buf.count {
+                        belowSum += Double(buf[belowIdx])
+                    }
+                }
+                let aboveAvg = aboveSum / Double(windowSize)
+                let belowAvg = belowSum / Double(windowSize)
+                let gradient = abs(aboveAvg - belowAvg) / 255.0
+                edgeStrengths.append(gradient)
+
+                // Measure sky/ground contrast (larger window)
+                let bigWindow = min(20, hy, imgH - hy - 1)
+                guard bigWindow > 2 else { continue }
+                var skySum = 0.0
+                var gndSum = 0.0
+                for dy in 1...bigWindow {
+                    let skyIdx = ((hy - dy) * imgW + x) * cpp
+                    let gndIdx = ((hy + dy) * imgW + x) * cpp
+                    if skyIdx >= 0 && skyIdx < buf.count { skySum += Double(buf[skyIdx]) }
+                    if gndIdx >= 0 && gndIdx < buf.count { gndSum += Double(buf[gndIdx]) }
+                }
+                let contrast = abs(skySum - gndSum) / (Double(bigWindow) * 255.0)
+                contrastScores.append(min(1.0, contrast))
+            }
+
+        case .sixteenBit(let buf):
+            let cpp = image.componentsPerPixel
+            for x in stride(from: 0, to: imgW, by: sampleStep) {
+                guard x < horizonY.count, let hy = horizonY[x] else { continue }
+                guard hy > 5 && hy < imgH - 5 else { continue }
+
+                let windowSize = 5
+                var aboveSum = 0.0
+                var belowSum = 0.0
+                for dy in 1...windowSize {
+                    let aboveIdx = ((hy - dy) * imgW + x) * cpp
+                    let belowIdx = ((hy + dy) * imgW + x) * cpp
+                    if aboveIdx >= 0 && aboveIdx < buf.count {
+                        aboveSum += Double(buf[aboveIdx])
+                    }
+                    if belowIdx >= 0 && belowIdx < buf.count {
+                        belowSum += Double(buf[belowIdx])
+                    }
+                }
+                let aboveAvg = aboveSum / Double(windowSize)
+                let belowAvg = belowSum / Double(windowSize)
+                let gradient = abs(aboveAvg - belowAvg) / 65535.0
+                edgeStrengths.append(gradient)
+            }
+
+        default:
+            break
+        }
+
+        // Edge alignment score: mean gradient strength at horizon
+        let edgeScore: Double
+        if edgeStrengths.isEmpty {
+            edgeScore = 0.5 // neutral if we can't measure
+        } else {
+            let meanEdge = edgeStrengths.reduce(0, +) / Double(edgeStrengths.count)
+            // Normalize: typical good edge ~0.05-0.3, boost via sigmoid
+            edgeScore = 1.0 / (1.0 + exp(-20.0 * (meanEdge - 0.03)))
+        }
+
+        // Contrast score
+        let contrastScore: Double
+        if contrastScores.isEmpty {
+            contrastScore = 0.5
+        } else {
+            contrastScore = contrastScores.reduce(0, +) / Double(contrastScores.count)
+        }
+
+        // Composite: base confidence weighted with edge alignment
+        // baseConf already captures smoothness/coverage/plausibility
+        // edgeScore captures whether there's actually an edge at the detected horizon
+        return baseConf * 0.5 + edgeScore * 0.3 + contrastScore * 0.2
     }
 
     /// Confidence-weighted combine: each method contributes proportionally

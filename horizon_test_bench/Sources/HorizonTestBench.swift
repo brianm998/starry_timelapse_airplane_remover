@@ -36,6 +36,7 @@ import logging
 import StarCore
 import KHTSwift
 import kht_bridge
+import Semaphore
 
 // MARK: - Top-level command
 
@@ -44,7 +45,7 @@ struct HorizonTestBench: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "horizon_test_bench",
         abstract: "Benchmark and optimize horizon detection methods",
-        subcommands: [Benchmark.self, Optimize.self, Evaluate.self, DataFormat.self],
+        subcommands: [Benchmark.self, Optimize.self, Evaluate.self, DataFormat.self, SelectTest.self],
         defaultSubcommand: Benchmark.self
     )
 }
@@ -230,6 +231,343 @@ struct Benchmark: AsyncParsableCommand {
 
         await TaskWaiter.shared.finish()
         await logging.gremlin.finishLogging()
+    }
+}
+
+// MARK: - Select-test subcommand
+
+struct SelectTest: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "select-test",
+        abstract: "Test self-scoring method selection: run 5 methods through RW, self-score, compare to reference"
+    )
+
+    @Argument(help: "Path to test data root directory")
+    var dataDir: String
+
+    @Option(name: .shortAndLong,
+            help: "Max concurrent samples (default: 6)")
+    var jobs: Int = 6
+
+    @Option(name: .long, help: "Max samples to process (0 = all)")
+    var maxSamples: Int = 0
+
+    @Option(name: .long, help: "Sample every Nth image (for quick runs)")
+    var stride: Int = 1
+
+    @Option(name: .long, help: "RW working width (default 512)")
+    var rwWidth: Int32 = 512
+
+    mutating func run() async throws {
+        Log.add(handler: ConsoleLogHandler(at: .warn), for: .console)
+
+        let split = try TestDataLoader.load(from: dataDir)
+        let allSamples = split.allSamples
+        var selected = stride > 1
+            ? Swift.stride(from: 0, to: allSamples.count, by: stride).map { allSamples[$0] }
+            : allSamples
+        if maxSamples > 0 { selected = Array(selected.prefix(maxSamples)) }
+        let samples = selected
+        print("Running select-test on \(samples.count) samples with \(jobs) concurrent jobs, RW width=\(rwWidth)")
+
+        let semaphore = AsyncSemaphore(value: jobs)
+        let collector = SelectTestCollector()
+        let width = rwWidth
+        let totalCount = samples.count
+
+        await withTaskGroup(of: SelectTestResult?.self) { group in
+            for (i, sample) in samples.enumerated() {
+                group.addTask {
+                    await semaphore.wait()
+                    defer { semaphore.signal() }
+                    return await SelectTest.processSample(sample, index: i, total: totalCount, rwWidth: width)
+                }
+            }
+            for await result in group {
+                if let r = result {
+                    await collector.add(r)
+                }
+            }
+        }
+
+        await collector.printReport()
+        await TaskWaiter.shared.finish()
+        await logging.gremlin.finishLogging()
+    }
+
+    static func processSample(_ sample: TestSample, index: Int, total: Int, rwWidth: Int32) async -> SelectTestResult? {
+        let start = CFAbsoluteTimeGetCurrent()
+        FileHandle.standardError.write("  [\(index+1)/\(total)] \(sample.description)...".data(using: .utf8)!)
+
+        guard let image = PixelatedImage(filename: sample.imagePath),
+              let refMask = PixelatedImage(filename: sample.maskPath) else {
+            return nil
+        }
+
+        // Compute base masks
+        var baseMasks: [HorizonMethod: PixelatedImage] = [:]
+        if let m = try? await OtsuRunner.run(image: image) { baseMasks[.otsu] = m }
+        if let m = try? await DPRunner.run(image: image, gridSearch: true) { baseMasks[.dp] = m }
+        baseMasks[.siox] = await SIOXRunner.run(image: image)
+        baseMasks[.gradProfile] = GradProfileRunner.run(image: image)
+        baseMasks[.texture] = TextureRunner.run(image: image)
+
+        // Run each through RW
+        let methods: [HorizonMethod] = [.otsu, .dp, .siox, .gradProfile, .texture]
+        let rwMethodMap: [HorizonMethod: HorizonMethod] = [
+            .otsu: .otsuThenRW, .dp: .dpThenRW, .siox: .sioxThenRW,
+            .gradProfile: .gradThenRW, .texture: .textureThenRW
+        ]
+
+        struct RWResult {
+            let method: HorizonMethod
+            let rwMask: PixelatedImage
+            let horizonY: [Int?]
+            let refScore: Double
+            let selfScore: Double
+            let edgeScore: Double
+            let baseConfidence: Double
+        }
+
+        var rwResults: [RWResult] = []
+        let imgH = image.height
+
+        for method in methods {
+            guard let baseMask = baseMasks[method] else { continue }
+            let baseHorizonY = BandSimulator.horizonYFromMask(baseMask)
+            let baseConf = BandSimulator.horizonConfidence(baseHorizonY, imageHeight: imgH)
+            let params = RWParams(maxWorkingWidth: rwWidth, brushRadius: 40)
+            let rwMask = RWRunner.run(image: image, baseHorizonY: baseHorizonY, params: params)
+            let rwHorizonY = BandSimulator.horizonYFromMask(rwMask)
+            let refScore = MaskScorer.score(computed: rwMask, reference: refMask).combinedScore
+            let selfScore = BandSimulator.selfScoreMask(rwMask, imageHeight: imgH)
+            let edgeScore = BandSimulator.selfScoreWithImage(rwMask, image: image)
+            rwResults.append(RWResult(
+                method: rwMethodMap[method]!, rwMask: rwMask, horizonY: rwHorizonY,
+                refScore: refScore, selfScore: selfScore, edgeScore: edgeScore,
+                baseConfidence: baseConf
+            ))
+        }
+
+        // Also compute combined+rw
+        var weightedMethods: [([Int?], Double)] = []
+        for method in methods {
+            guard let mask = baseMasks[method] else { continue }
+            let y = BandSimulator.horizonYFromMask(mask)
+            let conf = BandSimulator.horizonConfidence(y, imageHeight: imgH)
+            if conf > 0.05 { weightedMethods.append((y, conf)) }
+        }
+        if weightedMethods.isEmpty {
+            for method in methods {
+                guard let mask = baseMasks[method] else { continue }
+                let y = BandSimulator.horizonYFromMask(mask)
+                weightedMethods.append((y, 1.0))
+            }
+        }
+        var combinedRefScore = 0.0
+        if !weightedMethods.isEmpty {
+            let combinedY = BandSimulator.confidenceWeightedCombine(weightedMethods)
+            let params = RWParams(maxWorkingWidth: rwWidth, brushRadius: 40)
+            let combinedMask = RWRunner.run(image: image, baseHorizonY: combinedY, params: params)
+            combinedRefScore = MaskScorer.score(computed: combinedMask, reference: refMask).combinedScore
+        }
+
+        // Strategy 1: basic self-score
+        let bestByRef = rwResults.max(by: { $0.refScore < $1.refScore })!
+        let bestBySelf = rwResults.max(by: { $0.selfScore < $1.selfScore })!
+        let bestByEdge = rwResults.max(by: { $0.edgeScore < $1.edgeScore })!
+
+        // Strategy 2: consensus — pick method whose RW output is closest to median of all RW outputs
+        let consensusResult: RWResult = {
+            let width = rwResults[0].horizonY.count
+            // Compute per-column median across all RW results
+            var medianY = [Int?](repeating: nil, count: width)
+            for x in 0..<width {
+                let ys = rwResults.compactMap { $0.horizonY[x] }.sorted()
+                if !ys.isEmpty { medianY[x] = ys[ys.count / 2] }
+            }
+            // For each method, compute mean absolute distance to median
+            var bestDist = Double.infinity
+            var bestIdx = 0
+            for (i, r) in rwResults.enumerated() {
+                var totalDist = 0.0
+                var count = 0
+                for x in 0..<width {
+                    guard let my = medianY[x], let ry = r.horizonY[x] else { continue }
+                    totalDist += Double(abs(my - ry))
+                    count += 1
+                }
+                let avgDist = count > 0 ? totalDist / Double(count) : Double.infinity
+                if avgDist < bestDist {
+                    bestDist = avgDist
+                    bestIdx = i
+                }
+            }
+            return rwResults[bestIdx]
+        }()
+
+        // Strategy 3: base confidence — pick method with highest base (pre-RW) confidence
+        let bestByBaseConf = rwResults.max(by: { $0.baseConfidence < $1.baseConfidence })!
+
+        // Strategy 4: consensus + confidence hybrid — weight proximity to consensus by base confidence
+        let hybridResult: RWResult = {
+            let width = rwResults[0].horizonY.count
+            var medianY = [Int?](repeating: nil, count: width)
+            for x in 0..<width {
+                let ys = rwResults.compactMap { $0.horizonY[x] }.sorted()
+                if !ys.isEmpty { medianY[x] = ys[ys.count / 2] }
+            }
+            var bestScore = -Double.infinity
+            var bestIdx = 0
+            for (i, r) in rwResults.enumerated() {
+                var totalDist = 0.0
+                var count = 0
+                for x in 0..<width {
+                    guard let my = medianY[x], let ry = r.horizonY[x] else { continue }
+                    totalDist += Double(abs(my - ry))
+                    count += 1
+                }
+                let avgDist = count > 0 ? totalDist / Double(count) : 1000.0
+                // Proximity score: 1/(1 + dist/H), weighted by base confidence
+                let proximity = 1.0 / (1.0 + avgDist / Double(imgH) * 50.0)
+                let score = proximity * 0.5 + r.baseConfidence * 0.5
+                if score > bestScore {
+                    bestScore = score
+                    bestIdx = i
+                }
+            }
+            return rwResults[bestIdx]
+        }()
+
+        let elapsed = CFAbsoluteTimeGetCurrent() - start
+        FileHandle.standardError.write(" \(String(format: "%.0f", elapsed))s\n".data(using: .utf8)!)
+
+        return SelectTestResult(
+            sample: sample.description,
+            sequenceName: sample.sequenceName,
+            combinedRefScore: combinedRefScore,
+            oracleMethod: bestByRef.method,
+            oracleScore: bestByRef.refScore,
+            selfSelectedMethod: bestBySelf.method,
+            selfSelectedScore: bestBySelf.refScore,
+            edgeSelectedMethod: bestByEdge.method,
+            edgeSelectedScore: bestByEdge.refScore,
+            consensusMethod: consensusResult.method,
+            consensusScore: consensusResult.refScore,
+            baseConfMethod: bestByBaseConf.method,
+            baseConfScore: bestByBaseConf.refScore,
+            hybridMethod: hybridResult.method,
+            hybridScore: hybridResult.refScore
+        )
+    }
+}
+
+struct SelectTestResult: Sendable {
+    let sample: String
+    let sequenceName: String
+    let combinedRefScore: Double
+    let oracleMethod: HorizonMethod
+    let oracleScore: Double
+    let selfSelectedMethod: HorizonMethod
+    let selfSelectedScore: Double
+    let edgeSelectedMethod: HorizonMethod
+    let edgeSelectedScore: Double
+    let consensusMethod: HorizonMethod
+    let consensusScore: Double
+    let baseConfMethod: HorizonMethod
+    let baseConfScore: Double
+    let hybridMethod: HorizonMethod
+    let hybridScore: Double
+}
+
+actor SelectTestCollector {
+    private var results: [SelectTestResult] = []
+
+    func add(_ result: SelectTestResult) {
+        results.append(result)
+    }
+
+    func printReport() {
+        let n = Double(results.count)
+        guard n > 0 else { print("No results"); return }
+
+        let avgCombined = results.map(\.combinedRefScore).reduce(0, +) / n
+        let avgOracle = results.map(\.oracleScore).reduce(0, +) / n
+        let avgSelfSelect = results.map(\.selfSelectedScore).reduce(0, +) / n
+        let avgEdgeSelect = results.map(\.edgeSelectedScore).reduce(0, +) / n
+        let avgConsensus = results.map(\.consensusScore).reduce(0, +) / n
+        let avgBaseConf = results.map(\.baseConfScore).reduce(0, +) / n
+        let avgHybrid = results.map(\.hybridScore).reduce(0, +) / n
+
+        // Count correct selections
+        let selfCorrect = results.filter { $0.selfSelectedMethod == $0.oracleMethod }.count
+        let edgeCorrect = results.filter { $0.edgeSelectedMethod == $0.oracleMethod }.count
+        let consensusCorrect = results.filter { $0.consensusMethod == $0.oracleMethod }.count
+        let baseConfCorrect = results.filter { $0.baseConfMethod == $0.oracleMethod }.count
+        let hybridCorrect = results.filter { $0.hybridMethod == $0.oracleMethod }.count
+
+        print("\n" + String(repeating: "=", count: 90))
+        print("SELECT-TEST RESULTS  (\(Int(n)) samples)")
+        print(String(repeating: "=", count: 90))
+        print()
+        print("Strategy               AvgScore   vs Combined   vs Oracle   Match%")
+        print(String(repeating: "-", count: 90))
+        print("combined+rw            \(String(format: "%.4f", avgCombined))     —             \(String(format: "%+.4f", avgCombined - avgOracle))       —")
+        print("select (basic)         \(String(format: "%.4f", avgSelfSelect))     \(String(format: "%+.4f", avgSelfSelect - avgCombined))         \(String(format: "%+.4f", avgSelfSelect - avgOracle))       \(String(format: "%.0f", Double(selfCorrect)/n*100))%")
+        print("select (edge)          \(String(format: "%.4f", avgEdgeSelect))     \(String(format: "%+.4f", avgEdgeSelect - avgCombined))         \(String(format: "%+.4f", avgEdgeSelect - avgOracle))       \(String(format: "%.0f", Double(edgeCorrect)/n*100))%")
+        print("select (consensus)     \(String(format: "%.4f", avgConsensus))     \(String(format: "%+.4f", avgConsensus - avgCombined))         \(String(format: "%+.4f", avgConsensus - avgOracle))       \(String(format: "%.0f", Double(consensusCorrect)/n*100))%")
+        print("select (base conf)     \(String(format: "%.4f", avgBaseConf))     \(String(format: "%+.4f", avgBaseConf - avgCombined))         \(String(format: "%+.4f", avgBaseConf - avgOracle))       \(String(format: "%.0f", Double(baseConfCorrect)/n*100))%")
+        print("select (hybrid)        \(String(format: "%.4f", avgHybrid))     \(String(format: "%+.4f", avgHybrid - avgCombined))         \(String(format: "%+.4f", avgHybrid - avgOracle))       \(String(format: "%.0f", Double(hybridCorrect)/n*100))%")
+        print("oracle (perfect)       \(String(format: "%.4f", avgOracle))     \(String(format: "%+.4f", avgOracle - avgCombined))         —           100%")
+
+        // Per-sequence breakdown
+        var bySeq: [String: [SelectTestResult]] = [:]
+        for r in results { bySeq[r.sequenceName, default: []].append(r) }
+
+        print("\nPer-sequence breakdown:")
+        print("Sequence".padding(toLength: 35, withPad: " ", startingAt: 0) +
+              "N".padding(toLength: 5, withPad: " ", startingAt: 0) +
+              "Combined".padding(toLength: 10, withPad: " ", startingAt: 0) +
+              "Consens".padding(toLength: 10, withPad: " ", startingAt: 0) +
+              "BaseConf".padding(toLength: 10, withPad: " ", startingAt: 0) +
+              "Hybrid".padding(toLength: 10, withPad: " ", startingAt: 0) +
+              "Oracle".padding(toLength: 10, withPad: " ", startingAt: 0))
+        print(String(repeating: "-", count: 90))
+
+        for (seq, seqResults) in bySeq.sorted(by: { $0.key < $1.key }) {
+            let sn = Double(seqResults.count)
+            let c = seqResults.map(\.combinedRefScore).reduce(0, +) / sn
+            let con = seqResults.map(\.consensusScore).reduce(0, +) / sn
+            let bc = seqResults.map(\.baseConfScore).reduce(0, +) / sn
+            let h = seqResults.map(\.hybridScore).reduce(0, +) / sn
+            let o = seqResults.map(\.oracleScore).reduce(0, +) / sn
+            print(seq.padding(toLength: 35, withPad: " ", startingAt: 0) +
+                  "\(Int(sn))".padding(toLength: 5, withPad: " ", startingAt: 0) +
+                  String(format: "%.4f", c).padding(toLength: 10, withPad: " ", startingAt: 0) +
+                  String(format: "%.4f", con).padding(toLength: 10, withPad: " ", startingAt: 0) +
+                  String(format: "%.4f", bc).padding(toLength: 10, withPad: " ", startingAt: 0) +
+                  String(format: "%.4f", h).padding(toLength: 10, withPad: " ", startingAt: 0) +
+                  String(format: "%.4f", o))
+        }
+
+        // Method selection distribution
+        print("\nMethod selection distribution:")
+        var consDist: [HorizonMethod: Int] = [:]
+        var bcDist: [HorizonMethod: Int] = [:]
+        var hybDist: [HorizonMethod: Int] = [:]
+        var oracleDist: [HorizonMethod: Int] = [:]
+        for r in results {
+            consDist[r.consensusMethod, default: 0] += 1
+            bcDist[r.baseConfMethod, default: 0] += 1
+            hybDist[r.hybridMethod, default: 0] += 1
+            oracleDist[r.oracleMethod, default: 0] += 1
+        }
+        print("  Oracle:    \(oracleDist.sorted(by: { $0.value > $1.value }).map { "\($0.key.rawValue):\($0.value)" }.joined(separator: " "))")
+        print("  Consensus: \(consDist.sorted(by: { $0.value > $1.value }).map { "\($0.key.rawValue):\($0.value)" }.joined(separator: " "))")
+        print("  BaseConf:  \(bcDist.sorted(by: { $0.value > $1.value }).map { "\($0.key.rawValue):\($0.value)" }.joined(separator: " "))")
+        print("  Hybrid:    \(hybDist.sorted(by: { $0.value > $1.value }).map { "\($0.key.rawValue):\($0.value)" }.joined(separator: " "))")
+
+        print(String(repeating: "=", count: 90))
     }
 }
 
