@@ -384,21 +384,33 @@ final class HorizonPaintState {
         let vw = Int(viewWidth)
         for col in 0..<vw {
             guard gestureColumnBottom[col] != Int.min else { continue }
+            let brushTop    = gestureColumnTop[col]
+            let brushBottom = gestureColumnBottom[col]
             if isErasing {
-                // Erase → mark as known ground: ceiling moves up.
-                let brushTop = gestureColumnTop[col]
+                // Erase → mark brushed rows as known ground: ceiling moves up.
                 if let current = knownGroundCeiling[col] {
                     knownGroundCeiling[col] = min(current, brushTop)
                 } else {
                     knownGroundCeiling[col] = brushTop
                 }
+                // Retract sky floor if it now overlaps the newly marked ground.
+                // This lets erasing fully undo a prior paint-sky gesture.
+                if let sf = knownSkyFloor[col], sf >= brushTop {
+                    let retracted = brushTop - 1
+                    knownSkyFloor[col] = max(retracted, bandColumnTop[col] ?? 0)
+                }
             } else {
-                // Paint → mark as known sky: floor moves down.
-                let brushBottom = gestureColumnBottom[col]
+                // Paint → mark brushed rows as known sky: floor moves down.
                 if let current = knownSkyFloor[col] {
                     knownSkyFloor[col] = max(current, brushBottom)
                 } else {
                     knownSkyFloor[col] = brushBottom
+                }
+                // Retract ground ceiling if it now overlaps the newly marked sky.
+                // This lets painting fully undo a prior erase gesture.
+                if let gc = knownGroundCeiling[col], gc <= brushBottom {
+                    let retracted = brushBottom + 1
+                    knownGroundCeiling[col] = min(retracted, bandColumnBottom[col] ?? Int(viewHeight))
                 }
             }
         }
