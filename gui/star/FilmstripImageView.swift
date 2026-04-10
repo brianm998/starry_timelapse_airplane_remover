@@ -110,11 +110,31 @@ struct FilmstripImageView: View {
                     // the actual thumbnail image
 
                     frameView.thumbnailImage
-                    
+
+                    // Horizon overlay — coloured polyline tracing the sky/ground boundary.
+                    // white = initial detected, blue = merged, green = user reference.
+                    if let overlay = frameView.horizonOverlay {
+                        let strokeColor: Color = switch overlay.kind {
+                            case .initial:   .white
+                            case .merged:    .blue
+                            case .reference: .green
+                        }
+                        Canvas { ctx, size in
+                            var path = Path()
+                            for (col, y) in overlay.yPerColumn.enumerated() {
+                                let pt = CGPoint(x: CGFloat(col), y: CGFloat(y))
+                                if col == 0 { path.move(to: pt) }
+                                else        { path.addLine(to: pt) }
+                            }
+                            ctx.stroke(path, with: .color(strokeColor), lineWidth: 1.5)
+                        }
+                        .allowsHitTesting(false)
+                    }
+
                     if let frameState = frameView.frameState {
-                        // processing state on the bottom left 
+                        // processing state on the bottom left
                         VStack {
-                            Spacer() 
+                            Spacer()
                             HStack {
                                 Spacer()
                                   .frame(width: 8)
@@ -126,6 +146,8 @@ struct FilmstripImageView: View {
                         }
                     }
                 }
+                .frame(width: CGFloat(viewModel.config.config().thumbnailWidth),
+                       height: CGFloat(viewModel.config.config().thumbnailHeight))
             }
             Spacer().frame(height: 8)
         }

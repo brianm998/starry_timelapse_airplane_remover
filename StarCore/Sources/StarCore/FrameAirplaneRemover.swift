@@ -1635,6 +1635,90 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return FrameAirplaneRemover.fillEdgeNils(viewY)
     }
 
+    // MARK: - Filmstrip horizon thumbnail overlay
+
+    /// Returns `true` if a user-painted reference horizon file exists on disk
+    /// for this frame (either per-frame or global).  Synchronous — no I/O beyond
+    /// a file-existence check.
+    public var hasHorizonReference: Bool {
+        guard let refinedPath = imageAccessor.nameForImage(
+                frameIndex: frameIndex,
+                ofType: .refinedHorizon,
+                atSize: .original
+              )
+        else { return false }
+        let refinedURL    = URL(fileURLWithPath: refinedPath)
+        let frameFileName = refinedURL.lastPathComponent
+        let referenceDir  = refinedURL
+            .deletingLastPathComponent()    // …/refinedHorizon
+            .deletingLastPathComponent()    // …/output
+            .appendingPathComponent("horizonReference")
+        return FileManager.default.fileExists(
+                   atPath: referenceDir.appendingPathComponent(frameFileName).path)
+            || FileManager.default.fileExists(
+                   atPath: referenceDir.appendingPathComponent("reference.tiff").path)
+    }
+
+    /// Load the best-available horizon for this frame and scale it to thumbnail
+    /// dimensions, returning a `HorizonThumbnailOverlay` suitable for drawing
+    /// directly on a filmstrip cell.
+    ///
+    /// Priority: **reference** (green) › **merged** (blue) › **initial** (white).
+    /// Returns `nil` when no horizon of any kind has been computed yet.
+    ///
+    /// - Parameters:
+    ///   - thumbnailWidth:  Width of the thumbnail in pixels.
+    ///   - thumbnailHeight: Height of the thumbnail in pixels.
+    public func loadHorizonThumbnailOverlay(
+        thumbnailWidth:  Int,
+        thumbnailHeight: Int
+    ) async throws -> HorizonThumbnailOverlay? {
+
+        // ── Choose the best available source ────────────────────────────────
+        let pixImage: PixelatedImage
+        let kind: HorizonThumbnailOverlay.Kind
+
+        if let refMask = try await loadHorizonReferenceMask() {
+            pixImage = refMask.image
+            kind     = .reference
+        } else if let mergedImage = try await imageAccessor.load(
+                      frameIndex: frameIndex,
+                      type: .mergedHorizon,
+                      atSize: .original)
+        {
+            pixImage = mergedImage
+            kind     = .merged
+        } else if let initialImage = try await imageAccessor.load(
+                      frameIndex: frameIndex,
+                      type: .horizon,
+                      atSize: .original)
+        {
+            pixImage = initialImage
+            kind     = .initial
+        } else {
+            return nil
+        }
+
+        // ── Scale image-space horizon Y → thumbnail Y ────────────────────
+        let imgW   = pixImage.width
+        let imgH   = pixImage.height
+        let scaleX = Double(imgW) / Double(thumbnailWidth)
+        let scaleY = Double(imgH) / Double(thumbnailHeight)
+
+        let imgY   = CombinedHorizonDetector.extractHorizonY(from: pixImage)
+
+        var thumbY = [Int](repeating: thumbnailHeight / 2, count: thumbnailWidth)
+        for tx in 0..<thumbnailWidth {
+            let ix = min(max(0, Int((Double(tx) * scaleX).rounded())), imgW - 1)
+            if let iy = imgY[ix] {
+                thumbY[tx] = min(thumbnailHeight - 1,
+                                 max(0, Int((Double(iy) / scaleY).rounded())))
+            }
+        }
+
+        return HorizonThumbnailOverlay(kind: kind, yPerColumn: thumbY)
+    }
+
     // MARK: - Save user-painted reference horizon mask
 
     /// Convert a painted horizon (from `HorizonPainterView`) into a binary

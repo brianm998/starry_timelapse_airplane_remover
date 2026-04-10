@@ -634,6 +634,8 @@ struct HorizonPainterToolbarView: View {
             Log.i("HorizonPainterToolbarView: saved reference mask for frame \(frame.frameIndex)")
             savedAlready = true
             isSaving     = false
+            // Refresh the filmstrip thumbnail overlay so it immediately turns green.
+            viewModel.currentFrameView.refreshHorizonOverlay()
             viewModel.isShowingHorizonPainter = false
         } catch {
             Log.w("HorizonPainterToolbarView: save failed: \(error)")

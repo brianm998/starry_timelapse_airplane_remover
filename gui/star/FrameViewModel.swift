@@ -26,6 +26,10 @@ public class FrameViewModel {
     }
 
     var existingImages: Set<FrameViewMode> = []
+
+    /// The best-available horizon overlay for this frame's filmstrip thumbnail.
+    /// Nil until `refreshHorizonOverlay()` completes.
+    var horizonOverlay: HorizonThumbnailOverlay? = nil
     
     var frameObserver = FrameObserver()
 
@@ -83,6 +87,7 @@ public class FrameViewModel {
                     try await frame.loadOutliers(loadOnly: true)
                     Task { @MainActor in
                         await self.setOutlierGroups()
+                        self.refreshHorizonOverlay()
                     }
                 }
             }
@@ -435,6 +440,28 @@ public class FrameViewModel {
         }
     }
     
+    /// Asynchronously load (or reload) the filmstrip horizon overlay for this
+    /// frame and store the result in `horizonOverlay`.  Safe to call repeatedly;
+    /// each call cancels nothing — the last write wins on MainActor.
+    func refreshHorizonOverlay() {
+        guard let frame else {
+            horizonOverlay = nil
+            return
+        }
+        let tw = config.config().thumbnailWidth
+        let th = config.config().thumbnailHeight
+        Task.detached(priority: .utility) {
+            let overlay = try? await frame.loadHorizonThumbnailOverlay(
+                thumbnailWidth:  tw,
+                thumbnailHeight: th
+            )
+            await MainActor.run {
+                self.horizonOverlay = overlay
+                self.reloadID = UUID()
+            }
+        }
+    }
+
     func setOutlierGroups(forced: Bool = false) async {
         guard let frame else {
             Log.w("cannot set outlier groups with no frame reference")
