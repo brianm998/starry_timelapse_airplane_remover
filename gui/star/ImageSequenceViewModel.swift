@@ -688,14 +688,6 @@ public final class ImageSequenceViewModel {
             config.update(realConfig)
         }
     }
-    
-    var maxConcurrentKeypointCalculations: Int {
-        didSet {
-            var realConfig = config.config()
-            realConfig.maxConcurrentKeypointCalculations = maxConcurrentKeypointCalculations
-            config.update(realConfig)
-        }
-    }
 
     var homographySmoothingEpsilon: Double {
         didSet {
@@ -899,7 +891,6 @@ public final class ImageSequenceViewModel {
         self.alignedNeighborFrameOverrides = config.alignedNeighborFrameOverrides
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.numberOfFramesToProcessConcurrently = config.numberOfFramesToProcessConcurrently
-        self.maxConcurrentKeypointCalculations = config.maxConcurrentKeypointCalculations
         self.homographySmoothingEpsilon = config.homographySmoothingEpsilon
         self.horizonVerticalShiftAmount = config.horizonVerticalShiftAmount
         self.allowEarthAlignment = config.allowEarthAlignment

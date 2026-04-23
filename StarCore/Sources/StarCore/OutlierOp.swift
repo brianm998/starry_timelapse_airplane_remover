@@ -5,31 +5,29 @@ public final class OutlierOp: AsyncOperation, @unchecked Sendable {
     let frame: FrameAirplaneRemover
     let errorClosure: (String) -> Void
 
-    init(frame: FrameAirplaneRemover, errorClosure: @escaping (String) -> Void) {
+    init(
+      frame: FrameAirplaneRemover,
+      rawImageBytes: UInt64 = 0,
+      errorClosure: @escaping (String) -> Void
+    ) {
         self.frame = frame
         self.errorClosure = errorClosure
-        super.init(for: .outliers)
+        super.init(for: .outliers, rawImageBytes: rawImageBytes)
         self.name = "outliers for frame \(frame.frameIndex)"
     }
 
-    public override func execute() {
-        task = Task {
-            defer {
-                Log.d("frame \(frame.frameIndex) end")
-                finish()
+    public override func asyncExecute() async {
+        do {
+            Log.d("frame \(frame.frameIndex) start")
+            if await frame.usesOutliers {
+                Log.d("frame \(frame.frameIndex) loading outliers")
+                try await frame.loadOutliers()
             }
-            do {
-                Log.d("frame \(frame.frameIndex) start")
-                if await frame.usesOutliers {
-                    Log.d("frame \(frame.frameIndex) loading outliers")
-                    try await frame.loadOutliers()
-                }
-                Log.d("frame \(frame.frameIndex) done")
-            } catch {
-                let str = "frame \(frame.frameIndex) error with outliers: \(error)"
-                Log.e(str)
-                errorClosure(str)
-            }
+            Log.d("frame \(frame.frameIndex) done")
+        } catch {
+            let str = "frame \(frame.frameIndex) error with outliers: \(error)"
+            Log.e(str)
+            errorClosure(str)
         }
     }
 }

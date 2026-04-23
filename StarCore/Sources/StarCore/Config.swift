@@ -349,9 +349,6 @@ public struct Config: Codable, Sendable, Transferable {
 
     public var numberOfFramesToProcessConcurrently: Int = ProcessInfo.processInfo.processorCount
     
-    // max number of frames to concurrently calculation keypoints on
-    public var maxConcurrentKeypointCalculations: Int = ProcessInfo.processInfo.processorCount/2
-    
     // when doing auto aligned outputs, how far to shift up the horizon mask
     // when doing a final composite image.
     public var horizonVerticalShiftAmount: Int = 8
@@ -499,7 +496,6 @@ public struct Config: Codable, Sendable, Transferable {
         self.horizonMinY = try c.decodeIfPresent(Int.self, forKey: .horizonMinY)
         self.horizonMaxY = try c.decodeIfPresent(Int.self, forKey: .horizonMaxY)
         self.numberOfFramesToProcessConcurrently = try c.decodeIfPresent(Int.self, forKey: .numberOfFramesToProcessConcurrently) ?? self.numberOfFramesToProcessConcurrently
-        self.maxConcurrentKeypointCalculations = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentKeypointCalculations) ?? self.maxConcurrentKeypointCalculations
 
         self.horizonVerticalShiftAmount = try c.decodeIfPresent(Int.self, forKey: .horizonVerticalShiftAmount) ?? self.horizonVerticalShiftAmount
 

@@ -4,14 +4,15 @@ import logging
 final class HorizonMergeOp: AsyncOperation, @unchecked Sendable {
     let frame: FrameAirplaneRemover
     let errorClosure: (String) -> Void
-    
+
     init(
       frame: FrameAirplaneRemover,
+      rawImageBytes: UInt64 = 0,
       errorClosure: @escaping (String) -> Void
     ) {
         self.frame = frame
         self.errorClosure = errorClosure
-        super.init(for: .mergedHorizon)
+        super.init(for: .mergedHorizon, rawImageBytes: rawImageBytes)
         self.name = "horizon merge frame \(frame.frameIndex)"
     }
 
@@ -24,22 +25,16 @@ final class HorizonMergeOp: AsyncOperation, @unchecked Sendable {
             }
         }
     }
-    
-    override func execute() {
-        task = Task {
-            defer {
-                Log.d("frame \(frame.frameIndex) end")
-                finish()
-            }
-            do {
-                Log.d("frame \(frame.frameIndex) starting")
-                _ = try await frame.loadOrCreateFinalHorizonMask()
-                Log.d("frame \(frame.frameIndex) done")
-            } catch {
-                let str = "frame \(frame.frameIndex) error during horizon merge: \(error)"
-                Log.e(str)
-                errorClosure(str)
-            }
+
+    override func asyncExecute() async {
+        do {
+            Log.d("frame \(frame.frameIndex) starting")
+            _ = try await frame.loadOrCreateFinalHorizonMask()
+            Log.d("frame \(frame.frameIndex) done")
+        } catch {
+            let str = "frame \(frame.frameIndex) error during horizon merge: \(error)"
+            Log.e(str)
+            errorClosure(str)
         }
     }
 }

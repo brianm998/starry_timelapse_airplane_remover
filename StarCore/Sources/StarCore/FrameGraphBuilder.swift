@@ -17,6 +17,33 @@ public enum OperationType: String, CaseIterable, Sendable {
     case merge
 }
 
+extension OperationType {
+    /// Multiplier applied to the raw image byte size to estimate how much
+    /// memory this operation type needs.  Values are empirically derived.
+    ///
+    /// - 0  means the op works on small data (keypoints, homographies) and
+    ///      doesn't need a reservation.
+    /// - 8  for SIFT/AKAZE: scale-space pyramid uses ~8× the raw image size.
+    /// - 4  for merge: loads warped neighbours + compositing.
+    /// - 3  for outliers: loads a few aligned images for comparison.
+    /// - 2  for horizon ops: converts to 8-bit + processing.
+    var memoryMultiplier: UInt64 {
+        switch self {
+        case .preview:             return 2
+        case .horizon:             return 2
+        case .mergedHorizon:       return 2
+        case .refinedHorizon:      return 1
+        case .starKeypoints:       return 8
+        case .earthKeypoints:      return 8
+        case .starHomography:      return 0
+        case .earthHomography:     return 0
+        case .alignmentValidation: return 0
+        case .outliers:            return 3
+        case .merge:               return 4
+        }
+    }
+}
+
 public enum OperationState: String, CaseIterable, Sendable {
     case queued
     case running
@@ -29,12 +56,10 @@ public final actor FrameGraphBuilder {
     // MARK: Queues (user adjustable)
     let queue = OperationQueue()
 
-    let keypointLimiter = KeypointLimiter(max: 10) // XXX use other value
-
     public init() {
         queue.name = "operations"
     }
-    
+
     var configManager: ConfigManager? = nil
 
     public func set(configManager: ConfigManager) async {
@@ -46,12 +71,9 @@ public final actor FrameGraphBuilder {
             }
         }
     }
-    
+
     public func update(from config: Config) {
         queue.maxConcurrentOperationCount = config.numberOfFramesToProcessConcurrently
-        keypointLimiter.set(
-          max: config.maxConcurrentKeypointCalculations
-        )
         Task {
             await MemoryMonitor.shared.configure(
                 maxMemoryFraction: config.maxMatMemoryFraction,
@@ -78,8 +100,14 @@ public final actor FrameGraphBuilder {
         }
 
         let errors = ArrayActor<String>([])
-        
+
         let config = await configManager.config()
+
+        // Bytes in one uncompressed source frame.  Used by each op to compute
+        // its memory reservation via OperationType.memoryMultiplier.
+        let rawImageBytes = UInt64(config.imageWidth) *
+                            UInt64(config.imageHeight) *
+                            UInt64(max(config.imageBytesPerPixel, 1))
 
         let hasHorizon = config.horizonDetectionEnabled
         let processEarth = config.allowEarthAlignment &&
@@ -114,7 +142,10 @@ public final actor FrameGraphBuilder {
 
                     // 1. Horizon
                     if hasHorizon {
-                        let horizonOp = HorizonDetectionOp(frame: frame) { errorString in
+                        let horizonOp = HorizonDetectionOp(
+                          frame: frame,
+                          rawImageBytes: rawImageBytes
+                        ) { errorString in
                             Task { await errors.append(errorString) }
                             errorClosure(errorString)
                         }
@@ -155,7 +186,10 @@ public final actor FrameGraphBuilder {
                         taskGroup.addTask {
                             let frame = frames[frameIndex]
                             
-                            let horizonOp = HorizonMergeOp(frame: frame) { errorString in
+                            let horizonOp = HorizonMergeOp(
+                              frame: frame,
+                              rawImageBytes: rawImageBytes
+                            ) { errorString in
                                 Task { await errors.append(errorString) }
                                 errorClosure(errorString)
                             }
@@ -184,7 +218,10 @@ public final actor FrameGraphBuilder {
                  depends upon all other horizon operations
                  */
                 let frame = frames[startIndex]
-                let horizonOp = HorizonMergeOp(frame: frame) { errorString in
+                let horizonOp = HorizonMergeOp(
+                  frame: frame,
+                  rawImageBytes: rawImageBytes
+                ) { errorString in
                     Task { await errors.append(errorString) }
                     errorClosure(errorString)
                 }
@@ -210,7 +247,7 @@ public final actor FrameGraphBuilder {
                       forStars: true,
                       frame: frame,
                       mode: .starAligned,
-                      limiter: self.keypointLimiter
+                      rawImageBytes: rawImageBytes
                     ) { errorString in
                         Task { await errors.append(errorString) }
                         errorClosure(errorString)
@@ -262,7 +299,7 @@ public final actor FrameGraphBuilder {
                           forStars: false,
                           frame: frame,
                           mode: .earthAligned,
-                          limiter: self.keypointLimiter
+                          rawImageBytes: rawImageBytes
                         ) { errorString in
                             Task { await errors.append(errorString) }
                             errorClosure(errorString)
@@ -295,7 +332,8 @@ public final actor FrameGraphBuilder {
             let skyH = HomographyOp(
               forStars: true,
               frame: frame,
-              mode: .starAligned
+              mode: .starAligned,
+              rawImageBytes: rawImageBytes
             ) { errorString in
                 Task { await errors.append(errorString) }
                 errorClosure(errorString)
@@ -325,7 +363,8 @@ public final actor FrameGraphBuilder {
                 let earthH = HomographyOp(
                   forStars: false,
                   frame: frame,
-                  mode: .earthAligned
+                  mode: .earthAligned,
+                  rawImageBytes: rawImageBytes
                 ) { errorString in
                     Task { await errors.append(errorString) }
                     errorClosure(errorString)
@@ -367,7 +406,8 @@ public final actor FrameGraphBuilder {
         if hasHorizon && useHomographyRefinedHorizon {
             for frame in frames {
                 let refinementOp = HorizonRefinementOp(
-                  frame: frame
+                  frame: frame,
+                  rawImageBytes: rawImageBytes
                 ) { errorString in
                     Task { await errors.append(errorString) }
                     errorClosure(errorString)
@@ -387,7 +427,8 @@ public final actor FrameGraphBuilder {
             // all frames get an op, but it may be a nop for auto only
             if await frame.usesOutliers {
                 let outlierOp = OutlierOp(
-                  frame: frame
+                  frame: frame,
+                  rawImageBytes: rawImageBytes
                 ) { errorString in
                     Task { await errors.append(errorString) }
                     errorClosure(errorString)
@@ -408,7 +449,8 @@ public final actor FrameGraphBuilder {
         for frame in frames {
             
             let mergeOp = MergeOp(
-              frame: frame
+              frame: frame,
+              rawImageBytes: rawImageBytes
             ) { errorString in
                 Task { await errors.append(errorString) }
                 errorClosure(errorString)

@@ -374,10 +374,6 @@ struct ProcessingSettingsView: View {
                           //self.cuncurrentProcessingLimitView
                           //Divider()
                          
-                          self.maxConcurrentKeypointsView
-                          Divider()
-                         
-                          
                           DisclosureGroup {
                               Grid {
                                   self.neighborFrameCountView
@@ -990,43 +986,6 @@ struct ProcessingSettingsView: View {
             }
         }
           .disabled(viewModel.sceneType == .skyOnly || viewModel.useCannyForHorizonDetection == .no)
-    }
-
-    private var maxConcurrentKeypointsView: some View {
-        @Bindable var viewModel = viewModel
-        return InfoTextInstructionGridRow(
-          showInfo: $showMaxConcurrentKeypointsView,
-          addSpacer: { addSpacer },
-          infoText: """
-            How many keypoint calculations should star do at once?  Close to the number of CPUs is usually good.
-            """
-        ) {
-            HStack {
-                HStack {
-                    Spacer()
-                    Text("Concurrent Keypoint Calculations:")
-                      .font(.title2)
-                      .foregroundColor(.white)
-                      .opacity(0.6)
-                }
-                HStack {
-                    EditableNumberView(
-                      value: $viewModel.maxConcurrentKeypointCalculations,
-                      minValue: 1,
-                      maxValue: 300,
-                      fullTextProvider: { _ in "" },
-                      prefixText: "",
-                      suffixTextProvider: { _ in "" },
-                      textColor: .white,
-                      focusedField: $focusedField,
-                      focusField: .maxConcurrentKeypoints,
-                      alwaysOpen: true            
-                    )
-                    Spacer()
-                }
-            }
-        }
-          .disabled(viewModel.sceneType == .skyOnly)
     }
     
     private var homographySmoothingEpsilonView: some View {

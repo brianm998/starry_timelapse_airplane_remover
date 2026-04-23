@@ -20,9 +20,11 @@ You should have received a copy of the GNU General Public License along with sta
 /// Uses `os_proc_available_memory()` for real-time available memory and
 /// `MatWrapper.totalBytes` for tracking OpenCV mat allocations.
 ///
-/// Callers use `waitForMemory(needed:)` before large allocations.
-/// If memory is tight, the call suspends until enough memory is freed
-/// (by other frames completing and releasing their images).
+/// Two gating mechanisms:
+///   - `waitForMemory(needed:)` — gates actual allocations inside a running op.
+///   - `reserve(bytes:)` / `release(bytes:)` — op-level pre-commit that prevents
+///     too many ops from starting simultaneously.  The reservation is held from
+///     before the op's heavy work begins until the op completes.
 public actor MemoryMonitor {
 
     // MARK: - Singleton
@@ -63,9 +65,19 @@ public actor MemoryMonitor {
         let deadline: Date
     }
 
+    /// Waiters for `waitForMemory` — check against actual mat bytes.
     private var waiters: [Waiter] = []
+    /// Waiters for `reserve` — check against actual + already-reserved bytes.
+    private var reservationWaiters: [Waiter] = []
     private var nextWaiterId = 0
     private var pollTask: Task<Void, Never>?
+
+    // MARK: - Reservation tracking
+
+    /// Bytes claimed by ops that have started but not yet finished.
+    /// Counted on top of `currentMatBytes` when deciding whether a new
+    /// reservation can be granted, preventing over-commitment.
+    private var reservedBytes: UInt64 = 0
 
     // MARK: - Stats
 
@@ -112,31 +124,37 @@ public actor MemoryMonitor {
         return UInt64(ProcessInfo.processInfo.physicalMemory) / 2
     }
 
-    /// Returns true if allocating `needed` bytes would exceed our budget
-    /// or push available system memory below the floor.
+    /// True if allocating `needed` bytes RIGHT NOW would exceed our budget.
+    /// Used by `waitForMemory` — does NOT count pending reservations.
     private func isMemoryTight(for needed: UInt64) -> Bool {
         let matBytes = currentMatBytes
         let available = availableSystemMemory
 
-        // Check 1: Would total mat allocations exceed our budget?
-        if matBytes + needed > matBudgetBytes {
-            return true
-        }
+        if matBytes + needed > matBudgetBytes { return true }
+        if available < minAvailableMemoryBytes + needed { return true }
+        return false
+    }
 
-        // Check 2: Would available system memory drop below the floor?
-        if available < minAvailableMemoryBytes + needed {
-            return true
-        }
+    /// True if granting a new reservation of `needed` bytes would exceed our
+    /// budget when combined with actual allocations AND already-granted
+    /// reservations.  Used by `reserve`.
+    private func isReservationTight(for needed: UInt64) -> Bool {
+        let committed = currentMatBytes + reservedBytes
+        let available = availableSystemMemory
 
+        if committed + needed > matBudgetBytes { return true }
+        if available < minAvailableMemoryBytes + needed { return true }
         return false
     }
 
     // MARK: - Public API
 
-    /// Call before a large allocation. Returns immediately if memory is
-    /// available; otherwise suspends until memory is freed or timeout expires.
+    /// Call before a large allocation inside a running operation.
+    /// Returns immediately if memory is available; otherwise suspends until
+    /// enough memory is freed or the timeout expires.
     ///
-    /// - Parameter needed: Estimated bytes about to be allocated.
+    /// This check is independent of reservations — it gates the actual
+    /// `MatWrapper` bytes in flight right now.
     public func waitForMemory(needed: UInt64) async {
         guard needed > 0 else { return }
 
@@ -175,6 +193,58 @@ public actor MemoryMonitor {
               "available=\(availableSystemMemory / (1024*1024))MB")
     }
 
+    /// Reserve `bytes` of memory budget before starting heavy op work.
+    /// Suspends until the combined actual+reserved usage fits within the
+    /// budget.  Call `release(bytes:)` when the op finishes.
+    public func reserve(bytes: UInt64) async {
+        guard bytes > 0 else { return }
+
+        // Fast path: reservation fits within budget
+        if !isReservationTight(for: bytes) {
+            reservedBytes += bytes
+            Log.d("MemoryMonitor: reserved \(bytes / (1024*1024))MB — " +
+                  "reservedTotal=\(reservedBytes / (1024*1024))MB, " +
+                  "matBytes=\(currentMatBytes / (1024*1024))MB")
+            return
+        }
+
+        let startTime = Date()
+        Log.i("MemoryMonitor: waiting to reserve \(bytes / (1024*1024))MB — " +
+              "reserved=\(reservedBytes / (1024*1024))MB, " +
+              "matBytes=\(currentMatBytes / (1024*1024))MB, " +
+              "budget=\(matBudgetBytes / (1024*1024))MB")
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let id = nextWaiterId
+            nextWaiterId += 1
+            let waiter = Waiter(
+                id: id,
+                needed: bytes,
+                continuation: continuation,
+                deadline: Date().addingTimeInterval(maxWaitTime)
+            )
+            reservationWaiters.append(waiter)
+            startPollingIfNeeded()
+        }
+
+        reservedBytes += bytes
+
+        let elapsed = Date().timeIntervalSince(startTime)
+        Log.i("MemoryMonitor: reservation granted after \(String(format: "%.1f", elapsed))s — " +
+              "reserved=\(reservedBytes / (1024*1024))MB, " +
+              "matBytes=\(currentMatBytes / (1024*1024))MB")
+    }
+
+    /// Release a previously granted reservation.  Wakes any ops waiting to
+    /// reserve memory.
+    public func release(bytes: UInt64) {
+        guard bytes > 0 else { return }
+        reservedBytes = reservedBytes >= bytes ? reservedBytes - bytes : 0
+        Log.d("MemoryMonitor: released \(bytes / (1024*1024))MB — " +
+              "reservedTotal=\(reservedBytes / (1024*1024))MB")
+        drainReadyWaiters()
+    }
+
     /// Notify the monitor that memory has been freed (e.g. after a frame completes).
     /// This triggers an immediate check of waiting tasks.
     public func memoryFreed() {
@@ -185,7 +255,8 @@ public actor MemoryMonitor {
     public func stats() -> String {
         "MemoryMonitor: \(totalWaits) waits, " +
         "avg \(totalWaits > 0 ? String(format: "%.1f", totalWaitTime / Double(totalWaits)) : "0")s, " +
-        "\(waiters.count) queued, " +
+        "\(waiters.count) queued, \(reservationWaiters.count) reservation-queued, " +
+        "reserved=\(reservedBytes / (1024*1024))MB, " +
         "matBytes=\(currentMatBytes / (1024*1024))MB, " +
         "available=\(availableSystemMemory / (1024*1024))MB"
     }
@@ -212,7 +283,7 @@ public actor MemoryMonitor {
     // MARK: - Internal
 
     private func startPollingIfNeeded() {
-        guard pollTask == nil, !waiters.isEmpty else { return }
+        guard pollTask == nil, !waiters.isEmpty || !reservationWaiters.isEmpty else { return }
         pollTask = Task { [weak self] in
             while true {
                 guard let self else { break }
@@ -226,7 +297,7 @@ public actor MemoryMonitor {
     }
 
     private func hasWaiters() -> Bool {
-        !waiters.isEmpty
+        !waiters.isEmpty || !reservationWaiters.isEmpty
     }
 
     private func stopPolling() {
@@ -235,11 +306,11 @@ public actor MemoryMonitor {
 
     private func drainReadyWaiters() {
         let now = Date()
+
+        // Drain allocation waiters (checked against actual mat bytes)
         var released: [Waiter] = []
         var remaining: [Waiter] = []
-
         for waiter in waiters {
-            // Release if memory available OR deadline exceeded
             if !isMemoryTight(for: waiter.needed) || now >= waiter.deadline {
                 if now >= waiter.deadline {
                     Log.w("MemoryMonitor: waiter \(waiter.id) timed out after \(maxWaitTime)s, proceeding anyway")
@@ -249,15 +320,26 @@ public actor MemoryMonitor {
                 remaining.append(waiter)
             }
         }
-
         waiters = remaining
+        for waiter in released { waiter.continuation.resume() }
 
-        // Resume waiters outside the loop (FIFO order preserved)
-        for waiter in released {
-            waiter.continuation.resume()
+        // Drain reservation waiters (checked against actual + reserved bytes)
+        var releasedR: [Waiter] = []
+        var remainingR: [Waiter] = []
+        for waiter in reservationWaiters {
+            if !isReservationTight(for: waiter.needed) || now >= waiter.deadline {
+                if now >= waiter.deadline {
+                    Log.w("MemoryMonitor: reservation waiter \(waiter.id) timed out after \(maxWaitTime)s, proceeding anyway")
+                }
+                releasedR.append(waiter)
+            } else {
+                remainingR.append(waiter)
+            }
         }
+        reservationWaiters = remainingR
+        for waiter in releasedR { waiter.continuation.resume() }
 
-        if remaining.isEmpty {
+        if waiters.isEmpty && reservationWaiters.isEmpty {
             pollTask?.cancel()
             pollTask = nil
         }

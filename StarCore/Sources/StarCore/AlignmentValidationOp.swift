@@ -22,28 +22,23 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         self.name = "alignment validation"
     }
 
-    override func execute() {
-        task = Task {
-            defer {
-                Log.d("end")
-                finish()
+    override func asyncExecute() async {
+        do {
+            Log.d("start")
+            let config = await configManager.config()
+            if config.tripodHeadWasMoving {
+                await validateMovingStarAlignment()
+            } else {
+                // tripod was stationary
+                try await self.validateStaticStarAlignment()
             }
-            do {
-                Log.d("start")
-                let config = await configManager.config()
-                if config.tripodHeadWasMoving {
-                    await validateMovingStarAlignment()
-                } else {
-                    // tripod was stationary
-                    try await self.validateStaticStarAlignment()
-                }
-            } catch {
-                let str = "error during alignment validation: \(error)"
-                Log.e(str)
-                errorClosure(str)
-            }
-            // XXX still need to handle earth alignment if enabled
+        } catch {
+            let str = "error during alignment validation: \(error)"
+            Log.e(str)
+            errorClosure(str)
         }
+        // XXX still need to handle earth alignment if enabled
+        Log.d("end")
     }
 
     // runs on a static sequence after homography is known for each frame and its neighbors

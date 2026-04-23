@@ -11,29 +11,24 @@ final class HorizonRefinementOp: AsyncOperation, @unchecked Sendable {
 
     init(
       frame: FrameAirplaneRemover,
+      rawImageBytes: UInt64 = 0,
       errorClosure: @escaping (String) -> Void
     ) {
         self.frame = frame
         self.errorClosure = errorClosure
-        super.init(for: .refinedHorizon)
+        super.init(for: .refinedHorizon, rawImageBytes: rawImageBytes)
         self.name = "horizon refinement frame \(frame.frameIndex)"
     }
 
-    override func execute() {
-        task = Task {
-            defer {
-                Log.d("frame \(frame.frameIndex) HorizonRefinementOp end")
-                finish()
-            }
-            do {
-                Log.d("frame \(frame.frameIndex) HorizonRefinementOp starting")
-                _ = try await frame.loadOrCreateRefinedHorizonMask()
-                Log.d("frame \(frame.frameIndex) HorizonRefinementOp done")
-            } catch {
-                let str = "frame \(frame.frameIndex) error during horizon refinement: \(error)"
-                Log.e(str)
-                errorClosure(str)
-            }
+    override func asyncExecute() async {
+        do {
+            Log.d("frame \(frame.frameIndex) HorizonRefinementOp starting")
+            _ = try await frame.loadOrCreateRefinedHorizonMask()
+            Log.d("frame \(frame.frameIndex) HorizonRefinementOp done")
+        } catch {
+            let str = "frame \(frame.frameIndex) error during horizon refinement: \(error)"
+            Log.e(str)
+            errorClosure(str)
         }
     }
 }
