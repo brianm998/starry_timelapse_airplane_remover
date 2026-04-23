@@ -31,15 +31,23 @@ open class AsyncOperation: Operation, @unchecked Sendable {
             return _state
         }
         set {
-            willChangeValue(forKey: newValue.keyPath)
-            willChangeValue(forKey: state.keyPath)
+            // Capture old key path BEFORE the assignment so both will/did
+            // notifications fire for the correct (old vs new) KVO keys.
+            // Reading state.keyPath after _state = newValue would yield the
+            // new key for both calls, leaving the old key's didChange unsent
+            // and breaking OperationQueue's concurrent-slot tracking.
+            let oldKeyPath = state.keyPath
+            let newKeyPath = newValue.keyPath
+
+            willChangeValue(forKey: newKeyPath)
+            willChangeValue(forKey: oldKeyPath)
 
             stateLock.lock()
             _state = newValue
             stateLock.unlock()
 
-            didChangeValue(forKey: state.keyPath)
-            didChangeValue(forKey: newValue.keyPath)
+            didChangeValue(forKey: oldKeyPath)
+            didChangeValue(forKey: newKeyPath)
         }
     }
 

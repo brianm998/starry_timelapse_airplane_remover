@@ -306,12 +306,16 @@ public actor MemoryMonitor {
 
     private func drainReadyWaiters() {
         let now = Date()
+        let matBytes = currentMatBytes
+        let available = availableSystemMemory
 
         // Drain allocation waiters (checked against actual mat bytes)
         var released: [Waiter] = []
         var remaining: [Waiter] = []
         for waiter in waiters {
-            if !isMemoryTight(for: waiter.needed) || now >= waiter.deadline {
+            let fits = matBytes + waiter.needed <= matBudgetBytes &&
+                       available >= minAvailableMemoryBytes + waiter.needed
+            if fits || now >= waiter.deadline {
                 if now >= waiter.deadline {
                     Log.w("MemoryMonitor: waiter \(waiter.id) timed out after \(maxWaitTime)s, proceeding anyway")
                 }
@@ -323,15 +327,25 @@ public actor MemoryMonitor {
         waiters = remaining
         for waiter in released { waiter.continuation.resume() }
 
-        // Drain reservation waiters (checked against actual + reserved bytes)
+        // Drain reservation waiters using SPECULATIVE reserved bytes.
+        // Each waiter we decide to release is immediately added to
+        // speculativeReserved so subsequent waiters in the same drain pass
+        // see the correct committed total.  Without this, a single release()
+        // call would unblock ALL waiters simultaneously (they all see the same
+        // stale reservedBytes), causing a burst of concurrent heavy operations.
+        var speculativeReserved = reservedBytes
         var releasedR: [Waiter] = []
         var remainingR: [Waiter] = []
         for waiter in reservationWaiters {
-            if !isReservationTight(for: waiter.needed) || now >= waiter.deadline {
+            let committed = matBytes + speculativeReserved
+            let fits = committed + waiter.needed <= matBudgetBytes &&
+                       available >= minAvailableMemoryBytes + waiter.needed
+            if fits || now >= waiter.deadline {
                 if now >= waiter.deadline {
                     Log.w("MemoryMonitor: reservation waiter \(waiter.id) timed out after \(maxWaitTime)s, proceeding anyway")
                 }
                 releasedR.append(waiter)
+                speculativeReserved += waiter.needed
             } else {
                 remainingR.append(waiter)
             }
