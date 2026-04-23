@@ -1101,24 +1101,34 @@ public enum CombinedHorizonDetector {
         let w = mask.width
         let h = mask.height
         var result = [Int?](repeating: nil, count: w)
+        // Use mat.dataPtr + bytesPerRow stride so row-padding in the cv::Mat
+        // (where mat.step > width × channels) is handled correctly.
+        // The UnsafeBufferPointer from imageData has count = w*h*cpp (no padding),
+        // which would trap on stride-based offsets, so we go through the raw pointer.
+        guard let rawPtr = mask.mat.dataPtr else { return result }
+        let cpp = mask.componentsPerPixel
+        let rowBytes = mask.bytesPerRow   // == mat.step, includes any padding
+        let totalBytes = h * rowBytes
         switch mask.imageData {
-        case .eightBit(let buf):
-            let cpp = mask.componentsPerPixel
+        case .eightBit:
+            let ptr = rawPtr.assumingMemoryBound(to: UInt8.self)
             for x in 0..<w {
                 for y in 0..<h {
-                    let offset = y * w * cpp + x * cpp
-                    if offset < buf.count && buf[offset] <= 127 {
+                    let offset = y * rowBytes + x * cpp
+                    if offset < totalBytes && ptr[offset] <= 127 {
                         result[x] = y
                         break
                     }
                 }
             }
-        case .sixteenBit(let buf):
-            let cpp = mask.componentsPerPixel
+        case .sixteenBit:
+            let ptr = rawPtr.assumingMemoryBound(to: UInt16.self)
+            let rowElems = rowBytes / MemoryLayout<UInt16>.stride
+            let totalElems = h * rowElems
             for x in 0..<w {
                 for y in 0..<h {
-                    let offset = y * w * cpp + x * cpp
-                    if offset < buf.count && buf[offset] <= 32767 {
+                    let offset = y * rowElems + x * cpp
+                    if offset < totalElems && ptr[offset] <= 32767 {
                         result[x] = y
                         break
                     }
