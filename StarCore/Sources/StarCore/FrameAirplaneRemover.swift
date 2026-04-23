@@ -3097,6 +3097,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         Log.d("frame \(frameIndex) finding keypoints of type \(alignmentType)")
 
+        // SIFT builds a multi-octave Gaussian scale-space pyramid that uses
+        // substantially more memory than the image itself.  Gate here so concurrent
+        // keypoint operations don't collectively exhaust RAM.
+        // The 8x multiplier is empirically derived: ~2.5 GB observed per 42 MP frame.
+        let siftMemoryEstimate = UInt64(originalFrame.byteCount) * 8
+        await MemoryMonitor.shared.waitForMemory(needed: siftMemoryEstimate)
+
         if let results = ImageAligner.findFeatures(
              baseImage: originalFrame.mat,
              frameIndex: Int32(frameIndex),
