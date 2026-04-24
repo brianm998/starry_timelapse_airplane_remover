@@ -96,11 +96,21 @@ struct UserPreferences: Codable, Sendable {
     mutating func justOpened(filename: String) {
         self.recentlyOpenedSequencelist[filename] = Date().timeIntervalSince1970
     }
-    
+
+    mutating func pruneNonExistentFromRecentList() {
+        let missing = recentlyOpenedSequencelist.keys.filter {
+            !FileManager.default.fileExists(atPath: $0)
+        }
+        for filename in missing {
+            recentlyOpenedSequencelist.removeValue(forKey: filename)
+        }
+    }
+
     static func initialize() -> UserPreferences? { // XXX rename this
         var instance: UserPreferences?
         do {
             instance = try UserPreferences.load()
+            instance?.pruneNonExistentFromRecentList()
 
             if let processingType = instance?.processingType {
                 Task { await constants.set(detectionType: processingType) }
