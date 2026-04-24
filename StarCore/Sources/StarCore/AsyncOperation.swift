@@ -52,13 +52,15 @@ open class AsyncOperation: Operation, @unchecked Sendable {
     }
 
     /// - Parameters:
-    ///   - type: The operation type, which determines the memory multiplier.
+    ///   - type: The operation type, which provides the default memory multiplier.
     ///   - rawImageBytes: Bytes in one uncompressed source frame.
     ///     Pass `Config.imageWidth × imageHeight × imageBytesPerPixel`.
     ///     Zero (the default) disables memory reservation for this op.
-    public init(for type: OperationType, rawImageBytes: UInt64 = 0) {
+    ///   - memoryMultiplier: Override for the per-type default multiplier.
+    ///     Pass `UInt64(config.keypointMemoryMultiplier)` etc. to use config-driven values.
+    public init(for type: OperationType, rawImageBytes: UInt64 = 0, memoryMultiplier: UInt64? = nil) {
         self.type = type
-        self.estimatedMemoryBytes = rawImageBytes * type.memoryMultiplier
+        self.estimatedMemoryBytes = rawImageBytes * (memoryMultiplier ?? type.memoryMultiplier)
         Task { @MainActor in
             frameGraphViewModel.queuedOperation(ofType: type)
         }

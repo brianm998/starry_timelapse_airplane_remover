@@ -689,6 +689,38 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    var memoryBudgetFraction: Double {
+        didSet {
+            var realConfig = config.config()
+            realConfig.maxMatMemoryFraction = memoryBudgetFraction
+            config.update(realConfig)
+        }
+    }
+
+    var keypointMemoryMultiplier: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.keypointMemoryMultiplier = keypointMemoryMultiplier
+            config.update(realConfig)
+        }
+    }
+
+    var outlierMemoryMultiplier: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.outlierMemoryMultiplier = outlierMemoryMultiplier
+            config.update(realConfig)
+        }
+    }
+
+    var mergeMemoryMultiplier: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.mergeMemoryMultiplier = mergeMemoryMultiplier
+            config.update(realConfig)
+        }
+    }
+
     var homographySmoothingEpsilon: Double {
         didSet {
             var realConfig = config.config()
@@ -891,6 +923,10 @@ public final class ImageSequenceViewModel {
         self.alignedNeighborFrameOverrides = config.alignedNeighborFrameOverrides
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.numberOfFramesToProcessConcurrently = config.numberOfFramesToProcessConcurrently
+        self.memoryBudgetFraction = config.maxMatMemoryFraction
+        self.keypointMemoryMultiplier = config.keypointMemoryMultiplier
+        self.outlierMemoryMultiplier = config.outlierMemoryMultiplier
+        self.mergeMemoryMultiplier = config.mergeMemoryMultiplier
         self.homographySmoothingEpsilon = config.homographySmoothingEpsilon
         self.horizonVerticalShiftAmount = config.horizonVerticalShiftAmount
         self.allowEarthAlignment = config.allowEarthAlignment

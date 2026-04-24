@@ -29,5 +29,9 @@ enum FocusedField: Hashable {
     case alignmentGroundHorizonExtension
     case alignmentSkyHorizonExtension
     case homographySmothingEpsilon
+    case keypointMemoryMultiplier
+    case outlierMemoryMultiplier
+    case mergeMemoryMultiplier
+    case memoryBudgetFraction
 }
 

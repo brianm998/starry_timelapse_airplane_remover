@@ -202,6 +202,11 @@ struct ProcessingSettingsView: View {
     @State private var showMaxConcurrentMergesView = false
     @State private var showHomographySmoothingEpsilon = false
 
+    @State private var showMemoryBudgetFractionInfo = false
+    @State private var showKeypointMultiplierInfo = false
+    @State private var showOutlierMultiplierInfo = false
+    @State private var showMergeMultiplierInfo = false
+
 
     private var addSpacer: Bool {
         showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo ||
@@ -225,7 +230,11 @@ struct ProcessingSettingsView: View {
         showMaxConcurrentKeypointsView ||
         showMaxConcurrentHomographiesView ||
         showMaxConcurrentMergesView ||
-        showHomographySmoothingEpsilon
+        showHomographySmoothingEpsilon ||
+        showMemoryBudgetFractionInfo ||
+        showKeypointMultiplierInfo ||
+        showOutlierMultiplierInfo ||
+        showMergeMultiplierInfo
     }
     
     private func showAll() {
@@ -260,6 +269,10 @@ struct ProcessingSettingsView: View {
         showMaxConcurrentHomographiesView = true
         showMaxConcurrentMergesView = true
         showHomographySmoothingEpsilon = true
+        showMemoryBudgetFractionInfo = true
+        showKeypointMultiplierInfo = true
+        showOutlierMultiplierInfo = true
+        showMergeMultiplierInfo = true
     }
 
     private func hideAll() {
@@ -294,6 +307,10 @@ struct ProcessingSettingsView: View {
         showMaxConcurrentHomographiesView = false
         showMaxConcurrentMergesView = false
         showHomographySmoothingEpsilon = false
+        showMemoryBudgetFractionInfo = false
+        showKeypointMultiplierInfo = false
+        showOutlierMultiplierInfo = false
+        showMergeMultiplierInfo = false
     }
     
     @FocusState private var focusedField: FocusedField?
@@ -424,12 +441,31 @@ struct ProcessingSettingsView: View {
                                   self.useHomographyRefinedHorizonView
                               }
                           } label: {
-                              Text("Horizon Settings") 
+                              Text("Horizon Settings")
                                 .font(.title2)
                                 .foregroundColor(.white)
                                 .opacity(0.6)
                           }
                           .tint(.secondary)
+
+                          Divider()
+                          DisclosureGroup {
+                              Grid {
+                                  self.memoryBudgetFractionView
+                                  Divider()
+                                  self.keypointMultiplierView
+                                  Divider()
+                                  self.outlierMultiplierView
+                                  Divider()
+                                  self.mergeMultiplierView
+                              }
+                          } label: {
+                              Text("Memory Settings")
+                                .font(.title2)
+                                .foregroundColor(.white)
+                                .opacity(0.6)
+                          }
+                          .tint(.orange)
                       }
                   }
               }
@@ -1288,6 +1324,182 @@ struct EnumInstructionGridRow<E: InstructionOption>: View {
     }
 }
 
+
+// MARK: - Memory rows
+
+extension ProcessingSettingsView {
+
+    private var memoryBudgetFractionView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showMemoryBudgetFractionInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            The fraction of total physical RAM that Star is allowed to reserve for in-flight operations. \
+            Values range from 0.1 (10%) to 0.95 (95%). The default of 0.85 leaves the OS and other apps \
+            roughly 15% headroom.
+
+            Lowering this value reduces the number of operations that can run concurrently, \
+            which prevents RAM exhaustion on machines shared with other heavy apps. \
+            Raising it can increase throughput if your system is mostly idle.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Memory Budget:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.memoryBudgetFraction,
+                      minValue: 0.1,
+                      maxValue: 0.95,
+                      allowDecimal: true,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .memoryBudgetFraction,
+                      alwaysOpen: true
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var keypointMultiplierView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showKeypointMultiplierInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            How many times the raw frame size (in bytes) to reserve per keypoint detection operation.
+
+            Keypoint detection (SIFT/AKAZE) builds a multi-octave Gaussian pyramid and keeps the full \
+            frame plus working buffers in memory. For 33 MP 16-bit images this can easily reach 6–10 GB \
+            per operation.
+
+            Raise this value if your system thrashes during keypoint detection — it reduces the number \
+            of concurrent operations allowed. Lower it if you have abundant RAM and want more throughput.
+            Default: 35.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Keypoint Mem ×:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.keypointMemoryMultiplier,
+                      minValue: 1,
+                      maxValue: 200,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .keypointMemoryMultiplier,
+                      alwaysOpen: true
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var outlierMultiplierView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showOutlierMultiplierInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            How many times the raw frame size (in bytes) to reserve per outlier-detection operation.
+
+            Outlier detection loads and compares several aligned neighbor frames to find pixels \
+            that are statistically brighter than expected. Memory scales roughly with the number \
+            of neighbors loaded simultaneously.
+
+            Raise this if you see heavy swap usage during the outlier phase. Default: 3.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Outlier Mem ×:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.outlierMemoryMultiplier,
+                      minValue: 1,
+                      maxValue: 50,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .outlierMemoryMultiplier,
+                      alwaysOpen: true
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var mergeMultiplierView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showMergeMultiplierInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            How many times the raw frame size (in bytes) to reserve per merge operation.
+
+            The merge step composites the final output frame using warped neighbor images and \
+            classification masks. It loads the original frame plus any warped replacements needed \
+            to cover detected airplane trails.
+
+            Raise this if you see thrashing during the merge phase. Default: 4.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Merge Mem ×:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.mergeMemoryMultiplier,
+                      minValue: 1,
+                      maxValue: 50,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .mergeMemoryMultiplier,
+                      alwaysOpen: true
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+}
 
 // base grid row
 struct InstructionGridRow<Content: View, InfoContent: View>: View {

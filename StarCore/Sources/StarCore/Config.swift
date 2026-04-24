@@ -255,6 +255,12 @@ public struct Config: Codable, Sendable, Transferable {
     // Value between 0.1 and 0.95.
     public var maxMatMemoryFraction: Double = 0.85
 
+    // Per-op memory multipliers: rawImageBytes × multiplier = estimated reservation.
+    // Raise to limit concurrency; lower to allow more concurrent ops at higher RAM risk.
+    public var keypointMemoryMultiplier: Int = 35
+    public var outlierMemoryMultiplier: Int = 3
+    public var mergeMemoryMultiplier: Int = 4
+
     // used by updatable log
     public var progressBarLength = 35
 
@@ -526,6 +532,9 @@ public struct Config: Codable, Sendable, Transferable {
         self.dpHorizonCannyWeightCount = try c.decodeIfPresent(Int.self, forKey: .dpHorizonCannyWeightCount) ?? self.dpHorizonCannyWeightCount
 
         self.maxMatMemoryFraction = try c.decodeIfPresent(Double.self, forKey: .maxMatMemoryFraction) ?? self.maxMatMemoryFraction
+        self.keypointMemoryMultiplier = try c.decodeIfPresent(Int.self, forKey: .keypointMemoryMultiplier) ?? self.keypointMemoryMultiplier
+        self.outlierMemoryMultiplier = try c.decodeIfPresent(Int.self, forKey: .outlierMemoryMultiplier) ?? self.outlierMemoryMultiplier
+        self.mergeMemoryMultiplier = try c.decodeIfPresent(Int.self, forKey: .mergeMemoryMultiplier) ?? self.mergeMemoryMultiplier
     }
 
     /// Expand a [min, max] range and a step count into an array of evenly-spaced values.

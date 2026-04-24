@@ -15,6 +15,7 @@ final class KeypointOp: AsyncOperation, @unchecked Sendable {
       mode: FrameViewMode,
       limiter: KeypointLimiter,
       rawImageBytes: UInt64 = 0,
+      memoryMultiplier: UInt64? = nil,
       errorClosure: @escaping (String) -> Void
     ) {
         self.frame = frame
@@ -22,10 +23,10 @@ final class KeypointOp: AsyncOperation, @unchecked Sendable {
         self.limiter = limiter
         self.errorClosure = errorClosure
         if forStars {
-            super.init(for: .starKeypoints, rawImageBytes: rawImageBytes)
+            super.init(for: .starKeypoints, rawImageBytes: rawImageBytes, memoryMultiplier: memoryMultiplier)
             self.name = "star keypoints for frame \(frame.frameIndex)"
         } else {
-            super.init(for: .earthKeypoints, rawImageBytes: rawImageBytes)
+            super.init(for: .earthKeypoints, rawImageBytes: rawImageBytes, memoryMultiplier: memoryMultiplier)
             self.name = "earth keypoints for frame \(frame.frameIndex)"
         }
     }

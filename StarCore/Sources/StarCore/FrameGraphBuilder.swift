@@ -86,11 +86,11 @@ public final actor FrameGraphBuilder {
             let rawBytes = UInt64(config.imageWidth) *
                            UInt64(config.imageHeight) *
                            UInt64(config.imageBytesPerPixel)
-            let bytesPerOp = rawBytes * OperationType.starKeypoints.memoryMultiplier
+            let bytesPerOp = rawBytes * UInt64(config.keypointMemoryMultiplier)
             let memMax = Int(max(1, budget / bytesPerOp))
             keypointMax = min(config.numberOfFramesToProcessConcurrently, memMax)
             Log.i("KeypointLimiter: \(memMax) ops fit in budget " +
-                  "(\(rawBytes/(1024*1024))MB × \(OperationType.starKeypoints.memoryMultiplier) = " +
+                  "(\(rawBytes/(1024*1024))MB × \(config.keypointMemoryMultiplier) = " +
                   "\(bytesPerOp/(1024*1024))MB/op, budget \(budget/(1024*1024))MB), " +
                   "capped to \(keypointMax)")
         } else {
@@ -136,14 +136,14 @@ public final actor FrameGraphBuilder {
         if config.imageWidth > 0 && config.imageHeight > 0 && config.imageBytesPerPixel > 0 {
             let physMem = UInt64(ProcessInfo.processInfo.physicalMemory)
             let budget = UInt64(Double(physMem) * config.maxMatMemoryFraction)
-            let bytesPerOp = rawImageBytes * OperationType.starKeypoints.memoryMultiplier
+            let bytesPerOp = rawImageBytes * UInt64(config.keypointMemoryMultiplier)
             let memMax = Int(max(1, budget / bytesPerOp))
             let cap = min(config.numberOfFramesToProcessConcurrently, memMax)
             keypointLimiter.set(max: cap)
             Log.i("KeypointLimiter: \(cap) max ops " +
                   "(image \(config.imageWidth)×\(config.imageHeight)×\(config.imageBytesPerPixel)B, " +
                   "rawBytes=\(rawImageBytes/(1024*1024))MB, " +
-                  "×\(OperationType.starKeypoints.memoryMultiplier)=\(bytesPerOp/(1024*1024))MB/op, " +
+                  "×\(config.keypointMemoryMultiplier)=\(bytesPerOp/(1024*1024))MB/op, " +
                   "budget=\(budget/(1024*1024))MB → memMax=\(memMax))")
         }
 
@@ -286,7 +286,8 @@ public final actor FrameGraphBuilder {
                       frame: frame,
                       mode: .starAligned,
                       limiter: self.keypointLimiter,
-                      rawImageBytes: rawImageBytes
+                      rawImageBytes: rawImageBytes,
+                      memoryMultiplier: UInt64(config.keypointMemoryMultiplier)
                     ) { errorString in
                         Task { await errors.append(errorString) }
                         errorClosure(errorString)
@@ -339,7 +340,8 @@ public final actor FrameGraphBuilder {
                           frame: frame,
                           mode: .earthAligned,
                           limiter: self.keypointLimiter,
-                          rawImageBytes: rawImageBytes
+                          rawImageBytes: rawImageBytes,
+                          memoryMultiplier: UInt64(config.keypointMemoryMultiplier)
                         ) { errorString in
                             Task { await errors.append(errorString) }
                             errorClosure(errorString)
@@ -468,7 +470,8 @@ public final actor FrameGraphBuilder {
             if await frame.usesOutliers {
                 let outlierOp = OutlierOp(
                   frame: frame,
-                  rawImageBytes: rawImageBytes
+                  rawImageBytes: rawImageBytes,
+                  memoryMultiplier: UInt64(config.outlierMemoryMultiplier)
                 ) { errorString in
                     Task { await errors.append(errorString) }
                     errorClosure(errorString)
@@ -490,7 +493,8 @@ public final actor FrameGraphBuilder {
             
             let mergeOp = MergeOp(
               frame: frame,
-              rawImageBytes: rawImageBytes
+              rawImageBytes: rawImageBytes,
+              memoryMultiplier: UInt64(config.mergeMemoryMultiplier)
             ) { errorString in
                 Task { await errors.append(errorString) }
                 errorClosure(errorString)

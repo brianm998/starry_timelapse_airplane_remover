@@ -287,6 +287,12 @@ struct RightPanel: View {
                               alwaysOpen: false
                             )
 
+                            MemoryMultiplierView(
+                              focusedField: $focusedField,
+                              textColor: .white,
+                              alwaysOpen: false
+                            )
+
                             Picker("redo", selection: $viewModel.reprocessingType) {
                                 ForEach(FrameReprocessingType.allCases, id: \.self) { value in
                                     Text(value.rawValue).tag(value)
@@ -752,5 +758,63 @@ struct EditableNumberOfFramesToProcessConcurrentlyView: View {
                 viewModel.numberOfFramesToProcessConcurrently = newVal
             }
         )
+    }
+}
+
+struct MemoryMultiplierView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    let focusedField: FocusState<FocusedField?>.Binding
+    let textColor: Color
+    let alwaysOpen: Bool
+
+    var body: some View {
+        @Bindable var viewModel = viewModel
+        VStack(alignment: .leading, spacing: 4) {
+            EditableNumberView(
+                value: $viewModel.keypointMemoryMultiplier,
+                minValue: 1,
+                maxValue: 200,
+                fullTextProvider: { "kp mem ×\($0)" },
+                prefixText: "kp mem ×",
+                suffixTextProvider: { _ in "" },
+                textColor: textColor,
+                focusedField: focusedField,
+                focusField: .keypointMemoryMultiplier,
+                alwaysOpen: alwaysOpen,
+                commitAction: { newVal in
+                    viewModel.keypointMemoryMultiplier = newVal
+                }
+            )
+            EditableNumberView(
+                value: $viewModel.outlierMemoryMultiplier,
+                minValue: 1,
+                maxValue: 50,
+                fullTextProvider: { "outlier mem ×\($0)" },
+                prefixText: "outlier mem ×",
+                suffixTextProvider: { _ in "" },
+                textColor: textColor,
+                focusedField: focusedField,
+                focusField: .outlierMemoryMultiplier,
+                alwaysOpen: alwaysOpen,
+                commitAction: { newVal in
+                    viewModel.outlierMemoryMultiplier = newVal
+                }
+            )
+            EditableNumberView(
+                value: $viewModel.mergeMemoryMultiplier,
+                minValue: 1,
+                maxValue: 50,
+                fullTextProvider: { "merge mem ×\($0)" },
+                prefixText: "merge mem ×",
+                suffixTextProvider: { _ in "" },
+                textColor: textColor,
+                focusedField: focusedField,
+                focusField: .mergeMemoryMultiplier,
+                alwaysOpen: alwaysOpen,
+                commitAction: { newVal in
+                    viewModel.mergeMemoryMultiplier = newVal
+                }
+            )
+        }
     }
 }

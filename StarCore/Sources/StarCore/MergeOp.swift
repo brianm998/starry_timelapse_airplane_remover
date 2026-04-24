@@ -8,11 +8,12 @@ public final class MergeOp: AsyncOperation, @unchecked Sendable {
     init(
       frame: FrameAirplaneRemover,
       rawImageBytes: UInt64 = 0,
+      memoryMultiplier: UInt64? = nil,
       errorClosure: @escaping (String) -> Void
     ) {
         self.frame = frame
         self.errorClosure = errorClosure
-        super.init(for: .merge, rawImageBytes: rawImageBytes)
+        super.init(for: .merge, rawImageBytes: rawImageBytes, memoryMultiplier: memoryMultiplier)
         self.name = "merge frame \(frame.frameIndex)"
     }
 
