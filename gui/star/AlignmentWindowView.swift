@@ -367,10 +367,29 @@ struct AlignmentDeviationChart: View {
           .sorted { $0.offset < $1.offset }
     }
 
-    
-    let maxVisibleDeviation: Double = 50.0 // tune this
-    
+    @State private var maxVisibleDeviation: Double = 50.0
+
     var body: some View {
+        VStack(spacing: 2) {
+            HStack(spacing: 4) {/*
+                Text("\(Int(maxVisibleDeviation))")
+                  .font(.caption2)
+                  .foregroundColor(foregroundColor)
+                  .monospacedDigit()*/
+                Text("Height:")
+                  .font(.caption2)
+                  .foregroundColor(foregroundColor)
+                  .monospacedDigit()
+                Slider(value: $maxVisibleDeviation, in: 5...100)
+                  .frame(maxWidth: .infinity)
+                  .frame(height: 30)
+                Spacer()
+            }
+            chartView
+        }
+    }
+
+    private var chartView: some View {
         Chart {
             // === Lines ===
             ForEach(pointsByOffset, id: \.offset) { group in
@@ -426,7 +445,6 @@ struct AlignmentDeviationChart: View {
               ensureVisible(frame: viewModel.currentIndex)
           }
           .chartXScale(domain: xDomain)
-          .chartYScale(domain: -maxVisibleDeviation ... maxVisibleDeviation)
           .chartXAxisLabel {
               Text("Frame Index")
                 .foregroundColor(foregroundColor)
@@ -436,7 +454,7 @@ struct AlignmentDeviationChart: View {
                 .foregroundColor(foregroundColor)
           }
           .chartLegend(.hidden)
-          .chartYScale(domain: symmetricDomain())
+          .chartYScale(domain: -maxVisibleDeviation ... maxVisibleDeviation)
           .chartXAxis {
               AxisMarks {
                   AxisGridLine()

@@ -33,8 +33,8 @@ extension OperationType {
         case .horizon:             return 2
         case .mergedHorizon:       return 2
         case .refinedHorizon:      return 1
-        case .starKeypoints:       return 8
-        case .earthKeypoints:      return 8
+        case .starKeypoints:       return 35
+        case .earthKeypoints:      return 35
         case .starHomography:      return 0
         case .earthHomography:     return 0
         case .alignmentValidation: return 0
@@ -55,6 +55,7 @@ public final actor FrameGraphBuilder {
 
     // MARK: Queues (user adjustable)
     let queue = OperationQueue()
+    let keypointLimiter = KeypointLimiter(max: max(1, ProcessInfo.processInfo.processorCount / 2))
 
     public init() {
         queue.name = "operations"
@@ -74,11 +75,31 @@ public final actor FrameGraphBuilder {
 
     public func update(from config: Config) {
         queue.maxConcurrentOperationCount = config.numberOfFramesToProcessConcurrently
+
+        // Derive the keypoint concurrency cap from memory budget so large-image
+        // SIFT/AKAZE ops don't exhaust RAM before the MemoryMonitor can react.
+        // Falls back to numberOfFramesToProcessConcurrently if image dims are unknown.
+        let keypointMax: Int
+        if config.imageWidth > 0 && config.imageHeight > 0 && config.imageBytesPerPixel > 0 {
+            let physMem = UInt64(ProcessInfo.processInfo.physicalMemory)
+            let budget = UInt64(Double(physMem) * config.maxMatMemoryFraction)
+            let rawBytes = UInt64(config.imageWidth) *
+                           UInt64(config.imageHeight) *
+                           UInt64(config.imageBytesPerPixel)
+            let bytesPerOp = rawBytes * OperationType.starKeypoints.memoryMultiplier
+            let memMax = Int(max(1, budget / bytesPerOp))
+            keypointMax = min(config.numberOfFramesToProcessConcurrently, memMax)
+            Log.i("KeypointLimiter: \(memMax) ops fit in budget " +
+                  "(\(rawBytes/(1024*1024))MB × \(OperationType.starKeypoints.memoryMultiplier) = " +
+                  "\(bytesPerOp/(1024*1024))MB/op, budget \(budget/(1024*1024))MB), " +
+                  "capped to \(keypointMax)")
+        } else {
+            keypointMax = config.numberOfFramesToProcessConcurrently
+        }
+        keypointLimiter.set(max: keypointMax)
+
         Task {
-            await MemoryMonitor.shared.configure(
-                maxMemoryFraction: config.maxMatMemoryFraction,
-                minAvailableMemoryBytes: config.minAvailableMemoryBytes
-            )
+            await MemoryMonitor.shared.configure(budgetFraction: config.maxMatMemoryFraction)
         }
     }
 
@@ -108,6 +129,23 @@ public final actor FrameGraphBuilder {
         let rawImageBytes = UInt64(config.imageWidth) *
                             UInt64(config.imageHeight) *
                             UInt64(max(config.imageBytesPerPixel, 1))
+
+        // Recalculate the keypoint limiter now that we have actual image dimensions.
+        // update(from:) runs at startup before image dims are known, so it falls back
+        // to numberOfFramesToProcessConcurrently.  Here we have the real numbers.
+        if config.imageWidth > 0 && config.imageHeight > 0 && config.imageBytesPerPixel > 0 {
+            let physMem = UInt64(ProcessInfo.processInfo.physicalMemory)
+            let budget = UInt64(Double(physMem) * config.maxMatMemoryFraction)
+            let bytesPerOp = rawImageBytes * OperationType.starKeypoints.memoryMultiplier
+            let memMax = Int(max(1, budget / bytesPerOp))
+            let cap = min(config.numberOfFramesToProcessConcurrently, memMax)
+            keypointLimiter.set(max: cap)
+            Log.i("KeypointLimiter: \(cap) max ops " +
+                  "(image \(config.imageWidth)×\(config.imageHeight)×\(config.imageBytesPerPixel)B, " +
+                  "rawBytes=\(rawImageBytes/(1024*1024))MB, " +
+                  "×\(OperationType.starKeypoints.memoryMultiplier)=\(bytesPerOp/(1024*1024))MB/op, " +
+                  "budget=\(budget/(1024*1024))MB → memMax=\(memMax))")
+        }
 
         let hasHorizon = config.horizonDetectionEnabled
         let processEarth = config.allowEarthAlignment &&
@@ -247,6 +285,7 @@ public final actor FrameGraphBuilder {
                       forStars: true,
                       frame: frame,
                       mode: .starAligned,
+                      limiter: self.keypointLimiter,
                       rawImageBytes: rawImageBytes
                     ) { errorString in
                         Task { await errors.append(errorString) }
@@ -299,6 +338,7 @@ public final actor FrameGraphBuilder {
                           forStars: false,
                           frame: frame,
                           mode: .earthAligned,
+                          limiter: self.keypointLimiter,
                           rawImageBytes: rawImageBytes
                         ) { errorString in
                             Task { await errors.append(errorString) }
