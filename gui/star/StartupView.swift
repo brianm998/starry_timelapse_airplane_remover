@@ -6,7 +6,9 @@ import logging
 private enum StartupState: Int, CaseIterable {
     case horizon                // does this sequence have a horizon?
     case moving                 // is the camera moving?
-    case removal                // what kind of removal is desired?
+    case selectHorizon          // static + horizon: ask user to paint it themselves
+    case selectMovingHorizons   // moving + horizon: ask how many horizons to define
+    case removal                // what kind of removal is desired? (raw value 4)
 }
 
 
@@ -23,6 +25,10 @@ struct StartupView: View {
                     HorizonView(state: $state)
                 case .moving:
                     MovingView(state: $state)
+                case .selectHorizon:
+                    SelectHorizonView(state: $state)
+                case .selectMovingHorizons:
+                    SelectMovingHorizonsView(state: $state)
                 case .removal:
                     RemovalView(state: $state)
                 }
@@ -31,6 +37,13 @@ struct StartupView: View {
         }
           .padding(20)
           .background(.gray)
+          .onAppear {
+              let raw = viewModel.startupInitialStateRawValue
+              if raw != 0, let s = StartupState(rawValue: raw) {
+                  withAnimation(.none) { state = s }
+                  viewModel.startupInitialStateRawValue = 0
+              }
+          }
     }
 }
 
@@ -126,9 +139,13 @@ struct MovingView: View {
             HStack {
                 Spacer()
                 Button {
-                    self.state = .removal
                     viewModel.cameraMotion = .fixed
                     viewModel.allowEarthAlignment = true // default to on for earth
+                    if viewModel.horizonDetectionEnabled {
+                        self.state = .selectHorizon
+                    } else {
+                        self.state = .removal
+                    }
                 } label: {
                     Text("Static")
                       .font(.title)
@@ -145,8 +162,12 @@ struct MovingView: View {
                 Space(width: 20)
                 
                 Button {
-                    self.state = .removal
                     viewModel.cameraMotion = .moving
+                    if viewModel.horizonDetectionEnabled {
+                        self.state = .selectMovingHorizons
+                    } else {
+                        self.state = .removal
+                    }
                 } label: {
                     Text("Moving")
                       .font(.title)
@@ -179,6 +200,132 @@ struct MovingView: View {
                     }
                 }
                   .buttonStyle(PlainButtonStyle())
+            }
+        }
+    }
+}
+
+struct SelectMovingHorizonsView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    @Binding fileprivate var state: StartupState
+
+    @State private var horizonCount: Int = 3
+
+    private var maxCount: Int { max(1, viewModel.imageSequenceSize) }
+
+    var body: some View {
+        VStack {
+            Text("Do you want to select the horizons yourself?")
+              .font(.largeTitle)
+              .foregroundColor(.white)
+            Space(height: 10)
+            Text("Star allows you to tell it where the horizon is for specific frames of this moving video.  If you define horizons on evenly-spaced frames now, you will speed up Star's processing and make sure there are no errors with horizon detection.  Star will use these painted frames as references for all frames in the sequence.")
+              .font(.body)
+              .foregroundColor(.white)
+            Space(height: 10)
+            HStack {
+                Spacer()
+                Button {
+                    self.state = .removal
+                } label: {
+                    Text("No")
+                      .font(.title)
+                      .foregroundColor(.black)
+                      .padding(10)
+                      .background(
+                        RoundedRectangle(cornerRadius: 20)
+                          .fill(.white)
+                      )
+                }
+                  .fixedSize(horizontal: true, vertical: true)
+                  .buttonStyle(PlainButtonStyle())
+
+                Space(width: 30)
+
+                VStack(spacing: 10) {
+                    Stepper(
+                        "Define \(horizonCount) horizon\(horizonCount == 1 ? "" : "s")",
+                        value: $horizonCount,
+                        in: 1...maxCount
+                    )
+                    .foregroundColor(.white)
+                    .font(.title2)
+
+                    Button {
+                        viewModel.startMovingHorizonStartupFlow(count: horizonCount)
+                    } label: {
+                        Text("Yes, select \(horizonCount) horizon\(horizonCount == 1 ? "" : "s")")
+                          .font(.title)
+                          .foregroundColor(.white)
+                          .padding(10)
+                          .background(
+                            RoundedRectangle(cornerRadius: 20)
+                              .fill(Color.blue.opacity(0.7))
+                          )
+                    }
+                      .buttonStyle(PlainButtonStyle())
+                      .fixedSize(horizontal: true, vertical: true)
+                }
+
+                Spacer()
+            }
+        }
+        .onAppear {
+            horizonCount = min(3, maxCount)
+        }
+    }
+}
+
+struct SelectHorizonView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    @Binding fileprivate var state: StartupState
+
+    var body: some View {
+        VStack {
+            Text("Do you want to select the horizon yourself?")
+              .font(.largeTitle)
+              .foregroundColor(.white)
+            Space(height: 10)
+            Text("Star allows you to tell it where the horizon is for any frame.  If you spend 1-2 minutes to select and refine the horizon on this static video yourself now, you will speed up Star's processing, and make sure there are no errors with horizon detection.")
+              .font(.body)
+              .foregroundColor(.white)
+            Space(height: 10)
+            HStack {
+                Spacer()
+                Button {
+                    self.state = .removal
+                } label: {
+                    Text("No")
+                      .font(.title)
+                      .foregroundColor(.black)
+                      .padding(10)
+                      .background(
+                        RoundedRectangle(cornerRadius: 20)
+                          .fill(.white)
+                      )
+                }
+                  .fixedSize(horizontal: true, vertical: true)
+                  .buttonStyle(PlainButtonStyle())
+
+                Space(width: 20)
+
+                Button {
+                    viewModel.horizonPainterMode = .startup
+                    viewModel.shouldShowInitialInstructions = false
+                    viewModel.isShowingHorizonPainter = true
+                } label: {
+                    Text("Yes")
+                      .font(.title)
+                      .foregroundColor(.white)
+                      .padding(10)
+                      .background(
+                        RoundedRectangle(cornerRadius: 20)
+                          .fill(Color.blue.opacity(0.7))
+                      )
+                }
+                  .buttonStyle(PlainButtonStyle())
+                  .fixedSize(horizontal: true, vertical: true)
+                Spacer()
             }
         }
     }

@@ -11,6 +11,11 @@ public enum VideoPlayMode: String, Equatable, CaseIterable {
     case reverse
 }
 
+enum HorizonPainterMode: Sendable {
+    case normal
+    case startup
+}
+
 public enum ToolType: String, Equatable, CaseIterable {
     case remove
     case keep
@@ -264,6 +269,86 @@ public final class ImageSequenceViewModel {
 
     /// When `true` the horizon-painting overlay is shown over the frame view.
     var isShowingHorizonPainter = false
+
+    /// Differentiates how the horizon painter was opened.
+    var horizonPainterMode: HorizonPainterMode = .normal
+
+    /// Raw value of the `StartupState` to restore when the startup sheet re-opens
+    /// after returning from the horizon painter. 0 means "use default (.horizon)".
+    var startupInitialStateRawValue: Int = 0
+
+    /// Frame indices (in the sequence) that the user has chosen to paint horizons for
+    /// during the startup flow. Empty for the static single-frame case.
+    var horizonPainterStartupFrameIndices: [Int] = []
+
+    /// Which position in `horizonPainterStartupFrameIndices` is currently being painted.
+    var horizonPainterStartupFramePosition: Int = 0
+
+    /// Called by the horizon painter toolbar when the user confirms a horizon
+    /// during the startup flow — marks the reference saved and advances to the
+    /// removal step.  For static sequences also sets the hasStaticReferenceHorizon flag.
+    func continueToRemovalFromHorizonPainter() {
+        if !config.config().tripodHeadWasMoving {
+            var cfg = config.config()
+            cfg.hasStaticReferenceHorizon = true
+            config.update(cfg)
+        }
+        horizonPainterMode = .normal
+        horizonPainterStartupFrameIndices = []
+        horizonPainterStartupFramePosition = 0
+        startupInitialStateRawValue = 4  // StartupState.removal raw value (enum case 4)
+        isShowingHorizonPainter = false
+        // Defer the sheet re-presentation to the next run-loop cycle so SwiftUI
+        // can finish processing the isShowingHorizonPainter = false change first,
+        // avoiding a race with any in-flight dismiss animation.
+        Task { @MainActor in
+            shouldShowInitialInstructions = true
+        }
+    }
+
+    /// Called by the horizon painter toolbar Cancel in startup flow — returns
+    /// the user to the "Was the camera moving?" question.
+    func returnToMovingViewFromHorizonPainter() {
+        horizonPainterMode = .normal
+        horizonPainterStartupFrameIndices = []
+        horizonPainterStartupFramePosition = 0
+        startupInitialStateRawValue = 1  // StartupState.moving raw value
+        isShowingHorizonPainter = false
+        Task { @MainActor in
+            shouldShowInitialInstructions = true
+        }
+    }
+
+    /// Begins the moving-video startup horizon flow: calculates evenly-spaced frame
+    /// indices, navigates to the first one, and opens the painter.
+    func startMovingHorizonStartupFlow(count: Int) {
+        let indices = Self.calculateFrameIndices(count: count, total: imageSequenceSize)
+        horizonPainterStartupFrameIndices = indices
+        horizonPainterStartupFramePosition = 0
+        if let first = indices.first { currentIndex = first }
+        horizonPainterMode = .startup
+        shouldShowInitialInstructions = false
+        isShowingHorizonPainter = true
+    }
+
+    /// Advances to the next frame in the startup horizon flow.  Called after the
+    /// user hits Continue on a frame that still has successors.
+    func advanceToNextStartupHorizonFrame() {
+        horizonPainterStartupFramePosition += 1
+        guard horizonPainterStartupFramePosition < horizonPainterStartupFrameIndices.count else { return }
+        currentIndex = horizonPainterStartupFrameIndices[horizonPainterStartupFramePosition]
+        // FrameEditView watches currentIndex while painter is open in startup mode
+        // and resets the HorizonPaintState for the new frame automatically.
+    }
+
+    private static func calculateFrameIndices(count: Int, total: Int) -> [Int] {
+        guard count > 0, total > 0 else { return [] }
+        if count == 1 { return [0] }
+        if count >= total { return Array(0..<total) }
+        return (0..<count).map { i in
+            Int((Double(i) * Double(total - 1) / Double(count - 1)).rounded())
+        }
+    }
 
     var showAllFrameViewModes = false
     var showAllFrameProcessingStates = false

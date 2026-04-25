@@ -460,6 +460,17 @@ final class HorizonPaintState {
         knownGroundCeiling = bandColumnBottom
     }
 
+    /// Reset all painting data for a new frame while preserving brush settings.
+    ///
+    /// Identical to `clear()` except `brushRadius` and `isErasing` are left
+    /// untouched, so tool settings survive multi-frame startup-flow advances.
+    /// Transitions to `.computing` so the view shows a spinner while the
+    /// existing horizon reference (if any) is loaded asynchronously.
+    func resetForNewFrame() {
+        clear()              // clears everything except brushRadius (never touched by clear)
+        phase = .computing   // override bandSelection set by clear()
+    }
+
     /// Remove all recorded strokes and reset to the band-selection phase.
     func clear() {
         strokes.removeAll()

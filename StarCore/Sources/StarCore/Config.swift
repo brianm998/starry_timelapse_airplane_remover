@@ -319,6 +319,10 @@ public struct Config: Codable, Sendable, Transferable {
     // if not set, defaults to true
     public var horizonDetectionEnabled: Bool = true
 
+    // true when the user has painted a reference horizon for a static sequence,
+    // so FrameGraphBuilder can skip per-frame detection and merge operations.
+    public var hasStaticReferenceHorizon: Bool = false
+
     // use the combined+RW horizon detector (Otsu + DP + SIOX → median → Random Walker)?
     // when true, this replaces the legacy adaptive Otsu/DP search in loadOrCreateHorizonMask.
     // set to false to fall back to the previous adaptive search approach.

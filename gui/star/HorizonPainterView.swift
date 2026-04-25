@@ -219,6 +219,22 @@ struct HorizonPainterView: View {
         }
         .keyboardShortcut("-", modifiers: [])
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+
+        Button("") {
+            if paintState.phase == .refinement { paintState.isErasing = false }
+        }
+        .keyboardShortcut("p", modifiers: [])
+        .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+
+        Button("") {
+            if paintState.phase == .refinement { paintState.isErasing = true }
+        }
+        .keyboardShortcut("e", modifiers: [])
+        .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+
+        Button("") { paintState.clear() }
+            .keyboardShortcut("r", modifiers: [])
+            .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
     }
 }
 
@@ -399,7 +415,9 @@ struct HorizonPainterToolbarView: View {
             .onDisappear {
                 // Auto-save when dismissed via toggle (not Cancel / Escape).
                 // Only save during refinement — band selection has no horizon.
-                guard paintState.phase == .refinement,
+                // In startup mode the user must use Continue/Cancel explicitly.
+                guard viewModel.horizonPainterMode == .normal,
+                      paintState.phase == .refinement,
                       !savedAlready,
                       !cancelledExplicitly,
                       !isSaving
@@ -459,11 +477,9 @@ struct HorizonPainterToolbarView: View {
 
     @ViewBuilder
     private var bandSelectionToolbar: some View {
-        Label("Brush: \(Int(paintState.brushRadius))px",
-              systemImage: "circle.dashed")
-            .foregroundColor(.white)
-            .font(.system(.caption, design: .monospaced))
-            .help("Use [ and ] to shrink / grow the brush")
+        startupProgressLabel
+
+        brushSizeControls
 
         Divider().frame(height: 24)
 
@@ -478,14 +494,13 @@ struct HorizonPainterToolbarView: View {
         Button {
             paintState.clear()
         } label: {
-            Label("Clear", systemImage: "trash")
+            Label("Reset", systemImage: "arrow.counterclockwise")
         }
+        .buttonStyle(.bordered)
         .disabled(!paintState.hasStrokes)
+        .help("Reset and start over (R)")
 
-        Button("Cancel") {
-            cancelledExplicitly = true
-            viewModel.isShowingHorizonPainter = false
-        }
+        Button("Cancel") { handleCancel() }
         .help("Discard and close (Esc)")
     }
 
@@ -501,43 +516,29 @@ struct HorizonPainterToolbarView: View {
                 .font(.caption)
         }
         Spacer()
-        Button("Cancel") {
-            cancelledExplicitly = true
-            viewModel.isShowingHorizonPainter = false
-        }
+        Button("Cancel") { handleCancel() }
+        .help("Discard and close (Esc)")
     }
 
     // MARK: Refinement toolbar
 
     @ViewBuilder
     private var refinementToolbar: some View {
-        Label("Brush: \(Int(paintState.brushRadius))px",
-              systemImage: "circle.dashed")
-            .foregroundColor(.white)
-            .font(.system(.caption, design: .monospaced))
-            .help("Use [ and ] to shrink / grow the brush")
+        startupProgressLabel
+
+        brushSizeControls
 
         Divider().frame(height: 24)
 
-        Toggle(isOn: Binding(
-            get: { paintState.isErasing },
-            set: { paintState.isErasing = $0 }
-        )) {
-            Label(
-                paintState.isErasing ? "Erasing" : "Painting",
-                systemImage: paintState.isErasing ? "eraser.fill" : "paintbrush.fill"
-            )
-        }
-        .toggleStyle(.button)
-        .tint(paintState.isErasing ? .red : .blue)
-        .help("Press - to toggle between paint and erase mode")
+        paintEraseButtons
 
         Button {
             paintState.clear()
         } label: {
-            Label("Clear", systemImage: "trash")
+            Label("Reset", systemImage: "arrow.counterclockwise")
         }
-        .help("Start over from band selection")
+        .buttonStyle(.bordered)
+        .help("Reset and start over from band selection (R)")
 
         Spacer()
 
@@ -561,35 +562,127 @@ struct HorizonPainterToolbarView: View {
 
         Button {
             Task { await saveHorizonReference() }
+
+            // XXX HERE if in startup mode for either static of moving video,
+            // take the user to the next place after saving the horizon reference frame.
         } label: {
             if isSaving {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
                     Text("Saving…")
                 }
+            } else if viewModel.horizonPainterMode == .startup {
+                let indices = viewModel.horizonPainterStartupFrameIndices
+                let pos     = viewModel.horizonPainterStartupFramePosition
+                let hasMore = !indices.isEmpty && pos + 1 < indices.count
+                Label(hasMore ? "Next" : "Continue", systemImage: "checkmark.circle.fill")
             } else {
                 Label("Save Reference Horizon", systemImage: "checkmark.circle.fill")
             }
         }
         .buttonStyle(.borderedProminent)
         .disabled(paintState.lastHorizonY == nil || isSaving || paintState.isExpanding)
-        .help("Save the horizon reference (Return)")
+        .help(viewModel.horizonPainterMode == .startup
+              ? "Save horizon and continue (Return)"
+              : "Save the horizon reference (Return)")
 
-        Button("Cancel") {
-            cancelledExplicitly = true
+        Button("Cancel") { handleCancel() }
+        .help("Discard and close (Esc)")
+    }
+
+    // MARK: - Paint / Erase buttons
+
+    /// Two-button toggle: the active mode button uses .borderedProminent (blue),
+    /// the inactive one uses .bordered.  Ternary can't unify the two concrete
+    /// ButtonStyle types, so if/else is used to give each branch a single type.
+    @ViewBuilder
+    private var paintEraseButtons: some View {
+        if paintState.isErasing {
+            Button { paintState.isErasing = false } label: {
+                Label("Paint", systemImage: "paintbrush.fill")
+            }
+            .buttonStyle(.bordered)
+            .help("Paint sky — adds to the selection (P)")
+
+            Button { paintState.isErasing = true } label: {
+                Label("Erase", systemImage: "eraser.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .help("Erase sky — removes from the selection (E)")
+        } else {
+            Button { paintState.isErasing = false } label: {
+                Label("Paint", systemImage: "paintbrush.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .help("Paint sky — adds to the selection (P)")
+
+            Button { paintState.isErasing = true } label: {
+                Label("Erase", systemImage: "eraser.fill")
+            }
+            .buttonStyle(.bordered)
+            .help("Erase sky — removes from the selection (E)")
+        }
+    }
+
+    // MARK: - Brush size controls
+
+    @ViewBuilder
+    private var brushSizeControls: some View {
+        HStack(spacing: 4) {
+            Button {
+                paintState.shrinkBrush()
+            } label: {
+                Image(systemName: "minus.circle")
+            }
+            .buttonStyle(.bordered)
+            .help("Shrink brush ([)")
+
+            Text("\(Int(paintState.brushRadius))px")
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.secondary)
+                .frame(minWidth: 45, alignment: .center)
+
+            Button {
+                paintState.growBrush()
+            } label: {
+                Image(systemName: "plus.circle")
+            }
+            .buttonStyle(.bordered)
+            .help("Grow brush (])")
+        }
+    }
+
+    // MARK: - Startup progress label
+
+    /// Shows "1 / N" when in startup mode with multiple frames to paint.
+    @ViewBuilder
+    private var startupProgressLabel: some View {
+        let indices = viewModel.horizonPainterStartupFrameIndices
+        if viewModel.horizonPainterMode == .startup, indices.count > 1 {
+            let pos = viewModel.horizonPainterStartupFramePosition + 1
+            Text("\(pos) / \(indices.count)")
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.secondary)
+            Divider().frame(height: 24)
+        }
+    }
+
+    // MARK: - Cancel helper
+
+    private func handleCancel() {
+        cancelledExplicitly = true
+        if viewModel.horizonPainterMode == .startup {
+            viewModel.returnToMovingViewFromHorizonPainter()
+        } else {
             viewModel.isShowingHorizonPainter = false
         }
-        .help("Discard and close (Esc)")
     }
 
     // MARK: - Keyboard shortcuts (save / cancel actions)
 
     @ViewBuilder
     private var actionKeyboardHandlers: some View {
-        Button("") {
-            cancelledExplicitly = true
-            viewModel.isShowingHorizonPainter = false
-        }
+        Button("") { handleCancel() }
         .keyboardShortcut(.escape, modifiers: [])
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
 
@@ -604,7 +697,9 @@ struct HorizonPainterToolbarView: View {
 
     @MainActor
     private func saveHorizonReference() async {
-        guard paintState.hasStrokes else { return }
+        // Allow saving when the horizon was auto-detected from band strokes OR
+        // was loaded from an existing reference (lastHorizonY set, strokes empty).
+        guard paintState.hasStrokes || paintState.lastHorizonY != nil else { return }
         guard let frame = viewModel.currentFrameView.frame else {
             saveError = "No frame available"
             return
@@ -634,9 +729,25 @@ struct HorizonPainterToolbarView: View {
             Log.i("HorizonPainterToolbarView: saved reference mask for frame \(frame.frameIndex)")
             savedAlready = true
             isSaving     = false
-            // Refresh the filmstrip thumbnail overlay so it immediately turns green.
-            viewModel.currentFrameView.refreshHorizonOverlay()
-            viewModel.isShowingHorizonPainter = false
+            if viewModel.horizonPainterMode == .startup {
+                let indices = viewModel.horizonPainterStartupFrameIndices
+                let pos     = viewModel.horizonPainterStartupFramePosition
+                // indices is empty for a static single-frame flow (SelectHorizonView).
+                // For moving multi-frame flows it holds the evenly-spaced frame list.
+                let hasMoreFrames = !indices.isEmpty && pos + 1 < indices.count
+                if hasMoreFrames {
+                    // Moving sequence: more horizons to paint — advance to next frame.
+                    savedAlready = false  // reset so the next frame's save is treated as new
+                    viewModel.advanceToNextStartupHorizonFrame()
+                } else {
+                    // Static single frame OR final frame of moving sequence: all done.
+                    viewModel.continueToRemovalFromHorizonPainter()
+                }
+            } else {
+                // Refresh the filmstrip thumbnail overlay so it immediately turns green.
+                viewModel.currentFrameView.refreshHorizonOverlay()
+                viewModel.isShowingHorizonPainter = false
+            }
         } catch {
             Log.w("HorizonPainterToolbarView: save failed: \(error)")
             isSaving  = false

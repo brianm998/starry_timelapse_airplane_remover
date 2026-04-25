@@ -148,6 +148,10 @@ public final actor FrameGraphBuilder {
         }
 
         let hasHorizon = config.horizonDetectionEnabled
+        // Skip per-frame detection and merge when the user has painted a global
+        // reference horizon for a static sequence — the reference.tiff will be
+        // loaded directly by each operation that needs the horizon mask.
+        let hasStaticReferenceHorizon = config.hasStaticReferenceHorizon && !config.tripodHeadWasMoving
         let processEarth = config.allowEarthAlignment &&
           config.tripodHeadWasMoving // keypoints not used when stationary
         let useHomographyRefinedHorizon = config.useHomographyRefinedHorizon
@@ -170,7 +174,8 @@ public final actor FrameGraphBuilder {
         Log.d("processing from frameIndex \(startIndex) to \(lastIndex)")
 
         // First assemble initial horizon operations,
-        // with no dependencies upon any other operations
+        // with no dependencies upon any other operations.
+        // Skipped when the user has painted a global reference for a static sequence.
         let horizonOps = await withTaskGroup(
           of: HorizonDetectionOp?.self
         ) { taskGroup in
@@ -179,7 +184,7 @@ public final actor FrameGraphBuilder {
                     let frame = frames[frameIndex]
 
                     // 1. Horizon
-                    if hasHorizon {
+                    if hasHorizon && !hasStaticReferenceHorizon {
                         let horizonOp = HorizonDetectionOp(
                           frame: frame,
                           rawImageBytes: rawImageBytes
@@ -208,10 +213,11 @@ public final actor FrameGraphBuilder {
             .sorted { $0.key < $1.key }
             .map { $0.value }
         )
-        
+
         // next assemble merged horizons, which each depend upon an array of
-        // original horizon operations from above
-        if hasHorizon {
+        // original horizon operations from above.
+        // Skipped when the user has painted a global reference for a static sequence.
+        if hasHorizon && !hasStaticReferenceHorizon {
             if config.tripodHeadWasMoving {
                 /*
                  Moving tripods have separate HorizonMergsOps for each frame,
@@ -445,7 +451,8 @@ public final actor FrameGraphBuilder {
         // ---- 4b. Horizon refinement (per-frame, after validated homography) ----
         // Only run when horizon detection is enabled and homography refined
         // horizon is turned on (experimental, off by default).
-        if hasHorizon && useHomographyRefinedHorizon {
+        // Skipped when a static reference horizon exists.
+        if hasHorizon && !hasStaticReferenceHorizon && useHomographyRefinedHorizon {
             for frame in frames {
                 let refinementOp = HorizonRefinementOp(
                   frame: frame,

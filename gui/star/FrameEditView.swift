@@ -118,42 +118,78 @@ struct FrameEditView: View {
                 HorizonPainterToolbarView(paintState: ps)
             }
         }
+        // ── Startup-mode instructions overlay ────────────────────────────
+        .overlay(alignment: .top) {
+            if viewModel.isShowingHorizonPainter,
+               viewModel.horizonPainterMode == .startup
+            {
+                HorizonPainterStartupInstructionsView()
+            }
+        }
         // Create a fresh HorizonPaintState whenever the painter is opened,
         // and discard it when closed.
         .onChange(of: viewModel.isShowingHorizonPainter) { _, isShowing in
             if isShowing {
-                let ps = HorizonPaintState(
-                    viewWidth:  viewModel.frameWidth,
-                    viewHeight: viewModel.frameHeight
-                )
-                // Show a spinner while we check for an existing reference mask.
-                ps.setPhase(.computing)
-                horizonPaintState = ps
-
-                let frameView = viewModel.currentFrameView
-                let w = Int(viewModel.frameWidth)
-                let h = Int(viewModel.frameHeight)
-
-                Task { @MainActor in
-                    guard let frame = frameView.frame else {
-                        ps.setPhase(.bandSelection)
-                        return
-                    }
-                    if let existingY = try? await frame.loadExistingHorizonReferenceAsViewY(
-                        viewWidth:  w,
-                        viewHeight: h
-                    ) {
-                        // Existing reference found — jump straight to refinement
-                        // with a ±10 % margin band so the user can adjust freely.
-                        let margin = max(50, h / 10)
-                        ps.loadExistingHorizon(existingY, margin: margin)
-                    } else {
-                        // No reference yet — start from band selection as normal.
-                        ps.setPhase(.bandSelection)
-                    }
-                }
+                loadHorizonPainterForCurrentFrame()
             } else {
                 horizonPaintState = nil
+            }
+        }
+        // During the startup moving-horizon flow the user advances through evenly-spaced
+        // frames. Reset the painter state each time the frame changes so the user gets a
+        // clean canvas for each new horizon.
+        .onChange(of: viewModel.currentIndex) { _, _ in
+            guard viewModel.isShowingHorizonPainter,
+                  viewModel.horizonPainterMode == .startup
+            else { return }
+            resetPaintStateForCurrentFrame()
+        }
+    }
+
+    /// Creates a fresh `HorizonPaintState` for the current frame and loads any
+    /// existing reference horizon, transitioning straight to refinement if found.
+    private func loadHorizonPainterForCurrentFrame() {
+        let ps = HorizonPaintState(
+            viewWidth:  viewModel.frameWidth,
+            viewHeight: viewModel.frameHeight
+        )
+        ps.setPhase(.computing)
+        horizonPaintState = ps
+        loadHorizonReferenceInto(ps)
+    }
+
+    /// Resets the existing `HorizonPaintState` in place for the next frame in the
+    /// startup multi-frame flow.  Preserves `brushRadius` so the user's tool
+    /// setting carries over, and keeps the same instance reference so SwiftUI
+    /// does not re-register keyboard shortcuts bound to the painter view.
+    private func resetPaintStateForCurrentFrame() {
+        guard let ps = horizonPaintState else {
+            loadHorizonPainterForCurrentFrame()
+            return
+        }
+        ps.resetForNewFrame()   // clears paint data, preserves brushRadius, sets .computing
+        loadHorizonReferenceInto(ps)
+    }
+
+    /// Async-loads the saved horizon reference for the current frame into `ps`.
+    private func loadHorizonReferenceInto(_ ps: HorizonPaintState) {
+        let frameView = viewModel.currentFrameView
+        let w = Int(viewModel.frameWidth)
+        let h = Int(viewModel.frameHeight)
+
+        Task { @MainActor in
+            guard let frame = frameView.frame else {
+                ps.setPhase(.bandSelection)
+                return
+            }
+            if let existingY = try? await frame.loadExistingHorizonReferenceAsViewY(
+                viewWidth:  w,
+                viewHeight: h
+            ) {
+                let margin = max(50, h / 10)
+                ps.loadExistingHorizon(existingY, margin: margin)
+            } else {
+                ps.setPhase(.bandSelection)
             }
         }
     }
@@ -472,6 +508,70 @@ struct FrameEditView: View {
         } else {
             viewModel.selectionStart = nil
             viewModel.selectionEnd = nil
+        }
+    }
+}
+
+// MARK: - Horizon painter startup instructions
+
+struct HorizonPainterStartupInstructionsView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    @State private var isDismissed = false
+
+    private var isMoving: Bool {
+        viewModel.horizonPainterStartupFrameIndices.count > 1
+    }
+
+    var body: some View {
+        if !isDismissed {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Selecting the horizon with Star is easy.")
+                  .font(.headline)
+                  .foregroundColor(.white)
+
+                if isMoving {
+                    Text("""
+For a moving video like this, you can define the horizon on several evenly-spaced frames. Star will use these as references for all frames in the sequence.  This makes overall processing faster and more accurate.
+
+If the frame shown here doesn't show the horizon well, you can scroll to a different frame in the sequence to use instead.
+
+Then brush over the horizon itself, so that the selected area covers the horizon line itself.  Once you have selected across the entire width of the screen, Star will then automatically try to select the sky part of the image, stopping at what it thinks is the horizon.
+
+If the selection looks good, hit 'Continue'.
+
+If the selection of the sky isn't exactly right, use the brush to either add or remove to the selection.  Use '[' and ']' keys to shrink and enlarge the brush.
+""")
+                      .font(.body)
+                      .foregroundColor(.white)
+                } else {
+                    Text("""
+For a static video like this, you can choose any frame to calculate a horizon from and Star can then apply that same horizon mask to all frames in the sequence.  This makes overall processing faster and more accurate.
+
+If the frame you see here doesn't show the horizon well, scroll to a different frame that does first.
+
+Then brush over the horizon itself, so that the selected area covers the horizon line itself.  Once you have selected across the entire width of the screen, Star will then automatically try to select the sky part of the image, stopping at what it thinks is the horizon.
+
+If the selection looks good, hit 'Continue'.
+
+If the selection of the sky isn't exactly right, use the brush to either add or remove to the selection.  Use '[' and ']' keys to shrink and enlarge the brush.
+""")
+                      .font(.body)
+                      .foregroundColor(.white)
+                }
+
+                Button("Got it") {
+                    withAnimation { isDismissed = true }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                  .fill(Color.black.opacity(0.75))
+            )
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .transition(.opacity)
         }
     }
 }
