@@ -215,7 +215,7 @@ else
     for lib in $ALL_LIBS; do
         ar x "../$lib"
     done
-    ar rcs ../../lib/$PLATFORM_DIR/libopencv2.a *.o
+    ar rcs ../../../lib/$PLATFORM_DIR/libopencv2.a *.o
     cd ..
     rm -rf merged_tmp
 
