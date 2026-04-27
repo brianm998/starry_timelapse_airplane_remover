@@ -1,6 +1,8 @@
 import Foundation
 import logging
+#if canImport(SwiftUI)
 import SwiftUI
+#endif
 
 
 // different ways that an individual frame from a sequence can be displayed
@@ -30,10 +32,12 @@ public enum FrameViewMode: String,
     case selectiveProcessed     // .selective CleanMode
     case final              // the final processed image, 
                                 // the remove mask is used as a layer mask for the aligned neighbor
- 
+           
+#if canImport(SwiftUI)
     public var localizedName: LocalizedStringKey {
         LocalizedStringKey(rawValue)
     }
+#endif
 
     /// True for image types that represent horizon masks.
     /// These must always be CV_8UC1 (single-channel 8-bit grayscale).

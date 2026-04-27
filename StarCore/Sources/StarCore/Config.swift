@@ -1,6 +1,8 @@
 import Foundation
 import logging
+#if canImport(SwiftUI)
 import SwiftUI
+#endif
 
 /*
 

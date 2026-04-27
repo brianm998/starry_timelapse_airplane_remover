@@ -1,6 +1,8 @@
 import Foundation
-import SwiftUI
 import KHTSwift
+#if canImport(SwiftUI)
+import SwiftUI
+#endif
 
 /*
 
@@ -485,6 +487,7 @@ public enum FrameProcessingState: Codable,
             ""
         }
     }
+#if canImport(SwiftUI)
     public var color: Color {
         switch self {
         case .unprocessed:
@@ -581,5 +584,6 @@ public enum FrameProcessingState: Codable,
             .green
         }
     }
+    #endif
 }
 
