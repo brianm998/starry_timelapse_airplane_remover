@@ -30,6 +30,11 @@ public class FrameViewModel {
     /// The best-available horizon overlay for this frame's filmstrip thumbnail.
     /// Nil until `refreshHorizonOverlay()` completes.
     var horizonOverlay: HorizonThumbnailOverlay? = nil
+
+    /// Full-resolution horizon overlay for display on the main frame edit view.
+    /// Coordinates are in full frame pixel space (yPerColumn.count == frame.width).
+    /// Nil until `refreshFrameHorizonOverlay()` completes.
+    var frameHorizonOverlay: HorizonThumbnailOverlay? = nil
     
     var frameObserver = FrameObserver()
 
@@ -88,6 +93,7 @@ public class FrameViewModel {
                     Task { @MainActor in
                         await self.setOutlierGroups()
                         self.refreshHorizonOverlay()
+                        self.refreshFrameHorizonOverlay()
                     }
                 }
             }
@@ -458,6 +464,24 @@ public class FrameViewModel {
             await MainActor.run {
                 self.horizonOverlay = overlay
                 self.reloadID = UUID()
+            }
+        }
+    }
+
+    func refreshFrameHorizonOverlay() {
+        guard let frame else {
+            frameHorizonOverlay = nil
+            return
+        }
+        let fw = frame.width
+        let fh = frame.height
+        Task.detached(priority: .utility) {
+            let overlay = try? await frame.loadHorizonThumbnailOverlay(
+                thumbnailWidth:  fw,
+                thumbnailHeight: fh
+            )
+            await MainActor.run {
+                self.frameHorizonOverlay = overlay
             }
         }
     }

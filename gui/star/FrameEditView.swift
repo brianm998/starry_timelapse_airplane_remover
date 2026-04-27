@@ -223,6 +223,33 @@ struct FrameEditView: View {
                           y: drag_y_offset - CGFloat(viewModel.frameHeight/2) + height/2)
             }
 
+            // Horizon line overlay — drawn when the right-panel toggle is on.
+            // Uses full-frame-resolution yPerColumn so coordinates map 1:1 to
+            // frame pixels. lineWidth is scaled by 1/zoom so the stroke stays
+            // a constant visual thickness regardless of zoom level.
+            if viewModel.userPreferences.showHorizonOnMainView ?? false,
+               let overlay = viewModel.frames[viewModel.currentIndex].frameHorizonOverlay
+            {
+                let strokeColor: Color = switch overlay.kind {
+                    case .initial:   .white
+                    case .merged:    .blue
+                    case .reference: .green
+                }
+                let zoom = viewModel.currentZoomScale
+                Canvas { ctx, size in
+                    guard !overlay.yPerColumn.isEmpty else { return }
+                    var path = Path()
+                    for (col, y) in overlay.yPerColumn.enumerated() {
+                        let pt = CGPoint(x: CGFloat(col), y: CGFloat(y))
+                        if col == 0 { path.move(to: pt) }
+                        else        { path.addLine(to: pt) }
+                    }
+                    ctx.stroke(path, with: .color(strokeColor), lineWidth: 2 / zoom)
+                }
+                .frame(width: viewModel.frameWidth, height: viewModel.frameHeight)
+                .allowsHitTesting(false)
+            }
+
             // Horizon painter canvas — overlaid at image coordinates so that
             // view-space brush strokes map directly to image pixels.
             // The toolbar is rendered outside the ZoomableView (see .overlay

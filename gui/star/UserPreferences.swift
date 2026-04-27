@@ -93,6 +93,11 @@ struct UserPreferences: Codable, Sendable {
         }
     }
 
+    // whether to draw the horizon line on the main frame edit view
+    var showHorizonOnMainView: Bool? {
+        didSet { self.save() }
+    }
+
     mutating func justOpened(filename: String) {
         self.recentlyOpenedSequencelist[filename] = Date().timeIntervalSince1970
     }

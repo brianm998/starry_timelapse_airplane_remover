@@ -153,6 +153,12 @@ struct RightPanel: View {
                               .foregroundColor(.white)
                               .disabled(!viewModel.currentFrameUsesOutliers)
 
+                            Toggle("Show Horizon Line", isOn: Binding(
+                                get: { viewModel.userPreferences.showHorizonOnMainView ?? false },
+                                set: { viewModel.userPreferences.showHorizonOnMainView = $0 }
+                            ))
+                              .foregroundColor(.white)
+
                             /*
                              XXX for some unknown reason, these grab focus and refuse
                              XXX to let it go :(

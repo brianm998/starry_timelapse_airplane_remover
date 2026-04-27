@@ -413,11 +413,33 @@ public struct ImageAccessor: Sendable {
       ofType type: FrameViewMode,
       atSize size: ImageDisplaySize
     ) -> String? {
+        if type == .userHorizon {
+            return nameForUserHorizonImage(frameIndex: frameIndex, atSize: size)
+        }
         if let (dirname, filename) = dirAndNameForImage(frameIndex: frameIndex,
                                                         ofType: type,
                                                         atSize: size)
         {
             return "\(dirname)/\(filename)"
+        }
+        return nil
+    }
+
+    // Returns the path to the user-defined horizon mask for the given frame,
+    // checking per-frame first then falling back to the global reference.tiff.
+    private func nameForUserHorizonImage(frameIndex: Int, atSize size: ImageDisplaySize) -> String? {
+        guard size == .original,
+              let dir = config.dirForImage(ofType: .userHorizon, atSize: .original),
+              let baseFileName = frameIndexToBaseNameMap[frameIndex]
+        else { return nil }
+
+        let perFramePath = "\(dir)/\(baseFileName)"
+        if FileManager.default.fileExists(atPath: perFramePath) {
+            return perFramePath
+        }
+        let globalPath = "\(dir)/reference.tiff"
+        if FileManager.default.fileExists(atPath: globalPath) {
+            return globalPath
         }
         return nil
     }
@@ -440,6 +462,8 @@ public struct ImageAccessor: Sendable {
                 case .mergedHorizon:
                     return (dir, baseFileName)
                 case .refinedHorizon:
+                    return (dir, baseFileName)
+                case .userHorizon:
                     return (dir, baseFileName)
                 case .starAligned:
                     return (dir, baseFileName)
@@ -535,6 +559,9 @@ public struct ImageAccessor: Sendable {
             switch type {
             case .original:
                 break           // don't delete the original images
+
+            case .userHorizon:
+                break           // user-defined horizon masks are not auto-generated; preserve them
 
             case .starAligned:
                 if reprocessingType == .alignment {

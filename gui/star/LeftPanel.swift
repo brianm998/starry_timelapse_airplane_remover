@@ -472,7 +472,8 @@ struct LeftPanel: View {
               .foregroundColor(.white)
             
             VerticalLimitedSelectionPicker(selection: $viewModel.frameViewMode) { value, isEnabled in
-                let shouldShow = (!viewModel.showAllFrameViewModes && (value == .original || value == .final)) || viewModel.showAllFrameViewModes
+                let hasUserHorizon = viewModel.currentFrameView.hasImage(type: .userHorizon)
+                let shouldShow = (!viewModel.showAllFrameViewModes && (value == .original || value == .final || (value == .userHorizon && hasUserHorizon))) || viewModel.showAllFrameViewModes
                 if shouldShow {
                     let hasImage = viewModel.currentFrameView.hasImage(type: value)
                     let color: Color =

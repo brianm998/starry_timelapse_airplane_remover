@@ -19,6 +19,7 @@ public enum FrameViewMode: String,
     case horizon                // computed horizon mask
     case mergedHorizon          // median merged and maybe aligned horizon mask from neighbors
     case refinedHorizon         // homography alignment-drop refined horizon mask
+    case userHorizon            // user-defined horizon mask from horizonReference/
     case starAligned            // star aligned neighbor frame
     case failedStarAligned      // failed star aligned neighbor frame
     case earthAligned           // earth aligned neighbor frame
@@ -43,7 +44,7 @@ public enum FrameViewMode: String,
     /// These must always be CV_8UC1 (single-channel 8-bit grayscale).
     public var isHorizonMask: Bool {
         switch self {
-        case .horizon, .mergedHorizon, .refinedHorizon: true
+        case .horizon, .mergedHorizon, .refinedHorizon, .userHorizon: true
         default: false
         }
     }
@@ -82,6 +83,8 @@ public enum FrameViewMode: String,
             "mergedHorizon"
         case .refinedHorizon:
             "refinedHorizon"
+        case .userHorizon:
+            "userHorizon"
         }
     }
 
@@ -119,6 +122,8 @@ public enum FrameViewMode: String,
             "merged horizon"
         case .refinedHorizon:
             "homography refined horizon"
+        case .userHorizon:
+            "user defined horizon"
         }
     }
 }

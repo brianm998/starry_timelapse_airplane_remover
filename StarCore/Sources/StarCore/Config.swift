@@ -796,6 +796,13 @@ public struct Config: Codable, Sendable {
             case .thumbnail:
                 return nil
             }
+        case .userHorizon:
+            switch size {
+            case .original:
+                return "\(self.tempOutputPath)/horizonReference"
+            case .preview, .thumbnail:
+                return nil
+            }
         case .subtraction:
             switch size {
             case .original:
@@ -892,6 +899,7 @@ public struct Config: Codable, Sendable {
         if let dir = self.dirForImage(ofType: .horizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .mergedHorizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .refinedHorizon) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .userHorizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .subtraction) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .validation) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .autoProcessed) { ret.append(dir) }

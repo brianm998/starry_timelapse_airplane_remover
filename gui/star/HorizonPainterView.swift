@@ -746,6 +746,7 @@ struct HorizonPainterToolbarView: View {
             } else {
                 // Refresh the filmstrip thumbnail overlay so it immediately turns green.
                 viewModel.currentFrameView.refreshHorizonOverlay()
+                viewModel.currentFrameView.refreshFrameHorizonOverlay()
                 viewModel.isShowingHorizonPainter = false
             }
         } catch {
