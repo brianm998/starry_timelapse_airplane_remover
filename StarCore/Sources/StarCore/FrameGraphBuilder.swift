@@ -50,15 +50,22 @@ public enum OperationState: String, CaseIterable, Sendable {
     case done
 }
 
-// uses OperationQueues to allow processing with dependencies and configurable max processing  
+// uses OperationQueues to allow processing with dependencies and configurable max processing
 public final actor FrameGraphBuilder {
 
     // MARK: Queues (user adjustable)
     let queue = OperationQueue()
+
+    // Dedicated queue for preview/thumbnail ops so they are never blocked
+    // behind heavy frame-processing operations that fill the main queue slots.
+    let previewQueue = OperationQueue()
+
     let keypointLimiter = KeypointLimiter(max: max(1, ProcessInfo.processInfo.processorCount / 2))
 
     public init() {
         queue.name = "operations"
+        previewQueue.name = "previews"
+        previewQueue.maxConcurrentOperationCount = 3
     }
 
     var configManager: ConfigManager? = nil
@@ -104,7 +111,11 @@ public final actor FrameGraphBuilder {
     }
 
     public func add(operation: Operation) {
-        queue.addOperation(operation)
+        if let asyncOp = operation as? AsyncOperation, asyncOp.type == .preview {
+            previewQueue.addOperation(operation)
+        } else {
+            queue.addOperation(operation)
+        }
     }
     
     public func build(
@@ -550,6 +561,10 @@ public final actor FrameGraphBuilder {
         Log.d("Quality of Service: \(queue.qualityOfService)")
         Log.d("Is Suspended: \(queue.isSuspended)")
         Log.d("Operation Count: \(queue.operationCount)")
+        Log.d("-------- Preview Queue -------------")
+        Log.d("Name: \(previewQueue.name ?? "nil")")
+        Log.d("Max Concurrent Operation Count: \(previewQueue.maxConcurrentOperationCount)")
+        Log.d("Operation Count: \(previewQueue.operationCount)")
         Log.d("------------------------------------")
 
         let operations = queue.operations
