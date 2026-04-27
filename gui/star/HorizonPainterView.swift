@@ -168,6 +168,10 @@ struct HorizonPainterView: View {
                 mousePosition = gesture.location
             }
             .onEnded { gesture in
+                guard paintState.phase != .computing else {
+                    paintState.endSegment()
+                    return
+                }
                 paintState.addStroke(at: gesture.location)
                 paintState.endSegment()
 
@@ -192,8 +196,11 @@ struct HorizonPainterView: View {
 
                 case .refinement:
                     let wasErasing = paintState.isErasing
-                    expansionTask?.cancel()
-                    expansionTask = Task {
+                    // Do not cancel a prior refinement task — it targets different
+                    // columns and its result should still be applied.  Both tasks
+                    // run concurrently; each merges only its own affected columns
+                    // into lastHorizonY, so they compose safely.
+                    Task {
                         await triggerObjectSelection(paintState: ps,
                                                      frameView: frameView,
                                                      isErasingGesture: wasErasing)
@@ -306,9 +313,8 @@ private func triggerObjectSelection(
     frameView: FrameViewModel,
     isErasingGesture: Bool = false
 ) async {
-    let vw         = Int(paintState.viewWidth)
-    let vh         = Int(paintState.viewHeight)
-    let generation = paintState.expansionGeneration
+    let vw = Int(paintState.viewWidth)
+    let vh = Int(paintState.viewHeight)
 
     let bandTop = paintState.bandColumnTop
     let bandBot = paintState.bandColumnBottom
@@ -371,7 +377,6 @@ private func triggerObjectSelection(
     }
 
     guard !Task.isCancelled,
-          paintState.expansionGeneration == generation,
           let local = snappedHorizon
     else {
         paintState.endExpanding()
@@ -746,7 +751,6 @@ struct HorizonPainterToolbarView: View {
             } else {
                 // Refresh the filmstrip thumbnail overlay so it immediately turns green.
                 viewModel.currentFrameView.refreshHorizonOverlay()
-                viewModel.currentFrameView.refreshFrameHorizonOverlay()
                 viewModel.isShowingHorizonPainter = false
             }
         } catch {

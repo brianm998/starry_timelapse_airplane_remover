@@ -89,14 +89,17 @@ final class HorizonPaintState {
     /// Erasing extends this upward (enlarges the known-ground region).
     private(set) var knownGroundCeiling: [Int?]
 
-    /// `true` when the band spans the full frame width (within a small edge margin).
+    /// `true` when the band spans the full frame width (within a small edge margin)
+    /// with no unpainted gaps between the first and last painted columns.
     var isBandComplete: Bool {
         let vw = Int(viewWidth)
         guard vw > 0 else { return false }
         let edgeMargin = max(10, vw / 50)   // ~2 % margin
         let first = bandColumnTop.firstIndex(where: { $0 != nil }) ?? Int.max
         let last  = bandColumnTop.lastIndex(where: { $0 != nil })  ?? 0
-        return first <= edgeMargin && last >= vw - 1 - edgeMargin
+        guard first <= edgeMargin && last >= vw - 1 - edgeMargin else { return false }
+        // Require continuous coverage — no unpainted columns between first and last.
+        return !bandColumnTop[first...last].contains(where: { $0 == nil })
     }
 
     /// Fraction of columns covered by the band (0.0 to 1.0).

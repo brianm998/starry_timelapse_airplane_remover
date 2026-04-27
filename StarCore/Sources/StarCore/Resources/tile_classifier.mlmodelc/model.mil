@@ -88,7 +88,7 @@ program(1.0)
             tensor<fp16, [1, 256]> linear_0_cast_fp16 = linear(bias = classifier_2_bias_to_fp16, weight = classifier_2_weight_to_fp16, x = input_47_cast_fp16)[name = tensor<string, []>("linear_0_cast_fp16")];
             tensor<fp16, [1, 256]> input_53_cast_fp16 = relu(x = linear_0_cast_fp16)[name = tensor<string, []>("input_53_cast_fp16")];
             tensor<fp16, [4, 256]> classifier_5_weight_to_fp16 = const()[name = tensor<string, []>("classifier_5_weight_to_fp16"), val = tensor<fp16, [4, 256]>(BLOBFILE(path = tensor<string, []>("@model_path/weights/weight.bin"), offset = tensor<uint64, []>(1624064)))];
-            tensor<fp16, [4]> classifier_5_bias_to_fp16 = const()[name = tensor<string, []>("classifier_5_bias_to_fp16"), val = tensor<fp16, [4]>([-0x1.e8cp-4, 0x1.11p-5, 0x1.28p-4, -0x1.45cp-5])];
+            tensor<fp16, [4]> classifier_5_bias_to_fp16 = const()[name = tensor<string, []>("classifier_5_bias_to_fp16"), val = tensor<fp16, [4]>([-0x1.b64p-5, -0x1.6b4p-10, 0x1.694p-5, -0x1.0f8p-5])];
             tensor<fp16, [1, 4]> var_127 = linear(bias = classifier_5_bias_to_fp16, weight = classifier_5_weight_to_fp16, x = input_53_cast_fp16)[name = tensor<string, []>("linear_1_cast_fp16")];
             tensor<string, []> var_127_cast_to_fp32_dtype_0 = const()[name = tensor<string, []>("var_127_cast_to_fp32_dtype_0"), val = tensor<string, []>("fp32")];
             tensor<fp32, [1, 4]> var_127_cast_to_fp32 = cast(dtype = var_127_cast_to_fp32_dtype_0, x = var_127)[name = tensor<string, []>("var_127_cast_to_fp32")];

@@ -235,4 +235,12 @@ else
             cp -r opencv/modules/$mod/include/opencv2/* include/opencv2/
         fi
     done
+
+    # copy the umbrella opencv.hpp from the source tree
+    # (it lives in opencv/include/opencv2/, not in any per-module directory)
+    if [ -f "opencv/include/opencv2/opencv.hpp" ]; then
+        cp "opencv/include/opencv2/opencv.hpp" include/opencv2/
+    else
+        echo "WARNING: opencv/include/opencv2/opencv.hpp not found — umbrella header missing"
+    fi
 fi

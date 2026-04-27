@@ -12,9 +12,9 @@ set -e
 ####
 
 # takes about 15-20 minutes
-#cd opencv
-#./release.sh
-#cd ..
+cd opencv
+./release.sh
+cd ..
 
 # results end up here:
 # opencv/lib
@@ -25,9 +25,9 @@ set -e
 # this can be large, and is linked into the gui, cli and decision tree generator apps
 ####
 
-#cd StarDecisionTrees
-#./release.sh
-#cd ..
+cd StarDecisionTrees
+./release.sh
+cd ..
 
 # results end up here:
 # StarDecisionTrees/lib
@@ -60,7 +60,7 @@ cd ..
 # move the gui and cli apps into releases dir and tag git local and remote
 ####
 
-./finishRelease.sh
+#./finishRelease.sh
 
 # output should be in releases/star-${STAR_VERSION}.zip
 # tag release/${STAR_VERSION} should be on both local and remote
