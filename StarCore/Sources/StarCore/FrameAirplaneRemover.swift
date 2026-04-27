@@ -1,5 +1,4 @@
 import Foundation
-import CoreGraphics
 import KHTSwift
 import Semaphore
 import logging

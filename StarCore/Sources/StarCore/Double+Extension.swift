@@ -1,5 +1,4 @@
 import Foundation
-import CoreGraphics
 
 public extension Double {
     var int: Int? {
