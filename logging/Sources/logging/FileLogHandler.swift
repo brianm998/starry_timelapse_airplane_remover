@@ -67,7 +67,7 @@ public final class FileLogHandler: LogHandler {
             fileHandle.write(messageData)
             fileHandle.closeFile()
         } else {
-            FileManager.default.createFile(atPath: full_log_path, contents: messageData, attributes: nil)
+            _ = FileManager.default.createFile(atPath: full_log_path, contents: messageData, attributes: nil)
         }
     }
 }
