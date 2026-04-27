@@ -101,7 +101,7 @@ public actor UpdatableLog {
     
     public init() {
         var w = winsize()
-        let ioctl_ret = ioctl(STDOUT_FILENO, TIOCGWINSZ, &w)
+        let ioctl_ret = ioctl(STDOUT_FILENO, UInt(TIOCGWINSZ), &w)
         if ioctl_ret == 0 {
             screen_width = w.ws_col
         }
@@ -120,7 +120,7 @@ public actor UpdatableLog {
         var w = winsize()
         let sigwinchSrc = DispatchSource.makeSignalSource(signal: SIGWINCH, queue: .main)
         sigwinchSrc.setEventHandler {
-            if ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0 {
+            if ioctl(STDOUT_FILENO, UInt(TIOCGWINSZ), &w) == 0 {
                 Task {
                     await self.setScreenWidth(w.ws_col)
                 }
