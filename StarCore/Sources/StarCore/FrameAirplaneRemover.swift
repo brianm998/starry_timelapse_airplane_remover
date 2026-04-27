@@ -3822,9 +3822,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
       _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Bool
     ) async -> Bool {
         // first get bounding box from start and end location
-        var minX: CGFloat = CGFLOAT_MAX
+        var minX: CGFloat = CGFloat.greatestFiniteMagnitude
         var maxX: CGFloat = 0
-        var minY: CGFloat = CGFLOAT_MAX
+        var minY: CGFloat = CGFloat.greatestFiniteMagnitude
         var maxY: CGFloat = 0
 
         if startLocation.x < minX { minX = startLocation.x }
@@ -4044,7 +4044,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 try FileManager.default.removeItem(atPath: fullPath)
             } 
             Log.i("creating \(fullPath)")                      
-            FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
+            _ = FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
         } catch {
             Log.e("\(error)")
         }

@@ -702,7 +702,7 @@ public struct Config: Codable, Sendable {
                 }
             } else {
                 Log.i("creating \(fullPath)")                      
-                FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
+                _ = FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
             }
         } catch {
             Log.e("\(error)")

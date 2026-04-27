@@ -106,7 +106,7 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
             }
             
             Log.i("creating \(fullPath)")                      
-            FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
+            _ = FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
             Log.i("created \(fullPath)")                      
             
         } catch {
