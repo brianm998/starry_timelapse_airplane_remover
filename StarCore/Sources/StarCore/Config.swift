@@ -696,7 +696,7 @@ public struct Config: Codable, Sendable {
             if FileManager.default.fileExists(atPath: fullPath) {
                 if overwrite {
                     try? FileManager.default.removeItem(atPath: fullPath)
-                    FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
+                    _ = FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
                 } else {
                     Log.w("cannot write to \(fullPath), it already exists")
                 }

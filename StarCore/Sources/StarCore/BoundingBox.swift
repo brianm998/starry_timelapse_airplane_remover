@@ -25,9 +25,9 @@ public struct BoundingBox: Codable,
                 and endLocation: CGPoint)
     {
         // first get bounding box from start and end location
-        var minX: CGFloat = CGFLOAT_MAX
+        var minX: CGFloat = CGFloat.greatestFiniteMagnitude
         var maxX: CGFloat = 0
-        var minY: CGFloat = CGFLOAT_MAX
+        var minY: CGFloat = CGFloat.greatestFiniteMagnitude
         var maxY: CGFloat = 0
 
         if startLocation.x < minX { minX = startLocation.x }

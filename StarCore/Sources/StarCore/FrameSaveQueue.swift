@@ -4,7 +4,7 @@ import logging
 fileprivate let frameSaveMonitor = FileSystemMonitor(max: 16) // guess, make configurable?
 // XXX this needs to track numberOfFramesToProcessConcurrently
 
-@MainActor @Observable
+@MainActor
 public class FrameSaveQueue {
 
     public init() { } 

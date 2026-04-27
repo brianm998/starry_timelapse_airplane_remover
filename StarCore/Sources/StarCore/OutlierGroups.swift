@@ -475,9 +475,11 @@ public actor OutlierGroups {
             try FileManager.default.removeItem(atPath: outlierGroupPaintDataFilename)
         }
         let contents = try encoder.encode(outlierGroupPaintData)
-        FileManager.default.createFile(atPath: outlierGroupPaintDataFilename,
-                               contents: contents,
-                               attributes: nil)
+        _ = FileManager.default.createFile(
+          atPath: outlierGroupPaintDataFilename,
+          contents: contents,
+          attributes: nil
+        )
         
         Log.d("frame \(frameIndex) wrote outlier group paint data to \(outlierGroupPaintDataFilename): \(contents)")
     }

@@ -2,7 +2,6 @@ import Foundation
 import KHTSwift
 
 @MainActor
-@Observable
 public class FrameObserver {
     public init() { }
 
