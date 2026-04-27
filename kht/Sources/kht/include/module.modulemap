@@ -1,0 +1,10 @@
+// Declaring kht.hpp as a textual header prevents Clang from treating it as a
+// precompiled module. On Linux, SwiftPM auto-generates module maps for C/C++
+// targets and passes -fno-implicit-modules to Clang, so when kht_bridge does
+// #include "kht.hpp" Clang would normally demand a precompiled 'kht' module
+// and emit: "module 'kht' is needed but has not been provided".
+// With 'textual header', Clang does a plain text include — no .pcm needed.
+module kht {
+    textual header "kht.hpp"
+    export *
+}
