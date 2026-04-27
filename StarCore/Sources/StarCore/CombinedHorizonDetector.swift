@@ -159,7 +159,8 @@ public enum CombinedHorizonDetector {
 
         let combinedY = confidenceWeightedCombine(
             methods.map { ($0.horizonY, $0.confidence) },
-            outlierThreshold: params.outlierThreshold
+            outlierThreshold: params.outlierThreshold,
+            imageHeight: imgH
         )
 
         Log.i("CombinedHorizonDetector: combined using \(methods.map { "\($0.name)(\(String(format: "%.2f", $0.confidence)))" }.joined(separator: ", "))")
@@ -1045,23 +1046,78 @@ public enum CombinedHorizonDetector {
         return coverage * smoothness * clampedPlausibility
     }
 
+    /// Compute per-column local smoothness weights for a horizon Y array.
+    /// Each column gets a weight in (0, 1] based on how stable (non-spiky) the
+    /// detector is in a local window around that column. A detector that makes a
+    /// sudden jump at column X gets a low weight at X regardless of its global score.
+    private static func perColumnLocalWeights(
+        _ horizonY: [Int?],
+        imageHeight: Int,
+        windowHalf: Int = 20
+    ) -> [Double] {
+        let n = horizonY.count
+        let scale = Double(max(1, imageHeight))
+        var weights = [Double](repeating: 0.0, count: n)
+        for x in 0..<n {
+            guard horizonY[x] != nil else { continue }
+            let lo = max(0, x - windowHalf)
+            let hi = min(n - 1, x + windowHalf)
+            var window: [Int] = []
+            for j in lo...hi { if let y = horizonY[j] { window.append(y) } }
+            guard window.count >= 3 else { weights[x] = 0.5; continue }
+            let mean = Double(window.reduce(0, +)) / Double(window.count)
+            let mad = window.map { abs(Double($0) - mean) }.reduce(0.0, +) / Double(window.count)
+            // Normalize by image height so scale-invariant.
+            // mad ≈ 0 → weight 1.0; mad ≈ 1% height → weight ~0.67; mad ≈ 5% height → weight ~0.17
+            weights[x] = 1.0 / (1.0 + (mad / scale) * 50.0)
+        }
+        return weights
+    }
+
+    /// Median-filter a sparse [Int?] horizon array to remove residual spike columns.
+    private static func medianFilterHorizonY(_ horizonY: [Int?], windowHalf: Int) -> [Int?] {
+        let n = horizonY.count
+        var result = horizonY
+        for x in 0..<n {
+            guard horizonY[x] != nil else { continue }
+            let lo = max(0, x - windowHalf)
+            let hi = min(n - 1, x + windowHalf)
+            var window: [Int] = []
+            for j in lo...hi { if let y = horizonY[j] { window.append(y) } }
+            if !window.isEmpty {
+                window.sort()
+                result[x] = window[window.count / 2]
+            }
+        }
+        return result
+    }
+
     /// Confidence-weighted combine: merge multiple horizon Y arrays, weighting
-    /// each method's contribution by its confidence score. Falls back to median
-    /// when only one method contributes at a column.
+    /// each method's contribution by its global confidence × per-column local
+    /// smoothness. This prevents a noisy detector from raising the noise floor at
+    /// columns where it makes a sudden spike, even if it's globally smooth.
     private static func confidenceWeightedCombine(
         _ methodsAndWeights: [([Int?], Double)],
-        outlierThreshold: Int
+        outlierThreshold: Int,
+        imageHeight: Int
     ) -> [Int?] {
         guard let (first, _) = methodsAndWeights.first else { return [] }
         let w = first.count
+
+        // Precompute per-column local smoothness for each detector
+        let localWeightsPerMethod: [[Double]] = methodsAndWeights.map { (arr, _) in
+            perColumnLocalWeights(arr, imageHeight: imageHeight)
+        }
+
         var result = [Int?](repeating: nil, count: w)
 
         for x in 0..<w {
-            // Collect (value, weight) pairs for this column
+            // Collect (value, effective-weight) pairs — effective weight = globalConf × localSmooth
             var entries: [(y: Int, weight: Double)] = []
-            for (arr, conf) in methodsAndWeights {
+            for (idx, (arr, conf)) in methodsAndWeights.enumerated() {
                 if x < arr.count, let y = arr[x] {
-                    entries.append((y, conf))
+                    let localW = x < localWeightsPerMethod[idx].count ? localWeightsPerMethod[idx][x] : 1.0
+                    entries.append((y, conf * localW))
                 }
             }
             guard !entries.isEmpty else { continue }
@@ -1071,7 +1127,7 @@ public enum CombinedHorizonDetector {
                 continue
             }
 
-            // Compute median for outlier filtering
+            // Compute median for outlier filtering (unweighted, for stability)
             let sortedY = entries.map(\.y).sorted()
             let med = sortedY[sortedY.count / 2]
 
@@ -1083,17 +1139,18 @@ public enum CombinedHorizonDetector {
                 continue
             }
 
-            // Confidence-weighted average of non-outlier values
+            // Weighted average of non-outlier values
             let totalWeight = filtered.reduce(0.0) { $0 + $1.weight }
             if totalWeight > 1e-10 {
                 let weightedSum = filtered.reduce(0.0) { $0 + Double($1.y) * $1.weight }
                 result[x] = Int((weightedSum / totalWeight).rounded())
             } else {
-                // Equal weight fallback
                 result[x] = filtered[filtered.count / 2].y
             }
         }
-        return result
+
+        // Final median-filter pass to remove any residual spike columns before RW refinement.
+        return medianFilterHorizonY(result, windowHalf: 12)
     }
 
     /// Extract per-column horizon Y (topmost ground pixel) from a mask.
