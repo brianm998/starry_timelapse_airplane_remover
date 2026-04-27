@@ -25,10 +25,10 @@ public actor CondensedOutlierGroupValueMatrix {
         // write out types file
         let typesCSV = self.types.map { $0.rawValue }.joined(separator:",").data(using: .utf8)
         let typesCSVFilename = "\(dir)/\(CondensedOutlierGroupValueMatrix.typesFilename)"
-        if fileManager.fileExists(atPath: typesCSVFilename) {
-            try fileManager.removeItem(atPath: typesCSVFilename)
+        if FileManager.default.fileExists(atPath: typesCSVFilename) {
+            try FileManager.default.removeItem(atPath: typesCSVFilename)
         }
-        _ = fileManager.createFile(
+        _ = FileManager.default.createFile(
           atPath: typesCSVFilename,
           contents: typesCSV,
           attributes: nil
@@ -44,10 +44,10 @@ public actor CondensedOutlierGroupValueMatrix {
         }
         let outlierData = outlierString.data(using: .utf8)
         let outlierFilename = "\(dir)/\(CondensedOutlierGroupValueMatrix.outlierDataFilename)"
-        if fileManager.fileExists(atPath: outlierFilename) {
-            try fileManager.removeItem(atPath: outlierFilename)
+        if FileManager.default.fileExists(atPath: outlierFilename) {
+            try FileManager.default.removeItem(atPath: outlierFilename)
         }
-        _ = fileManager.createFile(
+        _ = FileManager.default.createFile(
           atPath: outlierFilename,
           contents: outlierData,
           attributes: nil
@@ -55,4 +55,3 @@ public actor CondensedOutlierGroupValueMatrix {
     }
 }
 
-fileprivate let fileManager = FileManager.default

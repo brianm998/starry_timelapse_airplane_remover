@@ -99,9 +99,11 @@ public actor BlobBinarySaver {
             if FileManager.default.fileExists(atPath: filename) {
                 try FileManager.default.removeItem(atPath: filename) 
             }
-            FileManager.default.createFile(atPath: filename,
-                                           contents: buffer,
-                                           attributes: nil)
+            _ = FileManager.default.createFile(
+              atPath: filename,
+              contents: buffer,
+              attributes: nil
+            )
         } catch {
             Log.e("error saving binary blobs \(filename): \(error)")
         }
