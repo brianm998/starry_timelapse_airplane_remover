@@ -22,6 +22,8 @@ let eigenCSettings: [CSetting] = [
                  ]),
     .headerSearchPath("../../opencv/include"),
 ]
+// On macOS, Xcode resolves cross-target includes fine without any extra flags.
+let khtBridgeCXXSettings: [CXXSetting] = []
 #elseif os(Linux)
 let opencvLibPath = "../opencv/lib/linux"
 let opencvLib = "../opencv/lib/linux/libopencv2.a"
@@ -36,6 +38,14 @@ let eigenCSettings: [CSetting] = [
     .unsafeFlags(["-I/usr/include/eigen3"]),
     .headerSearchPath("../../opencv/include"),
 ]
+// On Linux, SwiftPM generates a module.modulemap for every C/C++ target.
+// When kht_bridge includes kht.hpp Clang tries to use the auto-generated
+// 'kht' module, but implicit modules are disabled in the SPM build, causing:
+//   "module 'kht' is needed but has not been provided"
+// -fno-modules makes all #includes plain text includes, bypassing the issue.
+let khtBridgeCXXSettings: [CXXSetting] = [
+    .unsafeFlags(["-fno-modules"])
+]
 #else
 let opencvLibPath = "../opencv/lib"
 let opencvLib = "../opencv/lib/libopencv2.a"
@@ -46,6 +56,7 @@ let platformLinkerSettings: [LinkerSetting] = [
 let eigenCSettings: [CSetting] = [
     .headerSearchPath("../../opencv/include"),
 ]
+let khtBridgeCXXSettings: [CXXSetting] = []
 #endif
 
 let package = Package(
@@ -69,7 +80,8 @@ let package = Package(
       .target(name: "kht_bridge", // C++ (was Objective-C)
               dependencies: ["kht"],
               publicHeadersPath: "include",
-              cSettings: eigenCSettings
+              cSettings: eigenCSettings,
+              cxxSettings: khtBridgeCXXSettings
       ),
       .target(name: "KHTSwift", // Swift
               dependencies: [
