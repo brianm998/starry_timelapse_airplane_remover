@@ -155,6 +155,9 @@ public final class ViewModel {
     // prepare for another sequence
     func unloadSequence() {
         imageSequence = nil
+        cursorStack = []
+        cursor = .arrow
+        frameGraphViewModel.reset()
     }
 
     func startup(withConfigFile jsonConfigFilename: String) async throws {

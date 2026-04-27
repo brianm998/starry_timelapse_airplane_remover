@@ -55,6 +55,10 @@ public final class FrameGraphViewModel {
         }
     }
     
+    public func reset() {
+        operations = [:]
+    }
+
     public func queuedOperation(ofType type: OperationType) {
         addition(ofType: type, to: .queued)
     }
