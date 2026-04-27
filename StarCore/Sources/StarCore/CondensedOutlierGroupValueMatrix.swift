@@ -47,10 +47,11 @@ public actor CondensedOutlierGroupValueMatrix {
         if fileManager.fileExists(atPath: outlierFilename) {
             try fileManager.removeItem(atPath: outlierFilename)
         }
-        fileManager.createFile(atPath: outlierFilename,
-                               contents: outlierData,
-                               attributes: nil)
-
+        _ = fileManager.createFile(
+          atPath: outlierFilename,
+          contents: outlierData,
+          attributes: nil
+        )
     }
 }
 
