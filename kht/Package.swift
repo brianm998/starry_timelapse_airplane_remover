@@ -23,12 +23,14 @@ let platformLinkerSettings: [LinkerSetting] = [
     .linkedLibrary("opencv2"),
 ]
 // Eigen is installed via Homebrew on macOS (arm: /opt/homebrew, intel: /usr/local)
-let bridgeCXXSettings: [CXXSetting] = [
+let khtCXXSettings: [CXXSetting] = [
     .unsafeFlags([
         "-I/opt/homebrew/include/eigen3",   // Apple Silicon
         "-I/usr/local/include/eigen3",      // Intel
     ]),
-    .headerSearchPath("../../opencv/include"),
+]
+let bridgeCXXSettings: [CXXSetting] = khtCXXSettings + [
+    .unsafeFlags(["-I../opencv/include"]),  // built opencv headers (same base as linker)
 ]
 
 #elseif os(Linux)
@@ -56,7 +58,9 @@ let gccArchDir = "aarch64-linux-gnu"
 let gccArchDir = "linux-gnu"   // fallback; harmless if it doesn't exist
 #endif
 
-let bridgeCXXSettings: [CXXSetting] = [
+// kht (Hough Transform core) needs eigen + GCC C++ stdlib headers.
+// kht_bridge additionally needs the OpenCV headers.
+let khtCXXSettings: [CXXSetting] = [
     .unsafeFlags([
         "-I/usr/include/eigen3",
         // GCC C++ stdlib headers — list several versions for portability:
@@ -67,7 +71,9 @@ let bridgeCXXSettings: [CXXSetting] = [
         "-I/usr/include/\(gccArchDir)/c++/12",
         "-I/usr/include/\(gccArchDir)/c++/13",
     ]),
-    .headerSearchPath("../../opencv/include"),
+]
+let bridgeCXXSettings: [CXXSetting] = khtCXXSettings + [
+    .unsafeFlags(["-I../opencv/include"]),  // same relative base as linker's ../opencv/lib/linux
 ]
 
 #else
@@ -77,8 +83,9 @@ let platformLinkerSettings: [LinkerSetting] = [
     .unsafeFlags(["-L\(opencvLibPath)", "-Xlinker", opencvLib]),
     .linkedLibrary("opencv2"),
 ]
+let khtCXXSettings: [CXXSetting] = []
 let bridgeCXXSettings: [CXXSetting] = [
-    .headerSearchPath("../../opencv/include"),
+    .unsafeFlags(["-I../opencv/include"]),
 ]
 #endif
 
@@ -97,6 +104,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "kht",             // C++ Hough Transform implementation
+                cxxSettings: khtCXXSettings,
                 linkerSettings: platformLinkerSettings
         ),
         .target(name: "kht_bridge",      // C++ OpenCV / KHT bridge (all .cpp)
