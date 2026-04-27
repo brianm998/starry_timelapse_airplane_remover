@@ -32,8 +32,35 @@ let platformLinkerSettings: [LinkerSetting] = [
     .linkedLibrary("z"),
     .linkedLibrary("pthread"),
 ]
+
+// Swift's bundled Clang on Linux doesn't automatically find the system GCC
+// C++ standard library headers (libstdc++). We list several GCC versions so
+// this works on Ubuntu 22.04 (GCC 11/12) and Ubuntu 24.04 (GCC 13) without
+// needing -Xcc flags on the command line. Clang silently ignores any -I path
+// that doesn't exist, so listing extras is harmless.
+//
+// The arch-specific subdirectory differs by CPU:
+//   x86_64  → x86_64-linux-gnu
+//   arm64   → aarch64-linux-gnu
+#if arch(x86_64)
+let gccArchDir = "x86_64-linux-gnu"
+#elseif arch(arm64)
+let gccArchDir = "aarch64-linux-gnu"
+#else
+let gccArchDir = "linux-gnu"   // fallback; may not exist but won't error
+#endif
+
 let eigenCSettings: [CSetting] = [
-    .unsafeFlags(["-I/usr/include/eigen3"]),
+    .unsafeFlags([
+        "-I/usr/include/eigen3",
+        // GCC C++ headers — version-specific paths, several listed for portability
+        "-I/usr/include/c++/11",
+        "-I/usr/include/c++/12",
+        "-I/usr/include/c++/13",
+        "-I/usr/include/\(gccArchDir)/c++/11",
+        "-I/usr/include/\(gccArchDir)/c++/12",
+        "-I/usr/include/\(gccArchDir)/c++/13",
+    ]),
     .headerSearchPath("../../opencv/include"),
 ]
 #else
