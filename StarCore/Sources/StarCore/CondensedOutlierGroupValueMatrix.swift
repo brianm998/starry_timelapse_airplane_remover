@@ -28,9 +28,11 @@ public actor CondensedOutlierGroupValueMatrix {
         if fileManager.fileExists(atPath: typesCSVFilename) {
             try fileManager.removeItem(atPath: typesCSVFilename)
         }
-        fileManager.createFile(atPath: typesCSVFilename,
-                                contents: typesCSV,
-                                attributes: nil)
+        _ = fileManager.createFile(
+          atPath: typesCSVFilename,
+          contents: typesCSV,
+          attributes: nil
+        )
         
         var outlierString = ""
 
@@ -52,6 +54,4 @@ public actor CondensedOutlierGroupValueMatrix {
     }
 }
 
-
-
-nonisolated(unsafe) fileprivate let fileManager = FileManager.default
+fileprivate let fileManager = FileManager.default

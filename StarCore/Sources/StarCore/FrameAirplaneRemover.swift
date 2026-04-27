@@ -3191,7 +3191,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     try FileManager.default.removeItem(atPath: fullPath)
                 } 
                 Log.i("creating \(fullPath)")                      
-                FileManager.default.createFile(
+                _ = FileManager.default.createFile(
                   atPath: fullPath,
                   contents: jsonData,
                   attributes: nil
