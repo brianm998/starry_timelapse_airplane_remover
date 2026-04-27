@@ -87,12 +87,8 @@ public class ConfigManager {
     }
 }
 
-public struct Config: Codable, Sendable, Transferable {
+public struct Config: Codable, Sendable {
  
-    public static var transferRepresentation: some TransferRepresentation {
-        CodableRepresentation(contentType: .json)
-    }
-
     public init() {
         self.outputPath = "."
         self.tempOutputPath = "."

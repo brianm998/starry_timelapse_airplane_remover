@@ -29,8 +29,12 @@ let khtCXXSettings: [CXXSetting] = [
         "-I/usr/local/include/eigen3",      // Intel
     ]),
 ]
+// headerSearchPath (not unsafeFlags) is required for macOS/Xcode — Xcode resolves
+// headerSearchPath correctly but resolves unsafeFlags -I relative to a different
+// working directory.  "../../opencv/include" is relative to Sources/ in SPM,
+// which puts it at the repo root's opencv/include/.
 let bridgeCXXSettings: [CXXSetting] = khtCXXSettings + [
-    .unsafeFlags(["-I../opencv/include"]),  // built opencv headers (same base as linker)
+    .headerSearchPath("../../opencv/include"),
 ]
 
 #elseif os(Linux)
