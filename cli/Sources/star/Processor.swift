@@ -1,6 +1,5 @@
 import Foundation
 import StarCore
-import CoreGraphics
 import logging
 import Semaphore
 
