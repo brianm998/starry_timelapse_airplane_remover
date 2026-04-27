@@ -15,7 +15,6 @@ You should have received a copy of the GNU General Public License along with sta
 import Foundation
 import KHTSwift
 import logging
-import Combine
 #if canImport(CoreGraphics)
 import CoreGraphics
 #endif
