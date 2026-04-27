@@ -324,6 +324,18 @@ public struct Config: Codable, Sendable {
     // so FrameGraphBuilder can skip per-frame detection and merge operations.
     public var hasStaticReferenceHorizon: Bool = false
 
+    // when true and tripodHeadWasMoving is set, frames that are within
+    // referenceHorizonSmoothingMaxDistance of a user-defined reference horizon
+    // frame have their computed horizon filtered against that reference to weed
+    // out statistically implausible column values, before the result is saved as
+    // the merged horizon.  Frames outside the distance window fall through to the
+    // normal median-merge smoothing pass.
+    public var useReferenceHorizonSmoothing: Bool = true
+
+    // maximum frame distance (inclusive) from a user-defined reference horizon
+    // within which reference-based smoothing is applied.
+    public var referenceHorizonSmoothingMaxDistance: Int = 30
+
     // use the combined+RW horizon detector (Otsu + DP + SIOX → median → Random Walker)?
     // when true, this replaces the legacy adaptive Otsu/DP search in loadOrCreateHorizonMask.
     // set to false to fall back to the previous adaptive search approach.
@@ -491,6 +503,8 @@ public struct Config: Codable, Sendable {
         self.hasAudio = try c.decodeIfPresent(Bool.self, forKey: .hasAudio) ?? self.hasAudio
 
         self.horizonDetectionEnabled = try c.decodeIfPresent(Bool.self, forKey: .horizonDetectionEnabled) ?? self.horizonDetectionEnabled
+        self.useReferenceHorizonSmoothing = try c.decodeIfPresent(Bool.self, forKey: .useReferenceHorizonSmoothing) ?? self.useReferenceHorizonSmoothing
+        self.referenceHorizonSmoothingMaxDistance = try c.decodeIfPresent(Int.self, forKey: .referenceHorizonSmoothingMaxDistance) ?? self.referenceHorizonSmoothingMaxDistance
         self.useCombinedHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useCombinedHorizonDetection) ?? self.useCombinedHorizonDetection
         self.horizonStripWidth = try c.decodeIfPresent(Int.self, forKey: .horizonStripWidth) ?? self.horizonStripWidth
         self.useCannyForHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useCannyForHorizonDetection) ?? self.useCannyForHorizonDetection

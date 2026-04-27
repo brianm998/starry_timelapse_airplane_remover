@@ -195,6 +195,8 @@ struct ProcessingSettingsView: View {
     @State private var showAlignmentWriteDebugImagesInfo = false
     @State private var showAlignmentAllowEarthAlignmentInfo = false
     @State private var showUseHomographyRefinedHorizonInfo = false
+    @State private var showUseReferenceHorizonSmoothingInfo = false
+    @State private var showReferenceHorizonSmoothingMaxDistanceInfo = false
 
     @State private var showMaxConcurrentHorizonsView = false
     @State private var showMaxConcurrentKeypointsView = false
@@ -226,6 +228,8 @@ struct ProcessingSettingsView: View {
         showAlignmentWriteDebugImagesInfo ||
         showAlignmentAllowEarthAlignmentInfo ||
         showUseHomographyRefinedHorizonInfo ||
+        showUseReferenceHorizonSmoothingInfo ||
+        showReferenceHorizonSmoothingMaxDistanceInfo ||
         showMaxConcurrentHorizonsView ||
         showMaxConcurrentKeypointsView ||
         showMaxConcurrentHomographiesView ||
@@ -264,6 +268,8 @@ struct ProcessingSettingsView: View {
         showAlignmentWriteDebugImagesInfo = true
         showAlignmentAllowEarthAlignmentInfo = true
         showUseHomographyRefinedHorizonInfo = true
+        showUseReferenceHorizonSmoothingInfo = true
+        showReferenceHorizonSmoothingMaxDistanceInfo = true
         showMaxConcurrentHorizonsView = true
         showMaxConcurrentKeypointsView = true
         showMaxConcurrentHomographiesView = true
@@ -302,6 +308,8 @@ struct ProcessingSettingsView: View {
         showAlignmentWriteDebugImagesInfo = false
         showAlignmentAllowEarthAlignmentInfo = false
         showUseHomographyRefinedHorizonInfo = false
+        showUseReferenceHorizonSmoothingInfo = false
+        showReferenceHorizonSmoothingMaxDistanceInfo = false
         showMaxConcurrentHorizonsView = false
         showMaxConcurrentKeypointsView = false
         showMaxConcurrentHomographiesView = false
@@ -439,6 +447,10 @@ struct ProcessingSettingsView: View {
                                   self.horizonVerticalShiftAmountView
                                   Divider()
                                   self.useHomographyRefinedHorizonView
+                                  Divider()
+                                  self.useReferenceHorizonSmoothingView
+                                  Divider()
+                                  self.referenceHorizonSmoothingMaxDistanceView
                               }
                           } label: {
                               Text("Horizon Settings")
@@ -1168,6 +1180,81 @@ struct ProcessingSettingsView: View {
             }
         }
         .disabled(viewModel.sceneType == .skyOnly)
+    }
+
+    private var useReferenceHorizonSmoothingView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showUseReferenceHorizonSmoothingInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            For moving timelapses with user-defined reference horizon frames, enabling this uses those \
+            reference horizons to filter out obviously wrong per-column horizon values on nearby frames. \
+            Columns whose detected position is a statistical outlier relative to the reference are \
+            replaced by the reference value; columns within normal variation are kept as detected. \
+            Frames beyond the max distance window fall through to normal horizon smoothing.
+            Only applies when Camera Motion is set to Moving.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Reference Horizon Smoothing:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    Space(width: 10)
+                    Toggle(isOn: $viewModel.useReferenceHorizonSmoothing) {
+                        Text("")
+                    }
+                    Spacer()
+                }
+            }
+        }
+        .disabled(viewModel.sceneType == .skyOnly || viewModel.cameraMotion == .fixed)
+    }
+
+    private var referenceHorizonSmoothingMaxDistanceView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showReferenceHorizonSmoothingMaxDistanceInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            The maximum number of frames away from a user-defined reference horizon within which \
+            reference-based horizon smoothing is applied. For example, a value of 30 means any \
+            frame within 30 frames of a reference horizon frame will be smoothed against it. \
+            Frames further away than this distance use the normal median-merge horizon smoothing instead.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Reference Smoothing Distance:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.referenceHorizonSmoothingMaxDistance,
+                      minValue: 1,
+                      maxValue: 10000,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .referenceHorizonSmoothingMaxDistance,
+                      alwaysOpen: true
+                    )
+                    Spacer()
+                }
+            }
+        }
+        .disabled(viewModel.sceneType == .skyOnly || viewModel.cameraMotion == .fixed ||
+                  !viewModel.useReferenceHorizonSmoothing)
     }
 
     private var processingModeView: some View {

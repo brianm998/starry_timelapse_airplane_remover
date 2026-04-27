@@ -717,6 +717,22 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    var useReferenceHorizonSmoothing: Bool {
+        didSet {
+            var realConfig = config.config()
+            realConfig.useReferenceHorizonSmoothing = useReferenceHorizonSmoothing
+            config.update(realConfig)
+        }
+    }
+
+    var referenceHorizonSmoothingMaxDistance: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.referenceHorizonSmoothingMaxDistance = referenceHorizonSmoothingMaxDistance
+            config.update(realConfig)
+        }
+    }
+
     public var alignmentMaxKeypoints: Int {
         didSet {
             var realConfig = config.config()
@@ -1016,6 +1032,8 @@ public final class ImageSequenceViewModel {
         self.horizonVerticalShiftAmount = config.horizonVerticalShiftAmount
         self.allowEarthAlignment = config.allowEarthAlignment
         self.useHomographyRefinedHorizon = config.useHomographyRefinedHorizon
+        self.useReferenceHorizonSmoothing = config.useReferenceHorizonSmoothing
+        self.referenceHorizonSmoothingMaxDistance = config.referenceHorizonSmoothingMaxDistance
 
         self.alignmentMaxKeypoints = config.alignmentMaxKeypoints
         self.alignmentGroundHorizonExtension = config.alignmentGroundHorizonExtension

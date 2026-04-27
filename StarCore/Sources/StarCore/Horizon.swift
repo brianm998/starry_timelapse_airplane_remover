@@ -371,6 +371,38 @@ extension PixelatedImage {
 
         return PixelatedImage(mat: self.mat.addWhiteRows(onTop: Int32(height)))
     }
+
+    /// Build a binary CV_8UC1 horizon mask from per-column Y values.
+    ///
+    /// White (255) = sky, black (0) = ground.
+    /// For column x, all rows >= columnY[x] are ground; rows above are sky.
+    /// Columns with nil retain all-sky (255 throughout).
+    static func fromHorizonColumnY(
+      width: Int,
+      height: Int,
+      columnY: [Int?]
+    ) -> PixelatedImage? {
+        guard width > 0, height > 0, columnY.count == width else { return nil }
+        var bytes = [UInt8](repeating: 255, count: width * height)
+        for x in 0..<width {
+            guard let y = columnY[x] else { continue }
+            let clampedY = max(0, min(height, y))
+            for row in clampedY..<height {
+                bytes[row * width + x] = 0
+            }
+        }
+        return bytes.withUnsafeMutableBytes { ptr in
+            guard let base = ptr.baseAddress else { return nil }
+            let mat = MatWrapper(
+              width: width, height: height,
+              cvType: 0, // CV_8UC1
+              bytesPerRow: width,
+              data: base,
+              takeOwnership: false
+            )
+            return PixelatedImage(mat: mat.clone())
+        }
+    }
 }
 
 extension Array where Element == ImageMatrixElement {

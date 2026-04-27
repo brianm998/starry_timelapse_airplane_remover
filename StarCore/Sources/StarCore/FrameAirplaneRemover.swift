@@ -500,15 +500,39 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
-    public func createMergedHorizonMask() async throws -> HorizonMask? { 
+    public func createMergedHorizonMask() async throws -> HorizonMask? {
 
         self.set(state: .mergingHorizon)
 
         // get original horizon mask for this frame
         Log.d("frame \(frameIndex) calling loadOrCreateHorizonMask()")
         let mask = try await self.loadOrCreateHorizonMask()
-        
+
         let config = await configManager.config()
+
+        // Reference-horizon smoothing pass (moving sequences only).
+        // When enabled and a user-defined reference horizon exists within
+        // referenceHorizonSmoothingMaxDistance frames, use it to filter
+        // statistically implausible column values and save as merged horizon.
+        if config.useReferenceHorizonSmoothing,
+           config.tripodHeadWasMoving,
+           let (_, refMask) = try await nearestReferenceHorizon(
+             maxDistance: config.referenceHorizonSmoothingMaxDistance
+           )
+        {
+            Log.i("frame \(frameIndex) createMergedHorizonMask: applying reference-horizon smoothing")
+            if let filtered = referenceSmoothedHorizonMask(detected: mask, reference: refMask) {
+                try await imageAccessor.save(
+                  filtered.image,
+                  frameIndex: frameIndex,
+                  as: .mergedHorizon,
+                  atSizes: await self.outputSizes,
+                  overwrite: true
+                )
+                return filtered
+            }
+            Log.w("frame \(frameIndex) reference smoothing failed, falling through to normal merge")
+        }
 
         var neighborIndices: [Int] = []
 
@@ -598,6 +622,123 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.w("frame \(frameIndex) unable to calculate merged horizon")
         
         return nil
+    }
+
+    // MARK: - Reference horizon smoothing helpers
+
+    /// Returns the (frameIndex, mask) of the nearest user-defined reference horizon
+    /// within `maxDistance` frames of the current frame, or nil if none exists.
+    private func nearestReferenceHorizon(
+      maxDistance: Int
+    ) async throws -> (Int, HorizonMask)? {
+        guard let imageSequence else { return nil }
+        guard let refinedPath = imageAccessor.nameForImage(
+                frameIndex: frameIndex,
+                ofType: .refinedHorizon,
+                atSize: .original
+              )
+        else { return nil }
+
+        let referenceDir = URL(fileURLWithPath: refinedPath)
+            .deletingLastPathComponent()    // …/refinedHorizon
+            .deletingLastPathComponent()    // …/output
+            .appendingPathComponent("horizonReference")
+
+        let fm = FileManager.default
+        var bestDistance = Int.max
+        var bestIndex: Int = -1
+        var bestMask: HorizonMask? = nil
+
+        let frameCount = imageSequence.filenames.count
+        for candidateIndex in 0..<frameCount {
+            let distance = abs(candidateIndex - frameIndex)
+            guard distance <= maxDistance, distance < bestDistance else { continue }
+
+            // Derive the reference filename the same way loadHorizonReferenceMask does:
+            // use the refinedHorizon path for the candidate frame, take its last component.
+            guard let candidatePath = imageAccessor.nameForImage(
+                    frameIndex: candidateIndex,
+                    ofType: .refinedHorizon,
+                    atSize: .original
+                  )
+            else { continue }
+            let candidateFileName = URL(fileURLWithPath: candidatePath).lastPathComponent
+            let candidateRefURL = referenceDir.appendingPathComponent(candidateFileName)
+
+            guard fm.fileExists(atPath: candidateRefURL.path),
+                  let img = PixelatedImage(filename: candidateRefURL.path)?.asHorizonMask,
+                  let horizonMask = HorizonMask(img)
+            else { continue }
+
+            bestDistance = distance
+            bestIndex = candidateIndex
+            bestMask = horizonMask
+        }
+
+        guard let mask = bestMask else { return nil }
+        return (bestIndex, mask)
+    }
+
+    /// Filter a detected horizon mask using a reference mask to reject per-column
+    /// Y values that are statistical outliers relative to the reference.
+    ///
+    /// For each column the delta between detected and reference horizon Y is computed.
+    /// Columns whose delta deviates more than 2 standard deviations from the mean
+    /// delta are replaced by the reference Y value.  This removes obviously wrong
+    /// detections without clamping the entire mask to the reference.
+    private func referenceSmoothedHorizonMask(
+      detected: HorizonMask,
+      reference: HorizonMask
+    ) -> HorizonMask? {
+        let w = detected.image.width
+        let h = detected.image.height
+
+        let detectedY  = HorizonScoring.extractHorizonYPerColumn(from: detected.image)
+        let referenceY = HorizonScoring.extractHorizonYPerColumn(from: reference.image)
+
+        // Compute per-column deltas where both masks have a defined horizon Y.
+        var deltas: [Double] = []
+        for x in 0..<w {
+            if let dy = detectedY[x], let ry = referenceY[x] {
+                deltas.append(Double(dy - ry))
+            }
+        }
+
+        guard !deltas.isEmpty else {
+            Log.w("frame \(frameIndex) referenceSmoothedHorizonMask: no common columns, skipping")
+            return nil
+        }
+
+        let mean = deltas.reduce(0, +) / Double(deltas.count)
+        let variance = deltas.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(deltas.count)
+        let stddev = variance.squareRoot()
+        let threshold = 2.0 * max(stddev, 1.0) // at least 1 px to avoid clamping tiny natural variation
+
+        Log.d("frame \(frameIndex) referenceSmoothedHorizonMask: mean delta=\(String(format:"%.1f", mean)) stddev=\(String(format:"%.1f", stddev)) threshold=\(String(format:"%.1f", threshold))")
+
+        // Build corrected per-column Y array.
+        var correctedY = detectedY
+        var replacedCount = 0
+        for x in 0..<w {
+            guard let dy = detectedY[x] else { continue }
+            let ry = referenceY[x]
+            let delta = Double(dy) - Double(ry ?? dy)
+            if abs(delta - mean) > threshold, let refY = ry {
+                correctedY[x] = refY
+                replacedCount += 1
+            }
+        }
+
+        Log.i("frame \(frameIndex) referenceSmoothedHorizonMask: replaced \(replacedCount)/\(w) columns")
+
+        guard let maskImage = PixelatedImage.fromHorizonColumnY(width: w, height: h, columnY: correctedY),
+              let result = HorizonMask(maskImage)
+        else {
+            Log.w("frame \(frameIndex) referenceSmoothedHorizonMask: failed to build mask image")
+            return nil
+        }
+
+        return result
     }
 
     // MARK: - Refined horizon mask (homography-based refinement)
