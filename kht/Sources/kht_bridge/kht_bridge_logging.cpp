@@ -1,6 +1,5 @@
 // kht_bridge_logging.cpp — C logging callback implementation
 #include "kht_bridge_logging.h"
-#include <cstddef>
 
 static KHTLogHandler g_logHandler = nullptr;
 

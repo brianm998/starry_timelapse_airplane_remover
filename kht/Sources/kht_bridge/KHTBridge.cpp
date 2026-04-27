@@ -5,7 +5,7 @@
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
-#include "../kht/include/kht.hpp"
+#include "kht.hpp"
 
 #include <cmath>
 #include <cstdlib>
