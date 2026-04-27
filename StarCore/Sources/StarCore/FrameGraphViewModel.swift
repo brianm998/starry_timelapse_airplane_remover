@@ -4,7 +4,9 @@ import Foundation
 public let frameGraphViewModel = FrameGraphViewModel()
 
 @MainActor
+#if canImport(SwiftUI)
 @Observable
+#endif
 public final class FrameGraphViewModel {
 
     public var operations: [OperationType: [OperationState: UInt]] = [:]
