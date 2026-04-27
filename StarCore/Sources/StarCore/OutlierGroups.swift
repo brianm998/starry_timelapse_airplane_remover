@@ -11,6 +11,9 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking   // URLSession, URLRequest live here on Linux
+#endif
 import logging
 
 // holds all the outlier groups for a frame

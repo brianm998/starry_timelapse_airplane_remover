@@ -25,7 +25,6 @@ nonisolated(unsafe) public var IMAGE_WIDTH: Double?
 nonisolated(unsafe) public var IMAGE_HEIGHT: Double?
 
 @MainActor
-@Observable
 public class OutlierRemovalObserver {
     public init() { }
     

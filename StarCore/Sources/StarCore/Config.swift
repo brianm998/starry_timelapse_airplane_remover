@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking   // URLSession, URLRequest live here on Linux
+#endif
 import logging
 #if canImport(SwiftUI)
 import SwiftUI
