@@ -43,6 +43,7 @@ let opencvLib    = "../opencv/lib/linux/libopencv2.a"
 let platformLinkerSettings: [LinkerSetting] = [
     .unsafeFlags(["-L\(opencvLibPath)", "-Xlinker", opencvLib]),
     .linkedLibrary("opencv2"),
+    .linkedLibrary("stdc++"),
     .linkedLibrary("z"),
     .linkedLibrary("pthread"),
 ]
