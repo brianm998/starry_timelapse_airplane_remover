@@ -4,6 +4,9 @@ import StarCore
 import logging
 import StarDecisionTrees
 import KHTSwift
+#if canImport(Observation)
+import Observation
+#endif
 
 /*
 
