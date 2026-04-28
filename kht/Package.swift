@@ -61,16 +61,25 @@ let gccArchDir = "linux-gnu"   // fallback; harmless if it doesn't exist
 
 let platformLinkerSettings: [LinkerSetting] = [
     .unsafeFlags([
-        "-L\(opencvLibPath)", "-Xlinker", opencvLib,
-        // Swift's bundled Clang doesn't search GCC's lib dirs, so ld.gold
-        // can't resolve -lstdc++ without these explicit search paths.
-        // List multiple GCC versions; ld silently ignores non-existent ones.
+        "-L\(opencvLibPath)",
+        // ld.gold only extracts archive members that satisfy already-unresolved
+        // symbols at the point the archive is scanned.  With a monolithic OpenCV
+        // .a the scan order means cv::fastMalloc, cv::parallel_for_, JPEG codecs,
+        // etc. are never extracted.  --whole-archive forces all members in, then
+        // --no-whole-archive restores normal behaviour for subsequent libraries.
+        "-Xlinker", "--whole-archive",
+        "-Xlinker", opencvLib,
+        "-Xlinker", "--no-whole-archive",
+        // Swift's bundled Clang doesn't search GCC's lib dirs automatically.
+        // List multiple GCC versions; ld silently ignores non-existent paths.
         "-L/usr/lib/gcc/\(gccArchDir)/11",
         "-L/usr/lib/gcc/\(gccArchDir)/12",
         "-L/usr/lib/gcc/\(gccArchDir)/13",
         "-L/usr/lib/\(gccArchDir)",
+        // ld.gold verifies .so dependency chains at link time; libswiftObservation.so
+        // references swift::threading::fatal which lives in libswiftCore.so.
+        "-L/opt/swift-6/usr/lib/swift/linux",
     ]),
-    .linkedLibrary("opencv2"),
     .linkedLibrary("stdc++"),
     .linkedLibrary("z"),
     .linkedLibrary("pthread"),
