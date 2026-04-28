@@ -415,8 +415,6 @@ struct StarCli: AsyncParsableCommand {
             }
             
             Log.i("looking for files to processes in \(inputImageSequenceDirname)")
-            let writeOutputFiles = !skipOutputFiles
-
             do {
                 
                 let processor = try await Processor(
@@ -544,7 +542,7 @@ func streamFrameChanges() -> AsyncStream<[OperationType: [OperationState: UInt]]
 private func registerTracking(
     continuation: AsyncStream<[OperationType: [OperationState: UInt]]>.Continuation
 ) {
-    withObservationTracking {
+    _ = withObservationTracking {
         continuation.yield(
             frameGraphViewModel.operations
         )
