@@ -210,13 +210,22 @@ else
     ALL_LIBS="$LIBS $THIRD_PARTY"
 
     # create a merged static library using ar
-    mkdir -p merged_tmp
-    cd merged_tmp
+    # Each archive is extracted into its own numbered subdirectory to prevent
+    # basename collisions: ar x uses basenames, so two archives that both
+    # contain e.g. alloc.cpp.o or jutils.c.o would silently overwrite each
+    # other when extracted into a shared flat directory.
+    OUTLIB="../../../lib/$PLATFORM_DIR/libopencv2.a"
+    rm -f "$OUTLIB"
+    IDX=0
     for lib in $ALL_LIBS; do
-        ar x "../$lib"
+        mkdir -p "merged_tmp/$IDX"
+        (cd "merged_tmp/$IDX" && ar x "../../$lib")
+        IDX=$((IDX + 1))
     done
-    ar rcs ../../../lib/$PLATFORM_DIR/libopencv2.a *.o
-    cd ..
+    # xargs -n 200 keeps argument lists under ARG_MAX.
+    # 'qc' = quick-append (no duplicate check) + create-if-absent.
+    find merged_tmp -name '*.o' -print0 | xargs -0 -n 200 ar qc "$OUTLIB"
+    ranlib "$OUTLIB"
     rm -rf merged_tmp
 
     cd ../..  # back to opencv/

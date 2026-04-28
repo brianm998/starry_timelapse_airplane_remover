@@ -76,9 +76,11 @@ let platformLinkerSettings: [LinkerSetting] = [
         "-L/usr/lib/gcc/\(gccArchDir)/12",
         "-L/usr/lib/gcc/\(gccArchDir)/13",
         "-L/usr/lib/\(gccArchDir)",
-        // ld.gold verifies .so dependency chains at link time; libswiftObservation.so
-        // references swift::threading::fatal which lives in libswiftCore.so.
-        "-L/opt/swift-6/usr/lib/swift/linux",
+        // ld.gold verifies .so dependency chains at link time and rejects
+        // libswiftObservation.so's reference to swift::threading::fatal
+        // (defined in libswiftCore.so, resolved at runtime via rpath).
+        // --allow-shlib-undefined suppresses this false-positive.
+        "-Wl,--allow-shlib-undefined",
     ]),
     .linkedLibrary("stdc++"),
     .linkedLibrary("z"),
