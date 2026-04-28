@@ -41,7 +41,16 @@ let bridgeCXXSettings: [CXXSetting] = khtCXXSettings + [
 let opencvLibPath = "../opencv/lib/linux"
 let opencvLib    = "../opencv/lib/linux/libopencv2.a"
 let platformLinkerSettings: [LinkerSetting] = [
-    .unsafeFlags(["-L\(opencvLibPath)", "-Xlinker", opencvLib]),
+    .unsafeFlags([
+        "-L\(opencvLibPath)", "-Xlinker", opencvLib,
+        // Swift's bundled Clang doesn't search GCC's lib dirs, so ld.gold
+        // can't resolve -lstdc++ without these explicit search paths.
+        // List multiple GCC versions; ld silently ignores non-existent ones.
+        "-L/usr/lib/gcc/\(gccArchDir)/11",
+        "-L/usr/lib/gcc/\(gccArchDir)/12",
+        "-L/usr/lib/gcc/\(gccArchDir)/13",
+        "-L/usr/lib/\(gccArchDir)",
+    ]),
     .linkedLibrary("opencv2"),
     .linkedLibrary("stdc++"),
     .linkedLibrary("z"),
