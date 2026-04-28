@@ -1,10 +1,13 @@
 import Foundation
+#if canImport(Observation)
+import Observation
+#endif
 
 @MainActor
 public let frameGraphViewModel = FrameGraphViewModel()
 
 @MainActor
-#if canImport(SwiftUI)
+#if canImport(Observation)
 @Observable
 #endif
 public final class FrameGraphViewModel {
