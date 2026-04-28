@@ -214,7 +214,7 @@ else
     # basename collisions: ar x uses basenames, so two archives that both
     # contain e.g. alloc.cpp.o or jutils.c.o would silently overwrite each
     # other when extracted into a shared flat directory.
-    OUTLIB="../../../lib/$PLATFORM_DIR/libopencv2.a"
+    OUTLIB="../../lib/$PLATFORM_DIR/libopencv2.a"
     rm -f "$OUTLIB"
     IDX=0
     for lib in $ALL_LIBS; do
