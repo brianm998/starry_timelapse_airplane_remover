@@ -40,6 +40,25 @@ let bridgeCXXSettings: [CXXSetting] = khtCXXSettings + [
 #elseif os(Linux)
 let opencvLibPath = "../opencv/lib/linux"
 let opencvLib    = "../opencv/lib/linux/libopencv2.a"
+
+// Swift's bundled Clang on Linux doesn't automatically find the system GCC
+// C++ standard library headers (libstdc++).  We list several GCC versions so
+// this works on Ubuntu 22.04 (GCC 11/12) and Ubuntu 24.04 (GCC 13) without
+// extra -Xcc flags.  Clang silently ignores any -I path that doesn't exist.
+//
+// The arch-specific subdir:  x86_64 → x86_64-linux-gnu
+//                            arm64  → aarch64-linux-gnu
+//
+// IMPORTANT: gccArchDir must be defined BEFORE platformLinkerSettings below,
+// because Package.swift top-level lets execute sequentially.
+#if arch(x86_64)
+let gccArchDir = "x86_64-linux-gnu"
+#elseif arch(arm64)
+let gccArchDir = "aarch64-linux-gnu"
+#else
+let gccArchDir = "linux-gnu"   // fallback; harmless if it doesn't exist
+#endif
+
 let platformLinkerSettings: [LinkerSetting] = [
     .unsafeFlags([
         "-L\(opencvLibPath)", "-Xlinker", opencvLib,
@@ -56,21 +75,6 @@ let platformLinkerSettings: [LinkerSetting] = [
     .linkedLibrary("z"),
     .linkedLibrary("pthread"),
 ]
-
-// Swift's bundled Clang on Linux doesn't automatically find the system GCC
-// C++ standard library headers (libstdc++).  We list several GCC versions so
-// this works on Ubuntu 22.04 (GCC 11/12) and Ubuntu 24.04 (GCC 13) without
-// extra -Xcc flags.  Clang silently ignores any -I path that doesn't exist.
-//
-// The arch-specific subdir:  x86_64 → x86_64-linux-gnu
-//                            arm64  → aarch64-linux-gnu
-#if arch(x86_64)
-let gccArchDir = "x86_64-linux-gnu"
-#elseif arch(arm64)
-let gccArchDir = "aarch64-linux-gnu"
-#else
-let gccArchDir = "linux-gnu"   // fallback; harmless if it doesn't exist
-#endif
 
 // kht (Hough Transform core) needs eigen + GCC C++ stdlib headers.
 // kht_bridge additionally needs the OpenCV headers.
