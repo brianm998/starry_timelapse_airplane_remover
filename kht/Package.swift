@@ -80,7 +80,7 @@ let platformLinkerSettings: [LinkerSetting] = [
         // libswiftObservation.so's reference to swift::threading::fatal
         // (defined in libswiftCore.so, resolved at runtime via rpath).
         // --allow-shlib-undefined suppresses this false-positive.
-        "-Wl,--allow-shlib-undefined",
+        "-Xlinker", "--allow-shlib-undefined",
     ]),
     .linkedLibrary("stdc++"),
     .linkedLibrary("z"),
