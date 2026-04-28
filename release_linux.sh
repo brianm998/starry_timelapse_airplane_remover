@@ -2,8 +2,6 @@
 
 # Builds the star CLI binary for Linux and packages it as a .deb file.
 #
-# Run from the cli/ directory (mirrors cli/release.sh convention on macOS).
-#
 # Prerequisites (Debian/Ubuntu):
 #   apt install cmake make git pkg-config perl dpkg-dev \
 #               libeigen3-dev zlib1g-dev libpng-dev libtiff-dev libjpeg-dev
@@ -18,7 +16,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$SCRIPT_DIR"
 
 STAR_VERSION=$(cd "$REPO_ROOT/StarCore" && perl version.pl)
 echo "==> Building star CLI v${STAR_VERSION} for Linux"
