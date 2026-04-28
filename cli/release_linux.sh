@@ -33,11 +33,10 @@ else
     ./release.sh
 fi
 
-# ── 2. StarDecisionTrees debug static library ─────────────────────────────────
-# cli/Package.swift links against the debug lib (dtLibDebug), so build that.
-echo "==> Building StarDecisionTrees debug lib..."
+# ── 2. StarDecisionTrees release static library ───────────────────────────────
+echo "==> Building StarDecisionTrees release lib..."
 cd "$REPO_ROOT/StarDecisionTrees"
-bash build_debug_lib.sh
+bash release.sh
 echo "==> StarDecisionTrees: done"
 
 # ── 3. CLI ───────────────────────────────────────────────────────────────────

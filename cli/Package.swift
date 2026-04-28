@@ -9,9 +9,9 @@ let dtIncludeDebug   = "../StarDecisionTrees/include/debug/macos"
 let dtLibDebug       = "../StarDecisionTrees/lib/debug/macos"
 let dtLibDebugFile   = "../StarDecisionTrees/lib/debug/macos/libStarDecisionTrees.a"
 #elseif os(Linux)
-let dtIncludeDebug   = "../StarDecisionTrees/include/debug/linux"
-let dtLibDebug       = "../StarDecisionTrees/lib/debug/linux"
-let dtLibDebugFile   = "../StarDecisionTrees/lib/debug/linux/libStarDecisionTrees.a"
+let dtIncludeDebug   = "../StarDecisionTrees/include/release/linux"
+let dtLibDebug       = "../StarDecisionTrees/lib/release/linux"
+let dtLibDebugFile   = "../StarDecisionTrees/lib/release/linux/libStarDecisionTrees.a"
 #else
 let dtIncludeDebug   = "../StarDecisionTrees/include/debug"
 let dtLibDebug       = "../StarDecisionTrees/lib/debug"

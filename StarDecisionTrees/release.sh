@@ -57,8 +57,18 @@ if [ "$PLATFORM" = "Darwin" ]; then
           -create -output lib/release/$PLATFORM_DIR/libStarDecisionTrees.a
 
 else
-    # Linux: single architecture build
-    swift build --configuration release -Xswiftc -O
+    # Linux: single architecture build.
+    # Decision-tree Swift files are very large; cap parallelism so each job
+    # has ~2 GB of available RAM to avoid swap thrash.
+    MEM_PER_JOB_GB=2
+    NCPU=$(nproc)
+    AVAIL_MEM_GB=$(awk '/MemAvailable/ { print int($2/1024/1024) }' /proc/meminfo)
+    MEM_JOBS=$(( AVAIL_MEM_GB / MEM_PER_JOB_GB ))
+    JOBS=$(( MEM_JOBS < NCPU ? MEM_JOBS : NCPU ))
+    [ "$JOBS" -lt 1 ] && JOBS=1
+    echo "==> swift build -j $JOBS  (${NCPU} CPUs, memory-limited)"
+
+    swift build --configuration release -Xswiftc -O -j "$JOBS"
 
     mv .build/release/libStarDecisionTrees.a lib/release/$PLATFORM_DIR
     mv .build/release/Modules/StarDecisionTrees.swiftmodule include/release/$PLATFORM_DIR
