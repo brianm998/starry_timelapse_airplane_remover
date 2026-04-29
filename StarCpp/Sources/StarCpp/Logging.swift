@@ -1,6 +1,6 @@
 // Logging.swift — Bridge C++ logging to Swift logging system
-// Re-export kht_bridge so consumers of KHTSwift automatically get all C types
-@_exported import kht_bridge
+// Re-export starcpp_bridge so consumers of StarCpp automatically get all C types
+@_exported import starcpp_bridge
 import logging
 
 /// Call this once at startup to route C++ log messages through the Swift logging system.

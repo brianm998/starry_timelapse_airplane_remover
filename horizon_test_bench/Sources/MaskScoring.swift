@@ -7,8 +7,8 @@
 
 import Foundation
 import StarCore
-import KHTSwift
-import kht_bridge
+import StarCpp
+import starcpp_bridge
 
 // MARK: - Pixel access helper (since intensity is internal on PixelatedImage)
 

@@ -1,6 +1,6 @@
 // MatWrapper.swift — Swift wrapper matching the old ObjC MatWrapper API
 import Foundation
-import kht_bridge
+import starcpp_bridge
 
 public final class MatWrapper: @unchecked Sendable {
     public let ref: MatWrapperRef

@@ -2,7 +2,7 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking   // URLSession, URLRequest live here on Linux
 #endif
-import KHTSwift
+import StarCpp
 import Semaphore
 import logging
 
@@ -5721,7 +5721,7 @@ public actor CountActor {
 }
 
 
-// OCVFeatureSet is already @unchecked Sendable in KHTSwift
+// OCVFeatureSet is already @unchecked Sendable in StarCpp
 
 public func doublyLink(frames: [FrameAirplaneRemover]) async {
     // doubly link frames here so that the decision tree can have acess to other frames

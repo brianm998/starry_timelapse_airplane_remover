@@ -1,9 +1,9 @@
-// KHTBridge.h — Pure C API for Kernel Hough Transform + umbrella header
+// StarCppBridge.h — Pure C API for Kernel Hough Transform + umbrella header
 #pragma once
 
-// Include all kht_bridge headers
-#include "kht_bridge_logging.h"
-#include "kht_bridge_types.h"
+// Include all starcpp_bridge headers
+#include "starcpp_bridge_logging.h"
+#include "starcpp_bridge_types.h"
 #include "MatWrapper.h"
 #include "BufferHolder.h"
 #include "PixelatedImageBridge.h"

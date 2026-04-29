@@ -1,5 +1,5 @@
 import Foundation
-import KHTSwift
+import StarCpp
 #if canImport(SwiftUI)
 import SwiftUI
 #endif

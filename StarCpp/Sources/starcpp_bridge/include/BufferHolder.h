@@ -1,7 +1,7 @@
 // BufferHolder.h — Pure C API for pixel buffer management
 #pragma once
 
-#include "kht_bridge_types.h"
+#include "starcpp_bridge_types.h"
 
 #ifdef __cplusplus
 extern "C" {

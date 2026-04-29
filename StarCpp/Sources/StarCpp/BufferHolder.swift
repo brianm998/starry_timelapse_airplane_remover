@@ -1,5 +1,5 @@
 // BufferHolder.swift — Swift wrapper for pixel buffer management
-import kht_bridge
+import starcpp_bridge
 
 public final class BufferHolder: @unchecked Sendable {
     public let ref: BufferHolderRef

@@ -1,7 +1,7 @@
 // ImageCache_C.h — Pure C API for image loading cache
 #pragma once
 
-#include "kht_bridge_types.h"
+#include "starcpp_bridge_types.h"
 
 #ifdef __cplusplus
 extern "C" {

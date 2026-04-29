@@ -11,7 +11,7 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 import Foundation
-import KHTSwift
+import StarCpp
 import logging
 #if canImport(CoreGraphics)
 import CoreGraphics
@@ -1238,7 +1238,7 @@ extension PixelatedImage {
 
 // MARK: - MatWrapper
 
-// MatWrapper is already @unchecked Sendable in KHTSwift
+// MatWrapper is already @unchecked Sendable in StarCpp
 // UnsafeBufferPointer is already Sendable in the Swift stdlib
 
 extension MatWrapper: @retroactive CustomStringConvertible {

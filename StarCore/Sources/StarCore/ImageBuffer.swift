@@ -1,6 +1,6 @@
 import Foundation
 import logging
-import KHTSwift
+import StarCpp
 
 // allows construction of an accessable buffer that can then be converted into
 // a PixelatedImage with a cv::Mat holding the buffer

@@ -21,7 +21,7 @@
 
 import Foundation
 import StarCore
-import KHTSwift
+import StarCpp
 
 // MARK: - Data model
 

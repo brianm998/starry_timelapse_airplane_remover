@@ -1,5 +1,5 @@
 import Foundation
-import KHTSwift
+import StarCpp
 import logging
 
 // this file has logic for horizon detection and analysis

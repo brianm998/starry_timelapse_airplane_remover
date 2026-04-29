@@ -9,7 +9,7 @@ let package = Package(
         .macOS(.v13)
     ],
     dependencies: [
-//        .package(name: "KHTSwift", path: "../kht")
+//        .package(name: "StarCpp", path: "../StarCpp")
         .package(name: "StarCore", path: "../StarCore")
     ],
     targets: [

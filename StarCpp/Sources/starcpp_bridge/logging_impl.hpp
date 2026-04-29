@@ -1,7 +1,7 @@
 // logging_impl.hpp — Internal logging macros for C++ code, using the C callback
 #pragma once
 
-#include "kht_bridge_logging.h"
+#include "starcpp_bridge_logging.h"
 #include <cstdio>
 #include <cstdarg>
 #include <cstring>

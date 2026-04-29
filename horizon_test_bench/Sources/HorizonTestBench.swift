@@ -34,8 +34,8 @@ import Foundation
 import ArgumentParser
 import logging
 import StarCore
-import KHTSwift
-import kht_bridge
+import StarCpp
+import starcpp_bridge
 import Semaphore
 
 // MARK: - Top-level command

@@ -1,4 +1,4 @@
-// kht_bridge_logging.h — Pure C logging interface replacing ObjC LoggingObjC
+// starcpp_bridge_logging.h — Pure C logging interface replacing ObjC LoggingObjC
 #pragma once
 
 #ifdef __cplusplus

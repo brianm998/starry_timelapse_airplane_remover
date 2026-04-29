@@ -1,7 +1,7 @@
 // ImageAligner.h — Pure C API for image alignment operations
 #pragma once
 
-#include "kht_bridge_types.h"
+#include "starcpp_bridge_types.h"
 
 #ifdef __cplusplus
 extern "C" {

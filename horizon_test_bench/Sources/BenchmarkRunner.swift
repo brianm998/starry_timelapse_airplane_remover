@@ -7,8 +7,8 @@
 
 import Foundation
 import StarCore
-import KHTSwift
-import kht_bridge
+import StarCpp
+import starcpp_bridge
 import Semaphore
 
 // MARK: - Result types

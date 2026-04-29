@@ -3,7 +3,7 @@ import Foundation
 import StarCore
 import logging
 import StarDecisionTrees
-import KHTSwift
+import StarCpp
 #if canImport(Observation)
 import Observation
 #endif

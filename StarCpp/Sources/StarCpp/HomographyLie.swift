@@ -1,5 +1,5 @@
 // HomographyLie.swift — Swift wrapper for Lie group homography operations
-import kht_bridge
+import starcpp_bridge
 
 public enum HomographyLie {
     /// Converts a 3x3 homography (9 doubles, row-major) to 8D log-space vector.

@@ -3,12 +3,12 @@
 
 import PackageDescription
 
-// this package exposes the kernel hough transform to swift, which needs the c++ opencv2 lib
+// this package (StarCpp) exposes the kernel hough transform to swift, which needs the c++ opencv2 lib
 
 // ---------------------------------------------------------------------------
 // Platform-specific settings
 //
-// NOTE: kht_bridge contains only .cpp files, so all include-path settings
+// NOTE: starcpp_bridge contains only .cpp files, so all include-path settings
 // must be in cxxSettings, not cSettings.  cSettings only applies to .c files
 // and would be silently ignored for C++ compilation.
 // ---------------------------------------------------------------------------
@@ -23,7 +23,7 @@ let platformLinkerSettings: [LinkerSetting] = [
     .linkedLibrary("opencv2"),
 ]
 // Eigen is installed via Homebrew on macOS (arm: /opt/homebrew, intel: /usr/local)
-let khtCXXSettings: [CXXSetting] = [
+let starcppCXXSettings: [CXXSetting] = [
     .unsafeFlags([
         "-I/opt/homebrew/include/eigen3",   // Apple Silicon
         "-I/usr/local/include/eigen3",      // Intel
@@ -33,7 +33,7 @@ let khtCXXSettings: [CXXSetting] = [
 // headerSearchPath correctly but resolves unsafeFlags -I relative to a different
 // working directory.  "../../opencv/include" is relative to Sources/ in SPM,
 // which puts it at the repo root's opencv/include/.
-let bridgeCXXSettings: [CXXSetting] = khtCXXSettings + [
+let bridgeCXXSettings: [CXXSetting] = starcppCXXSettings + [
     .headerSearchPath("../../opencv/include"),
 ]
 
@@ -87,9 +87,9 @@ let platformLinkerSettings: [LinkerSetting] = [
     .linkedLibrary("pthread"),
 ]
 
-// kht (Hough Transform core) needs eigen + GCC C++ stdlib headers.
-// kht_bridge additionally needs the OpenCV headers.
-let khtCXXSettings: [CXXSetting] = [
+// starcpp (Hough Transform core) needs eigen + GCC C++ stdlib headers.
+// starcpp_bridge additionally needs the OpenCV headers.
+let starcppCXXSettings: [CXXSetting] = [
     .unsafeFlags([
         "-I/usr/include/eigen3",
         // GCC C++ stdlib headers — list several versions for portability:
@@ -101,7 +101,7 @@ let khtCXXSettings: [CXXSetting] = [
         "-I/usr/include/\(gccArchDir)/c++/13",
     ]),
 ]
-let bridgeCXXSettings: [CXXSetting] = khtCXXSettings + [
+let bridgeCXXSettings: [CXXSetting] = starcppCXXSettings + [
     .unsafeFlags(["-I../opencv/include"]),  // same relative base as linker's ../opencv/lib/linux
 ]
 
@@ -126,10 +126,10 @@ let platformLinkerSettings: [LinkerSetting] = [
 
 // Eigen3 headers — unzip to C:\eigen3 (see windows_start.txt step 5f).
 // MSVC headers are found automatically; no need to list them explicitly.
-let khtCXXSettings: [CXXSetting] = [
+let starcppCXXSettings: [CXXSetting] = [
     .unsafeFlags(["-IC:/eigen3"]),
 ]
-let bridgeCXXSettings: [CXXSetting] = khtCXXSettings + [
+let bridgeCXXSettings: [CXXSetting] = starcppCXXSettings + [
     .unsafeFlags(["-I../opencv/include"]),
 ]
 
@@ -140,40 +140,43 @@ let platformLinkerSettings: [LinkerSetting] = [
     .unsafeFlags(["-L\(opencvLibPath)", "-Xlinker", opencvLib]),
     .linkedLibrary("opencv2"),
 ]
-let khtCXXSettings: [CXXSetting] = []
+let starcppCXXSettings: [CXXSetting] = []
 let bridgeCXXSettings: [CXXSetting] = [
     .unsafeFlags(["-I../opencv/include"]),
 ]
 #endif
 
 let package = Package(
-    name: "KHTSwift",
+    name: "StarCpp",
     platforms: [
         .macOS(.v13)
     ],
     products: [
         .library(
-            name: "KHTSwift",
-            targets: ["KHTSwift"])
+            name: "StarCpp",
+            targets: ["StarCpp"])
     ],
     dependencies: [
         .package(name: "logging", path: "../logging"),
     ],
     targets: [
-        .target(name: "kht",             // C++ Hough Transform implementation
-                cxxSettings: khtCXXSettings,
+        .target(name: "StarCppCore",     // C++ Hough Transform implementation
+                path: "Sources/StarCppCore",
+                cxxSettings: starcppCXXSettings,
                 linkerSettings: platformLinkerSettings
         ),
-        .target(name: "kht_bridge",      // C++ OpenCV / KHT bridge (all .cpp)
-                dependencies: ["kht"],
+        .target(name: "starcpp_bridge",  // C++ OpenCV / StarCpp bridge (all .cpp)
+                dependencies: ["StarCppCore"],
+                path: "Sources/starcpp_bridge",
                 publicHeadersPath: "include",
                 cxxSettings: bridgeCXXSettings
         ),
-        .target(name: "KHTSwift",        // Swift wrapper
+        .target(name: "StarCpp",         // Swift wrapper
                 dependencies: [
-                    "kht_bridge",
+                    "starcpp_bridge",
                     .product(name: "logging", package: "logging"),
-                ]
+                ],
+                path: "Sources/StarCpp"
         ),
     ],
     cxxLanguageStandard: .cxx2b

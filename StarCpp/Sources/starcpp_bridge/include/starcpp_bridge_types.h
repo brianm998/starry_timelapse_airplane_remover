@@ -1,4 +1,4 @@
-// kht_bridge_types.h — All opaque handle types, enums, and simple structs
+// starcpp_bridge_types.h — All opaque handle types, enums, and simple structs
 #pragma once
 
 #include <stdint.h>

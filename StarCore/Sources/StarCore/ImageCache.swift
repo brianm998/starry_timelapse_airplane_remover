@@ -1,6 +1,6 @@
 import Foundation
 import logging
-import KHTSwift
+import StarCpp
 
 
 public let imageCache = ImageCache()
@@ -35,7 +35,7 @@ public actor ImageCache {
 
     init() {
         // Register our loader with the C++ image cache
-        KHTSwift.ImageCache.setLoader { filename in
+        StarCpp.ImageCache.setLoader { filename in
             MatWrapper.load(fromFilename: filename)
         }
     }

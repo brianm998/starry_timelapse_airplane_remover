@@ -1,7 +1,7 @@
 // MatWrapper.h — Pure C API for OpenCV Mat wrapper
 #pragma once
 
-#include "kht_bridge_types.h"
+#include "starcpp_bridge_types.h"
 
 #ifdef __cplusplus
 extern "C" {

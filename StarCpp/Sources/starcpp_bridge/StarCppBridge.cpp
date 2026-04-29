@@ -1,5 +1,5 @@
-// KHTBridge.cpp — Pure C++ implementation of Kernel Hough Transform bridge
-#include "KHTBridge.h"
+// StarCppBridge.cpp — Pure C++ implementation of Kernel Hough Transform bridge
+#include "StarCppBridge.h"
 #include "MatWrapperImpl.hpp"
 #include "logging_impl.hpp"
 

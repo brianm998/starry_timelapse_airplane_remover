@@ -3,7 +3,7 @@ import SwiftUI
 import Cocoa
 import StarCore
 import logging
-import KHTSwift
+import StarCpp
 import Combine
 
 // UI view class used for each frame

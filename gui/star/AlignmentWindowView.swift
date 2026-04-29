@@ -1,5 +1,5 @@
 import SwiftUI
-import KHTSwift
+import StarCpp
 import StarCore
 import logging
 import Charts

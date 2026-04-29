@@ -1,7 +1,7 @@
 import SwiftUI
 import StarCore
 import Combine
-import KHTSwift
+import StarCpp
 import logging
 
 // the view model for a single outlier group

@@ -1,5 +1,5 @@
 import Foundation
-import KHTSwift
+import StarCpp
 
 @MainActor
 public class FrameObserver {

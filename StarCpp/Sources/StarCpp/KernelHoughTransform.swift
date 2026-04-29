@@ -1,5 +1,5 @@
 import Foundation
-import kht_bridge
+import starcpp_bridge
 import logging
 
 public let DEGREES_TO_RADIANS = atan(1.0) / 45.0

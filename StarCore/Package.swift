@@ -18,7 +18,7 @@ let package = Package(
         // Dependencies declare other packages that this package depends on.
         // .package(url: /* package url */, from: "1.0.0"),
       .package(url: "https://github.com/groue/Semaphore.git", from: "0.0.8"),
-      .package(name: "KHTSwift", path: "../kht"),
+      .package(name: "StarCpp", path: "../StarCpp"),
       .package(name: "logging", path: "../logging"),
     ],
     targets: [
@@ -33,7 +33,7 @@ let package = Package(
             dependencies: [
               "StarCoreC",
               .product(name: "Semaphore", package: "Semaphore"),
-              .product(name: "KHTSwift", package: "KHTSwift"),
+              .product(name: "StarCpp", package: "StarCpp"),
               .product(name: "logging", package: "logging"),
             ],
             resources: [

@@ -1,5 +1,5 @@
 import Foundation
-import KHTSwift
+import StarCpp
 
 public extension AlignmentResult {
     /*

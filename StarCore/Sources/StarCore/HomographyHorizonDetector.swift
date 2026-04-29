@@ -1,6 +1,6 @@
 import Foundation
 import logging
-import KHTSwift
+import StarCpp
 
 /// Refines the horizon mask for a single frame using two complementary passes:
 ///
