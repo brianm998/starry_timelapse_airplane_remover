@@ -32,10 +32,15 @@ else
 fi
 
 # ── 2. StarDecisionTrees release static library ───────────────────────────────
-echo "==> Building StarDecisionTrees release lib..."
-cd "$REPO_ROOT/StarDecisionTrees"
-bash release.sh
-echo "==> StarDecisionTrees: done"
+DT_LIB="$REPO_ROOT/StarDecisionTrees/lib/release/linux/libStarDecisionTrees.a"
+if [ -f "$DT_LIB" ]; then
+    echo "==> StarDecisionTrees: already built, skipping"
+else
+    echo "==> Building StarDecisionTrees release lib..."
+    cd "$REPO_ROOT/StarDecisionTrees"
+    bash release.sh
+    echo "==> StarDecisionTrees: done"
+fi
 
 # ── 3. CLI ───────────────────────────────────────────────────────────────────
 echo "==> Building star CLI (release configuration)..."

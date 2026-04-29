@@ -1,69 +1,45 @@
 #!/bin/bash
 
-# this script produces a new release of star
-#
-# created are a zip file in releases/ and local and remote release tags
+# Builds the star CLI and GUI for macOS and packages them as .pkg installers.
 
 set -e
 
-####
-# first build opencv2 into a static, universal library (.a file)
-# this is a large c++ library that is used a lot for image processing
-####
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
-# takes about 15-20 minutes
-cd opencv
-./release.sh
-cd ..
+# ── 1. OpenCV ──────────────────────────────────────────────────────────────────
+OPENCV_LIB="opencv/lib/macos/libopencv2.a"
+if [ -f "$OPENCV_LIB" ]; then
+    echo "==> OpenCV: already built, skipping"
+else
+    echo "==> OpenCV: not found, building now (this takes 15-30 min)..."
+    cd opencv
+    ./release.sh
+    cd "$SCRIPT_DIR"
+fi
 
-# results end up here:
-# opencv/lib
-# opencv/include
+# ── 2. StarDecisionTrees ───────────────────────────────────────────────────────
+DT_LIB="StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a"
+if [ -f "$DT_LIB" ]; then
+    echo "==> StarDecisionTrees: already built, skipping"
+else
+    echo "==> Building StarDecisionTrees release lib..."
+    cd StarDecisionTrees
+    ./release.sh
+    cd "$SCRIPT_DIR"
+    echo "==> StarDecisionTrees: done"
+fi
 
-####
-# next build the decision tree code into a static, universal library (.a file)
-# this can be large, and is linked into the gui, cli and decision tree generator apps
-####
-
-cd StarDecisionTrees
-./release.sh
-cd ..
-
-# results end up here:
-# StarDecisionTrees/lib
-# StarDecisionTrees/include
-
-####
-# next build a universal (all arch) binary for the cli     
-####
-
+# ── 3. CLI ────────────────────────────────────────────────────────────────────
+echo "==> Building star CLI..."
 cd cli
 ./release.sh
-cd ..
+cd "$SCRIPT_DIR"
 
-# result ends up here:
-# cli/.build/star_cli_${STAR_VERSION}.pkg"
-
-
-####
-# next build a .app dir from the gui
-####
+# ── 4. GUI ────────────────────────────────────────────────────────────────────
+echo "==> Building star GUI..."
 cd gui
 ./release.sh
-cd ..
-
-# results end up here:
-# gui/.build/star_app_${STAR_VERSION}.pkg"
-
-
-####
-# move the gui and cli apps into releases dir and tag git local and remote
-####
-
-#./finishRelease.sh
-
-# output should be in releases/star-${STAR_VERSION}.zip
-# tag release/${STAR_VERSION} should be on both local and remote
-
+cd "$SCRIPT_DIR"
 
 say 'the release worked'
