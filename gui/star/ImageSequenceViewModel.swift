@@ -2137,18 +2137,33 @@ public final class ImageSequenceViewModel {
          my $ffmpeg_cmd = "ffmpeg -y -r $frame_rate -i $image_sequence_full_dirname/$config->{image_name_prefix}%05d$image_type -aspect $aspect_ratio $filter_str -c:v $output_codec -pix_fmt $pix_fmt_str -threads 0 -profile:v 1 -movflags +write_colr -an -color_range $color_range -color_primaries bt709 -colorspace bt709 -color_trc bt709 -timecode 00:00:00:00 ";
  */
         
+        let hasAudio = realConfig.hasAudio
+        let audioPath = "\(realConfig.imageSequencePath)/\(realConfig.imageSequenceDirname)/audio.aac"
+
         /*videoRenderTask = */Task.detached {
             do {
-                try runFFmpegWithProgress(
-                  arguments: [ "-y",                  // overwrite
-                    "-framerate", rawFrameRate,       // frame rate
-                    "-pattern_type", "glob", "-i",    // input image glob
-                    "\(outputPath)/\(basename)/*.\(realConfig.fileExtension)", // input images
+                var arguments: [String] = [
+                    "-y",                                                              // overwrite
+                    "-framerate", rawFrameRate,                                        // frame rate
+                    "-pattern_type", "glob", "-i",                                    // input image glob
+                    "\(outputPath)/\(basename)/*.\(realConfig.fileExtension)",        // input images
+                ]
+                if hasAudio {
+                    arguments += ["-i", audioPath]
+                }
+                arguments += [
                     "-c:v", encoder.rawValue,         // encoder
                     "-pix_fmt", pixelFormat.rawValue, // pixel format
+                ]
+                if hasAudio {
+                    arguments += ["-c:a", "copy"]
+                }
+                arguments += [
                     "-f", muxer.rawValue,             // muxer
                     "\(outputPath)/\(filename)"       // output filename
-                  ],
+                ]
+                try runFFmpegWithProgress(
+                  arguments: arguments,
                   totalFrames: totalNumberOfFrames,
                   outputFolder: outputPath,
                   progress: progress)
