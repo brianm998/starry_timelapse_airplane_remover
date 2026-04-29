@@ -396,6 +396,7 @@ struct RightPanel: View {
                         }
                     }
                       .defaultScrollAnchor(.bottom)
+                      .focusable(false)
 
                     Spacer()
                     

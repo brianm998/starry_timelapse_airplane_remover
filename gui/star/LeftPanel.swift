@@ -114,6 +114,7 @@ struct LeftPanel: View {
                 //                          .frame(maxWidth: 200)
             }
               .defaultScrollAnchor(.bottom)
+              .focusable(false)
            //   .frame(maxHeight: .infinity, alignment: .bottom)
 
               .onAppear {
