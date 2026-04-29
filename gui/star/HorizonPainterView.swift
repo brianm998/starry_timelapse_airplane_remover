@@ -749,8 +749,10 @@ struct HorizonPainterToolbarView: View {
                     viewModel.continueToRemovalFromHorizonPainter()
                 }
             } else {
-                // Refresh the filmstrip thumbnail overlay so it immediately turns green.
+                // Refresh both overlays so the change is immediately visible
+                // in the filmstrip thumbnail and the frame edit view.
                 viewModel.currentFrameView.refreshHorizonOverlay()
+                viewModel.currentFrameView.refreshFrameHorizonOverlay()
                 viewModel.isShowingHorizonPainter = false
             }
         } catch {
