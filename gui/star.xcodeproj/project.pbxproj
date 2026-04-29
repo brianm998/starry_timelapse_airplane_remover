@@ -519,6 +519,7 @@
 			packageReferences = (
 				D3B29CAF2B2FE5BE00754C10 /* XCLocalSwiftPackageReference "../StarCore" */,
 				D30356DB2E6FDC8B0092140B /* XCLocalSwiftPackageReference "../logging-objc" */,
+				D3B29CA22B2FE31800754C10 /* XCLocalSwiftPackageReference "../StarCpp" */,
 			);
 			productRefGroup = D386FA0E298B617300878B56 /* Products */;
 			projectDirPath = "";
@@ -1047,7 +1048,7 @@
 		};
 		D3B29CAB2B2FE47D00754C10 /* StarCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D3B29C9C2B2FE23F00754C10 /* XCLocalSwiftPackageReference "../StarCore" */;
+			package = D3B29CAF2B2FE5BE00754C10 /* XCLocalSwiftPackageReference "../StarCore" */;
 			productName = StarCore;
 		};
 		D3B29CAD2B2FE47D00754C10 /* Zoomable */ = {
