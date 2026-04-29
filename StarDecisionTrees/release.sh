@@ -17,9 +17,10 @@ set -e
 # detect platform
 PLATFORM="$(uname -s)"
 case "$PLATFORM" in
-    Darwin) PLATFORM_DIR="macos" ;;
-    Linux)  PLATFORM_DIR="linux" ;;
-    *)      echo "Unsupported platform: $PLATFORM"; exit 1 ;;
+    Darwin)    PLATFORM_DIR="macos" ;;
+    Linux)     PLATFORM_DIR="linux" ;;
+    MINGW*|MSYS_NT*) PLATFORM_DIR="windows" ;;
+    *)         echo "Unsupported platform: $PLATFORM"; exit 1 ;;
 esac
 
 # clear out any previous build
@@ -55,6 +56,31 @@ if [ "$PLATFORM" = "Darwin" ]; then
     lipo .build/arm64-apple-macosx/release/libStarDecisionTrees.a \
          .build/x86_64-apple-macosx/release/libStarDecisionTrees.a \
           -create -output lib/release/$PLATFORM_DIR/libStarDecisionTrees.a
+
+elif [ "$PLATFORM_DIR" = "windows" ]; then
+    # Windows: single architecture build.
+    # Same memory-aware job cap as Linux; query available RAM via PowerShell
+    # since /proc/meminfo does not exist on Windows.
+    MEM_PER_JOB_GB=2
+    NCPU=$(nproc)
+    AVAIL_MEM_KB=$(powershell.exe -Command \
+        "(Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory" \
+        2>/dev/null | tr -d '\r\n')
+    if [ -n "$AVAIL_MEM_KB" ] && [ "$AVAIL_MEM_KB" -gt 0 ] 2>/dev/null; then
+        AVAIL_MEM_GB=$(( AVAIL_MEM_KB / 1048576 ))
+    else
+        AVAIL_MEM_GB=4  # conservative fallback if PowerShell query fails
+    fi
+    MEM_JOBS=$(( AVAIL_MEM_GB / MEM_PER_JOB_GB ))
+    JOBS=$(( MEM_JOBS < NCPU ? MEM_JOBS : NCPU ))
+    [ "$JOBS" -lt 1 ] && JOBS=1
+    echo "==> swift build -j $JOBS  (${NCPU} CPUs, memory-limited)"
+
+    swift build --configuration release -Xswiftc -O -j "$JOBS"
+
+    # SPM on Windows produces TargetName.lib (no "lib" prefix, COFF archive).
+    mv .build/release/StarDecisionTrees.lib lib/release/$PLATFORM_DIR/
+    mv .build/release/Modules/StarDecisionTrees.swiftmodule include/release/$PLATFORM_DIR/
 
 else
     # Linux: single architecture build.

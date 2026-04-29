@@ -105,6 +105,34 @@ let bridgeCXXSettings: [CXXSetting] = khtCXXSettings + [
     .unsafeFlags(["-I../opencv/include"]),  // same relative base as linker's ../opencv/lib/linux
 ]
 
+#elseif os(Windows)
+let opencvLibPath = "../opencv/lib/windows"
+let opencvLib    = "../opencv/lib/windows/opencv2.lib"
+
+// lld-link (COFF mode) uses /WHOLEARCHIVE:path to force all archive members
+// to be included, equivalent to GNU ld's --whole-archive.
+// The flag and path are a single linker token, passed via one -Xlinker argument.
+//
+// NOTE: if the build fails with "file not found" on opencv2.lib, lld-link may
+// need a Windows-style path (backslashes).  In that case replace the opencvLib
+// string above with the absolute Windows path, e.g.:
+//   "C:\\Users\\brian\\git\\star_release\\opencv\\lib\\windows\\opencv2.lib"
+let platformLinkerSettings: [LinkerSetting] = [
+    .unsafeFlags([
+        "-L\(opencvLibPath)",
+        "-Xlinker", "/WHOLEARCHIVE:\(opencvLib)",
+    ]),
+]
+
+// Eigen3 headers — unzip to C:\eigen3 (see windows_start.txt step 5f).
+// MSVC headers are found automatically; no need to list them explicitly.
+let khtCXXSettings: [CXXSetting] = [
+    .unsafeFlags(["-IC:/eigen3"]),
+]
+let bridgeCXXSettings: [CXXSetting] = khtCXXSettings + [
+    .unsafeFlags(["-I../opencv/include"]),
+]
+
 #else
 let opencvLibPath = "../opencv/lib"
 let opencvLib    = "../opencv/lib/libopencv2.a"

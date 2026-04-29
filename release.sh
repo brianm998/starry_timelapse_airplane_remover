@@ -66,7 +66,7 @@ mkdir -p "$LOG_DIR"
 # ── Helpers ───────────────────────────────────────────────────────────────────
 collect_local_artifacts() {
     local found=0
-    for f in cli/.build/star_*.pkg cli/.build/star_*.deb gui/.build/star_*.pkg; do
+    for f in cli/.build/star_*.pkg cli/.build/star_*.deb cli/.build/star_*.zip gui/.build/star_*.pkg; do
         [ -f "$f" ] || continue
         cp "$f" "$RELEASE_DIR"/
         echo "==> [local] collected: $(basename "$f")"
@@ -148,6 +148,8 @@ REMOTE_SCRIPT
             2>/dev/null && echo "==> [remote/${_platform} @ ${_host}] collected .deb" || true
         scp "${_user}@${_host}:${_path}/cli/.build/star_*.pkg" "$_release_dir"/ \
             2>/dev/null && echo "==> [remote/${_platform} @ ${_host}] collected .pkg" || true
+        scp "${_user}@${_host}:${_path}/cli/.build/star_*.zip" "$_release_dir"/ \
+            2>/dev/null && echo "==> [remote/${_platform} @ ${_host}] collected .zip" || true
         echo "==> [remote/${_platform} @ ${_host}] Done."
     ) &
     BUILD_PIDS+=($!)

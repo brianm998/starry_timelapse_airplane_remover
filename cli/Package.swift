@@ -12,6 +12,11 @@ let dtLibDebugFile   = "../StarDecisionTrees/lib/debug/macos/libStarDecisionTree
 let dtIncludeDebug   = "../StarDecisionTrees/include/release/linux"
 let dtLibDebug       = "../StarDecisionTrees/lib/release/linux"
 let dtLibDebugFile   = "../StarDecisionTrees/lib/release/linux/libStarDecisionTrees.a"
+#elseif os(Windows)
+// SPM on Windows produces TargetName.lib (no "lib" prefix, .lib not .a).
+let dtIncludeDebug   = "../StarDecisionTrees/include/release/windows"
+let dtLibDebug       = "../StarDecisionTrees/lib/release/windows"
+let dtLibDebugFile   = "../StarDecisionTrees/lib/release/windows/StarDecisionTrees.lib"
 #else
 let dtIncludeDebug   = "../StarDecisionTrees/include/debug"
 let dtLibDebug       = "../StarDecisionTrees/lib/debug"

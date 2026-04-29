@@ -26,9 +26,10 @@ set -e
 # detect platform
 PLATFORM="$(uname -s)"
 case "$PLATFORM" in
-    Darwin) PLATFORM_DIR="macos" ;;
-    Linux)  PLATFORM_DIR="linux" ;;
-    *)      echo "Unsupported platform: $PLATFORM"; exit 1 ;;
+    Darwin)    PLATFORM_DIR="macos" ;;
+    Linux)     PLATFORM_DIR="linux" ;;
+    MINGW*|MSYS_NT*) PLATFORM_DIR="windows" ;;
+    *)         echo "Unsupported platform: $PLATFORM"; exit 1 ;;
 esac
 
 # if ARCHS is not already set, default it to the current platform
@@ -160,6 +161,97 @@ if [ "$PLATFORM" = "Darwin" ]; then
     mkdir opencv2
     cd opencv2
     ln -s ../../opencv2.framework/Headers/* .
+
+elif [ "$PLATFORM_DIR" = "windows" ]; then
+    #
+    # Windows build via CMake + Visual Studio 17 2022 generator.
+    # The VS generator locates MSVC automatically — no vcvarsall.bat needed.
+    #
+
+    mkdir -p build_windows && cd build_windows
+
+    cmake .. \
+        -G "Visual Studio 17 2022" \
+        -A x64 \
+        -DCMAKE_CXX_STANDARD=17 \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DBUILD_LIST=core,imgproc,imgcodecs,features2d,calib3d,flann,highgui \
+        -DBUILD_opencv_apps=OFF \
+        -DBUILD_opencv_java=OFF \
+        -DBUILD_opencv_python3=OFF \
+        -DBUILD_opencv_python2=OFF \
+        -DBUILD_opencv_js=OFF \
+        -DBUILD_opencv_objc=OFF \
+        -DBUILD_TESTS=OFF \
+        -DBUILD_PERF_TESTS=OFF \
+        -DBUILD_EXAMPLES=OFF \
+        -DBUILD_DOCS=OFF \
+        -DWITH_GTK=OFF \
+        -DWITH_QT=OFF \
+        -DWITH_FFMPEG=OFF \
+        -DWITH_V4L=OFF \
+        -DWITH_OPENCL=OFF \
+        -DWITH_CUDA=OFF \
+        -DWITH_1394=OFF \
+        -DWITH_GSTREAMER=OFF \
+        -DWITH_OPENEXR=OFF \
+        -DWITH_WEBP=OFF \
+        -DWITH_JASPER=OFF \
+        -DWITH_OPENJPEG=OFF \
+        -DWITH_WIN32UI=OFF \
+        -DBUILD_ZLIB=ON \
+        -DBUILD_PNG=ON \
+        -DBUILD_TIFF=ON \
+        -DBUILD_JPEG=ON
+
+    cmake --build . --config Release --parallel "$(nproc)"
+
+    # Merge all static libs into one using lib.exe (MSVC's librarian).
+    # This is the Windows equivalent of the ar -M approach used on Linux.
+    VSWHERE="/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
+    VS_WIN="$("$VSWHERE" -latest -products '*' \
+        -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 \
+        -property installationPath 2>/dev/null | tr -d '\r')"
+    VS_BASH="$(cygpath -u "$VS_WIN")"
+    VCTOOLS_VER=$(tr -d '\r\n' < "$VS_BASH/VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt")
+    LIB_EXE="$VS_BASH/VC/Tools/MSVC/$VCTOOLS_VER/bin/Hostx64/x64/lib.exe"
+
+    OUTLIB="../../lib/$PLATFORM_DIR/opencv2.lib"
+    mkdir -p "$(dirname "$OUTLIB")"
+
+    # Collect all .lib files produced by the Release build.
+    ALL_LIBS=$(find lib/Release 3rdparty/lib/Release -name '*.lib' 2>/dev/null | sort)
+
+    # lib.exe requires Windows-style paths.
+    WIN_OUTLIB="$(cygpath -w "$(cd "$(dirname "$OUTLIB")" && pwd)/$(basename "$OUTLIB")")"
+    LIB_ARGS=()
+    for lib in $ALL_LIBS; do
+        LIB_ARGS+=("$(cygpath -w "$(cd "$(dirname "$lib")" && pwd)/$(basename "$lib")")")
+    done
+
+    echo "==> Merging ${#LIB_ARGS[@]} .lib files into opencv2.lib..."
+    "$LIB_EXE" /OUT:"$WIN_OUTLIB" "${LIB_ARGS[@]}"
+
+    cd ../..  # back to opencv/
+
+    # Set up headers (from source + generated, same as Linux).
+    rm -rf include/opencv2
+    mkdir -p include/opencv2
+
+    cp opencv/build_windows/cvconfig.h include/opencv2/
+    cp opencv/build_windows/opencv2/opencv_modules.hpp include/opencv2/
+
+    for mod in core imgproc imgcodecs features2d calib3d flann highgui; do
+        if [ -d "opencv/modules/$mod/include/opencv2" ]; then
+            cp -r opencv/modules/$mod/include/opencv2/* include/opencv2/
+        fi
+    done
+
+    if [ -f "opencv/include/opencv2/opencv.hpp" ]; then
+        cp "opencv/include/opencv2/opencv.hpp" include/opencv2/
+    else
+        echo "WARNING: opencv/include/opencv2/opencv.hpp not found — umbrella header missing"
+    fi
 
 else
     #
