@@ -154,6 +154,7 @@ import KHTSwift
 @main
 struct StarApp: App {
 
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.openWindow) private var openWindow
 
     public static let outlierGroupTableWindowName = "outlierGroupTableWindow"
@@ -161,7 +162,9 @@ struct StarApp: App {
     public static let debugWindowName = "debugWindow"
     public static let mainWindowName = "mainWindow"
     public static let alignmentWindowName = "alignmentWindowName"
-    
+
+    let viewModel = ViewModel()
+
     init() {
         // maybe move this elsewhere
         Task {
@@ -204,8 +207,6 @@ struct StarApp: App {
     let loggingViewModel = LoggingViewModel()
     
     var body: some Scene {
-        let viewModel = ViewModel()
-
         WindowGroup(id: StarApp.blobProcessingStepsWindowName) {
             BlobProcessingView()
               .environment(viewModel)
@@ -235,6 +236,7 @@ struct StarApp: App {
               .onAppear {
                   enableGUILogs()
                   setupKHTLogging()
+                  appDelegate.viewModel = viewModel
               }
               .onChange(of: loggingViewModel.level) {
                   enableGUILogs()

@@ -74,6 +74,10 @@ public final class ViewModel {
     
     var showErrorAlert = false
     var errorMessage: String = ""
+
+    var showCloseConfirmation = false
+    var closeConfirmationMessage: String = ""
+    var closeConfirmationAction: (() -> Void)?
     
     var showInfoDialog = false
     var currentInfoType: InfoType = .about

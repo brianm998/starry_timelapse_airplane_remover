@@ -83,12 +83,19 @@ struct StarCommands: Commands {
         // remove File -> New Window 
         CommandGroup(replacing: .newItem) { }
         
-        // replace File -> Close 
+        // replace File -> Close
         CommandGroup(replacing: .saveItem) {
             Button("Close") {
-                Task {
-                    await MainActor.run {
-                        // XXX make sure the current sequence isn't still processing somehow
+                Task { @MainActor in
+                    if let seq = viewModel.imageSequence, seq.hasPendingWork {
+                        viewModel.closeConfirmationMessage =
+                            "Currently \(seq.pendingWorkDescription). " +
+                            "Closing now will interrupt this work."
+                        viewModel.closeConfirmationAction = {
+                            viewModel.unloadSequence()
+                        }
+                        viewModel.showCloseConfirmation = true
+                    } else {
                         viewModel.unloadSequence()
                     }
                 }

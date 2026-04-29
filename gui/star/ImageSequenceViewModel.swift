@@ -237,6 +237,23 @@ public final class ImageSequenceViewModel {
     var numberOfFramesProcessed = 0
 
     var isRenderingVideo = false
+
+    var hasPendingWork: Bool {
+        isProcessingFrames ||
+        isRenderingVideo ||
+        frameSaveQueue.savingCount > 0 ||
+        frameSaveQueue.pendingSavingCount > 0 ||
+        frameSaveQueue.purgatoryCount > 0
+    }
+
+    var pendingWorkDescription: String {
+        var parts: [String] = []
+        if isProcessingFrames { parts.append("processing frames") }
+        if isRenderingVideo { parts.append("rendering video") }
+        let saving = frameSaveQueue.savingCount + frameSaveQueue.pendingSavingCount + frameSaveQueue.purgatoryCount
+        if saving > 0 { parts.append("saving \(saving) frame\(saving == 1 ? "" : "s")") }
+        return parts.joined(separator: ", ")
+    }
     
     var ignoreLowerPixels: CGFloat = 0
 

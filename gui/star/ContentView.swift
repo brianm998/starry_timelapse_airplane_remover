@@ -30,7 +30,43 @@ struct ContentView: View {
             // these may show on top
             if viewModel.showInfoDialog { InfoDialogView() }
             if viewModel.showErrorAlert { self.errorAlert }
+            if viewModel.showCloseConfirmation { self.closeConfirmationAlert }
 
+        }
+    }
+
+    var closeConfirmationAlert: some View {
+        ZStack {
+            Rectangle()
+              .frame(maxWidth: .infinity, maxHeight: .infinity)
+              .background(.gray)
+              .opacity(0.5)
+
+            VStack(spacing: 0) {
+                Text("Work In Progress")
+                  .font(.headline)
+                  .padding(.bottom, 16)
+                Text(viewModel.closeConfirmationMessage)
+                  .multilineTextAlignment(.center)
+                  .padding(.bottom, 24)
+                HStack(spacing: 16) {
+                    Button("Cancel") {
+                        viewModel.showCloseConfirmation = false
+                        viewModel.closeConfirmationAction = nil
+                    }
+                    Button("Stop and Close") {
+                        let action = viewModel.closeConfirmationAction
+                        viewModel.showCloseConfirmation = false
+                        viewModel.closeConfirmationAction = nil
+                        action?()
+                    }
+                    .foregroundColor(.red)
+                }
+            }
+              .padding(40)
+              .frame(maxWidth: 480)
+              .background(.regularMaterial)
+              .cornerRadius(16)
         }
     }
 
