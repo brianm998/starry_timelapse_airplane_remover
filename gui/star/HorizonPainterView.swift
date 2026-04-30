@@ -751,8 +751,12 @@ struct HorizonPainterToolbarView: View {
             } else {
                 // Refresh both overlays so the change is immediately visible
                 // in the filmstrip thumbnail and the frame edit view.
+                // Also mark userHorizon as existing so the left-panel "Show:"
+                // picker reveals it without requiring a full reload.
+                viewModel.currentFrameView.existingImages.insert(.userHorizon)
                 viewModel.currentFrameView.refreshHorizonOverlay()
                 viewModel.currentFrameView.refreshFrameHorizonOverlay()
+                viewModel.recordReferenceHorizonUpdated(frameIndex: viewModel.currentFrameView.frameIndex)
                 viewModel.isShowingHorizonPainter = false
             }
         } catch {

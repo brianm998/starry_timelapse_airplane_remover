@@ -114,11 +114,12 @@ struct FilmstripImageView: View {
                     // Horizon overlay — coloured polyline tracing the sky/ground boundary.
                     // white = initial detected, blue = merged, green = user reference.
                     if let overlay = frameView.horizonOverlay {
-                        let strokeColor: Color = switch overlay.kind {
+                        let strokeColor: Color = if frameView.isPendingHorizonRefinement { .orange }
+                        else { switch overlay.kind {
                             case .initial:   .white
                             case .merged:    .blue
                             case .reference: .green
-                        }
+                        }}
                         Canvas { ctx, size in
                             var path = Path()
                             for (col, y) in overlay.yPerColumn.enumerated() {

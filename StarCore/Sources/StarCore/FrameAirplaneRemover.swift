@@ -522,14 +522,18 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         {
             Log.i("frame \(frameIndex) createMergedHorizonMask: applying reference-horizon smoothing")
             if let filtered = referenceSmoothedHorizonMask(detected: mask, reference: refMask) {
+                let finalMask = try await referenceStatsBrightnessRefinementIfNeeded(
+                  mask: filtered,
+                  config: config
+                )
                 try await imageAccessor.save(
-                  filtered.image,
+                  finalMask.image,
                   frameIndex: frameIndex,
                   as: .mergedHorizon,
                   atSizes: await self.outputSizes,
                   overwrite: true
                 )
-                return filtered
+                return finalMask
             }
             Log.w("frame \(frameIndex) reference smoothing failed, falling through to normal merge")
         }
@@ -561,9 +565,23 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
              outlierThreshold: await self.pixelThreshold,
              includeAll: true)
         {
+            // Apply stats-based brightness refinement for moving sequences.
+            let imageToSave: PixelatedImage
+            if config.tripodHeadWasMoving,
+               let mergedMask = HorizonMask(mergedHorizon),
+               let refined = try? await referenceStatsBrightnessRefinementIfNeeded(
+                 mask: mergedMask,
+                 config: config
+               )
+            {
+                imageToSave = refined.image
+            } else {
+                imageToSave = mergedHorizon
+            }
+
             Log.d("saving merged horizon images")
             try await imageAccessor.save(
-              mergedHorizon,
+              imageToSave,
               frameIndex: frameIndex,
               as: .mergedHorizon,
               atSizes: await self.outputSizes,
@@ -609,16 +627,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
             
-            if let bounds = mergedHorizon.horizonBounds() {
+            if let bounds = imageToSave.horizonBounds() {
                 return HorizonMask(
-                  image: mergedHorizon,
+                  image: imageToSave,
                   horizonTopY: bounds.topY,
                   horizonBottomY: bounds.bottomY
                 )
             }
             Log.w("frame \(frameIndex) merged horizon has no computable bounds")
         }
-        
+
         Log.w("frame \(frameIndex) unable to calculate merged horizon")
         
         return nil
@@ -739,6 +757,215 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         return result
+    }
+
+    // MARK: - Reference stats brightness refinement
+
+    /// Scan the sequence for reference horizon masks, return stats for up to `maxCount`
+    /// nearest frames.  Stats are cached in `referenceHorizonStatsCache`.
+    private func referenceHorizonsWithStats(maxCount: Int = 2) async throws -> [ReferenceHorizonFrameStats] {
+        guard let imageSequence else { return [] }
+        guard let refinedPath = imageAccessor.nameForImage(
+                frameIndex: frameIndex,
+                ofType: .refinedHorizon,
+                atSize: .original
+              )
+        else { return [] }
+
+        let referenceDir = URL(fileURLWithPath: refinedPath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("horizonReference")
+
+        let fm = FileManager.default
+        var candidates: [(distance: Int, index: Int, maskURL: URL)] = []
+
+        for candidateIndex in 0..<imageSequence.filenames.count {
+            guard candidateIndex != frameIndex else { continue }
+            guard let candidatePath = imageAccessor.nameForImage(
+                    frameIndex: candidateIndex,
+                    ofType: .refinedHorizon,
+                    atSize: .original
+                  )
+            else { continue }
+            let candidateFileName = URL(fileURLWithPath: candidatePath).lastPathComponent
+            let candidateURL = referenceDir.appendingPathComponent(candidateFileName)
+            guard fm.fileExists(atPath: candidateURL.path) else { continue }
+            candidates.append((
+                distance: abs(candidateIndex - frameIndex),
+                index: candidateIndex,
+                maskURL: candidateURL
+            ))
+        }
+
+        candidates.sort { $0.distance < $1.distance }
+
+        var result: [ReferenceHorizonFrameStats] = []
+        for candidate in candidates.prefix(maxCount) {
+            if let cached = await referenceHorizonStatsCache.stats(for: candidate.index) {
+                result.append(cached)
+                continue
+            }
+            guard let maskImage = PixelatedImage(filename: candidate.maskURL.path)?.asHorizonMask,
+                  let mask = HorizonMask(maskImage),
+                  let original = try? await imageAccessor.load(
+                    frameIndex: candidate.index,
+                    type: .original,
+                    atSize: .original
+                  )
+            else {
+                Log.w("frame \(frameIndex) referenceHorizonsWithStats: skipping frame \(candidate.index)")
+                continue
+            }
+            guard let stats = original.computeReferenceHorizonStats(frameIndex: candidate.index, mask: mask)
+            else { continue }
+            await referenceHorizonStatsCache.set(stats)
+            result.append(stats)
+        }
+        return result
+    }
+
+    /// Per-pixel brightness + Y-position refinement of `detected` using reference frame stats.
+    ///
+    /// For each pixel in a band around the widest horizon Y bounds of the reference frames,
+    /// a combined sky probability is computed from:
+    ///   - brightness: a cubic-weighted score based on distance from the midpoint between
+    ///     the weighted-median sky and ground brightnesses of the reference frames.
+    ///   - Y position: a cubic-weighted score based on the pixel's row relative to the
+    ///     global [minHorizonY, maxHorizonY] span of the reference frames.
+    ///
+    /// The two scores are averaged equally.  Pixels with a combined score >= 0.5 are sky;
+    /// below 0.5 are ground.  Pixels outside the band are copied unchanged from `detected`.
+    private func referenceStatsBrightnessRefinedHorizonMask(
+      detected: HorizonMask,
+      original: PixelatedImage,
+      stats: [ReferenceHorizonFrameStats],
+      searchRadius: Int = 100
+    ) -> HorizonMask? {
+        guard !stats.isEmpty else { return nil }
+
+        let w = detected.image.width
+        let h = detected.image.height
+
+        // Compute inverse-distance-weighted brightness medians.
+        var totalWeight = 0.0
+        var weightedSky = 0.0
+        var weightedGround = 0.0
+        for s in stats {
+            let d = max(1.0, Double(abs(s.frameIndex - frameIndex)))
+            let wt = 1.0 / d
+            totalWeight    += wt
+            weightedSky    += wt * s.medianSkyBrightness
+            weightedGround += wt * s.medianGroundBrightness
+        }
+        let medianSky    = weightedSky    / totalWeight
+        let medianGround = weightedGround / totalWeight
+        let midBrightness = (medianSky + medianGround) / 2.0
+        let halfRange     = abs(medianSky - medianGround) / 2.0
+        let skyIsBrighter = medianSky > medianGround
+
+        // Global horizon Y bounds across all reference frames.
+        let globalMinY = stats.map { $0.minHorizonY }.min()!
+        let globalMaxY = stats.map { $0.maxHorizonY }.max()!
+        let bandTop    = max(0,     globalMinY - searchRadius)
+        let bandBottom = min(h - 1, globalMaxY + searchRadius)
+
+        guard case .eightBit(let detectedBuf) = detected.image.imageData else {
+            Log.w("frame \(frameIndex) referenceStatsBrightnessRefinedHorizonMask: mask not 8-bit")
+            return nil
+        }
+
+        let maxVal = original.maxBrightnessValue
+        var outputBytes = [UInt8](detectedBuf)
+
+        var refinedCount = 0
+        for y in bandTop...bandBottom {
+            // Y-position sky score: cubic-weighted, anchored at globalMinY / globalMaxY.
+            let ySkyScore: Double
+            if y <= globalMinY {
+                ySkyScore = 1.0
+            } else if y >= globalMaxY {
+                ySkyScore = 0.0
+            } else {
+                let yRange = Double(globalMaxY - globalMinY)
+                let yLinear = 1.0 - Double(y - globalMinY) / yRange  // 1 at top, 0 at bottom
+                let ySignal = 2.0 * yLinear - 1.0                     // +1 to -1
+                let yStrong = ySignal * ySignal * ySignal              // cubic, keeps sign
+                ySkyScore = (yStrong + 1.0) / 2.0
+            }
+
+            for x in 0..<w {
+                let brightness = original.normalizedBrightness(x: x, y: y, maxVal: maxVal)
+
+                // Brightness sky score: cubic-weighted distance from midpoint.
+                let brightnessSkyScore: Double
+                if halfRange < 0.001 {
+                    brightnessSkyScore = 0.5  // indistinguishable sky/ground brightnesses
+                } else {
+                    var normalised = (brightness - midBrightness) / halfRange  // [-1, 1]
+                    normalised = max(-1.0, min(1.0, normalised))
+                    if !skyIsBrighter { normalised = -normalised }
+                    let strong = normalised * normalised * normalised
+                    brightnessSkyScore = (strong + 1.0) / 2.0
+                }
+
+                let combined = 0.5 * brightnessSkyScore + 0.5 * ySkyScore
+                let newVal: UInt8 = combined >= 0.5 ? 255 : 0
+                let idx = y * w + x
+                if newVal != detectedBuf[idx] { refinedCount += 1 }
+                outputBytes[idx] = newVal
+            }
+        }
+
+        Log.i("frame \(frameIndex) referenceStatsBrightnessRefinedHorizonMask: " +
+              "refined \(refinedCount) pixels in band y=[\(bandTop),\(bandBottom)] " +
+              "globalY=[\(globalMinY),\(globalMaxY)] " +
+              "sky=\(String(format:"%.4f",medianSky)) " +
+              "ground=\(String(format:"%.4f",medianGround))")
+
+        return outputBytes.withUnsafeMutableBytes { ptr -> HorizonMask? in
+            guard let base = ptr.baseAddress else { return nil }
+            let mat = MatWrapper(
+              width: w, height: h,
+              cvType: 0,
+              bytesPerRow: w,
+              data: base,
+              takeOwnership: false
+            )
+            guard let maskImage = PixelatedImage(mat: mat.clone()) else { return nil }
+            return HorizonMask(maskImage)
+        }
+    }
+
+    /// Apply `referenceStatsBrightnessRefinedHorizonMask` if the config enables it and
+    /// reference stats are available.  Returns the original mask unchanged on failure.
+    private func referenceStatsBrightnessRefinementIfNeeded(
+      mask: HorizonMask,
+      config: Config
+    ) async throws -> HorizonMask {
+        guard config.tripodHeadWasMoving,
+              config.useReferenceHorizonBrightnessRefinement
+        else { return mask }
+
+        let stats = try await referenceHorizonsWithStats(maxCount: 2)
+        guard !stats.isEmpty else { return mask }
+
+        guard let original = try? await imageAccessor.load(
+                frameIndex: frameIndex,
+                type: .original,
+                atSize: .original
+              )
+        else {
+            Log.w("frame \(frameIndex) referenceStatsBrightnessRefinementIfNeeded: cannot load original")
+            return mask
+        }
+
+        return referenceStatsBrightnessRefinedHorizonMask(
+          detected: mask,
+          original: original,
+          stats: stats,
+          searchRadius: config.referenceHorizonBrightnessRefinementSearchRadius
+        ) ?? mask
     }
 
     // MARK: - Refined horizon mask (homography-based refinement)

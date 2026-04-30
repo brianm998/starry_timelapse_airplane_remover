@@ -197,6 +197,8 @@ struct ProcessingSettingsView: View {
     @State private var showUseHomographyRefinedHorizonInfo = false
     @State private var showUseReferenceHorizonSmoothingInfo = false
     @State private var showReferenceHorizonSmoothingMaxDistanceInfo = false
+    @State private var showUseReferenceHorizonBrightnessRefinementInfo = false
+    @State private var showReferenceHorizonBrightnessRefinementSearchRadiusInfo = false
 
     @State private var showMaxConcurrentHorizonsView = false
     @State private var showMaxConcurrentKeypointsView = false
@@ -230,6 +232,8 @@ struct ProcessingSettingsView: View {
         showUseHomographyRefinedHorizonInfo ||
         showUseReferenceHorizonSmoothingInfo ||
         showReferenceHorizonSmoothingMaxDistanceInfo ||
+        showUseReferenceHorizonBrightnessRefinementInfo ||
+        showReferenceHorizonBrightnessRefinementSearchRadiusInfo ||
         showMaxConcurrentHorizonsView ||
         showMaxConcurrentKeypointsView ||
         showMaxConcurrentHomographiesView ||
@@ -270,6 +274,8 @@ struct ProcessingSettingsView: View {
         showUseHomographyRefinedHorizonInfo = true
         showUseReferenceHorizonSmoothingInfo = true
         showReferenceHorizonSmoothingMaxDistanceInfo = true
+        showUseReferenceHorizonBrightnessRefinementInfo = true
+        showReferenceHorizonBrightnessRefinementSearchRadiusInfo = true
         showMaxConcurrentHorizonsView = true
         showMaxConcurrentKeypointsView = true
         showMaxConcurrentHomographiesView = true
@@ -310,6 +316,8 @@ struct ProcessingSettingsView: View {
         showUseHomographyRefinedHorizonInfo = false
         showUseReferenceHorizonSmoothingInfo = false
         showReferenceHorizonSmoothingMaxDistanceInfo = false
+        showUseReferenceHorizonBrightnessRefinementInfo = false
+        showReferenceHorizonBrightnessRefinementSearchRadiusInfo = false
         showMaxConcurrentHorizonsView = false
         showMaxConcurrentKeypointsView = false
         showMaxConcurrentHomographiesView = false
@@ -451,6 +459,10 @@ struct ProcessingSettingsView: View {
                                   self.useReferenceHorizonSmoothingView
                                   Divider()
                                   self.referenceHorizonSmoothingMaxDistanceView
+                                  Divider()
+                                  self.useReferenceHorizonBrightnessRefinementView
+                                  Divider()
+                                  self.referenceHorizonBrightnessRefinementSearchRadiusView
                               }
                           } label: {
                               Text("Horizon Settings")
@@ -1255,6 +1267,81 @@ struct ProcessingSettingsView: View {
         }
         .disabled(viewModel.sceneType == .skyOnly || viewModel.cameraMotion == .fixed ||
                   !viewModel.useReferenceHorizonSmoothing)
+    }
+
+    private var useReferenceHorizonBrightnessRefinementView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showUseReferenceHorizonBrightnessRefinementInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            For moving timelapses with user-defined reference horizon frames, enabling this uses the \
+            brightness statistics from those reference frames to refine per-pixel sky/ground \
+            classification near the horizon. Each pixel within the search radius of the widest known \
+            horizon bounds is scored by both its brightness (relative to the reference frame's median \
+            sky and ground brightness) and its vertical position, then reclassified as sky or ground. \
+            Only applies when Camera Motion is set to Moving.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Reference Horizon Brightness Refinement:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    Space(width: 10)
+                    Toggle(isOn: $viewModel.useReferenceHorizonBrightnessRefinement) {
+                        Text("")
+                    }
+                    Spacer()
+                }
+            }
+        }
+        .disabled(viewModel.sceneType == .skyOnly || viewModel.cameraMotion == .fixed)
+    }
+
+    private var referenceHorizonBrightnessRefinementSearchRadiusView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showReferenceHorizonBrightnessRefinementSearchRadiusInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            The number of pixels above and below the widest known horizon Y range (across all \
+            reference frames) within which brightness+position refinement is applied. Pixels \
+            outside this band are left unchanged. Larger values refine more of the image near \
+            the horizon; smaller values limit changes to pixels very close to the horizon.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Brightness Refinement Search Radius:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.referenceHorizonBrightnessRefinementSearchRadius,
+                      minValue: 1,
+                      maxValue: 10000,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .referenceHorizonBrightnessRefinementSearchRadius,
+                      alwaysOpen: true
+                    )
+                    Spacer()
+                }
+            }
+        }
+        .disabled(viewModel.sceneType == .skyOnly || viewModel.cameraMotion == .fixed ||
+                  !viewModel.useReferenceHorizonBrightnessRefinement)
     }
 
     private var processingModeView: some View {

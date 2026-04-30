@@ -230,11 +230,13 @@ struct FrameEditView: View {
             if viewModel.userPreferences.showHorizonOnMainView ?? false,
                let overlay = viewModel.frames[viewModel.currentIndex].frameHorizonOverlay
             {
-                let strokeColor: Color = switch overlay.kind {
+                let frameView = viewModel.frames[viewModel.currentIndex]
+                let strokeColor: Color = if frameView.isPendingHorizonRefinement { .orange }
+                else { switch overlay.kind {
                     case .initial:   .white
                     case .merged:    .blue
                     case .reference: .green
-                }
+                }}
                 let zoom = viewModel.currentZoomScale
                 Canvas { ctx, size in
                     guard !overlay.yPerColumn.isEmpty else { return }

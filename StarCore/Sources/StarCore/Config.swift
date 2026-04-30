@@ -336,6 +336,15 @@ public struct Config: Codable, Sendable {
     // within which reference-based smoothing is applied.
     public var referenceHorizonSmoothingMaxDistance: Int = 30
 
+    // when true and tripodHeadWasMoving is set, refine per-pixel sky/ground classification
+    // in a band around the horizon using brightness and Y-position evidence from the
+    // nearest 1–2 user-defined reference horizon frames.
+    public var useReferenceHorizonBrightnessRefinement: Bool = true
+
+    // half-height of the per-pixel refinement band in pixels, measured from the widest
+    // possible horizon Y bounds across the nearby reference frames.
+    public var referenceHorizonBrightnessRefinementSearchRadius: Int = 100
+
     // use the combined+RW horizon detector (Otsu + DP + SIOX → median → Random Walker)?
     // when true, this replaces the legacy adaptive Otsu/DP search in loadOrCreateHorizonMask.
     // set to false to fall back to the previous adaptive search approach.
@@ -505,6 +514,8 @@ public struct Config: Codable, Sendable {
         self.horizonDetectionEnabled = try c.decodeIfPresent(Bool.self, forKey: .horizonDetectionEnabled) ?? self.horizonDetectionEnabled
         self.useReferenceHorizonSmoothing = try c.decodeIfPresent(Bool.self, forKey: .useReferenceHorizonSmoothing) ?? self.useReferenceHorizonSmoothing
         self.referenceHorizonSmoothingMaxDistance = try c.decodeIfPresent(Int.self, forKey: .referenceHorizonSmoothingMaxDistance) ?? self.referenceHorizonSmoothingMaxDistance
+        self.useReferenceHorizonBrightnessRefinement = try c.decodeIfPresent(Bool.self, forKey: .useReferenceHorizonBrightnessRefinement) ?? self.useReferenceHorizonBrightnessRefinement
+        self.referenceHorizonBrightnessRefinementSearchRadius = try c.decodeIfPresent(Int.self, forKey: .referenceHorizonBrightnessRefinementSearchRadius) ?? self.referenceHorizonBrightnessRefinementSearchRadius
         self.useCombinedHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useCombinedHorizonDetection) ?? self.useCombinedHorizonDetection
         self.horizonStripWidth = try c.decodeIfPresent(Int.self, forKey: .horizonStripWidth) ?? self.horizonStripWidth
         self.useCannyForHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useCannyForHorizonDetection) ?? self.useCannyForHorizonDetection

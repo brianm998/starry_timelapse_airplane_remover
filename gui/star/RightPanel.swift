@@ -149,6 +149,16 @@ struct RightPanel: View {
                                   Press - to switch between paint and erase mode.
                                   """)
 
+                            Button {
+                                viewModel.reprocessHorizonsForUpdatedReferences()
+                            } label: {
+                                Label("Re-run Horizon Refinement", systemImage: "wand.and.stars")
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.orange)
+                            .help("Re-run brightness+position refinement for all frames affected by updated reference horizons.")
+                            .disabled(viewModel.affectedHorizonRefinementFrameIndices.isEmpty)
+
                             Toggle("Show Trash", isOn: $viewModel.shouldShowTrash)
                               .foregroundColor(.white)
                               .disabled(!viewModel.currentFrameUsesOutliers)

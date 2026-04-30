@@ -56,6 +56,8 @@ public class FrameViewModel {
 
     var isCurrentFrame: Bool = false
 
+    var isPendingHorizonRefinement: Bool = false
+
     func hasImage(type: FrameViewMode) -> Bool { existingImages.contains(type) }
     
     let frameIndex: Int

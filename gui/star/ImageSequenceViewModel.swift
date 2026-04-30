@@ -750,6 +750,98 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    var useReferenceHorizonBrightnessRefinement: Bool {
+        didSet {
+            var realConfig = config.config()
+            realConfig.useReferenceHorizonBrightnessRefinement = useReferenceHorizonBrightnessRefinement
+            config.update(realConfig)
+        }
+    }
+
+    var referenceHorizonBrightnessRefinementSearchRadius: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.referenceHorizonBrightnessRefinementSearchRadius = referenceHorizonBrightnessRefinementSearchRadius
+            config.update(realConfig)
+        }
+    }
+
+    // MARK: - Horizon refinement tracking
+
+    /// Reference frame indices updated this session (via HorizonPainterView).
+    var updatedReferenceHorizonFrameIndices: Set<Int> = []
+
+    /// Non-reference frame indices that will be re-refined when the user presses
+    /// "Re-run Horizon Refinement".
+    var affectedHorizonRefinementFrameIndices: Set<Int> = []
+
+    /// Called from HorizonPainterView after a reference horizon is saved.
+    /// Recomputes the affected set and marks those frames orange.
+    func recordReferenceHorizonUpdated(frameIndex: Int) {
+        updatedReferenceHorizonFrameIndices.insert(frameIndex)
+        let newAffected = computeAffectedHorizonRefinementFrameIndices()
+        let oldAffected = affectedHorizonRefinementFrameIndices
+        affectedHorizonRefinementFrameIndices = newAffected
+        // clear pending flag for frames that are no longer affected
+        for i in oldAffected.subtracting(newAffected) where i < frames.count {
+            frames[i].isPendingHorizonRefinement = false
+        }
+        // set pending flag for newly affected frames
+        for i in newAffected where i < frames.count {
+            frames[i].isPendingHorizonRefinement = true
+        }
+    }
+
+    private func computeAffectedHorizonRefinementFrameIndices() -> Set<Int> {
+        let allReferenceIndices = frames.indices
+            .filter { frames[$0].existingImages.contains(.userHorizon) }
+            .sorted()
+        let referenceSet = Set(allReferenceIndices)
+
+        var affected = Set<Int>()
+        for updatedIdx in updatedReferenceHorizonFrameIndices {
+            let prevRef = allReferenceIndices.last(where: { $0 < updatedIdx }).map { $0 } ?? -1
+            let nextRef = allReferenceIndices.first(where: { $0 > updatedIdx }).map { $0 } ?? frames.count
+            for i in (prevRef + 1)..<nextRef where !referenceSet.contains(i) {
+                affected.insert(i)
+            }
+        }
+        return affected
+    }
+
+    /// Clears the reference-stats cache for updated frames, recomputes merged
+    /// horizons for all affected frames, then clears the tracking state.
+    func reprocessHorizonsForUpdatedReferences() {
+        let toProcess = affectedHorizonRefinementFrameIndices
+        let toInvalidate = updatedReferenceHorizonFrameIndices
+
+        // Clear tracking state immediately so UI reflects that work is starting.
+        updatedReferenceHorizonFrameIndices = []
+        affectedHorizonRefinementFrameIndices = []
+        for i in toProcess where i < frames.count {
+            frames[i].isPendingHorizonRefinement = false
+        }
+
+        Task.detached(priority: .userInitiated) { [self] in
+            for idx in toInvalidate {
+                await referenceHorizonStatsCache.clearStats(for: idx)
+            }
+            await withTaskGroup(of: Void.self) { group in
+                for i in toProcess {
+                    group.addTask {
+                        guard i < (await self.frames.count),
+                              let frame = await self.frames[i].frame else { return }
+                        try? await frame.recomputeMergedHorizonIfExists()
+                        await MainActor.run {
+                            self.frames[i].refreshHorizonOverlay()
+                            self.frames[i].refreshFrameHorizonOverlay()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     public var alignmentMaxKeypoints: Int {
         didSet {
             var realConfig = config.config()
@@ -1051,6 +1143,8 @@ public final class ImageSequenceViewModel {
         self.useHomographyRefinedHorizon = config.useHomographyRefinedHorizon
         self.useReferenceHorizonSmoothing = config.useReferenceHorizonSmoothing
         self.referenceHorizonSmoothingMaxDistance = config.referenceHorizonSmoothingMaxDistance
+        self.useReferenceHorizonBrightnessRefinement = config.useReferenceHorizonBrightnessRefinement
+        self.referenceHorizonBrightnessRefinementSearchRadius = config.referenceHorizonBrightnessRefinementSearchRadius
 
         self.alignmentMaxKeypoints = config.alignmentMaxKeypoints
         self.alignmentGroundHorizonExtension = config.alignmentGroundHorizonExtension
