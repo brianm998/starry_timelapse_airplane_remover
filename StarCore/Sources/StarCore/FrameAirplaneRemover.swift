@@ -2,7 +2,7 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking   // URLSession, URLRequest live here on Linux
 #endif
-import StarCpp
+import StarCppBridge
 import Semaphore
 import logging
 
@@ -1983,24 +1983,58 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         viewHeight: Int
     ) async throws -> [Int?]? {
         guard let mask = try await loadHorizonReferenceMask() else { return nil }
+        return horizonMaskToViewY(mask, viewWidth: viewWidth, viewHeight: viewHeight)
+    }
 
-        let imgW = mask.image.width
-        let imgH = mask.image.height
+    /// Loads the best available existing horizon for this frame into view
+    /// coordinates, without computing or creating anything.
+    ///
+    /// Search order (highest quality first):
+    /// 1. User-painted reference in `horizonReference/`
+    /// 2. Cached `refinedHorizon` from a previous pipeline run
+    /// 3. Cached `mergedHorizon`
+    /// 4. Raw `horizon`
+    ///
+    /// Returns `nil` if no horizon data exists for this frame.
+    public func loadBestExistingHorizonAsViewY(
+        viewWidth:  Int,
+        viewHeight: Int
+    ) async throws -> [Int?]? {
+        if let result = try await loadExistingHorizonReferenceAsViewY(
+               viewWidth: viewWidth, viewHeight: viewHeight) {
+            return result
+        }
+        for type in [FrameViewMode.refinedHorizon, .mergedHorizon, .horizon] {
+            if let image = try? await imageAccessor.load(
+                   frameIndex: frameIndex, type: type, atSize: .original),
+               let horizonMask = image.asHorizonMask,
+               let mask = HorizonMask(horizonMask)
+            {
+                return horizonMaskToViewY(mask,
+                                          viewWidth:  viewWidth,
+                                          viewHeight: viewHeight)
+            }
+        }
+        return nil
+    }
+
+    private func horizonMaskToViewY(
+        _ mask: HorizonMask,
+        viewWidth:  Int,
+        viewHeight: Int
+    ) -> [Int?] {
+        let imgW   = mask.image.width
+        let imgH   = mask.image.height
         let scaleX = Double(imgW) / Double(viewWidth)
         let scaleY = Double(imgH) / Double(viewHeight)
-
-        // Extract per-column horizon Y in image-pixel coordinates.
-        let imgY = CombinedHorizonDetector.extractHorizonY(from: mask.image)
-
-        // Convert to view coordinates.
-        var viewY = [Int?](repeating: nil, count: viewWidth)
+        let imgY   = CombinedHorizonDetector.extractHorizonY(from: mask.image)
+        var viewY  = [Int?](repeating: nil, count: viewWidth)
         for vx in 0..<viewWidth {
             let ix = min(max(0, Int((Double(vx) * scaleX).rounded())), imgW - 1)
             if let iy = imgY[ix] {
                 viewY[vx] = Int((Double(iy) / scaleY).rounded())
             }
         }
-        // Edge-extrapolate so every column has a value.
         return FrameAirplaneRemover.fillEdgeNils(viewY)
     }
 
@@ -5948,7 +5982,7 @@ public actor CountActor {
 }
 
 
-// OCVFeatureSet is already @unchecked Sendable in StarCpp
+// OCVFeatureSet is already @unchecked Sendable in StarCppBridge
 
 public func doublyLink(frames: [FrameAirplaneRemover]) async {
     // doubly link frames here so that the decision tree can have acess to other frames

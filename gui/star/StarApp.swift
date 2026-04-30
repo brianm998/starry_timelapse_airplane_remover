@@ -9,7 +9,7 @@ import SwiftUI
 import StarCore
 import logging
 import StarDecisionTrees
-import StarCpp
+import StarCppBridge
 
 /*
 

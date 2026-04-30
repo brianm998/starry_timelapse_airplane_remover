@@ -1,5 +1,5 @@
 import SwiftUI
-import StarCpp
+import StarCppBridge
 import StarCore
 import logging
 import Charts

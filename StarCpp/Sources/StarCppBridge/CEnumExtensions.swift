@@ -1,7 +1,7 @@
 // CEnumExtensions.swift — Swift-friendly extensions for C enums
 // Since plain C enums (not NS_ENUM) are imported as global constants,
 // we add static properties to make them usable with dot syntax.
-import starcpp_bridge
+import StarCpp
 
 public extension AlignmentType {
     static let sky   = AlignmentTypeSky

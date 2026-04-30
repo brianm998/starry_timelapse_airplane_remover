@@ -1,5 +1,5 @@
 import Foundation
-import StarCpp
+import StarCppBridge
 
 public class HomographyLieMapping {
     static func log(_ h: [Double]) -> [Double] {

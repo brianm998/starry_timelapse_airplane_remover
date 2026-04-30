@@ -1,6 +1,6 @@
 // Logging.swift — Bridge C++ logging to Swift logging system
 // Re-export starcpp_bridge so consumers of StarCpp automatically get all C types
-@_exported import starcpp_bridge
+@_exported import StarCpp
 import logging
 
 /// Call this once at startup to route C++ log messages through the Swift logging system.

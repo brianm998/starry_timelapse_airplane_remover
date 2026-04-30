@@ -7,8 +7,8 @@
 
 import Foundation
 import StarCore
+import StarCppBridge
 import StarCpp
-import starcpp_bridge
 
 // MARK: - Pixel access helper (since intensity is internal on PixelatedImage)
 

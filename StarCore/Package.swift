@@ -33,7 +33,7 @@ let package = Package(
             dependencies: [
               "StarCoreC",
               .product(name: "Semaphore", package: "Semaphore"),
-              .product(name: "StarCpp", package: "StarCpp"),
+              .product(name: "StarCppBridge", package: "StarCpp"),
               .product(name: "logging", package: "logging"),
             ],
             resources: [

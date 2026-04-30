@@ -1,5 +1,5 @@
 import Foundation
-import StarCpp
+import StarCppBridge
 
 public enum AlignmentState: Int, Codable, CaseIterable, Sendable, CustomStringConvertible {
     case unableToDetectKeypoints = 0

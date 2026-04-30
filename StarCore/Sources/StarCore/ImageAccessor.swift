@@ -1,5 +1,5 @@
 import Foundation
-import StarCpp
+import StarCppBridge
 import logging
 import Semaphore
 #if canImport(CoreGraphics)

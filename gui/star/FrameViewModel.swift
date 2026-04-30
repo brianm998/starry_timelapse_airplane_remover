@@ -3,7 +3,7 @@ import SwiftUI
 import Cocoa
 import StarCore
 import logging
-import StarCpp
+import StarCppBridge
 import Combine
 
 // UI view class used for each frame

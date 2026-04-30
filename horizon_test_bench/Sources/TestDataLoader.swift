@@ -21,7 +21,7 @@
 
 import Foundation
 import StarCore
-import StarCpp
+import StarCppBridge
 
 // MARK: - Data model
 

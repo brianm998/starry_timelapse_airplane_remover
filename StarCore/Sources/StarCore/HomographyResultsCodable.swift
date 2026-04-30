@@ -1,6 +1,6 @@
 import Foundation
 import logging
-import StarCpp
+import StarCppBridge
 
 public struct HomographyResultsCodable: Codable, Sendable {
     public let frameIndex: Int

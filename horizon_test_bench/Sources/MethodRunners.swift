@@ -6,8 +6,8 @@
 
 import Foundation
 import StarCore
+import StarCppBridge
 import StarCpp
-import starcpp_bridge
 
 // MARK: - Method identifiers
 

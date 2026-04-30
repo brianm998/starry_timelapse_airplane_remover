@@ -52,7 +52,7 @@ import Foundation
 import ArgumentParser
 import logging
 import StarCore
-import starcpp_bridge
+import StarCpp
 
 // MARK: - Helpers
 

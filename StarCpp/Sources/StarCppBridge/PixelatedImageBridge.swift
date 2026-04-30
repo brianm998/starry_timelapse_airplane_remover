@@ -1,5 +1,5 @@
 // PixelatedImageBridge.swift — Swift wrapper for image processing operations
-import starcpp_bridge
+import StarCpp
 
 public enum PixelatedImageBridge {
 

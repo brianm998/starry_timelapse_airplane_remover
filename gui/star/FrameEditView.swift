@@ -182,7 +182,7 @@ struct FrameEditView: View {
                 ps.setPhase(.bandSelection)
                 return
             }
-            if let existingY = try? await frame.loadExistingHorizonReferenceAsViewY(
+            if let existingY = try? await frame.loadBestExistingHorizonAsViewY(
                 viewWidth:  w,
                 viewHeight: h
             ) {

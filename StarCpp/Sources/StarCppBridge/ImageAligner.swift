@@ -1,6 +1,6 @@
 // ImageAligner.swift — Swift wrapper for image alignment operations
 import Foundation
-import starcpp_bridge
+import StarCpp
 
 public enum ImageAligner {
 

@@ -8,7 +8,7 @@ import PackageDescription
 // ---------------------------------------------------------------------------
 // Platform-specific settings
 //
-// NOTE: starcpp_bridge contains only .cpp files, so all include-path settings
+// NOTE: StarCpp contains only .cpp files, so all include-path settings
 // must be in cxxSettings, not cSettings.  cSettings only applies to .c files
 // and would be silently ignored for C++ compilation.
 // ---------------------------------------------------------------------------
@@ -93,7 +93,7 @@ let platformLinkerSettings: [LinkerSetting] = [
 ]
 
 // starcpp (Hough Transform core) needs eigen + GCC C++ stdlib headers.
-// starcpp_bridge additionally needs the OpenCV headers.
+// StarCpp additionally needs the OpenCV headers.
 let starcppCXXSettings: [CXXSetting] = [
     .unsafeFlags([
         "-I/usr/include/eigen3",
@@ -158,30 +158,30 @@ let package = Package(
     ],
     products: [
         .library(
-            name: "StarCpp",
-            targets: ["StarCpp"])
+            name: "StarCppBridge",
+            targets: ["StarCppBridge"])
     ],
     dependencies: [
         .package(name: "logging", path: "../logging"),
     ],
     targets: [
-        .target(name: "StarCppCore",     // C++ Hough Transform implementation
-                path: "Sources/StarCppCore",
+        .target(name: "kht",             // C++ Hough Transform implementation
+                path: "Sources/kht",
                 cxxSettings: starcppCXXSettings,
                 linkerSettings: platformLinkerSettings
         ),
-        .target(name: "starcpp_bridge",  // C++ OpenCV / StarCpp bridge (all .cpp)
-                dependencies: ["StarCppCore"],
-                path: "Sources/starcpp_bridge",
+        .target(name: "StarCpp",         // C++ OpenCV / StarCpp bridge (all .cpp)
+                dependencies: ["kht"],
+                path: "Sources/StarCpp",
                 publicHeadersPath: "include",
                 cxxSettings: bridgeCXXSettings
         ),
-        .target(name: "StarCpp",         // Swift wrapper
+        .target(name: "StarCppBridge",   // Swift wrapper
                 dependencies: [
-                    "starcpp_bridge",
+                    "StarCpp",
                     .product(name: "logging", package: "logging"),
                 ],
-                path: "Sources/StarCpp"
+                path: "Sources/StarCppBridge"
         ),
     ],
     cxxLanguageStandard: .cxx2b

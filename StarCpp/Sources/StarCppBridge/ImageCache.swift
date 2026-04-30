@@ -1,6 +1,6 @@
 // ImageCache.swift — Swift wrapper for image loading cache
 import Foundation
-import starcpp_bridge
+import StarCpp
 
 // Global storage for the loader box pointer — must be outside the closure for C function pointer compatibility
 private nonisolated(unsafe) var _imageCacheLoaderBox: UnsafeMutableRawPointer?

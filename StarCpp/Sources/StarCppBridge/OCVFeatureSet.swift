@@ -1,5 +1,5 @@
 // OCVFeatureSet.swift — Swift wrapper for OpenCV feature set
-import starcpp_bridge
+import StarCpp
 
 public final class OCVFeatureSet: @unchecked Sendable {
     public let ref: OCVFeatureSetRef

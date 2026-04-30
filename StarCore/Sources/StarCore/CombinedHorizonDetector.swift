@@ -10,8 +10,8 @@
 */
 
 import Foundation
+import StarCppBridge
 import StarCpp
-import starcpp_bridge
 import logging
 
 /// Combined horizon detection: run base methods, median-combine, RW-refine.

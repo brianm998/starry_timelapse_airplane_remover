@@ -1,7 +1,7 @@
 // The Swift Programming Language
 // https://docs.swift.org/swift-book
 
-import StarCpp
+import StarCppBridge
 import StarCore
 import logging
 

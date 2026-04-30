@@ -3,7 +3,7 @@ import Foundation
 import StarCore
 import logging
 import StarDecisionTrees
-import StarCpp
+import StarCppBridge
 #if canImport(Observation)
 import Observation
 #endif

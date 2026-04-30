@@ -11,7 +11,7 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 import Foundation
-import StarCpp
+import StarCppBridge
 import logging
 
 public enum TreeType: String, CaseIterable, Sendable {

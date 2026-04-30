@@ -34,8 +34,8 @@ import Foundation
 import ArgumentParser
 import logging
 import StarCore
+import StarCppBridge
 import StarCpp
-import starcpp_bridge
 import Semaphore
 
 // MARK: - Top-level command

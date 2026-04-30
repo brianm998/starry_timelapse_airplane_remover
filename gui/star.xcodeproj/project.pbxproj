@@ -69,7 +69,7 @@
 		D3A0D3AE2CF383DF00FD2E9E /* ExpandUpButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */; };
 		D3A54A6F29AFAD2C00C50709 /* UserPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */; };
 		D3B29C9E2B2FE23F00754C10 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29C9D2B2FE23F00754C10 /* StarCore */; };
-		D3B29CA42B2FE31800754C10 /* StarCpp in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CA32B2FE31800754C10 /* StarCpp */; };
+		D3B29CA42B2FE31800754C10 /* StarCppBridge in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CA32B2FE31800754C10 /* StarCppBridge */; };
 		D3B29CB12B2FE5BE00754C10 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CB02B2FE5BE00754C10 /* StarCore */; };
 		D3B3730A2D50857400B56342 /* ProcessRemainingFramesButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B373092D50857400B56342 /* ProcessRemainingFramesButton.swift */; };
 		D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */; };
@@ -223,7 +223,7 @@
 				D364FD7F2C1F4357006FB43A /* libStarDecisionTrees.a in Frameworks */,
 				D3B29C9E2B2FE23F00754C10 /* StarCore in Frameworks */,
 				D3B29CB12B2FE5BE00754C10 /* StarCore in Frameworks */,
-				D3B29CA42B2FE31800754C10 /* StarCpp in Frameworks */,
+				D3B29CA42B2FE31800754C10 /* StarCppBridge in Frameworks */,
 				D30356DD2E6FDC8B0092140B /* LoggingObjC in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -440,7 +440,7 @@
 			name = Star;
 			packageProductDependencies = (
 				D3B29C9D2B2FE23F00754C10 /* StarCore */,
-				D3B29CA32B2FE31800754C10 /* StarCpp */,
+				D3B29CA32B2FE31800754C10 /* StarCppBridge */,
 				D3B29CB02B2FE5BE00754C10 /* StarCore */,
 				D30356DC2E6FDC8B0092140B /* LoggingObjC */,
 			);
@@ -672,7 +672,7 @@
 		};
 		D3B29CAA2B2FE44E00754C10 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			productRef = D3B29CA92B2FE44E00754C10 /* StarCpp */;
+			productRef = D3B29CA92B2FE44E00754C10 /* StarCppBridge */;
 		};
 		D3B29CAC2B2FE47D00754C10 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -1037,14 +1037,14 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = StarCore;
 		};
-		D3B29CA32B2FE31800754C10 /* StarCpp */ = {
+		D3B29CA32B2FE31800754C10 /* StarCppBridge */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = StarCpp;
+			productName = StarCppBridge;
 		};
-		D3B29CA92B2FE44E00754C10 /* StarCpp */ = {
+		D3B29CA92B2FE44E00754C10 /* StarCppBridge */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D3B29CA22B2FE31800754C10 /* XCLocalSwiftPackageReference "../StarCpp" */;
-			productName = StarCpp;
+			productName = StarCppBridge;
 		};
 		D3B29CAB2B2FE47D00754C10 /* StarCore */ = {
 			isa = XCSwiftPackageProductDependency;

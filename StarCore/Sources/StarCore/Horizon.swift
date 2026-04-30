@@ -1,5 +1,5 @@
 import Foundation
-import StarCpp
+import StarCppBridge
 import logging
 
 // this file has logic for horizon detection and analysis

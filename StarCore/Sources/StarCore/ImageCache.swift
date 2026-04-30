@@ -1,6 +1,6 @@
 import Foundation
 import logging
-import StarCpp
+import StarCppBridge
 
 
 public let imageCache = ImageCache()
@@ -35,7 +35,7 @@ public actor ImageCache {
 
     init() {
         // Register our loader with the C++ image cache
-        StarCpp.ImageCache.setLoader { filename in
+        StarCppBridge.ImageCache.setLoader { filename in
             MatWrapper.load(fromFilename: filename)
         }
     }

@@ -4,7 +4,7 @@ import Cocoa
 import StarCore
 import Semaphore
 import logging
-import StarCpp
+import StarCppBridge
 
 public enum VideoPlayMode: String, Equatable, CaseIterable {
     case forward

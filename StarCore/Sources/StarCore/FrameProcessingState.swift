@@ -1,5 +1,5 @@
 import Foundation
-import StarCpp
+import StarCppBridge
 #if canImport(SwiftUI)
 import SwiftUI
 #endif
