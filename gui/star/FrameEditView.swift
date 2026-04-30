@@ -246,7 +246,7 @@ struct FrameEditView: View {
                         if col == 0 { path.move(to: pt) }
                         else        { path.addLine(to: pt) }
                     }
-                    ctx.stroke(path, with: .color(strokeColor), lineWidth: 2 / zoom)
+                    ctx.stroke(path, with: .color(strokeColor), lineWidth: 4 / zoom)
                 }
                 .frame(width: viewModel.frameWidth, height: viewModel.frameHeight)
                 .allowsHitTesting(false)

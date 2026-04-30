@@ -58,7 +58,20 @@ public class FrameViewModel {
 
     var isPendingHorizonRefinement: Bool = false
 
-    func hasImage(type: FrameViewMode) -> Bool { existingImages.contains(type) }
+    func hasImage(type: FrameViewMode) -> Bool {
+        if existingImages.contains(type) { return true }
+        // userHorizon files (reference.tiff or per-frame) may be added after initial load
+        // without updating existingImages for every frame, so do a lazy live check
+        if type == .userHorizon,
+           let exists = frame?.imageAccessor.imageExists(
+             frameIndex: frameIndex, ofType: .userHorizon, atSize: .original
+           )
+        {
+            if exists { existingImages.insert(.userHorizon) }
+            return exists
+        }
+        return false
+    }
     
     let frameIndex: Int
 

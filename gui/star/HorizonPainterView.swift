@@ -742,10 +742,17 @@ struct HorizonPainterToolbarView: View {
                 let hasMoreFrames = !indices.isEmpty && pos + 1 < indices.count
                 if hasMoreFrames {
                     // Moving sequence: more horizons to paint — advance to next frame.
+                    // Refresh the overlay for the frame we just painted before moving on.
+                    viewModel.currentFrameView.existingImages.insert(.userHorizon)
+                    viewModel.currentFrameView.refreshHorizonOverlay()
+                    viewModel.currentFrameView.refreshFrameHorizonOverlay()
                     savedAlready = false  // reset so the next frame's save is treated as new
                     viewModel.advanceToNextStartupHorizonFrame()
                 } else {
                     // Static single frame OR final frame of moving sequence: all done.
+                    viewModel.currentFrameView.existingImages.insert(.userHorizon)
+                    viewModel.currentFrameView.refreshHorizonOverlay()
+                    viewModel.currentFrameView.refreshFrameHorizonOverlay()
                     viewModel.continueToRemovalFromHorizonPainter()
                 }
             } else {

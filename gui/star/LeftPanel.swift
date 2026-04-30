@@ -473,23 +473,19 @@ struct LeftPanel: View {
               .foregroundColor(.white)
             
             VerticalLimitedSelectionPicker(selection: $viewModel.frameViewMode) { value, isEnabled in
-                let hasUserHorizon = viewModel.currentFrameView.hasImage(type: .userHorizon)
-                let shouldShow = (!viewModel.showAllFrameViewModes && (value == .original || value == .final || (value == .userHorizon && hasUserHorizon))) || viewModel.showAllFrameViewModes
+                let hasImage = viewModel.currentFrameView.hasImage(type: value)
+                let shouldShow = hasImage && (
+                    (!viewModel.showAllFrameViewModes && (value == .original || value == .final || value == .userHorizon))
+                    || viewModel.showAllFrameViewModes
+                )
                 if shouldShow {
-                    let hasImage = viewModel.currentFrameView.hasImage(type: value)
-                    let color: Color =
-                      hasImage ?
-                      isEnabled ? .black : .yellow :
-                      .gray
-
+                    let color: Color = isEnabled ? .black : .yellow
                     HStack {
                         Text(value.longName)
                           .foregroundColor(color)
                           .padding(4)
                           .onTapGesture { _ in
-                              if hasImage {
-                                  viewModel.frameViewMode = value
-                              }
+                              viewModel.frameViewMode = value
                           }
                         Spacer()
                     }
