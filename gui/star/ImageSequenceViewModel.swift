@@ -811,6 +811,9 @@ public final class ImageSequenceViewModel {
 
     /// Clears the reference-stats cache for updated frames, recomputes merged
     /// horizons for all affected frames, then clears the tracking state.
+    /// If any affected frame (interpolated or reference) already has processed
+    /// output (star/earth aligned images), its alignment is invalidated and it
+    /// is re-queued for a full reprocess using the updated horizon.
     func reprocessHorizonsForUpdatedReferences() {
         let toProcess = affectedHorizonRefinementFrameIndices
         let toInvalidate = updatedReferenceHorizonFrameIndices
@@ -826,6 +829,7 @@ public final class ImageSequenceViewModel {
             for idx in toInvalidate {
                 await referenceHorizonStatsCache.clearStats(for: idx)
             }
+            // Recompute merged horizons for affected interpolated frames first.
             await withTaskGroup(of: Void.self) { group in
                 for i in toProcess {
                     group.addTask {
@@ -837,6 +841,28 @@ public final class ImageSequenceViewModel {
                             self.frames[i].refreshFrameHorizonOverlay()
                         }
                     }
+                }
+            }
+            // For every modified frame (interpolated or manually-edited reference)
+            // that was already processed, invalidate its stale alignment output and
+            // re-queue it so the merge runs again with the updated horizon.
+            let allModified = toProcess.union(toInvalidate).sorted()
+            for i in allModified {
+                guard i < (await self.frames.count),
+                      let frame = await self.frames[i].frame else { continue }
+                let alreadyProcessed =
+                    frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
+                                                    ofType: .starAligned, atSize: .original) ||
+                    frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
+                                                    ofType: .earthAligned, atSize: .original)
+                guard alreadyProcessed else { continue }
+                try? await frame.invalidateStarAlignmentIfExists()
+                await MainActor.run {
+                    self.frames[i].existingImages.subtract(
+                        [.starAligned, .earthAligned, .subtraction,
+                         .autoProcessed, .autoSelectiveProcessed, .selectiveProcessed, .final]
+                    )
+                    self.processFrames(from: i, to: i, performClean: false)
                 }
             }
         }

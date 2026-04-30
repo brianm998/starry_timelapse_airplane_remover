@@ -764,6 +764,7 @@ struct HorizonPainterToolbarView: View {
                 viewModel.currentFrameView.refreshHorizonOverlay()
                 viewModel.currentFrameView.refreshFrameHorizonOverlay()
                 viewModel.recordReferenceHorizonUpdated(frameIndex: viewModel.currentFrameView.frameIndex)
+                viewModel.reprocessHorizonsForUpdatedReferences()
                 viewModel.isShowingHorizonPainter = false
             }
         } catch {
