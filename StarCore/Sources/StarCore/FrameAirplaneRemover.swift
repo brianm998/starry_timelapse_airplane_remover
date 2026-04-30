@@ -828,14 +828,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     /// Per-pixel brightness + Y-position refinement of `detected` using reference frame stats.
     ///
     /// For each pixel in a band around the widest horizon Y bounds of the reference frames,
-    /// a combined sky probability is computed from:
-    ///   - brightness: a cubic-weighted score based on distance from the midpoint between
-    ///     the weighted-median sky and ground brightnesses of the reference frames.
-    ///   - Y position: a cubic-weighted score based on the pixel's row relative to the
-    ///     global [minHorizonY, maxHorizonY] span of the reference frames.
+    /// the sky/ground decision is driven primarily by brightness:
+    ///   - Within [globalMinY, globalMaxY]: brightness alone decides (Y position is neutral
+    ///     here because mountain peaks and dips mean position alone is unreliable).
+    ///   - Outside that band: a Y-position score is blended in with a weight that grows
+    ///     quadratically with distance from the band edge, capped at 0.5 so brightness
+    ///     always has the majority influence.
     ///
-    /// The two scores are averaged equally.  Pixels with a combined score >= 0.5 are sky;
-    /// below 0.5 are ground.  Pixels outside the band are copied unchanged from `detected`.
+    /// Pixels with a combined score >= 0.5 are sky; below 0.5 are ground.
+    /// Pixels outside the search band are copied unchanged from `detected`.
     private func referenceStatsBrightnessRefinedHorizonMask(
       detected: HorizonMask,
       original: PixelatedImage,
@@ -879,19 +880,26 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         var outputBytes = [UInt8](detectedBuf)
 
         var refinedCount = 0
+        let bandRange = Double(max(1, searchRadius))
         for y in bandTop...bandBottom {
-            // Y-position sky score: cubic-weighted, anchored at globalMinY / globalMaxY.
+            // Within [globalMinY, globalMaxY] rely on brightness alone — the Y range
+            // only tells us the horizon could be anywhere in here, so position gives
+            // no useful signal.  Outside the band, blend in a Y-position score whose
+            // weight grows quadratically with distance from the band edge, capped at
+            // 0.5 so brightness always has the majority influence.
+            let yWeight: Double
             let ySkyScore: Double
-            if y <= globalMinY {
+            if y < globalMinY {
+                let t = min(1.0, Double(globalMinY - y) / bandRange)
+                yWeight   = 0.5 * t * t
                 ySkyScore = 1.0
-            } else if y >= globalMaxY {
+            } else if y > globalMaxY {
+                let t = min(1.0, Double(y - globalMaxY) / bandRange)
+                yWeight   = 0.5 * t * t
                 ySkyScore = 0.0
             } else {
-                let yRange = Double(globalMaxY - globalMinY)
-                let yLinear = 1.0 - Double(y - globalMinY) / yRange  // 1 at top, 0 at bottom
-                let ySignal = 2.0 * yLinear - 1.0                     // +1 to -1
-                let yStrong = ySignal * ySignal * ySignal              // cubic, keeps sign
-                ySkyScore = (yStrong + 1.0) / 2.0
+                yWeight   = 0.0
+                ySkyScore = 0.5  // unused — pure brightness within the reference band
             }
 
             for x in 0..<w {
@@ -909,7 +917,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     brightnessSkyScore = (strong + 1.0) / 2.0
                 }
 
-                let combined = 0.5 * brightnessSkyScore + 0.5 * ySkyScore
+                let combined = yWeight < 0.001
+                    ? brightnessSkyScore
+                    : (1.0 - yWeight) * brightnessSkyScore + yWeight * ySkyScore
                 let newVal: UInt8 = combined >= 0.5 ? 255 : 0
                 let idx = y * w + x
                 if newVal != detectedBuf[idx] { refinedCount += 1 }
