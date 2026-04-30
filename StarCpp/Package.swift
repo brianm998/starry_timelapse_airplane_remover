@@ -33,8 +33,13 @@ let starcppCXXSettings: [CXXSetting] = [
 // headerSearchPath correctly but resolves unsafeFlags -I relative to a different
 // working directory.  "../../opencv/include" is relative to Sources/ in SPM,
 // which puts it at the repo root's opencv/include/.
+//
+// For `swift build` CLI, unsafeFlags -I resolves relative to the package root
+// (StarCpp/), so "../opencv/include" reaches the repo root's opencv/include/.
+// Both settings are present so that CLI and Xcode builds both find the headers.
 let bridgeCXXSettings: [CXXSetting] = starcppCXXSettings + [
     .headerSearchPath("../../opencv/include"),
+    .unsafeFlags(["-I../opencv/include"]),
 ]
 
 #elseif os(Linux)
