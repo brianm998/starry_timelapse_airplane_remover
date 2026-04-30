@@ -1418,10 +1418,22 @@ public final class ImageSequenceViewModel {
         }
         
         callbacks.frameStateChangeCallback = { [weak self] frame, newState in
-            guard let self else { return }            
+            guard let self else { return }
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                let previousState = self.frames[frame.frameIndex].frameState
                 self.frames[frame.frameIndex].frameState = newState
+
+                switch newState {
+                case .horizonDetected, .horizonRefined:
+                    self.frames[frame.frameIndex].refreshHorizonOverlay()
+                    self.frames[frame.frameIndex].refreshFrameHorizonOverlay()
+                default:
+                    if previousState == .mergingHorizon {
+                        self.frames[frame.frameIndex].refreshHorizonOverlay()
+                        self.frames[frame.frameIndex].refreshFrameHorizonOverlay()
+                    }
+                }
 
                 for state in FrameProcessingState.allCases {
                     if state == newState { continue }
