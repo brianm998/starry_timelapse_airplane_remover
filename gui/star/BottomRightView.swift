@@ -103,6 +103,19 @@ struct BottomRightView: View {
                       .colorScheme(.dark)
                     Text("\(frameGraphViewModel.numberOfFramesProcessingNow) frames processing")
                       .foregroundColor(.white)
+                    Button {
+                        viewModel.cancelProcessing()
+                        Task { await frameGraphBuilder.cancelAllOperations() }
+                    } label: {
+                        Text("Stop")
+                          .foregroundColor(.white)
+                          .padding(.horizontal, 8)
+                          .padding(.vertical, 4)
+                          .background(Color.red.opacity(0.8))
+                          .cornerRadius(6)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("Cancel all pending processing operations")
                 }
 
                 switch viewModel.sequenceProcessingState {
@@ -307,6 +320,19 @@ struct BottomRightView: View {
                           .colorScheme(.dark)
                         Text("processing \(viewModel.frames.count - viewModel.numberOfFramesProcessed) more frames")
                           .foregroundColor(.white)
+                        Button {
+                            viewModel.cancelProcessing()
+                            Task { await frameGraphBuilder.cancelAllOperations() }
+                        } label: {
+                            Text("Stop")
+                              .foregroundColor(.white)
+                              .padding(.horizontal, 8)
+                              .padding(.vertical, 4)
+                              .background(Color.red.opacity(0.8))
+                              .cornerRadius(6)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .help("Cancel all pending processing operations")
                     }
 
 

@@ -554,6 +554,19 @@ public final actor FrameGraphBuilder {
         }
     }
     
+    /// Cancel all queued and running operations.
+    ///
+    /// Queued operations are skipped immediately.  Running operations finish
+    /// their current async step and then mark themselves finished.  The
+    /// `GraphCompletionOp` will be cancelled and its closure will not fire,
+    /// so callers that track processing state (e.g. `isProcessingFrames`)
+    /// must reset that state themselves after calling this method.
+    public func cancelAllOperations() {
+        queue.cancelAllOperations()
+        previewQueue.cancelAllOperations()
+        Log.i("FrameGraphBuilder: all operations cancelled")
+    }
+
     public func debugPrint() {
         Log.d("========== OperationQueue ==========")
         Log.d("Name: \(queue.name ?? "nil")")

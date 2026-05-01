@@ -425,23 +425,32 @@ public struct ImageAccessor: Sendable {
         return nil
     }
 
-    // Returns the path to the user-defined horizon mask for the given frame,
-    // checking per-frame first then falling back to the global reference.tiff.
+    // Returns the path to the user-defined horizon mask for the given frame.
+    // For original: checks per-frame file first, then falls back to reference.tiff.
+    // For preview: returns a per-frame JPEG path in horizonReference-previews/.
     private func nameForUserHorizonImage(frameIndex: Int, atSize size: ImageDisplaySize) -> String? {
-        guard size == .original,
-              let dir = config.dirForImage(ofType: .userHorizon, atSize: .original),
-              let baseFileName = frameIndexToBaseNameMap[frameIndex]
-        else { return nil }
+        guard let baseFileName = frameIndexToBaseNameMap[frameIndex] else { return nil }
 
-        let perFramePath = "\(dir)/\(baseFileName)"
-        if FileManager.default.fileExists(atPath: perFramePath) {
-            return perFramePath
+        switch size {
+        case .original:
+            guard let dir = config.dirForImage(ofType: .userHorizon, atSize: .original)
+            else { return nil }
+            let perFramePath = "\(dir)/\(baseFileName)"
+            if FileManager.default.fileExists(atPath: perFramePath) {
+                return perFramePath
+            }
+            let globalPath = "\(dir)/reference.tiff"
+            if FileManager.default.fileExists(atPath: globalPath) {
+                return globalPath
+            }
+            return nil
+        case .preview:
+            guard let dir = config.dirForImage(ofType: .userHorizon, atSize: .preview)
+            else { return nil }
+            return "\(dir)/\(baseFileName).jpg"
+        case .thumbnail:
+            return nil
         }
-        let globalPath = "\(dir)/reference.tiff"
-        if FileManager.default.fileExists(atPath: globalPath) {
-            return globalPath
-        }
-        return nil
     }
 
     public func dirAndNameForImage(

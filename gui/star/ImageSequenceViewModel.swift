@@ -155,6 +155,9 @@ public final class ImageSequenceViewModel {
     // XXX report this from processAll
     var sequenceProcessingState: SequenceProcessingState = .unprocessed
 
+    // bumped on Stop so in-flight processAll closures know to ignore their final state write
+    private var processingGeneration = 0
+
     // the number of frames that are the given processing state
     func count(for state: FrameProcessingState) -> Int {
         self.frameStateMap[state]?.count ?? 0
@@ -766,6 +769,46 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    var referenceHorizonBrightnessRefinementHistogramBuckets: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.referenceHorizonBrightnessRefinementHistogramBuckets = referenceHorizonBrightnessRefinementHistogramBuckets
+            config.update(realConfig)
+        }
+    }
+
+    var horizonSpikeRemovalEnabled: Bool {
+        didSet {
+            var realConfig = config.config()
+            realConfig.horizonSpikeRemovalEnabled = horizonSpikeRemovalEnabled
+            config.update(realConfig)
+        }
+    }
+
+    var horizonSpikeMaxWidth: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.horizonSpikeMaxWidth = horizonSpikeMaxWidth
+            config.update(realConfig)
+        }
+    }
+
+    var horizonSpikeMaxDeviationFraction: Double {
+        didSet {
+            var realConfig = config.config()
+            realConfig.horizonSpikeMaxDeviationFraction = horizonSpikeMaxDeviationFraction
+            config.update(realConfig)
+        }
+    }
+
+    var horizonSpikeWindowHalf: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.horizonSpikeWindowHalf = horizonSpikeWindowHalf
+            config.update(realConfig)
+        }
+    }
+
     // MARK: - Horizon refinement tracking
 
     /// Reference frame indices updated this session (via HorizonPainterView).
@@ -830,12 +873,14 @@ public final class ImageSequenceViewModel {
                 await referenceHorizonStatsCache.clearStats(for: idx)
             }
             // Recompute merged horizons for affected interpolated frames first.
+            // Use the unconditional variant so frames that previously only had
+            // a raw (.horizon) mask get another attempt at producing a merged one.
             await withTaskGroup(of: Void.self) { group in
                 for i in toProcess {
                     group.addTask {
                         guard i < (await self.frames.count),
                               let frame = await self.frames[i].frame else { return }
-                        try? await frame.recomputeMergedHorizonIfExists()
+                        try? await frame.recomputeMergedHorizon()
                         await MainActor.run {
                             self.frames[i].refreshHorizonOverlay()
                             self.frames[i].refreshFrameHorizonOverlay()
@@ -1171,6 +1216,11 @@ public final class ImageSequenceViewModel {
         self.referenceHorizonSmoothingMaxDistance = config.referenceHorizonSmoothingMaxDistance
         self.useReferenceHorizonBrightnessRefinement = config.useReferenceHorizonBrightnessRefinement
         self.referenceHorizonBrightnessRefinementSearchRadius = config.referenceHorizonBrightnessRefinementSearchRadius
+        self.referenceHorizonBrightnessRefinementHistogramBuckets = config.referenceHorizonBrightnessRefinementHistogramBuckets
+        self.horizonSpikeRemovalEnabled = config.horizonSpikeRemovalEnabled
+        self.horizonSpikeMaxWidth = config.horizonSpikeMaxWidth
+        self.horizonSpikeMaxDeviationFraction = config.horizonSpikeMaxDeviationFraction
+        self.horizonSpikeWindowHalf = config.horizonSpikeWindowHalf
 
         self.alignmentMaxKeypoints = config.alignmentMaxKeypoints
         self.alignmentGroundHorizonExtension = config.alignmentGroundHorizonExtension
@@ -1627,9 +1677,17 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    func cancelProcessing() {
+        processingGeneration += 1
+        isProcessingFrames = false
+        sequenceProcessingState = .unprocessed
+    }
+
     func processAll() {
         Log.d("processAll")
         self.isProcessingFrames = true
+        processingGeneration += 1
+        let capturedGen = processingGeneration
         if let frame = frames[0].frame {
             Task {
                 Log.d("processAll")
@@ -1638,6 +1696,7 @@ public final class ImageSequenceViewModel {
                 ) { processingState in
                     Log.d("processAll")
                     Task { @MainActor in
+                        guard self.processingGeneration == capturedGen else { return }
                         self.isProcessingFrames = false
                         switch processingState {
                         case .done:

@@ -199,6 +199,11 @@ struct ProcessingSettingsView: View {
     @State private var showReferenceHorizonSmoothingMaxDistanceInfo = false
     @State private var showUseReferenceHorizonBrightnessRefinementInfo = false
     @State private var showReferenceHorizonBrightnessRefinementSearchRadiusInfo = false
+    @State private var showReferenceHorizonBrightnessRefinementHistogramBucketsInfo = false
+    @State private var showHorizonSpikeRemovalEnabledInfo = false
+    @State private var showHorizonSpikeMaxWidthInfo = false
+    @State private var showHorizonSpikeMaxDeviationFractionInfo = false
+    @State private var showHorizonSpikeWindowHalfInfo = false
 
     @State private var showMaxConcurrentHorizonsView = false
     @State private var showMaxConcurrentKeypointsView = false
@@ -234,6 +239,11 @@ struct ProcessingSettingsView: View {
         showReferenceHorizonSmoothingMaxDistanceInfo ||
         showUseReferenceHorizonBrightnessRefinementInfo ||
         showReferenceHorizonBrightnessRefinementSearchRadiusInfo ||
+        showReferenceHorizonBrightnessRefinementHistogramBucketsInfo ||
+        showHorizonSpikeRemovalEnabledInfo ||
+        showHorizonSpikeMaxWidthInfo ||
+        showHorizonSpikeMaxDeviationFractionInfo ||
+        showHorizonSpikeWindowHalfInfo ||
         showMaxConcurrentHorizonsView ||
         showMaxConcurrentKeypointsView ||
         showMaxConcurrentHomographiesView ||
@@ -276,6 +286,11 @@ struct ProcessingSettingsView: View {
         showReferenceHorizonSmoothingMaxDistanceInfo = true
         showUseReferenceHorizonBrightnessRefinementInfo = true
         showReferenceHorizonBrightnessRefinementSearchRadiusInfo = true
+        showReferenceHorizonBrightnessRefinementHistogramBucketsInfo = true
+        showHorizonSpikeRemovalEnabledInfo = true
+        showHorizonSpikeMaxWidthInfo = true
+        showHorizonSpikeMaxDeviationFractionInfo = true
+        showHorizonSpikeWindowHalfInfo = true
         showMaxConcurrentHorizonsView = true
         showMaxConcurrentKeypointsView = true
         showMaxConcurrentHomographiesView = true
@@ -318,6 +333,11 @@ struct ProcessingSettingsView: View {
         showReferenceHorizonSmoothingMaxDistanceInfo = false
         showUseReferenceHorizonBrightnessRefinementInfo = false
         showReferenceHorizonBrightnessRefinementSearchRadiusInfo = false
+        showReferenceHorizonBrightnessRefinementHistogramBucketsInfo = false
+        showHorizonSpikeRemovalEnabledInfo = false
+        showHorizonSpikeMaxWidthInfo = false
+        showHorizonSpikeMaxDeviationFractionInfo = false
+        showHorizonSpikeWindowHalfInfo = false
         showMaxConcurrentHorizonsView = false
         showMaxConcurrentKeypointsView = false
         showMaxConcurrentHomographiesView = false
@@ -463,6 +483,16 @@ struct ProcessingSettingsView: View {
                                   self.useReferenceHorizonBrightnessRefinementView
                                   Divider()
                                   self.referenceHorizonBrightnessRefinementSearchRadiusView
+                                  Divider()
+                                  self.referenceHorizonBrightnessRefinementHistogramBucketsView
+                                  Divider()
+                                  self.horizonSpikeRemovalEnabledView
+                                  Divider()
+                                  self.horizonSpikeMaxWidthView
+                                  Divider()
+                                  self.horizonSpikeMaxDeviationFractionView
+                                  Divider()
+                                  self.horizonSpikeWindowHalfView
                               }
                           } label: {
                               Text("Horizon Settings")
@@ -1342,6 +1372,206 @@ struct ProcessingSettingsView: View {
         }
         .disabled(viewModel.sceneType == .skyOnly || viewModel.cameraMotion == .fixed ||
                   !viewModel.useReferenceHorizonBrightnessRefinement)
+    }
+
+    private var referenceHorizonBrightnessRefinementHistogramBucketsView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showReferenceHorizonBrightnessRefinementHistogramBucketsInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            The number of buckets in the intensity histograms used to classify each pixel as \
+            sky or ground during brightness refinement. Each histogram spans the actual \
+            intensity range observed in that region (sky or ground) in the nearest reference \
+            frames, giving finer resolution within the real data range. Higher values provide \
+            more precise intensity matching but require more reference pixels per bucket to be \
+            reliable; lower values are more robust when few reference pixels are available.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Brightness Refinement Histogram Buckets:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.referenceHorizonBrightnessRefinementHistogramBuckets,
+                      minValue: 2,
+                      maxValue: 65536,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .referenceHorizonBrightnessRefinementHistogramBuckets,
+                      alwaysOpen: true
+                    )
+                    Spacer()
+                }
+            }
+        }
+        .disabled(viewModel.sceneType == .skyOnly || viewModel.cameraMotion == .fixed ||
+                  !viewModel.useReferenceHorizonBrightnessRefinement)
+    }
+
+    private var horizonSpikeRemovalEnabledView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showHorizonSpikeRemovalEnabledInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            When enabled, a spike-removal pass runs after brightness refinement to eliminate \
+            narrow upward protrusions (wind turbines, towers, isolated star pixels) from the \
+            horizon line.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Horizon Spike Removal:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    Toggle(isOn: $viewModel.horizonSpikeRemovalEnabled) {
+                        EmptyView()
+                    }
+                    .toggleStyle(.switch)
+                    Spacer()
+                }
+            }
+        }
+        .disabled(viewModel.sceneType == .skyOnly || viewModel.cameraMotion == .fixed ||
+                  !viewModel.useReferenceHorizonBrightnessRefinement)
+    }
+
+    private var horizonSpikeMaxWidthView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showHorizonSpikeMaxWidthInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            Maximum number of consecutive columns that can be removed as a spike. Runs wider \
+            than this are treated as legitimate terrain features (hills, ridgelines) and left \
+            unchanged. Increase this value to remove wider structures such as broad tower bases.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Spike Max Width (columns):")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.horizonSpikeMaxWidth,
+                      minValue: 1,
+                      maxValue: 500,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .horizonSpikeMaxWidth,
+                      alwaysOpen: true
+                    )
+                    Spacer()
+                }
+            }
+        }
+        .disabled(viewModel.sceneType == .skyOnly || viewModel.cameraMotion == .fixed ||
+                  !viewModel.useReferenceHorizonBrightnessRefinement ||
+                  !viewModel.horizonSpikeRemovalEnabled)
+    }
+
+    private var horizonSpikeMaxDeviationFractionView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showHorizonSpikeMaxDeviationFractionInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            A column is considered a spike when its horizon Y is more than this fraction of the \
+            image height above the local median. For example, 0.02 means 2% of image height \
+            (≈9 px on a 460 px image, ≈80 px on a 4000 px image). Lower values catch shorter \
+            spikes; higher values only remove very tall protrusions.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Spike Max Deviation Fraction:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.horizonSpikeMaxDeviationFraction,
+                      minValue: 0.001,
+                      maxValue: 0.5,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .horizonSpikeMaxDeviationFraction,
+                      alwaysOpen: true
+                    )
+                    Spacer()
+                }
+            }
+        }
+        .disabled(viewModel.sceneType == .skyOnly || viewModel.cameraMotion == .fixed ||
+                  !viewModel.useReferenceHorizonBrightnessRefinement ||
+                  !viewModel.horizonSpikeRemovalEnabled)
+    }
+
+    private var horizonSpikeWindowHalfView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showHorizonSpikeWindowHalfInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            Half-width of the local-median window (in columns) used to establish the reference \
+            horizon level for spike detection. A larger window is more robust because the spike \
+            value itself is a smaller fraction of the median sample, so it has less influence on \
+            the reference level. Reduce if the horizon changes rapidly across the frame.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Spike Detection Window Half:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.horizonSpikeWindowHalf,
+                      minValue: 10,
+                      maxValue: 2000,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .horizonSpikeWindowHalf,
+                      alwaysOpen: true
+                    )
+                    Spacer()
+                }
+            }
+        }
+        .disabled(viewModel.sceneType == .skyOnly || viewModel.cameraMotion == .fixed ||
+                  !viewModel.useReferenceHorizonBrightnessRefinement ||
+                  !viewModel.horizonSpikeRemovalEnabled)
     }
 
     private var processingModeView: some View {

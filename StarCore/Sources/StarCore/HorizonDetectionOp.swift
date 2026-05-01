@@ -17,10 +17,16 @@ final class HorizonDetectionOp: AsyncOperation, @unchecked Sendable {
     }
 
     override func asyncExecute() async {
+        guard !Task.isCancelled else {
+            Log.d("frame \(frame.frameIndex) horizon detection cancelled")
+            return
+        }
         do {
             Log.d("frame \(frame.frameIndex) starting")
             _ = try await frame.loadOrCreateHorizonMask()
             Log.d("frame \(frame.frameIndex) done")
+        } catch is CancellationError {
+            Log.d("frame \(frame.frameIndex) horizon detection cancelled")
         } catch {
             let str = "frame \(frame.frameIndex) error during horizon detection: \(error)"
             Log.e(str)

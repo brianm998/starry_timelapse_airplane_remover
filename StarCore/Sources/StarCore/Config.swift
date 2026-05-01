@@ -345,6 +345,29 @@ public struct Config: Codable, Sendable {
     // possible horizon Y bounds across the nearby reference frames.
     public var referenceHorizonBrightnessRefinementSearchRadius: Int = 100
 
+    // number of buckets in the per-region intensity histograms used by the brightness
+    // refinement step.  Higher values give finer intensity resolution at the cost of
+    // sparser bucket counts when few reference pixels are available.
+    public var referenceHorizonBrightnessRefinementHistogramBuckets: Int = 256
+
+    // when true, a spike-removal pass runs on the per-column horizon Y after brightness
+    // refinement, eliminating narrow upward protrusions (wind turbines, towers, etc.).
+    public var horizonSpikeRemovalEnabled: Bool = true
+
+    // maximum run of consecutive columns that qualifies as a spike (wider runs are
+    // treated as legitimate terrain features and left unchanged).
+    public var horizonSpikeMaxWidth: Int = 30
+
+    // spike trigger threshold expressed as a fraction of image height.  A column whose
+    // horizon Y is more than (fraction × imageHeight) pixels above the local median is
+    // considered the top of a spike.
+    public var horizonSpikeMaxDeviationFraction: Double = 0.02
+
+    // half-width of the local-median window (in columns) used for spike detection.
+    // A wider window is more robust: the spike value itself is a smaller fraction of
+    // the median sample, so the median is less pulled toward the spike.
+    public var horizonSpikeWindowHalf: Int = 300
+
     // use the combined+RW horizon detector (Otsu + DP + SIOX → median → Random Walker)?
     // when true, this replaces the legacy adaptive Otsu/DP search in loadOrCreateHorizonMask.
     // set to false to fall back to the previous adaptive search approach.
@@ -516,6 +539,11 @@ public struct Config: Codable, Sendable {
         self.referenceHorizonSmoothingMaxDistance = try c.decodeIfPresent(Int.self, forKey: .referenceHorizonSmoothingMaxDistance) ?? self.referenceHorizonSmoothingMaxDistance
         self.useReferenceHorizonBrightnessRefinement = try c.decodeIfPresent(Bool.self, forKey: .useReferenceHorizonBrightnessRefinement) ?? self.useReferenceHorizonBrightnessRefinement
         self.referenceHorizonBrightnessRefinementSearchRadius = try c.decodeIfPresent(Int.self, forKey: .referenceHorizonBrightnessRefinementSearchRadius) ?? self.referenceHorizonBrightnessRefinementSearchRadius
+        self.referenceHorizonBrightnessRefinementHistogramBuckets = try c.decodeIfPresent(Int.self, forKey: .referenceHorizonBrightnessRefinementHistogramBuckets) ?? self.referenceHorizonBrightnessRefinementHistogramBuckets
+        self.horizonSpikeRemovalEnabled = try c.decodeIfPresent(Bool.self, forKey: .horizonSpikeRemovalEnabled) ?? self.horizonSpikeRemovalEnabled
+        self.horizonSpikeMaxWidth = try c.decodeIfPresent(Int.self, forKey: .horizonSpikeMaxWidth) ?? self.horizonSpikeMaxWidth
+        self.horizonSpikeMaxDeviationFraction = try c.decodeIfPresent(Double.self, forKey: .horizonSpikeMaxDeviationFraction) ?? self.horizonSpikeMaxDeviationFraction
+        self.horizonSpikeWindowHalf = try c.decodeIfPresent(Int.self, forKey: .horizonSpikeWindowHalf) ?? self.horizonSpikeWindowHalf
         self.useCombinedHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useCombinedHorizonDetection) ?? self.useCombinedHorizonDetection
         self.horizonStripWidth = try c.decodeIfPresent(Int.self, forKey: .horizonStripWidth) ?? self.horizonStripWidth
         self.useCannyForHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useCannyForHorizonDetection) ?? self.useCannyForHorizonDetection
@@ -825,7 +853,9 @@ public struct Config: Codable, Sendable {
             switch size {
             case .original:
                 return "\(self.tempOutputPath)/horizonReference"
-            case .preview, .thumbnail:
+            case .preview:
+                return "\(self.tempOutputPath)/horizonReference-previews"
+            case .thumbnail:
                 return nil
             }
         case .subtraction:
@@ -940,6 +970,7 @@ public struct Config: Codable, Sendable {
             if let dir = self.dirForImage(ofType: .horizon, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .mergedHorizon, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .refinedHorizon, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .userHorizon, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .subtraction, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .validation, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .blobs, atSize: .preview) { ret.append(dir) }

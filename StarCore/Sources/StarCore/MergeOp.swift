@@ -18,6 +18,10 @@ public final class MergeOp: AsyncOperation, @unchecked Sendable {
     }
 
     public override func asyncExecute() async {
+        guard !Task.isCancelled else {
+            Log.d("frame \(frame.frameIndex) merge cancelled")
+            return
+        }
         do {
             Log.d("frame \(frame.frameIndex) start")
 
@@ -26,19 +30,42 @@ public final class MergeOp: AsyncOperation, @unchecked Sendable {
                 return
             }
 
+            guard !Task.isCancelled else {
+                Log.d("frame \(frame.frameIndex) merge cancelled after state check")
+                return
+            }
+
             switch await frame.cleanMethod {
             case .automatic(let usesOutliers):
                 if usesOutliers {
                     await frame.set(state: .secondClassification)
+                    guard !Task.isCancelled else {
+                        Log.d("frame \(frame.frameIndex) merge cancelled before decision tree (auto)")
+                        return
+                    }
                     await frame.applyDecisionTreeToAllOutliers()
+                    guard !Task.isCancelled else {
+                        Log.d("frame \(frame.frameIndex) merge cancelled after decision tree (auto)")
+                        return
+                    }
                 }
                 try await frame.finishAuto(useOutliers: usesOutliers)
             case .selective:
                 await frame.set(state: .secondClassification)
+                guard !Task.isCancelled else {
+                    Log.d("frame \(frame.frameIndex) merge cancelled before decision tree (selective)")
+                    return
+                }
                 await frame.applyDecisionTreeToAllOutliers()
+                guard !Task.isCancelled else {
+                    Log.d("frame \(frame.frameIndex) merge cancelled after decision tree (selective)")
+                    return
+                }
                 try await frame.finishSelective()
             }
             Log.d("frame \(frame.frameIndex) done")
+        } catch is CancellationError {
+            Log.d("frame \(frame.frameIndex) merge cancelled")
         } catch {
             let str = "frame \(frame.frameIndex) error during merge: \(error)"
             Log.e(str)

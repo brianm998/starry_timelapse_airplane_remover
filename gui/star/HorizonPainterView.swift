@@ -144,10 +144,33 @@ struct HorizonPainterView: View {
         }
         let cpu = max(0.001, displayScale / ctmScale)
 
+        // Color and label depend on the current interaction phase.
+        let color: Color
+        let label: String
+        switch paintState.phase {
+        case .bandSelection:
+            color = .yellow
+            label = "Select an area that contains the horizon"
+        case .computing:
+            color = .gray
+            label = "Calculating..."
+        case .refinement:
+            if paintState.isExpanding {
+                color = .gray
+                label = "Calculating..."
+            } else if paintState.isErasing {
+                color = .red
+                label = "select ground"
+            } else {
+                color = .green
+                label = "select sky"
+            }
+        }
+
+        // Draw the brush ring.
         let r    = paintState.brushRadius
         let rect = CGRect(x: pos.x - r, y: pos.y - r, width: r * 2, height: r * 2)
         let ring = Path(ellipseIn: rect)
-        let color: Color = paintState.isErasing ? .red : .white
         context.stroke(ring, with: .color(.black.opacity(0.5)),
                        style: StrokeStyle(lineWidth: 3.0 * cpu))
         context.stroke(ring, with: .color(color),
@@ -156,6 +179,18 @@ struct HorizonPainterView: View {
         let dot  = Path(ellipseIn: CGRect(x: pos.x - dotR, y: pos.y - dotR,
                                           width: dotR * 2, height: dotR * 2))
         context.fill(dot, with: .color(color))
+
+        // Draw label to the upper-right of the cursor ring.
+        // scaleEffect (from ZoomableView) is NOT reflected in the Canvas CTM, so
+        // we compensate manually: dividing by currentZoomScale keeps the label a
+        // constant size on screen regardless of zoom level.
+        let zoomScale = max(0.01, viewModel.currentZoomScale)
+        let labelOffset: CGFloat = 6.0 * cpu / zoomScale
+        let labelOrigin = CGPoint(x: pos.x + r + labelOffset, y: pos.y - r - labelOffset)
+        let text = Text(label)
+            .font(.system(size: 11.0 * cpu / zoomScale, weight: .medium))
+            .foregroundColor(color)
+        context.draw(text, at: labelOrigin, anchor: .bottomLeading)
     }
 
     // MARK: - Gesture
@@ -390,6 +425,20 @@ private func triggerObjectSelection(
     var merged: [Int?] = paintState.lastHorizonY ?? [Int?](repeating: nil, count: vw)
     for col in affectedMin...affectedMax {
         if let y = local[col] { merged[col] = y }
+    }
+
+    // Clamp every column so explicit paint/erase gestures are never
+    // overridden by the computation.
+    // • Paint (sky): knownSkyFloor[col] is the lowest sky row the user has
+    //   explicitly brushed — the horizon must be at or below that row.
+    // • Erase (ground): knownGroundCeiling[col] is the highest ground row —
+    //   the horizon must be above that row.
+    for col in 0..<vw {
+        guard let y = merged[col] else { continue }
+        var clampedY = y
+        if let sf = skyFloor[col]   { clampedY = max(clampedY, sf) }
+        if let gc = gndCeiling[col] { clampedY = min(clampedY, gc - 1) }
+        merged[col] = max(0, clampedY)
     }
 
     paintState.applyExpandedHorizonMask(merged)

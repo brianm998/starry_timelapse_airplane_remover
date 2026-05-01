@@ -35,6 +35,11 @@ public class FrameViewModel {
     /// Coordinates are in full frame pixel space (yPerColumn.count == frame.width).
     /// Nil until `refreshFrameHorizonOverlay()` completes.
     var frameHorizonOverlay: HorizonThumbnailOverlay? = nil
+
+    /// Monotonically-increasing counter. Each call to refreshHorizonOverlay()
+    /// stamps the launched task; only the most-recently-requested result is applied.
+    private var horizonOverlayVersion: UInt = 0
+    private var frameHorizonOverlayVersion: UInt = 0
     
     var frameObserver = FrameObserver()
 
@@ -461,9 +466,6 @@ public class FrameViewModel {
         }
     }
     
-    /// Asynchronously load (or reload) the filmstrip horizon overlay for this
-    /// frame and store the result in `horizonOverlay`.  Safe to call repeatedly;
-    /// each call cancels nothing — the last write wins on MainActor.
     func refreshHorizonOverlay() {
         guard let frame else {
             horizonOverlay = nil
@@ -471,12 +473,15 @@ public class FrameViewModel {
         }
         let tw = config.config().thumbnailWidth
         let th = config.config().thumbnailHeight
+        horizonOverlayVersion &+= 1
+        let version = horizonOverlayVersion
         Task.detached(priority: .utility) {
             let overlay = try? await frame.loadHorizonThumbnailOverlay(
                 thumbnailWidth:  tw,
                 thumbnailHeight: th
             )
             await MainActor.run {
+                guard self.horizonOverlayVersion == version else { return }
                 self.horizonOverlay = overlay
                 self.reloadID = UUID()
             }
@@ -490,12 +495,15 @@ public class FrameViewModel {
         }
         let fw = frame.width
         let fh = frame.height
+        frameHorizonOverlayVersion &+= 1
+        let version = frameHorizonOverlayVersion
         Task.detached(priority: .utility) {
             let overlay = try? await frame.loadHorizonThumbnailOverlay(
                 thumbnailWidth:  fw,
                 thumbnailHeight: fh
             )
             await MainActor.run {
+                guard self.frameHorizonOverlayVersion == version else { return }
                 self.frameHorizonOverlay = overlay
             }
         }

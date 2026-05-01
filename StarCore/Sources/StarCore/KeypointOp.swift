@@ -50,10 +50,16 @@ final class KeypointOp: AsyncOperation, @unchecked Sendable {
     }
 
     override func asyncExecute() async {
+        guard !Task.isCancelled else {
+            Log.d("frame \(frame.frameIndex) keypoint detection cancelled")
+            return
+        }
         do {
             Log.d("frame \(frame.frameIndex) start")
             _ = try await frame.loadOrCreateOCVFeatures(of: mode)
             Log.d("frame \(frame.frameIndex) done")
+        } catch is CancellationError {
+            Log.d("frame \(frame.frameIndex) keypoint detection cancelled")
         } catch {
             let str = "frame \(frame.frameIndex) error during keypoint detection: \(error)"
             Log.e(str)

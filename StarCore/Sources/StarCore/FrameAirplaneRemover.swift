@@ -369,6 +369,19 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         )
         _ = try await loadOrCreateFinalHorizonMask()
     }
+
+    /// Unconditional variant of `recomputeMergedHorizonIfExists`: always creates
+    /// a fresh merged horizon, saving it with overwrite:true.
+    /// Does NOT delete the old file first — if creation fails, the old
+    /// `.mergedHorizon` is preserved so the overlay stays blue instead of
+    /// regressing to the raw `.horizon` (white) line.
+    public func recomputeMergedHorizon() async throws {
+        // Reference frames serve their painted mask directly; nothing to recompute.
+        if (try await loadHorizonReferenceMask()) != nil { return }
+        // Bypass loadOrCreateMergedHorizonMask's "load if exists" check and go
+        // straight to creation.  createMergedHorizonMask saves with overwrite:true.
+        _ = try await createMergedHorizonMask()
+    }
           
     public func setNumberOfAlignedFrames(with config: Config? = nil) async {
         if let config {
@@ -763,7 +776,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     /// Scan the sequence for reference horizon masks, return stats for up to `maxCount`
     /// nearest frames.  Stats are cached in `referenceHorizonStatsCache`.
-    private func referenceHorizonsWithStats(maxCount: Int = 2) async throws -> [ReferenceHorizonFrameStats] {
+    private func referenceHorizonsWithStats(maxCount: Int = 2, numBuckets: Int = 256) async throws -> [ReferenceHorizonFrameStats] {
         guard let imageSequence else { return [] }
         guard let refinedPath = imageAccessor.nameForImage(
                 frameIndex: frameIndex,
@@ -817,7 +830,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 Log.w("frame \(frameIndex) referenceHorizonsWithStats: skipping frame \(candidate.index)")
                 continue
             }
-            guard let stats = original.computeReferenceHorizonStats(frameIndex: candidate.index, mask: mask)
+            guard let stats = original.computeReferenceHorizonStats(frameIndex: candidate.index, mask: mask, numBuckets: numBuckets)
             else { continue }
             await referenceHorizonStatsCache.set(stats)
             result.append(stats)
@@ -841,29 +854,23 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
       detected: HorizonMask,
       original: PixelatedImage,
       stats: [ReferenceHorizonFrameStats],
-      searchRadius: Int = 100
+      searchRadius: Int = 100,
+      spikeRemovalEnabled: Bool = true,
+      spikeMaxWidth: Int = 30,
+      spikeMaxDeviationFraction: Double = 0.04,
+      spikeWindowHalf: Int = 150
     ) -> HorizonMask? {
         guard !stats.isEmpty else { return nil }
 
         let w = detected.image.width
         let h = detected.image.height
 
-        // Compute inverse-distance-weighted brightness medians.
-        var totalWeight = 0.0
-        var weightedSky = 0.0
-        var weightedGround = 0.0
-        for s in stats {
-            let d = max(1.0, Double(abs(s.frameIndex - frameIndex)))
-            let wt = 1.0 / d
-            totalWeight    += wt
-            weightedSky    += wt * s.medianSkyBrightness
-            weightedGround += wt * s.medianGroundBrightness
+        // Precompute inverse-distance normalised weights for histogram lookups.
+        let rawWeights: [Double] = stats.map { s in
+            1.0 / max(1.0, Double(abs(s.frameIndex - frameIndex)))
         }
-        let medianSky    = weightedSky    / totalWeight
-        let medianGround = weightedGround / totalWeight
-        let midBrightness = (medianSky + medianGround) / 2.0
-        let halfRange     = abs(medianSky - medianGround) / 2.0
-        let skyIsBrighter = medianSky > medianGround
+        let totalWeight = rawWeights.reduce(0, +)
+        let normWeights = rawWeights.map { $0 / totalWeight }
 
         // Global horizon Y bounds across all reference frames.
         let globalMinY = stats.map { $0.minHorizonY }.min()!
@@ -905,16 +912,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             for x in 0..<w {
                 let brightness = original.normalizedBrightness(x: x, y: y, maxVal: maxVal)
 
-                // Brightness sky score: cubic-weighted distance from midpoint.
+                // Histogram-based brightness sky score.
+                // Weight each reference frame's sky/ground histogram values by distance,
+                // then turn the combined ratio into a [0,1] sky probability.
+                var skyRatio    = 0.0
+                var groundRatio = 0.0
+                for (s, w) in zip(stats, normWeights) {
+                    skyRatio    += w * s.skyHistogram[brightness]
+                    groundRatio += w * s.groundHistogram[brightness]
+                }
                 let brightnessSkyScore: Double
-                if halfRange < 0.001 {
-                    brightnessSkyScore = 0.5  // indistinguishable sky/ground brightnesses
+                let histTotal = skyRatio + groundRatio
+                if histTotal < 1e-10 {
+                    brightnessSkyScore = 0.5  // no histogram data for this intensity
                 } else {
-                    var normalised = (brightness - midBrightness) / halfRange  // [-1, 1]
-                    normalised = max(-1.0, min(1.0, normalised))
-                    if !skyIsBrighter { normalised = -normalised }
-                    let strong = normalised * normalised * normalised
-                    brightnessSkyScore = (strong + 1.0) / 2.0
+                    brightnessSkyScore = skyRatio / histTotal
                 }
 
                 let combined = yWeight < 0.001
@@ -930,8 +942,24 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.i("frame \(frameIndex) referenceStatsBrightnessRefinedHorizonMask: " +
               "refined \(refinedCount) pixels in band y=[\(bandTop),\(bandBottom)] " +
               "globalY=[\(globalMinY),\(globalMaxY)] " +
-              "sky=\(String(format:"%.4f",medianSky)) " +
-              "ground=\(String(format:"%.4f",medianGround))")
+              "skyMedian=\(String(format:"%.4f", stats.first?.medianSkyBrightness ?? 0)) " +
+              "groundMedian=\(String(format:"%.4f", stats.first?.medianGroundBrightness ?? 0))")
+
+        // De-spike: extract per-column horizon Y from the refined output, remove narrow
+        // upward protrusions (wind turbines, towers, etc.), then re-render the bytes.
+        if spikeRemovalEnabled {
+            let maxDev = Int((spikeMaxDeviationFraction * Double(h)).rounded())
+            let despiked = despikeHorizonY(
+              outputBytes,
+              width: w, height: h,
+              windowHalf: spikeWindowHalf,
+              maxDeviation: maxDev,
+              maxSpikeWidth: spikeMaxWidth
+            )
+            if let despiked {
+                outputBytes = despiked
+            }
+        }
 
         return outputBytes.withUnsafeMutableBytes { ptr -> HorizonMask? in
             guard let base = ptr.baseAddress else { return nil }
@@ -947,6 +975,139 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
+    /// Remove narrow upward spikes and isolated misclassified pixels from a binary horizon
+    /// mask stored as a flat byte array.
+    ///
+    /// Two-pronged approach:
+    ///
+    /// **Star pixels**: isolated bright pixels misclassified as ground appear as single black
+    /// pixels in the sky. They are handled by computing a *robust* horizon Y that requires
+    /// `minGroundRun` consecutive black pixels before accepting a column's horizon position.
+    /// A lone star pixel is never part of a run of 3+, so it is ignored and the real ground
+    /// boundary is used instead.
+    ///
+    /// **Narrow structures** (wind turbines, towers): these have genuine runs of consecutive
+    /// black pixels but form narrow columns that deviate far above the local terrain median.
+    /// They are detected by comparing each column's robust horizon Y to the local median over
+    /// `windowHalf` columns; deviations greater than `maxDeviation` pixels in runs narrower
+    /// than `maxSpikeWidth` columns are replaced by linear interpolation.
+    ///
+    /// After both corrections, each modified column is re-rendered cleanly: everything above
+    /// the corrected horizon Y is set to sky (255), everything at or below is ground (0).
+    ///
+    /// Returns `nil` if nothing changed.
+    private func despikeHorizonY(
+      _ bytes: [UInt8],
+      width w: Int,
+      height h: Int,
+      windowHalf: Int,
+      maxDeviation: Int,
+      maxSpikeWidth: Int,
+      minGroundRun: Int = 3
+    ) -> [UInt8]? {
+        // Step 1: extract two horizon Y arrays per column.
+        //   firstBlack: first dark pixel encountered (may be an isolated star pixel)
+        //   horizonY:   first position where minGroundRun consecutive dark pixels begin
+        //               (robust against isolated star pixels)
+        var firstBlack = [Int](repeating: h, count: w)
+        var horizonY   = [Int](repeating: h, count: w)
+        for x in 0..<w {
+            var run = 0
+            var gotFirst = false
+            for y in 0..<h {
+                if bytes[y * w + x] == 0 {
+                    if !gotFirst { firstBlack[x] = y; gotFirst = true }
+                    run += 1
+                    if run >= minGroundRun, horizonY[x] == h {
+                        horizonY[x] = y - minGroundRun + 1
+                    }
+                } else {
+                    run = 0
+                }
+            }
+        }
+
+        // Step 2: local median of robust horizon Y per column.
+        var localMedian = [Int](repeating: h / 2, count: w)
+        for x in 0..<w {
+            let lo = max(0, x - windowHalf)
+            let hi = min(w - 1, x + windowHalf)
+            var window = [Int](horizonY[lo...hi])
+            window.sort()
+            localMedian[x] = window[window.count / 2]
+        }
+
+        // Step 3: mark columns where robust horizonY spikes above the local median.
+        var isSpike = [Bool](repeating: false, count: w)
+        for x in 0..<w {
+            if horizonY[x] < localMedian[x] - maxDeviation {
+                isSpike[x] = true
+            }
+        }
+
+        // Step 4a: un-mark wide runs — those are legitimate terrain features, not spikes.
+        var x = 0
+        while x < w {
+            if isSpike[x] {
+                var runEnd = x
+                while runEnd < w && isSpike[runEnd] { runEnd += 1 }
+                if runEnd - x > maxSpikeWidth {
+                    for j in x..<runEnd { isSpike[j] = false }
+                }
+                x = runEnd
+            } else {
+                x += 1
+            }
+        }
+
+        // Step 4b: interpolate horizon Y over spike columns.
+        var fixedY = horizonY  // robust Y; star columns already corrected vs firstBlack
+        for x in 0..<w where isSpike[x] {
+            var leftX = x - 1
+            while leftX >= 0 && isSpike[leftX] { leftX -= 1 }
+            var rightX = x + 1
+            while rightX < w && isSpike[rightX] { rightX += 1 }
+            let ly = leftX >= 0 ? horizonY[leftX]  : (rightX < w ? horizonY[rightX] : h)
+            let ry = rightX < w ? horizonY[rightX] : ly
+            if leftX < 0 {
+                fixedY[x] = ry
+            } else if rightX >= w {
+                fixedY[x] = ly
+            } else {
+                let t = Double(x - leftX) / Double(rightX - leftX)
+                fixedY[x] = Int((Double(ly) * (1 - t) + Double(ry) * t).rounded())
+            }
+        }
+
+        // Determine what actually changed (spike corrections + star-pixel cleanups).
+        let spikeCount = isSpike.filter { $0 }.count
+        let starCount  = zip(firstBlack, fixedY).filter { $0 < $1 }.count
+        guard spikeCount > 0 || starCount > 0 else { return nil }
+
+        Log.i("frame \(frameIndex) despikeHorizonY: fixed \(spikeCount) spike columns, " +
+              "\(starCount) isolated-pixel columns " +
+              "(maxDev=\(maxDeviation) maxWidth=\(maxSpikeWidth) minRun=\(minGroundRun))")
+
+        // Step 5: re-render changed columns.
+        // For each column the intended boundary is fixedY[x].  We update the range between
+        // firstBlack[x] (first affected pixel) and fixedY[x] (new boundary).
+        var out = bytes
+        for x in 0..<w {
+            let newY  = fixedY[x]
+            let oldFirst = firstBlack[x]
+            guard oldFirst != newY else { continue }
+
+            if oldFirst < newY {
+                // Sky restored: rows [oldFirst, newY) should be white (255).
+                for row in oldFirst..<min(newY, h) { out[row * w + x] = 255 }
+            } else {
+                // Ground extended down: rows [newY, oldFirst) should be black (0).
+                for row in newY..<min(oldFirst, h) { out[row * w + x] = 0 }
+            }
+        }
+        return out
+    }
+
     /// Apply `referenceStatsBrightnessRefinedHorizonMask` if the config enables it and
     /// reference stats are available.  Returns the original mask unchanged on failure.
     private func referenceStatsBrightnessRefinementIfNeeded(
@@ -957,7 +1118,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               config.useReferenceHorizonBrightnessRefinement
         else { return mask }
 
-        let stats = try await referenceHorizonsWithStats(maxCount: 2)
+        let stats = try await referenceHorizonsWithStats(
+          maxCount: 2,
+          numBuckets: config.referenceHorizonBrightnessRefinementHistogramBuckets
+        )
         guard !stats.isEmpty else { return mask }
 
         guard let original = try? await imageAccessor.load(
@@ -974,7 +1138,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           detected: mask,
           original: original,
           stats: stats,
-          searchRadius: config.referenceHorizonBrightnessRefinementSearchRadius
+          searchRadius: config.referenceHorizonBrightnessRefinementSearchRadius,
+          spikeRemovalEnabled: config.horizonSpikeRemovalEnabled,
+          spikeMaxWidth: config.horizonSpikeMaxWidth,
+          spikeMaxDeviationFraction: config.horizonSpikeMaxDeviationFraction,
+          spikeWindowHalf: config.horizonSpikeWindowHalf
         ) ?? mask
     }
 

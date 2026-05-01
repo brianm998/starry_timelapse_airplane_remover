@@ -82,6 +82,11 @@ open class AsyncOperation: Operation, @unchecked Sendable {
         true
     }
 
+    override public func cancel() {
+        super.cancel()
+        task?.cancel()
+    }
+
     override public func start() {
         if isCancelled {
             finish()

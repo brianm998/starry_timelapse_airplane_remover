@@ -18,13 +18,23 @@ public final class OutlierOp: AsyncOperation, @unchecked Sendable {
     }
 
     public override func asyncExecute() async {
+        guard !Task.isCancelled else {
+            Log.d("frame \(frame.frameIndex) outlier loading cancelled")
+            return
+        }
         do {
             Log.d("frame \(frame.frameIndex) start")
             if await frame.usesOutliers {
+                guard !Task.isCancelled else {
+                    Log.d("frame \(frame.frameIndex) outlier loading cancelled")
+                    return
+                }
                 Log.d("frame \(frame.frameIndex) loading outliers")
                 try await frame.loadOutliers()
             }
             Log.d("frame \(frame.frameIndex) done")
+        } catch is CancellationError {
+            Log.d("frame \(frame.frameIndex) outlier loading cancelled")
         } catch {
             let str = "frame \(frame.frameIndex) error with outliers: \(error)"
             Log.e(str)
