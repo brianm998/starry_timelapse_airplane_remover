@@ -104,6 +104,29 @@ public struct ImageAccessor: Sendable {
             StarCore.mkdir(dirname)
         }
         StarCore.mkdir(config.dirForKeypointData)
+        writeCleanupScript()
+    }
+
+    private func writeCleanupScript() {
+        let tempDir = config.tempOutputPath
+        let tempDirName = URL(fileURLWithPath: tempDir).lastPathComponent
+        let outputDirName = URL(fileURLWithPath: config.outputSequenceDirname).lastPathComponent
+        let script = """
+            #!/bin/bash
+            cd "$(dirname "$0")/.."
+            rm -rf "\(tempDirName)"
+            rm -rf "\(outputDirName)"
+            """
+        let scriptPath = "\(tempDir)/cleanup.sh"
+        do {
+            try script.write(toFile: scriptPath, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes(
+              [.posixPermissions: 0o755],
+              ofItemAtPath: scriptPath
+            )
+        } catch {
+            Log.w("could not write cleanup.sh: \(error)")
+        }
     }
 
     // load for display as SwiftUI Image
