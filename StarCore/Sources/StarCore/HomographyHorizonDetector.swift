@@ -73,6 +73,15 @@ public struct HomographyHorizonDetector {
     /// coordinate-descent tuning.
     public var errorSampleHalfWidth: Int = 50
 
+    /// Number of standard deviations above the mean upward-deviation that a
+    /// Pass-2 result must exceed before being treated as an outlier and replaced
+    /// with the Pass-1 (warped-mask) value.
+    ///
+    /// A lower value is more aggressive (rejects more columns); a higher value
+    /// is more permissive (keeps more Pass-2 refinements).  Set to a very large
+    /// number (e.g. 999) to disable the guard entirely.
+    public var errorOutlierSigma: Double = 2.5
+
     public init() {}
 
     // MARK: - Apply persisted parameters
@@ -84,6 +93,7 @@ public struct HomographyHorizonDetector {
         errorBlurRadius       = params.errorBlurRadius
         errorThresholdFactor  = params.errorThresholdFactor
         errorSampleHalfWidth  = params.errorSampleHalfWidth
+        errorOutlierSigma     = params.errorOutlierSigma
     }
 
     // MARK: - Prepared data (result of expensive I/O pass)
@@ -268,6 +278,49 @@ public struct HomographyHorizonDetector {
             errorY = smooth(rawY, radius: smoothingRadius)
         } else {
             errorY = [Int?](repeating: nil, count: currentWidth)
+        }
+
+        // ------------------------------------------------------------------
+        // Pass 2 outlier guard: reject Per-column errorY values that deviate
+        // excessively upward from the Pass-1 maskY baseline.
+        //
+        // For each column, "upward deviation" = maskY[x] - errorY[x]
+        // (positive = Pass 2 pushed the horizon higher / more sky than Pass 1).
+        // We compute the mean and stddev of these deviations across all columns
+        // where both passes produced a value.  Any column whose deviation is
+        // more than `errorOutlierSigma` standard deviations above the mean is
+        // treated as an outlier and replaced with the Pass-1 value.
+        //
+        // This catches the "lower-right blowout" problem in moving timelapses
+        // where differential-motion noise causes Pass 2 to find a spurious
+        // sky/ground boundary far above the actual horizon.  Legitimate
+        // mountain-peak detections (which also deviate upward) are preserved
+        // because they tend to affect many contiguous columns simultaneously
+        // and their shared offset is captured by the mean.
+        if !data.neighborHBlurred.isEmpty {
+            var deviations: [(x: Int, dev: Double)] = []
+            for x in 0..<currentWidth {
+                if let m = maskY[x], let e = errorY[x] {
+                    deviations.append((x: x, dev: Double(m - e)))
+                }
+            }
+            if deviations.count >= 4 {
+                let devValues = deviations.map(\.dev)
+                let mean      = devValues.reduce(0, +) / Double(devValues.count)
+                let variance  = devValues.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(devValues.count)
+                let stddev    = variance.squareRoot()
+                // Cap at mean + N·σ; floor stddev at 10 px so sparse sequences
+                // with little variation still get a meaningful guard.
+                let cap       = mean + errorOutlierSigma * max(stddev, 10.0)
+                var rejectedCount = 0
+                for (x, dev) in deviations where dev > cap {
+                    errorY[x] = maskY[x]   // fall back to Pass-1
+                    rejectedCount += 1
+                }
+                if rejectedCount > 0 {
+                    Log.i("HomographyHorizonDetector: Pass 2 outlier guard rejected \(rejectedCount)/\(deviations.count) columns (mean=\(String(format:"%.1f",mean)) σ=\(String(format:"%.1f",stddev)) cap=\(String(format:"%.1f",cap)))")
+                }
+            }
         }
 
         // ------------------------------------------------------------------

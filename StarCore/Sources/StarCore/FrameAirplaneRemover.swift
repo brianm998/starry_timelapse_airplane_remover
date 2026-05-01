@@ -1171,6 +1171,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                )
             {
                 Log.d("frame \(frameIndex) loadOrCreateRefinedHorizonMask: loaded cached mask")
+                self.set(state: .horizonRefined)  // ensure overlay refresh fires even on cache hit
                 return HorizonMask(image)
             }
         } catch {
@@ -2262,6 +2263,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if let refMask = try await loadHorizonReferenceMask() {
             pixImage = refMask.image
             kind     = .reference
+        } else if let refinedImage = try await imageAccessor.load(
+                      frameIndex: frameIndex,
+                      type: .refinedHorizon,
+                      atSize: .original)
+        {
+            // Refined horizon is the most accurate auto-computed result; show as blue.
+            pixImage = refinedImage
+            kind     = .merged
         } else if let mergedImage = try await imageAccessor.load(
                       frameIndex: frameIndex,
                       type: .mergedHorizon,

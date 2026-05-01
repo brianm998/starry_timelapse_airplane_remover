@@ -39,6 +39,11 @@ public struct HorizonTunedParameters: Codable, Sendable {
     /// and not changed during coordinate-descent tuning.
     public var errorSampleHalfWidth: Int = 50
 
+    /// Standard-deviation multiplier for the Pass-2 upward-deviation outlier
+    /// guard.  Pass-2 column values that deviate more than this many σ above
+    /// the mean deviation are replaced with the Pass-1 baseline.
+    public var errorOutlierSigma: Double = 2.5
+
     // MARK: - Tuning metadata (informational; not used by the detector)
 
     /// Mean absolute Y error (pixels) achieved on the reference frames.

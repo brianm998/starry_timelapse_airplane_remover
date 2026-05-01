@@ -231,6 +231,12 @@ struct HorizonPainterView: View {
 
                 case .refinement:
                     let wasErasing = paintState.isErasing
+                    // Commit the gesture to the known-region map SYNCHRONOUSLY here,
+                    // before the Task is queued.  If we deferred this to inside the
+                    // Task, a second gesture's addStroke (which also runs on the main
+                    // actor) could reset gestureColumnBottom/Top before the Task even
+                    // starts, causing commitRefinementGesture to read the wrong data.
+                    paintState.commitRefinementGesture(isErasing: wasErasing)
                     // Do not cancel a prior refinement task — it targets different
                     // columns and its result should still be applied.  Both tasks
                     // run concurrently; each merges only its own affected columns
@@ -354,11 +360,9 @@ private func triggerObjectSelection(
     let bandTop = paintState.bandColumnTop
     let bandBot = paintState.bandColumnBottom
 
-    // Permanently commit the gesture to the known-region map.
-    // This shrinks the unknown gap so that brushed areas become seeds.
-    paintState.commitRefinementGesture(isErasing: isErasingGesture)
-
-    // Snapshot locked regions after committing.
+    // Gesture was already committed to the known-region map synchronously in
+    // paintGesture.onEnded, before this Task was queued.  Snapshot the current
+    // state (which includes that commit and any prior ones).
     let skyFloor   = paintState.knownSkyFloor
     let gndCeiling = paintState.knownGroundCeiling
 
