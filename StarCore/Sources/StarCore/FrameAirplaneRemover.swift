@@ -539,14 +539,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                   mask: filtered,
                   config: config
                 )
+                // Remove any black ground islands not connected to the bottom edge
+                // (e.g. dark flag poles or terrain features above the horizon line).
+                let cleanedImage = (try? finalMask.image.groundOnly()) ?? finalMask.image
                 try await imageAccessor.save(
-                  finalMask.image,
+                  cleanedImage,
                   frameIndex: frameIndex,
                   as: .mergedHorizon,
                   atSizes: await self.outputSizes,
                   overwrite: true
                 )
-                return finalMask
+                return HorizonMask(cleanedImage) ?? finalMask
             }
             Log.w("frame \(frameIndex) reference smoothing failed, falling through to normal merge")
         }
@@ -592,9 +595,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 imageToSave = mergedHorizon
             }
 
+            // Remove any black ground islands not connected to the bottom edge
+            // (e.g. dark flag poles or terrain features above the horizon line).
+            let cleanedToSave = (try? imageToSave.groundOnly()) ?? imageToSave
+
             Log.d("saving merged horizon images")
             try await imageAccessor.save(
-              imageToSave,
+              cleanedToSave,
               frameIndex: frameIndex,
               as: .mergedHorizon,
               atSizes: await self.outputSizes,
@@ -640,9 +647,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
             
-            if let bounds = imageToSave.horizonBounds() {
+            if let bounds = cleanedToSave.horizonBounds() {
                 return HorizonMask(
-                  image: imageToSave,
+                  image: cleanedToSave,
                   horizonTopY: bounds.topY,
                   horizonBottomY: bounds.bottomY
                 )
