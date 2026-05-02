@@ -3910,6 +3910,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             
         }
     }
+    public func deleteMergeOutput() {
+        imageAccessor.deleteImages(
+            frameIndex: frameIndex,
+            ofTypes: [.autoProcessed, .autoSelectiveProcessed, .selectiveProcessed, .final],
+            atSizes: [.original, .preview]
+        )
+        if state == .complete {
+            state = .outlierProcessingComplete
+        }
+    }
+
     public func removeSubtractionImages() {
         // get rid of the subtraction here image too,
         // as it is a product of the star aligned images
