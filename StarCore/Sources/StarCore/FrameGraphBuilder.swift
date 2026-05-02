@@ -554,6 +554,51 @@ public final actor FrameGraphBuilder {
         }
     }
     
+    /// Enqueue only MergeOps for the given frames, with no dependencies.
+    /// Used after horizon refinement when alignment output already exists on disk
+    /// and only the merge step needs to re-run with the updated horizon mask.
+    public func enqueueMergeOnly(
+      frames: [FrameAirplaneRemover],
+      errorClosure: @escaping @Sendable (String) -> Void,
+      completion: @escaping ([String]) -> Void
+    ) async {
+        guard let configManager else {
+            completion(["cannot enqueue merge without config manager"])
+            return
+        }
+        let config = await configManager.config()
+        let rawImageBytes = UInt64(config.imageWidth) *
+                            UInt64(config.imageHeight) *
+                            UInt64(max(config.imageBytesPerPixel, 1))
+
+        let errors = ArrayActor<String>([])
+        var mergeOps: [MergeOp] = []
+
+        for frame in frames {
+            let mergeOp = MergeOp(
+              frame: frame,
+              rawImageBytes: rawImageBytes,
+              memoryMultiplier: UInt64(config.mergeMemoryMultiplier)
+            ) { errorString in
+                Task { await errors.append(errorString) }
+                errorClosure(errorString)
+            }
+            mergeOp.qualityOfService = .userInteractive
+            mergeOps.append(mergeOp)
+        }
+
+        let completionOp = GraphCompletionOp {
+            completion(await errors.elements())
+        }
+        mergeOps.forEach { completionOp.addDependency($0) }
+
+        let allOps: [Operation] = mergeOps + [completionOp]
+        await withCheckedContinuation { continuation in
+            queue.addOperations(allOps, waitUntilFinished: false)
+            continuation.resume()
+        }
+    }
+
     /// Cancel all queued and running operations.
     ///
     /// Queued operations are skipped immediately.  Running operations finish
