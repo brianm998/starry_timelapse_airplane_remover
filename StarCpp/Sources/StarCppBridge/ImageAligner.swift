@@ -165,6 +165,18 @@ public enum ImageAligner {
         }
     }
 
+    /// Accumulate horizon masks from files using a producer/consumer pipeline and
+    /// return a binary mask via majority vote (>50 % non-zero → white).
+    public static func accumulateHorizonMasks(filenames: [String]) -> MatWrapper? {
+        let cStrs = filenames.map { strdup($0) }
+        defer { cStrs.forEach { free($0) } }
+        var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
+        let r = ptrs.withUnsafeMutableBufferPointer { buf in
+            ia_accumulate_horizon_masks(buf.baseAddress, Int32(buf.count))
+        }
+        return r.map { MatWrapper(ref: $0) }
+    }
+
     public static func createGradientMaskIntoSky(_ binaryMask: MatWrapper,
                                                    gradientDistance: Int32) -> MatWrapper {
         MatWrapper(ref: ia_gradient_mask_into_sky(binaryMask.ref, gradientDistance))

@@ -957,6 +957,13 @@ extension PixelatedImage {
 }
 
 extension PixelatedImage {
+    /// Accumulate binary horizon masks from `filenames` via a producer/consumer
+    /// pipeline and return the majority-vote result as a binary image.
+    public static func accumulatedHorizonMask(fromFilenames filenames: [String]) -> PixelatedImage? {
+        guard let mat = ImageAligner.accumulateHorizonMasks(filenames: filenames) else { return nil }
+        return PixelatedImage(mat: mat)
+    }
+
     public func medianMerge(
       with frames: [String],
       outlierThreshold: Double = 1.2,

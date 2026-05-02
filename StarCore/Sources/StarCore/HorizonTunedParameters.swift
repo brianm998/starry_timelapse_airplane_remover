@@ -44,6 +44,12 @@ public struct HorizonTunedParameters: Codable, Sendable {
     /// the mean deviation are replaced with the Pass-1 baseline.
     public var errorOutlierSigma: Double = 2.5
 
+    /// Maximum pixels the refined horizon may be pushed below the current
+    /// frame's merged-horizon baseline.  0 = disabled.  A value like 30 stops
+    /// Pass-1 warped masks from reclassifying ground as sky in building/
+    /// foreground areas on moving-camera timelapses.
+    public var maxDownwardExtension: Int = 0
+
     // MARK: - Tuning metadata (informational; not used by the detector)
 
     /// Mean absolute Y error (pixels) achieved on the reference frames.

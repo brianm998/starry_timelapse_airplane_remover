@@ -72,6 +72,14 @@ int ia_align_with_homography(int baseFrameIndex,
                              WarpedImageResultData *outResults,
                              const char **errorMsg);
 
+// --- Horizon mask accumulation ---
+
+// Count per-pixel non-zero occurrences across all horizon mask files using a
+// producer/consumer pipeline (one reader thread, accumulation on caller thread).
+// Returns an 8-bit binary mask: white (255) where more than half the frames had
+// a non-zero (sky) pixel, black (0) otherwise.  Caller must release the result.
+MatWrapperRef ia_accumulate_horizon_masks(const char **filenames, int count);
+
 // --- Gradient masks ---
 MatWrapperRef ia_gradient_mask_into_sky(MatWrapperRef binaryMask, int gradientDistance);
 MatWrapperRef ia_gradient_mask_into_ground(MatWrapperRef binaryMask, int gradientDistance);

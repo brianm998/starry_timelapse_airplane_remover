@@ -18,6 +18,10 @@
 #include <string>
 #include <iostream>
 #include <cstring>
+#include <thread>
+#include <queue>
+#include <mutex>
+#include <condition_variable>
 
 static MatWrapperRef wrap(const cv::Mat& mat) {
     return new MatWrapperImpl(mat);
@@ -268,6 +272,75 @@ MatWrapperRef ia_median_merge(MatWrapperRef *frames, int count,
         }
         return medianImageFromMats(mats, outlierThreshold, includeAll);
     } KHT_CATCH_LOG("ia_median_merge")
+    return nullptr;
+}
+
+MatWrapperRef ia_accumulate_horizon_masks(const char **filenames, int count) {
+    if (count <= 0) return wrap(cv::Mat());
+    try {
+        // Queue shared between reader thread and accumulator (this thread).
+        struct SharedQueue {
+            std::queue<cv::Mat> items;
+            std::mutex          mtx;
+            std::condition_variable cv;
+            bool                readerDone = false;
+        } q;
+        constexpr size_t kMaxQueueSize = 8;
+
+        // Reader thread: load each mask, normalise to single-channel, push onto queue.
+        std::thread reader([&]() {
+            for (int i = 0; i < count; ++i) {
+                MatWrapperRef ref = image_cache_load(filenames[i]);
+                if (!ref) continue;
+                cv::Mat mat = ref->mat.clone();
+                mat_wrapper_release(ref);
+
+                if (mat.channels() > 1) cv::cvtColor(mat, mat, cv::COLOR_BGR2GRAY);
+
+                // Binary 0/1 frame ready for accumulation
+                cv::Mat binary;
+                cv::threshold(mat, binary, 0, 1, cv::THRESH_BINARY);
+                cv::Mat frame;
+                binary.convertTo(frame, CV_16U);
+
+                std::unique_lock<std::mutex> lock(q.mtx);
+                q.cv.wait(lock, [&] { return q.items.size() < kMaxQueueSize; });
+                q.items.push(std::move(frame));
+                lock.unlock();
+                q.cv.notify_one();
+            }
+            {
+                std::lock_guard<std::mutex> lock(q.mtx);
+                q.readerDone = true;
+            }
+            q.cv.notify_all();
+        });
+
+        // Accumulator (this thread): sum per-pixel counts in a 32-bit mat.
+        cv::Mat total;
+        while (true) {
+            std::unique_lock<std::mutex> lock(q.mtx);
+            q.cv.wait(lock, [&] { return !q.items.empty() || q.readerDone; });
+            if (q.items.empty()) { lock.unlock(); break; }
+            cv::Mat frame = std::move(q.items.front());
+            q.items.pop();
+            lock.unlock();
+            q.cv.notify_one();
+
+            if (total.empty()) total = cv::Mat::zeros(frame.size(), CV_32S);
+            cv::Mat frame32s;
+            frame.convertTo(frame32s, CV_32S);
+            total += frame32s;
+        }
+        reader.join();
+
+        if (total.empty()) return wrap(cv::Mat());
+
+        // Pixels seen in more than half the frames → sky (255), rest → ground (0).
+        cv::Mat result;
+        cv::compare(total, cv::Scalar(count / 2), result, cv::CMP_GT);
+        return wrap(result);
+    } KHT_CATCH_LOG("ia_accumulate_horizon_masks")
     return nullptr;
 }
 

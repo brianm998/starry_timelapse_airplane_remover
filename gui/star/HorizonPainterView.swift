@@ -467,9 +467,11 @@ struct HorizonPainterToolbarView: View {
     @State private var saveError: String?    = nil
     @State private var cancelledExplicitly   = false
     @State private var savedAlready          = false
+    @State private var tunedParams           = HorizonTunedParameters()
 
     var body: some View {
         bottomToolbar
+            .task { await loadTunedParams() }
             .onDisappear {
                 // Auto-save when dismissed via toggle (not Cancel / Escape).
                 // Only save during refinement — band selection has no horizon.
@@ -598,6 +600,10 @@ struct HorizonPainterToolbarView: View {
         .buttonStyle(.bordered)
         .help("Reset and start over from band selection (R)")
 
+        Divider().frame(height: 24)
+
+        maxDownwardExtensionControl
+
         Spacer()
 
         if paintState.isExpanding {
@@ -707,6 +713,49 @@ struct HorizonPainterToolbarView: View {
             }
             .buttonStyle(.bordered)
             .help("Grow brush (])")
+        }
+    }
+
+    // MARK: - Max downward extension control
+
+    @ViewBuilder
+    private var maxDownwardExtensionControl: some View {
+        HStack(spacing: 4) {
+            Button {
+                adjustMaxDownwardExtension(by: -10)
+            } label: {
+                Image(systemName: "minus.circle")
+            }
+            .buttonStyle(.bordered)
+            .help("Decrease max downward extension by 10px")
+            .disabled(tunedParams.maxDownwardExtension <= 0)
+
+            Text("↓\(tunedParams.maxDownwardExtension)px")
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.secondary)
+                .frame(minWidth: 52, alignment: .center)
+                .help("Max pixels the refined horizon may go below the merged horizon baseline (0 = disabled)")
+
+            Button {
+                adjustMaxDownwardExtension(by: 10)
+            } label: {
+                Image(systemName: "plus.circle")
+            }
+            .buttonStyle(.bordered)
+            .help("Increase max downward extension by 10px")
+        }
+    }
+
+    private func loadTunedParams() async {
+        guard let frame = viewModel.currentFrameView.frame else { return }
+        tunedParams = await frame.loadTunedHorizonParameters()
+    }
+
+    private func adjustMaxDownwardExtension(by delta: Int) {
+        tunedParams.maxDownwardExtension = max(0, tunedParams.maxDownwardExtension + delta)
+        Task {
+            guard let frame = viewModel.currentFrameView.frame else { return }
+            try? await frame.saveTunedHorizonParameters(tunedParams)
         }
     }
 

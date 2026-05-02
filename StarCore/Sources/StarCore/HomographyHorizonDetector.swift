@@ -82,6 +82,15 @@ public struct HomographyHorizonDetector {
     /// number (e.g. 999) to disable the guard entirely.
     public var errorOutlierSigma: Double = 2.5
 
+    /// Maximum number of pixels the refined horizon may be pushed *downward*
+    /// (toward ground) relative to the current frame's merged-horizon baseline.
+    ///
+    /// Set to 0 to disable (no ceiling).  A positive value, e.g. 30, prevents
+    /// Pass-2 from reclassifying ground as sky in regions where the warped
+    /// neighbour mask sits lower than the actual horizon (common with moving
+    /// cameras where homography shifts the ground boundary).
+    public var maxDownwardExtension: Int = 0
+
     public init() {}
 
     // MARK: - Apply persisted parameters
@@ -94,6 +103,7 @@ public struct HomographyHorizonDetector {
         errorThresholdFactor  = params.errorThresholdFactor
         errorSampleHalfWidth  = params.errorSampleHalfWidth
         errorOutlierSigma     = params.errorOutlierSigma
+        maxDownwardExtension  = params.maxDownwardExtension
     }
 
     // MARK: - Prepared data (result of expensive I/O pass)
@@ -123,6 +133,9 @@ public struct HomographyHorizonDetector {
         public let neighborHBlurred: [[Float]]
         /// The `errorSampleHalfWidth` used to build `neighborHBlurred`.
         public let sampleHalfWidth: Int
+        /// Per-column horizon Y of the current frame's merged mask, used as a
+        /// ceiling when `maxDownwardExtension > 0`.  Empty if not supplied.
+        public let currentMergedHorizonY: [Int?]
     }
 
     // MARK: - Public entry points
@@ -137,7 +150,8 @@ public struct HomographyHorizonDetector {
       neighborHorizonFilenames: [String],
       neighborOriginalFilenames: [String],
       neighborHomographies: [[Double]],
-      currentImage: PixelatedImage? = nil
+      currentImage: PixelatedImage? = nil,
+      currentMergedHorizonY: [Int?] = []
     ) -> HorizonMask? {
         let data = prepare(
           currentWidth:              currentWidth,
@@ -145,7 +159,8 @@ public struct HomographyHorizonDetector {
           neighborHorizonFilenames:  neighborHorizonFilenames,
           neighborOriginalFilenames: neighborOriginalFilenames,
           neighborHomographies:      neighborHomographies,
-          currentImage:              currentImage
+          currentImage:              currentImage,
+          currentMergedHorizonY:     currentMergedHorizonY
         )
         return detectFromPrepared(data)
     }
@@ -160,7 +175,8 @@ public struct HomographyHorizonDetector {
       neighborHorizonFilenames: [String],
       neighborOriginalFilenames: [String],
       neighborHomographies: [[Double]],
-      currentImage: PixelatedImage? = nil
+      currentImage: PixelatedImage? = nil,
+      currentMergedHorizonY: [Int?] = []
     ) -> PreparedData {
 
         // ------------------------------------------------------------------
@@ -223,11 +239,12 @@ public struct HomographyHorizonDetector {
         }
 
         return PreparedData(
-          currentWidth:     currentWidth,
-          currentHeight:    currentHeight,
-          pass1RawY:        pass1RawY,
-          neighborHBlurred: neighborHBlurred,
-          sampleHalfWidth:  errorSampleHalfWidth
+          currentWidth:          currentWidth,
+          currentHeight:         currentHeight,
+          pass1RawY:             pass1RawY,
+          neighborHBlurred:      neighborHBlurred,
+          sampleHalfWidth:       errorSampleHalfWidth,
+          currentMergedHorizonY: currentMergedHorizonY
         )
     }
 
@@ -336,7 +353,34 @@ public struct HomographyHorizonDetector {
             case (let v1?, let v2?):   return min(v1, v2)
             }
         }
-        let finalY = smooth(combined, radius: 10)
+        var finalY = smooth(combined, radius: 10)
+
+        // ------------------------------------------------------------------
+        // Ceiling clamp: prevent the refined horizon from being pushed more
+        // than `maxDownwardExtension` pixels below the current frame's merged
+        // horizon.  This stops Pass-1 warped masks (which can shift ground
+        // downward on moving cameras) from reclassifying ground as sky in
+        // building/foreground areas where the neighbour mask sits lower than
+        // the actual horizon.
+        // ------------------------------------------------------------------
+        if maxDownwardExtension > 0, !data.currentMergedHorizonY.isEmpty {
+            var clampedCount = 0
+            let mergedCount = data.currentMergedHorizonY.count
+            for x in 0..<currentWidth {
+                guard x < mergedCount,
+                      let mergedY = data.currentMergedHorizonY[x],
+                      let fy = finalY[x]
+                else { continue }
+                let ceiling = mergedY + maxDownwardExtension
+                if fy > ceiling {
+                    finalY[x] = ceiling
+                    clampedCount += 1
+                }
+            }
+            if clampedCount > 0 {
+                Log.i("HomographyHorizonDetector: ceiling clamp applied to \(clampedCount)/\(currentWidth) columns (maxDownwardExtension=\(maxDownwardExtension))")
+            }
+        }
 
         // Log representative samples for debugging.
         let sampleStride = max(1, currentWidth / 8)

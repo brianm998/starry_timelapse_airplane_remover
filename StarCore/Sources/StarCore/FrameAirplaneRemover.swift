@@ -576,11 +576,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         Log.i("frame \(frameIndex) making merged horizon \(staticNeighborFrames.count) staticNeighborFrames \(neighboringHorizons.count) neighboringHorizons")
         
-        if let mergedHorizon = mask.image.medianMerge(
-             with: neighboringHorizons,
-             outlierThreshold: await self.pixelThreshold,
-             includeAll: true)
-        {
+        let mergedHorizonImage: PixelatedImage?
+        if config.tripodHeadWasMoving {
+            mergedHorizonImage = mask.image.medianMerge(
+                with: neighboringHorizons,
+                outlierThreshold: await self.pixelThreshold,
+                includeAll: true)
+        } else {
+            mergedHorizonImage = PixelatedImage.accumulatedHorizonMask(fromFilenames: neighboringHorizons)
+        }
+        if let mergedHorizon = mergedHorizonImage {
             // Apply stats-based brightness refinement for moving sequences.
             let imageToSave: PixelatedImage
             if config.tripodHeadWasMoving,
@@ -1251,11 +1256,18 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
         guard let homographyResults else {
             Log.w("frame \(frameIndex) createRefinedHorizonMask: no star homography — falling back to merged")
-            return try await loadOrCreateMergedHorizonMask()
+            let merged = try await loadOrCreateMergedHorizonMask()
+            self.set(state: .horizonRefined)
+            return merged
         }
 
         // We need the merged horizon mask as the Pass-1 baseline.
-        guard let mergedMask = try await loadOrCreateMergedHorizonMask() else { return nil }
+        guard let mergedMask = try await loadOrCreateMergedHorizonMask() else {
+            // Merged creation failed — nothing to refine.  Set state so the
+            // overlay refresh fires and the frame doesn't stay in .refiningHorizon.
+            self.set(state: .horizonDetected)
+            return nil
+        }
 
         let currentWidth  = mergedMask.image.width
         let currentHeight = mergedMask.image.height
@@ -1312,13 +1324,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         // Stage 1: expensive I/O.
+        let mergedHorizonY = HorizonScoring.extractHorizonYPerColumn(from: mergedMask.image)
         let prepared = detector.prepare(
             currentWidth:              currentWidth,
             currentHeight:             currentHeight,
             neighborHorizonFilenames:  neighborHorizonFilenames,
             neighborOriginalFilenames: neighborOriginalFilenames,
             neighborHomographies:      neighborHomographies,
-            currentImage:              currentImage
+            currentImage:              currentImage,
+            currentMergedHorizonY:     mergedHorizonY
         )
 
         // Stage 2: fast boundary scan.
@@ -1343,6 +1357,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     // MARK: - Horizon parameter tuning
+
+    /// Load the tuned horizon parameters for this sequence, returning defaults if none saved.
+    public func loadTunedHorizonParameters() -> HorizonTunedParameters {
+        guard let dir = tunedParametersDirectory() else { return HorizonTunedParameters() }
+        return HorizonTunedParameters.load(fromDirectory: dir) ?? HorizonTunedParameters()
+    }
+
+    /// Save tuned horizon parameters for this sequence.
+    public func saveTunedHorizonParameters(_ params: HorizonTunedParameters) throws {
+        guard let dir = tunedParametersDirectory() else {
+            throw "frame \(frameIndex): cannot determine tuned parameters directory"
+        }
+        try params.save(toDirectory: dir)
+    }
 
     /// Returns the URL of the `horizonReference/` directory for this sequence,
     /// or `nil` if the path cannot be determined.
@@ -2264,13 +2292,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     ) async throws -> HorizonThumbnailOverlay? {
 
         // ── Choose the best available source ────────────────────────────────
+        // Each load is individually guarded with try? so that a failure for
+        // one type (e.g., a corrupt file) falls through to the next rather
+        // than aborting the whole chain and leaving the overlay nil/stale.
         let pixImage: PixelatedImage
         let kind: HorizonThumbnailOverlay.Kind
 
-        if let refMask = try await loadHorizonReferenceMask() {
+        if let refMask = try? await loadHorizonReferenceMask() {
             pixImage = refMask.image
             kind     = .reference
-        } else if let refinedImage = try await imageAccessor.load(
+        } else if let refinedImage = try? await imageAccessor.load(
                       frameIndex: frameIndex,
                       type: .refinedHorizon,
                       atSize: .original)
@@ -2278,14 +2309,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // Refined horizon is the most accurate auto-computed result; show as blue.
             pixImage = refinedImage
             kind     = .merged
-        } else if let mergedImage = try await imageAccessor.load(
+        } else if let mergedImage = try? await imageAccessor.load(
                       frameIndex: frameIndex,
                       type: .mergedHorizon,
                       atSize: .original)
         {
             pixImage = mergedImage
             kind     = .merged
-        } else if let initialImage = try await imageAccessor.load(
+        } else if let initialImage = try? await imageAccessor.load(
                       frameIndex: frameIndex,
                       type: .horizon,
                       atSize: .original)
