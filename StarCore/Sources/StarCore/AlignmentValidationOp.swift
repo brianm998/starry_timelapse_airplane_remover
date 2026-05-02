@@ -366,7 +366,7 @@ func interpolateHomography(
     let sortedW0 = w0.sorted { $0.frameIndex < $1.frameIndex }
     let sortedW1 = w1.sorted { $0.frameIndex < $1.frameIndex }
     let sortedBad = bad.sorted { $0.frameIndex < $1.frameIndex }
-    for i in 0..<sortedW0.count {
+    for i in 0..<min(sortedW0.count, sortedW1.count) {
         if i < sortedBad.count {
             ret.append(
               AlignmentWarpInfoCodable(
