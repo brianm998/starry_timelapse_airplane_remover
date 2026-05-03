@@ -524,17 +524,26 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let config = await configManager.config()
 
         // Reference-horizon smoothing pass (moving sequences only).
-        // When enabled and a user-defined reference horizon exists within
-        // referenceHorizonSmoothingMaxDistance frames, use it to filter
-        // statistically implausible column values and save as merged horizon.
-        if config.useReferenceHorizonSmoothing,
-           config.tripodHeadWasMoving,
-           let (_, refMask) = try await nearestReferenceHorizon(
-             maxDistance: config.referenceHorizonSmoothingMaxDistance
-           )
-        {
-            Log.i("frame \(frameIndex) createMergedHorizonMask: applying reference-horizon smoothing")
-            if let filtered = referenceSmoothedHorizonMask(detected: mask, reference: refMask) {
+        // When enabled and user-defined reference horizons exist within
+        // referenceHorizonSmoothingMaxDistance frames, use them (interpolated
+        // per-column when bracketing) to filter statistically implausible
+        // column values and save as merged horizon.
+        if config.useReferenceHorizonSmoothing, config.tripodHeadWasMoving {
+            let allStats = try await referenceHorizonsWithStats(
+              maxCount: 2,
+              numBuckets: config.referenceHorizonBrightnessRefinementHistogramBuckets
+            )
+            let maxDist = config.referenceHorizonSmoothingMaxDistance
+            let nearbyStats = allStats.filter { abs($0.frameIndex - frameIndex) <= maxDist }
+            if !nearbyStats.isEmpty,
+               let expectedY = interpolatedExpectedYPerColumn(
+                 from: nearbyStats, width: mask.image.width
+               ),
+               let filtered = referenceSmoothedHorizonMask(
+                 detected: mask, expectedYPerColumn: expectedY
+               )
+            {
+                Log.i("frame \(frameIndex) createMergedHorizonMask: applying reference-horizon smoothing")
                 let finalMask = try await referenceStatsBrightnessRefinementIfNeeded(
                   mask: filtered,
                   config: config
@@ -551,7 +560,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 )
                 return HorizonMask(cleanedImage) ?? finalMask
             }
-            Log.w("frame \(frameIndex) reference smoothing failed, falling through to normal merge")
+            Log.w("frame \(frameIndex) reference smoothing skipped, falling through to normal merge")
         }
 
         var neighborIndices: [Int] = []
@@ -671,77 +680,28 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     /// Returns the (frameIndex, mask) of the nearest user-defined reference horizon
     /// within `maxDistance` frames of the current frame, or nil if none exists.
-    private func nearestReferenceHorizon(
-      maxDistance: Int
-    ) async throws -> (Int, HorizonMask)? {
-        guard let imageSequence else { return nil }
-        guard let mergedPath = imageAccessor.nameForImage(
-                frameIndex: frameIndex,
-                ofType: .mergedHorizon,
-                atSize: .original
-              )
-        else { return nil }
-
-        let referenceDir = URL(fileURLWithPath: mergedPath)
-            .deletingLastPathComponent()    // …/mergedHorizon
-            .deletingLastPathComponent()    // …/output
-            .appendingPathComponent("horizonReference")
-
-        let fm = FileManager.default
-        var bestDistance = Int.max
-        var bestIndex: Int = -1
-        var bestMask: HorizonMask? = nil
-
-        let frameCount = imageSequence.filenames.count
-        for candidateIndex in 0..<frameCount {
-            let distance = abs(candidateIndex - frameIndex)
-            guard distance <= maxDistance, distance < bestDistance else { continue }
-
-            guard let candidatePath = imageAccessor.nameForImage(
-                    frameIndex: candidateIndex,
-                    ofType: .mergedHorizon,
-                    atSize: .original
-                  )
-            else { continue }
-            let candidateFileName = URL(fileURLWithPath: candidatePath).lastPathComponent
-            let candidateRefURL = referenceDir.appendingPathComponent(candidateFileName)
-
-            guard fm.fileExists(atPath: candidateRefURL.path),
-                  let img = PixelatedImage(filename: candidateRefURL.path)?.asHorizonMask,
-                  let horizonMask = HorizonMask(img)
-            else { continue }
-
-            bestDistance = distance
-            bestIndex = candidateIndex
-            bestMask = horizonMask
-        }
-
-        guard let mask = bestMask else { return nil }
-        return (bestIndex, mask)
-    }
-
-    /// Filter a detected horizon mask using a reference mask to reject per-column
-    /// Y values that are statistical outliers relative to the reference.
+    /// Filter a detected horizon mask using a per-column expected Y (from interpolated
+    /// bracketing reference horizons) to reject per-column Y values that are statistical
+    /// outliers.
     ///
-    /// For each column the delta between detected and reference horizon Y is computed.
+    /// For each column the delta between detected and expected horizon Y is computed.
     /// Columns whose delta deviates more than 2 standard deviations from the mean
-    /// delta are replaced by the reference Y value.  This removes obviously wrong
-    /// detections without clamping the entire mask to the reference.
+    /// delta are replaced by the expected Y value.  This removes obviously wrong
+    /// detections without clamping the entire mask to the expected curve.
     private func referenceSmoothedHorizonMask(
       detected: HorizonMask,
-      reference: HorizonMask
+      expectedYPerColumn: [Int?]
     ) -> HorizonMask? {
         let w = detected.image.width
         let h = detected.image.height
 
-        let detectedY  = HorizonScoring.extractHorizonYPerColumn(from: detected.image)
-        let referenceY = HorizonScoring.extractHorizonYPerColumn(from: reference.image)
+        let detectedY = HorizonScoring.extractHorizonYPerColumn(from: detected.image)
 
-        // Compute per-column deltas where both masks have a defined horizon Y.
+        // Compute per-column deltas where both detected and expected have a Y value.
         var deltas: [Double] = []
         for x in 0..<w {
-            if let dy = detectedY[x], let ry = referenceY[x] {
-                deltas.append(Double(dy - ry))
+            if let dy = detectedY[x], x < expectedYPerColumn.count, let ey = expectedYPerColumn[x] {
+                deltas.append(Double(dy - ey))
             }
         }
 
@@ -762,10 +722,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         var replacedCount = 0
         for x in 0..<w {
             guard let dy = detectedY[x] else { continue }
-            let ry = referenceY[x]
-            let delta = Double(dy) - Double(ry ?? dy)
-            if abs(delta - mean) > threshold, let refY = ry {
-                correctedY[x] = refY
+            guard x < expectedYPerColumn.count, let ey = expectedYPerColumn[x] else { continue }
+            let delta = Double(dy - ey)
+            if abs(delta - mean) > threshold {
+                correctedY[x] = ey
                 replacedCount += 1
             }
         }
@@ -823,8 +783,24 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         candidates.sort { $0.distance < $1.distance }
 
+        // Prefer a bracketing pair: nearest ref with index < frameIndex, plus nearest with index > frameIndex.
+        // Falls back to plain nearest-N when one side has no refs.
+        var ordered: [(distance: Int, index: Int, maskURL: URL)] = []
+        if maxCount >= 2,
+           let prev = candidates.first(where: { $0.index < frameIndex }),
+           let next = candidates.first(where: { $0.index > frameIndex })
+        {
+            ordered = [prev, next]
+            for c in candidates where c.index != prev.index && c.index != next.index {
+                if ordered.count >= maxCount { break }
+                ordered.append(c)
+            }
+        } else {
+            ordered = Array(candidates.prefix(maxCount))
+        }
+
         var result: [ReferenceHorizonFrameStats] = []
-        for candidate in candidates.prefix(maxCount) {
+        for candidate in ordered {
             if let cached = await referenceHorizonStatsCache.stats(for: candidate.index) {
                 result.append(cached)
                 continue
@@ -848,22 +824,66 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return result
     }
 
+    /// Build a per-column expected horizon Y by linearly interpolating between bracketing
+    /// reference frames (one with frameIndex < self.frameIndex, one with > self.frameIndex).
+    /// Falls back to a single ref's Y when only one side is available.  Returns nil if no
+    /// reference Y data is available.
+    ///
+    /// For each column the result is the Y position the horizon is *expected* to occupy,
+    /// based on the user's manually-specified neighboring horizons.  This is the per-column
+    /// prior used by the smoothing filter and the brightness-refinement Y-position term.
+    private func interpolatedExpectedYPerColumn(
+      from stats: [ReferenceHorizonFrameStats],
+      width: Int
+    ) -> [Int?]? {
+        guard !stats.isEmpty else { return nil }
+        let prev = stats.filter { $0.frameIndex < frameIndex }
+                        .max(by: { $0.frameIndex < $1.frameIndex })
+        let next = stats.filter { $0.frameIndex > frameIndex }
+                        .min(by: { $0.frameIndex < $1.frameIndex })
+
+        var result = [Int?](repeating: nil, count: width)
+        if let p = prev, let n = next {
+            let span = Double(n.frameIndex - p.frameIndex)
+            let t = span > 0 ? Double(frameIndex - p.frameIndex) / span : 0.5
+            let pYs = p.horizonYPerColumn
+            let nYs = n.horizonYPerColumn
+            let cols = min(width, min(pYs.count, nYs.count))
+            for x in 0..<cols {
+                switch (pYs[x], nYs[x]) {
+                case let (py?, ny?):
+                    result[x] = Int((Double(py) * (1.0 - t) + Double(ny) * t).rounded())
+                case let (py?, nil): result[x] = py
+                case let (nil, ny?): result[x] = ny
+                default: break
+                }
+            }
+            return result
+        }
+        // Only one side has refs — use the nearest single ref's Y values.
+        let only = (prev ?? next) ?? stats.min(by: { abs($0.frameIndex - frameIndex) < abs($1.frameIndex - frameIndex) })!
+        let ys = only.horizonYPerColumn
+        let cols = min(width, ys.count)
+        for x in 0..<cols { result[x] = ys[x] }
+        return result
+    }
+
     /// Per-pixel brightness + Y-position refinement of `detected` using reference frame stats.
     ///
-    /// For each pixel in a band around the widest horizon Y bounds of the reference frames,
-    /// the sky/ground decision is driven primarily by brightness:
-    ///   - Within [globalMinY, globalMaxY]: brightness alone decides (Y position is neutral
-    ///     here because mountain peaks and dips mean position alone is unreliable).
-    ///   - Outside that band: a Y-position score is blended in with a weight that grows
-    ///     quadratically with distance from the band edge, capped at 0.5 so brightness
-    ///     always has the majority influence.
+    /// For each column we have a per-column `expectedY[x]` derived from linear interpolation
+    /// between bracketing reference horizons.  Within `searchRadius` of `expectedY[x]` we
+    /// blend a brightness-based sky score (from the reference histograms) with a Y-position
+    /// score that snaps toward the expected Y as distance grows.  Pixels far from `expectedY`
+    /// are dominated by the position prior; pixels near it are dominated by brightness so
+    /// real terrain detail (rocks, ridges) is preserved.
     ///
-    /// Pixels with a combined score >= 0.5 are sky; below 0.5 are ground.
-    /// Pixels outside the search band are copied unchanged from `detected`.
+    /// Pixels outside `[expectedY[x] - searchRadius, expectedY[x] + searchRadius]` are
+    /// copied unchanged from `detected`.
     private func referenceStatsBrightnessRefinedHorizonMask(
       detected: HorizonMask,
       original: PixelatedImage,
       stats: [ReferenceHorizonFrameStats],
+      expectedYPerColumn: [Int?],
       searchRadius: Int = 100,
       spikeRemovalEnabled: Bool = true,
       spikeMaxWidth: Int = 30,
@@ -882,12 +902,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let totalWeight = rawWeights.reduce(0, +)
         let normWeights = rawWeights.map { $0 / totalWeight }
 
-        // Global horizon Y bounds across all reference frames.
-        let globalMinY = stats.map { $0.minHorizonY }.min()!
-        let globalMaxY = stats.map { $0.maxHorizonY }.max()!
-        let bandTop    = max(0,     globalMinY - searchRadius)
-        let bandBottom = min(h - 1, globalMaxY + searchRadius)
-
         guard case .eightBit(let detectedBuf) = detected.image.imageData else {
             Log.w("frame \(frameIndex) referenceStatsBrightnessRefinedHorizonMask: mask not 8-bit")
             return nil
@@ -897,47 +911,45 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         var outputBytes = [UInt8](detectedBuf)
 
         var refinedCount = 0
-        let bandRange = Double(max(1, searchRadius))
-        for y in bandTop...bandBottom {
-            // Within [globalMinY, globalMaxY] rely on brightness alone — the Y range
-            // only tells us the horizon could be anywhere in here, so position gives
-            // no useful signal.  Outside the band, blend in a Y-position score whose
-            // weight grows quadratically with distance from the band edge, capped at
-            // 0.5 so brightness always has the majority influence.
-            let yWeight: Double
-            let ySkyScore: Double
-            if y < globalMinY {
-                let t = min(1.0, Double(globalMinY - y) / bandRange)
-                yWeight   = 0.5 * t * t
-                ySkyScore = 1.0
-            } else if y > globalMaxY {
-                let t = min(1.0, Double(y - globalMaxY) / bandRange)
-                yWeight   = 0.5 * t * t
-                ySkyScore = 0.0
-            } else {
-                yWeight   = 0.0
-                ySkyScore = 0.5  // unused — pure brightness within the reference band
-            }
+        var minBandTop = h
+        var maxBandBottom = 0
+        // The position prior reaches full strength at this distance from expectedY.
+        // Inside this radius brightness still has meaningful weight; beyond it
+        // position dominates and pixels snap toward the expected horizon.
+        let positionFullRadius = Double(max(1, searchRadius / 2))
 
-            for x in 0..<w {
+        for x in 0..<w {
+            guard let expY = expectedYPerColumn[x] else { continue }
+            let bandTop    = max(0,     expY - searchRadius)
+            let bandBottom = min(h - 1, expY + searchRadius)
+            if bandTop < minBandTop { minBandTop = bandTop }
+            if bandBottom > maxBandBottom { maxBandBottom = bandBottom }
+
+            for y in bandTop...bandBottom {
                 let brightness = original.normalizedBrightness(x: x, y: y, maxVal: maxVal)
 
                 // Histogram-based brightness sky score.
-                // Weight each reference frame's sky/ground histogram values by distance,
-                // then turn the combined ratio into a [0,1] sky probability.
                 var skyRatio    = 0.0
                 var groundRatio = 0.0
-                for (s, w) in zip(stats, normWeights) {
-                    skyRatio    += w * s.skyHistogram[brightness]
-                    groundRatio += w * s.groundHistogram[brightness]
+                for (s, nw) in zip(stats, normWeights) {
+                    skyRatio    += nw * s.skyHistogram[brightness]
+                    groundRatio += nw * s.groundHistogram[brightness]
                 }
                 let brightnessSkyScore: Double
                 let histTotal = skyRatio + groundRatio
                 if histTotal < 1e-10 {
-                    brightnessSkyScore = 0.5  // no histogram data for this intensity
+                    brightnessSkyScore = 0.5
                 } else {
                     brightnessSkyScore = skyRatio / histTotal
                 }
+
+                // Position prior: weight grows quadratically with distance from expectedY,
+                // capped at 1.0.  Above expectedY the prior says sky (1.0); below says ground (0.0).
+                let dy = Double(y - expY)
+                let absDy = abs(dy)
+                let t = min(1.0, absDy / positionFullRadius)
+                let yWeight = t * t
+                let ySkyScore: Double = dy < 0 ? 1.0 : (dy > 0 ? 0.0 : 0.5)
 
                 let combined = yWeight < 0.001
                     ? brightnessSkyScore
@@ -949,9 +961,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
 
+        let definedExpY = expectedYPerColumn.compactMap { $0 }
+        let expYMin = definedExpY.min() ?? -1
+        let expYMax = definedExpY.max() ?? -1
         Log.i("frame \(frameIndex) referenceStatsBrightnessRefinedHorizonMask: " +
-              "refined \(refinedCount) pixels in band y=[\(bandTop),\(bandBottom)] " +
-              "globalY=[\(globalMinY),\(globalMaxY)] " +
+              "refined \(refinedCount) pixels in band y=[\(minBandTop),\(maxBandBottom)] " +
+              "expectedY=[\(expYMin),\(expYMax)] " +
               "skyMedian=\(String(format:"%.4f", stats.first?.medianSkyBrightness ?? 0)) " +
               "groundMedian=\(String(format:"%.4f", stats.first?.medianGroundBrightness ?? 0))")
 
@@ -1134,6 +1149,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         )
         guard !stats.isEmpty else { return mask }
 
+        guard let expectedY = interpolatedExpectedYPerColumn(from: stats, width: mask.image.width)
+        else { return mask }
+
         guard let original = try? await imageAccessor.load(
                 frameIndex: frameIndex,
                 type: .original,
@@ -1148,6 +1166,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           detected: mask,
           original: original,
           stats: stats,
+          expectedYPerColumn: expectedY,
           searchRadius: config.referenceHorizonBrightnessRefinementSearchRadius,
           spikeRemovalEnabled: config.horizonSpikeRemovalEnabled,
           spikeMaxWidth: config.horizonSpikeMaxWidth,

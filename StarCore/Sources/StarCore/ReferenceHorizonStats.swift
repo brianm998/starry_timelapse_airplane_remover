@@ -69,6 +69,9 @@ public struct ReferenceHorizonFrameStats: Sendable {
     public let minHorizonY: Int
     /// Maximum horizon Y across all mask columns (lowest position the horizon reaches in the image).
     public let maxHorizonY: Int
+    /// Per-column horizon Y for the reference mask (nil where the column has no defined horizon).
+    /// Used for per-column linear interpolation between bracketing reference frames.
+    public let horizonYPerColumn: [Int?]
     /// Median normalised [0,1] brightness of sky pixels (kept for logging).
     public let medianSkyBrightness: Double
     /// Median normalised [0,1] brightness of ground pixels (kept for logging).
@@ -120,7 +123,8 @@ extension PixelatedImage {
             return nil
         }
 
-        let horizonYs = HorizonScoring.extractHorizonYPerColumn(from: mask.image).compactMap { $0 }
+        let horizonYPerColumn = HorizonScoring.extractHorizonYPerColumn(from: mask.image)
+        let horizonYs = horizonYPerColumn.compactMap { $0 }
         guard !horizonYs.isEmpty else {
             Log.w("frame \(frameIndex) computeReferenceHorizonStats: no horizon columns in mask")
             return nil
@@ -160,6 +164,7 @@ extension PixelatedImage {
             groundHistogram: groundHist,
             minHorizonY: minHorizonY,
             maxHorizonY: maxHorizonY,
+            horizonYPerColumn: horizonYPerColumn,
             medianSkyBrightness: medSky,
             medianGroundBrightness: medGround
         )
