@@ -915,16 +915,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         var minBandTop = h
         var maxBandBottom = 0
         // The position prior reaches full strength at this distance from expectedY.
-        // Inside this radius brightness still has meaningful weight; beyond it
+        // Inside this radius colour evidence still has meaningful weight; beyond it
         // position dominates and pixels snap toward the expected horizon.
         let positionFullRadius = Double(max(1, searchRadius / 2))
-        // Floor for per-channel histogram lookups so the joint sky/ground
-        // probability does not collapse to zero when one channel value falls
-        // slightly outside an observed range.
-        let probFloor = 1e-4
 
         // Reusable buffer for per-pixel per-channel values.
         var channelBuf = [Double](repeating: 0, count: cpp)
+
+        // Precompute log-weights for distance-weighted averaging of per-frame
+        // Gaussian likelihoods in log space.
+        let logWeights: [Double] = normWeights.map { Foundation.log(max(1e-12, $0)) }
 
         for x in 0..<w {
             guard let expY = expectedYPerColumn[x] else { continue }
@@ -935,30 +935,48 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             for y in bandTop...bandBottom {
                 original.fillNormalizedChannelValues(x: x, y: y, maxVal: maxVal, into: &channelBuf)
+                let r: Double, g: Double, bch: Double
+                if cpp >= 3 {
+                    r = channelBuf[0]; g = channelBuf[1]; bch = channelBuf[2]
+                } else {
+                    let v = channelBuf[0]; r = v; g = v; bch = v
+                }
+                let lab = sRGBtoLAB(r, g, bch)
 
-                // Naive-Bayes per-channel histogram lookup.  For each reference
-                // frame we compute the joint sky and ground likelihoods as the
-                // product of per-channel histogram probabilities, then average
-                // those joint likelihoods across reference frames (distance-weighted).
-                var skyAcc    = 0.0
-                var groundAcc = 0.0
-                for (s, nw) in zip(stats, normWeights) {
-                    var skyJoint    = 1.0
-                    var groundJoint = 1.0
-                    for c in 0..<cpp {
-                        let v = channelBuf[c]
-                        skyJoint    *= max(probFloor, s.skyHistograms[c][v])
-                        groundJoint *= max(probFloor, s.groundHistograms[c][v])
+                // Per-frame log-likelihoods under the sky/ground LAB Gaussians,
+                // weighted by inverse frame distance.  Combine via log-sum-exp
+                // (numerically stable mixture) and turn into a sky probability.
+                var maxSky    = -Double.infinity
+                var maxGround = -Double.infinity
+                var skyLLs    = [Double](repeating: -Double.infinity, count: stats.count)
+                var groundLLs = [Double](repeating: -Double.infinity, count: stats.count)
+                for i in 0..<stats.count {
+                    if let sky = stats[i].skyGaussian {
+                        let ll = logWeights[i] + sky.logLikelihood(lab.L, lab.a, lab.b)
+                        skyLLs[i] = ll
+                        if ll > maxSky { maxSky = ll }
                     }
-                    skyAcc    += nw * skyJoint
-                    groundAcc += nw * groundJoint
+                    if let gnd = stats[i].groundGaussian {
+                        let ll = logWeights[i] + gnd.logLikelihood(lab.L, lab.a, lab.b)
+                        groundLLs[i] = ll
+                        if ll > maxGround { maxGround = ll }
+                    }
                 }
                 let brightnessSkyScore: Double
-                let histTotal = skyAcc + groundAcc
-                if histTotal < 1e-12 {
+                if maxSky == -Double.infinity || maxGround == -Double.infinity {
                     brightnessSkyScore = 0.5
                 } else {
-                    brightnessSkyScore = skyAcc / histTotal
+                    var skySum = 0.0, gndSum = 0.0
+                    for i in 0..<stats.count {
+                        if skyLLs[i]    > -Double.infinity { skySum += Foundation.exp(skyLLs[i]    - maxSky) }
+                        if groundLLs[i] > -Double.infinity { gndSum += Foundation.exp(groundLLs[i] - maxGround) }
+                    }
+                    let logSky    = maxSky    + Foundation.log(skySum)
+                    let logGround = maxGround + Foundation.log(gndSum)
+                    let logRatio  = logSky - logGround
+                    // sigmoid; clamp to avoid exp overflow on extreme distances.
+                    let clamped = max(-50.0, min(50.0, logRatio))
+                    brightnessSkyScore = 1.0 / (1.0 + Foundation.exp(-clamped))
                 }
 
                 // Position prior: weight grows quadratically with distance from expectedY,

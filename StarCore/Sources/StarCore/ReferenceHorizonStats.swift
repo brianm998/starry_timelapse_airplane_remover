@@ -54,6 +54,113 @@ public struct IntensityHistogram: Sendable {
     }
 }
 
+// MARK: - sRGB → CIE LAB conversion (D65)
+
+@inline(__always)
+private func srgbToLinear(_ v: Double) -> Double {
+    return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
+}
+
+@inline(__always)
+private func labF(_ t: Double) -> Double {
+    let delta = 6.0 / 29.0
+    let delta3 = delta * delta * delta
+    return t > delta3 ? Foundation.cbrt(t) : t / (3.0 * delta * delta) + 4.0 / 29.0
+}
+
+/// Convert sRGB normalized [0, 1] (R, G, B) to CIE LAB (D65).
+/// L ∈ [0, 100], a ≈ [-128, 127], b ≈ [-128, 127].
+@inline(__always)
+public func sRGBtoLAB(_ r: Double, _ g: Double, _ b: Double) -> (L: Double, a: Double, b: Double) {
+    let R = srgbToLinear(r)
+    let G = srgbToLinear(g)
+    let B = srgbToLinear(b)
+    // sRGB → XYZ (D65)
+    let X = 0.4124564 * R + 0.3575761 * G + 0.1804375 * B
+    let Y = 0.2126729 * R + 0.7151522 * G + 0.0721750 * B
+    let Z = 0.0193339 * R + 0.1191920 * G + 0.9503041 * B
+    // XYZ → LAB (D65 reference white).
+    let fx = labF(X / 0.95047)
+    let fy = labF(Y)
+    let fz = labF(Z / 1.08883)
+    return (L: 116 * fy - 16, a: 500 * (fx - fy), b: 200 * (fy - fz))
+}
+
+// MARK: - 3D Gaussian (mean + precision + log|Σ|)
+
+/// 3D Gaussian distribution of LAB colour samples, with precomputed precision matrix
+/// (Σ⁻¹, symmetric upper triangle) and log|Σ| for fast Mahalanobis / log-likelihood
+/// evaluation.  A small ridge is added to the covariance diagonal at construction
+/// for numerical stability.
+public struct GaussianStats3D: Sendable {
+    public let mean0: Double, mean1: Double, mean2: Double
+    /// Precision (Σ⁻¹) entries, symmetric.
+    public let p00: Double, p01: Double, p02: Double
+    public let p11: Double, p12: Double
+    public let p22: Double
+    /// log|Σ|, used in log-likelihood.
+    public let logDet: Double
+
+    public init?(samples: [(Double, Double, Double)], ridge: Double = 1e-3) {
+        guard samples.count >= 4 else { return nil }
+        let n = Double(samples.count)
+        var s0 = 0.0, s1 = 0.0, s2 = 0.0
+        for s in samples { s0 += s.0; s1 += s.1; s2 += s.2 }
+        let m0 = s0 / n, m1 = s1 / n, m2 = s2 / n
+
+        var c00 = 0.0, c01 = 0.0, c02 = 0.0, c11 = 0.0, c12 = 0.0, c22 = 0.0
+        for s in samples {
+            let d0 = s.0 - m0, d1 = s.1 - m1, d2 = s.2 - m2
+            c00 += d0 * d0
+            c01 += d0 * d1
+            c02 += d0 * d2
+            c11 += d1 * d1
+            c12 += d1 * d2
+            c22 += d2 * d2
+        }
+        let denom = max(1.0, n - 1.0)
+        c00 = c00 / denom + ridge
+        c01 = c01 / denom
+        c02 = c02 / denom
+        c11 = c11 / denom + ridge
+        c12 = c12 / denom
+        c22 = c22 / denom + ridge
+
+        // det of symmetric 3x3
+        let det = c00 * (c11 * c22 - c12 * c12)
+                - c01 * (c01 * c22 - c12 * c02)
+                + c02 * (c01 * c12 - c11 * c02)
+        guard det > 1e-20 else { return nil }
+        let inv = 1.0 / det
+
+        self.mean0 = m0
+        self.mean1 = m1
+        self.mean2 = m2
+        self.p00 =  (c11 * c22 - c12 * c12) * inv
+        self.p01 = -(c01 * c22 - c12 * c02) * inv
+        self.p02 =  (c01 * c12 - c11 * c02) * inv
+        self.p11 =  (c00 * c22 - c02 * c02) * inv
+        self.p12 = -(c00 * c12 - c01 * c02) * inv
+        self.p22 =  (c00 * c11 - c01 * c01) * inv
+        self.logDet = Foundation.log(det)
+    }
+
+    /// Mahalanobis squared distance from `(v0, v1, v2)` to the mean.
+    @inline(__always)
+    public func mahalanobisSq(_ v0: Double, _ v1: Double, _ v2: Double) -> Double {
+        let d0 = v0 - mean0, d1 = v1 - mean1, d2 = v2 - mean2
+        return p00 * d0 * d0 + p11 * d1 * d1 + p22 * d2 * d2
+             + 2 * (p01 * d0 * d1 + p02 * d0 * d2 + p12 * d1 * d2)
+    }
+
+    /// Log of the 3D Gaussian density up to the constant `-0.5 * 3 * log(2π)`,
+    /// which cancels when comparing two Gaussians.
+    @inline(__always)
+    public func logLikelihood(_ v0: Double, _ v1: Double, _ v2: Double) -> Double {
+        return -0.5 * (logDet + mahalanobisSq(v0, v1, v2))
+    }
+}
+
 // MARK: - ReferenceHorizonFrameStats
 
 /// Per-frame statistics derived from a user-defined reference horizon mask
@@ -61,11 +168,11 @@ public struct IntensityHistogram: Sendable {
 /// sky/ground classification on nearby frames in a moving video sequence.
 public struct ReferenceHorizonFrameStats: Sendable {
     public let frameIndex: Int
-    /// Per-channel normalized intensity histograms of sky pixels in the reference frame.
-    /// Length equals the source image's `componentsPerPixel` (1 for grayscale, 3 for RGB).
-    public let skyHistograms: [IntensityHistogram]
-    /// Per-channel normalized intensity histograms of ground pixels in the reference frame.
-    public let groundHistograms: [IntensityHistogram]
+    /// 3D Gaussian fit to LAB samples of sky pixels in the reference frame.
+    /// `nil` when the source image is not RGB or there are too few samples to fit.
+    public let skyGaussian: GaussianStats3D?
+    /// 3D Gaussian fit to LAB samples of ground pixels in the reference frame.
+    public let groundGaussian: GaussianStats3D?
     /// Minimum horizon Y across all mask columns (highest position the horizon reaches in the image).
     public let minHorizonY: Int
     /// Maximum horizon Y across all mask columns (lowest position the horizon reaches in the image).
@@ -135,16 +242,14 @@ extension PixelatedImage {
 
         let maxVal = maxBrightnessValue
         let cpp = componentsPerPixel
-        var skyByChannel:    [[Double]] = (0..<cpp).map { _ in [] }
-        var groundByChannel: [[Double]] = (0..<cpp).map { _ in [] }
-        for c in 0..<cpp {
-            skyByChannel[c].reserveCapacity((width * minHorizonY) / 16)
-            groundByChannel[c].reserveCapacity(max(1, (width * (height - maxHorizonY)) / 16))
-        }
+        var skyLab:    [(Double, Double, Double)] = []
+        var groundLab: [(Double, Double, Double)] = []
+        skyLab.reserveCapacity((width * minHorizonY) / 16)
+        groundLab.reserveCapacity(max(1, (width * (height - maxHorizonY)) / 16))
         var skyAvg:    [Double] = []
         var groundAvg: [Double] = []
-        skyAvg.reserveCapacity((width * minHorizonY) / 16)
-        groundAvg.reserveCapacity(max(1, (width * (height - maxHorizonY)) / 16))
+        skyAvg.reserveCapacity(skyLab.capacity)
+        groundAvg.reserveCapacity(groundLab.capacity)
 
         let sampleStride = 4
         var channelBuf = [Double](repeating: 0, count: cpp)
@@ -152,13 +257,21 @@ extension PixelatedImage {
             for x in stride(from: 0, to: width, by: sampleStride) {
                 let isSky = maskBuf[y * width + x] > 0
                 fillNormalizedChannelValues(x: x, y: y, maxVal: maxVal, into: &channelBuf)
-                var sum = 0.0
-                if isSky {
-                    for c in 0..<cpp { skyByChannel[c].append(channelBuf[c]); sum += channelBuf[c] }
-                    skyAvg.append(sum / Double(cpp))
+                let r: Double, g: Double, bch: Double
+                if cpp >= 3 {
+                    r = channelBuf[0]; g = channelBuf[1]; bch = channelBuf[2]
                 } else {
-                    for c in 0..<cpp { groundByChannel[c].append(channelBuf[c]); sum += channelBuf[c] }
-                    groundAvg.append(sum / Double(cpp))
+                    let v = channelBuf[0]
+                    r = v; g = v; bch = v
+                }
+                let lab = sRGBtoLAB(r, g, bch)
+                let avg = (r + g + bch) / 3.0
+                if isSky {
+                    skyLab.append((lab.L, lab.a, lab.b))
+                    skyAvg.append(avg)
+                } else {
+                    groundLab.append((lab.L, lab.a, lab.b))
+                    groundAvg.append(avg)
                 }
             }
         }
@@ -168,29 +281,33 @@ extension PixelatedImage {
             return nil
         }
 
-        let skyHistograms    = skyByChannel.map    { IntensityHistogram(values: $0, numBuckets: numBuckets) }
-        let groundHistograms = groundByChannel.map { IntensityHistogram(values: $0, numBuckets: numBuckets) }
+        let skyG    = GaussianStats3D(samples: skyLab)
+        let groundG = GaussianStats3D(samples: groundLab)
 
         let medSky    = sortedMedian(&skyAvg)
         let medGround = sortedMedian(&groundAvg)
 
         let stats = ReferenceHorizonFrameStats(
             frameIndex: frameIndex,
-            skyHistograms: skyHistograms,
-            groundHistograms: groundHistograms,
+            skyGaussian: skyG,
+            groundGaussian: groundG,
             minHorizonY: minHorizonY,
             maxHorizonY: maxHorizonY,
             horizonYPerColumn: horizonYPerColumn,
             medianSkyBrightness: medSky,
             medianGroundBrightness: medGround
         )
-        let skyRanges    = skyHistograms.map    { "[\(String(format:"%.3f", $0.minIntensity)),\(String(format:"%.3f", $0.maxIntensity))]" }.joined(separator: ",")
-        let groundRanges = groundHistograms.map { "[\(String(format:"%.3f", $0.minIntensity)),\(String(format:"%.3f", $0.maxIntensity))]" }.joined(separator: ",")
-        Log.i("frame \(frameIndex) computeReferenceHorizonStats: channels=\(cpp) " +
+        let skyMeans = skyG.map {
+            "(L=\(String(format:"%.1f", $0.mean0)),a=\(String(format:"%.1f", $0.mean1)),b=\(String(format:"%.1f", $0.mean2)))"
+        } ?? "nil"
+        let groundMeans = groundG.map {
+            "(L=\(String(format:"%.1f", $0.mean0)),a=\(String(format:"%.1f", $0.mean1)),b=\(String(format:"%.1f", $0.mean2)))"
+        } ?? "nil"
+        Log.i("frame \(frameIndex) computeReferenceHorizonStats: " +
               "skyMedian=\(String(format:"%.4f", medSky)) " +
               "groundMedian=\(String(format:"%.4f", medGround)) " +
-              "skyChRanges=\(skyRanges) " +
-              "groundChRanges=\(groundRanges) " +
+              "skyLAB=\(skyMeans) " +
+              "groundLAB=\(groundMeans) " +
               "horizonY=[\(minHorizonY),\(maxHorizonY)]")
         return stats
     }
