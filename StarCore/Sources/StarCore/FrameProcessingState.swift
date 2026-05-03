@@ -116,8 +116,6 @@ public enum FrameProcessingState: Codable,
     case horizonDetection
     case horizonDetected
     case mergingHorizon
-    case refiningHorizon
-    case horizonRefined
     case earthAlignment(AlignmentStep)
     case creatingEarthAlignedFrame
     case starKeypoints
@@ -166,8 +164,6 @@ public enum FrameProcessingState: Codable,
         .horizonDetection,
         .horizonDetected,
         .mergingHorizon,
-        .refiningHorizon,
-        .horizonRefined,
         .earthAlignment(.start),
         .creatingEarthAlignedFrame,
         .starKeypoints,
@@ -219,10 +215,6 @@ public enum FrameProcessingState: Codable,
             "finding horizon"
         case .mergingHorizon:
             "merging horizon"
-        case .refiningHorizon:
-            "refining horizon"
-        case .horizonRefined:
-            "horizon refined"
         case .horizonDetected:
             "horizon found"
         case .starKeypoints:
@@ -312,10 +304,6 @@ public enum FrameProcessingState: Codable,
             false
         case .mergingHorizon:
             false
-        case .refiningHorizon:
-            false
-        case .horizonRefined:
-            false
         case .horizonDetected:
             false
         case .starKeypoints:
@@ -399,10 +387,6 @@ public enum FrameProcessingState: Codable,
             "horizon"
         case .mergingHorizon:
             "horizon"
-        case .refiningHorizon:
-            "refining horizon"
-        case .horizonRefined:
-            "horizon refined"
         case .horizonDetected:
             "horizon"
         case .starKeypoints:
@@ -496,10 +480,6 @@ public enum FrameProcessingState: Codable,
             .blue
         case .mergingHorizon:
             .cyan
-        case .refiningHorizon:
-            .teal
-        case .horizonRefined:
-            .green
         case .horizonDetected:
             .green
         case .starKeypoints:

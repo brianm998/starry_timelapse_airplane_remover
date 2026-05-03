@@ -406,10 +406,6 @@ public struct Config: Codable, Sendable {
     // turned off by default as it's still expermintal
     public var allowEarthAlignment: Bool = false
 
-    // use homography-based horizon refinement after star alignment?
-    // turned off by default as it's still experimental
-    public var useHomographyRefinedHorizon: Bool = false
-
     // --- Adaptive horizon detection parameters ---
 
     // What size do we detect the horizon at?
@@ -559,9 +555,6 @@ public struct Config: Codable, Sendable {
 
         self.allowEarthAlignment = try c.decodeIfPresent(Bool.self, forKey: .allowEarthAlignment) ?? self.allowEarthAlignment
 
-        self.useHomographyRefinedHorizon = try c.decodeIfPresent(Bool.self, forKey: .useHomographyRefinedHorizon) ?? self.useHomographyRefinedHorizon
-
-        
         self.alignmentMaxKeypoints = try c.decodeIfPresent(Int.self, forKey: .alignmentMaxKeypoints) ?? self.alignmentMaxKeypoints
         self.alignmentWriteDebugImages = try c.decodeIfPresent(Bool.self, forKey: .alignmentWriteDebugImages) ?? self.alignmentWriteDebugImages
         self.alignmentGroundHorizonExtension = try c.decodeIfPresent(Int.self, forKey: .alignmentGroundHorizonExtension) ?? self.alignmentGroundHorizonExtension
@@ -839,16 +832,6 @@ public struct Config: Codable, Sendable {
             case .thumbnail:
                 return nil
             }
-        case .refinedHorizon:
-            switch size {
-            case .original:
-                return "\(self.tempOutputPath)/refinedHorizon"
-
-            case .preview:
-                return "\(self.tempOutputPath)/refinedHorizon-previews"
-            case .thumbnail:
-                return nil
-            }
         case .userHorizon:
             switch size {
             case .original:
@@ -953,7 +936,6 @@ public struct Config: Codable, Sendable {
         if let dir = self.dirForImage(ofType: .earthAligned) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .horizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .mergedHorizon) { ret.append(dir) }
-        if let dir = self.dirForImage(ofType: .refinedHorizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .userHorizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .subtraction) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .validation) { ret.append(dir) }
@@ -969,7 +951,6 @@ public struct Config: Codable, Sendable {
             if let dir = self.dirForImage(ofType: .earthAligned, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .horizon, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .mergedHorizon, atSize: .preview) { ret.append(dir) }
-            if let dir = self.dirForImage(ofType: .refinedHorizon, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .userHorizon, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .subtraction, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .validation, atSize: .preview) { ret.append(dir) }

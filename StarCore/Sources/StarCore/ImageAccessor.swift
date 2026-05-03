@@ -493,8 +493,6 @@ public struct ImageAccessor: Sendable {
                     return (dir, baseFileName)
                 case .mergedHorizon:
                     return (dir, baseFileName)
-                case .refinedHorizon:
-                    return (dir, baseFileName)
                 case .userHorizon:
                     return (dir, baseFileName)
                 case .starAligned:

@@ -675,15 +675,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
       maxDistance: Int
     ) async throws -> (Int, HorizonMask)? {
         guard let imageSequence else { return nil }
-        guard let refinedPath = imageAccessor.nameForImage(
+        guard let mergedPath = imageAccessor.nameForImage(
                 frameIndex: frameIndex,
-                ofType: .refinedHorizon,
+                ofType: .mergedHorizon,
                 atSize: .original
               )
         else { return nil }
 
-        let referenceDir = URL(fileURLWithPath: refinedPath)
-            .deletingLastPathComponent()    // …/refinedHorizon
+        let referenceDir = URL(fileURLWithPath: mergedPath)
+            .deletingLastPathComponent()    // …/mergedHorizon
             .deletingLastPathComponent()    // …/output
             .appendingPathComponent("horizonReference")
 
@@ -697,11 +697,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             let distance = abs(candidateIndex - frameIndex)
             guard distance <= maxDistance, distance < bestDistance else { continue }
 
-            // Derive the reference filename the same way loadHorizonReferenceMask does:
-            // use the refinedHorizon path for the candidate frame, take its last component.
             guard let candidatePath = imageAccessor.nameForImage(
                     frameIndex: candidateIndex,
-                    ofType: .refinedHorizon,
+                    ofType: .mergedHorizon,
                     atSize: .original
                   )
             else { continue }
@@ -790,14 +788,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     /// nearest frames.  Stats are cached in `referenceHorizonStatsCache`.
     private func referenceHorizonsWithStats(maxCount: Int = 2, numBuckets: Int = 256) async throws -> [ReferenceHorizonFrameStats] {
         guard let imageSequence else { return [] }
-        guard let refinedPath = imageAccessor.nameForImage(
+        guard let mergedPath = imageAccessor.nameForImage(
                 frameIndex: frameIndex,
-                ofType: .refinedHorizon,
+                ofType: .mergedHorizon,
                 atSize: .original
               )
         else { return [] }
 
-        let referenceDir = URL(fileURLWithPath: refinedPath)
+        let referenceDir = URL(fileURLWithPath: mergedPath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("horizonReference")
@@ -809,7 +807,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             guard candidateIndex != frameIndex else { continue }
             guard let candidatePath = imageAccessor.nameForImage(
                     frameIndex: candidateIndex,
-                    ofType: .refinedHorizon,
+                    ofType: .mergedHorizon,
                     atSize: .original
                   )
             else { continue }
@@ -1158,58 +1156,23 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         ) ?? mask
     }
 
-    // MARK: - Refined horizon mask (homography-based refinement)
-
-    /// Load (or create) the refined horizon mask for this frame.
-    ///
-    /// If a user-painted reference mask exists it is returned immediately and
-    /// the tuner is given a chance to update `tuned_parameters.json`.
-    /// Otherwise the cached `.refinedHorizon` image is used, falling back to
-    /// `createRefinedHorizonMask()`.
-    public func loadOrCreateRefinedHorizonMask() async throws -> HorizonMask? {
-        // Reference mask takes priority over everything.
-        if let referenceMask = try await loadHorizonReferenceMask() {
-            Log.i("frame \(frameIndex) loadOrCreateRefinedHorizonMask: using reference mask")
-            await maybeTuneHorizonParameters(referenceMask: referenceMask)
-            return referenceMask
-        }
-
-        // Try the cached refined mask from a previous run.
-        do {
-            if let image = try await imageAccessor.load(
-                 frameIndex: frameIndex,
-                 type: .refinedHorizon,
-                 atSize: .original
-               )
-            {
-                Log.d("frame \(frameIndex) loadOrCreateRefinedHorizonMask: loaded cached mask")
-                self.set(state: .horizonRefined)  // ensure overlay refresh fires even on cache hit
-                return HorizonMask(image)
-            }
-        } catch {
-            Log.w("frame \(frameIndex) loadOrCreateRefinedHorizonMask: cache load failed: \(error)")
-        }
-
-        return try await createRefinedHorizonMask()
-    }
-
     /// Look for a user-painted reference horizon mask on disk and return it if found.
     ///
     /// Search order:
     /// 1. `{horizonReference}/{frameFileName}` — per-frame reference (moving sequences)
     /// 2. `{horizonReference}/reference.tiff`   — global reference (static sequences)
     private func loadHorizonReferenceMask() async throws -> HorizonMask? {
-        guard let refinedPath = imageAccessor.nameForImage(
+        guard let mergedPath = imageAccessor.nameForImage(
                 frameIndex: frameIndex,
-                ofType: .refinedHorizon,
+                ofType: .mergedHorizon,
                 atSize: .original
               )
         else { return nil }
 
-        let refinedURL      = URL(fileURLWithPath: refinedPath)
-        let frameFileName   = refinedURL.lastPathComponent
-        let referenceDir    = refinedURL
-            .deletingLastPathComponent()    // …/refinedHorizon
+        let mergedURL       = URL(fileURLWithPath: mergedPath)
+        let frameFileName   = mergedURL.lastPathComponent
+        let referenceDir    = mergedURL
+            .deletingLastPathComponent()    // …/mergedHorizon
             .deletingLastPathComponent()    // …/output (tempOutputPath)
             .appendingPathComponent("horizonReference")
 
@@ -1234,128 +1197,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return nil
     }
 
-    /// Create the refined horizon mask using the homography-based two-pass detector.
-    ///
-    /// Loads tuned parameters from `tuned_parameters.json` when available.
-    internal func createRefinedHorizonMask() async throws -> HorizonMask? {
-        self.set(state: .refiningHorizon)
-
-        // Gate on memory — horizon refinement loads neighbor images
-        let estimatedBytes = MemoryMonitor.estimatedImageBytes(
-            width: width,
-            height: height,
-            componentsPerPixel: 1,  // horizon masks are single-channel 8-bit
-            bytesPerComponent: 1
-        )
-        await MemoryMonitor.shared.waitForMemory(needed: estimatedBytes)
-
-        // Ensure we have homography results.
-        var homographyResults = neighborStarHomography
-        if homographyResults == nil {
-            homographyResults = await readStarNeighborHomographyForThisFrame()
-        }
-        guard let homographyResults else {
-            Log.w("frame \(frameIndex) createRefinedHorizonMask: no star homography — falling back to merged")
-            let merged = try await loadOrCreateMergedHorizonMask()
-            self.set(state: .horizonRefined)
-            return merged
-        }
-
-        // We need the merged horizon mask as the Pass-1 baseline.
-        guard let mergedMask = try await loadOrCreateMergedHorizonMask() else {
-            // Merged creation failed — nothing to refine.  Set state so the
-            // overlay refresh fires and the frame doesn't stay in .refiningHorizon.
-            self.set(state: .horizonDetected)
-            return nil
-        }
-
-        let currentWidth  = mergedMask.image.width
-        let currentHeight = mergedMask.image.height
-
-        // Collect valid neighbours that have a homography and original images.
-        var neighborHorizonFilenames:   [String]   = []
-        var neighborOriginalFilenames:  [String]   = []
-        var neighborHomographies:       [[Double]] = []
-
-        for warpInfo in homographyResults.neighborHomography {
-            guard warpInfo.alignmentState == .homographySuccess ||
-                  warpInfo.alignmentState == .usedExistingHomography,
-                  let homography = warpInfo.homography
-            else { continue }
-
-            let neighborIndex = warpInfo.frameIndex
-            guard let origFilename = imageAccessor.nameForImage(
-                    frameIndex: neighborIndex,
-                    ofType: .original,
-                    atSize: .original
-                  ),
-                  let horizFilename = imageAccessor.nameForImage(
-                    frameIndex: neighborIndex,
-                    ofType: .mergedHorizon,
-                    atSize: .original
-                  )
-            else { continue }
-
-            neighborOriginalFilenames.append(origFilename)
-            neighborHorizonFilenames.append(horizFilename)
-            neighborHomographies.append(homography)
-        }
-
-        guard !neighborHomographies.isEmpty else {
-            Log.w("frame \(frameIndex) createRefinedHorizonMask: no valid neighbours — returning merged mask")
-            self.set(state: .horizonRefined)
-            return mergedMask
-        }
-
-        // Load the current frame's original image for Pass 2.
-        let currentImage = try await imageAccessor.load(
-            frameIndex: frameIndex,
-            type: .original,
-            atSize: .original
-        )
-
-        // Build the detector and apply any saved tuned parameters.
-        var detector = HomographyHorizonDetector()
-        if let paramsDir = tunedParametersDirectory(),
-           let params = HorizonTunedParameters.load(fromDirectory: paramsDir)
-        {
-            detector.apply(params)
-            Log.i("frame \(frameIndex) createRefinedHorizonMask: applied tuned parameters (MAE: \(params.tuningMeanAbsoluteError.map { String(format: "%.1f", $0) } ?? "n/a"))")
-        }
-
-        // Stage 1: expensive I/O.
-        let mergedHorizonY = HorizonScoring.extractHorizonYPerColumn(from: mergedMask.image)
-        let prepared = detector.prepare(
-            currentWidth:              currentWidth,
-            currentHeight:             currentHeight,
-            neighborHorizonFilenames:  neighborHorizonFilenames,
-            neighborOriginalFilenames: neighborOriginalFilenames,
-            neighborHomographies:      neighborHomographies,
-            currentImage:              currentImage,
-            currentMergedHorizonY:     mergedHorizonY
-        )
-
-        // Stage 2: fast boundary scan.
-        guard let refinedMask = detector.detectFromPrepared(prepared) else {
-            Log.w("frame \(frameIndex) createRefinedHorizonMask: detector returned nil — returning merged mask")
-            self.set(state: .horizonRefined)
-            return mergedMask
-        }
-
-        // Save for future runs.
-        try await imageAccessor.save(
-            refinedMask.image,
-            frameIndex: frameIndex,
-            as: .refinedHorizon,
-            atSizes: await self.outputSizes,
-            overwrite: true
-        )
-
-        self.set(state: .horizonRefined)
-        Log.i("frame \(frameIndex) createRefinedHorizonMask: refined mask created")
-        return refinedMask
-    }
-
     // MARK: - Horizon parameter tuning
 
     /// Load the tuned horizon parameters for this sequence, returning defaults if none saved.
@@ -1375,14 +1216,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     /// Returns the URL of the `horizonReference/` directory for this sequence,
     /// or `nil` if the path cannot be determined.
     private func tunedParametersDirectory() -> URL? {
-        guard let refinedPath = imageAccessor.nameForImage(
+        guard let mergedPath = imageAccessor.nameForImage(
                 frameIndex: frameIndex,
-                ofType: .refinedHorizon,
+                ofType: .mergedHorizon,
                 atSize: .original
               )
         else { return nil }
-        return URL(fileURLWithPath: refinedPath)
-            .deletingLastPathComponent()    // …/refinedHorizon
+        return URL(fileURLWithPath: mergedPath)
+            .deletingLastPathComponent()    // …/mergedHorizon
             .deletingLastPathComponent()    // …/output
             .appendingPathComponent("horizonReference")
     }
@@ -2205,9 +2046,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     ///
     /// Search order (highest quality first):
     /// 1. User-painted reference in `horizonReference/`
-    /// 2. Cached `refinedHorizon` from a previous pipeline run
-    /// 3. Cached `mergedHorizon`
-    /// 4. Raw `horizon`
+    /// 2. Cached `mergedHorizon`
+    /// 3. Raw `horizon`
     ///
     /// Returns `nil` if no horizon data exists for this frame.
     public func loadBestExistingHorizonAsViewY(
@@ -2218,7 +2058,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                viewWidth: viewWidth, viewHeight: viewHeight) {
             return result
         }
-        for type in [FrameViewMode.refinedHorizon, .mergedHorizon, .horizon] {
+        for type in [FrameViewMode.mergedHorizon, .horizon] {
             if let image = try? await imageAccessor.load(
                    frameIndex: frameIndex, type: type, atSize: .original),
                let horizonMask = image.asHorizonMask,
@@ -2258,16 +2098,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     /// for this frame (either per-frame or global).  Synchronous — no I/O beyond
     /// a file-existence check.
     public var hasHorizonReference: Bool {
-        guard let refinedPath = imageAccessor.nameForImage(
+        guard let mergedPath = imageAccessor.nameForImage(
                 frameIndex: frameIndex,
-                ofType: .refinedHorizon,
+                ofType: .mergedHorizon,
                 atSize: .original
               )
         else { return false }
-        let refinedURL    = URL(fileURLWithPath: refinedPath)
-        let frameFileName = refinedURL.lastPathComponent
-        let referenceDir  = refinedURL
-            .deletingLastPathComponent()    // …/refinedHorizon
+        let mergedURL     = URL(fileURLWithPath: mergedPath)
+        let frameFileName = mergedURL.lastPathComponent
+        let referenceDir  = mergedURL
+            .deletingLastPathComponent()    // …/mergedHorizon
             .deletingLastPathComponent()    // …/output
             .appendingPathComponent("horizonReference")
         return FileManager.default.fileExists(
@@ -2282,6 +2122,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     ///
     /// Priority: **reference** (green) › **merged** (blue) › **initial** (white).
     /// Returns `nil` when no horizon of any kind has been computed yet.
+    ///
     ///
     /// - Parameters:
     ///   - thumbnailWidth:  Width of the thumbnail in pixels.
@@ -2301,14 +2142,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if let refMask = try? await loadHorizonReferenceMask() {
             pixImage = refMask.image
             kind     = .reference
-        } else if let refinedImage = try? await imageAccessor.load(
-                      frameIndex: frameIndex,
-                      type: .refinedHorizon,
-                      atSize: .original)
-        {
-            // Refined horizon is the most accurate auto-computed result; show as blue.
-            pixImage = refinedImage
-            kind     = .merged
         } else if let mergedImage = try? await imageAccessor.load(
                       frameIndex: frameIndex,
                       type: .mergedHorizon,
@@ -2415,17 +2248,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         // 5. Determine save path inside horizonReference/.
-        guard let refinedPath = imageAccessor.nameForImage(
+        guard let mergedPath = imageAccessor.nameForImage(
                 frameIndex: frameIndex,
-                ofType: .refinedHorizon,
+                ofType: .mergedHorizon,
                 atSize: .original
               )
         else {
             throw "saveHorizonReferenceMask: cannot determine output path for frame \(frameIndex)"
         }
-        let refinedURL    = URL(fileURLWithPath: refinedPath)
-        let frameFileName = refinedURL.lastPathComponent
-        let referenceDir  = refinedURL
+        let mergedURL     = URL(fileURLWithPath: mergedPath)
+        let frameFileName = mergedURL.lastPathComponent
+        let referenceDir  = mergedURL
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("horizonReference")

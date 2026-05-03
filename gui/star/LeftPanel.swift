@@ -266,10 +266,6 @@ struct LeftPanel: View {
               ofType: .earthHomography,
               atMax: viewModel.frames.count
             )
-            let hasRefinedHorizonOps = frameGraphViewModel.hasOperations(
-              ofType: .refinedHorizon,
-              atMax: viewModel.frames.count
-            )
             let hasOutlierOps = frameGraphViewModel.hasOperations(
               ofType: .outliers,
               atMax: viewModel.frames.count
@@ -286,7 +282,6 @@ struct LeftPanel: View {
                hasEarthKeypointOps ||
                hasStarHomographyOps ||
                hasEarthHomographyOps ||
-               hasRefinedHorizonOps ||
                hasOutlierOps ||
                hasMergeOps
             {
@@ -324,9 +319,6 @@ struct LeftPanel: View {
                     }
                     if hasEarthHomographyOps {
                         operationView(of: .earthHomography)
-                    }
-                    if hasRefinedHorizonOps {
-                        operationView(of: .refinedHorizon)
                     }
                     if hasOutlierOps {
                         operationView(of: .outliers)

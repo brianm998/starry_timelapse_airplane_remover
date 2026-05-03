@@ -7,7 +7,6 @@ public enum OperationType: String, CaseIterable, Sendable {
     case preview
     case horizon
     case mergedHorizon
-    case refinedHorizon
     case starKeypoints = "star kp"
     case earthKeypoints = "earth kp"
     case starHomography = "star align"
@@ -32,7 +31,6 @@ extension OperationType {
         case .preview:             return 2
         case .horizon:             return 2
         case .mergedHorizon:       return 2
-        case .refinedHorizon:      return 1
         case .starKeypoints:       return 35
         case .earthKeypoints:      return 35
         case .starHomography:      return 0
@@ -165,7 +163,6 @@ public final actor FrameGraphBuilder {
         let hasStaticReferenceHorizon = config.hasStaticReferenceHorizon && !config.tripodHeadWasMoving
         let processEarth = config.allowEarthAlignment &&
           config.tripodHeadWasMoving // keypoints not used when stationary
-        let useHomographyRefinedHorizon = config.useHomographyRefinedHorizon
 
         var mergedHorizonOps: [Int: Operation] = [:]
         var homographyOps: [Operation] = []
@@ -174,7 +171,6 @@ public final actor FrameGraphBuilder {
         var skyKeypointOps: [Int: Operation] = [:]
         var earthKeypointOps: [Int: Operation] = [:]
 
-        var horizonRefinementOps: [Int: Operation] = [:]
         var outlierOps: [Int: OutlierOp] = [:]
 
         var lastIndex = frames.count - 1
@@ -459,26 +455,6 @@ public final actor FrameGraphBuilder {
         homographyOps.forEach { validationOp.addDependency($0) }
         allOps.append(validationOp)
 
-        // ---- 4b. Horizon refinement (per-frame, after validated homography) ----
-        // Only run when horizon detection is enabled and homography refined
-        // horizon is turned on (experimental, off by default).
-        // Skipped when a static reference horizon exists.
-        if hasHorizon && !hasStaticReferenceHorizon && useHomographyRefinedHorizon {
-            for frame in frames {
-                let refinementOp = HorizonRefinementOp(
-                  frame: frame,
-                  rawImageBytes: rawImageBytes
-                ) { errorString in
-                    Task { await errors.append(errorString) }
-                    errorClosure(errorString)
-                }
-                refinementOp.qualityOfService = .userInteractive
-                refinementOp.addDependency(validationOp)
-                allOps.append(refinementOp)
-                horizonRefinementOps[frame.frameIndex] = refinementOp
-            }
-        }
-
         // how many in each direction for final outlier classification
         let numOutlierNeighbors = config.numberFinalProcessingNeighborsNeeded
 
@@ -496,11 +472,6 @@ public final actor FrameGraphBuilder {
                 }
 
                 outlierOp.addDependency(validationOp)
-                // also depend on this frame's horizon refinement so the
-                // refined horizon is available for outlier classification
-                if let refinementOp = horizonRefinementOps[frame.frameIndex] {
-                    outlierOp.addDependency(refinementOp)
-                }
                 allOps.append(outlierOp)
                 outlierOps[frame.frameIndex] = outlierOp
             }
@@ -554,9 +525,9 @@ public final actor FrameGraphBuilder {
         }
     }
     
-    /// Enqueue only MergeOps for the given frames, with no dependencies.
-    /// Used after horizon refinement when alignment output already exists on disk
-    /// and only the merge step needs to re-run with the updated horizon mask.
+    /// Re-enqueue merge for the given frames after a manual horizon reference edit.
+    /// The mergedHorizon has already been recomputed; MergeOp re-composites the
+    /// final image using the updated merged horizon mask.
     public func enqueueMergeOnly(
       frames: [FrameAirplaneRemover],
       errorClosure: @escaping @Sendable (String) -> Void,

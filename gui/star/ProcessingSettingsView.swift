@@ -194,7 +194,6 @@ struct ProcessingSettingsView: View {
 
     @State private var showAlignmentWriteDebugImagesInfo = false
     @State private var showAlignmentAllowEarthAlignmentInfo = false
-    @State private var showUseHomographyRefinedHorizonInfo = false
     @State private var showUseReferenceHorizonSmoothingInfo = false
     @State private var showReferenceHorizonSmoothingMaxDistanceInfo = false
     @State private var showUseReferenceHorizonBrightnessRefinementInfo = false
@@ -234,7 +233,6 @@ struct ProcessingSettingsView: View {
         showAlignmentNeighborThresholdValueInfo ||
         showAlignmentWriteDebugImagesInfo ||
         showAlignmentAllowEarthAlignmentInfo ||
-        showUseHomographyRefinedHorizonInfo ||
         showUseReferenceHorizonSmoothingInfo ||
         showReferenceHorizonSmoothingMaxDistanceInfo ||
         showUseReferenceHorizonBrightnessRefinementInfo ||
@@ -281,7 +279,6 @@ struct ProcessingSettingsView: View {
         showAlignmentNeighborThresholdValueInfo = true
         showAlignmentWriteDebugImagesInfo = true
         showAlignmentAllowEarthAlignmentInfo = true
-        showUseHomographyRefinedHorizonInfo = true
         showUseReferenceHorizonSmoothingInfo = true
         showReferenceHorizonSmoothingMaxDistanceInfo = true
         showUseReferenceHorizonBrightnessRefinementInfo = true
@@ -328,7 +325,6 @@ struct ProcessingSettingsView: View {
         showAlignmentNeighborThresholdValueInfo = false
         showAlignmentWriteDebugImagesInfo = false
         showAlignmentAllowEarthAlignmentInfo = false
-        showUseHomographyRefinedHorizonInfo = false
         showUseReferenceHorizonSmoothingInfo = false
         showReferenceHorizonSmoothingMaxDistanceInfo = false
         showUseReferenceHorizonBrightnessRefinementInfo = false
@@ -473,8 +469,6 @@ struct ProcessingSettingsView: View {
                                   self.l2GradientGridRow
                                   Divider()
                                   self.horizonVerticalShiftAmountView
-                                  Divider()
-                                  self.useHomographyRefinedHorizonView
                                   Divider()
                                   self.useReferenceHorizonSmoothingView
                                   Divider()
@@ -1192,36 +1186,6 @@ struct ProcessingSettingsView: View {
             }
         }
         .disabled(viewModel.sceneType == .skyOnly || viewModel.cleanMethod == .selective)
-    }
-
-    private var useHomographyRefinedHorizonView: some View {
-        @Bindable var viewModel = viewModel
-        return InfoTextInstructionGridRow(
-          showInfo: $showUseHomographyRefinedHorizonInfo,
-          addSpacer: { addSpacer },
-          infoText: """
-            Use experimental homography-based horizon refinement after star alignment.
-            When enabled, Star uses the star alignment homography together with neighbouring frames to refine the per-frame horizon mask.  This can produce a more accurate sky/ground boundary in some scenes, but may produce worse results in others.  Off by default.
-            """
-        ) {
-            HStack {
-                HStack {
-                    Spacer()
-                    Text("Homography Refined Horizon:")
-                      .font(.title2)
-                      .foregroundColor(.white)
-                      .opacity(0.6)
-                }
-                HStack {
-                    Space(width: 10)
-                    Toggle(isOn: $viewModel.useHomographyRefinedHorizon) {
-                        Text("")
-                    }
-                    Spacer()
-                }
-            }
-        }
-        .disabled(viewModel.sceneType == .skyOnly)
     }
 
     private var useReferenceHorizonSmoothingView: some View {

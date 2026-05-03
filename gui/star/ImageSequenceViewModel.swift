@@ -729,14 +729,6 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    var useHomographyRefinedHorizon: Bool {
-        didSet {
-            var realConfig = config.config()
-            realConfig.useHomographyRefinedHorizon = useHomographyRefinedHorizon
-            config.update(realConfig)
-        }
-    }
-
     var useReferenceHorizonSmoothing: Bool {
         didSet {
             var realConfig = config.config()
@@ -861,12 +853,12 @@ public final class ImageSequenceViewModel {
         let toProcess = affectedHorizonRefinementFrameIndices
         let toInvalidate = updatedReferenceHorizonFrameIndices
 
-        // Clear tracking state immediately so UI reflects that work is starting.
         updatedReferenceHorizonFrameIndices = []
         affectedHorizonRefinementFrameIndices = []
-        for i in toProcess where i < frames.count {
-            frames[i].isPendingHorizonRefinement = false
-        }
+        // Leave isPendingHorizonRefinement = true for affected frames so the
+        // filmstrip and frame view show orange horizon lines while re-merge is queued.
+        // It will be cleared per-frame once its merge completes (or immediately below
+        // for frames that have no alignment output and won't be re-merged).
 
         Task.detached(priority: .userInitiated) { [self] in
             for idx in toInvalidate {
@@ -880,7 +872,22 @@ public final class ImageSequenceViewModel {
                     group.addTask {
                         guard i < (await self.frames.count),
                               let frame = await self.frames[i].frame else { return }
+                        // recomputeMergedHorizon sets the frame's state to .mergingHorizon.
+                        // For frames that haven't reached alignment yet, there is no
+                        // subsequent op to advance the state, so they'd show as stuck
+                        // on "horizon" in the filmstrip.  Save state before the call and
+                        // restore it after so only frames being re-queued for MergeOp
+                        // remain at .mergingHorizon (MergeOp will advance them to .complete).
+                        let hasAlignment =
+                            frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
+                                                            ofType: .starAligned, atSize: .original) ||
+                            frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
+                                                            ofType: .earthAligned, atSize: .original)
+                        let stateBeforeMerge = hasAlignment ? nil : await frame.processingState()
                         try? await frame.recomputeMergedHorizon()
+                        if let savedState = stateBeforeMerge {
+                            await frame.set(state: savedState)
+                        }
                         await MainActor.run {
                             self.frames[i].refreshHorizonOverlay()
                             self.frames[i].refreshFrameHorizonOverlay()
@@ -889,26 +896,53 @@ public final class ImageSequenceViewModel {
                 }
             }
             // For every modified frame (interpolated or manually-edited reference)
-            // that was already processed, invalidate its stale alignment output and
-            // re-queue it so the merge runs again with the updated horizon.
+            // that was already processed, delete only its merge output and re-queue
+            // just the merge step. Star/earth alignment output is preserved — the
+            // horizon change only affects how the final image is composited.
             let allModified = toProcess.union(toInvalidate).sorted()
+            var framesToMerge: [FrameAirplaneRemover] = []
             for i in allModified {
                 guard i < (await self.frames.count),
                       let frame = await self.frames[i].frame else { continue }
-                let alreadyProcessed =
+                // Re-queue any frame that already has final output, regardless of whether
+                // it has alignment files. Frames in gaps where alignment was skipped still
+                // have auto-processed output and need their horizon re-composited.
+                let hasOutput =
                     frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
-                                                    ofType: .starAligned, atSize: .original) ||
+                                                    ofType: .autoProcessed, atSize: .original) ||
                     frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
-                                                    ofType: .earthAligned, atSize: .original)
-                guard alreadyProcessed else { continue }
-                try? await frame.invalidateStarAlignmentIfExists()
+                                                    ofType: .autoSelectiveProcessed, atSize: .original) ||
+                    frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
+                                                    ofType: .selectiveProcessed, atSize: .original) ||
+                    frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
+                                                    ofType: .final, atSize: .original)
+                guard hasOutput else {
+                    // Frame hasn't been processed yet — nothing to re-merge, clear orange now.
+                    await MainActor.run { self.frames[i].isPendingHorizonRefinement = false }
+                    continue
+                }
+                await frame.deleteMergeOutput()
                 await MainActor.run {
                     self.frames[i].existingImages.subtract(
-                        [.starAligned, .earthAligned, .subtraction,
-                         .autoProcessed, .autoSelectiveProcessed, .selectiveProcessed, .final]
+                        [.autoProcessed, .autoSelectiveProcessed, .selectiveProcessed, .final]
                     )
-                    self.processFrames(from: i, to: i, performClean: false)
                 }
+                framesToMerge.append(frame)
+            }
+            if !framesToMerge.isEmpty {
+                let mergeIndices = framesToMerge.map { $0.frameIndex }
+                await frameGraphBuilder.enqueueMergeOnly(
+                  frames: framesToMerge,
+                  errorClosure: { errorString in Log.e(errorString) }
+                ) { _ in
+                    Task { @MainActor in
+                        for i in mergeIndices where i < self.frames.count {
+                            self.frames[i].isPendingHorizonRefinement = false
+                        }
+                        self.isProcessingFrames = false
+                    }
+                }
+                await MainActor.run { self.isProcessingFrames = true }
             }
         }
     }
@@ -1211,7 +1245,6 @@ public final class ImageSequenceViewModel {
         self.homographySmoothingEpsilon = config.homographySmoothingEpsilon
         self.horizonVerticalShiftAmount = config.horizonVerticalShiftAmount
         self.allowEarthAlignment = config.allowEarthAlignment
-        self.useHomographyRefinedHorizon = config.useHomographyRefinedHorizon
         self.useReferenceHorizonSmoothing = config.useReferenceHorizonSmoothing
         self.referenceHorizonSmoothingMaxDistance = config.referenceHorizonSmoothingMaxDistance
         self.useReferenceHorizonBrightnessRefinement = config.useReferenceHorizonBrightnessRefinement
@@ -1501,7 +1534,7 @@ public final class ImageSequenceViewModel {
                 self.frames[frame.frameIndex].frameState = newState
 
                 switch newState {
-                case .horizonDetected, .horizonRefined:
+                case .horizonDetected:
                     self.frames[frame.frameIndex].refreshHorizonOverlay()
                     self.frames[frame.frameIndex].refreshFrameHorizonOverlay()
                 default:
