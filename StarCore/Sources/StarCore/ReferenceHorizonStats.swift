@@ -61,10 +61,11 @@ public struct IntensityHistogram: Sendable {
 /// sky/ground classification on nearby frames in a moving video sequence.
 public struct ReferenceHorizonFrameStats: Sendable {
     public let frameIndex: Int
-    /// Normalized intensity histogram of sky pixels in the reference frame.
-    public let skyHistogram: IntensityHistogram
-    /// Normalized intensity histogram of ground pixels in the reference frame.
-    public let groundHistogram: IntensityHistogram
+    /// Per-channel normalized intensity histograms of sky pixels in the reference frame.
+    /// Length equals the source image's `componentsPerPixel` (1 for grayscale, 3 for RGB).
+    public let skyHistograms: [IntensityHistogram]
+    /// Per-channel normalized intensity histograms of ground pixels in the reference frame.
+    public let groundHistograms: [IntensityHistogram]
     /// Minimum horizon Y across all mask columns (highest position the horizon reaches in the image).
     public let minHorizonY: Int
     /// Maximum horizon Y across all mask columns (lowest position the horizon reaches in the image).
@@ -133,46 +134,63 @@ extension PixelatedImage {
         let maxHorizonY = horizonYs.max()!
 
         let maxVal = maxBrightnessValue
-        var skyValues:    [Double] = []
-        var groundValues: [Double] = []
-        skyValues.reserveCapacity((width * minHorizonY) / 16)
-        groundValues.reserveCapacity(max(1, (width * (height - maxHorizonY)) / 16))
+        let cpp = componentsPerPixel
+        var skyByChannel:    [[Double]] = (0..<cpp).map { _ in [] }
+        var groundByChannel: [[Double]] = (0..<cpp).map { _ in [] }
+        for c in 0..<cpp {
+            skyByChannel[c].reserveCapacity((width * minHorizonY) / 16)
+            groundByChannel[c].reserveCapacity(max(1, (width * (height - maxHorizonY)) / 16))
+        }
+        var skyAvg:    [Double] = []
+        var groundAvg: [Double] = []
+        skyAvg.reserveCapacity((width * minHorizonY) / 16)
+        groundAvg.reserveCapacity(max(1, (width * (height - maxHorizonY)) / 16))
 
         let sampleStride = 4
+        var channelBuf = [Double](repeating: 0, count: cpp)
         for y in stride(from: 0, to: height, by: sampleStride) {
             for x in stride(from: 0, to: width, by: sampleStride) {
                 let isSky = maskBuf[y * width + x] > 0
-                let b = normalizedBrightness(x: x, y: y, maxVal: maxVal)
-                if isSky { skyValues.append(b) } else { groundValues.append(b) }
+                fillNormalizedChannelValues(x: x, y: y, maxVal: maxVal, into: &channelBuf)
+                var sum = 0.0
+                if isSky {
+                    for c in 0..<cpp { skyByChannel[c].append(channelBuf[c]); sum += channelBuf[c] }
+                    skyAvg.append(sum / Double(cpp))
+                } else {
+                    for c in 0..<cpp { groundByChannel[c].append(channelBuf[c]); sum += channelBuf[c] }
+                    groundAvg.append(sum / Double(cpp))
+                }
             }
         }
 
-        guard !skyValues.isEmpty, !groundValues.isEmpty else {
+        guard !skyAvg.isEmpty, !groundAvg.isEmpty else {
             Log.w("frame \(frameIndex) computeReferenceHorizonStats: all-sky or all-ground mask")
             return nil
         }
 
-        let skyHist    = IntensityHistogram(values: skyValues,    numBuckets: numBuckets)
-        let groundHist = IntensityHistogram(values: groundValues, numBuckets: numBuckets)
+        let skyHistograms    = skyByChannel.map    { IntensityHistogram(values: $0, numBuckets: numBuckets) }
+        let groundHistograms = groundByChannel.map { IntensityHistogram(values: $0, numBuckets: numBuckets) }
 
-        let medSky    = sortedMedian(&skyValues)
-        let medGround = sortedMedian(&groundValues)
+        let medSky    = sortedMedian(&skyAvg)
+        let medGround = sortedMedian(&groundAvg)
 
         let stats = ReferenceHorizonFrameStats(
             frameIndex: frameIndex,
-            skyHistogram: skyHist,
-            groundHistogram: groundHist,
+            skyHistograms: skyHistograms,
+            groundHistograms: groundHistograms,
             minHorizonY: minHorizonY,
             maxHorizonY: maxHorizonY,
             horizonYPerColumn: horizonYPerColumn,
             medianSkyBrightness: medSky,
             medianGroundBrightness: medGround
         )
-        Log.i("frame \(frameIndex) computeReferenceHorizonStats: " +
+        let skyRanges    = skyHistograms.map    { "[\(String(format:"%.3f", $0.minIntensity)),\(String(format:"%.3f", $0.maxIntensity))]" }.joined(separator: ",")
+        let groundRanges = groundHistograms.map { "[\(String(format:"%.3f", $0.minIntensity)),\(String(format:"%.3f", $0.maxIntensity))]" }.joined(separator: ",")
+        Log.i("frame \(frameIndex) computeReferenceHorizonStats: channels=\(cpp) " +
               "skyMedian=\(String(format:"%.4f", medSky)) " +
               "groundMedian=\(String(format:"%.4f", medGround)) " +
-              "skyRange=[\(String(format:"%.4f", skyHist.minIntensity)),\(String(format:"%.4f", skyHist.maxIntensity))] " +
-              "groundRange=[\(String(format:"%.4f", groundHist.minIntensity)),\(String(format:"%.4f", groundHist.maxIntensity))] " +
+              "skyChRanges=\(skyRanges) " +
+              "groundChRanges=\(groundRanges) " +
               "horizonY=[\(minHorizonY),\(maxHorizonY)]")
         return stats
     }
@@ -190,6 +208,20 @@ extension PixelatedImage {
             for c in 0..<componentsPerPixel { sum += Double(max(0, buf[base + c])) }
         }
         return (sum / Double(componentsPerPixel)) / maxVal
+    }
+
+    /// Fill `out` with normalised [0,1] per-channel values for pixel (x, y).
+    /// `out` must have length >= `componentsPerPixel`.
+    func fillNormalizedChannelValues(x: Int, y: Int, maxVal: Double, into out: inout [Double]) {
+        let base = (y * width + x) * componentsPerPixel
+        switch imageData {
+        case .eightBit(let buf):
+            for c in 0..<componentsPerPixel { out[c] = Double(buf[base + c]) / maxVal }
+        case .sixteenBit(let buf):
+            for c in 0..<componentsPerPixel { out[c] = Double(buf[base + c]) / maxVal }
+        case .thirtyTwoBit(let buf):
+            for c in 0..<componentsPerPixel { out[c] = Double(max(0, buf[base + c])) / maxVal }
+        }
     }
 
     /// The maximum pixel-component value for normalisation to [0, 1].

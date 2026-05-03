@@ -908,6 +908,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         let maxVal = original.maxBrightnessValue
+        let cpp = original.componentsPerPixel
         var outputBytes = [UInt8](detectedBuf)
 
         var refinedCount = 0
@@ -917,6 +918,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // Inside this radius brightness still has meaningful weight; beyond it
         // position dominates and pixels snap toward the expected horizon.
         let positionFullRadius = Double(max(1, searchRadius / 2))
+        // Floor for per-channel histogram lookups so the joint sky/ground
+        // probability does not collapse to zero when one channel value falls
+        // slightly outside an observed range.
+        let probFloor = 1e-4
+
+        // Reusable buffer for per-pixel per-channel values.
+        var channelBuf = [Double](repeating: 0, count: cpp)
 
         for x in 0..<w {
             guard let expY = expectedYPerColumn[x] else { continue }
@@ -926,21 +934,31 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             if bandBottom > maxBandBottom { maxBandBottom = bandBottom }
 
             for y in bandTop...bandBottom {
-                let brightness = original.normalizedBrightness(x: x, y: y, maxVal: maxVal)
+                original.fillNormalizedChannelValues(x: x, y: y, maxVal: maxVal, into: &channelBuf)
 
-                // Histogram-based brightness sky score.
-                var skyRatio    = 0.0
-                var groundRatio = 0.0
+                // Naive-Bayes per-channel histogram lookup.  For each reference
+                // frame we compute the joint sky and ground likelihoods as the
+                // product of per-channel histogram probabilities, then average
+                // those joint likelihoods across reference frames (distance-weighted).
+                var skyAcc    = 0.0
+                var groundAcc = 0.0
                 for (s, nw) in zip(stats, normWeights) {
-                    skyRatio    += nw * s.skyHistogram[brightness]
-                    groundRatio += nw * s.groundHistogram[brightness]
+                    var skyJoint    = 1.0
+                    var groundJoint = 1.0
+                    for c in 0..<cpp {
+                        let v = channelBuf[c]
+                        skyJoint    *= max(probFloor, s.skyHistograms[c][v])
+                        groundJoint *= max(probFloor, s.groundHistograms[c][v])
+                    }
+                    skyAcc    += nw * skyJoint
+                    groundAcc += nw * groundJoint
                 }
                 let brightnessSkyScore: Double
-                let histTotal = skyRatio + groundRatio
-                if histTotal < 1e-10 {
+                let histTotal = skyAcc + groundAcc
+                if histTotal < 1e-12 {
                     brightnessSkyScore = 0.5
                 } else {
-                    brightnessSkyScore = skyRatio / histTotal
+                    brightnessSkyScore = skyAcc / histTotal
                 }
 
                 // Position prior: weight grows quadratically with distance from expectedY,
