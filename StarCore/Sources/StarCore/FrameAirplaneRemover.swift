@@ -3935,7 +3935,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public var userSliceDirname: String {
         get async {
             let config = await configManager.config()
-            return "\(config.outputPath)/\(config.imageSequenceDirname)-star-user-slices"
+            return "\(config.tempOutputPath)/\(config.imageSequenceDirname)-star-user-slices"
         }
     }
 
