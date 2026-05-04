@@ -468,6 +468,7 @@ struct HorizonPainterToolbarView: View {
     @State private var cancelledExplicitly   = false
     @State private var savedAlready          = false
     @State private var tunedParams           = HorizonTunedParameters()
+    @State private var applyToNearbyFrames   = true
 
     var body: some View {
         bottomToolbar
@@ -603,6 +604,13 @@ struct HorizonPainterToolbarView: View {
         Divider().frame(height: 24)
 
         maxDownwardExtensionControl
+
+        Divider().frame(height: 24)
+
+        Toggle("Apply to nearby frames", isOn: $applyToNearbyFrames)
+            .toggleStyle(.switch)
+            .font(.caption)
+            .help("When on, saving this reference will trigger reprocessing of nearby interpolated frames")
 
         Spacer()
 
@@ -865,8 +873,10 @@ struct HorizonPainterToolbarView: View {
                 viewModel.currentFrameView.existingImages.insert(.userHorizon)
                 viewModel.currentFrameView.refreshHorizonOverlay()
                 viewModel.currentFrameView.refreshFrameHorizonOverlay()
-                viewModel.recordReferenceHorizonUpdated(frameIndex: viewModel.currentFrameView.frameIndex)
-                viewModel.reprocessHorizonsForUpdatedReferences()
+                if applyToNearbyFrames {
+                    viewModel.recordReferenceHorizonUpdated(frameIndex: viewModel.currentFrameView.frameIndex)
+                    viewModel.reprocessHorizonsForUpdatedReferences()
+                }
                 viewModel.isShowingHorizonPainter = false
             }
         } catch {
