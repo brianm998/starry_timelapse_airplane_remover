@@ -76,6 +76,19 @@ struct StarCommands: Commands {
                 }
                 .environment(viewModel)
                 .keyboardShortcut("h", modifiers: [])
+
+                // TAB — toggle side panels
+                Button("Toggle Side Panels") {
+                    if viewModel.leftPanelShowing && viewModel.rightPanelShowing {
+                        viewModel.leftPanelShowing = false
+                        viewModel.rightPanelShowing = false
+                    } else {
+                        viewModel.leftPanelShowing = true
+                        viewModel.rightPanelShowing = true
+                    }
+                }
+                .environment(viewModel)
+                .keyboardShortcut(KeyEquivalent("\t"), modifiers: [])
             }
             
         }
