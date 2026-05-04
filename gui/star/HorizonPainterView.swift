@@ -663,25 +663,25 @@ struct HorizonPainterToolbarView: View {
     private var paintEraseButtons: some View {
         if paintState.isErasing {
             Button { paintState.isErasing = false } label: {
-                Label("Paint", systemImage: "paintbrush.fill")
+                Label("Sky", systemImage: "paintbrush.fill")
             }
             .buttonStyle(.bordered)
             .help("Paint sky — adds to the selection (P)")
 
             Button { paintState.isErasing = true } label: {
-                Label("Erase", systemImage: "eraser.fill")
+                Label("Ground", systemImage: "eraser.fill")
             }
             .buttonStyle(.borderedProminent)
             .help("Erase sky — removes from the selection (E)")
         } else {
             Button { paintState.isErasing = false } label: {
-                Label("Paint", systemImage: "paintbrush.fill")
+                Label("Sky", systemImage: "paintbrush.fill")
             }
             .buttonStyle(.borderedProminent)
             .help("Paint sky — adds to the selection (P)")
 
             Button { paintState.isErasing = true } label: {
-                Label("Erase", systemImage: "eraser.fill")
+                Label("Ground", systemImage: "eraser.fill")
             }
             .buttonStyle(.bordered)
             .help("Erase sky — removes from the selection (E)")
