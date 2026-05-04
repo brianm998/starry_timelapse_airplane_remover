@@ -1235,6 +1235,31 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     /// Look for a user-painted reference horizon mask on disk and return it if found.
     ///
     /// Search order:
+    /// Loads the per-frame reference mask only (does NOT fall back to the global
+    /// `reference.tiff`).  Returns non-nil only when this specific frame has its
+    /// own painted reference file in `horizonReference/`.
+    private func loadPerFrameHorizonReferenceMask() async throws -> HorizonMask? {
+        guard let mergedPath = imageAccessor.nameForImage(
+                frameIndex: frameIndex,
+                ofType: .mergedHorizon,
+                atSize: .original
+              )
+        else { return nil }
+
+        let mergedURL   = URL(fileURLWithPath: mergedPath)
+        let frameRefURL = mergedURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("horizonReference")
+            .appendingPathComponent(mergedURL.lastPathComponent)
+
+        guard FileManager.default.fileExists(atPath: frameRefURL.path),
+              let refImage = PixelatedImage(filename: frameRefURL.path)?.asHorizonMask
+        else { return nil }
+
+        return HorizonMask(refImage)
+    }
+
     /// 1. `{horizonReference}/{frameFileName}` — per-frame reference (moving sequences)
     /// 2. `{horizonReference}/reference.tiff`   — global reference (static sequences)
     private func loadHorizonReferenceMask() async throws -> HorizonMask? {
@@ -2215,9 +2240,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let pixImage: PixelatedImage
         let kind: HorizonThumbnailOverlay.Kind
 
-        if let refMask = try? await loadHorizonReferenceMask() {
+        // Per-frame reference (the actual painted frame) → green.
+        // Global-only reference (static timelapse, not the painted frame) → blue.
+        if let refMask = try? await loadPerFrameHorizonReferenceMask() {
             pixImage = refMask.image
             kind     = .reference
+        } else if let refMask = try? await loadHorizonReferenceMask() {
+            pixImage = refMask.image
+            kind     = .merged
         } else if let mergedImage = try? await imageAccessor.load(
                       frameIndex: frameIndex,
                       type: .mergedHorizon,
@@ -2351,6 +2381,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         maskPixelated.writeTIFFEncoding(toFilename: savePath)
         Log.i("frame \(frameIndex) saveHorizonReferenceMask: saved \(savePath)")
+
+        // For static sequences, also write a per-frame marker so this specific frame
+        // can be identified as the painted reference (shown green; others show blue).
+        if !config.tripodHeadWasMoving {
+            let perFramePath = referenceDir.appendingPathComponent(frameFileName).path
+            maskPixelated.writeTIFFEncoding(toFilename: perFramePath)
+            Log.i("frame \(frameIndex) saveHorizonReferenceMask: saved per-frame marker \(perFramePath)")
+        }
     }
 
     // this horizon mask is calculated based upon this frame only.
