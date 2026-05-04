@@ -546,13 +546,14 @@ struct FrameEditView: View {
 struct HorizonPainterStartupInstructionsView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     @State private var isDismissed = false
+    @State private var dontShowAgain = false
 
     private var isMoving: Bool {
         viewModel.horizonPainterStartupFrameIndices.count > 1
     }
 
     var body: some View {
-        if !isDismissed {
+        if !isDismissed && (viewModel.userPreferences.showHorizonPainterInstructions ?? true) {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Selecting the horizon with Star is easy.")
                   .font(.headline)
@@ -588,10 +589,18 @@ If the selection of the sky isn't exactly right, use the brush to either add or 
                       .foregroundColor(.white)
                 }
 
-                Button("Got it") {
-                    withAnimation { isDismissed = true }
+                HStack(spacing: 16) {
+                    Toggle("Don't show again", isOn: $dontShowAgain)
+                      .foregroundColor(.white)
+
+                    Button("Got it") {
+                        if dontShowAgain {
+                            viewModel.userPreferences.showHorizonPainterInstructions = false
+                        }
+                        withAnimation { isDismissed = true }
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
             }
             .padding(16)
             .background(

@@ -98,6 +98,11 @@ struct UserPreferences: Codable, Sendable {
         didSet { self.save() }
     }
 
+    // whether to show the startup instructions overlay in the horizon painter
+    var showHorizonPainterInstructions: Bool? {
+        didSet { self.save() }
+    }
+
     mutating func justOpened(filename: String) {
         self.recentlyOpenedSequencelist[filename] = Date().timeIntervalSince1970
     }
