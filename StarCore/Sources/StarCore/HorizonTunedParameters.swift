@@ -50,6 +50,23 @@ public struct HorizonTunedParameters: Codable, Sendable {
     /// foreground areas on moving-camera timelapses.
     public var maxDownwardExtension: Int = 0
 
+    // MARK: - Canny snap parameters
+
+    /// Half-height (pixels) of the per-column search band used when snapping
+    /// the final horizon Y to the nearest Canny edge.  0 = disabled.
+    /// A value around 20–40 pixels is a good starting point.
+    public var cannySnapRadius: Int = 0
+
+    /// Canny minimum threshold for the snap step.
+    public var cannyMinThreshold: Double = 50
+
+    /// Canny maximum threshold for the snap step.
+    public var cannyMaxThreshold: Double = 150
+
+    /// Proximity radius (pixels) used to prefer edge candidates that also
+    /// fall near the Pass-1 (warped-mask) horizon.  0 = disabled.
+    public var cannyFirstDetectedProximityRadius: Int = 20
+
     // MARK: - Tuning metadata (informational; not used by the detector)
 
     /// Mean absolute Y error (pixels) achieved on the reference frames.

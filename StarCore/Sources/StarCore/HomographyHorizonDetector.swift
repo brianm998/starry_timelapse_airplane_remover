@@ -91,19 +91,53 @@ public struct HomographyHorizonDetector {
     /// cameras where homography shifts the ground boundary).
     public var maxDownwardExtension: Int = 0
 
+    // MARK: - Canny snap parameters
+
+    /// Half-height (in pixels) of the search band around the current per-column
+    /// horizon Y used when snapping to a detected Canny edge.
+    ///
+    /// For each column the snap step looks for edge pixels in the range
+    /// `[finalY - cannySnapRadius, finalY + cannySnapRadius]` and moves the
+    /// horizon Y to the closest one found.  Set to 0 (the default) to skip the
+    /// Canny snap step entirely.  A value around 20–40 pixels is a reasonable
+    /// starting point.
+    public var cannySnapRadius: Int = 30
+
+    /// Canny edge detector minimum threshold for the snap step.
+    public var cannyMinThreshold: Double = 50
+
+    /// Canny edge detector maximum threshold for the snap step.
+    public var cannyMaxThreshold: Double = 150
+
+    /// Radius (in pixels) used to assess proximity to the Pass-1 (warped-mask)
+    /// horizon when choosing among multiple Canny edge candidates within the
+    /// search band.
+    ///
+    /// When `> 0`, candidates that also fall within this many pixels of the
+    /// Pass-1 horizon Y are preferred over candidates that are merely closest
+    /// to the current finalY.  This implements the "closer to the first
+    /// detected horizon → higher confidence" heuristic described in the snap
+    /// step design.  Set to 0 to disable proximity priority (any edge in band
+    /// is equally considered).
+    public var cannyFirstDetectedProximityRadius: Int = 20
+
     public init() {}
 
     // MARK: - Apply persisted parameters
 
     /// Copy all algorithm parameters from a `HorizonTunedParameters` value.
     public mutating func apply(_ params: HorizonTunedParameters) {
-        smoothingRadius       = params.smoothingRadius
-        errorSearchRange      = params.errorSearchRange
-        errorBlurRadius       = params.errorBlurRadius
-        errorThresholdFactor  = params.errorThresholdFactor
-        errorSampleHalfWidth  = params.errorSampleHalfWidth
-        errorOutlierSigma     = params.errorOutlierSigma
-        maxDownwardExtension  = params.maxDownwardExtension
+        smoothingRadius                   = params.smoothingRadius
+        errorSearchRange                  = params.errorSearchRange
+        errorBlurRadius                   = params.errorBlurRadius
+        errorThresholdFactor              = params.errorThresholdFactor
+        errorSampleHalfWidth              = params.errorSampleHalfWidth
+        errorOutlierSigma                 = params.errorOutlierSigma
+        maxDownwardExtension              = params.maxDownwardExtension
+        cannySnapRadius                   = params.cannySnapRadius
+        cannyMinThreshold                 = params.cannyMinThreshold
+        cannyMaxThreshold                 = params.cannyMaxThreshold
+        cannyFirstDetectedProximityRadius = params.cannyFirstDetectedProximityRadius
     }
 
     // MARK: - Prepared data (result of expensive I/O pass)
@@ -136,6 +170,9 @@ public struct HomographyHorizonDetector {
         /// Per-column horizon Y of the current frame's merged mask, used as a
         /// ceiling when `maxDownwardExtension > 0`.  Empty if not supplied.
         public let currentMergedHorizonY: [Int?]
+        /// The current frame's original image, retained for the Canny snap step
+        /// in `detectFromPrepared`.  `nil` when not supplied by the caller.
+        public let currentImage: PixelatedImage?
     }
 
     // MARK: - Public entry points
@@ -244,7 +281,8 @@ public struct HomographyHorizonDetector {
           pass1RawY:             pass1RawY,
           neighborHBlurred:      neighborHBlurred,
           sampleHalfWidth:       errorSampleHalfWidth,
-          currentMergedHorizonY: currentMergedHorizonY
+          currentMergedHorizonY: currentMergedHorizonY,
+          currentImage:          currentImage
         )
     }
 
@@ -379,6 +417,31 @@ public struct HomographyHorizonDetector {
             }
             if clampedCount > 0 {
                 Log.i("HomographyHorizonDetector: ceiling clamp applied to \(clampedCount)/\(currentWidth) columns (maxDownwardExtension=\(maxDownwardExtension))")
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Pass 3 (optional): Canny edge snap.
+        //
+        // For each column, look within ±cannySnapRadius pixels of finalY[x]
+        // for a Canny edge and snap the horizon to the closest one found.
+        // Edges that also fall near the Pass-1 (warped-mask) horizon receive
+        // priority, making them "high-confidence" candidates.
+        // ------------------------------------------------------------------
+        if cannySnapRadius > 0, let image = data.currentImage {
+            if let edgeImage = try? image.cannyEdgeDetect(
+              minThreshold: cannyMinThreshold,
+              maxThreshold: cannyMaxThreshold,
+              useL2Gradient: true)
+            {
+                finalY = cannySnapHorizon(
+                  finalY:     finalY,
+                  edgeImage:  edgeImage,
+                  referenceY: maskY,
+                  width:      currentWidth,
+                  height:     currentHeight)
+            } else {
+                Log.w("HomographyHorizonDetector: Canny edge detection failed; skipping snap step")
             }
         }
 
@@ -551,6 +614,87 @@ public struct HomographyHorizonDetector {
                 }
             }
         }
+        return result
+    }
+
+    // MARK: - Canny edge snap
+
+    /// Snap per-column horizon Y values toward the nearest Canny edge within
+    /// `±cannySnapRadius` pixels of each column's current Y.
+    ///
+    /// For each column:
+    ///   1. Collect all edge pixels in the search band.
+    ///   2. If `cannyFirstDetectedProximityRadius > 0` and a reference Y
+    ///      (`referenceY`, i.e. the Pass-1 warped-mask result) exists for
+    ///      that column, prefer edge candidates that also fall within that
+    ///      proximity radius of the reference — these are "high-confidence"
+    ///      snaps where the edge matches the initial detection.
+    ///   3. Among the chosen candidate pool, pick the edge closest to the
+    ///      current finalY and update the column if it differs.
+    private func cannySnapHorizon(
+      finalY:     [Int?],
+      edgeImage:  PixelatedImage,
+      referenceY: [Int?],
+      width:      Int,
+      height:     Int
+    ) -> [Int?] {
+        let rowStride = edgeImage.bytesPerRow
+        let bpp       = max(1, edgeImage.bytesPerPixel)
+        let buf       = edgeImage.mat.buffer(of: UInt8.self)
+        let refRadius = cannyFirstDetectedProximityRadius
+
+        var result          = finalY
+        var snappedCount    = 0
+        var highConfCount   = 0
+
+        for x in 0..<width {
+            guard let currentY = finalY[x] else { continue }
+            let bandTop    = max(0, currentY - cannySnapRadius)
+            let bandBottom = min(height - 1, currentY + cannySnapRadius)
+            guard bandTop <= bandBottom else { continue }
+
+            // Collect all edge Y values in this column's search band.
+            var edgeYs: [Int] = []
+            for y in bandTop...bandBottom {
+                if buf[y * rowStride + x * bpp] > 128 {
+                    edgeYs.append(y)
+                }
+            }
+            guard !edgeYs.isEmpty else { continue }
+
+            // Choose the best candidate.
+            let refY   = x < referenceY.count ? referenceY[x] : nil
+            let chosen: Int
+            var highConf = false
+
+            if refRadius > 0, let ry = refY {
+                // Candidates near the initial (Pass-1) horizon are preferred.
+                let proxCandidates = edgeYs.filter { abs($0 - ry) <= refRadius }
+                if !proxCandidates.isEmpty {
+                    chosen   = proxCandidates.min(by: { abs($0 - currentY) < abs($1 - currentY) })!
+                    highConf = true
+                } else {
+                    chosen = edgeYs.min(by: { abs($0 - currentY) < abs($1 - currentY) })!
+                }
+            } else {
+                chosen = edgeYs.min(by: { abs($0 - currentY) < abs($1 - currentY) })!
+            }
+
+            if chosen != currentY {
+                result[x] = chosen
+                snappedCount += 1
+                if highConf { highConfCount += 1 }
+            }
+        }
+
+        if snappedCount > 0 {
+            Log.i("HomographyHorizonDetector: Canny snap moved \(snappedCount)/\(width) columns " +
+                  "(\(highConfCount) high-confidence near Pass-1 horizon, " +
+                  "radius=±\(cannySnapRadius)px)")
+        } else {
+            Log.d("HomographyHorizonDetector: Canny snap found no edges to snap to within ±\(cannySnapRadius)px")
+        }
+
         return result
     }
 
