@@ -23,7 +23,8 @@ final class HorizonDetectionOp: AsyncOperation, @unchecked Sendable {
         }
         do {
             Log.d("frame \(frame.frameIndex) starting")
-            _ = try await frame.loadOrCreateHorizonMask()
+            let mask = try await frame.loadOrCreateHorizonMask()
+            await frame.accumulateDetectedHorizon(mask)
             Log.d("frame \(frame.frameIndex) done")
         } catch is CancellationError {
             Log.d("frame \(frame.frameIndex) horizon detection cancelled")

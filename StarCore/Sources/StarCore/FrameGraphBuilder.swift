@@ -177,8 +177,19 @@ public final actor FrameGraphBuilder {
         if let endIndex { lastIndex = endIndex }
 
         var allOps: [Operation] = []
-        
+
         Log.d("processing from frameIndex \(startIndex) to \(lastIndex)")
+
+        // For static sequences without a reference horizon, create a shared accumulator
+        // so that HorizonDetectionOps feed their results in as they complete, avoiding
+        // a full disk reload of all masks during the later HorizonMergeOp.
+        if hasHorizon && !hasStaticReferenceHorizon && !config.tripodHeadWasMoving {
+            let accumulator = HorizonAccumulator(frameCount: frames.count)
+            for frameIndex in startIndex...lastIndex {
+                await frames[frameIndex].setHorizonAccumulator(accumulator)
+            }
+            Log.i("created HorizonAccumulator for \(frames.count) frames")
+        }
 
         // First assemble initial horizon operations,
         // with no dependencies upon any other operations.

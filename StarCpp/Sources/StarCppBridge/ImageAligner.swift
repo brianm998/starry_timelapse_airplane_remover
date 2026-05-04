@@ -177,6 +177,33 @@ public enum ImageAligner {
         return r.map { MatWrapper(ref: $0) }
     }
 
+    /// Add a single in-memory horizon mask to a running CV_32S pixel-count accumulator.
+    /// Pass nil for `accum` on the first call; pass the previous result on subsequent calls.
+    public static func accumulateOneHorizonMask(_ accum: MatWrapper?, mask: MatWrapper) -> MatWrapper? {
+        let r = ia_accumulate_one_horizon_mask(accum?.ref, mask.ref)
+        return r.map { MatWrapper(ref: $0) }
+    }
+
+    /// Load horizon masks from files and add them to an existing CV_32S accumulator.
+    /// Pass nil for `accum` to start a fresh accumulation from the files only.
+    public static func accumulateFromFiles(_ accum: MatWrapper?, filenames: [String]) -> MatWrapper? {
+        guard !filenames.isEmpty else { return accum }
+        let cStrs = filenames.map { strdup($0) }
+        defer { cStrs.forEach { free($0) } }
+        var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
+        let r = ptrs.withUnsafeMutableBufferPointer { buf in
+            ia_accumulate_from_files(accum?.ref, buf.baseAddress, Int32(buf.count))
+        }
+        return r.map { MatWrapper(ref: $0) }
+    }
+
+    /// Apply majority-vote threshold to a CV_32S accumulator and return a binary mask.
+    /// Pixels seen in more than half of `totalCount` frames become white (255), rest black (0).
+    public static func finalizeHorizonAccumulation(_ accum: MatWrapper, totalCount: Int) -> MatWrapper? {
+        let r = ia_finalize_horizon_accumulation(accum.ref, Int32(totalCount))
+        return r.map { MatWrapper(ref: $0) }
+    }
+
     public static func createGradientMaskIntoSky(_ binaryMask: MatWrapper,
                                                    gradientDistance: Int32) -> MatWrapper {
         MatWrapper(ref: ia_gradient_mask_into_sky(binaryMask.ref, gradientDistance))

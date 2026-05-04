@@ -344,6 +344,67 @@ MatWrapperRef ia_accumulate_horizon_masks(const char **filenames, int count) {
     return nullptr;
 }
 
+MatWrapperRef ia_accumulate_one_horizon_mask(MatWrapperRef accum_ref, MatWrapperRef mask_ref) {
+    if (!mask_ref) return accum_ref ? wrap(accum_ref->mat.clone()) : wrap(cv::Mat());
+    try {
+        cv::Mat mask = mask_ref->mat.clone();
+        if (mask.channels() > 1) cv::cvtColor(mask, mask, cv::COLOR_BGR2GRAY);
+        cv::Mat binary;
+        cv::threshold(mask, binary, 0, 1, cv::THRESH_BINARY);
+        cv::Mat frame32s;
+        binary.convertTo(frame32s, CV_32S);
+
+        cv::Mat total;
+        if (accum_ref && !accum_ref->mat.empty()) {
+            total = accum_ref->mat.clone();
+            total += frame32s;
+        } else {
+            total = frame32s;
+        }
+        return wrap(total);
+    } KHT_CATCH_LOG("ia_accumulate_one_horizon_mask")
+    return nullptr;
+}
+
+MatWrapperRef ia_accumulate_from_files(MatWrapperRef accum_ref, const char **filenames, int count) {
+    try {
+        cv::Mat total;
+        if (accum_ref && !accum_ref->mat.empty()) {
+            total = accum_ref->mat.clone();
+        }
+        for (int i = 0; i < count; ++i) {
+            MatWrapperRef ref = image_cache_load(filenames[i]);
+            if (!ref) continue;
+            cv::Mat mat = ref->mat.clone();
+            mat_wrapper_release(ref);
+
+            if (mat.channels() > 1) cv::cvtColor(mat, mat, cv::COLOR_BGR2GRAY);
+            cv::Mat binary;
+            cv::threshold(mat, binary, 0, 1, cv::THRESH_BINARY);
+            cv::Mat frame32s;
+            binary.convertTo(frame32s, CV_32S);
+
+            if (total.empty()) {
+                total = frame32s;
+            } else {
+                total += frame32s;
+            }
+        }
+        return total.empty() ? wrap(cv::Mat()) : wrap(total);
+    } KHT_CATCH_LOG("ia_accumulate_from_files")
+    return nullptr;
+}
+
+MatWrapperRef ia_finalize_horizon_accumulation(MatWrapperRef accum_ref, int32_t total_count) {
+    if (!accum_ref || accum_ref->mat.empty() || total_count <= 0) return wrap(cv::Mat());
+    try {
+        cv::Mat result;
+        cv::compare(accum_ref->mat, cv::Scalar(total_count / 2), result, cv::CMP_GT);
+        return wrap(result);
+    } KHT_CATCH_LOG("ia_finalize_horizon_accumulation")
+    return nullptr;
+}
+
 OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
                                    FeatureMatchMethod matchMethod,
                                    MatWrapperRef mask,

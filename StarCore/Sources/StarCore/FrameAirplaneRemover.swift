@@ -241,6 +241,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     private weak var imageSequence: ImageSequence?
 
+    // Set by FrameGraphBuilder for static sequences; nil for moving sequences.
+    var horizonAccumulator: HorizonAccumulator?
+
+    func setHorizonAccumulator(_ acc: HorizonAccumulator) {
+        horizonAccumulator = acc
+    }
+
+    /// Called by HorizonDetectionOp after a first-round horizon mask is ready.
+    /// No-op if no accumulator has been registered (moving sequences, or reference-horizon sequences).
+    func accumulateDetectedHorizon(_ mask: HorizonMask) async {
+        guard let horizonAccumulator else { return }
+        await horizonAccumulator.accumulate(image: mask.image, frameIndex: frameIndex)
+    }
+
     private var skyKeyPoints: OCVFeatureSet? = nil {
         didSet {
             Log.d("frame \(frameIndex) did set skyKeyPoints \(skyKeyPoints as Any)")
@@ -591,6 +605,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 with: neighboringHorizons,
                 outlierThreshold: await self.pixelThreshold,
                 includeAll: true)
+        } else if let accumulator = horizonAccumulator {
+            // Use the running accumulator that was populated by HorizonDetectionOps.
+            // Any frames not yet accumulated will be loaded from disk here.
+            let imageAccessor = self.imageAccessor
+            mergedHorizonImage = await accumulator.finalize { idx in
+                imageAccessor.nameForImage(frameIndex: idx, ofType: .horizon, atSize: .original)
+            }
         } else {
             mergedHorizonImage = PixelatedImage.accumulatedHorizonMask(fromFilenames: neighboringHorizons)
         }

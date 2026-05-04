@@ -80,6 +80,21 @@ int ia_align_with_homography(int baseFrameIndex,
 // a non-zero (sky) pixel, black (0) otherwise.  Caller must release the result.
 MatWrapperRef ia_accumulate_horizon_masks(const char **filenames, int count);
 
+// Add a single in-memory horizon mask to a running CV_32S pixel-count accumulator.
+// Pass NULL for `accum` on the first call; pass the previous result on subsequent calls.
+// Caller must release the returned ref (and the old accum if replacing it).
+MatWrapperRef ia_accumulate_one_horizon_mask(MatWrapperRef accum, MatWrapperRef mask);
+
+// Load horizon masks from files and add them to an existing CV_32S accumulator.
+// Pass NULL for `accum` to start a fresh accumulation from files only.
+// Caller must release the returned ref.
+MatWrapperRef ia_accumulate_from_files(MatWrapperRef accum, const char **filenames, int count);
+
+// Apply majority-vote threshold to a CV_32S accumulator and return a binary mask.
+// Pixels seen in more than half of `total_count` frames become white (255), rest black (0).
+// Caller must release the returned ref.
+MatWrapperRef ia_finalize_horizon_accumulation(MatWrapperRef accum, int32_t total_count);
+
 // --- Gradient masks ---
 MatWrapperRef ia_gradient_mask_into_sky(MatWrapperRef binaryMask, int gradientDistance);
 MatWrapperRef ia_gradient_mask_into_ground(MatWrapperRef binaryMask, int gradientDistance);
