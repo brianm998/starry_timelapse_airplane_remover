@@ -680,6 +680,33 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         Log.w("unable to get name for merged horizon for frameIndex \(frameIndex)")
                     }
                 }
+
+                // Also persist the median as the global reference horizon for the
+                // whole sequence so loadHorizonReferenceMask() picks it up on
+                // subsequent loads and re-runs can skip horizon detection entirely.
+                if let mergedPath = imageAccessor.nameForImage(
+                     frameIndex: frameIndex,
+                     ofType: .mergedHorizon,
+                     atSize: .original
+                   )
+                {
+                    let referenceDir = URL(fileURLWithPath: mergedPath)
+                        .deletingLastPathComponent()
+                        .deletingLastPathComponent()
+                        .appendingPathComponent("horizonReference")
+                    do {
+                        try FileManager.default.createDirectory(
+                          at: referenceDir,
+                          withIntermediateDirectories: true
+                        )
+                        let referencePath = referenceDir
+                            .appendingPathComponent("reference.tiff").path
+                        cleanedToSave.writeTIFFEncoding(toFilename: referencePath)
+                        Log.i("frame \(frameIndex) saved median horizon as global reference \(referencePath)")
+                    } catch {
+                        Log.w("frame \(frameIndex) could not save global reference horizon: \(error)")
+                    }
+                }
             }
             
             if let bounds = cleanedToSave.horizonBounds() {
