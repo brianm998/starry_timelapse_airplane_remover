@@ -2244,6 +2244,40 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                    atPath: referenceDir.appendingPathComponent("reference.tiff").path)
     }
 
+    /// Loads `.mergedHorizon` for the overlay, retrying briefly when the file
+    /// exists on disk but the load returns nil. Under heavy concurrent I/O
+    /// during reprocessing, transient `cv::imread` failures would otherwise
+    /// leave the overlay stuck on `.initial` (white) for ~1-3% of frames even
+    /// though a valid merged horizon is on disk; a reload of the sequence
+    /// would then "fix" them. See suspect #1 in the white-line investigation.
+    private func loadMergedHorizonForOverlayWithRetry() async -> PixelatedImage? {
+        let maxAttempts = 3
+        for attempt in 0..<maxAttempts {
+            if let img = try? await imageAccessor.load(
+                           frameIndex: frameIndex,
+                           type: .mergedHorizon,
+                           atSize: .original)
+            {
+                if attempt > 0 {
+                    Log.w("frame \(frameIndex) merged-horizon overlay load succeeded on retry attempt \(attempt)")
+                }
+                return img
+            }
+            // Only retry when the file genuinely exists; if the merged horizon
+            // hasn't been computed yet, falling through to .horizon is correct.
+            guard imageAccessor.imageExists(
+                    frameIndex: frameIndex,
+                    ofType: .mergedHorizon,
+                    atSize: .original)
+            else { return nil }
+            if attempt < maxAttempts - 1 {
+                try? await Task.sleep(nanoseconds: 50_000_000) // 50 ms
+            }
+        }
+        Log.w("frame \(frameIndex) merged-horizon overlay load failed \(maxAttempts) times despite file existing on disk; overlay will fall back to white")
+        return nil
+    }
+
     /// Load the best-available horizon for this frame and scale it to thumbnail
     /// dimensions, returning a `HorizonThumbnailOverlay` suitable for drawing
     /// directly on a filmstrip cell.
@@ -2275,11 +2309,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         } else if let refMask = try? await loadHorizonReferenceMask() {
             pixImage = refMask.image
             kind     = .merged
-        } else if let mergedImage = try? await imageAccessor.load(
-                      frameIndex: frameIndex,
-                      type: .mergedHorizon,
-                      atSize: .original)
-        {
+        } else if let mergedImage = await loadMergedHorizonForOverlayWithRetry() {
             pixImage = mergedImage
             kind     = .merged
         } else if let initialImage = try? await imageAccessor.load(
