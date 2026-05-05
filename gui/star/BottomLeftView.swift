@@ -21,35 +21,21 @@ struct BottomLeftView: View {
                 let foobar2 = 138.0/255.0
                 
                 HStack {
-                    ZStack {
-                        Button("") {
-                            self.viewModel.interactionMode = .edit
-                        }
-                          .opacity(0)
-                          .keyboardShortcut("e", modifiers: [])
-                        
-                        Button("") {
-                            self.viewModel.interactionMode = .scrub
-                        }
-                          .opacity(0)
-                          .keyboardShortcut("s", modifiers: [])
-
-                        StarPicker(selection: $viewModel.interactionMode) { value, isEnabled in
-                            Text(value.rawValue)
-                              .foregroundColor(isEnabled ? .black : .yellow)
-                            //                                  .onTapGesture { _ in
-                            //                                      viewModel.frameViewMode = value
-                            //                                  }
-                        }
-                        //.frame(width: pickerWidth)
-                        //                              .background(Color(red: foobar, green: foobar, blue: foobar2))
-                        //                              .cornerRadius(5)
-                          .disabled(viewModel.videoPlaying)
-                          .help("""
-                                  Choose between quickly scrubbing around the video
-                                  and editing an individual frame.
-                                  """)
+                    StarPicker(selection: $viewModel.interactionMode) { value, isEnabled in
+                        Text(value.rawValue)
+                          .foregroundColor(isEnabled ? .black : .yellow)
+                        //                                  .onTapGesture { _ in
+                        //                                      viewModel.frameViewMode = value
+                        //                                  }
                     }
+                    //.frame(width: pickerWidth)
+                    //                              .background(Color(red: foobar, green: foobar, blue: foobar2))
+                    //                              .cornerRadius(5)
+                      .disabled(viewModel.videoPlaying)
+                      .help("""
+                              Choose between quickly scrubbing around the video
+                              and editing an individual frame.
+                              """)
                     Spacer().frame(maxWidth: 6, maxHeight: 10)
                     Text("with")
                       .foregroundColor(.white)

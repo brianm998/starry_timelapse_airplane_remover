@@ -68,6 +68,25 @@ struct StarCommands: Commands {
 
                 Divider()
 
+                // E — switch to edit interaction mode
+                Button("Edit Mode") {
+                    viewModel.interactionMode = .edit
+                }
+                .environment(viewModel)
+                .keyboardShortcut("e", modifiers: [])
+
+                // S — switch to scrub interaction mode.
+                // Disabled while the user is painting horizons on
+                // manual keyframes for a moving video, since switching
+                // interaction mode there leaves the user in a weird state.
+                Button("Scrub Mode") {
+                    viewModel.interactionMode = .scrub
+                }
+                .environment(viewModel)
+                .keyboardShortcut("s", modifiers: [])
+                .disabled(viewModel.isShowingHorizonPainter
+                          && viewModel.horizonPainterMode == .startup)
+
                 // H — toggle the horizon painter overlay
                 Button(viewModel.isShowingHorizonPainter
                        ? "Close Horizon Painter"
