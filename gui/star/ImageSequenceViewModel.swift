@@ -322,10 +322,13 @@ public final class ImageSequenceViewModel {
             var cfg = config.config()
             cfg.hasStaticReferenceHorizon = true
             config.update(cfg)
-            // Refresh every frame so all filmstrip thumbnails pick up the global
-            // reference horizon and display it as a blue line.
+            // Refresh every frame so the filmstrip thumbnails and the main
+            // frame edit view both pick up the global reference horizon and
+            // display it as a blue line.
+
             for frameView in frames {
                 frameView.refreshHorizonOverlay()
+                frameView.refreshFrameHorizonOverlay()
             }
         }
         horizonPainterMode = .normal
