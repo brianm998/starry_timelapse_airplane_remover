@@ -105,7 +105,13 @@ struct FrameEditView: View {
                 } else {
                     Color.clear // placeholder for until we know the geometry
                       .onAppear {
+                          // Sync viewModel.currentZoomScale before the ZoomableView
+                          // first appears, so the imageView's horizon-overlay Canvas
+                          // (which reads viewModel.currentZoomScale to compute a
+                          // zoom-compensated lineWidth) renders correctly on the
+                          // very first frame instead of using the stale default of 1.
                           currentZoomScale = min
+                          viewModel.currentZoomScale = min
                       }
                 }
             }

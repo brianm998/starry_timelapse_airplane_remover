@@ -31,7 +31,6 @@ import logging
 struct HorizonPainterView: View {
 
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-    @Environment(\.displayScale) private var displayScale
 
     /// Shared state owned by the parent (`FrameEditView`).
     let paintState: HorizonPaintState
@@ -106,20 +105,16 @@ struct HorizonPainterView: View {
         let path = paintState.displayPath
         guard !path.isEmpty else { return }
 
-        // Compute screen-stable stroke widths by reading the current CTM scale.
-        // The canvas lives inside ZoomableView's scaleEffect, so the CTM encodes
-        // the zoom factor.  `ctmScale` is in device pixels per canvas unit.
-        // `cpu` (canvas units per screen point) = displayScale / ctmScale.
-        // Multiplying nominal screen sizes by `cpu` keeps strokes visually constant.
-        var ctmScale: CGFloat = displayScale
-        context.withCGContext { cgCtx in
-            ctmScale = hypot(cgCtx.ctm.a, cgCtx.ctm.c)
-        }
-        let cpu      = max(0.001, displayScale / ctmScale)
-        let lw       = 1.5  * cpu
-        let dashLen  = 4.0  * cpu
+        // ZoomableView's scaleEffect is applied at the layer level after the
+        // Canvas has rendered, so it is NOT reflected in the Canvas CGContext
+        // CTM.  Compensate by dividing nominal screen sizes by currentZoomScale
+        // so the stroke and dash render at constant screen size regardless of
+        // zoom level.
+        let zoomScale = max(0.01, viewModel.currentZoomScale)
+        let lw       = 1.5  / zoomScale
+        let dashLen  = 4.0  / zoomScale
         // Phase advances at 20 screen-points/sec — constant speed regardless of zoom.
-        let phase = CGFloat(time * 20.0 * Double(cpu))
+        let phase = CGFloat(time * 20.0 / Double(zoomScale))
             .truncatingRemainder(dividingBy: dashLen * 2)
 
         context.stroke(path, with: .color(.white),
@@ -137,12 +132,12 @@ struct HorizonPainterView: View {
     private func drawCursor(_ context: inout GraphicsContext) {
         guard let pos = mousePosition else { return }
 
-        // Same CTM-based screen-stable scaling as drawMarchingAnts.
-        var ctmScale: CGFloat = displayScale
-        context.withCGContext { cgCtx in
-            ctmScale = hypot(cgCtx.ctm.a, cgCtx.ctm.c)
-        }
-        let cpu = max(0.001, displayScale / ctmScale)
+        // ZoomableView's scaleEffect is applied at the layer level after the
+        // Canvas has rendered, so it is NOT reflected in the Canvas CGContext
+        // CTM.  Compensate by dividing nominal screen sizes by currentZoomScale
+        // so the brush ring, dot, and label all render at constant screen size
+        // regardless of zoom level.
+        let zoomScale = max(0.01, viewModel.currentZoomScale)
 
         // Color and label depend on the current interaction phase.
         let color: Color
@@ -172,23 +167,19 @@ struct HorizonPainterView: View {
         let rect = CGRect(x: pos.x - r, y: pos.y - r, width: r * 2, height: r * 2)
         let ring = Path(ellipseIn: rect)
         context.stroke(ring, with: .color(.black.opacity(0.5)),
-                       style: StrokeStyle(lineWidth: 3.0 * cpu))
+                       style: StrokeStyle(lineWidth: 3.0 / zoomScale))
         context.stroke(ring, with: .color(color),
-                       style: StrokeStyle(lineWidth: 1.5 * cpu))
-        let dotR = 2.0 * cpu
+                       style: StrokeStyle(lineWidth: 1.5 / zoomScale))
+        let dotR = 2.0 / zoomScale
         let dot  = Path(ellipseIn: CGRect(x: pos.x - dotR, y: pos.y - dotR,
                                           width: dotR * 2, height: dotR * 2))
         context.fill(dot, with: .color(color))
 
         // Draw label to the upper-right of the cursor ring.
-        // scaleEffect (from ZoomableView) is NOT reflected in the Canvas CTM, so
-        // we compensate manually: dividing by currentZoomScale keeps the label a
-        // constant size on screen regardless of zoom level.
-        let zoomScale = max(0.01, viewModel.currentZoomScale)
-        let labelOffset: CGFloat = 6.0 * cpu / zoomScale
+        let labelOffset: CGFloat = 6.0 / zoomScale
         let labelOrigin = CGPoint(x: pos.x + r + labelOffset, y: pos.y - r - labelOffset)
         let text = Text(label)
-            .font(.system(size: 11.0 * cpu / zoomScale, weight: .medium))
+            .font(.system(size: 11.0 / zoomScale, weight: .medium))
             .foregroundColor(color)
         context.draw(text, at: labelOrigin, anchor: .bottomLeading)
     }
