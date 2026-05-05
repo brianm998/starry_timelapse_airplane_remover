@@ -173,6 +173,16 @@ public final class ImageSequenceViewModel {
 
     var leftPanelShowing = true
     var rightPanelShowing = true
+
+    func toggleSidePanels() {
+        if leftPanelShowing && rightPanelShowing {
+            leftPanelShowing = false
+            rightPanelShowing = false
+        } else {
+            leftPanelShowing = true
+            rightPanelShowing = true
+        }
+    }
     
     var fastAdvancementType: FastAdvancementType = .normal
 

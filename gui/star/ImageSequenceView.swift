@@ -54,6 +54,9 @@ struct ImageSequenceView: View {
               .padding([.bottom, .leading, .trailing])
               .background(viewModel.backgroundColor)
 
+            TabCatcher { viewModel.toggleSidePanels() }
+                .frame(width: 0, height: 0)
+                .allowsHitTesting(false)
         }
         /* XXX fix this
           .alert(isPresented: $viewModel.showErrorAlert) {

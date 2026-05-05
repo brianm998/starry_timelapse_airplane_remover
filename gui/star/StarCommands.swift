@@ -3,6 +3,38 @@ import StarCore
 
 // this is the menu bar at the top of the screen
 
+// SwiftUI's focus system traps the tab key, so a CommandMenu
+// keyboardShortcut(KeyEquivalent("\t")) never fires. Drop this
+// NSView into the hierarchy to intercept tab keyDown directly.
+struct TabCatcher: NSViewRepresentable {
+    let onTab: () -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = KeyCatchingView()
+        view.onTab = onTab
+        DispatchQueue.main.async {
+            view.window?.makeFirstResponder(view)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? KeyCatchingView)?.onTab = onTab
+    }
+
+    private class KeyCatchingView: NSView {
+        var onTab: (() -> Void)?
+        override var acceptsFirstResponder: Bool { true }
+        override func keyDown(with event: NSEvent) {
+            if event.keyCode == 48 {
+                onTab?()
+            } else {
+                super.keyDown(with: event)
+            }
+        }
+    }
+}
+
 struct StarCommands: Commands {
     @Environment(\.openWindow) private var openWindow
 
@@ -96,18 +128,13 @@ struct StarCommands: Commands {
                 .environment(viewModel)
                 .keyboardShortcut("h", modifiers: [])
 
-                // TAB — toggle side panels
+                // Toggle side panels. The tab keyboard shortcut for this
+                // is handled by TabCatcher inside ImageSequenceView, since
+                // SwiftUI traps tab and won't deliver it to a CommandMenu.
                 Button("Toggle Side Panels") {
-                    if viewModel.leftPanelShowing && viewModel.rightPanelShowing {
-                        viewModel.leftPanelShowing = false
-                        viewModel.rightPanelShowing = false
-                    } else {
-                        viewModel.leftPanelShowing = true
-                        viewModel.rightPanelShowing = true
-                    }
+                    viewModel.toggleSidePanels()
                 }
                 .environment(viewModel)
-                .keyboardShortcut(KeyEquivalent("\t"), modifiers: [])
             }
             
         }
