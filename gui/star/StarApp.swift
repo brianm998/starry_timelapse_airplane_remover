@@ -233,6 +233,10 @@ struct StarApp: App {
               .environment(viewModel)
               .environment(loggingViewModel)
               .environment(StarCore.frameGraphViewModel)
+              .background(MainWindowAccessor { window in
+                  appDelegate.viewModel = viewModel
+                  window.delegate = appDelegate
+              })
               .onAppear {
                   enableGUILogs()
                   setupKHTLogging()

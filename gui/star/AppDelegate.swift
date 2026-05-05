@@ -1,8 +1,9 @@
 import AppKit
+import SwiftUI
 import StarCore
 import logging
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // set by StarApp.onAppear so we can inspect processing state at quit time
     var viewModel: ViewModel?
@@ -28,5 +29,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // user chose Quit Anyway
         return .terminateNow
+    }
+
+    // Closing the main window goes through here so it mirrors Cmd-Q:
+    // confirm if work is in progress, and unload the sequence so the
+    // next time the window opens it starts from the initial view.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard let viewModel = viewModel else { return true }
+
+        if let seq = viewModel.imageSequence, seq.hasPendingWork {
+            let alert = NSAlert()
+            alert.messageText = "Work In Progress"
+            alert.informativeText =
+                "Currently \(seq.pendingWorkDescription). " +
+                "Closing now will interrupt this work."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: "Close Anyway")
+
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                return false
+            }
+        }
+
+        viewModel.unloadSequence()
+        return true
+    }
+}
+
+// Captures the NSWindow that hosts the main ContentView so we can
+// install our NSWindowDelegate on it.
+struct MainWindowAccessor: NSViewRepresentable {
+    let onWindow: (NSWindow) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = WindowReadingView()
+        view.onWindow = onWindow
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? WindowReadingView)?.onWindow = onWindow
+    }
+
+    private final class WindowReadingView: NSView {
+        var onWindow: ((NSWindow) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let window = self.window {
+                onWindow?(window)
+            }
+        }
     }
 }
