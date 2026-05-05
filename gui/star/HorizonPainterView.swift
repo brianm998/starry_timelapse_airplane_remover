@@ -399,6 +399,49 @@ private func triggerObjectSelection(
         localGndCeiling[col] = gndCeiling[col]
     }
 
+    // Smooth the locked-region boundary at the brush X-edges.
+    //
+    // For a circular brush, the per-column locked-sky floor is `cy` at the
+    // leftmost touched column (only one pixel of the circle), so the value
+    // jumps discontinuously between the column just outside the footprint
+    // (skyFloor = bandTop, often dozens of rows higher) and the leftmost
+    // brush column.  The Random Walker's Gauss-Seidel diffusion produces
+    // a noisy probability profile in those step columns, and the
+    // scan-up-from-ground in RandomWalkerHorizon.cpp catches a stray
+    // prob >= 0.5 crossing *below* the real horizon — visible as a small
+    // downward dip right at each X-edge of the brush.
+    //
+    // Taper the locked-region boundary into half the margin so the solver
+    // sees a smooth ramp instead of a step.  Only the side that the
+    // gesture actually moved (sky floor for paint, ground ceiling for
+    // erase) needs to be tapered.  The taper never relaxes a constraint:
+    // on the sky side it pushes the floor down; on the ground side it
+    // pushes the ceiling up.
+    let taperWidth = max(1, margin / 2)
+    if let bounds = paintState.lastGestureBounds {
+        let brushLeft  = max(affectedMin, Int(bounds.minX))
+        let brushRight = min(affectedMax, Int(bounds.maxX))
+        if brushLeft <= brushRight {
+            if isErasingGesture {
+                taperLockedBoundary(&localGndCeiling,
+                                    brushLeft:  brushLeft,
+                                    brushRight: brushRight,
+                                    outerLeft:  affectedMin,
+                                    outerRight: affectedMax,
+                                    taperWidth: taperWidth,
+                                    pushDirection: .up)
+            } else {
+                taperLockedBoundary(&localSkyFloor,
+                                    brushLeft:  brushLeft,
+                                    brushRight: brushRight,
+                                    outerLeft:  affectedMin,
+                                    outerRight: affectedMax,
+                                    taperWidth: taperWidth,
+                                    pushDirection: .down)
+            }
+        }
+    }
+
     let snappedHorizon: [Int?]?
     do {
         snappedHorizon = try await frame.computeRandomWalkerHorizon(
@@ -447,6 +490,62 @@ private func triggerObjectSelection(
 
     paintState.applyExpandedHorizonMask(merged)
     paintState.endExpanding()
+}
+
+// MARK: - Locked-region taper helper
+
+/// Direction the taper pushes a locked-region boundary toward the brush
+/// edge value.  Sky uses `.down` (floor moves to a larger Y); ground uses
+/// `.up` (ceiling moves to a smaller Y).
+private enum BoundaryPushDirection { case up, down }
+
+/// Linearly interpolate a locked-region boundary from `outer` toward the
+/// brush edge value across `taperWidth` columns on each side of the brush
+/// footprint.  Never relaxes the existing constraint: when pushing
+/// `.down`, the new value is `max(prior, tapered)`; when pushing `.up`,
+/// it is `min(prior, tapered)`.
+///
+/// Required to fix a small downward dip in the detected horizon at the
+/// left/right edges of a refinement brush stroke — see the comment at the
+/// call site in `triggerObjectSelection`.
+private func taperLockedBoundary(_ array: inout [Int?],
+                                 brushLeft:  Int,
+                                 brushRight: Int,
+                                 outerLeft:  Int,
+                                 outerRight: Int,
+                                 taperWidth: Int,
+                                 pushDirection: BoundaryPushDirection) {
+    func combine(_ prior: Int, _ tapered: Int) -> Int {
+        switch pushDirection {
+        case .down: return max(prior, tapered)
+        case .up:   return min(prior, tapered)
+        }
+    }
+
+    if let edge = array[brushLeft] {
+        let extendStart = max(outerLeft, brushLeft - taperWidth)
+        let span = brushLeft - extendStart
+        if span > 0 {
+            for col in extendStart..<brushLeft {
+                guard let prior = array[col] else { continue }
+                let t = Double(col - extendStart) / Double(span)
+                let tapered = Int((1.0 - t) * Double(prior) + t * Double(edge))
+                array[col] = combine(prior, tapered)
+            }
+        }
+    }
+    if let edge = array[brushRight] {
+        let extendEnd = min(outerRight, brushRight + taperWidth)
+        let span = extendEnd - brushRight
+        if span > 0 {
+            for col in (brushRight + 1)...extendEnd {
+                guard let prior = array[col] else { continue }
+                let t = Double(extendEnd - col) / Double(span)
+                let tapered = Int((1.0 - t) * Double(prior) + t * Double(edge))
+                array[col] = combine(prior, tapered)
+            }
+        }
+    }
 }
 
 // MARK: - Toolbar (lives outside ZoomableView, always screen-sized)
