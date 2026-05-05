@@ -3736,6 +3736,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let siftMemoryEstimate = UInt64(originalFrame.byteCount) * 8
         await MemoryMonitor.shared.waitForMemory(needed: siftMemoryEstimate)
 
+        // Diagnostic for moving-timelapse painted-reference alignment bug:
+        // log the original image and mask used so a subsequent repro can be
+        // checked for cross-frame contamination of the keypoint detection input.
+        let originalFilename = imageAccessor.nameForImage(
+          frameIndex: frameIndex, ofType: .original, atSize: .original
+        ) ?? "<no name>"
+        Log.i("frame \(frameIndex) findFeatures input: " +
+              "original=\(originalFrame.description) " +
+              "originalFile=\(originalFilename) " +
+              "mask=\(horizonMask?.image.description ?? "<none>")")
+
         if let results = ImageAligner.findFeatures(
              baseImage: originalFrame.mat,
              frameIndex: Int32(frameIndex),
@@ -3775,8 +3786,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     let neighborStarHomographyFilename = "neighbor_star_homography.json"
 
     public func removeNeighborStarHomography() throws {
-        if FileManager.default.fileExists(atPath: neighborStarHomographyFilename) {
-            try FileManager.default.removeItem(atPath: neighborStarHomographyFilename)
+        guard let dirname = imageAccessor.dirForImage(
+                ofType: .starAligned,
+                atSize: .original
+              )
+        else { return }
+        let fullPath = "\(dirname)/\(frameIndex)/\(neighborStarHomographyFilename)"
+        if FileManager.default.fileExists(atPath: fullPath) {
+            try FileManager.default.removeItem(atPath: fullPath)
         }
     }
     
