@@ -536,16 +536,30 @@ public final actor FrameGraphBuilder {
         }
     }
     
-    /// Re-enqueue merge for the given frames after a manual horizon reference edit.
-    /// The mergedHorizon has already been recomputed; MergeOp re-composites the
-    /// final image using the updated merged horizon mask.
-    public func enqueueMergeOnly(
-      frames: [FrameAirplaneRemover],
+    /// Re-enqueue horizon refinement and merge for the given frames after a
+    /// manual horizon reference edit.
+    ///
+    /// - `refinementFrames`: interpolated frames whose merged horizon mask must
+    ///   be recomputed (each gets a `HorizonRefinementOp`).
+    /// - `mergeFrames`: frames with existing output that need re-compositing
+    ///   with the updated horizon (each gets a `MergeOp` depending on the
+    ///   matching refinement op when one exists).
+    /// - `refinementCompletion`: per-frame callback fired when each refinement
+    ///   op finishes — used by callers to refresh overlays.
+    ///
+    /// Running everything through the operation queue means refinement honors
+    /// `numberOfFramesToProcessConcurrently` and the `MemoryMonitor` budget,
+    /// and shows up in the operations panel rather than spawning unbounded
+    /// concurrent tasks.
+    public func enqueueHorizonRefinement(
+      refinementFrames: [FrameAirplaneRemover],
+      mergeFrames: [FrameAirplaneRemover],
+      refinementCompletion: @escaping @Sendable (FrameAirplaneRemover) async -> Void = { _ in },
       errorClosure: @escaping @Sendable (String) -> Void,
-      completion: @escaping ([String]) -> Void
+      completion: @escaping @Sendable ([String]) -> Void
     ) async {
         guard let configManager else {
-            completion(["cannot enqueue merge without config manager"])
+            completion(["cannot enqueue horizon refinement without config manager"])
             return
         }
         let config = await configManager.config()
@@ -554,9 +568,24 @@ public final actor FrameGraphBuilder {
                             UInt64(max(config.imageBytesPerPixel, 1))
 
         let errors = ArrayActor<String>([])
-        var mergeOps: [MergeOp] = []
 
-        for frame in frames {
+        var refinementOps: [Int: HorizonRefinementOp] = [:]
+        for frame in refinementFrames {
+            let op = HorizonRefinementOp(
+              frame: frame,
+              rawImageBytes: rawImageBytes,
+              errorClosure: { errorString in
+                  Task { await errors.append(errorString) }
+                  errorClosure(errorString)
+              },
+              onCompletion: refinementCompletion
+            )
+            op.qualityOfService = .userInteractive
+            refinementOps[frame.frameIndex] = op
+        }
+
+        var mergeOps: [MergeOp] = []
+        for frame in mergeFrames {
             let mergeOp = MergeOp(
               frame: frame,
               rawImageBytes: rawImageBytes,
@@ -566,15 +595,21 @@ public final actor FrameGraphBuilder {
                 errorClosure(errorString)
             }
             mergeOp.qualityOfService = .userInteractive
+            if let refinementOp = refinementOps[frame.frameIndex] {
+                mergeOp.addDependency(refinementOp)
+            }
             mergeOps.append(mergeOp)
         }
 
         let completionOp = GraphCompletionOp {
             completion(await errors.elements())
         }
+        refinementOps.values.forEach { completionOp.addDependency($0) }
         mergeOps.forEach { completionOp.addDependency($0) }
 
-        let allOps: [Operation] = mergeOps + [completionOp]
+        let sortedRefinements = refinementOps.values
+            .sorted { $0.frame.frameIndex < $1.frame.frameIndex }
+        let allOps: [Operation] = sortedRefinements + mergeOps + [completionOp]
         await withCheckedContinuation { continuation in
             queue.addOperations(allOps, waitUntilFinished: false)
             continuation.resume()
