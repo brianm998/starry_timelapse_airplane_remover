@@ -297,32 +297,17 @@ public final class ImageSequenceViewModel {
 
     var renderVideoSheetShowing = false
 
-    // when true, the next presentation of `renderVideoSheetShowing` should
-    // immediately kick off rendering with the current settings instead of
-    // showing the settings/choice view.
-    var renderVideoAutoStart = false
-
-    // controls the "render video after processing?" sheet shown before
-    // processing begins.
-    var preProcessingRenderPromptShowing = false
-
-    // controls the "processing complete, render video?" sheet shown after
-    // processing finishes.
-    var postProcessingRenderPromptShowing = false
-
-    // set by the pre-processing prompt's "Yes" button — when processing
-    // finishes successfully, automatically start a video render.
-    private var autoRenderAfterProcessing = false
-
     /// When `true` the horizon-painting overlay is shown over the frame view.
     var isShowingHorizonPainter = false
 
     /// Differentiates how the horizon painter was opened.
     var horizonPainterMode: HorizonPainterMode = .normal
 
-    /// Raw value of the `StartupState` to restore when the startup sheet re-opens
-    /// after returning from the horizon painter. 0 means "use default (.horizon)".
-    var startupInitialStateRawValue: Int = 0
+    /// Which screen the startup sheet should display.  Owned by the view model
+    /// (rather than `@State` inside `StartupView`) so that the painter exit
+    /// flow can re-route the sheet synchronously without racing against
+    /// SwiftUI's `.onAppear` on sheet re-presentation.
+    var startupState: StartupState = .horizon
 
     /// Frame indices (in the sequence) that the user has chosen to paint horizons for
     /// during the startup flow. Empty for the static single-frame case.
@@ -351,14 +336,9 @@ public final class ImageSequenceViewModel {
         horizonPainterMode = .normal
         horizonPainterStartupFrameIndices = []
         horizonPainterStartupFramePosition = 0
-        startupInitialStateRawValue = 4  // StartupState.removal raw value (enum case 4)
+        startupState = .removal
         isShowingHorizonPainter = false
-        // Defer the sheet re-presentation to the next run-loop cycle so SwiftUI
-        // can finish processing the isShowingHorizonPainter = false change first,
-        // avoiding a race with any in-flight dismiss animation.
-        Task { @MainActor in
-            shouldShowInitialInstructions = true
-        }
+        shouldShowInitialInstructions = true
     }
 
     /// Called by the horizon painter toolbar Cancel in startup flow — returns
@@ -367,11 +347,9 @@ public final class ImageSequenceViewModel {
         horizonPainterMode = .normal
         horizonPainterStartupFrameIndices = []
         horizonPainterStartupFramePosition = 0
-        startupInitialStateRawValue = 1  // StartupState.moving raw value
+        startupState = .moving
         isShowingHorizonPainter = false
-        Task { @MainActor in
-            shouldShowInitialInstructions = true
-        }
+        shouldShowInitialInstructions = true
     }
 
     /// Begins the moving-video startup horizon flow: calculates evenly-spaced frame
@@ -1746,47 +1724,24 @@ public final class ImageSequenceViewModel {
 
     func processAll() {
         Log.d("processAll")
-        // If the user has opted out of render prompts, start immediately.
-        // Otherwise show the pre-processing "render after?" sheet, which
-        // will call beginProcessing() once the user chooses.
-        if userPreferences.skipRenderPromptAfterProcessing == true {
-            autoRenderAfterProcessing = false
-            beginProcessing()
-        } else {
-            preProcessingRenderPromptShowing = true
-        }
-    }
-
-    // Called by PreProcessingRenderPromptView once the user has chosen.
-    // - autoRender: render video automatically after processing succeeds
-    // - dontAskAgain: persist the don't-ask preference (suppresses both prompts going forward)
-    func confirmStartProcessing(autoRender: Bool, dontAskAgain: Bool) {
-        if dontAskAgain {
-            userPreferences.skipRenderPromptAfterProcessing = true
-        }
-        autoRenderAfterProcessing = autoRender
-        preProcessingRenderPromptShowing = false
-        beginProcessing()
-    }
-
-    private func beginProcessing() {
-        Log.d("beginProcessing")
         self.isProcessingFrames = true
         processingGeneration += 1
         let capturedGen = processingGeneration
         if let frame = frames[0].frame {
             Task {
-                Log.d("beginProcessing")
+                Log.d("processAll")
                 await self.process(
                   frame: frame
                 ) { processingState in
-                    Log.d("beginProcessing")
+                    Log.d("processAll")
                     Task { @MainActor in
                         guard self.processingGeneration == capturedGen else { return }
                         self.isProcessingFrames = false
                         switch processingState {
                         case .done:
-                            self.handleProcessingDone()
+                            // XXX show a success sheet before render
+                            // show video render sheet?
+                            self.renderVideoSheetShowing = true
                         case .error(let errorString):
                             Log.e("Error: \(errorString)")
                             self.topViewModel?.report(error: errorString)
@@ -1798,28 +1753,6 @@ public final class ImageSequenceViewModel {
                 }
             }
         }
-    }
-
-    private func handleProcessingDone() {
-        if autoRenderAfterProcessing {
-            // user already said yes in the pre-prompt — render directly
-            autoRenderAfterProcessing = false
-            renderVideoAutoStart = true
-            renderVideoSheetShowing = true
-        } else if userPreferences.skipRenderPromptAfterProcessing != true {
-            // user hasn't suppressed prompts — ask whether to render now
-            postProcessingRenderPromptShowing = true
-        }
-        // otherwise: user has opted out of all render prompts; do nothing
-    }
-
-    // Called by PostProcessingRenderPromptView when the user picks an option.
-    // - autoStart: when true, the render begins immediately on the render sheet;
-    //              when false, the render sheet shows its settings/preview view.
-    func confirmRenderAfterProcessing(autoStart: Bool) {
-        postProcessingRenderPromptShowing = false
-        renderVideoAutoStart = autoStart
-        renderVideoSheetShowing = true
     }
 
     private nonisolated func process(

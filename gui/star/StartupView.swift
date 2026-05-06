@@ -3,47 +3,39 @@ import StarCore
 import logging
 
 
-private enum StartupState: Int, CaseIterable {
+enum StartupState {
     case horizon                // does this sequence have a horizon?
     case moving                 // is the camera moving?
     case selectHorizon          // static + horizon: ask user to paint it themselves
     case selectMovingHorizons   // moving + horizon: ask how many horizons to define
-    case removal                // what kind of removal is desired? (raw value 4)
+    case removal                // what kind of removal is desired?
 }
 
 
 struct StartupView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
-    @State private var state: StartupState = .horizon
-    
     var body: some View {
+        @Bindable var viewModel = viewModel
         VStack(spacing: 0) {
             ZStack {
-                switch state {
+                switch viewModel.startupState {
                 case .horizon:
-                    HorizonView(state: $state)
+                    HorizonView(state: $viewModel.startupState)
                 case .moving:
-                    MovingView(state: $state)
+                    MovingView(state: $viewModel.startupState)
                 case .selectHorizon:
-                    SelectHorizonView(state: $state)
+                    SelectHorizonView(state: $viewModel.startupState)
                 case .selectMovingHorizons:
-                    SelectMovingHorizonsView(state: $state)
+                    SelectMovingHorizonsView(state: $viewModel.startupState)
                 case .removal:
-                    RemovalView(state: $state)
+                    RemovalView(state: $viewModel.startupState)
                 }
             }
-            .animation(.easeInOut(duration: 0.35), value: state)
+            .animation(.easeInOut(duration: 0.35), value: viewModel.startupState)
         }
           .padding(20)
           .background(.gray)
-          .onAppear {
-              let raw = viewModel.startupInitialStateRawValue
-              if raw != 0, let s = StartupState(rawValue: raw) {
-                  withAnimation(.none) { state = s }
-                  viewModel.startupInitialStateRawValue = 0
-              }
-          }
     }
 }
 
