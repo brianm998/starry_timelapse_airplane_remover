@@ -103,6 +103,11 @@ struct UserPreferences: Codable, Sendable {
         didSet { self.save() }
     }
 
+    // when true, suppress the pre- and post-processing "render video?" prompts
+    var skipRenderPromptAfterProcessing: Bool? {
+        didSet { self.save() }
+    }
+
     mutating func justOpened(filename: String) {
         self.recentlyOpenedSequencelist[filename] = Date().timeIntervalSince1970
     }

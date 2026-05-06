@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		D30356DD2E6FDC8B0092140B /* LoggingObjC in Frameworks */ = {isa = PBXBuildFile; productRef = D30356DC2E6FDC8B0092140B /* LoggingObjC */; };
 		D3058E1B2AC0745C00C58F1D /* MultiSelectSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */; };
+		D3A1C0DE000100010001AAA1 /* PreProcessingRenderPromptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A1C0DE000100010001AAA0 /* PreProcessingRenderPromptView.swift */; };
+		D3A1C0DE000300030003AAA3 /* PostProcessingRenderPromptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A1C0DE000300030003AAA2 /* PostProcessingRenderPromptView.swift */; };
 		D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBC299736730001CD0C /* ViewModel.swift */; };
 		D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBE299736730001CD0C /* OutlierGroupView.swift */; };
 		D324257F2EE5030100CEF78F /* ProcessingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D324257E2EE5030100CEF78F /* ProcessingSettingsView.swift */; };
@@ -128,6 +130,8 @@
 
 /* Begin PBXFileReference section */
 		D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MultiSelectSheetView.swift; sourceTree = "<group>"; };
+		D3A1C0DE000100010001AAA0 /* PreProcessingRenderPromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreProcessingRenderPromptView.swift; sourceTree = "<group>"; };
+		D3A1C0DE000300030003AAA2 /* PostProcessingRenderPromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostProcessingRenderPromptView.swift; sourceTree = "<group>"; };
 		D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libStarDecisionTrees.a; path = ../../StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a; sourceTree = "<group>"; };
 		D31F9FBC299736730001CD0C /* ViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewModel.swift; sourceTree = "<group>"; };
 		D31F9FBE299736730001CD0C /* OutlierGroupView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupView.swift; sourceTree = "<group>"; };
@@ -310,6 +314,8 @@
 				D35A28452E4FC8AE007121E6 /* FinderStyleDropZone.swift */,
 				D3E6804A2E424B0700A97C28 /* FocusedField.swift */,
 				D3E680482E3FB75600A97C28 /* RenderVideoSheetView.swift */,
+				D3A1C0DE000100010001AAA0 /* PreProcessingRenderPromptView.swift */,
+				D3A1C0DE000300030003AAA2 /* PostProcessingRenderPromptView.swift */,
 				D333BC0A2E23FF7000569A78 /* EditableNumberView.swift */,
 				D392EB6C2E16C6940020E16A /* Space.swift */,
 				D392EB672E1395CB0020E16A /* DebugView.swift */,
@@ -633,6 +639,8 @@
 				D35A284C2E50E176007121E6 /* ZoomableView.swift in Sources */,
 				D32F6DBA2A4E6FCE00704870 /* BottomRightView.swift in Sources */,
 				D3E680492E3FB75600A97C28 /* RenderVideoSheetView.swift in Sources */,
+				D3A1C0DE000100010001AAA1 /* PreProcessingRenderPromptView.swift in Sources */,
+				D3A1C0DE000300030003AAA3 /* PostProcessingRenderPromptView.swift in Sources */,
 				D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */,
 				D3FBFA232CE91B4700A23FC6 /* ImageSequenceLoadingView.swift in Sources */,
 				D397FEF92E96005500680C78 /* NewReleaseSheetView.swift in Sources */,
@@ -738,7 +746,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = NO;
+				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx14.0;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -792,7 +800,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = NO;
+				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx14.0;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -821,7 +829,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.10.8;
-				ONLY_ACTIVE_ARCH = NO;
+				ONLY_ACTIVE_ARCH = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-weak_framework",
@@ -864,7 +872,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.10.8;
-				ONLY_ACTIVE_ARCH = NO;
+				ONLY_ACTIVE_ARCH = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-weak_framework",

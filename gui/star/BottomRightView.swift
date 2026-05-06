@@ -298,7 +298,18 @@ struct BottomRightView: View {
               }
               .sheet(isPresented: $viewModel.renderVideoSheetShowing) {
                   RenderVideoSheetView(isVisible: $viewModel.renderVideoSheetShowing,
-                                       viewModel: viewModel)
+                                       viewModel: viewModel,
+                                       autoStart: viewModel.renderVideoAutoStart)
+                    .onDisappear {
+                        // reset so a later manual open shows the choice view
+                        viewModel.renderVideoAutoStart = false
+                    }
+              }
+              .sheet(isPresented: $viewModel.preProcessingRenderPromptShowing) {
+                  PreProcessingRenderPromptView()
+              }
+              .sheet(isPresented: $viewModel.postProcessingRenderPromptShowing) {
+                  PostProcessingRenderPromptView()
               }
               .sheet(isPresented: $viewModel.shouldShowProcessingSettings) {
                   ProcessingSettingsView(viewModel: viewModel)

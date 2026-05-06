@@ -24,12 +24,15 @@ struct RenderVideoSheetView: View {
 
     @Binding var isVisible: Bool
     let viewModel: ImageSequenceViewModel
+    let autoStart: Bool
 
     init(isVisible: Binding<Bool>,
-         viewModel: ImageSequenceViewModel)
+         viewModel: ImageSequenceViewModel,
+         autoStart: Bool = false)
     {
         _isVisible = isVisible
         self.viewModel = viewModel
+        self.autoStart = autoStart
         let config = viewModel.config 
         let frameRate = config.config().frameRate 
         _frameRate = State(initialValue: frameRate)
@@ -86,14 +89,48 @@ struct RenderVideoSheetView: View {
     @State private var totalFrames = 0
     
     var body: some View {
-        if isRendering {
-            self.renderingView
-        } else if let renderingError {
-            self.renderingErrorView
-        } else if renderSuccess {
-            self.renderingSuccessView
-        } else {
-            self.renderChoiceView
+        Group {
+            if isRendering {
+                self.renderingView
+            } else if let renderingError {
+                self.renderingErrorView
+            } else if renderSuccess {
+                self.renderingSuccessView
+            } else {
+                self.renderChoiceView
+            }
+        }
+          .onAppear {
+              if autoStart, !isRendering, !renderSuccess, renderingError == nil {
+                  startRender()
+              }
+          }
+    }
+
+    private func startRender() {
+        self.isRendering = true
+        viewModel.renderVideo(named: videoFilename,
+                              frameRate: frameRate,
+                              encoder: encoder,
+                              pixelFormat: pixelFormat,
+                              muxer: muxer)
+        { currentFrame, totalFrames, _ in
+            let progress = Double(currentFrame)/Double(totalFrames)
+            Task { @MainActor in
+                self.encodingProgress = progress
+                self.encodingFrameNumber = currentFrame
+                self.totalFrames = totalFrames
+            }
+        } completion: {
+            Task { @MainActor in
+                self.isRendering = false
+                self.renderSuccess = true
+            }
+        } errorCallback: { error in
+            Task { @MainActor in
+                self.isRendering = false
+                self.renderingError = error
+            }
         }
     }
 
@@ -290,34 +327,7 @@ struct RenderVideoSheetView: View {
                         self.isVisible = false
                     }
                     Button("Render") {
-                        self.isRendering = true
-                        viewModel.renderVideo(named: videoFilename,
-                                              frameRate: frameRate,
-                                              encoder: encoder,
-                                              pixelFormat: pixelFormat,
-                                              muxer: muxer)
-                        { currentFrame, totalFrames, _ in
-                            let progress = Double(currentFrame)/Double(totalFrames)
-                            Task { @MainActor in
-                                self.encodingProgress = progress
-                                self.encodingFrameNumber = currentFrame
-                                self.totalFrames = totalFrames
-                            }
-                        } completion: {
-                            // success
-                            //self.isVisible = false
-                            Task { @MainActor in 
-                                self.isRendering = false
-                                self.renderSuccess  = true
-                            }
-                        } errorCallback: { error in
-                            // error
-                            //self.isVisible = false
-                            Task { @MainActor in 
-                                self.isRendering = false
-                                self.renderingError = error
-                            }
-                        }
+                        startRender()
                     }
                 }
                 Spacer()
