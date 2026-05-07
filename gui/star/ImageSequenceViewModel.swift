@@ -297,6 +297,23 @@ public final class ImageSequenceViewModel {
 
     var renderVideoSheetShowing = false
 
+    // when true, the next presentation of `renderVideoSheetShowing` should
+    // immediately kick off rendering with the current settings instead of
+    // showing the settings/choice view.
+    var renderVideoAutoStart = false
+
+    // controls the "render video after processing?" sheet shown before
+    // processing begins.
+    var preProcessingRenderPromptShowing = false
+
+    // controls the "processing complete, render video?" sheet shown after
+    // processing finishes.
+    var postProcessingRenderPromptShowing = false
+
+    // set by the pre-processing prompt's "Yes" button — when processing
+    // finishes successfully, automatically start a video render.
+    private var autoRenderAfterProcessing = false
+
     /// When `true` the horizon-painting overlay is shown over the frame view.
     var isShowingHorizonPainter = false
 
@@ -1724,24 +1741,47 @@ public final class ImageSequenceViewModel {
 
     func processAll() {
         Log.d("processAll")
+        // If the user has opted out of render prompts, start immediately.
+        // Otherwise show the pre-processing "render after?" sheet, which
+        // will call beginProcessing() once the user chooses.
+        if userPreferences.skipRenderPromptAfterProcessing == true {
+            autoRenderAfterProcessing = false
+            beginProcessing()
+        } else {
+            preProcessingRenderPromptShowing = true
+        }
+    }
+
+    // Called by PreProcessingRenderPromptView once the user has chosen.
+    // - autoRender: render video automatically after processing succeeds
+    // - dontAskAgain: persist the don't-ask preference (suppresses both prompts going forward)
+    func confirmStartProcessing(autoRender: Bool, dontAskAgain: Bool) {
+        if dontAskAgain {
+            userPreferences.skipRenderPromptAfterProcessing = true
+        }
+        autoRenderAfterProcessing = autoRender
+        preProcessingRenderPromptShowing = false
+        beginProcessing()
+    }
+
+    private func beginProcessing() {
+        Log.d("beginProcessing")
         self.isProcessingFrames = true
         processingGeneration += 1
         let capturedGen = processingGeneration
         if let frame = frames[0].frame {
             Task {
-                Log.d("processAll")
+                Log.d("beginProcessing")
                 await self.process(
                   frame: frame
                 ) { processingState in
-                    Log.d("processAll")
+                    Log.d("beginProcessing")
                     Task { @MainActor in
                         guard self.processingGeneration == capturedGen else { return }
                         self.isProcessingFrames = false
                         switch processingState {
                         case .done:
-                            // XXX show a success sheet before render
-                            // show video render sheet?
-                            self.renderVideoSheetShowing = true
+                            self.handleProcessingDone()
                         case .error(let errorString):
                             Log.e("Error: \(errorString)")
                             self.topViewModel?.report(error: errorString)
@@ -1753,6 +1793,28 @@ public final class ImageSequenceViewModel {
                 }
             }
         }
+    }
+
+    private func handleProcessingDone() {
+        if autoRenderAfterProcessing {
+            // user already said yes in the pre-prompt — render directly
+            autoRenderAfterProcessing = false
+            renderVideoAutoStart = true
+            renderVideoSheetShowing = true
+        } else if userPreferences.skipRenderPromptAfterProcessing != true {
+            // user hasn't suppressed prompts — ask whether to render now
+            postProcessingRenderPromptShowing = true
+        }
+        // otherwise: user has opted out of all render prompts; do nothing
+    }
+
+    // Called by PostProcessingRenderPromptView when the user picks an option.
+    // - autoStart: when true, the render begins immediately on the render sheet;
+    //              when false, the render sheet shows its settings/preview view.
+    func confirmRenderAfterProcessing(autoStart: Bool) {
+        postProcessingRenderPromptShowing = false
+        renderVideoAutoStart = autoStart
+        renderVideoSheetShowing = true
     }
 
     private nonisolated func process(
