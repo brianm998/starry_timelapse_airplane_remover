@@ -1448,7 +1448,7 @@ public final class ImageSequenceViewModel {
         }
 
         let frames = await accumulator.allFrames()
-        
+
         // doubly link them here
         await doublyLink(frames: frames)
 
@@ -2523,7 +2523,8 @@ actor FrameAccumulator {
     var numberLoaded = 0
 
     func append(_ frame: FrameAirplaneRemover) -> Int {
-        frames.append(frame)
+        let insertAt = frames.firstIndex { $0.frameIndex > frame.frameIndex } ?? frames.count
+        frames.insert(frame, at: insertAt)
         numberLoaded += 1
         return numberLoaded
     }

@@ -199,11 +199,11 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                 }
                 if let newHomography {
                     let results = HomographyResultsCodable(
-                        for: idx, 
+                        for: frames[idx].frameIndex,
                         with: newHomography
                     )
                     homographies[idx] = results
-                    Log.d("frame \(idx) is getting newHomography \(newHomography)")
+                    Log.d("frame \(frames[idx].frameIndex) is getting newHomography \(newHomography)")
                     await frames[idx].set(
                       neighborStarHomography: results
                     )
