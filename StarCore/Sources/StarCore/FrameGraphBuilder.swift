@@ -173,8 +173,21 @@ public final actor FrameGraphBuilder {
 
         var outlierOps: [Int: OutlierOp] = [:]
 
-        var lastIndex = frames.count - 1
-        if let endIndex { lastIndex = endIndex }
+        // Look up frames by their actual `frameIndex`, never by array index.
+        // The caller is responsible for passing the full sequence, but if
+        // anything ever passes a subset or a scrambled order this lookup
+        // still does the right thing (or returns nil) instead of silently
+        // pulling the wrong frame from a coincidental array slot.
+        let framesByIndex: [Int: FrameAirplaneRemover] = Dictionary(
+          uniqueKeysWithValues: frames.map { ($0.frameIndex, $0) }
+        )
+
+        // The frame-index range to process.  `endIndex` (if given) is a frame
+        // index, so cap at the largest frame index we actually have, not at
+        // `frames.count - 1`.
+        let maxFrameIndex = frames.map(\.frameIndex).max() ?? (startIndex - 1)
+        var lastIndex = maxFrameIndex
+        if let endIndex { lastIndex = min(endIndex, maxFrameIndex) }
 
         var allOps: [Operation] = []
 
@@ -184,9 +197,14 @@ public final actor FrameGraphBuilder {
         // so that HorizonDetectionOps feed their results in as they complete, avoiding
         // a full disk reload of all masks during the later HorizonMergeOp.
         if hasHorizon && !hasStaticReferenceHorizon && !config.tripodHeadWasMoving {
-            let accumulator = HorizonAccumulator(frameCount: frames.count)
+            // HorizonAccumulator sizes its internal table by frameCount and
+            // indexes it directly by frameIndex, so it must cover up through
+            // the largest frame index in the sequence.
+            let accumulator = HorizonAccumulator(frameCount: maxFrameIndex + 1)
             for frameIndex in startIndex...lastIndex {
-                await frames[frameIndex].setHorizonAccumulator(accumulator)
+                if let frame = framesByIndex[frameIndex] {
+                    await frame.setHorizonAccumulator(accumulator)
+                }
             }
             Log.i("created HorizonAccumulator for \(frames.count) frames")
         }
@@ -198,9 +216,8 @@ public final actor FrameGraphBuilder {
           of: HorizonDetectionOp?.self
         ) { taskGroup in
             for frameIndex in startIndex...lastIndex {
+                guard let frame = framesByIndex[frameIndex] else { continue }
                 taskGroup.addTask() {
-                    let frame = frames[frameIndex]
-
                     // 1. Horizon
                     if hasHorizon && !hasStaticReferenceHorizon {
                         let horizonOp = HorizonDetectionOp(
@@ -245,9 +262,8 @@ public final actor FrameGraphBuilder {
                   of: HorizonMergeOp.self
                 ) { taskGroup in
                     for frameIndex in startIndex...lastIndex {
+                        guard let frame = framesByIndex[frameIndex] else { continue }
                         taskGroup.addTask {
-                            let frame = frames[frameIndex]
-                            
                             let horizonOp = HorizonMergeOp(
                               frame: frame,
                               rawImageBytes: rawImageBytes
@@ -279,7 +295,10 @@ public final actor FrameGraphBuilder {
                  execute just one horizon merge op that
                  depends upon all other horizon operations
                  */
-                let frame = frames[startIndex]
+                guard let frame = framesByIndex[startIndex] else {
+                    Log.e("no frame at startIndex \(startIndex), cannot create static HorizonMergeOp")
+                    return
+                }
                 let horizonOp = HorizonMergeOp(
                   frame: frame,
                   rawImageBytes: rawImageBytes
@@ -302,7 +321,7 @@ public final actor FrameGraphBuilder {
         ) { taskGroup in
             // Keypoints depend upon the merged horizon mask for their index
             for frameIndex in startIndex...lastIndex {
-                let frame = frames[frameIndex]
+                guard let frame = framesByIndex[frameIndex] else { continue }
                 taskGroup.addTask {
                     // 2. Keypoints (always sky)
                     let skyKP = KeypointOp(
@@ -356,7 +375,7 @@ public final actor FrameGraphBuilder {
             ) { taskGroup in
                 // Keypoints depend upon the merged horizon mask for their index
                 for frameIndex in startIndex...lastIndex {
-                    let frame = frames[frameIndex]
+                    guard let frame = framesByIndex[frameIndex] else { continue }
                     taskGroup.addTask {
                         // 2b. Earth keypoints (optional)
                         let kp = KeypointOp(
@@ -504,14 +523,17 @@ public final actor FrameGraphBuilder {
             mergeOp.addDependency(validationOp)
 
 
-            // add outlier dependencies for all frames, will be a nop if not using outliers
-            var startOutlierIndex = frame.frameIndex - numOutlierNeighbors
-            var endOutlierIndex = frame.frameIndex + numOutlierNeighbors
-            if startOutlierIndex < 0 { startOutlierIndex = 0 }
-            if endOutlierIndex >= frames.count { endOutlierIndex = frames.count - 1 }
+            // add outlier dependencies for neighbor frames; will be a nop
+            // if this frame doesn't use outliers.  These are frame-index
+            // values, not array indices — clamp against the actual largest
+            // frame index in the sequence.
+            var startOutlierFrameIndex = frame.frameIndex - numOutlierNeighbors
+            var endOutlierFrameIndex = frame.frameIndex + numOutlierNeighbors
+            if startOutlierFrameIndex < 0 { startOutlierFrameIndex = 0 }
+            if endOutlierFrameIndex > maxFrameIndex { endOutlierFrameIndex = maxFrameIndex }
 
-            for i in startOutlierIndex...endOutlierIndex {
-                if let outlierOp = outlierOps[i] {
+            for neighborFrameIndex in startOutlierFrameIndex...endOutlierFrameIndex {
+                if let outlierOp = outlierOps[neighborFrameIndex] {
                     mergeOp.addDependency(outlierOp)
                 }
             }

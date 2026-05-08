@@ -90,31 +90,48 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
     func validateMovingStarAlignment() async {
         Log.d("validateMovingStarAlignment (gap-fill approach) \(frames.count) frames")
 
-        // Collect results ordered by frame index
-
-        var homographies: [HomographyResultsCodable] = []
+        // Build entries that stay parallel to `frames`.  Frames whose
+        // homography is missing are kept (homography == nil) and treated as
+        // bad — squashing them out would mis-align array indices with the
+        // frames array and we would write each fixed homography to the wrong
+        // FrameAirplaneRemover.  Each entry carries its own frame so we never
+        // need to look up `frames[idx]` from a homography-array index.
+        var entries: [GapFillEntry] = []
         for frame in frames {
-            if let homography = await frame.getNeighborStarHomography() {
-                homographies.append(homography)
-            }
+            // also remember each frame's neighbor structure up front, since
+            // for nil-homography entries we still need it when retargeting
+            // a good homography onto this frame.
+            let homography = await frame.getNeighborStarHomography()
+            let neighborFrameIndices = await frame.getAlignmentFrameIndices()
+            entries.append(
+              GapFillEntry(
+                frame: frame,
+                homography: homography,
+                neighborFrameIndices: neighborFrameIndices
+              )
+            )
         }
 
-        guard !homographies.isEmpty else {
+        let nonNilCount = entries.lazy.filter { $0.homography != nil }.count
+        guard nonNilCount > 0 else {
             Log.e("No homography results found")
             errorClosure("no homographies found")
             self.cancel()
             return
         }
-        Log.d("validateMovingStarAlignment (gap-fill approach) \(homographies.count) homographies")
-        
-        // Classify frames
-        let goodFlags = homographies.map(isGood)
+        Log.d("validateMovingStarAlignment (gap-fill approach) \(nonNilCount) homographies of \(entries.count) frames")
 
-        Log.d("found \(goodFlags.count) good flags out of \(homographies.count)")
-        
+        // Classify frames — nil homography is automatically bad.
+        let goodFlags: [Bool] = entries.map { entry in
+            guard let h = entry.homography else { return false }
+            return isGood(h)
+        }
+
+        Log.d("found \(goodFlags.filter { $0 }.count) good flags out of \(entries.count)")
+
         // Find contiguous bad segments
         var i = 0
-        while i < homographies.count {
+        while i < entries.count {
 
             // Skip good frames
             if goodFlags[i] {
@@ -123,7 +140,7 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
             }
 
             let start = i
-            while i < homographies.count && !goodFlags[i] {
+            while i < entries.count && !goodFlags[i] {
                 i += 1
             }
             let end = i - 1   // inclusive
@@ -135,12 +152,12 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
              */
             let leftGood  = bestHomography(
               before: start,
-              in: homographies,
+              in: entries,
               checking: 20
             )
             let rightGood = bestHomography(
               after:  i-1,
-              in: homographies,
+              in: entries,
               checking: 20
             )
 
@@ -148,10 +165,11 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 
             // Apply correction strategy
             for idx in start...end {
-                let bad = homographies[idx]
-                //let t = bad.frameIndex
+                let badEntry = entries[idx]
+                let badFrame = badEntry.frame
+                let neighborFrameIndices = badEntry.neighborFrameIndices
 
-                Log.d("rebuild @ \(idx)")
+                Log.d("rebuild @ idx \(idx) frame \(badFrame.frameIndex)")
 
                 let newHomography: [AlignmentWarpInfoCodable]?
 
@@ -159,38 +177,27 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 
                     // 4a️ Only left side good → flat copy
                 case (let lg?, nil):
-                    newHomography = zip(lg.neighborHomography, bad.neighborHomography).map {
-                        AlignmentWarpInfoCodable(
-                          homography: $0.homography,
-                          deviation: $0.deviation,
-                          alignmentState: .homographySuccess,
-                          frameIndex: $1.frameIndex
-                        )
-                    }
+                    newHomography = retargetNeighborHomography(
+                      from: lg.neighborHomography,
+                      to: neighborFrameIndices
+                    )
 
                     // 4b️ Only right side good → flat copy
                 case (nil, let rg?):
-                    newHomography = zip(rg.neighborHomography, bad.neighborHomography).map {
-                        AlignmentWarpInfoCodable(
-                          homography: $0.homography,
-                          deviation: $0.deviation,
-                          alignmentState: .homographySuccess,
-                          frameIndex: $1.frameIndex
-                        )
-                    }
+                    newHomography = retargetNeighborHomography(
+                      from: rg.neighborHomography,
+                      to: neighborFrameIndices
+                    )
 
                     // 4c️ Both sides good → interpolate
                 case (let lg?, let rg?):
-                    let h0 = lg.neighborHomography
-                    let h1 = rg.neighborHomography
-
                     let alpha = Double(idx - start + 1) /
                       Double(end - start + 2)
 
                     newHomography = interpolateHomography(
-                      h0,
-                      h1,
-                      bad.neighborHomography,
+                      lg.neighborHomography,
+                      rg.neighborHomography,
+                      to: neighborFrameIndices,
                       alpha: alpha
                     )
 
@@ -199,12 +206,12 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                 }
                 if let newHomography {
                     let results = HomographyResultsCodable(
-                        for: frames[idx].frameIndex,
+                        for: badFrame.frameIndex,
                         with: newHomography
                     )
-                    homographies[idx] = results
-                    Log.d("frame \(frames[idx].frameIndex) is getting newHomography \(newHomography)")
-                    await frames[idx].set(
+                    entries[idx].homography = results
+                    Log.d("frame \(badFrame.frameIndex) is getting newHomography \(newHomography)")
+                    await badFrame.set(
                       neighborStarHomography: results
                     )
                 }
@@ -306,17 +313,28 @@ func limitBackward(_ d: inout [Double], maxSlope: Double) {
 }
 
 
+/// One slot of the gap-fill table: a frame, the homography we currently have
+/// for it (may be nil if alignment failed), and that frame's known neighbor
+/// frame indices.  Entries are kept parallel to the validator's `frames`
+/// array, so an array index here always lines up with the same array index
+/// in `frames` — but never with a frame index.
+struct GapFillEntry {
+    let frame: FrameAirplaneRemover
+    var homography: HomographyResultsCodable?
+    let neighborFrameIndices: [Int]
+}
+
 func bestHomography(
   before index: Int,
-  in homographies: [HomographyResultsCodable],
-  checking checkCount: Int = 20 
+  in entries: [GapFillEntry],
+  checking checkCount: Int = 20
 ) -> HomographyResultsCodable? {
     if index <= 0 { return nil }
     let startIndex = index > checkCount ? index - checkCount : 0
     var homographyBasket: [HomographyResultsCodable] = []
     for i in startIndex..<index {
-        if homographies[i].alignmentLooksOk {
-            homographyBasket.append(homographies[i])
+        if let h = entries[i].homography, h.alignmentLooksOk {
+            homographyBasket.append(h)
         }
     }
     return bestMedianHomography(in: homographyBasket)
@@ -324,19 +342,46 @@ func bestHomography(
 
 func bestHomography(
   after index: Int,
-  in homographies: [HomographyResultsCodable],
-  checking checkCount: Int = 20 
+  in entries: [GapFillEntry],
+  checking checkCount: Int = 20
 ) -> HomographyResultsCodable? {
-    if index >= homographies.count { return nil }
+    if index >= entries.count { return nil }
     let startIndex = index+1
-    let endIndex = index + checkCount < homographies.count ? index + checkCount : homographies.count 
+    let endIndex = index + checkCount < entries.count ? index + checkCount : entries.count
     var homographyBasket: [HomographyResultsCodable] = []
     for i in startIndex..<endIndex {
-        if homographies[i].alignmentLooksOk {
-            homographyBasket.append(homographies[i])
+        if let h = entries[i].homography, h.alignmentLooksOk {
+            homographyBasket.append(h)
         }
     }
     return bestMedianHomography(in: homographyBasket)
+}
+
+/// Copy `src`'s homography values onto a new neighbor list whose frame
+/// indices are `targetNeighborFrameIndices`.  Both lists are paired by sorted
+/// position, so the i-th smallest neighbor of the source becomes the i-th
+/// smallest neighbor of the target.  This preserves the relative offset
+/// structure (−4..−1, +1..+4 etc.) without ever assuming the array index
+/// equals a frame index.
+func retargetNeighborHomography(
+    from src: [AlignmentWarpInfoCodable],
+    to targetNeighborFrameIndices: [Int]
+) -> [AlignmentWarpInfoCodable] {
+    let sortedSrc = src.sorted { $0.frameIndex < $1.frameIndex }
+    let sortedTargets = targetNeighborFrameIndices.sorted()
+    var ret: [AlignmentWarpInfoCodable] = []
+    let count = min(sortedSrc.count, sortedTargets.count)
+    for i in 0..<count {
+        ret.append(
+          AlignmentWarpInfoCodable(
+            homography: sortedSrc[i].homography,
+            deviation: sortedSrc[i].deviation,
+            alignmentState: .homographySuccess,
+            frameIndex: sortedTargets[i]
+          )
+        )
+    }
+    return ret
 }
 
 // returns the best median homography sorted by composite deviation from identity
@@ -359,27 +404,26 @@ func isGood(_ r: HomographyResultsCodable) -> Bool {
 func interpolateHomography(
   _ w0: [AlignmentWarpInfoCodable],
   _ w1: [AlignmentWarpInfoCodable],
-  _ bad: [AlignmentWarpInfoCodable],
+  to targetNeighborFrameIndices: [Int],
   alpha: Double
 ) -> [AlignmentWarpInfoCodable] {
     var ret: [AlignmentWarpInfoCodable] = []
     let sortedW0 = w0.sorted { $0.frameIndex < $1.frameIndex }
     let sortedW1 = w1.sorted { $0.frameIndex < $1.frameIndex }
-    let sortedBad = bad.sorted { $0.frameIndex < $1.frameIndex }
-    for i in 0..<min(sortedW0.count, sortedW1.count) {
-        if i < sortedBad.count {
-            ret.append(
-              AlignmentWarpInfoCodable(
-                homography: interpolateHomography(
-                  sortedW0[i].homography ?? [],
-                  sortedW1[i].homography ?? [],
-                  alpha: alpha
-                ),
-                alignmentState: .homographySuccess,
-                frameIndex: sortedBad[i].frameIndex 
-              )
-            )
-        }
+    let sortedTargets = targetNeighborFrameIndices.sorted()
+    let count = min(sortedW0.count, sortedW1.count, sortedTargets.count)
+    for i in 0..<count {
+        ret.append(
+          AlignmentWarpInfoCodable(
+            homography: interpolateHomography(
+              sortedW0[i].homography ?? [],
+              sortedW1[i].homography ?? [],
+              alpha: alpha
+            ),
+            alignmentState: .homographySuccess,
+            frameIndex: sortedTargets[i]
+          )
+        )
     }
     return ret
 }
