@@ -178,15 +178,17 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                     // 4a️ Only left side good → flat copy
                 case (let lg?, nil):
                     newHomography = retargetNeighborHomography(
-                      from: lg.neighborHomography,
-                      to: neighborFrameIndices
+                      from: lg,
+                      toFrameIndex: badFrame.frameIndex,
+                      targetNeighborFrameIndices: neighborFrameIndices
                     )
 
                     // 4b️ Only right side good → flat copy
                 case (nil, let rg?):
                     newHomography = retargetNeighborHomography(
-                      from: rg.neighborHomography,
-                      to: neighborFrameIndices
+                      from: rg,
+                      toFrameIndex: badFrame.frameIndex,
+                      targetNeighborFrameIndices: neighborFrameIndices
                     )
 
                     // 4c️ Both sides good → interpolate
@@ -195,9 +197,9 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                       Double(end - start + 2)
 
                     newHomography = interpolateHomography(
-                      lg.neighborHomography,
-                      rg.neighborHomography,
-                      to: neighborFrameIndices,
+                      lg, rg,
+                      toFrameIndex: badFrame.frameIndex,
+                      targetNeighborFrameIndices: neighborFrameIndices,
                       alpha: alpha
                     )
 
@@ -357,31 +359,37 @@ func bestHomography(
     return bestMedianHomography(in: homographyBasket)
 }
 
-/// Copy `src`'s homography values onto a new neighbor list whose frame
-/// indices are `targetNeighborFrameIndices`.  Both lists are paired by sorted
-/// position, so the i-th smallest neighbor of the source becomes the i-th
-/// smallest neighbor of the target.  This preserves the relative offset
-/// structure (−4..−1, +1..+4 etc.) without ever assuming the array index
-/// equals a frame index.
+/// Copy `src`'s homography values onto a new neighbor list for the target
+/// frame, pairing entries by **offset** (`neighbor.frameIndex −
+/// selfFrameIndex`).  An entry from `src` at offset −2 becomes an entry on
+/// the target at offset −2 (i.e. target's neighbor at `targetFrameIndex −
+/// 2`), and so on.  Pairing by offset means asymmetric neighbor lists (e.g.
+/// edge frames with fewer neighbors, or alignments where some neighbors
+/// failed) can't drift into each other's slots — which would produce a
+/// uniform-translation artifact in the rendered output.  Offsets present
+/// on the source but missing from the target's expected neighbor list are
+/// dropped.
 func retargetNeighborHomography(
-    from src: [AlignmentWarpInfoCodable],
-    to targetNeighborFrameIndices: [Int]
+    from src: HomographyResultsCodable,
+    toFrameIndex targetFrameIndex: Int,
+    targetNeighborFrameIndices: [Int]
 ) -> [AlignmentWarpInfoCodable] {
-    let sortedSrc = src.sorted { $0.frameIndex < $1.frameIndex }
-    let sortedTargets = targetNeighborFrameIndices.sorted()
+    let validTargets = Set(targetNeighborFrameIndices)
     var ret: [AlignmentWarpInfoCodable] = []
-    let count = min(sortedSrc.count, sortedTargets.count)
-    for i in 0..<count {
+    for entry in src.neighborHomography {
+        let offset = entry.frameIndex - src.frameIndex
+        let targetNeighbor = targetFrameIndex + offset
+        guard validTargets.contains(targetNeighbor) else { continue }
         ret.append(
           AlignmentWarpInfoCodable(
-            homography: sortedSrc[i].homography,
-            deviation: sortedSrc[i].deviation,
+            homography: entry.homography,
+            deviation: entry.deviation,
             alignmentState: .homographySuccess,
-            frameIndex: sortedTargets[i]
+            frameIndex: targetNeighbor
           )
         )
     }
-    return ret
+    return ret.sorted { $0.frameIndex < $1.frameIndex }
 }
 
 // returns the best median homography sorted by composite deviation from identity
@@ -401,27 +409,43 @@ func isGood(_ r: HomographyResultsCodable) -> Bool {
 }
 
 
+/// Interpolate two homography sets onto a third (target) frame, pairing
+/// entries by **offset** (`neighbor.frameIndex − selfFrameIndex`).  For each
+/// expected neighbor of the target frame we look up the same offset in
+/// `w0` and `w1`; if both have an entry, we interpolate the homography
+/// matrices and stamp the result on the target's neighbor frame index.  An
+/// offset missing from either side is dropped — better to omit a neighbor
+/// than to mis-pair it and emit a homography for the wrong relative
+/// distance.
 func interpolateHomography(
-  _ w0: [AlignmentWarpInfoCodable],
-  _ w1: [AlignmentWarpInfoCodable],
-  to targetNeighborFrameIndices: [Int],
+  _ w0: HomographyResultsCodable,
+  _ w1: HomographyResultsCodable,
+  toFrameIndex targetFrameIndex: Int,
+  targetNeighborFrameIndices: [Int],
   alpha: Double
 ) -> [AlignmentWarpInfoCodable] {
+    var w0ByOffset: [Int: AlignmentWarpInfoCodable] = [:]
+    for entry in w0.neighborHomography {
+        w0ByOffset[entry.frameIndex - w0.frameIndex] = entry
+    }
+    var w1ByOffset: [Int: AlignmentWarpInfoCodable] = [:]
+    for entry in w1.neighborHomography {
+        w1ByOffset[entry.frameIndex - w1.frameIndex] = entry
+    }
+
     var ret: [AlignmentWarpInfoCodable] = []
-    let sortedW0 = w0.sorted { $0.frameIndex < $1.frameIndex }
-    let sortedW1 = w1.sorted { $0.frameIndex < $1.frameIndex }
-    let sortedTargets = targetNeighborFrameIndices.sorted()
-    let count = min(sortedW0.count, sortedW1.count, sortedTargets.count)
-    for i in 0..<count {
+    for targetNeighborFrameIndex in targetNeighborFrameIndices.sorted() {
+        let offset = targetNeighborFrameIndex - targetFrameIndex
+        guard let w0Entry = w0ByOffset[offset],
+              let w1Entry = w1ByOffset[offset],
+              let w0H = w0Entry.homography,
+              let w1H = w1Entry.homography
+        else { continue }
         ret.append(
           AlignmentWarpInfoCodable(
-            homography: interpolateHomography(
-              sortedW0[i].homography ?? [],
-              sortedW1[i].homography ?? [],
-              alpha: alpha
-            ),
+            homography: interpolateHomography(w0H, w1H, alpha: alpha),
             alignmentState: .homographySuccess,
-            frameIndex: sortedTargets[i]
+            frameIndex: targetNeighborFrameIndex
           )
         )
     }
