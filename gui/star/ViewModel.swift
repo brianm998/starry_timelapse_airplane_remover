@@ -113,7 +113,9 @@ public final class ViewModel {
 
     var newRelease: GitHubRelease? = nil
     var newReleaseSheetShowing = false
-    
+
+    var showUserPreferencesSheet = false
+
     func pushCursor(_ cursor: NSCursor) {
         cursorStack.append(.literal(cursor))
         self.cursor = cursor

@@ -139,9 +139,9 @@ struct StarCommands: Commands {
             
         }
 
-        // remove File -> New Window 
+        // remove File -> New Window
         CommandGroup(replacing: .newItem) { }
-        
+
         // replace File -> Close
         CommandGroup(replacing: .saveItem) {
             Button("Close") {
@@ -159,6 +159,14 @@ struct StarCommands: Commands {
                     }
                 }
             }
+        }
+
+        // Add Preferences to the app menu
+        CommandGroup(replacing: .appSettings) {
+            Button("Preferences") {
+                viewModel.showUserPreferencesSheet = true
+            }
+            .keyboardShortcut(",", modifiers: [.command])
         }
     }
 }
