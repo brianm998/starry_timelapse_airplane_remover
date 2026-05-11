@@ -3575,7 +3575,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
              baseKeypoints: baseKeypoints,
              frameIndex: Int32(frameIndex),
              neighbors: neighbors,
-             matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
+             // BFMatcher's knnMatch with Lowe's ratio test.  Fully
+             // deterministic.  FLANN's KDTree uses random splits in its
+             // internal RNG (not exposed via OpenCV) so the same input could
+             // return slightly different top-2 matches across runs, which
+             // combined with RANSAC variance produced the intermittent
+             // bad-homography frames.
+             matchMethod: .knnLowes,
              alignmentType: alignmentType,
              maxKeypoints: Int32(config.alignmentMaxKeypoints),
              writeDebugImages: config.alignmentWriteDebugImages,
@@ -3750,7 +3756,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if let results = ImageAligner.findFeatures(
              baseImage: originalFrame.mat,
              frameIndex: Int32(frameIndex),
-             matchMethod: .FLANN, //.bruteForce,//.FLANN,//.knnLowes,
+             // findFeatures only does SIFT detection; matchMethod is ignored
+             // here, but kept consistent with computeHomography for clarity.
+             matchMethod: .knnLowes,
              mask: horizonMask?.image.mat,
              alignmentType: alignmentType,       // earth is zero in mask
              maxKeypoints: Int32(config.alignmentMaxKeypoints),
