@@ -561,6 +561,17 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
 
                 if (ptsNeighbor.size() >= 4) {
                     notify(ObjCAlignmentStepAligningNeighbor, ii);
+                    // cv::findHomography with RANSAC draws random subsets via
+                    // cv::theRNG().  Without an explicit seed the chosen
+                    // consensus set varies run-to-run, occasionally producing
+                    // homographies whose deviation magnitude looks fine but
+                    // whose tx/ty are off by several pixels.  Seed
+                    // per (baseFrame, neighborFrame) so the same pair always
+                    // gets the same RANSAC sequence.
+                    uint64_t rngSeed =
+                        (static_cast<uint64_t>(frameIndex) * 2654435761ULL) ^
+                        static_cast<uint64_t>(neighbors[ii].frameIndex);
+                    cv::theRNG() = cv::RNG(rngSeed);
                     cv::Mat H = cv::findHomography(ptsNeighbor, ptsBase, cv::RANSAC, 10);
                     if (!H.empty() && H.type() != CV_64F) H.convertTo(H, CV_64F);
 
