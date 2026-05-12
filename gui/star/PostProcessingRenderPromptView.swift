@@ -20,9 +20,9 @@ struct PostProcessingRenderPromptView: View {
                 Spacer()
 
                 Button("Preview first") {
-                    viewModel.confirmRenderAfterProcessing(autoStart: false)
+                    viewModel.playFinalFrames()
                 }
-                  .help("Open the render settings sheet so you can adjust before rendering.")
+                  .help("Play the final processed frames from the beginning.")
 
                 Button("Yes") {
                     viewModel.confirmRenderAfterProcessing(autoStart: true)

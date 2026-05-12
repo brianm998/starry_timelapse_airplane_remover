@@ -1817,6 +1817,16 @@ public final class ImageSequenceViewModel {
         renderVideoSheetShowing = true
     }
 
+    func playFinalFrames() {
+        postProcessingRenderPromptShowing = false
+        frameViewMode = .final
+        currentIndex = 0
+        videoPlayMode = .forward
+        if !videoPlaying {
+            togglePlay()
+        }
+    }
+
     private nonisolated func process(
       frame: FrameAirplaneRemover,
       startIndex: Int = 0,
