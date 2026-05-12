@@ -799,6 +799,14 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    var referenceHorizonNeighborhoodSize: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.referenceHorizonNeighborhoodSize = referenceHorizonNeighborhoodSize
+            config.update(realConfig)
+        }
+    }
+
     var horizonSpikeRemovalEnabled: Bool {
         didSet {
             var realConfig = config.config()
@@ -1273,6 +1281,7 @@ public final class ImageSequenceViewModel {
         self.useReferenceHorizonBrightnessRefinement = config.useReferenceHorizonBrightnessRefinement
         self.referenceHorizonBrightnessRefinementSearchRadius = config.referenceHorizonBrightnessRefinementSearchRadius
         self.referenceHorizonBrightnessRefinementHistogramBuckets = config.referenceHorizonBrightnessRefinementHistogramBuckets
+        self.referenceHorizonNeighborhoodSize = config.referenceHorizonNeighborhoodSize
         self.horizonSpikeRemovalEnabled = config.horizonSpikeRemovalEnabled
         self.horizonSpikeMaxWidth = config.horizonSpikeMaxWidth
         self.horizonSpikeMaxDeviationFraction = config.horizonSpikeMaxDeviationFraction

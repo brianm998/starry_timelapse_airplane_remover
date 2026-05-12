@@ -32,6 +32,7 @@ enum FocusedField: Hashable {
     case referenceHorizonSmoothingMaxDistance
     case referenceHorizonBrightnessRefinementSearchRadius
     case referenceHorizonBrightnessRefinementHistogramBuckets
+    case referenceHorizonNeighborhoodSize
     case horizonSpikeMaxWidth
     case horizonSpikeMaxDeviationFraction
     case horizonSpikeWindowHalf

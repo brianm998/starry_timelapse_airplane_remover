@@ -357,6 +357,14 @@ public struct Config: Codable, Sendable {
     // sparser bucket counts when few reference pixels are available.
     public var referenceHorizonBrightnessRefinementHistogramBuckets: Int = 256
 
+    // odd side length of the square neighbourhood used when sampling pixel colour/intensity
+    // for reference-horizon statistics and per-pixel refinement.  For a given pixel the
+    // neighbourhood average (excluding cross-boundary pixels in the stats pass) is used
+    // instead of the single centre value, giving more stable colour estimates near the
+    // horizon.  Must be a positive odd integer; even values are treated as the next lower
+    // odd number (e.g. 4 → 3×3).  Set to 1 to use single-pixel sampling (legacy behaviour).
+    public var referenceHorizonNeighborhoodSize: Int = 5
+
     // when true, a spike-removal pass runs on the per-column horizon Y after brightness
     // refinement, eliminating narrow upward protrusions (wind turbines, towers, etc.).
     public var horizonSpikeRemovalEnabled: Bool = true

@@ -557,7 +557,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if config.useReferenceHorizonSmoothing, config.tripodHeadWasMoving {
             let allStats = try await referenceHorizonsWithStats(
               maxCount: 2,
-              numBuckets: config.referenceHorizonBrightnessRefinementHistogramBuckets
+              numBuckets: config.referenceHorizonBrightnessRefinementHistogramBuckets,
+              neighborhoodSize: config.referenceHorizonNeighborhoodSize
             )
             let maxDist = config.referenceHorizonSmoothingMaxDistance
             let nearbyStats = allStats.filter { abs($0.frameIndex - frameIndex) <= maxDist }
@@ -806,7 +807,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     /// Scan the sequence for reference horizon masks, return stats for up to `maxCount`
     /// nearest frames.  Stats are cached in `referenceHorizonStatsCache`.
-    private func referenceHorizonsWithStats(maxCount: Int = 2, numBuckets: Int = 256) async throws -> [ReferenceHorizonFrameStats] {
+    private func referenceHorizonsWithStats(maxCount: Int = 2, numBuckets: Int = 256, neighborhoodSize: Int = 1) async throws -> [ReferenceHorizonFrameStats] {
         guard let imageSequence else { return [] }
         guard let mergedPath = imageAccessor.nameForImage(
                 frameIndex: frameIndex,
@@ -876,7 +877,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 Log.w("frame \(frameIndex) referenceHorizonsWithStats: skipping frame \(candidate.index)")
                 continue
             }
-            guard let stats = original.computeReferenceHorizonStats(frameIndex: candidate.index, mask: mask, numBuckets: numBuckets)
+            guard let stats = original.computeReferenceHorizonStats(frameIndex: candidate.index, mask: mask, numBuckets: numBuckets, neighborhoodSize: neighborhoodSize)
             else { continue }
             await referenceHorizonStatsCache.set(stats)
             result.append(stats)
@@ -948,7 +949,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
       spikeRemovalEnabled: Bool = true,
       spikeMaxWidth: Int = 30,
       spikeMaxDeviationFraction: Double = 0.04,
-      spikeWindowHalf: Int = 150
+      spikeWindowHalf: Int = 150,
+      neighborhoodSize: Int = 1
     ) -> HorizonMask? {
         guard !stats.isEmpty else { return nil }
 
@@ -968,7 +970,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         let maxVal = original.maxBrightnessValue
-        let cpp = original.componentsPerPixel
         var outputBytes = [UInt8](detectedBuf)
 
         var refinedCount = 0
@@ -979,8 +980,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // position dominates and pixels snap toward the expected horizon.
         let positionFullRadius = Double(max(1, searchRadius / 2))
 
-        // Reusable buffer for per-pixel per-channel values.
-        var channelBuf = [Double](repeating: 0, count: cpp)
+        let halfSize = neighborhoodSize / 2
 
         // Precompute log-weights for distance-weighted averaging of per-frame
         // Gaussian likelihoods in log space.
@@ -994,13 +994,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             if bandBottom > maxBandBottom { maxBandBottom = bandBottom }
 
             for y in bandTop...bandBottom {
-                original.fillNormalizedChannelValues(x: x, y: y, maxVal: maxVal, into: &channelBuf)
-                let r: Double, g: Double, bch: Double
-                if cpp >= 3 {
-                    r = channelBuf[0]; g = channelBuf[1]; bch = channelBuf[2]
-                } else {
-                    let v = channelBuf[0]; r = v; g = v; bch = v
-                }
+                let (r, g, bch) = original.neighborhoodAveragedRGB(
+                  x: x, y: y, halfSize: halfSize, maxVal: maxVal
+                )
                 let lab = sRGBtoLAB(r, g, bch)
 
                 // Per-frame log-likelihoods under the sky/ground LAB Gaussians,
@@ -1241,7 +1237,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         let stats = try await referenceHorizonsWithStats(
           maxCount: 2,
-          numBuckets: config.referenceHorizonBrightnessRefinementHistogramBuckets
+          numBuckets: config.referenceHorizonBrightnessRefinementHistogramBuckets,
+          neighborhoodSize: config.referenceHorizonNeighborhoodSize
         )
         guard !stats.isEmpty else { return mask }
 
@@ -1267,7 +1264,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           spikeRemovalEnabled: config.horizonSpikeRemovalEnabled,
           spikeMaxWidth: config.horizonSpikeMaxWidth,
           spikeMaxDeviationFraction: config.horizonSpikeMaxDeviationFraction,
-          spikeWindowHalf: config.horizonSpikeWindowHalf
+          spikeWindowHalf: config.horizonSpikeWindowHalf,
+          neighborhoodSize: config.referenceHorizonNeighborhoodSize
         ) ?? mask
     }
 

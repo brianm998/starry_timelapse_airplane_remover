@@ -219,7 +219,8 @@ extension PixelatedImage {
     func computeReferenceHorizonStats(
       frameIndex: Int,
       mask: HorizonMask,
-      numBuckets: Int = 256
+      numBuckets: Int = 256,
+      neighborhoodSize: Int = 1
     ) -> ReferenceHorizonFrameStats? {
         guard width == mask.image.width, height == mask.image.height else {
             Log.w("frame \(frameIndex) computeReferenceHorizonStats: size mismatch " +
@@ -252,18 +253,14 @@ extension PixelatedImage {
         groundAvg.reserveCapacity(groundLab.capacity)
 
         let sampleStride = 4
-        var channelBuf = [Double](repeating: 0, count: cpp)
+        let halfSize = neighborhoodSize / 2
         for y in stride(from: 0, to: height, by: sampleStride) {
             for x in stride(from: 0, to: width, by: sampleStride) {
                 let isSky = maskBuf[y * width + x] > 0
-                fillNormalizedChannelValues(x: x, y: y, maxVal: maxVal, into: &channelBuf)
-                let r: Double, g: Double, bch: Double
-                if cpp >= 3 {
-                    r = channelBuf[0]; g = channelBuf[1]; bch = channelBuf[2]
-                } else {
-                    let v = channelBuf[0]
-                    r = v; g = v; bch = v
-                }
+                let (r, g, bch) = neighborhoodAveragedRGB(
+                  x: x, y: y, halfSize: halfSize, maxVal: maxVal,
+                  maskBuf: maskBuf, isSky: isSky
+                )
                 let lab = sRGBtoLAB(r, g, bch)
                 let avg = (r + g + bch) / 3.0
                 if isSky {
@@ -310,6 +307,84 @@ extension PixelatedImage {
               "groundLAB=\(groundMeans) " +
               "horizonY=[\(minHorizonY),\(maxHorizonY)]")
         return stats
+    }
+
+    /// Return the neighbourhood-averaged normalised RGB for pixel (x, y) over a
+    /// `(2*halfSize+1)²` window.  When `maskBuf` is non-nil only neighbours whose
+    /// mask value (`> 0` means sky) matches `isSky` are included; the centre pixel
+    /// always qualifies since the caller already confirmed its classification.
+    func neighborhoodAveragedRGB(
+      x: Int, y: Int, halfSize: Int, maxVal: Double,
+      maskBuf: UnsafeBufferPointer<UInt8>? = nil,
+      isSky: Bool = false
+    ) -> (r: Double, g: Double, b: Double) {
+        guard halfSize > 0 else {
+            var buf = [Double](repeating: 0, count: max(3, componentsPerPixel))
+            fillNormalizedChannelValues(x: x, y: y, maxVal: maxVal, into: &buf)
+            let r = buf[0], g = componentsPerPixel >= 3 ? buf[1] : buf[0], b = componentsPerPixel >= 3 ? buf[2] : buf[0]
+            return (r, g, b)
+        }
+        let cpp = componentsPerPixel
+        let xMin = max(0, x - halfSize), xMax = min(width - 1, x + halfSize)
+        let yMin = max(0, y - halfSize), yMax = min(height - 1, y + halfSize)
+        var sumR = 0.0, sumG = 0.0, sumB = 0.0, count = 0.0
+        switch imageData {
+        case .eightBit(let imgBuf):
+            for ny in yMin...yMax {
+                for nx in xMin...xMax {
+                    if let mb = maskBuf, (mb[ny * width + nx] > 0) != isSky { continue }
+                    let base = (ny * width + nx) * cpp
+                    if cpp >= 3 {
+                        sumR += Double(imgBuf[base]) / maxVal
+                        sumG += Double(imgBuf[base + 1]) / maxVal
+                        sumB += Double(imgBuf[base + 2]) / maxVal
+                    } else {
+                        let v = Double(imgBuf[base]) / maxVal
+                        sumR += v; sumG += v; sumB += v
+                    }
+                    count += 1
+                }
+            }
+        case .sixteenBit(let imgBuf):
+            for ny in yMin...yMax {
+                for nx in xMin...xMax {
+                    if let mb = maskBuf, (mb[ny * width + nx] > 0) != isSky { continue }
+                    let base = (ny * width + nx) * cpp
+                    if cpp >= 3 {
+                        sumR += Double(imgBuf[base]) / maxVal
+                        sumG += Double(imgBuf[base + 1]) / maxVal
+                        sumB += Double(imgBuf[base + 2]) / maxVal
+                    } else {
+                        let v = Double(imgBuf[base]) / maxVal
+                        sumR += v; sumG += v; sumB += v
+                    }
+                    count += 1
+                }
+            }
+        case .thirtyTwoBit(let imgBuf):
+            for ny in yMin...yMax {
+                for nx in xMin...xMax {
+                    if let mb = maskBuf, (mb[ny * width + nx] > 0) != isSky { continue }
+                    let base = (ny * width + nx) * cpp
+                    if cpp >= 3 {
+                        sumR += Double(max(0, imgBuf[base])) / maxVal
+                        sumG += Double(max(0, imgBuf[base + 1])) / maxVal
+                        sumB += Double(max(0, imgBuf[base + 2])) / maxVal
+                    } else {
+                        let v = Double(max(0, imgBuf[base])) / maxVal
+                        sumR += v; sumG += v; sumB += v
+                    }
+                    count += 1
+                }
+            }
+        }
+        guard count > 0 else {
+            var buf = [Double](repeating: 0, count: max(3, cpp))
+            fillNormalizedChannelValues(x: x, y: y, maxVal: maxVal, into: &buf)
+            let r = buf[0], g = cpp >= 3 ? buf[1] : buf[0], b = cpp >= 3 ? buf[2] : buf[0]
+            return (r, g, b)
+        }
+        return (sumR / count, sumG / count, sumB / count)
     }
 
     /// Average normalised [0,1] brightness of pixel (x, y) across all channels.

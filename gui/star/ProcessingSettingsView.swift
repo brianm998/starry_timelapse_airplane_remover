@@ -199,6 +199,7 @@ struct ProcessingSettingsView: View {
     @State private var showUseReferenceHorizonBrightnessRefinementInfo = false
     @State private var showReferenceHorizonBrightnessRefinementSearchRadiusInfo = false
     @State private var showReferenceHorizonBrightnessRefinementHistogramBucketsInfo = false
+    @State private var showReferenceHorizonNeighborhoodSizeInfo = false
     @State private var showHorizonSpikeRemovalEnabledInfo = false
     @State private var showHorizonSpikeMaxWidthInfo = false
     @State private var showHorizonSpikeMaxDeviationFractionInfo = false
@@ -479,6 +480,8 @@ struct ProcessingSettingsView: View {
                                   self.referenceHorizonBrightnessRefinementSearchRadiusView
                                   Divider()
                                   self.referenceHorizonBrightnessRefinementHistogramBucketsView
+                                  Divider()
+                                  self.referenceHorizonNeighborhoodSizeView
                                   Divider()
                                   self.horizonSpikeRemovalEnabledView
                                   Divider()
@@ -1371,6 +1374,49 @@ struct ProcessingSettingsView: View {
                       textColor: .white,
                       focusedField: $focusedField,
                       focusField: .referenceHorizonBrightnessRefinementHistogramBuckets,
+                      alwaysOpen: true
+                    )
+                    Spacer()
+                }
+            }
+        }
+        .disabled(viewModel.sceneType == .skyOnly || viewModel.cameraMotion == .fixed ||
+                  !viewModel.useReferenceHorizonBrightnessRefinement)
+    }
+
+    private var referenceHorizonNeighborhoodSizeView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showReferenceHorizonNeighborhoodSizeInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            The side length of the square neighbourhood used when sampling pixel colour and \
+            intensity for reference-horizon statistics and per-pixel refinement. For each pixel, \
+            values from the neighbourhood are averaged (excluding pixels on the opposite side of \
+            the horizon mask in the stats pass) to produce a more stable colour estimate. Use an \
+            odd number (e.g. 1, 3, 5, 7); even values are treated as the next lower odd. Set to \
+            1 to use single-pixel sampling. Default is 5 (5×5 neighbourhood).
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Reference Horizon Neighbourhood Size:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.referenceHorizonNeighborhoodSize,
+                      minValue: 1,
+                      maxValue: 99,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .referenceHorizonNeighborhoodSize,
                       alwaysOpen: true
                     )
                     Spacer()
