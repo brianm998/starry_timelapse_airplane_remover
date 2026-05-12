@@ -425,8 +425,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     .autoProcessed, .autoSelectiveProcessed, .selectiveProcessed, .final],
           atSizes: [.original, .preview]
         )
-        try removeNumberOfAlignedImagesForThisFrameFile()
-        try removeNeighborStarHomography()
+        try await removeNumberOfAlignedImagesForThisFrameFile()
+        try await removeNeighborStarHomography()
         // Clear in-memory homography caches so reprocessing recomputes them
         // rather than reusing the stale cached values.
         self.neighborStarHomography = nil
@@ -3398,20 +3398,24 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func set(neighborStarHomography: HomographyResultsCodable) {
         self.neighborStarHomography = neighborStarHomography
-        do {
-            try self.write(neighborStarHomography: neighborStarHomography.neighborHomography)
-            Log.i("frame \(frameIndex) set star homography: \(neighborStarHomography.neighborHomography)")
-        } catch {
-            Log.e("frame \(frameIndex) unable to set star homography: \(error)")
+        Log.i("frame \(frameIndex) set star homography: \(neighborStarHomography.neighborHomography)")
+        Task {
+            do {
+                try await self.write(neighborStarHomography: neighborStarHomography.neighborHomography)
+            } catch {
+                Log.e("frame \(frameIndex) unable to persist star homography: \(error)")
+            }
         }
     }
-    
+
     public func set(neighborEarthHomography: HomographyResultsCodable) {
         self.neighborEarthHomography = neighborEarthHomography
-        do {
-            try self.write(neighborEarthHomography: neighborEarthHomography.neighborHomography)
-        } catch {
-            Log.e("frame \(frameIndex) unable to set star homography: \(error)")
+        Task {
+            do {
+                try await self.write(neighborEarthHomography: neighborEarthHomography.neighborHomography)
+            } catch {
+                Log.e("frame \(frameIndex) unable to persist earth homography: \(error)")
+            }
         }
     }
     
@@ -3627,15 +3631,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // save homography results for later
             switch type {
             case .starAligned:
-                try self.write(
-                  neighborStarHomography: alignedWarps
-                )
+                try await self.write(neighborStarHomography: alignedWarps)
                 // store results in ram for lookup later
                 self.neighborStarHomography = ret
             case .earthAligned:
-                try self.write(
-                  neighborEarthHomography: alignedWarps
-                )
+                try await self.write(neighborEarthHomography: alignedWarps)
                 // store results in ram for lookup later
                 self.neighborEarthHomography = ret
             default:
@@ -3791,138 +3791,78 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return nil
     }    
     
-    let neighborStarHomographyFilename = "neighbor_star_homography.json"
+    let neighborStarHomographyFilename  = "neighbor_star_homography.json"
+    let neighborEarthHomographyFilename = "neighbor_earth_homography.json"
 
-    public func removeNeighborStarHomography() throws {
-        guard let dirname = imageAccessor.dirForImage(
-                ofType: .starAligned,
-                atSize: .original
-              )
-        else { return }
-        let fullPath = "\(dirname)/\(frameIndex)/\(neighborStarHomographyFilename)"
-        if FileManager.default.fileExists(atPath: fullPath) {
-            try FileManager.default.removeItem(atPath: fullPath)
-        }
+    public func removeNeighborStarHomography() async throws {
+        try? await configManager.homographyDatabase.delete(frameIndex: frameIndex, type: .star)
+        deleteHomographyJSONFile(neighborStarHomographyFilename)
     }
-    
-    private func write(
-      neighborStarHomography: [AlignmentWarpInfoCodable]
-    ) throws {
+
+    private func write(neighborStarHomography: [AlignmentWarpInfoCodable]) async throws {
         Log.d("frame \(frameIndex) writing \(neighborStarHomography.count) neighborStarHomographies")
-        if let results = try write(
-             homography: neighborStarHomography,
-             to: neighborStarHomographyFilename
-           ),
-           let observer
-        {
+        let results = HomographyResultsCodable(for: frameIndex, with: neighborStarHomography)
+        try await configManager.homographyDatabase.write(frameIndex: frameIndex, type: .star, results: results)
+        if let observer {
             Log.d("frame \(frameIndex) notifying observer of star alignment results")
-            Task { await observer.set(starAlignmentResults: results) }
+            await observer.set(starAlignmentResults: results)
         }
     }
 
-    private func write(
-      homography: [AlignmentWarpInfoCodable],
-      to filename: String
-    ) throws -> HomographyResultsCodable? {
-        if let dirname = imageAccessor.dirForImage(
-          ofType: .starAligned,
-          atSize: .original
-        ) {
-            Log.d("frame \(frameIndex) write \(homography.count) homographies to \(filename)")
-            let dirname = "\(dirname)/\(frameIndex)"
-            StarCore.mkdir(dirname)
-            // write a text file with
+    private func write(neighborEarthHomography: [AlignmentWarpInfoCodable]) async throws {
+        let results = HomographyResultsCodable(for: frameIndex, with: neighborEarthHomography)
+        try await configManager.homographyDatabase.write(frameIndex: frameIndex, type: .earth, results: results)
+        if let observer {
+            await observer.set(earthAlignmentResults: results)
+        }
+    }
 
-            let results = HomographyResultsCodable(
-              for: frameIndex,
-              with: homography
-            )
-            
-            let encoder = JSONEncoder()
-            do {
-                let jsonData = try encoder.encode(results)
-                
-                let fullPath = "\(dirname)/\(filename)"
-                if FileManager.default.fileExists(atPath: fullPath) {
-                    try FileManager.default.removeItem(atPath: fullPath)
-                } 
-                Log.i("creating \(fullPath)")                      
-                _ = FileManager.default.createFile(
-                  atPath: fullPath,
-                  contents: jsonData,
-                  attributes: nil
-                )
-            } catch {
-                Log.e("\(error)")
-            }
-            return results
-        } else {
+    public func readStarNeighborHomographyForThisFrame() async -> HomographyResultsCodable? {
+        await readHomographyResults(type: .star)
+    }
+
+    public func readEarthNeighborHomographyForThisFrame() async -> HomographyResultsCodable? {
+        await readHomographyResults(type: .earth)
+    }
+
+    private func readHomographyResults(type: HomographyDatabase.HomographyType) async -> HomographyResultsCodable? {
+        let db = configManager.homographyDatabase
+        if let result = try? await db.read(frameIndex: frameIndex, type: type) {
+            return result
+        }
+        // Migration path: read legacy JSON file, write to DB, delete the file
+        let filename = type == .star ? neighborStarHomographyFilename : neighborEarthHomographyFilename
+        guard let result = await readHomographyFromJSONFile(filename) else { return nil }
+        try? await db.write(frameIndex: frameIndex, type: type, results: result)
+        deleteHomographyJSONFile(filename)
+        return result
+    }
+
+    private func readHomographyFromJSONFile(_ filename: String) async -> HomographyResultsCodable? {
+        guard let dirname = imageAccessor.dirForImage(ofType: .starAligned, atSize: .original) else {
+            return nil
+        }
+        do {
+            let fullPath = "\(dirname)/\(frameIndex)/\(filename)"
+            let url = NSURL(fileURLWithPath: fullPath, isDirectory: false) as URL
+            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
+            return try JSONDecoder().decode(HomographyResultsCodable.self, from: data)
+        } catch {
             return nil
         }
     }
-    
-    public func readStarNeighborHomographyForThisFrame() async -> HomographyResultsCodable? {
-        await readHomographyResults(from: neighborStarHomographyFilename)
+
+    private func deleteHomographyJSONFile(_ filename: String) {
+        guard let dirname = imageAccessor.dirForImage(ofType: .starAligned, atSize: .original) else { return }
+        try? FileManager.default.removeItem(atPath: "\(dirname)/\(frameIndex)/\(filename)")
     }
 
-    private func readHomographyResults(from filename: String) async -> HomographyResultsCodable? {
-        if let dirname = imageAccessor.dirForImage(ofType: .starAligned,
-                                                   atSize: .original)
-        {
-            do {
-                let dirname = "\(dirname)/\(frameIndex)"
-                StarCore.mkdir(dirname)
-
-                let fullPath = "\(dirname)/\(filename)"
-                let url = NSURL(
-                  fileURLWithPath: fullPath,
-                  isDirectory: false
-                ) as URL
-                
-                let (data, _) = try await URLSession.shared.data(
-                  for: URLRequest(
-                       url: url
-                     )
-                )
-                let decoder = JSONDecoder()
-                return try decoder.decode(HomographyResultsCodable.self, from: data)
-            } catch {
-                //Log.i("Error: \(error)")
-                return nil
-            }
+    public func removeNumberOfAlignedImagesForThisFrameFile() async throws {
+        try? await configManager.homographyDatabase.deleteAll(frameIndex: frameIndex)
+        // Also clean up any legacy JSON files from pre-DB runs
+        if let dirname = imageAccessor.dirForImage(ofType: .starAligned, atSize: .original) {
+            try? removeFiles(withSuffix: ".json", in: "\(dirname)/\(frameIndex)")
         }
-        return nil
-    }
-    
-    public func removeNumberOfAlignedImagesForThisFrameFile() throws {
-        // get rid of any existing .txt files
-        if let dirname = imageAccessor.dirForImage(ofType: .starAligned,
-                                                   atSize: .original)
-        {
-            let dirname = "\(dirname)/\(frameIndex)"
-            StarCore.mkdir(dirname)
-            try? removeFiles(withSuffix: ".json", in: dirname)
-        } 
-    }
-        
-    let neighborEarthHomographyFilename = "neighbor_earth_homography.json"
-
-    private func write(
-      neighborEarthHomography: [AlignmentWarpInfoCodable]
-    ) throws {
-        if let results = try write(
-             homography: neighborEarthHomography,
-             to: neighborEarthHomographyFilename
-           ),
-           let observer
-        {
-            Task { await observer.set(earthAlignmentResults: results) }
-        }
-    }
-
-
-    public func readEarthNeighborHomographyForThisFrame() async -> HomographyResultsCodable? {
-        await readHomographyResults(from: neighborEarthHomographyFilename)
     }
 
     public func deleteAllProcessedImages() {

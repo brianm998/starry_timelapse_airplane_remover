@@ -49,17 +49,23 @@ public class ConfigManager {
     /// This allows subsequent frames to narrow their search based on what worked
     /// for previous frames in the same sequence.
     public let adaptiveHorizonState = AdaptiveHorizonState()
-    
+
+    /// Shared SQLite database for neighbor homography results.
+    /// All frames in a sequence share one instance via their shared ConfigManager.
+    public let homographyDatabase: HomographyDatabase
+
     public init() {
         _jsonFilename = ""
         _config = Config()
+        homographyDatabase = HomographyDatabase(tempOutputPath: _config.tempOutputPath)
     }
 
     public init(configFilename: String, config: Config) {
         self._jsonFilename = configFilename
         self._config = config
+        homographyDatabase = HomographyDatabase(tempOutputPath: config.tempOutputPath)
     }
-    
+
     public init(configFilename: String) throws {
         self._jsonFilename = configFilename
         if FileManager.default.fileExists(atPath: _jsonFilename) {
@@ -67,6 +73,7 @@ public class ConfigManager {
         } else {
             self._config = Config()
         }
+        homographyDatabase = HomographyDatabase(tempOutputPath: _config.tempOutputPath)
     }
 
     public func onUpdate(closure: @escaping @Sendable (Config) -> Void) {
