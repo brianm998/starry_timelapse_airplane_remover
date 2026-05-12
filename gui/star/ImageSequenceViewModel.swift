@@ -1654,6 +1654,9 @@ public final class ImageSequenceViewModel {
 
 
     fileprivate var videoPlaybackTask: Task<Void,Never>?
+
+    private let videoPrefetchLookahead = 30
+    var videoPrefetchCache: [Int: NSImage] = [:]
     
     var outlierLoadingProgress: Double {
         if imageSequenceSize == 0 { return 0 }
@@ -2323,22 +2326,32 @@ public final class ImageSequenceViewModel {
             let interval = 1/Double(self.videoPlaybackFramerate)
 
             self.backgroundColor = .black
-            
+
+            // seed the prefetch cache with the first lookahead frames before the loop starts
+            switch self.videoPlayMode {
+            case .forward:
+                let seedEnd = min(currentIndex + videoPrefetchLookahead + 1, frames.count)
+                for i in currentIndex..<seedEnd { prefetchVideoFrame(i) }
+            case .reverse:
+                let seedStart = max(currentIndex - videoPrefetchLookahead, 0)
+                for i in stride(from: currentIndex, through: seedStart, by: -1) { prefetchVideoFrame(i) }
+            }
+
             videoPlaybackTask = Task {
                 while(!Task.isCancelled) {
 
                     let startTime = NSDate().timeIntervalSince1970
-                    
+
                     var nextVideoFrame: Int = 0
-                    
+
                     switch self.videoPlayMode {
                     case .forward:
                         nextVideoFrame = self.currentIndex + 1
-                        
+
                     case .reverse:
                         nextVideoFrame = self.currentIndex - 1
                     }
-                    
+
                     if nextVideoFrame >= self.frames.count {
                         self.stopVideo()
                         self.currentIndex = self.frames.count - 1
@@ -2346,7 +2359,14 @@ public final class ImageSequenceViewModel {
                         self.stopVideo()
                         self.currentIndex = 0
                     } else {
-                        self.self.currentIndex = nextVideoFrame
+                        self.currentIndex = nextVideoFrame
+                        switch self.videoPlayMode {
+                        case .forward:
+                            self.prefetchVideoFrame(self.currentIndex + self.videoPrefetchLookahead)
+                        case .reverse:
+                            self.prefetchVideoFrame(self.currentIndex - self.videoPrefetchLookahead)
+                        }
+                        self.evictVideoPrefetchCache(currentIndex: self.currentIndex)
                     }
 
                     let secondsLeft = interval - (NSDate().timeIntervalSince1970 - startTime)
@@ -2362,11 +2382,47 @@ public final class ImageSequenceViewModel {
 
     func stopVideo() {
         videoPlaybackTask?.cancel()
+        videoPrefetchCache.removeAll()
 
         self.interactionMode = self.previousInteractionMode
-        
+
         self.videoPlaying = false
         self.backgroundColor = ViewModel.defaultBackgroundColor
+    }
+
+    private func prefetchVideoFrame(_ index: Int) {
+        guard index >= 0 && index < frames.count else { return }
+        guard videoPrefetchCache[index] == nil else { return }
+        let frameVM = frames[index]
+        let mode = self.frameViewMode
+        guard let frame = frameVM.frame,
+              let url = frame.imageAccessor.urlForImage(
+                frameIndex: frame.frameIndex,
+                ofType: mode,
+                atSize: .preview
+              )
+        else { return }
+        Task.detached(priority: .utility) {
+            guard let data = try? Data(contentsOf: url) else { return }
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                guard let image = NSImage(data: data) else { return }
+                self.videoPrefetchCache[index] = image
+            }
+        }
+    }
+
+    private func evictVideoPrefetchCache(currentIndex: Int) {
+        switch videoPlayMode {
+        case .forward:
+            for key in videoPrefetchCache.keys where key < currentIndex - 2 {
+                videoPrefetchCache.removeValue(forKey: key)
+            }
+        case .reverse:
+            for key in videoPrefetchCache.keys where key > currentIndex + 2 {
+                videoPrefetchCache.removeValue(forKey: key)
+            }
+        }
     }
 
     func goToFirstFrameButtonAction() {

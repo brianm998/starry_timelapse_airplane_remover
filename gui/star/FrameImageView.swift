@@ -15,12 +15,18 @@ public struct FrameImageView: View {
         // force tracking
         let _ = frameViewModel.reloadID
 
-        return frameViewModel.previewImage(
-          type: viewModel.frameViewMode
-        )
-          .aspectRatio(viewModel.frameSize, contentMode: .fit)
-          .readSize() { size in
-              self.size = size
-          }
+        Group {
+            if viewModel.videoPlaying,
+               let cached = viewModel.videoPrefetchCache[viewModel.currentIndex]
+            {
+                Image(nsImage: cached).resizable()
+            } else {
+                frameViewModel.previewImage(type: viewModel.frameViewMode)
+            }
+        }
+        .aspectRatio(viewModel.frameSize, contentMode: .fit)
+        .readSize() { size in
+            self.size = size
+        }
     }
 }
