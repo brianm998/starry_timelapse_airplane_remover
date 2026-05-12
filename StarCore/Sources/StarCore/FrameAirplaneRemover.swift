@@ -244,6 +244,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // Set by FrameGraphBuilder for static sequences; nil for moving sequences.
     var horizonAccumulator: HorizonAccumulator?
 
+    // Cached result of loadOrCreateFinalHorizonMask().  The horizon mask is
+    // computed once per frame and never changes during a processing run.
+    // Cleared by recomputeMergedHorizon* whenever the mask is intentionally
+    // regenerated (e.g. after a reference-horizon edit in the GUI).
+    private var cachedFinalHorizonMask: HorizonMask?
+
     func setHorizonAccumulator(_ acc: HorizonAccumulator) {
         horizonAccumulator = acc
     }
@@ -376,6 +382,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           ofType: .mergedHorizon,
           atSize: .original
         ) else { return }
+        cachedFinalHorizonMask = nil
         imageAccessor.deleteImages(
           frameIndex: frameIndex,
           ofTypes: [.mergedHorizon],
@@ -392,9 +399,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func recomputeMergedHorizon() async throws {
         // Reference frames serve their painted mask directly; nothing to recompute.
         if (try await loadHorizonReferenceMask()) != nil { return }
+        cachedFinalHorizonMask = nil
         // Bypass loadOrCreateMergedHorizonMask's "load if exists" check and go
         // straight to creation.  createMergedHorizonMask saves with overwrite:true.
-        _ = try await createMergedHorizonMask()
+        cachedFinalHorizonMask = try await createMergedHorizonMask()
     }
           
     public func setNumberOfAlignedFrames(with config: Config? = nil) async {
@@ -473,12 +481,16 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public var numberOfAlignedFrames: Int { alignmentFrames.count }
 
     internal func loadOrCreateFinalHorizonMask() async throws -> HorizonMask? {
-        if let mask = try await self.loadOrCreateMergedHorizonMask() {
-            mask
+        if let cached = cachedFinalHorizonMask { return cached }
+        let mask: HorizonMask?
+        if let merged = try await self.loadOrCreateMergedHorizonMask() {
+            mask = merged
         } else {
             // fall back to non-merged horizon mask
-            try await self.loadOrCreateHorizonMask()
+            mask = try await self.loadOrCreateHorizonMask()
         }
+        cachedFinalHorizonMask = mask
+        return mask
     }
     
     // this horizon mask has been calculated by a median merge of
@@ -3208,9 +3220,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                  atSize: .original
                )
             {
-                // load any possible keypoints for this neighbor 
+                // load any possible keypoints for this neighbor
                 var keypointFilename = ""
-                
+
                 switch type {
                 case .starAligned:
                     keypointFilename = "\(neighborIndex).sky.yaml"
@@ -3220,10 +3232,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     Log.e("not loading keypoints for type \(type)")
                 }
 
-                let keypoints = OCVFeatureSet.load(
+                let keypoints = await keypointCache.load(
                   fromFilename: "\(config.dirForKeypointData)/\(keypointFilename)"
                 )
-                
+
                 switch alignmentType {
                 case .earth:
                     if let maskFilename = self.imageAccessor.nameForImage(
@@ -3261,7 +3273,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         Log.d("frame \(frameIndex) original frame \(originalFrame.description)")
-        
+
         var warpedResult: WarpedImageResult? = nil
 
         let pixelThreshold = await self.pixelThreshold
@@ -3498,9 +3510,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                  atSize: .original
                )
             {
-                // load any possible keypoints for this neighbor 
+                // load any possible keypoints for this neighbor
                 var keypointFilename = ""
-                
+
                 switch type {
                 case .starAligned:
                     keypointFilename = "\(neighborIndex).sky.yaml"
@@ -3510,7 +3522,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     Log.e("not loading keypoints for type \(type)")
                 }
 
-                let keypoints = OCVFeatureSet.load(
+                let keypoints = await keypointCache.load(
                   fromFilename: "\(config.dirForKeypointData)/\(keypointFilename)"
                 )
                 switch alignmentType {
@@ -3696,7 +3708,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         let config = await configManager.config()
 
         let fullPath = "\(config.dirForKeypointData)/\(filename)"
-        if let features = OCVFeatureSet.load(fromFilename: fullPath) {
+        if let features = await keypointCache.load(fromFilename: fullPath) {
             return features
         }
 
@@ -3775,6 +3787,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             } else {
                 Log.w("frame \(frameIndex) failed to write results to \(fullPath)")
             }
+
+            // Pre-populate the keypoint cache so neighbor HomographyOps find
+            // this frame's features without a disk round-trip.
+            await keypointCache.store(results, forFilename: fullPath)
 
             // save results in RAM
             switch type {
