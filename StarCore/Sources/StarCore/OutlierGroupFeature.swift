@@ -339,7 +339,7 @@ public enum OutlierGroupFeature: String,
         case .borderBrightness: // depends upon the original image
             return await calculateBorderBrightness(of: group)
         case .numberOfNearbyOutliersInSameFrame: // depends upon outlierGroups
-            return await calculateNumberOfNearbyOutliersInSameFrame(of: group, in: group.frame?.outlierGroups)
+            return await calculateNumberOfNearbyOutliersInSameFrame(of: group, in: await group.frame?.getOutlierGroups())
 
         case .nearbyDirectOverlapScore: // depends upon previous and next frames, outlierImageDataFunc
             var prevImgData: FrameHolder?

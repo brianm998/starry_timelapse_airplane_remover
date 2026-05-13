@@ -242,7 +242,6 @@ extension PixelatedImage {
         let maxHorizonY = horizonYs.max()!
 
         let maxVal = maxBrightnessValue
-        let cpp = componentsPerPixel
         var skyLab:    [(Double, Double, Double)] = []
         var groundLab: [(Double, Double, Double)] = []
         skyLab.reserveCapacity((width * minHorizonY) / 16)

@@ -326,7 +326,7 @@ struct OutlierGroupView: View {
             // update frame view model too
             
             if let frame = viewModel.currentFrame,
-               let outlierGroups = await frame.outlierGroups
+               let outlierGroups = await frame.getOutlierGroups()
             {
                 if let outlier_group = await outlierGroups.members[self.groupViewModel.group.id] {
                     // update the outlier group in the background

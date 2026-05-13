@@ -81,14 +81,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         Task {
             await observer.set(cleanMethod: cleanMethod)
-            if let results = await self.readEarthNeighborHomographyForThisFrame() {
+            if let results = await alignmentProcessor.readEarthNeighborHomographyForThisFrame() {
                 //Log.d("frame \(frameIndex) setting number of earth alignments \(results)")
                 await observer.set(earthAlignmentResults: results)
             } else {
                 //Log.d("frame \(frameIndex) NO number of earth alignments")
             }
 
-            if let results = await self.readStarNeighborHomographyForThisFrame() {
+            if let results = await alignmentProcessor.readStarNeighborHomographyForThisFrame() {
                 //Log.d("frame \(frameIndex) setting number of star alignments \(results)")
                 await observer.set(starAlignmentResults: results)
             } else {
@@ -126,7 +126,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         hasher.combine(self.state)
         
-        if let outlierGroups {
+        if let outlierGroups = await outlierProcessor.getOutlierGroups() {
             await outlierGroups.asyncHash(into: &hasher)
         }
     }
@@ -137,14 +137,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     nonisolated public let frameIndex: Int
 
     // populated by pruning
-    public var outlierGroups: OutlierGroups? // XXX LOTS OF MEMORY ???
 
-    public func getOutlierGroups() -> OutlierGroups?  { outlierGroups }
+    public func getOutlierGroups() async -> OutlierGroups? { await outlierProcessor.getOutlierGroups() }
     
     public func changesHandled() { self.state = .complete }
 
     public func updateCombineSubjects() async {
-        if let outliers = await outlierGroups?.getMembers() {
+        if let outlierGroups = await outlierProcessor.getOutlierGroups() {
+            let outliers = await outlierGroups.getMembers()
             var totalPositive: Int = 0
             var totalNegative: Int = 0
             var totalUnknown: Int = 0
@@ -160,7 +160,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
 
-            let trashCount = await outlierGroups?.getTrash().count ?? 0
+            let trashCount = await outlierGroups.getTrash().count
             
             // update the observer here
             await observer?.set(numberOfPositiveOutliers: totalPositive,
@@ -212,7 +212,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public let baseName: String
 
     // did we load our outliers from a file?
-    internal var outliersLoadedFromFile = false
 
     // doubly linked list
     public weak var previousFrame: FrameAirplaneRemover?
@@ -237,62 +236,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     private let completion: (() async -> Void)?
     
-    internal var isLoadingOutliers = false
 
     private weak var imageSequence: ImageSequence?
 
+    internal let alignmentProcessor: FrameAlignmentProcessor
+    internal let horizonProcessor: FrameHorizonProcessor
+    internal let outlierProcessor: FrameOutlierProcessor
+
     // Set by FrameGraphBuilder for static sequences; nil for moving sequences.
-    var horizonAccumulator: HorizonAccumulator?
 
-    // Cached result of loadOrCreateFinalHorizonMask().  The horizon mask is
-    // computed once per frame and never changes during a processing run.
-    // Cleared by recomputeMergedHorizon* whenever the mask is intentionally
-    // regenerated (e.g. after a reference-horizon edit in the GUI).
-    private var cachedFinalHorizonMask: HorizonMask?
-
-    func setHorizonAccumulator(_ acc: HorizonAccumulator) {
-        horizonAccumulator = acc
-    }
-
-    /// Called by HorizonDetectionOp after a first-round horizon mask is ready.
-    /// No-op if no accumulator has been registered (moving sequences, or reference-horizon sequences).
-    func accumulateDetectedHorizon(_ mask: HorizonMask) async {
-        guard let horizonAccumulator else { return }
-        await horizonAccumulator.accumulate(image: mask.image, frameIndex: frameIndex)
-    }
-
-    private var skyKeyPoints: OCVFeatureSet? = nil {
-        didSet {
-            Log.d("frame \(frameIndex) did set skyKeyPoints \(skyKeyPoints as Any)")
-            Task { 
-                await observer?.set(numberOfSkyKeyPoints: self.skyKeyPointCount())
-            }
-        }
-    }
-    private var earthKeyPoints: OCVFeatureSet? = nil {
-        didSet {
-            Task {
-                await observer?.set(numberOfEarthKeyPoints: self.earthKeyPointCount())
-            }
-        }
-    }
-
-    public func skyKeyPointCount() -> Int {
-        if let skyKeyPoints {
-            skyKeyPoints.keypointCount
-        } else {
-            0
-        }
-    }
-    
-    public func earthKeyPointCount() -> Int {
-        if let earthKeyPoints {
-            earthKeyPoints.keypointCount
-        } else {
-            0
-        }
-    }
-    
     public init(with configManager: ConfigManager,
                 initialConfig: Config,
                 width: Int,
@@ -322,11 +274,39 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         self.componentsPerPixel = componentsPerPixel
 
+        self.alignmentProcessor = FrameAlignmentProcessor(
+            frameIndex: frameIndex,
+            width: width,
+            height: height,
+            componentsPerPixel: componentsPerPixel,
+            imageAccessor: imageAccessor,
+            configManager: configManager,
+            imageSequence: imageSequence
+        )
+        self.horizonProcessor = FrameHorizonProcessor(
+            frameIndex: frameIndex,
+            imageAccessor: imageAccessor,
+            configManager: configManager,
+            imageSequence: imageSequence
+        )
+        self.outlierProcessor = FrameOutlierProcessor(
+            frameIndex: frameIndex,
+            imageAccessor: imageAccessor,
+            configManager: configManager,
+            callbacks: callbacks,
+            imageSequence: imageSequence,
+            width: width,
+            height: height,
+            componentsPerPixel: componentsPerPixel
+        )
+
         // call directly in init becuase didSet() isn't called from here :P
-       
+        await alignmentProcessor.setFrame(self)
+        await horizonProcessor.setFrame(self)
+        await outlierProcessor.setFrame(self)
         //Log.d("config.numberAlignedNeighborFrames \(config.numberAlignedNeighborFrames)")
-        await self.setNumberOfAlignedFrames(with: initialConfig)
-        await self.setNumberOfStaticNeighborFrames(with: initialConfig)
+        await alignmentProcessor.setNumberOfAlignedFrames(with: initialConfig)
+        await alignmentProcessor.setNumberOfStaticNeighborFrames(with: initialConfig)
         await self.set(
           cleanMethod: initialConfig.cleanMethod(for: frameIndex),
           process: false,
@@ -339,7 +319,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                      atSize: .original)
         {
             self.state = .complete
-        } else if FileManager.default.fileExists(atPath: "\(await self.outliersDirname)/\(BlobBinarySaver.outlierBinaryFilename)") {
+        } else if FileManager.default.fileExists(atPath: "\(await outlierProcessor.outliersDirname)/\(BlobBinarySaver.outlierBinaryFilename)") {
             // if we have outliers, mark it as userModified (classified),
             // even if some are not classified
             self.state = .userModified
@@ -363,58 +343,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public func setNumberOfStaticNeighborFrames(with config: Config? = nil) async {
-        if let config {
-            self.staticNeighborFrames = calculateNeighborIndices(config.numberStaticNeighborFrames(for: frameIndex))
-        } else {
-            let config = await configManager.config()
-            self.staticNeighborFrames = calculateNeighborIndices(config.numberStaticNeighborFrames(for: frameIndex))
-        }
-    }
-
-    /// If the merged horizon has already been computed for this frame, deletes the
-    /// cached image and recomputes it using the current staticNeighborFrames count.
-    /// Call this after changing the per-frame staticNeighborFrames override so that
-    /// already-processed frames get an updated merged horizon without a full reprocess.
-    public func recomputeMergedHorizonIfExists() async throws {
-        guard imageAccessor.imageExists(
-          frameIndex: frameIndex,
-          ofType: .mergedHorizon,
-          atSize: .original
-        ) else { return }
-        cachedFinalHorizonMask = nil
-        imageAccessor.deleteImages(
-          frameIndex: frameIndex,
-          ofTypes: [.mergedHorizon],
-          atSizes: [.original, .preview]
-        )
-        _ = try await loadOrCreateFinalHorizonMask()
-    }
-
-    /// Unconditional variant of `recomputeMergedHorizonIfExists`: always creates
-    /// a fresh merged horizon, saving it with overwrite:true.
-    /// Does NOT delete the old file first — if creation fails, the old
-    /// `.mergedHorizon` is preserved so the overlay stays blue instead of
-    /// regressing to the raw `.horizon` (white) line.
-    public func recomputeMergedHorizon() async throws {
-        // Reference frames serve their painted mask directly; nothing to recompute.
-        if (try await loadHorizonReferenceMask()) != nil { return }
-        cachedFinalHorizonMask = nil
-        // Bypass loadOrCreateMergedHorizonMask's "load if exists" check and go
-        // straight to creation.  createMergedHorizonMask saves with overwrite:true.
-        cachedFinalHorizonMask = try await createMergedHorizonMask()
-    }
           
-    public func setNumberOfAlignedFrames(with config: Config? = nil) async {
-        if let config {
-            self.alignmentFrames = calculateNeighborIndices(config.numberAlignedNeighborFrames(for: frameIndex))
-        } else {
-            let config = await configManager.config()
-            self.alignmentFrames = calculateNeighborIndices(config.numberAlignedNeighborFrames(for: frameIndex))
-        }
-        Log.d("frame \(frameIndex) set alignedNeighborFrames \(self.alignmentFrames)")
-    }
-
     /// Deletes star-alignment-related cached images and keypoint files for this
     /// frame if they have already been computed.  Returns `true` when something
     /// was invalidated so the caller knows whether to trigger reprocessing.
@@ -433,2575 +362,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     .autoProcessed, .autoSelectiveProcessed, .selectiveProcessed, .final],
           atSizes: [.original, .preview]
         )
-        try await removeNumberOfAlignedImagesForThisFrameFile()
-        try await removeNeighborStarHomography()
+        try await alignmentProcessor.removeNumberOfAlignedImagesForThisFrameFile()
+        try await alignmentProcessor.removeNeighborStarHomography()
         // Clear in-memory homography caches so reprocessing recomputes them
         // rather than reusing the stale cached values.
-        self.neighborStarHomography = nil
-        self.neighborEarthHomography = nil
+        await alignmentProcessor.clearHomographyCache()
         self.state = .unprocessed
         return true
     }
     
-    public func calculateNeighborIndices(_ alignmentNumber: Int) -> [Int] {
-        Log.d("frame \(frameIndex) calculateNeighborIndices(alignmentNumber: \(alignmentNumber))")
-        guard let imageSequence else {
-            Log.e("cannot set number of alignment images without an image sequence")
-            return []
-        }
-        if alignmentNumber < 1 {
-            Log.e("invalid alignmentNumbernumberOfImage \(alignmentNumber)")
-            return []
-        }
-
-        var halfNumber = alignmentNumber/2
-        if alignmentNumber % 2 == 1 { halfNumber += 1 } // round up
-
-        var startFrame = frameIndex - halfNumber
-        var endFrame = startFrame + alignmentNumber + 1
-        
-        if startFrame < 0 { startFrame = 0 }
-        if endFrame >= imageSequence.filenames.count {
-            endFrame = imageSequence.filenames.count - 1
-        }
-        
-        var ret: [Int] = []
-        
-        // calculate the frame indicies of the frames we will use for star alignment
-        for index in startFrame..<endFrame {
-            if index == frameIndex { continue }
-            ret.append(index)
-        }
-
-        //Log.d("frame \(frameIndex) has alignment frames \(ret)")
-
-        return ret
-    }
-
-    public var numberOfAlignedFrames: Int { alignmentFrames.count }
-
-    internal func loadOrCreateFinalHorizonMask() async throws -> HorizonMask? {
-        if let cached = cachedFinalHorizonMask { return cached }
-        let mask: HorizonMask?
-        if let merged = try await self.loadOrCreateMergedHorizonMask() {
-            mask = merged
-        } else {
-            // fall back to non-merged horizon mask
-            mask = try await self.loadOrCreateHorizonMask()
-        }
-        cachedFinalHorizonMask = mask
-        return mask
-    }
-    
-    // this horizon mask has been calculated by a median merge of
-    // possibly aligned horizon masks from neighbor frames.
-    public func loadOrCreateMergedHorizonMask() async throws -> HorizonMask? {
-        // If the user has painted a reference horizon, use it directly.
-        if let referenceMask = try await loadHorizonReferenceMask() {
-            Log.i("frame \(frameIndex) loadOrCreateMergedHorizonMask: using reference mask (skipping merge)")
-            return referenceMask
-        }
-        Log.d("frame \(frameIndex) trying to load merged horizon mask")
-        // load if possible
-        do {
-            if let horizonMaskImage = try await imageAccessor.load(
-                 frameIndex: frameIndex,
-                 type: .mergedHorizon,
-                 atSize: .original
-               )
-            {
-                Log.d("frame \(frameIndex) successfully loaded merged horizon mask")
-
-                if let bounds = horizonMaskImage.horizonBounds() {
-                    return HorizonMask(
-                      image: horizonMaskImage,
-                      horizonTopY: bounds.topY,
-                      horizonBottomY: bounds.bottomY
-                    )
-                }
-                Log.w("frame \(frameIndex) loaded merged horizon mask image but could not compute bounds")
-            }
-        } catch {
-            Log.w("frame \(frameIndex) unable to load merged horizon mask")
-        }
-
-        Log.i("frame \(frameIndex) making merged horizon")
-
-        return try await createMergedHorizonMask()
-    }
-
-    public func getHorizonMergeIndices() async -> [Int] {
-        let config = await configManager.config()
-        if config.tripodHeadWasMoving {
-            return alignmentFrames
-        } else {
-            return staticNeighborFrames
-        }
-    }
-    
-    public func createMergedHorizonMask() async throws -> HorizonMask? {
-
-        self.set(state: .mergingHorizon)
-
-        // get original horizon mask for this frame
-        Log.d("frame \(frameIndex) calling loadOrCreateHorizonMask()")
-        let mask = try await self.loadOrCreateHorizonMask()
-
-        let config = await configManager.config()
-
-        // Reference-horizon smoothing pass (moving sequences only).
-        // When enabled and user-defined reference horizons exist within
-        // referenceHorizonSmoothingMaxDistance frames, use them (interpolated
-        // per-column when bracketing) to filter statistically implausible
-        // column values and save as merged horizon.
-        if config.useReferenceHorizonSmoothing, config.tripodHeadWasMoving {
-            let allStats = try await referenceHorizonsWithStats(
-              maxCount: 2,
-              numBuckets: config.referenceHorizonBrightnessRefinementHistogramBuckets,
-              neighborhoodSize: config.referenceHorizonNeighborhoodSize
-            )
-            let maxDist = config.referenceHorizonSmoothingMaxDistance
-            let nearbyStats = allStats.filter { abs($0.frameIndex - frameIndex) <= maxDist }
-            if !nearbyStats.isEmpty,
-               let expectedY = interpolatedExpectedYPerColumn(
-                 from: nearbyStats, width: mask.image.width
-               ),
-               let filtered = referenceSmoothedHorizonMask(
-                 detected: mask, expectedYPerColumn: expectedY
-               )
-            {
-                Log.i("frame \(frameIndex) createMergedHorizonMask: applying reference-horizon smoothing")
-                let finalMask = try await referenceStatsBrightnessRefinementIfNeeded(
-                  mask: filtered,
-                  config: config
-                )
-                // Remove any black ground islands not connected to the bottom edge
-                // (e.g. dark flag poles or terrain features above the horizon line).
-                let cleanedImage = (try? finalMask.image.groundOnly()) ?? finalMask.image
-                try await imageAccessor.save(
-                  cleanedImage,
-                  frameIndex: frameIndex,
-                  as: .mergedHorizon,
-                  atSizes: await self.outputSizes,
-                  overwrite: true
-                )
-                return HorizonMask(cleanedImage) ?? finalMask
-            }
-            Log.w("frame \(frameIndex) reference smoothing skipped, falling through to normal merge")
-        }
-
-        var neighborIndices: [Int] = []
-
-        if config.tripodHeadWasMoving {
-            neighborIndices = await self.getHorizonMergeIndices()
-        } else {
-            // static video uses all frames
-            if let imageSequence {
-                neighborIndices = Array(0..<imageSequence.filenames.count)
-            } else {
-                Log.w("cannot get static neighbor indices without an image sequence")
-            }
-        }
-        
-        // get the names of neighboring horizon masks
-        let neighboringHorizons = neighborIndices.compactMap {
-            self.imageAccessor.nameForImage(frameIndex: $0,
-                                            ofType: .horizon,
-                                            atSize: .original)
-        }
-
-        Log.i("frame \(frameIndex) making merged horizon \(staticNeighborFrames.count) staticNeighborFrames \(neighboringHorizons.count) neighboringHorizons")
-        
-        let mergedHorizonImage: PixelatedImage?
-        if config.tripodHeadWasMoving {
-            mergedHorizonImage = mask.image.medianMerge(
-                with: neighboringHorizons,
-                outlierThreshold: await self.pixelThreshold,
-                includeAll: true)
-        } else if let accumulator = horizonAccumulator {
-            // Use the running accumulator that was populated by HorizonDetectionOps.
-            // Any frames not yet accumulated will be loaded from disk here.
-            let imageAccessor = self.imageAccessor
-            mergedHorizonImage = await accumulator.finalize { idx in
-                imageAccessor.nameForImage(frameIndex: idx, ofType: .horizon, atSize: .original)
-            }
-        } else {
-            mergedHorizonImage = PixelatedImage.accumulatedHorizonMask(fromFilenames: neighboringHorizons)
-        }
-        if let mergedHorizon = mergedHorizonImage {
-            // Apply stats-based brightness refinement for moving sequences.
-            let imageToSave: PixelatedImage
-            if config.tripodHeadWasMoving,
-               let mergedMask = HorizonMask(mergedHorizon),
-               let refined = try? await referenceStatsBrightnessRefinementIfNeeded(
-                 mask: mergedMask,
-                 config: config
-               )
-            {
-                imageToSave = refined.image
-            } else {
-                imageToSave = mergedHorizon
-            }
-
-            // Remove any black ground islands not connected to the bottom edge
-            // (e.g. dark flag poles or terrain features above the horizon line).
-            let cleanedToSave = (try? imageToSave.groundOnly()) ?? imageToSave
-
-            Log.d("saving merged horizon images")
-            try await imageAccessor.save(
-              cleanedToSave,
-              frameIndex: frameIndex,
-              as: .mergedHorizon,
-              atSizes: await self.outputSizes,
-              overwrite: true
-            )
-            if !config.tripodHeadWasMoving {
-                // for static videos link all the merged horizons together here
-                for size in await self.outputSizes {
-                    if let fromName = imageAccessor.nameForImage(
-                         frameIndex: frameIndex,
-                         ofType: .mergedHorizon,
-                         atSize: size
-                       )
-                    {
-                        for neighborIndex in neighborIndices {
-                            if neighborIndex != frameIndex {
-                                if let toName = imageAccessor.nameForImage(
-                                     frameIndex: neighborIndex,
-                                     ofType: .mergedHorizon,
-                                     atSize: size
-                                   )
-                                {
-                                    do {
-                                        try createHardLinkReplacingDestination(
-                                          from: fromName,
-                                          to: toName
-                                        )
-                                    } catch {
-                                        Log.w("cannot hard link \(fromName) to \(toName), trying copy")
-                                        try copyReplacingDestination(
-                                          from: fromName,
-                                          to: toName
-                                        )
-                                    }
-                                } else {
-                                    Log.w("unable to get name for merged horizon for frameIndex \(neighborIndex)")
-                                }
-                            }
-                        }
-                    } else {
-                        Log.w("unable to get name for merged horizon for frameIndex \(frameIndex)")
-                    }
-                }
-
-                // Also persist the median as the global reference horizon for the
-                // whole sequence so loadHorizonReferenceMask() picks it up on
-                // subsequent loads and re-runs can skip horizon detection entirely.
-                if let mergedPath = imageAccessor.nameForImage(
-                     frameIndex: frameIndex,
-                     ofType: .mergedHorizon,
-                     atSize: .original
-                   )
-                {
-                    let referenceDir = URL(fileURLWithPath: mergedPath)
-                        .deletingLastPathComponent()
-                        .deletingLastPathComponent()
-                        .appendingPathComponent("horizonReference")
-                    do {
-                        try FileManager.default.createDirectory(
-                          at: referenceDir,
-                          withIntermediateDirectories: true
-                        )
-                        let referencePath = referenceDir
-                            .appendingPathComponent("reference.tiff").path
-                        cleanedToSave.writeTIFFEncoding(toFilename: referencePath)
-                        Log.i("frame \(frameIndex) saved median horizon as global reference \(referencePath)")
-                    } catch {
-                        Log.w("frame \(frameIndex) could not save global reference horizon: \(error)")
-                    }
-                }
-            }
-            
-            if let bounds = cleanedToSave.horizonBounds() {
-                return HorizonMask(
-                  image: cleanedToSave,
-                  horizonTopY: bounds.topY,
-                  horizonBottomY: bounds.bottomY
-                )
-            }
-            Log.w("frame \(frameIndex) merged horizon has no computable bounds")
-        }
-
-        Log.w("frame \(frameIndex) unable to calculate merged horizon")
-        
-        return nil
-    }
-
-    // MARK: - Reference horizon smoothing helpers
-
-    /// Returns the (frameIndex, mask) of the nearest user-defined reference horizon
-    /// within `maxDistance` frames of the current frame, or nil if none exists.
-    /// Filter a detected horizon mask using a per-column expected Y (from interpolated
-    /// bracketing reference horizons) to reject per-column Y values that are statistical
-    /// outliers.
-    ///
-    /// For each column the delta between detected and expected horizon Y is computed.
-    /// Columns whose delta deviates more than 2 standard deviations from the mean
-    /// delta are replaced by the expected Y value.  This removes obviously wrong
-    /// detections without clamping the entire mask to the expected curve.
-    private func referenceSmoothedHorizonMask(
-      detected: HorizonMask,
-      expectedYPerColumn: [Int?]
-    ) -> HorizonMask? {
-        let w = detected.image.width
-        let h = detected.image.height
-
-        let detectedY = HorizonScoring.extractHorizonYPerColumn(from: detected.image)
-
-        // Compute per-column deltas where both detected and expected have a Y value.
-        var deltas: [Double] = []
-        for x in 0..<w {
-            if let dy = detectedY[x], x < expectedYPerColumn.count, let ey = expectedYPerColumn[x] {
-                deltas.append(Double(dy - ey))
-            }
-        }
-
-        guard !deltas.isEmpty else {
-            Log.w("frame \(frameIndex) referenceSmoothedHorizonMask: no common columns, skipping")
-            return nil
-        }
-
-        let mean = deltas.reduce(0, +) / Double(deltas.count)
-        let variance = deltas.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(deltas.count)
-        let stddev = variance.squareRoot()
-        let threshold = 2.0 * max(stddev, 1.0) // at least 1 px to avoid clamping tiny natural variation
-
-        Log.d("frame \(frameIndex) referenceSmoothedHorizonMask: mean delta=\(String(format:"%.1f", mean)) stddev=\(String(format:"%.1f", stddev)) threshold=\(String(format:"%.1f", threshold))")
-
-        // Build corrected per-column Y array.
-        var correctedY = detectedY
-        var replacedCount = 0
-        for x in 0..<w {
-            guard let dy = detectedY[x] else { continue }
-            guard x < expectedYPerColumn.count, let ey = expectedYPerColumn[x] else { continue }
-            let delta = Double(dy - ey)
-            if abs(delta - mean) > threshold {
-                correctedY[x] = ey
-                replacedCount += 1
-            }
-        }
-
-        Log.i("frame \(frameIndex) referenceSmoothedHorizonMask: replaced \(replacedCount)/\(w) columns")
-
-        guard let maskImage = PixelatedImage.fromHorizonColumnY(width: w, height: h, columnY: correctedY),
-              let result = HorizonMask(maskImage)
-        else {
-            Log.w("frame \(frameIndex) referenceSmoothedHorizonMask: failed to build mask image")
-            return nil
-        }
-
-        return result
-    }
-
-    // MARK: - Reference stats brightness refinement
-
-    /// Scan the sequence for reference horizon masks, return stats for up to `maxCount`
-    /// nearest frames.  Stats are cached in `referenceHorizonStatsCache`.
-    private func referenceHorizonsWithStats(maxCount: Int = 2, numBuckets: Int = 256, neighborhoodSize: Int = 1) async throws -> [ReferenceHorizonFrameStats] {
-        guard let imageSequence else { return [] }
-        guard let mergedPath = imageAccessor.nameForImage(
-                frameIndex: frameIndex,
-                ofType: .mergedHorizon,
-                atSize: .original
-              )
-        else { return [] }
-
-        let referenceDir = URL(fileURLWithPath: mergedPath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("horizonReference")
-
-        let fm = FileManager.default
-        var candidates: [(distance: Int, index: Int, maskURL: URL)] = []
-
-        for candidateIndex in 0..<imageSequence.filenames.count {
-            guard candidateIndex != frameIndex else { continue }
-            guard let candidatePath = imageAccessor.nameForImage(
-                    frameIndex: candidateIndex,
-                    ofType: .mergedHorizon,
-                    atSize: .original
-                  )
-            else { continue }
-            let candidateFileName = URL(fileURLWithPath: candidatePath).lastPathComponent
-            let candidateURL = referenceDir.appendingPathComponent(candidateFileName)
-            guard fm.fileExists(atPath: candidateURL.path) else { continue }
-            candidates.append((
-                distance: abs(candidateIndex - frameIndex),
-                index: candidateIndex,
-                maskURL: candidateURL
-            ))
-        }
-
-        candidates.sort { $0.distance < $1.distance }
-
-        // Prefer a bracketing pair: nearest ref with index < frameIndex, plus nearest with index > frameIndex.
-        // Falls back to plain nearest-N when one side has no refs.
-        var ordered: [(distance: Int, index: Int, maskURL: URL)] = []
-        if maxCount >= 2,
-           let prev = candidates.first(where: { $0.index < frameIndex }),
-           let next = candidates.first(where: { $0.index > frameIndex })
-        {
-            ordered = [prev, next]
-            for c in candidates where c.index != prev.index && c.index != next.index {
-                if ordered.count >= maxCount { break }
-                ordered.append(c)
-            }
-        } else {
-            ordered = Array(candidates.prefix(maxCount))
-        }
-
-        var result: [ReferenceHorizonFrameStats] = []
-        for candidate in ordered {
-            if let cached = await referenceHorizonStatsCache.stats(for: candidate.index) {
-                result.append(cached)
-                continue
-            }
-            guard let maskImage = PixelatedImage(filename: candidate.maskURL.path)?.asHorizonMask,
-                  let mask = HorizonMask(maskImage),
-                  let original = try? await imageAccessor.load(
-                    frameIndex: candidate.index,
-                    type: .original,
-                    atSize: .original
-                  )
-            else {
-                Log.w("frame \(frameIndex) referenceHorizonsWithStats: skipping frame \(candidate.index)")
-                continue
-            }
-            guard let stats = original.computeReferenceHorizonStats(frameIndex: candidate.index, mask: mask, numBuckets: numBuckets, neighborhoodSize: neighborhoodSize)
-            else { continue }
-            await referenceHorizonStatsCache.set(stats)
-            result.append(stats)
-        }
-        return result
-    }
-
-    /// Build a per-column expected horizon Y by linearly interpolating between bracketing
-    /// reference frames (one with frameIndex < self.frameIndex, one with > self.frameIndex).
-    /// Falls back to a single ref's Y when only one side is available.  Returns nil if no
-    /// reference Y data is available.
-    ///
-    /// For each column the result is the Y position the horizon is *expected* to occupy,
-    /// based on the user's manually-specified neighboring horizons.  This is the per-column
-    /// prior used by the smoothing filter and the brightness-refinement Y-position term.
-    private func interpolatedExpectedYPerColumn(
-      from stats: [ReferenceHorizonFrameStats],
-      width: Int
-    ) -> [Int?]? {
-        guard !stats.isEmpty else { return nil }
-        let prev = stats.filter { $0.frameIndex < frameIndex }
-                        .max(by: { $0.frameIndex < $1.frameIndex })
-        let next = stats.filter { $0.frameIndex > frameIndex }
-                        .min(by: { $0.frameIndex < $1.frameIndex })
-
-        var result = [Int?](repeating: nil, count: width)
-        if let p = prev, let n = next {
-            let span = Double(n.frameIndex - p.frameIndex)
-            let t = span > 0 ? Double(frameIndex - p.frameIndex) / span : 0.5
-            let pYs = p.horizonYPerColumn
-            let nYs = n.horizonYPerColumn
-            let cols = min(width, min(pYs.count, nYs.count))
-            for x in 0..<cols {
-                switch (pYs[x], nYs[x]) {
-                case let (py?, ny?):
-                    result[x] = Int((Double(py) * (1.0 - t) + Double(ny) * t).rounded())
-                case let (py?, nil): result[x] = py
-                case let (nil, ny?): result[x] = ny
-                default: break
-                }
-            }
-            return result
-        }
-        // Only one side has refs — use the nearest single ref's Y values.
-        let only = (prev ?? next) ?? stats.min(by: { abs($0.frameIndex - frameIndex) < abs($1.frameIndex - frameIndex) })!
-        let ys = only.horizonYPerColumn
-        let cols = min(width, ys.count)
-        for x in 0..<cols { result[x] = ys[x] }
-        return result
-    }
-
-    /// Per-pixel brightness + Y-position refinement of `detected` using reference frame stats.
-    ///
-    /// For each column we have a per-column `expectedY[x]` derived from linear interpolation
-    /// between bracketing reference horizons.  Within `searchRadius` of `expectedY[x]` we
-    /// blend a brightness-based sky score (from the reference histograms) with a Y-position
-    /// score that snaps toward the expected Y as distance grows.  Pixels far from `expectedY`
-    /// are dominated by the position prior; pixels near it are dominated by brightness so
-    /// real terrain detail (rocks, ridges) is preserved.
-    ///
-    /// Pixels outside `[expectedY[x] - searchRadius, expectedY[x] + searchRadius]` are
-    /// copied unchanged from `detected`.
-    private func referenceStatsBrightnessRefinedHorizonMask(
-      detected: HorizonMask,
-      original: PixelatedImage,
-      stats: [ReferenceHorizonFrameStats],
-      expectedYPerColumn: [Int?],
-      searchRadius: Int = 100,
-      spikeRemovalEnabled: Bool = true,
-      spikeMaxWidth: Int = 30,
-      spikeMaxDeviationFraction: Double = 0.04,
-      spikeWindowHalf: Int = 150,
-      neighborhoodSize: Int = 1
-    ) -> HorizonMask? {
-        guard !stats.isEmpty else { return nil }
-
-        let w = detected.image.width
-        let h = detected.image.height
-
-        // Precompute inverse-distance normalised weights for histogram lookups.
-        let rawWeights: [Double] = stats.map { s in
-            1.0 / max(1.0, Double(abs(s.frameIndex - frameIndex)))
-        }
-        let totalWeight = rawWeights.reduce(0, +)
-        let normWeights = rawWeights.map { $0 / totalWeight }
-
-        guard case .eightBit(let detectedBuf) = detected.image.imageData else {
-            Log.w("frame \(frameIndex) referenceStatsBrightnessRefinedHorizonMask: mask not 8-bit")
-            return nil
-        }
-
-        let maxVal = original.maxBrightnessValue
-        var outputBytes = [UInt8](detectedBuf)
-
-        var refinedCount = 0
-        var minBandTop = h
-        var maxBandBottom = 0
-        // The position prior reaches full strength at this distance from expectedY.
-        // Inside this radius colour evidence still has meaningful weight; beyond it
-        // position dominates and pixels snap toward the expected horizon.
-        let positionFullRadius = Double(max(1, searchRadius / 2))
-
-        let halfSize = neighborhoodSize / 2
-
-        // Precompute log-weights for distance-weighted averaging of per-frame
-        // Gaussian likelihoods in log space.
-        let logWeights: [Double] = normWeights.map { Foundation.log(max(1e-12, $0)) }
-
-        for x in 0..<w {
-            guard let expY = expectedYPerColumn[x] else { continue }
-            let bandTop    = max(0,     expY - searchRadius)
-            let bandBottom = min(h - 1, expY + searchRadius)
-            if bandTop < minBandTop { minBandTop = bandTop }
-            if bandBottom > maxBandBottom { maxBandBottom = bandBottom }
-
-            for y in bandTop...bandBottom {
-                let (r, g, bch) = original.neighborhoodAveragedRGB(
-                  x: x, y: y, halfSize: halfSize, maxVal: maxVal
-                )
-                let lab = sRGBtoLAB(r, g, bch)
-
-                // Per-frame log-likelihoods under the sky/ground LAB Gaussians,
-                // weighted by inverse frame distance.  Combine via log-sum-exp
-                // (numerically stable mixture) and turn into a sky probability.
-                var maxSky    = -Double.infinity
-                var maxGround = -Double.infinity
-                var skyLLs    = [Double](repeating: -Double.infinity, count: stats.count)
-                var groundLLs = [Double](repeating: -Double.infinity, count: stats.count)
-                for i in 0..<stats.count {
-                    if let sky = stats[i].skyGaussian {
-                        let ll = logWeights[i] + sky.logLikelihood(lab.L, lab.a, lab.b)
-                        skyLLs[i] = ll
-                        if ll > maxSky { maxSky = ll }
-                    }
-                    if let gnd = stats[i].groundGaussian {
-                        let ll = logWeights[i] + gnd.logLikelihood(lab.L, lab.a, lab.b)
-                        groundLLs[i] = ll
-                        if ll > maxGround { maxGround = ll }
-                    }
-                }
-                let brightnessSkyScore: Double
-                if maxSky == -Double.infinity || maxGround == -Double.infinity {
-                    brightnessSkyScore = 0.5
-                } else {
-                    var skySum = 0.0, gndSum = 0.0
-                    for i in 0..<stats.count {
-                        if skyLLs[i]    > -Double.infinity { skySum += Foundation.exp(skyLLs[i]    - maxSky) }
-                        if groundLLs[i] > -Double.infinity { gndSum += Foundation.exp(groundLLs[i] - maxGround) }
-                    }
-                    let logSky    = maxSky    + Foundation.log(skySum)
-                    let logGround = maxGround + Foundation.log(gndSum)
-                    let logRatio  = logSky - logGround
-                    // sigmoid; clamp to avoid exp overflow on extreme distances.
-                    let clamped = max(-50.0, min(50.0, logRatio))
-                    brightnessSkyScore = 1.0 / (1.0 + Foundation.exp(-clamped))
-                }
-
-                // Position prior: weight grows quadratically with distance from expectedY,
-                // capped at 1.0.  Above expectedY the prior says sky (1.0); below says ground (0.0).
-                let dy = Double(y - expY)
-                let absDy = abs(dy)
-                let t = min(1.0, absDy / positionFullRadius)
-                let yWeight = t * t
-                let ySkyScore: Double = dy < 0 ? 1.0 : (dy > 0 ? 0.0 : 0.5)
-
-                let combined = yWeight < 0.001
-                    ? brightnessSkyScore
-                    : (1.0 - yWeight) * brightnessSkyScore + yWeight * ySkyScore
-                let newVal: UInt8 = combined >= 0.5 ? 255 : 0
-                let idx = y * w + x
-                if newVal != detectedBuf[idx] { refinedCount += 1 }
-                outputBytes[idx] = newVal
-            }
-        }
-
-        let definedExpY = expectedYPerColumn.compactMap { $0 }
-        let expYMin = definedExpY.min() ?? -1
-        let expYMax = definedExpY.max() ?? -1
-        Log.i("frame \(frameIndex) referenceStatsBrightnessRefinedHorizonMask: " +
-              "refined \(refinedCount) pixels in band y=[\(minBandTop),\(maxBandBottom)] " +
-              "expectedY=[\(expYMin),\(expYMax)] " +
-              "skyMedian=\(String(format:"%.4f", stats.first?.medianSkyBrightness ?? 0)) " +
-              "groundMedian=\(String(format:"%.4f", stats.first?.medianGroundBrightness ?? 0))")
-
-        // De-spike: extract per-column horizon Y from the refined output, remove narrow
-        // upward protrusions (wind turbines, towers, etc.), then re-render the bytes.
-        if spikeRemovalEnabled {
-            let maxDev = Int((spikeMaxDeviationFraction * Double(h)).rounded())
-            let despiked = despikeHorizonY(
-              outputBytes,
-              width: w, height: h,
-              windowHalf: spikeWindowHalf,
-              maxDeviation: maxDev,
-              maxSpikeWidth: spikeMaxWidth
-            )
-            if let despiked {
-                outputBytes = despiked
-            }
-        }
-
-        return outputBytes.withUnsafeMutableBytes { ptr -> HorizonMask? in
-            guard let base = ptr.baseAddress else { return nil }
-            let mat = MatWrapper(
-              width: w, height: h,
-              cvType: 0,
-              bytesPerRow: w,
-              data: base,
-              takeOwnership: false
-            )
-            guard let maskImage = PixelatedImage(mat: mat.clone()) else { return nil }
-            return HorizonMask(maskImage)
-        }
-    }
-
-    /// Remove narrow upward spikes and isolated misclassified pixels from a binary horizon
-    /// mask stored as a flat byte array.
-    ///
-    /// Two-pronged approach:
-    ///
-    /// **Star pixels**: isolated bright pixels misclassified as ground appear as single black
-    /// pixels in the sky. They are handled by computing a *robust* horizon Y that requires
-    /// `minGroundRun` consecutive black pixels before accepting a column's horizon position.
-    /// A lone star pixel is never part of a run of 3+, so it is ignored and the real ground
-    /// boundary is used instead.
-    ///
-    /// **Narrow structures** (wind turbines, towers): these have genuine runs of consecutive
-    /// black pixels but form narrow columns that deviate far above the local terrain median.
-    /// They are detected by comparing each column's robust horizon Y to the local median over
-    /// `windowHalf` columns; deviations greater than `maxDeviation` pixels in runs narrower
-    /// than `maxSpikeWidth` columns are replaced by linear interpolation.
-    ///
-    /// After both corrections, each modified column is re-rendered cleanly: everything above
-    /// the corrected horizon Y is set to sky (255), everything at or below is ground (0).
-    ///
-    /// Returns `nil` if nothing changed.
-    private func despikeHorizonY(
-      _ bytes: [UInt8],
-      width w: Int,
-      height h: Int,
-      windowHalf: Int,
-      maxDeviation: Int,
-      maxSpikeWidth: Int,
-      minGroundRun: Int = 3
-    ) -> [UInt8]? {
-        // Step 1: extract two horizon Y arrays per column.
-        //   firstBlack: first dark pixel encountered (may be an isolated star pixel)
-        //   horizonY:   first position where minGroundRun consecutive dark pixels begin
-        //               (robust against isolated star pixels)
-        var firstBlack = [Int](repeating: h, count: w)
-        var horizonY   = [Int](repeating: h, count: w)
-        for x in 0..<w {
-            var run = 0
-            var gotFirst = false
-            for y in 0..<h {
-                if bytes[y * w + x] == 0 {
-                    if !gotFirst { firstBlack[x] = y; gotFirst = true }
-                    run += 1
-                    if run >= minGroundRun, horizonY[x] == h {
-                        horizonY[x] = y - minGroundRun + 1
-                    }
-                } else {
-                    run = 0
-                }
-            }
-        }
-
-        // Step 2: local median of robust horizon Y per column.
-        var localMedian = [Int](repeating: h / 2, count: w)
-        for x in 0..<w {
-            let lo = max(0, x - windowHalf)
-            let hi = min(w - 1, x + windowHalf)
-            var window = [Int](horizonY[lo...hi])
-            window.sort()
-            localMedian[x] = window[window.count / 2]
-        }
-
-        // Step 3: mark columns where robust horizonY spikes above the local median.
-        var isSpike = [Bool](repeating: false, count: w)
-        for x in 0..<w {
-            if horizonY[x] < localMedian[x] - maxDeviation {
-                isSpike[x] = true
-            }
-        }
-
-        // Step 4a: un-mark wide runs — those are legitimate terrain features, not spikes.
-        var x = 0
-        while x < w {
-            if isSpike[x] {
-                var runEnd = x
-                while runEnd < w && isSpike[runEnd] { runEnd += 1 }
-                if runEnd - x > maxSpikeWidth {
-                    for j in x..<runEnd { isSpike[j] = false }
-                }
-                x = runEnd
-            } else {
-                x += 1
-            }
-        }
-
-        // Step 4b: interpolate horizon Y over spike columns.
-        var fixedY = horizonY  // robust Y; star columns already corrected vs firstBlack
-        for x in 0..<w where isSpike[x] {
-            var leftX = x - 1
-            while leftX >= 0 && isSpike[leftX] { leftX -= 1 }
-            var rightX = x + 1
-            while rightX < w && isSpike[rightX] { rightX += 1 }
-            let ly = leftX >= 0 ? horizonY[leftX]  : (rightX < w ? horizonY[rightX] : h)
-            let ry = rightX < w ? horizonY[rightX] : ly
-            if leftX < 0 {
-                fixedY[x] = ry
-            } else if rightX >= w {
-                fixedY[x] = ly
-            } else {
-                let t = Double(x - leftX) / Double(rightX - leftX)
-                fixedY[x] = Int((Double(ly) * (1 - t) + Double(ry) * t).rounded())
-            }
-        }
-
-        // Determine what actually changed (spike corrections + star-pixel cleanups).
-        let spikeCount = isSpike.filter { $0 }.count
-        let starCount  = zip(firstBlack, fixedY).filter { $0 < $1 }.count
-        guard spikeCount > 0 || starCount > 0 else { return nil }
-
-        Log.i("frame \(frameIndex) despikeHorizonY: fixed \(spikeCount) spike columns, " +
-              "\(starCount) isolated-pixel columns " +
-              "(maxDev=\(maxDeviation) maxWidth=\(maxSpikeWidth) minRun=\(minGroundRun))")
-
-        // Step 5: re-render changed columns.
-        // For each column the intended boundary is fixedY[x].  We update the range between
-        // firstBlack[x] (first affected pixel) and fixedY[x] (new boundary).
-        var out = bytes
-        for x in 0..<w {
-            let newY  = fixedY[x]
-            let oldFirst = firstBlack[x]
-            guard oldFirst != newY else { continue }
-
-            if oldFirst < newY {
-                // Sky restored: rows [oldFirst, newY) should be white (255).
-                for row in oldFirst..<min(newY, h) { out[row * w + x] = 255 }
-            } else {
-                // Ground extended down: rows [newY, oldFirst) should be black (0).
-                for row in newY..<min(oldFirst, h) { out[row * w + x] = 0 }
-            }
-        }
-        return out
-    }
-
-    /// Apply `referenceStatsBrightnessRefinedHorizonMask` if the config enables it and
-    /// reference stats are available.  Returns the original mask unchanged on failure.
-    private func referenceStatsBrightnessRefinementIfNeeded(
-      mask: HorizonMask,
-      config: Config
-    ) async throws -> HorizonMask {
-        guard config.tripodHeadWasMoving,
-              config.useReferenceHorizonBrightnessRefinement
-        else { return mask }
-
-        let stats = try await referenceHorizonsWithStats(
-          maxCount: 2,
-          numBuckets: config.referenceHorizonBrightnessRefinementHistogramBuckets,
-          neighborhoodSize: config.referenceHorizonNeighborhoodSize
-        )
-        guard !stats.isEmpty else { return mask }
-
-        guard let expectedY = interpolatedExpectedYPerColumn(from: stats, width: mask.image.width)
-        else { return mask }
-
-        guard let original = try? await imageAccessor.load(
-                frameIndex: frameIndex,
-                type: .original,
-                atSize: .original
-              )
-        else {
-            Log.w("frame \(frameIndex) referenceStatsBrightnessRefinementIfNeeded: cannot load original")
-            return mask
-        }
-
-        return referenceStatsBrightnessRefinedHorizonMask(
-          detected: mask,
-          original: original,
-          stats: stats,
-          expectedYPerColumn: expectedY,
-          searchRadius: config.referenceHorizonBrightnessRefinementSearchRadius,
-          spikeRemovalEnabled: config.horizonSpikeRemovalEnabled,
-          spikeMaxWidth: config.horizonSpikeMaxWidth,
-          spikeMaxDeviationFraction: config.horizonSpikeMaxDeviationFraction,
-          spikeWindowHalf: config.horizonSpikeWindowHalf,
-          neighborhoodSize: config.referenceHorizonNeighborhoodSize
-        ) ?? mask
-    }
-
-    /// Look for a user-painted reference horizon mask on disk and return it if found.
-    ///
-    /// Search order:
-    /// Loads the per-frame reference mask only (does NOT fall back to the global
-    /// `reference.tiff`).  Returns non-nil only when this specific frame has its
-    /// own painted reference file in `horizonReference/`.
-    private func loadPerFrameHorizonReferenceMask() async throws -> HorizonMask? {
-        guard let mergedPath = imageAccessor.nameForImage(
-                frameIndex: frameIndex,
-                ofType: .mergedHorizon,
-                atSize: .original
-              )
-        else { return nil }
-
-        let mergedURL   = URL(fileURLWithPath: mergedPath)
-        let frameRefURL = mergedURL
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("horizonReference")
-            .appendingPathComponent(mergedURL.lastPathComponent)
-
-        guard FileManager.default.fileExists(atPath: frameRefURL.path),
-              let refImage = PixelatedImage(filename: frameRefURL.path)?.asHorizonMask
-        else { return nil }
-
-        return HorizonMask(refImage)
-    }
-
-    /// 1. `{horizonReference}/{frameFileName}` — per-frame reference (moving sequences)
-    /// 2. `{horizonReference}/reference.tiff`   — global reference (static sequences)
-    private func loadHorizonReferenceMask() async throws -> HorizonMask? {
-        guard let mergedPath = imageAccessor.nameForImage(
-                frameIndex: frameIndex,
-                ofType: .mergedHorizon,
-                atSize: .original
-              )
-        else { return nil }
-
-        let mergedURL       = URL(fileURLWithPath: mergedPath)
-        let frameFileName   = mergedURL.lastPathComponent
-        let referenceDir    = mergedURL
-            .deletingLastPathComponent()    // …/mergedHorizon
-            .deletingLastPathComponent()    // …/output (tempOutputPath)
-            .appendingPathComponent("horizonReference")
-
-        // 1. Per-frame reference
-        let frameRefURL = referenceDir.appendingPathComponent(frameFileName)
-        if FileManager.default.fileExists(atPath: frameRefURL.path),
-           let refImage = PixelatedImage(filename: frameRefURL.path)?.asHorizonMask
-        {
-            Log.d("frame \(frameIndex) loadHorizonReferenceMask: found per-frame reference")
-            return HorizonMask(refImage)
-        }
-
-        // 2. Global reference
-        let globalRefURL = referenceDir.appendingPathComponent("reference.tiff")
-        if FileManager.default.fileExists(atPath: globalRefURL.path),
-           let refImage = PixelatedImage(filename: globalRefURL.path)?.asHorizonMask
-        {
-            Log.d("frame \(frameIndex) loadHorizonReferenceMask: found global reference")
-            return HorizonMask(refImage)
-        }
-
-        return nil
-    }
-
-    // MARK: - Horizon parameter tuning
-
-    /// Load the tuned horizon parameters for this sequence, returning defaults if none saved.
-    public func loadTunedHorizonParameters() -> HorizonTunedParameters {
-        guard let dir = tunedParametersDirectory() else { return HorizonTunedParameters() }
-        return HorizonTunedParameters.load(fromDirectory: dir) ?? HorizonTunedParameters()
-    }
-
-    /// Save tuned horizon parameters for this sequence.
-    public func saveTunedHorizonParameters(_ params: HorizonTunedParameters) throws {
-        guard let dir = tunedParametersDirectory() else {
-            throw "frame \(frameIndex): cannot determine tuned parameters directory"
-        }
-        try params.save(toDirectory: dir)
-    }
-
-    /// Returns the URL of the `horizonReference/` directory for this sequence,
-    /// or `nil` if the path cannot be determined.
-    private func tunedParametersDirectory() -> URL? {
-        guard let mergedPath = imageAccessor.nameForImage(
-                frameIndex: frameIndex,
-                ofType: .mergedHorizon,
-                atSize: .original
-              )
-        else { return nil }
-        return URL(fileURLWithPath: mergedPath)
-            .deletingLastPathComponent()    // …/mergedHorizon
-            .deletingLastPathComponent()    // …/output
-            .appendingPathComponent("horizonReference")
-    }
-
-    /// If `tuned_parameters.json` does not already exist, run coordinate-descent
-    /// tuning against `referenceMask` and write the winner.
-    private func maybeTuneHorizonParameters(referenceMask: HorizonMask) async {
-        guard let paramsDir = tunedParametersDirectory() else { return }
-
-        // Don't overwrite hand-tuned or previously auto-tuned parameters.
-        let jsonURL = paramsDir.appendingPathComponent(HorizonTunedParameters.jsonFilename)
-        guard !FileManager.default.fileExists(atPath: jsonURL.path) else {
-            Log.d("frame \(frameIndex) maybeTuneHorizonParameters: tuned_parameters.json already exists — skipping")
-            return
-        }
-
-        // Need homography results for prepare().
-        var homographyResults = neighborStarHomography
-        if homographyResults == nil {
-            homographyResults = await readStarNeighborHomographyForThisFrame()
-        }
-        guard let homographyResults else {
-            Log.w("frame \(frameIndex) maybeTuneHorizonParameters: no star homography — cannot tune")
-            return
-        }
-
-        guard let mergedMask = try? await loadOrCreateMergedHorizonMask() else { return }
-        let currentWidth  = mergedMask.image.width
-        let currentHeight = mergedMask.image.height
-
-        var neighborHorizonFilenames:   [String]   = []
-        var neighborOriginalFilenames:  [String]   = []
-        var neighborHomographies:       [[Double]] = []
-
-        for warpInfo in homographyResults.neighborHomography {
-            guard warpInfo.alignmentState == .homographySuccess ||
-                  warpInfo.alignmentState == .usedExistingHomography,
-                  let homography = warpInfo.homography
-            else { continue }
-            let neighborIndex = warpInfo.frameIndex
-            guard let origFilename = imageAccessor.nameForImage(
-                    frameIndex: neighborIndex, ofType: .original, atSize: .original),
-                  let horizFilename = imageAccessor.nameForImage(
-                    frameIndex: neighborIndex, ofType: .mergedHorizon, atSize: .original)
-            else { continue }
-            neighborOriginalFilenames.append(origFilename)
-            neighborHorizonFilenames.append(horizFilename)
-            neighborHomographies.append(homography)
-        }
-
-        guard !neighborHomographies.isEmpty else { return }
-
-        let currentImage = try? await imageAccessor.load(
-            frameIndex: frameIndex, type: .original, atSize: .original
-        )
-
-        // Prepare once — the expensive I/O stage.
-        let seedDetector = HomographyHorizonDetector()
-        let prepared = seedDetector.prepare(
-            currentWidth:              currentWidth,
-            currentHeight:             currentHeight,
-            neighborHorizonFilenames:  neighborHorizonFilenames,
-            neighborOriginalFilenames: neighborOriginalFilenames,
-            neighborHomographies:      neighborHomographies,
-            currentImage:              currentImage
-        )
-
-        let referenceY = HomographyHorizonDetector.horizonYPerColumn(in: referenceMask)
-        let tunedParams = tuneDetector(seedDetector, prepared: prepared, referenceY: referenceY)
-
-        do {
-            try tunedParams.save(toDirectory: paramsDir)
-            Log.i("frame \(frameIndex) maybeTuneHorizonParameters: saved tuned parameters " +
-                  "(MAE: \(tunedParams.tuningMeanAbsoluteError.map { String(format: "%.1f", $0) } ?? "n/a"))")
-        } catch {
-            Log.w("frame \(frameIndex) maybeTuneHorizonParameters: could not save parameters: \(error)")
-        }
-    }
-
-    /// Coordinate-descent search over the four detector parameters.
-    ///
-    /// Two passes: each pass cycles through all parameters and picks the best
-    /// value within the candidate range while keeping the others fixed.
-    /// About 40 evaluations total — all using the pre-built `prepared` data so
-    /// no disk I/O is required.
-    private func tuneDetector(
-        _ initial: HomographyHorizonDetector,
-        prepared: HomographyHorizonDetector.PreparedData,
-        referenceY: [Int?]
-    ) -> HorizonTunedParameters {
-
-        var best = initial
-        var bestScore = Double.infinity
-        if let mask = best.detectFromPrepared(prepared) {
-            bestScore = HomographyHorizonDetector.score(
-                algorithmY: HomographyHorizonDetector.horizonYPerColumn(in: mask),
-                referenceY: referenceY
-            )
-        }
-
-        let errorThresholdFactors: [Double] = [0.5, 1.0, 2.0, 3.0, 4.0]
-        let errorSearchRanges:     [Int]    = [150, 250, 400, 550]
-        let errorBlurRadii:        [Int]    = [2, 5, 8]
-        let smoothingRadii:        [Int]    = [25, 50, 75, 100]
-
-        for _ in 0..<2 {
-            // Tune errorThresholdFactor
-            for v in errorThresholdFactors {
-                var candidate = best
-                candidate.errorThresholdFactor = v
-                if let mask = candidate.detectFromPrepared(prepared) {
-                    let s = HomographyHorizonDetector.score(
-                        algorithmY: HomographyHorizonDetector.horizonYPerColumn(in: mask),
-                        referenceY: referenceY
-                    )
-                    if s < bestScore { bestScore = s; best = candidate }
-                }
-            }
-            // Tune errorSearchRange
-            for v in errorSearchRanges {
-                var candidate = best
-                candidate.errorSearchRange = v
-                if let mask = candidate.detectFromPrepared(prepared) {
-                    let s = HomographyHorizonDetector.score(
-                        algorithmY: HomographyHorizonDetector.horizonYPerColumn(in: mask),
-                        referenceY: referenceY
-                    )
-                    if s < bestScore { bestScore = s; best = candidate }
-                }
-            }
-            // Tune errorBlurRadius
-            for v in errorBlurRadii {
-                var candidate = best
-                candidate.errorBlurRadius = v
-                if let mask = candidate.detectFromPrepared(prepared) {
-                    let s = HomographyHorizonDetector.score(
-                        algorithmY: HomographyHorizonDetector.horizonYPerColumn(in: mask),
-                        referenceY: referenceY
-                    )
-                    if s < bestScore { bestScore = s; best = candidate }
-                }
-            }
-            // Tune smoothingRadius
-            for v in smoothingRadii {
-                var candidate = best
-                candidate.smoothingRadius = v
-                if let mask = candidate.detectFromPrepared(prepared) {
-                    let s = HomographyHorizonDetector.score(
-                        algorithmY: HomographyHorizonDetector.horizonYPerColumn(in: mask),
-                        referenceY: referenceY
-                    )
-                    if s < bestScore { bestScore = s; best = candidate }
-                }
-            }
-        }
-
-        var params = HorizonTunedParameters()
-        params.smoothingRadius      = best.smoothingRadius
-        params.errorSearchRange     = best.errorSearchRange
-        params.errorBlurRadius      = best.errorBlurRadius
-        params.errorThresholdFactor = best.errorThresholdFactor
-        params.errorSampleHalfWidth = best.errorSampleHalfWidth
-        params.tuningMeanAbsoluteError = bestScore.isFinite ? bestScore : nil
-        params.tuningFrameCount = 1
-        return params
-    }
-
-    // MARK: - Live object-selection horizon preview
-
-    /// Compute the snapped, interpolated per-column horizon Y for live preview
-    /// in the horizon painter's "object selection" mode.
-    ///
-    /// **Algorithm** (adapted from GIMP's Foreground Select / SIOX):
-    /// 1. Build a *sky centroid* in CIE L\*a\*b\* from the **bottom 20 %** of the
-    ///    painted band (sky immediately adjacent to the ridgeline), and a *ground
-    ///    centroid* from the bottom 5 % of the image (guaranteed terrain regardless
-    ///    of how high up in the sky the user painted).
-    /// 2. For each column scan **downward** from `bottomBoundaryY` computing the
-    ///    SIOX ratio: `confidence = d_gnd / (d_sky + d_gnd)`.  The first row where
-    ///    `confidence < 0.5` (closer to ground than sky) is the horizon.
-    ///    The result is always at or below the painted bottom edge, so the
-    ///    selection always expands *downward* toward terrain, never upward.
-    ///
-    /// Pixel colours are averaged over a ±20 px horizontal window (41 px total)
-    /// before LAB conversion, suppressing stars (1–3 px wide) to ≤ 7 % of the
-    /// window mean.  The scan additionally requires 3 consecutive terrain-like
-    /// rows before declaring the horizon, eliminating false stops on the 1–2 px
-    /// dark gaps between stars.
-    ///
-    /// - Parameters:
-    ///   - topBoundaryY:    Per-column Y of the *top* edge of the painted area
-    ///     (view coordinates, length = `viewWidth`).
-    ///   - bottomBoundaryY: Per-column Y of the *bottom* edge of the painted area
-    ///     (view coordinates, length = `viewWidth`).
-    ///   - viewWidth:  Width of the frame view in points.
-    ///   - viewHeight: Height of the frame view in points.
-    /// - Returns: Per-column horizon Y in **view coordinates**
-    ///   (length = `viewWidth`).  `nil` columns were not painted.
-    /// SIOX three-region horizon detection.
-    ///
-    /// - Parameters:
-    ///   - topBoundaryY: Per-column top of the horizon band (view coords).
-    ///   - bottomBoundaryY: Per-column bottom of the horizon band (view coords).
-    ///   - viewWidth: Width of the view.
-    ///   - viewHeight: Height of the view.
-    ///   - bandMode: Must be `true` for three-region SIOX.
-    ///   - knownSkyFloorY: Per-column lowest Y known to be sky (view coords).
-    ///     Defaults to `topBoundaryY` (initial band computation).
-    ///   - knownGroundCeilingY: Per-column highest Y known to be ground (view coords).
-    ///     Defaults to `bottomBoundaryY` (initial band computation).
-    ///
-    /// The algorithm classifies each pixel in the **unknown** region
-    /// (between `knownSkyFloor` and `knownGroundCeiling`) by comparing its
-    /// 4D feature vector (CIE L*a*b* colour + weighted linear luminance) to
-    /// a single global sky centroid and a single global ground centroid,
-    /// both computed from ALL known pixels.  The intensity channel provides
-    /// Otsu-like brightness discrimination alongside perceptual colour.
-    /// Known regions are never reclassified.
-    public func computeLiveObjectSelection(
-        topBoundaryY:    [Int?],
-        bottomBoundaryY: [Int?],
-        viewWidth:  Int,
-        viewHeight: Int,
-        bandMode: Bool = false,
-        knownSkyFloorY:      [Int?]? = nil,
-        knownGroundCeilingY: [Int?]? = nil
-    ) async throws -> [Int?] {
-        // 1. Load original image (async I/O — suspends without blocking).
-        guard let original = try await imageAccessor.load(
-                frameIndex: frameIndex,
-                type: .original,
-                atSize: .original
-              )
-        else {
-            throw "computeLiveObjectSelection: cannot load original image for frame \(frameIndex)"
-        }
-        let imgW = original.width
-        let imgH = original.height
-
-        // 2. Scale the painted top + bottom boundaries: view coords → image pixel coords.
-        let scaleX = Double(imgW) / Double(viewWidth)
-        let scaleY = Double(imgH) / Double(viewHeight)
-
-        // scaledTop[ix] / scaledBottom[ix]: image-pixel Y range painted in column ix.
-        // Both are nil when the column was not painted at all.
-        var scaledTop    = [Int?](repeating: nil, count: imgW)
-        var scaledBottom = [Int?](repeating: nil, count: imgW)
-        for ix in 0..<imgW {
-            let vx  = Int((Double(ix) / scaleX).rounded())
-            let col = min(max(vx, 0), topBoundaryY.count - 1)
-            if let topVY = topBoundaryY[col] {
-                scaledTop[ix]    = Int((Double(topVY) * scaleY).rounded())
-            }
-            if let botVY = bottomBoundaryY[col] {
-                scaledBottom[ix] = Int((Double(botVY) * scaleY).rounded())
-            }
-        }
-
-        // Scale known-region boundaries: view coords → image pixel coords.
-        // knownSkyFloor defaults to topBoundaryY (initial band computation).
-        // knownGroundCeiling defaults to bottomBoundaryY.
-        let skyFloorSrc   = knownSkyFloorY      ?? topBoundaryY
-        let gndCeilingSrc = knownGroundCeilingY  ?? bottomBoundaryY
-        var scaledSkyFloor   = [Int?](repeating: nil, count: imgW)
-        var scaledGndCeiling = [Int?](repeating: nil, count: imgW)
-        for ix in 0..<imgW {
-            let vx  = Int((Double(ix) / scaleX).rounded())
-            let col = min(max(vx, 0), skyFloorSrc.count - 1)
-            if let vy = skyFloorSrc[col] {
-                scaledSkyFloor[ix] = Int((Double(vy) * scaleY).rounded())
-            }
-            if let vy = gndCeilingSrc[col] {
-                scaledGndCeiling[ix] = Int((Double(vy) * scaleY).rounded())
-            }
-        }
-
-        // 3. Horizon detection — SIOX-inspired LAB+intensity ratio
-        //    (adapted from GIMP's Foreground Select tool; no Canny).
-        //
-        //    Stars make Canny unreliable: an isolated star produces the same
-        //    high gradient as a mountain ridgeline.  Instead we use the SIOX
-        //    "confidence" ratio from GIMP, applied per-column:
-        //
-        //        confidence = d_gnd / (d_sky + d_gnd)   (in CIE L*a*b* + I)
-        //
-        //    confidence > 0.5 → pixel closer to sky centroid   → still sky
-        //    confidence < 0.5 → pixel closer to ground centroid → horizon found
-        //
-        //    The feature space is 4D: L*a*b* (perceptually uniform colour)
-        //    plus linear luminance I (absolute brightness, Otsu-like).
-        //    L* is a cube-root transform of luminance — perceptually uniform
-        //    but compresses bright regions.  Adding linear luminance I as a
-        //    4th channel preserves absolute brightness differences that help
-        //    separate sky from terrain in difficult cases (similar-hue horizons,
-        //    twilight scenes, very dark terrain against very dark sky).
-        //
-        //    Stars are suppressed by averaging pixels over a ±halfW horizontal
-        //    window before converting to LAB+I.  A 3 px star in a 61 px window
-        //    shifts the windowed mean by only ~5 %, not enough to flip the
-        //    ratio.  The mountain silhouette causes a broad, sustained shift
-        //    that reliably flips the ratio.
-        //
-        //    Implementation detail: prefix-sum trick gives O(imgW) per row
-        //    instead of O(imgW × windowWidth) for the windowed cache.
-
-        let halfW = 30   // horizontal window half-width (61 px total)
-        // A 3 px star contributes only 3/61 ≈ 5 % of the window mean.
-        // Even a 10 px star cluster = 16 %, insufficient to dominate a
-        // region of continuous sky.  Mountain silhouettes are solid over
-        // thousands of pixels and still dominate even with a 61 px window.
-
-        // Weight for the linear-luminance intensity channel in the 4D
-        // distance calculation.  Linear Y ranges [0,1]; L* ranges [0,100].
-        // Multiplying Y by this weight puts it on a comparable scale to L*.
-        // Higher values give more Otsu-like emphasis to raw brightness
-        // differences; lower values rely more on perceptual colour.
-        let intensityWeight: Float = 100.0
-
-        let pixelData = Array(original.mat.buffer(of: UInt8.self))
-        let pixStride = original.bytesPerRow
-        let pxBpp     = max(1, original.bytesPerPixel)
-        // OpenCV convention: channel order is [Blue=0, Green=1, Red=2, (Alpha=3)]
-
-        let snapTop    = scaledTop
-        let snapBottom = scaledBottom
-
-        // Pre-compute the LAB band covering the full image height so we can
-        // scan all the way down to terrain regardless of where the user painted.
-        let globalTop = max(0, snapTop.compactMap { $0 }.min() ?? 0)
-        let globalBot = imgH - 1   // always extend to the bottom of the image
-
-        // `scaledY`: image-pixel horizon Y per image column (length = imgW).
-        // Captures for Sendable closure.
-        let skyFloor   = scaledSkyFloor
-        let gndCeiling = scaledGndCeiling
-        var scaledY: [Int?] = await Task.detached(priority: .userInitiated) {
-
-            // ── Linearise LUT ─────────────────────────────────────────────────
-            let linearLUT: [Float] = (0..<256).map { v in
-                let n = Float(v) / 255.0
-                return n <= 0.04045 ? n / 12.92 : pow((n + 0.055) / 1.055, 2.4)
-            }
-
-            @inline(__always)
-            func linRGBtoLABI(r: Float, g: Float, b: Float)
-                -> (L: Float, a: Float, b: Float, I: Float)
-            {
-                let X = 0.4124564*r + 0.3575761*g + 0.1804375*b
-                let Y = 0.2126729*r + 0.7151522*g + 0.0721750*b
-                let Z = 0.0193339*r + 0.1191920*g + 0.9503041*b
-                let Xn: Float = 0.95047, Yn: Float = 1.0, Zn: Float = 1.08883
-                @inline(__always) func f(_ t: Float) -> Float {
-                    t > 0.008856 ? pow(t, 1.0/3.0) : 7.787*t + (16.0/116.0)
-                }
-                let (fx, fy, fz) = (f(X/Xn), f(Y/Yn), f(Z/Zn))
-                // L*a*b* for perceptual colour + linear luminance Y for
-                // Otsu-like intensity discrimination.
-                return (116.0*fy - 16.0,  500.0*(fx - fy),  200.0*(fy - fz),  Y)
-            }
-
-            // ── Phase A: build the windowed-LAB cache ──────────────────────────
-            let rowStep = 2
-
-            // Column range covering all painted columns.
-            let colLeft  = snapTop.firstIndex(where: { $0 != nil }) ?? 0
-            let colRight = snapTop.lastIndex(where:  { $0 != nil }) ?? (imgW - 1)
-            guard colLeft <= colRight else { return [Int?](repeating: nil, count: imgW) }
-            let colWidth = colRight - colLeft + 1
-
-            let pxLeft  = max(0,        colLeft  - halfW)
-            let pxRight = min(imgW - 1, colRight + halfW)
-            let pxWidth = pxRight - pxLeft + 1
-
-            let bandH = (globalBot - globalTop) / rowStep + 1
-            var winL  = [Float](repeating: 0, count: bandH * colWidth)
-            var winA  = [Float](repeating: 0, count: bandH * colWidth)
-            var winBB = [Float](repeating: 0, count: bandH * colWidth)
-            var winI  = [Float](repeating: 0, count: bandH * colWidth)
-
-            for iy in stride(from: globalTop, through: globalBot, by: rowStep) {
-                let ri = (iy - globalTop) / rowStep
-                var prefR = [Float](repeating: 0, count: pxWidth + 1)
-                var prefG = [Float](repeating: 0, count: pxWidth + 1)
-                var prefB = [Float](repeating: 0, count: pxWidth + 1)
-                for i in 0..<pxWidth {
-                    let ix   = pxLeft + i
-                    let base = iy * pixStride + ix * pxBpp
-                    let bV   = linearLUT[Int(pixelData[base])]
-                    let gV   = pxBpp > 1 ? linearLUT[Int(pixelData[base + 1])] : bV
-                    let rV   = pxBpp > 2 ? linearLUT[Int(pixelData[base + 2])] : bV
-                    prefR[i+1] = prefR[i] + rV
-                    prefG[i+1] = prefG[i] + gV
-                    prefB[i+1] = prefB[i] + bV
-                }
-                for ix in colLeft...colRight {
-                    let i   = ix - pxLeft
-                    let lo  = max(0,          i - halfW)
-                    let hi  = min(pxWidth - 1, i + halfW)
-                    let cnt = Float(hi - lo + 1)
-                    let mr  = (prefR[hi+1] - prefR[lo]) / cnt
-                    let mg  = (prefG[hi+1] - prefG[lo]) / cnt
-                    let mb  = (prefB[hi+1] - prefB[lo]) / cnt
-                    let (L, a, lab_b, intensity) = linRGBtoLABI(r: mr, g: mg, b: mb)
-                    let idx = ri * colWidth + (ix - colLeft)
-                    winL[idx] = L;  winA[idx] = a;  winBB[idx] = lab_b
-                    winI[idx] = intensity * intensityWeight
-                }
-            }
-
-            // ── Phase B: SIOX three-region scan ───────────────────────────────
-
-            @inline(__always)
-            func labiAt(ix: Int, iy: Int) -> (L: Float, a: Float, b: Float, I: Float) {
-                let ri  = min((iy - globalTop) / rowStep, bandH - 1)
-                let idx = ri * colWidth + (ix - colLeft)
-                return (winL[idx], winA[idx], winBB[idx], winI[idx])
-            }
-            @inline(__always)
-            func dist2(_ l1: Float, _ a1: Float, _ b1: Float, _ i1: Float,
-                       _ l2: Float, _ a2: Float, _ b2: Float, _ i2: Float) -> Float {
-                let dL = l1-l2, da = a1-a2, db = b1-b2, di = i1-i2
-                return dL*dL + da*da + db*db + di*di
-            }
-
-            let centroidColStep = max(1, (colRight - colLeft + 1) / 40)
-
-            // ── Global sky centroid (4D: L*a*b* + intensity) ──────────────
-            //
-            // Computed from ALL known-sky pixels: everything from row 0 down
-            // to knownSkyFloor[col] for each column.  This is a single global
-            // centroid (no per-group segmentation) to avoid banding effects.
-            var skyLSum: Float = 0, skyASum: Float = 0, skyBBSum: Float = 0
-            var skyISum: Float = 0
-            var nSky = 0
-            for ix in stride(from: colLeft, through: colRight, by: centroidColStep) {
-                let floor = skyFloor[ix] ?? snapTop[ix] ?? globalTop
-                guard floor > 0 else { continue }
-                let yStep = max(1, floor / 20)
-                for iy in stride(from: 0, to: floor, by: yStep) {
-                    let base = iy * pixStride + ix * pxBpp
-                    let bV = linearLUT[Int(pixelData[base])]
-                    let gV = pxBpp > 1 ? linearLUT[Int(pixelData[base + 1])] : bV
-                    let rV = pxBpp > 2 ? linearLUT[Int(pixelData[base + 2])] : bV
-                    let (L, a, b, rawI) = linRGBtoLABI(r: rV, g: gV, b: bV)
-                    skyLSum += L; skyASum += a; skyBBSum += b
-                    skyISum += rawI * intensityWeight
-                    nSky += 1
-                }
-            }
-            let nSkyF = Float(max(1, nSky))
-            let globalSkyL  = skyLSum  / nSkyF
-            let globalSkyA  = skyASum  / nSkyF
-            let globalSkyBB = skyBBSum / nSkyF
-            let globalSkyI  = skyISum  / nSkyF
-
-            // ── Global ground centroid (4D: L*a*b* + intensity) ──────────
-            //
-            // Computed from ALL known-ground pixels: everything from
-            // knownGroundCeiling[col] down to imgH for each column.
-            var gndLSum: Float = 0, gndASum: Float = 0, gndBBSum: Float = 0
-            var gndISum: Float = 0
-            var nGnd = 0
-            for ix in stride(from: colLeft, through: colRight, by: centroidColStep) {
-                let ceiling = gndCeiling[ix] ?? snapBottom[ix] ?? (imgH - 1)
-                guard ceiling < imgH else { continue }
-                let rowSpan = imgH - ceiling
-                let yStep = max(1, rowSpan / 20)
-                for iy in stride(from: ceiling, to: imgH, by: yStep) {
-                    let base = iy * pixStride + ix * pxBpp
-                    let bV = linearLUT[Int(pixelData[base])]
-                    let gV = pxBpp > 1 ? linearLUT[Int(pixelData[base + 1])] : bV
-                    let rV = pxBpp > 2 ? linearLUT[Int(pixelData[base + 2])] : bV
-                    let (L, a, b, rawI) = linRGBtoLABI(r: rV, g: gV, b: bV)
-                    gndLSum += L; gndASum += a; gndBBSum += b
-                    gndISum += rawI * intensityWeight
-                    nGnd += 1
-                }
-            }
-            let nGndF = Float(max(1, nGnd))
-            let globalGndL  = gndLSum  / nGndF
-            let globalGndA  = gndASum  / nGndF
-            let globalGndBB = gndBBSum / nGndF
-            let globalGndI  = gndISum  / nGndF
-
-            // ── Per-column scan (unknown region only) ────────────────────────
-            //
-            // For each column, the scan region is the unknown gap:
-            //   top  = knownSkyFloor[col]     (everything above is locked sky)
-            //   bot  = knownGroundCeiling[col] (everything below is locked ground)
-            //
-            // We scan top-down through this gap.  The first run of
-            // `minConsecutive` terrain-like rows marks the horizon.
-            // If no terrain is found, the horizon defaults to the bottom
-            // of the unknown gap (all unknown pixels are sky).
-
-            let minConsecutive = 4
-            var result = [Int?](repeating: nil, count: imgW)
-
-            for ix in colLeft...colRight {
-                guard let bandTop = snapTop[ix],
-                      let bandBot = snapBottom[ix] else { continue }
-
-                // Unknown region boundaries for this column.
-                let unknownTop = max(0, skyFloor[ix]   ?? bandTop)
-                let unknownBot = min(imgH - 1, gndCeiling[ix] ?? bandBot)
-
-                guard unknownTop < unknownBot else {
-                    // No unknown gap — horizon is at the sky floor.
-                    result[ix] = unknownTop
-                    continue
-                }
-
-                var consecutiveTerrain = 0
-                var horizonY = unknownBot   // default: all unknown is sky
-                for iy in unknownTop ..< unknownBot {
-                    let (L, a, b, I) = labiAt(ix: ix, iy: iy)
-                    if dist2(L, a, b, I, globalGndL, globalGndA, globalGndBB, globalGndI) <
-                       dist2(L, a, b, I, globalSkyL, globalSkyA, globalSkyBB, globalSkyI) {
-                        consecutiveTerrain += 1
-                        if consecutiveTerrain >= minConsecutive {
-                            horizonY = iy - minConsecutive + 1
-                            break
-                        }
-                    } else {
-                        consecutiveTerrain = 0
-                    }
-                }
-                result[ix] = max(unknownTop, min(horizonY, unknownBot))
-            }
-            return result
-        }.value
-
-        // 4. Linear-interpolate gaps between painted image columns.
-        var lastValidIdx: Int? = nil
-        var lastValidY:   Int  = 0
-        for ix in 0..<imgW {
-            if let y = scaledY[ix] {
-                if let prev = lastValidIdx, prev < ix - 1 {
-                    let span = ix - prev
-                    for gap in (prev + 1)..<ix {
-                        let t = Double(gap - prev) / Double(span)
-                        scaledY[gap] = Int((Double(lastValidY) * (1 - t) + Double(y) * t).rounded())
-                    }
-                }
-                lastValidIdx = ix
-                lastValidY   = y
-            }
-        }
-
-        // 4b. Median filter — removes isolated per-column spikes caused by snow
-        //     patches, bright terrain features, or stray dark/bright pixels that
-        //     shift the SIOX ratio for only a few individual columns.
-        //     A ±medW window replaces each column's value with the median of its
-        //     neighbours, eliminating narrow outliers while preserving the broad
-        //     horizon curve.
-        let medW = 40
-        var smoothedY = scaledY
-        for ix in 0..<imgW {
-            guard scaledY[ix] != nil else { continue }
-            let lo = max(0, ix - medW)
-            let hi = min(imgW - 1, ix + medW)
-            var window: [Int] = []
-            window.reserveCapacity(hi - lo + 1)
-            for jx in lo...hi { if let y = scaledY[jx] { window.append(y) } }
-            if !window.isEmpty {
-                window.sort()
-                smoothedY[ix] = window[window.count / 2]
-            }
-        }
-        scaledY = smoothedY
-
-        // 5. Convert image-pixel coords → view coords.
-        //    `applyExpandedHorizonMask` renders into a Canvas sized at view dimensions,
-        //    so the returned array MUST have `viewWidth` elements with view-coord Ys.
-        var viewY = [Int?](repeating: nil, count: viewWidth)
-        for vx in 0..<viewWidth {
-            let ix = min(max(0, Int((Double(vx) * scaleX).rounded())), imgW - 1)
-            if let iy = scaledY[ix] {
-                viewY[vx] = Int((Double(iy) / scaleY).rounded())
-            }
-        }
-
-        return viewY
-    }
-
-    // MARK: - Random Walker horizon detection
-
-    // MARK: - CombinedHorizonDetector interactive detection
-
-    /// Fill nil values at the leading and trailing edges of an array with
-    /// nearest-neighbour extrapolation.  Interior nil runs are left unchanged.
-    private static func fillEdgeNils(_ arr: [Int?]) -> [Int?] {
-        var result = arr
-        if let first = result.first(where: { $0 != nil }) {
-            for i in result.indices { if result[i] != nil { break }; result[i] = first }
-        }
-        if let last = result.last(where: { $0 != nil }) {
-            for i in result.indices.reversed() { if result[i] != nil { break }; result[i] = last }
-        }
-        return result
-    }
-
-    /// Horizon detection within the user's painted band using `CombinedHorizonDetector`.
-    ///
-    /// Runs the full multi-method pipeline (Otsu, DP, SIOX, gradient, texture)
-    /// constrained to the painted band region.  Locked sky/ground regions —
-    /// set by user brush strokes during refinement — are honoured in the output
-    /// and are never re-classified by the detector.  Edge columns that were not
-    /// painted are filled by nearest-neighbour extrapolation so the horizon
-    /// always covers the full frame width.
-    ///
-    /// - Parameters:
-    ///   - topBoundaryY:         Per-column top of painted band (view coords).
-    ///   - bottomBoundaryY:      Per-column bottom of painted band (view coords).
-    ///   - viewWidth:            Width of the view in points.
-    ///   - viewHeight:           Height of the view in points.
-    ///   - knownSkyFloorY:       Per-column lowest Y confirmed as sky (view coords).
-    ///   - knownGroundCeilingY:  Per-column highest Y confirmed as ground (view coords).
-    /// - Returns: Per-column horizon Y in view coordinates, edge-extrapolated.
-    public func computeCombinedHorizonInBand(
-        topBoundaryY: [Int?],
-        bottomBoundaryY: [Int?],
-        viewWidth: Int,
-        viewHeight: Int,
-        knownSkyFloorY: [Int?]? = nil,
-        knownGroundCeilingY: [Int?]? = nil
-    ) async throws -> [Int?] {
-        guard let original = try await imageAccessor.load(
-                frameIndex: frameIndex,
-                type: .original,
-                atSize: .original
-              )
-        else {
-            throw "computeCombinedHorizonInBand: cannot load original image for frame \(frameIndex)"
-        }
-        let imgW = original.width
-        let imgH = original.height
-        let scaleX = Double(imgW) / Double(viewWidth)
-        let scaleY = Double(imgH) / Double(viewHeight)
-
-        // Edge-fill the band boundaries so all columns have a value.
-        let topFilled = FrameAirplaneRemover.fillEdgeNils(topBoundaryY)
-        let botFilled = FrameAirplaneRemover.fillEdgeNils(bottomBoundaryY)
-
-        // Per-column effective detection window:
-        // top = max(knownSkyFloor, bandTop)   — narrowed by user painting sky downward
-        // bot = min(knownGroundCeiling, bandBot) — narrowed by user erasing upward
-        let skyFloorSrc = FrameAirplaneRemover.fillEdgeNils(
-            knownSkyFloorY ?? topFilled
-        )
-        let gndCeilSrc = FrameAirplaneRemover.fillEdgeNils(
-            knownGroundCeilingY ?? botFilled
-        )
-
-        var effectiveTop = [Int?](repeating: nil, count: viewWidth)
-        var effectiveBot = [Int?](repeating: nil, count: viewWidth)
-        for vx in 0..<viewWidth {
-            let sf = skyFloorSrc[vx]
-            let tb = topFilled[vx]
-            effectiveTop[vx] = (sf != nil && tb != nil) ? max(sf!, tb!) : (sf ?? tb)
-
-            let gc = gndCeilSrc[vx]
-            let bb = botFilled[vx]
-            effectiveBot[vx] = (gc != nil && bb != nil) ? min(gc!, bb!) : (gc ?? bb)
-        }
-
-        // Set SIOX band fractions from the global effective window.
-        let globalTopView  = effectiveTop.compactMap { $0 }.min() ?? 0
-        let globalBotView  = effectiveBot.compactMap { $0 }.max() ?? viewHeight
-        var params = CombinedHorizonDetector.Params()
-        params.sioxBandTopFraction    = max(0.0, Double(globalTopView)  / Double(viewHeight) - 0.02)
-        params.sioxBandBottomFraction = min(1.0, Double(globalBotView)  / Double(viewHeight) + 0.02)
-
-        // Run the full combined detection pipeline.
-        let horizonMask = try await CombinedHorizonDetector.detect(image: original, params: params)
-
-        // Extract per-column Y (image-pixel coords) from the binary mask.
-        let detectedImgY = CombinedHorizonDetector.extractHorizonY(from: horizonMask.image)
-
-        // Map to view coords and clamp each column to its effective window.
-        var result = [Int?](repeating: nil, count: viewWidth)
-        for vx in 0..<viewWidth {
-            let ix = min(max(0, Int((Double(vx) * scaleX).rounded())), imgW - 1)
-            guard var iy = detectedImgY[ix] else { continue }
-
-            // Clamp to per-column effective window (image-pixel coords).
-            if let topVY = effectiveTop[vx] {
-                iy = max(iy, Int((Double(topVY) * scaleY).rounded()))
-            }
-            if let botVY = effectiveBot[vx] {
-                iy = min(iy, Int((Double(botVY) * scaleY).rounded()))
-            }
-
-            result[vx] = Int((Double(iy) / scaleY).rounded())
-        }
-
-        // Edge-extrapolate so the horizon spans the full frame width.
-        return FrameAirplaneRemover.fillEdgeNils(result)
-    }
-
-    /// Edge-aware Random Walker horizon detection within the user's painted band.
-    ///
-    /// This is an alternative to the SIOX method in `computeLiveObjectSelection`.
-    /// It solves a graph-based diffusion problem where:
-    /// - Above the band = sky seeds (probability 1.0)
-    /// - Below the band = ground seeds (probability 0.0)
-    /// - Within the band = unknown, solved via Gauss-Seidel iteration
-    /// - Edge weights = exp(-beta * gradient^2): strong edges resist crossing
-    ///
-    /// The horizon is found by scanning **upward** from the ground seeds,
-    /// locating where the sky probability crosses 0.5.  Results are edge-snapped
-    /// to the nearest strong vertical gradient and median-filtered.
-    ///
-    /// The algorithm operates on a downsampled copy (max 2048px wide) for
-    /// performance, with multi-scale solving for fast convergence.
-    /// Stars are suppressed via Gaussian pre-blur.
-    ///
-    /// - Parameters:
-    ///   - topBoundaryY:         Per-column top of painted band (view coords).
-    ///   - bottomBoundaryY:      Per-column bottom of painted band (view coords).
-    ///   - viewWidth:            Width of the view.
-    ///   - viewHeight:           Height of the view.
-    ///   - knownSkyFloorY:       Per-column lowest Y known sky (view coords).
-    ///   - knownGroundCeilingY:  Per-column highest Y known ground (view coords).
-    ///   - beta:                 Edge weight sensitivity (default 90).
-    /// - Returns: Per-column horizon Y in view coordinates. `nil` = unpainted.
-    public func computeRandomWalkerHorizon(
-        topBoundaryY:    [Int?],
-        bottomBoundaryY: [Int?],
-        viewWidth:  Int,
-        viewHeight: Int,
-        knownSkyFloorY:      [Int?]? = nil,
-        knownGroundCeilingY: [Int?]? = nil,
-        beta: Double = 90.0
-    ) async throws -> [Int?] {
-        // 1. Load original image.
-        guard let original = try await imageAccessor.load(
-                frameIndex: frameIndex,
-                type: .original,
-                atSize: .original
-              )
-        else {
-            throw "computeRandomWalkerHorizon: cannot load original image for frame \(frameIndex)"
-        }
-        let imgW = original.width
-        let imgH = original.height
-
-        // 2. Scale view coords → image pixel coords.
-        let scaleX = Double(imgW) / Double(viewWidth)
-        let scaleY = Double(imgH) / Double(viewHeight)
-
-        let skyFloorSrc   = knownSkyFloorY     ?? topBoundaryY
-        let gndCeilingSrc = knownGroundCeilingY ?? bottomBoundaryY
-
-        // Build Int32 arrays for C bridge.  -1 = unpainted column.
-        var bandTop    = [Int32](repeating: -1, count: imgW)
-        var bandBottom = [Int32](repeating: -1, count: imgW)
-        var skyFloor   = [Int32](repeating: -1, count: imgW)
-        var gndCeiling = [Int32](repeating: -1, count: imgW)
-
-        for ix in 0..<imgW {
-            let vx  = Int((Double(ix) / scaleX).rounded())
-            let col = min(max(vx, 0), topBoundaryY.count - 1)
-
-            if let topVY = topBoundaryY[col] {
-                bandTop[ix] = Int32(min(max(Int((Double(topVY) * scaleY).rounded()), 0), imgH - 1))
-            }
-            if let botVY = bottomBoundaryY[col] {
-                bandBottom[ix] = Int32(min(max(Int((Double(botVY) * scaleY).rounded()), 0), imgH - 1))
-            }
-            if let skyVY = skyFloorSrc[col] {
-                skyFloor[ix] = Int32(min(max(Int((Double(skyVY) * scaleY).rounded()), 0), imgH - 1))
-            }
-            if let gndVY = gndCeilingSrc[col] {
-                gndCeiling[ix] = Int32(min(max(Int((Double(gndVY) * scaleY).rounded()), 0), imgH - 1))
-            }
-        }
-
-        // 3. Call Random Walker C++ implementation.
-        let horizonY = PixelatedImageBridge.randomWalkerHorizon(
-            original.mat,
-            bandTopY: bandTop,
-            bandBottomY: bandBottom,
-            skyFloorY: skyFloor,
-            groundCeilY: gndCeiling,
-            beta: beta
-        )
-
-        // 4. Convert image pixel coords → view coords.
-        var viewY = [Int?](repeating: nil, count: viewWidth)
-        for vx in 0..<viewWidth {
-            let ix = min(max(0, Int((Double(vx) * scaleX).rounded())), imgW - 1)
-            let iy = horizonY[ix]
-            if iy >= 0 {
-                viewY[vx] = Int((Double(iy) / scaleY).rounded())
-            }
-        }
-
-        return viewY
-    }
-
-    // MARK: - Load existing reference horizon for interactive editing
-
-    /// Return the existing user-painted reference horizon as per-column Y values
-    /// in **view** coordinates, or `nil` if no reference mask exists on disk.
-    ///
-    /// Used by `HorizonPainterView` to pre-populate the painter when the user
-    /// opens the tool on a frame that already has a saved reference, so they
-    /// can jump straight into refinement rather than re-painting the band.
-    public func loadExistingHorizonReferenceAsViewY(
-        viewWidth:  Int,
-        viewHeight: Int
-    ) async throws -> [Int?]? {
-        guard let mask = try await loadHorizonReferenceMask() else { return nil }
-        return horizonMaskToViewY(mask, viewWidth: viewWidth, viewHeight: viewHeight)
-    }
-
-    /// Loads the best available existing horizon for this frame into view
-    /// coordinates, without computing or creating anything.
-    ///
-    /// Search order (highest quality first):
-    /// 1. User-painted reference in `horizonReference/`
-    /// 2. Cached `mergedHorizon`
-    /// 3. Raw `horizon`
-    ///
-    /// Returns `nil` if no horizon data exists for this frame.
-    public func loadBestExistingHorizonAsViewY(
-        viewWidth:  Int,
-        viewHeight: Int
-    ) async throws -> [Int?]? {
-        if let result = try await loadExistingHorizonReferenceAsViewY(
-               viewWidth: viewWidth, viewHeight: viewHeight) {
-            return result
-        }
-        for type in [FrameViewMode.mergedHorizon, .horizon] {
-            if let image = try? await imageAccessor.load(
-                   frameIndex: frameIndex, type: type, atSize: .original),
-               let horizonMask = image.asHorizonMask,
-               let mask = HorizonMask(horizonMask)
-            {
-                return horizonMaskToViewY(mask,
-                                          viewWidth:  viewWidth,
-                                          viewHeight: viewHeight)
-            }
-        }
-        return nil
-    }
-
-    private func horizonMaskToViewY(
-        _ mask: HorizonMask,
-        viewWidth:  Int,
-        viewHeight: Int
-    ) -> [Int?] {
-        let imgW   = mask.image.width
-        let imgH   = mask.image.height
-        let scaleX = Double(imgW) / Double(viewWidth)
-        let scaleY = Double(imgH) / Double(viewHeight)
-        let imgY   = CombinedHorizonDetector.extractHorizonY(from: mask.image)
-        var viewY  = [Int?](repeating: nil, count: viewWidth)
-        for vx in 0..<viewWidth {
-            let ix = min(max(0, Int((Double(vx) * scaleX).rounded())), imgW - 1)
-            if let iy = imgY[ix] {
-                viewY[vx] = Int((Double(iy) / scaleY).rounded())
-            }
-        }
-        return FrameAirplaneRemover.fillEdgeNils(viewY)
-    }
-
-    // MARK: - Filmstrip horizon thumbnail overlay
-
-    /// Returns `true` if a user-painted reference horizon file exists on disk
-    /// for this frame (either per-frame or global).  Synchronous — no I/O beyond
-    /// a file-existence check.
-    public var hasHorizonReference: Bool {
-        guard let mergedPath = imageAccessor.nameForImage(
-                frameIndex: frameIndex,
-                ofType: .mergedHorizon,
-                atSize: .original
-              )
-        else { return false }
-        let mergedURL     = URL(fileURLWithPath: mergedPath)
-        let frameFileName = mergedURL.lastPathComponent
-        let referenceDir  = mergedURL
-            .deletingLastPathComponent()    // …/mergedHorizon
-            .deletingLastPathComponent()    // …/output
-            .appendingPathComponent("horizonReference")
-        return FileManager.default.fileExists(
-                   atPath: referenceDir.appendingPathComponent(frameFileName).path)
-            || FileManager.default.fileExists(
-                   atPath: referenceDir.appendingPathComponent("reference.tiff").path)
-    }
-
-    /// Loads `.mergedHorizon` for the overlay, retrying briefly when the file
-    /// exists on disk but the load returns nil. Under heavy concurrent I/O
-    /// during reprocessing, transient `cv::imread` failures would otherwise
-    /// leave the overlay stuck on `.initial` (white) for ~1-3% of frames even
-    /// though a valid merged horizon is on disk; a reload of the sequence
-    /// would then "fix" them. See suspect #1 in the white-line investigation.
-    private func loadMergedHorizonForOverlayWithRetry() async -> PixelatedImage? {
-        let maxAttempts = 3
-        for attempt in 0..<maxAttempts {
-            if let img = try? await imageAccessor.load(
-                           frameIndex: frameIndex,
-                           type: .mergedHorizon,
-                           atSize: .original)
-            {
-                if attempt > 0 {
-                    Log.w("frame \(frameIndex) merged-horizon overlay load succeeded on retry attempt \(attempt)")
-                }
-                return img
-            }
-            // Only retry when the file genuinely exists; if the merged horizon
-            // hasn't been computed yet, falling through to .horizon is correct.
-            guard imageAccessor.imageExists(
-                    frameIndex: frameIndex,
-                    ofType: .mergedHorizon,
-                    atSize: .original)
-            else { return nil }
-            if attempt < maxAttempts - 1 {
-                try? await Task.sleep(nanoseconds: 50_000_000) // 50 ms
-            }
-        }
-        Log.w("frame \(frameIndex) merged-horizon overlay load failed \(maxAttempts) times despite file existing on disk; overlay will fall back to white")
-        return nil
-    }
-
-    /// Load the best-available horizon for this frame and scale it to thumbnail
-    /// dimensions, returning a `HorizonThumbnailOverlay` suitable for drawing
-    /// directly on a filmstrip cell.
-    ///
-    /// Priority: **reference** (green) › **merged** (blue) › **initial** (white).
-    /// Returns `nil` when no horizon of any kind has been computed yet.
-    ///
-    ///
-    /// - Parameters:
-    ///   - thumbnailWidth:  Width of the thumbnail in pixels.
-    ///   - thumbnailHeight: Height of the thumbnail in pixels.
-    public func loadHorizonThumbnailOverlay(
-        thumbnailWidth:  Int,
-        thumbnailHeight: Int
-    ) async throws -> HorizonThumbnailOverlay? {
-
-        // ── Choose the best available source ────────────────────────────────
-        // Each load is individually guarded with try? so that a failure for
-        // one type (e.g., a corrupt file) falls through to the next rather
-        // than aborting the whole chain and leaving the overlay nil/stale.
-        let pixImage: PixelatedImage
-        let kind: HorizonThumbnailOverlay.Kind
-
-        // Per-frame reference (the actual painted frame) → green.
-        // Global-only reference (static timelapse, not the painted frame) → blue.
-        if let refMask = try? await loadPerFrameHorizonReferenceMask() {
-            pixImage = refMask.image
-            kind     = .reference
-        } else if let refMask = try? await loadHorizonReferenceMask() {
-            pixImage = refMask.image
-            kind     = .merged
-        } else if let mergedImage = await loadMergedHorizonForOverlayWithRetry() {
-            pixImage = mergedImage
-            kind     = .merged
-        } else if let initialImage = try? await imageAccessor.load(
-                      frameIndex: frameIndex,
-                      type: .horizon,
-                      atSize: .original)
-        {
-            pixImage = initialImage
-            kind     = .initial
-        } else {
-            return nil
-        }
-
-        // ── Scale image-space horizon Y → thumbnail Y ────────────────────
-        let imgW   = pixImage.width
-        let imgH   = pixImage.height
-        let scaleX = Double(imgW) / Double(thumbnailWidth)
-        let scaleY = Double(imgH) / Double(thumbnailHeight)
-
-        let imgY   = CombinedHorizonDetector.extractHorizonY(from: pixImage)
-
-        var thumbY = [Int](repeating: thumbnailHeight / 2, count: thumbnailWidth)
-        for tx in 0..<thumbnailWidth {
-            let ix = min(max(0, Int((Double(tx) * scaleX).rounded())), imgW - 1)
-            if let iy = imgY[ix] {
-                thumbY[tx] = min(thumbnailHeight - 1,
-                                 max(0, Int((Double(iy) / scaleY).rounded())))
-            }
-        }
-
-        return HorizonThumbnailOverlay(kind: kind, yPerColumn: thumbY)
-    }
-
-    // MARK: - Save user-painted reference horizon mask
-
-    /// Convert a painted horizon (from `HorizonPainterView`) into a binary
-    /// `HorizonMask` TIFF and write it to the `horizonReference/` directory.
-    ///
-    /// - Parameters:
-    ///   - paintedYPerColumn: Per-column painted horizon Y in *view* coordinates.
-    ///   - viewWidth:  Width of the frame view in points (view coordinate space).
-    ///   - viewHeight: Height of the frame view in points.
-    public func saveHorizonReferenceMask(
-        paintedYPerColumn: [Int?],
-        viewWidth:  Int,
-        viewHeight: Int
-    ) async throws {
-        // 1. Load original image to get actual pixel dimensions.
-        guard let original = try await imageAccessor.load(
-                frameIndex: frameIndex,
-                type: .original,
-                atSize: .original
-              )
-        else {
-            throw "saveHorizonReferenceMask: cannot load original image for frame \(frameIndex)"
-        }
-        let imgW = original.width
-        let imgH = original.height
-
-        // 2. Scale painted Y from view coordinates → image pixel coordinates.
-        let scaleX = Double(imgW) / Double(viewWidth)
-        let scaleY = Double(imgH) / Double(viewHeight)
-
-        var scaledY = [Int?](repeating: nil, count: imgW)
-        for ix in 0..<imgW {
-            // Map image column back to nearest painted column.
-            let vx = Int((Double(ix) / scaleX).rounded())
-            let paintedCol = min(max(vx, 0), paintedYPerColumn.count - 1)
-            if let vy = paintedYPerColumn[paintedCol] {
-                scaledY[ix] = Int((Double(vy) * scaleY).rounded())
-            }
-        }
-
-        // 3. Linear-interpolate gaps between painted columns.
-        var lastValidIdx: Int? = nil
-        var lastValidY:   Int  = 0
-        for ix in 0..<imgW {
-            if let y = scaledY[ix] {
-                if let prev = lastValidIdx, prev < ix - 1 {
-                    let span = ix - prev
-                    for gap in (prev + 1)..<ix {
-                        let t = Double(gap - prev) / Double(span)
-                        scaledY[gap] = Int((Double(lastValidY) * (1 - t) + Double(y) * t).rounded())
-                    }
-                }
-                lastValidIdx = ix
-                lastValidY   = y
-            }
-        }
-
-        // 4. Build the binary mask image.
-        let maskMat = PixelatedImageBridge.binaryHorizonMask(
-            width:  Int32(imgW),
-            height: Int32(imgH),
-            horizonY: scaledY
-        )
-        guard let maskPixelated = PixelatedImage(mat: maskMat) else {
-            throw "saveHorizonReferenceMask: could not create mask image for frame \(frameIndex)"
-        }
-
-        // 5. Determine save path inside horizonReference/.
-        guard let mergedPath = imageAccessor.nameForImage(
-                frameIndex: frameIndex,
-                ofType: .mergedHorizon,
-                atSize: .original
-              )
-        else {
-            throw "saveHorizonReferenceMask: cannot determine output path for frame \(frameIndex)"
-        }
-        let mergedURL     = URL(fileURLWithPath: mergedPath)
-        let frameFileName = mergedURL.lastPathComponent
-        let referenceDir  = mergedURL
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("horizonReference")
-
-        try FileManager.default.createDirectory(
-            at: referenceDir,
-            withIntermediateDirectories: true,
-            attributes: nil
-        )
-
-        let config = await configManager.config()
-        let saveName = config.tripodHeadWasMoving ? frameFileName : "reference.tiff"
-        let savePath = referenceDir.appendingPathComponent(saveName).path
-
-        maskPixelated.writeTIFFEncoding(toFilename: savePath)
-        Log.i("frame \(frameIndex) saveHorizonReferenceMask: saved \(savePath)")
-
-        // For static sequences, also write a per-frame marker so this specific frame
-        // can be identified as the painted reference (shown green; others show blue).
-        if !config.tripodHeadWasMoving {
-            let perFramePath = referenceDir.appendingPathComponent(frameFileName).path
-            maskPixelated.writeTIFFEncoding(toFilename: perFramePath)
-            Log.i("frame \(frameIndex) saveHorizonReferenceMask: saved per-frame marker \(perFramePath)")
-        }
-    }
-
-    // this horizon mask is calculated based upon this frame only.
-    // Uses adaptive parameter search: runs horizon detection at reduced resolution
-    // with multiple parameter combinations, scores each result, then applies the
-    // best parameters at full resolution.
-    internal func loadOrCreateHorizonMask() async throws -> HorizonMask {
-        // If the user has painted a reference horizon, use it directly.
-        if let referenceMask = try await loadHorizonReferenceMask() {
-            Log.i("frame \(frameIndex) loadOrCreateHorizonMask: using reference mask (skipping base detection)")
-            return referenceMask
-        }
-        Log.d("frame \(frameIndex) trying to load horizon mask")
-        // load if possible
-        do {
-            if let horizonMaskImage = try await imageAccessor.load(
-                 frameIndex: frameIndex,
-                 type: .horizon,
-                 atSize: .original
-               )
-            {
-                Log.d("frame \(frameIndex) successfully loaded horizon mask")
-                if let mask = HorizonMask(horizonMaskImage) {
-                    return mask
-                }
-                Log.w("frame \(frameIndex) loaded horizon mask image but could not compute bounds")
-            }
-        } catch {
-            Log.i("frame \(frameIndex) unable to load horizon mask: \(error)")
-        }
-        Log.d("frame \(frameIndex) trying to create horizon mask")
-
-        self.set(state: .horizonDetection)
-        let config = await configManager.config()
-        let adaptiveState = configManager.adaptiveHorizonState
-
-        guard let original = try await imageAccessor.load(
-                frameIndex: frameIndex,
-                type: .original,
-                atSize: .original
-              )
-        else {
-            throw "cannot load original image for horizon detection"
-        }
-
-        let horizonMask: HorizonMask
-
-        if config.useCombinedHorizonDetection {
-            // Combined+RW pipeline: run Otsu, DP, SIOX in parallel, median-combine,
-            // then refine with Random Walker. Best-performing method as of 2026-03.
-            Log.i("frame \(frameIndex) using combined+RW horizon detection")
-            horizonMask = try await CombinedHorizonDetector.detect(image: original)
-        } else {
-            // Legacy adaptive search: Otsu multi-crop + DP grid search
-            let useAdaptiveSearch = config.horizonSearchCropBounds.count >= 2
-
-            if useAdaptiveSearch {
-                horizonMask = try await adaptiveHorizonSearch(
-                  original: original,
-                  config: config,
-                  adaptiveState: adaptiveState
-                )
-            } else {
-                // Fallback: single parameter set, same as original behavior
-                let bottomPercentage: Double = 50
-                guard let mask = try await original.horizonMask(
-                        at: frameIndex,
-                        bottomPercentage: bottomPercentage,
-                        useCannyEdgeDetection: config.useCannyForHorizonDetection,
-                        cannyMinThreshold: config.cannyMinThreshold,
-                        cannyMaxThreshold: config.cannyMaxThreshold,
-                        useL2Gradient: config.cannyUseL2Gradient
-                      )
-                else {
-                    throw "cannot create horizon mask"
-                }
-                horizonMask = mask
-            }
-        }
-
-        Log.d("frame \(frameIndex) horizon mask image \(horizonMask.image) created")
-        try await imageAccessor.save(
-          horizonMask.image,
-          frameIndex: frameIndex,
-          as: .horizon,
-          atSizes: await self.outputSizes,
-          overwrite: true
-        )
-
-        self.set(state: .horizonDetected)
-        return horizonMask
-    }
-
-    /// Run horizon detection at reduced resolution with a two-pass parameter search,
-    /// score each result, then apply the best parameters at full resolution.
-    ///
-    /// Pass 1: Coarse search across the full crop bounds range with horizonSearchCropCount1
-    ///         steps, testing all strip width combinations.
-    /// Pass 2: Refined search centered on the pass-1 best crop value, spanning one
-    ///         pass-1 step in each direction, divided into horizonSearchCropCount2 steps.
-    ///         Only the best strip width from pass 1 is used.
-    private func adaptiveHorizonSearch(
-      original: PixelatedImage,
-      config: Config,
-      adaptiveState: AdaptiveHorizonState
-    ) async throws -> HorizonMask {
-        let shrunkWidth = UInt(config.horizonSearchSize[0])
-        let shrunkHeight = UInt(config.horizonSearchSize[1])
-
-        // Step 1: Create reduced-resolution image for parameter search
-        guard let shrunkImage = original.downScaleTo(
-                width: shrunkWidth,
-                height: shrunkHeight
-              )
-        else {
-            Log.w("frame \(frameIndex) unable to downscale for adaptive horizon search, falling back")
-            throw "cannot downscale image for adaptive horizon search"
-        }
-
-        // Pre-compute Canny edges on the shrunk image once for scoring all candidates.
-        let shrunkEdgeImage: PixelatedImage? = try? shrunkImage.cannyEdgeDetect(
-          minThreshold: config.cannyMinThreshold,
-          maxThreshold: config.cannyMaxThreshold,
-          useL2Gradient: config.cannyUseL2Gradient
-        )
-
-        // Step 2: Determine first-pass parameter search space.
-        // After the first frame, narrow the bounds based on what worked before.
-        let cropBounds: [Double] = await adaptiveState.narrowedCropBounds(
-          defaults: config.horizonSearchCropBounds,
-          narrowingRange: config.horizonSearchNarrowingRange
-        )
-        let pass1CropAmounts = HorizonCropAmounts.firstPass(
-          bounds: cropBounds,
-          count: config.horizonSearchCropCount1
-        )
-        let pass1Step = HorizonCropAmounts.firstPassStep(
-          bounds: cropBounds,
-          count: config.horizonSearchCropCount1
-        )
-
-        Log.i("frame \(frameIndex) adaptive horizon pass 1: " +
-              "cropAmounts=\(pass1CropAmounts), ")
-
-        // Step 3: Run first-pass combinations in parallel at reduced resolution
-        let pass1Results = try await runScoredHorizonSearch(
-          cropAmounts: pass1CropAmounts,
-          shrunkImage: shrunkImage,
-          shrunkEdgeImage: shrunkEdgeImage,
-          shrunkWidth: shrunkWidth,
-          config: config
-        )
-
-        // Tie-break on equal total score: prefer larger cropAmount (more conservative
-        // sky crop). A larger crop is less likely to bite into the real horizon; when
-        // the algorithm can't distinguish candidates by score it should stay safe.
-        guard let pass1Best = pass1Results.max(by: {
-            if $0.score.totalScore != $1.score.totalScore {
-                return $0.score.totalScore < $1.score.totalScore
-            }
-            return $0.cropAmount < $1.cropAmount   // higher cropAmount wins
-        })
-        else {
-            throw "adaptive horizon search pass 1 produced no valid results"
-        }
-
-        Log.i("frame \(frameIndex) pass 1 best: " +
-              "cropAmount=\(pass1Best.cropAmount), " +
-              "score=\(pass1Best.score)")
-
-        for result in pass1Results.sorted(by: { $0.score.totalScore > $1.score.totalScore }) {
-            Log.d("frame \(frameIndex) pass 1 result: " +
-                  "crop=\(result.cropAmount)" +
-                  "score=\(result.score)")
-        }
-
-        // Step 4: Second pass - refine the crop amount around the pass-1 best.
-        // The search area spans one pass-1 step in each direction, divided into
-        // horizonSearchCropCount2 evenly spaced values.
-        // Strip width is fixed to the pass-1 best.
-        let pass2CropAmounts = HorizonCropAmounts.secondPass(
-          bestCrop: pass1Best.cropAmount,
-          firstPassStep: pass1Step,
-          count: config.horizonSearchCropCount2
-        )
-
-        Log.i("frame \(frameIndex) adaptive horizon pass 2: " +
-              "cropAmounts=\(pass2CropAmounts)")
-
-        let pass2Results = try await runScoredHorizonSearch(
-          cropAmounts: pass2CropAmounts,
-          shrunkImage: shrunkImage,
-          shrunkEdgeImage: shrunkEdgeImage,
-          shrunkWidth: shrunkWidth,
-          config: config
-        )
-
-        // Same tie-break as pass 1: prefer larger cropAmount on equal scores.
-        guard let pass2Best = pass2Results.max(by: {
-            if $0.score.totalScore != $1.score.totalScore {
-                return $0.score.totalScore < $1.score.totalScore
-            }
-            return $0.cropAmount < $1.cropAmount   // higher cropAmount wins
-        })
-        else {
-            throw "adaptive horizon search pass 2 produced no valid results"
-        }
-
-        Log.i("frame \(frameIndex) pass 2 best: " +
-              "cropAmount=\(pass2Best.cropAmount), " +
-              "score=\(pass2Best.score)")
-
-        for result in pass2Results.sorted(by: { $0.score.totalScore > $1.score.totalScore }) {
-            Log.d("frame \(frameIndex) pass 2 result: " +
-                  "crop=\(result.cropAmount)," +
-                  "score=\(result.score)")
-        }
-
-        // Step 5: DP grid search on the shrunk image (if enabled).
-        // Run DP across all combinations of smoothnessLambda, sobelWeight, cannyWeight
-        // defined by the range+count config parameters. Each candidate is scored on the
-        // shrunk image using the same pre-computed Canny edge image used for Otsu scoring,
-        // so all candidates (Otsu and DP) are comparable on equal footing.
-        //
-        var dpBestShrunkResult: HorizonSearchResult? = nil
-
-
-        let dpSearchTop    = pass2Best.cropAmount/100
-        let dpSearchBottom = 1.0
-
-        let lambdaValues = config.dpHorizonSmoothnessLambdaValues
-        let sobelValues  = config.dpHorizonSobelWeightValues
-        let cannyValues  = config.dpHorizonCannyWeightValues
-        let dpTotal      = lambdaValues.count * sobelValues.count * cannyValues.count
-
-        Log.i("frame \(frameIndex) DP shrunk-image grid: " +
-                "\(dpTotal) combinations " +
-                "(lambda×\(lambdaValues.count), sobel×\(sobelValues.count), canny×\(cannyValues.count)), " +
-                "search \(String(format:"%.0f",dpSearchTop*100))%–" +
-                "\(String(format:"%.0f",dpSearchBottom*100))% of image height")
-
-        // Run all DP combinations in parallel on the shrunk image.
-        struct DPShrunkResult {
-            let mask: HorizonMask
-            let lambda: Double
-            let sobelW: Double
-            let cannyW: Double
-        }
-
-        let dpShrunkResults: [DPShrunkResult] = try await withThrowingTaskGroup(
-          of: DPShrunkResult?.self
-        ) { taskGroup in
-            for lambda in lambdaValues {
-                for sobelW in sobelValues {
-                    for cannyW in cannyValues {
-                        taskGroup.addTask { [frameIndex] in
-                            guard let mask = try? await shrunkImage.dpHorizonMask(
-                                    at: frameIndex,
-                                    searchTopFraction: dpSearchTop,
-                                    searchBottomFraction: dpSearchBottom,
-                                    cannyMinThreshold: config.cannyMinThreshold,
-                                    cannyMaxThreshold: config.cannyMaxThreshold,
-                                    useL2Gradient: config.cannyUseL2Gradient,
-                                    smoothnessLambda: lambda,
-                                    sobelWeight: sobelW,
-                                    cannyWeight: cannyW
-                                  )
-                            else { return nil }
-                            return DPShrunkResult(mask: mask, lambda: lambda,
-                                                  sobelW: sobelW, cannyW: cannyW)
-                        }
-                    }
-                }
-            }
-            var results: [DPShrunkResult] = []
-            for try await result in taskGroup {
-                if let r = result { results.append(r) }
-            }
-            return results
-        }
-
-        // Score each DP shrunk result and find the best.
-        for dpResult in dpShrunkResults {
-            let score: HorizonScore
-            if let edges = shrunkEdgeImage {
-                score = HorizonScoring.score(horizonMask: dpResult.mask, edgeImage: edges)
-            } else {
-                score = HorizonScoring.score(
-                  horizonMask: dpResult.mask,
-                  originalImage: shrunkImage,
-                  cannyMinThreshold: config.cannyMinThreshold,
-                  cannyMaxThreshold: config.cannyMaxThreshold,
-                  useL2Gradient: config.cannyUseL2Gradient
-                )
-            }
-            Log.d("frame \(frameIndex) DP shrunk score=\(score) " +
-                    "lambda=\(dpResult.lambda) sobel=\(dpResult.sobelW) canny=\(dpResult.cannyW)")
-
-            // Store as a HorizonSearchResult using cropAmount=-1 as a sentinel
-            // (DP doesn't have a crop amount; the sentinel is only used for logging).
-            let candidate = HorizonSearchResult(
-              cropAmount: -1, 
-              horizonMask: dpResult.mask, score: score,
-              lambda: dpResult.lambda, sobelW: dpResult.sobelW, cannyW: dpResult.cannyW
-            )
-            if let current = dpBestShrunkResult {
-                if score.totalScore > current.score.totalScore {
-                    dpBestShrunkResult = candidate
-                }
-            } else {
-                dpBestShrunkResult = candidate
-            }
-        }
-
-        if let best = dpBestShrunkResult {
-            Log.i("frame \(frameIndex) DP shrunk best score=\(best.score) " +
-                    "lambda=\(best.lambda ?? -1) sobel=\(best.sobelW ?? -1) " +
-                    "canny=\(best.cannyW ?? -1)")
-        } else {
-            Log.w("frame \(frameIndex) DP shrunk grid produced no valid results")
-        }
-
-
-        // Step 6: Run BOTH Otsu and DP at full and shrunk resolutions,
-        // then combine and score all of them.
-        //
-        // We always generate:
-        //   (a) otsuMask   — Otsu + Canny at full res with pass-2 best parameters
-        //   (b) shrunkOtsu — Otsu + Canny at smaller res with pass-2 best parameters
-        //   (c) dpMask     — DP at full res with shrunk-grid-best parameters (if enabled)
-        //   (d) shrunkDp   — DP at shrunk res with shrunk-grid-best parameters (if enabled)
-        //
-        // Each of the four is scored independently; the highest-scoring one is returned.
-        // When DP is disabled only (a) is produced.
-
-        // --- 6d: DP at smaller resolution ---
-        if let dpBest = dpBestShrunkResult,
-           let lambda = dpBest.lambda,
-           let sobelW = dpBest.sobelW,
-           let cannyW = dpBest.cannyW
-        {
-            let dpSearchTop    = pass2Best.cropAmount / 100.0
-            let dpSearchBottom = 1.0
-
-            Log.i("frame \(frameIndex) running DP at smaller resolution: " +
-                  "lambda=\(lambda), sobel=\(sobelW), canny=\(cannyW), " +
-                  "search \(String(format:"%.0f",dpSearchTop*100))%–" +
-                  "\(String(format:"%.0f",dpSearchBottom*100))%")
-
-            if let ogdpShrunkMask = try? await shrunkImage.dpHorizonMask(
-                 at: frameIndex,
-                 searchTopFraction: dpSearchTop,
-                 searchBottomFraction: dpSearchBottom,
-                 cannyMinThreshold: config.cannyMinThreshold,
-                 cannyMaxThreshold: config.cannyMaxThreshold,
-                 useL2Gradient: config.cannyUseL2Gradient,
-                 smoothnessLambda: lambda,
-                 sobelWeight: sobelW,
-                 cannyWeight: cannyW
-               )
-            {
-                // re-scale it back up
-                let dpFullResMask = HorizonMask(
-                  image: ogdpShrunkMask.image
-                    .upScaleTo(
-                      width: UInt(original.width),
-                      height: UInt(original.height)
-                    )!,
-                  horizonTopY: ogdpShrunkMask.horizonTopY,
-                  horizonBottomY: ogdpShrunkMask.horizonBottomY
-                )
-                let dpFullResScore: HorizonScore
-/*
-                if let edges = shrunkEdgeImage {
-                    dpFullResScore = HorizonScoring.score(
-                      horizonMask: dpFullResMask,
-                      edgeImage: edges
-                    )
-                } else {*/
-                    dpFullResScore = HorizonScoring.score(
-                      horizonMask: dpFullResMask,
-                      originalImage: original,
-                      cannyMinThreshold: config.cannyMinThreshold,
-                      cannyMaxThreshold: config.cannyMaxThreshold,
-                      useL2Gradient: config.cannyUseL2Gradient
-                    )
-//                }
-                Log.i("frame \(frameIndex) DP full resolution score=\(dpFullResScore)")
-
-
-                let bestMask   = dpFullResMask
-                let bestScore  = dpFullResScore
-                let bestMethod = "shrunkDp"
-
-
-                Log.i("frame \(frameIndex) final horizon method=\(bestMethod), score=\(bestScore)")
-
-                // Step 7: Record the best parameters for narrowing subsequent frames
-                await adaptiveState.recordBest(
-                  cropAmount: pass2Best.cropAmount,
-                  firstPassStep: pass1Step
-                )
-
-                return bestMask
-                
-            }
-        }
-
-        // --- 6b: Otsu at shrunk resolution
-
-        guard let ogShrunkOtsuMask = try await shrunkImage.horizonMask(
-                at: frameIndex,
-                bottomPercentage: pass2Best.cropAmount,
-                useCannyEdgeDetection: config.useCannyForHorizonDetection,
-                cannyMinThreshold: config.cannyMinThreshold,
-                cannyMaxThreshold: config.cannyMaxThreshold,
-                useL2Gradient: config.cannyUseL2Gradient
-              )
-        else {
-            throw "cannot create full resolution Otsu horizon mask"
-        }
-
-        // re-scale it back up
-        let shrunkOtsuMask = HorizonMask(
-          image: ogShrunkOtsuMask.image
-            .upScaleTo(
-              width: UInt(original.width),
-              height: UInt(original.height)
-            )!,
-          horizonTopY: ogShrunkOtsuMask.horizonTopY,
-          horizonBottomY: ogShrunkOtsuMask.horizonBottomY
-        )
-        
-        let shrunkResCropBoundaryY = Int(Double(shrunkImage.height) * pass2Best.cropAmount / 100)
-        /*
-         if let edges = shrunkEdgeImage {
-         shrunkOtsuScore = HorizonScoring.score(
-         horizonMask: shrunkOtsuMask,
-         edgeImage: edges,
-         cropBoundaryY: shrunkResCropBoundaryY
-         )
-         } else {*/
-
-        let shrunkOtsuScore = HorizonScoring.score(
-          horizonMask: shrunkOtsuMask,
-          originalImage: shrunkImage,
-          cannyMinThreshold: config.cannyMinThreshold,
-          cannyMaxThreshold: config.cannyMaxThreshold,
-          useL2Gradient: config.cannyUseL2Gradient,
-          cropBoundaryY: shrunkResCropBoundaryY
-        )
-        //        }
-        Log.i("frame \(frameIndex) Otsu full resolution score=\(shrunkOtsuScore)")
-
-        // Step 7: Record the best parameters for narrowing subsequent frames
-        await adaptiveState.recordBest(
-          cropAmount: pass2Best.cropAmount,
-          firstPassStep: pass1Step
-        )
-
-        return shrunkOtsuMask
-        
-    }
-
-    /// Run horizon detection and scoring for all combinations of crop amounts and
-    /// strip widths on a reduced-resolution image. Returns scored results.
-    ///
-    /// Strip width handling:
-    /// - A value of 0 means "full image width" and is always kept as-is.
-    /// - Other values are scaled down by shrinkFactor for the reduced-res search,
-    ///   with a minimum of 20 pixels at reduced resolution.
-    /// - To ensure different full-res strip widths produce meaningfully different
-    ///   reduced-res strip widths, we deduplicate shrunk widths. When multiple
-    ///   full-res values map to the same shrunk width, we keep only the largest
-    ///   full-res value (since it will produce the same reduced-res result but
-    ///   will perform better at full resolution).
-    private func runScoredHorizonSearch(
-      cropAmounts: [Double],
-      shrunkImage: PixelatedImage,
-      shrunkEdgeImage: PixelatedImage?,
-      shrunkWidth: UInt,
-      config: Config
-    ) async throws -> [HorizonSearchResult] {
-        // Deduplicate: when multiple full-res widths map to the same shrunk width,
-        // keep only the largest full-res width (it produces the same reduced-res
-        // result but will work better at full resolution).
-        // The special value 0 (full width) is always kept as a separate entry.
-
-        return try await withThrowingTaskGroup(
-          of: Optional<HorizonSearchResult>.self
-        ) { taskGroup in
-            for cropAmount in cropAmounts {
-                taskGroup.addTask { [frameIndex] in
-                    if let mask = try await shrunkImage.horizonMask(
-                            at: frameIndex,
-                            bottomPercentage: cropAmount,
-                            useCannyEdgeDetection: config.useCannyForHorizonDetection,
-                            cannyMinThreshold: config.cannyMinThreshold,
-                            cannyMaxThreshold: config.cannyMaxThreshold,
-                            useL2Gradient: config.cannyUseL2Gradient
-                          )
-                    {
-
-                        // The crop boundary is the first row of the cropped region
-                        // in the mask's coordinate space.  The mask has the same
-                        // height as the shrunk image; the top `cropAmount`% rows
-                        // were assumed to be sky and were filled white (not processed
-                        // by Otsu). The boundary between assumed-sky and the Otsu
-                        // region sits at this Y coordinate.
-                        let shrunkCropBoundaryY = Int(Double(shrunkImage.height) * cropAmount / 100.0)
-
-                        let score: HorizonScore
-                        if let edges = shrunkEdgeImage {
-                            score = HorizonScoring.score(
-                              horizonMask: mask,
-                              edgeImage: edges,
-                              cropBoundaryY: shrunkCropBoundaryY
-                            )
-                        } else {
-                            score = HorizonScoring.score(
-                              horizonMask: mask,
-                              originalImage: shrunkImage,
-                              cannyMinThreshold: config.cannyMinThreshold,
-                              cannyMaxThreshold: config.cannyMaxThreshold,
-                              useL2Gradient: config.cannyUseL2Gradient,
-                              cropBoundaryY: shrunkCropBoundaryY
-                            )
-                        }
-
-                        return HorizonSearchResult(
-                          cropAmount: cropAmount,
-                          horizonMask: mask,
-                          score: score
-                        )
-                    }
-                    return nil
-                }
-            }
-
-            var results: [HorizonSearchResult] = []
-            for try await result in taskGroup {
-                if let result { results.append(result) }
-            }
-            return results
-        }
-    }
 
     public nonisolated func process(
       startIndex: Int = 0,
@@ -3058,826 +427,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
-    // uses opencv2 for dark ground specific detection logic
-    private func loadOrCreateEarthAlignedImage() async throws -> WarpedImageResult {
-        try await loadOrCreateAlignedImage(
-          of: .earthAligned,
-          withFailedType: .failedEarthAligned
-        )
-    }
-    
-    // uses opencv2 for SIFT fast, accurate image alignment
-    private func loadOrCreateStarAlignedImage() async throws -> WarpedImageResult {
-        try await loadOrCreateAlignedImage(
-          of: .starAligned,
-          withFailedType: .failedStarAligned
-        )
-    }
-
-    // XXX break this up into:
-    // - get and save neighbor homography
-    // - align neighbors with given homography
-
-    /*
-
-     This method expects homography to have been computed for all neighbors
-     and stored in neighborStarHomography or neighborEarthHomography
-     
-     */
-    fileprivate func loadOrCreateAlignedImage(
-      of type: FrameViewMode,
-      withFailedType failedType: FrameViewMode? = nil
-    ) async throws -> WarpedImageResult {
-        var alignmentType: AlignmentType = .sky
-
-        // Gate on memory before loading full-resolution images for alignment.
-        // Each aligned image is roughly width × height × cpp × 2 bytes (16-bit).
-        let estimatedBytes = MemoryMonitor.estimatedImageBytes(
-            width: width,
-            height: height,
-            componentsPerPixel: componentsPerPixel
-        )
-        await MemoryMonitor.shared.waitForMemory(needed: estimatedBytes)
-
-        Log.d("frame \(frameIndex) loadOrCreateAlignedImage of type \(type)")
-        
-        switch type {
-        case .starAligned:
-            alignmentType = .sky
-        case .earthAligned:
-            alignmentType = .earth
-        default:
-            throw "unable to loadOrCreateAlignedImage of type \(type)"
-        }
-
-        // load or create the aligned frame
-        if let alignedFrame = try await imageAccessor.load(
-             frameIndex: frameIndex,
-             type: type,
-             atSize: .original
-           )
-        {
-            Log.d("frame \(frameIndex) loaded aligned frame")
-            
-            let horizonMask = try await self.loadOrCreateMergedHorizonMask()
-            var results: HomographyResultsCodable? = nil
-            switch alignmentType {
-            case .earth:
-                results = await self.readEarthNeighborHomographyForThisFrame()
-                if let results {
-                    await observer?.set(earthAlignmentResults: results)
-                }
-            case .sky:
-                results = await self.readStarNeighborHomographyForThisFrame()
-                if let results {
-                    await observer?.set(starAlignmentResults: results)
-                }
-            default:
-                break
-            }
-
-            return WarpedImageResult(
-              warpedFrame: alignedFrame.mat,
-              warpedHorizon: horizonMask?.image.mat
-            )
-        } else {
-            Log.d("frame \(frameIndex) unable to load image of type \(type)")
-            if let failedType {
-                if let failedFrame = try await imageAccessor.load(
-                     frameIndex: frameIndex,
-                     type: failedType,
-                     atSize: .original
-                   )
-                {
-                    Log.d("frame \(frameIndex) trying to load image of type \(failedType) because we were unable to load image of type \(type)")
-                    let horizonMask = try await self.loadOrCreateMergedHorizonMask()
-                    var results: HomographyResultsCodable? = nil
-                    switch alignmentType {
-                    case .earth:
-                        results = await self.readEarthNeighborHomographyForThisFrame()
-                        if let results {
-                            await observer?.set(earthAlignmentResults: results)
-                        }
-                    case .sky:
-                        results = await self.readStarNeighborHomographyForThisFrame()
-                        if let results {
-                            await observer?.set(starAlignmentResults: results)
-                        }
-                    default:
-                        break
-                    }                
-                    Log.d("frame \(frameIndex) successfully loaded failed image of type \(failedType)")
-
-                    return WarpedImageResult(
-                      warpedFrame: failedFrame.mat, 
-                      warpedHorizon: horizonMask?.image.mat
-                    )
-                } else {
-                    Log.w("frame \(frameIndex) unable to load image of failed type \(failedType) when missing image of type \(type)")
-                }
-            } else {
-                Log.w("frame \(frameIndex) no failed type to load when missing image of type \(type)")
-            }
-        }
-        // with no saved aligned frame, first load or create the set of aligned frames
-        // that we used to create the final aligned frame
-
-        Log.i("frame \(frameIndex) creating aligned image of type \(type)")
-        
-        let config = await configManager.config()
-
-        switch type {
-        case .starAligned:
-            self.set(state: .starAlignment(.start))
-        case .earthAligned:
-            if config.tripodHeadWasMoving {
-                self.set(state: .earthAlignment(.start))
-            }
-        default:
-            break
-        }
-
-        guard let originalFrame = try await imageAccessor.load(
-                frameIndex: frameIndex,
-                type: .original,
-                atSize: .original)
-        else {
-            throw "frame \(frameIndex) unable to load original frame for star alignment"
-        }
-
-        if originalFrame.isEmpty { Log.w("EMPTY IMAGE") }
-
-        Log.d("frame \(frameIndex) original frame \(originalFrame.description)")
-
-        var neighbors: [AlignmentNeighborInfo] = []
-        
-        for neighborIndex in alignmentFilenames.keys {
-            if let filename = self.imageAccessor.nameForImage(
-                 frameIndex: neighborIndex,
-                 ofType: .original,
-                 atSize: .original
-               )
-            {
-                // load any possible keypoints for this neighbor
-                var keypointFilename = ""
-
-                switch type {
-                case .starAligned:
-                    keypointFilename = "\(neighborIndex).sky.yaml"
-                case .earthAligned:
-                    keypointFilename = "\(neighborIndex).earth.yaml"
-                default:
-                    Log.e("not loading keypoints for type \(type)")
-                }
-
-                let keypoints = await keypointCache.load(
-                  fromFilename: "\(config.dirForKeypointData)/\(keypointFilename)"
-                )
-
-                switch alignmentType {
-                case .earth:
-                    if let maskFilename = self.imageAccessor.nameForImage(
-                         frameIndex: neighborIndex,
-                         ofType: .horizon,
-                         atSize: .original
-                       )
-                    {
-                        neighbors.append(
-                          AlignmentNeighborInfo(
-                            filename: filename,
-                            maskFilename: maskFilename,
-                            keypoints: keypoints,
-                            frameIndex: Int32(neighborIndex)
-                          )
-                        )
-                    } else {
-                        Log.w("frame \(frameIndex) unable to get filename mask original image at frame index \(neighborIndex)")
-                    }
-                case .sky:
-                    neighbors.append(
-                      AlignmentNeighborInfo(
-                        filename: filename,
-                        maskFilename: nil,
-                        keypoints: keypoints,
-                        frameIndex: Int32(neighborIndex)
-                      )
-                    )
-                default:
-                    break
-                }
-            } else {
-                Log.w("frame \(frameIndex) unable to get filename for original image at frame index \(neighborIndex)")
-            }
-        }
-
-        Log.d("frame \(frameIndex) original frame \(originalFrame.description)")
-
-        var warpedResult: WarpedImageResult? = nil
-
-        let pixelThreshold = await self.pixelThreshold
-        
-        if alignmentType == .earth,
-           !config.tripodHeadWasMoving
-        {
-            Log.d("frame \(frameIndex) not aliging earth, just merging") 
-            // don't try to align if we're combining not moving earth,
-            // just median merge them all
-
-            if let mergedImage = originalFrame.medianMerge(
-                 with: self.getStaticNeighborFilenames(),
-                 outlierThreshold: pixelThreshold
-               )
-            {
-                var horizonMask: HorizonMask? = nil
-                if config.horizonDetectionEnabled {
-                    // use static merged horizons  
-                    horizonMask = try await loadOrCreateMergedHorizonMask()
-                }
-                
-                warpedResult = WarpedImageResult(
-                  warpedFrame: mergedImage.mat,
-                  warpedHorizon: horizonMask?.image.mat
-                )
-            }
-        } else {
-            // tripod head is moving or stars, do full alignment
-            var horizonMask: HorizonMask? = nil
-            if config.horizonDetectionEnabled {
-                Log.d("frame \(frameIndex) calling loadFinalHorizonMask()")
-                horizonMask = try await loadOrCreateFinalHorizonMask()
-                if let horizonMask {
-                    Log.d("horizon mask \(horizonMask.image.description)")
-                }
-            }
-            
-            Log.d("frame \(frameIndex) doing real alignment for type \(alignmentType)")
-            // do real alignment
-            var homography: [Int: MatWrapper]? = nil
-            switch type {
-            case .starAligned:
-                homography = neighborStarHomography?.mappedHomography()
-            case .earthAligned:
-                homography = neighborEarthHomography?.mappedHomography()
-            default:
-                break
-            }
-            Log.d("frame \(frameIndex) using homography \(homography as Any)")
-            if let homography {
-                let result = ImageAligner.align(
-                  baseFrameIndex: Int32(frameIndex),
-                  neighbors: neighbors,
-                  homography: homography
-                )
-
-                if !result.isEmpty {
-                    Log.d("frame \(frameIndex) got \(result.count) results back from alignment")
-
-                    // include the original frame so we don't miss any edges
-                    var imagesToMerge: [MatWrapper] = [originalFrame.mat]
-
-                    // merge in all the warped neighbor frames
-                    imagesToMerge += result.compactMap { $0.warpedFrame }
-
-                    // median merge the frames and package as a result
-                    warpedResult = WarpedImageResult(
-                      warpedFrame: ImageAligner.medianMerge(
-                        imagesToMerge,
-                        outlierThreshold: config.pixelThreshold,
-                        includeAll: false
-                      ),
-                      warpedHorizon: nil // XXX
-                    )
-                } else {
-                    Log.w("frame \(frameIndex) alignment returned no results")
-                }
-            } else {
-                Log.w("frame \(frameIndex) cannot align without homography")
-            }
-        }
-        Log.i("frame \(frameIndex) got alignment result \(warpedResult as Any) for type \(type)")
-        guard let warpedResult else {
-            Log.e("frame \(frameIndex) got no alignment result")
-            // XXX report his error to the UI
-            return WarpedImageResult(
-              warpedFrame: originalFrame.mat, 
-              warpedHorizon: nil
-            )
-        }
-        
-        switch type {
-        case .starAligned:
-            self.set(state: .creatingStarAlignedFrame)
-        case .earthAligned:
-            self.set(state: .creatingEarthAlignedFrame)
-        default:
-            break
-        }
-         
-        if let aligned = warpedResult.warpedFrame,
-           let image = PixelatedImage(mat: aligned)
-        {
-            // write out the successfully aligned images
-            Log.i("frame \(frameIndex) writing out a successfully aligned image of type \(type)")
-            try await imageAccessor.save(
-              image,
-              frameIndex: frameIndex,
-              as: type,
-              atSizes: [.original, .preview],
-              overwrite: true
-            )
-        }
-        
-        if let mergedHorizon = warpedResult.warpedHorizon,
-           let image = PixelatedImage(mat: mergedHorizon)
-        {
-            Log.d("saving merged horizon images")
-            try await imageAccessor.save(
-              image,
-              frameIndex: frameIndex,
-              as: .mergedHorizon,
-              atSizes: await self.outputSizes,
-              overwrite: true
-            )
-        }
-
-        return warpedResult
-    }    
-
-    private var neighborEarthHomography: HomographyResultsCodable? = nil
-    private var neighborStarHomography: HomographyResultsCodable? = nil
-
-    public func set(neighborStarHomography: HomographyResultsCodable) {
-        self.neighborStarHomography = neighborStarHomography
-        Log.i("frame \(frameIndex) set star homography: \(neighborStarHomography.neighborHomography)")
-        Task {
-            do {
-                try await self.write(neighborStarHomography: neighborStarHomography.neighborHomography)
-            } catch {
-                Log.e("frame \(frameIndex) unable to persist star homography: \(error)")
-            }
-        }
-    }
-
-    public func set(neighborEarthHomography: HomographyResultsCodable) {
-        self.neighborEarthHomography = neighborEarthHomography
-        Task {
-            do {
-                try await self.write(neighborEarthHomography: neighborEarthHomography.neighborHomography)
-            } catch {
-                Log.e("frame \(frameIndex) unable to persist earth homography: \(error)")
-            }
-        }
-    }
-    
-    public func getNeighborStarHomography() -> HomographyResultsCodable? {
-        neighborStarHomography
-    }
-    
-    public func getNeighborEarthHomography() -> HomographyResultsCodable? {
-        neighborEarthHomography
-    }
-    
-    internal func loadOrCreateHomography(
-      of type: FrameViewMode
-    ) async throws -> HomographyResultsCodable? {
-        var alignmentType: AlignmentType = .sky
-
-        Log.d("frame \(frameIndex) loadOrCreateHomography of type \(type) ")
-        
-        switch type {
-        case .starAligned:
-            alignmentType = .sky
-        case .earthAligned:
-            alignmentType = .earth
-        default:
-            throw "unable to load homography of type \(type)"
-        }
-
-        // try to load from ram/file first
-        switch alignmentType {
-        case .sky:
-            if let ret = neighborStarHomography {
-                // from ram
-                return ret
-            } else if let results = await self.readStarNeighborHomographyForThisFrame() {
-                // from file
-                let ret = HomographyResultsCodable(for: frameIndex, with: results.neighborHomography)
-                self.neighborStarHomography = ret
-                return ret
-            }
-        case .earth:
-            if let ret = neighborEarthHomography {
-                // from ram
-                return ret
-            } else if let results = await self.readEarthNeighborHomographyForThisFrame() {
-                // from file
-                let ret = HomographyResultsCodable(for: frameIndex, with: results.neighborHomography)
-                self.neighborEarthHomography = ret
-                return ret
-            }
-        default:
-            break
-        }
-
-        // cached loads failed
-        
-        // with no saved homography, calculate it from given feature points
-        // of both this frame and all relevant neighboring frames.
-
-        Log.i("frame \(frameIndex) creating aligned image of type \(type)")
-        
-        let config = await configManager.config()
-
-        switch type {
-        case .starAligned:
-            self.set(state: .starAlignment(.start))
-        case .earthAligned:
-            if config.tripodHeadWasMoving {
-                self.set(state: .earthAlignment(.start))
-            }
-        default:
-            break
-        }
-
-        var neighbors: [AlignmentNeighborInfo] = []
-        
-        for neighborIndex in alignmentFilenames.keys {
-            if let filename = self.imageAccessor.nameForImage(
-                 frameIndex: neighborIndex,
-                 ofType: .original,
-                 atSize: .original
-               )
-            {
-                // load any possible keypoints for this neighbor
-                var keypointFilename = ""
-
-                switch type {
-                case .starAligned:
-                    keypointFilename = "\(neighborIndex).sky.yaml"
-                case .earthAligned:
-                    keypointFilename = "\(neighborIndex).earth.yaml"
-                default:
-                    Log.e("not loading keypoints for type \(type)")
-                }
-
-                let keypoints = await keypointCache.load(
-                  fromFilename: "\(config.dirForKeypointData)/\(keypointFilename)"
-                )
-                switch alignmentType {
-                case .earth:
-                    if let maskFilename = self.imageAccessor.nameForImage(
-                         frameIndex: neighborIndex,
-                         ofType: .horizon,
-                         atSize: .original
-                       )
-                    {
-                        neighbors.append(
-                          AlignmentNeighborInfo(
-                            filename: filename,
-                            maskFilename: maskFilename,
-                            keypoints: keypoints,
-                            frameIndex: Int32(neighborIndex)
-                          )
-                        )
-                    } else {
-                        Log.w("frame \(frameIndex) unable to get filename mask original image at frame index \(neighborIndex)")
-                    }
-                case .sky:
-                    neighbors.append(
-                      AlignmentNeighborInfo(
-                        filename: filename,
-                        maskFilename: nil,
-                        keypoints: keypoints,
-                        frameIndex: Int32(neighborIndex)
-                      )
-                    )
-                default:
-                    break
-                }
-            }
-        }
-
-        // can't load from file, detect homography 
-
-        Log.d("frame \(frameIndex) doing real alignment for type \(alignmentType)")
-        // do real alignment
-
-        var baseKeypoints: OCVFeatureSet? = nil
-
-        switch alignmentType {
-        case .sky:
-            baseKeypoints = self.skyKeyPoints
-        case .earth:
-            baseKeypoints = self.earthKeyPoints
-        default:
-            break
-        }
-
-        if baseKeypoints == nil {
-            Log.w("frame \(frameIndex) didn't have keypoints in ram for alignment type \(alignmentType), trying to load or create them")
-            baseKeypoints = try await loadOrCreateOCVFeatures(of: type) 
-        }
-
-        guard let baseKeypoints else {
-            Log.w("frame \(frameIndex) has no base keypoints for alignment type \(alignmentType)")
-            return nil
-        }
-
-        Log.d("frame \(frameIndex) has base keypoints \(baseKeypoints) and \(neighbors.count) neighbors")
-        
-        if let result = ImageAligner.computeHomography(
-             baseKeypoints: baseKeypoints,
-             frameIndex: Int32(frameIndex),
-             neighbors: neighbors,
-             // BFMatcher's knnMatch with Lowe's ratio test.  Fully
-             // deterministic.  FLANN's KDTree uses random splits in its
-             // internal RNG (not exposed via OpenCV) so the same input could
-             // return slightly different top-2 matches across runs, which
-             // combined with RANSAC variance produced the intermittent
-             // bad-homography frames.
-             matchMethod: .knnLowes,
-             alignmentType: alignmentType,
-             maxKeypoints: Int32(config.alignmentMaxKeypoints),
-             writeDebugImages: config.alignmentWriteDebugImages,
-             handler: { frameIndex,
-                        alignmentType,
-                        alignmentStep,
-                        neighborNumber in
-
-                 // XXX this handler is out of date now
-
-                 Log.d("frame \(frameIndex) got alignment step update \(alignmentStep)")
-                 // update frame state while processing
-                 var processingState: FrameProcessingState? = nil
-
-                 if let step = AlignmentStep(
-                      from: alignmentStep,
-                      neighborNumber: Int(neighborNumber))
-                 {
-                     switch alignmentType {
-                     case .sky:
-                         processingState = .starAlignment(step)
-                     case .earth:
-                         processingState = .earthAlignment(step)
-                     default:
-                         break
-                     }
-                 } else {
-                     Log.w("frame \(frameIndex) unable to process alignment step \(alignmentStep)")
-                 }
-
-                 if let processingState {
-                     Log.d("frame \(frameIndex) setting processingState \(processingState)")
-                     self.set(state: processingState)
-                 }
-             })
-        {
-            Log.d("frame \(frameIndex) got homography result \(result)")
-            let alignedWarps = result.warpInfo.map { $0.toCodable() }
-            Log.d("frame \(frameIndex) alignedWarps \(alignedWarps)")
-            
-            let ret = HomographyResultsCodable(from: result)
-
-            // save homography results for later
-            switch type {
-            case .starAligned:
-                try await self.write(neighborStarHomography: alignedWarps)
-                // store results in ram for lookup later
-                self.neighborStarHomography = ret
-            case .earthAligned:
-                try await self.write(neighborEarthHomography: alignedWarps)
-                // store results in ram for lookup later
-                self.neighborEarthHomography = ret
-            default:
-                break
-            }
-
-            return ret
-        }
-        
-        return nil
-    }
-    
-    // uses opencv2 for dark ground specific detection logic
-    public func loadOrCreateEarthFeatures() async throws -> OCVFeatureSet? {
-        if let earthKeyPoints {
-            return earthKeyPoints
-        } else {
-            self.earthKeyPoints = try await loadOrCreateOCVFeatures(of: .earthAligned)
-            return self.earthKeyPoints
-        }
-    }
-    
-    // uses opencv2 for SIFT fast, accurate image alignment
-    public func loadOrCreateStarFeatures() async throws -> OCVFeatureSet? {
-        if let skyKeyPoints {
-            Log.d("frame \(frameIndex) returning \(skyKeyPoints) skyKeyPoints")
-            return skyKeyPoints
-        } else {
-            self.skyKeyPoints = try await loadOrCreateOCVFeatures(of: .starAligned)
-            Log.d("frame \(frameIndex) loaded \(self.skyKeyPoints as Any) skyKeyPoints")
-            return self.skyKeyPoints
-        } 
-    }
-
-    // key points detected in the image are OpenCV features 
-    func loadOrCreateOCVFeatures(
-      of type: FrameViewMode
-    ) async throws -> OCVFeatureSet? {
-        var alignmentType: AlignmentType = .sky
-
-        Log.d("frame \(frameIndex) loadOrCreateOCVFeatures")
-        var filename = ""
-          
-        switch type {
-        case .starAligned:
-            alignmentType = .sky
-            filename = "\(frameIndex).sky.yaml"
-        case .earthAligned:
-            alignmentType = .earth
-            filename = "\(frameIndex).earth.yaml"
-        default:
-            throw "unable to loadOrCreateOCVFeatures of type \(type)"
-        }
-
-        // load or create the features
-
-        // try to load first
-        let config = await configManager.config()
-
-        let fullPath = "\(config.dirForKeypointData)/\(filename)"
-        if let features = await keypointCache.load(fromFilename: fullPath) {
-            return features
-        }
-
-        // with no saved features, find them
-        // that we used to create the final aligned frame
-
-        Log.i("frame \(frameIndex) creating aligned image of type \(type)")
-        switch type {
-        case .starAligned:
-            self.set(state: .starKeypoints)
-        case .earthAligned:
-            self.set(state: .earthKeypoints)
-        default:
-            break
-        }
-
-        guard let originalFrame = try await imageAccessor.load(
-                frameIndex: frameIndex,
-                type: .original,
-                atSize: .original)
-        else {
-            throw "frame \(frameIndex) unable to load original frame for keypoint detection"
-        }
-
-        if originalFrame.isEmpty { Log.w("EMPTY IMAGE") }
-
-        Log.d("frame \(frameIndex) original frame \(originalFrame.description)")
-
-        var horizonMask: HorizonMask? = nil
-        if config.horizonDetectionEnabled {
-            horizonMask = try await loadOrCreateFinalHorizonMask()
-            if let horizonMask {
-                Log.d("horizon mask \(horizonMask.image.description)")
-            }
-        }
-        
-        Log.d("frame \(frameIndex) finding keypoints of type \(alignmentType)")
-
-        // SIFT builds a multi-octave Gaussian scale-space pyramid that uses
-        // substantially more memory than the image itself.  Gate here so concurrent
-        // keypoint operations don't collectively exhaust RAM.
-        // The 8x multiplier is empirically derived: ~2.5 GB observed per 42 MP frame.
-        let siftMemoryEstimate = UInt64(originalFrame.byteCount) * 8
-        await MemoryMonitor.shared.waitForMemory(needed: siftMemoryEstimate)
-
-        // Diagnostic for moving-timelapse painted-reference alignment bug:
-        // log the original image and mask used so a subsequent repro can be
-        // checked for cross-frame contamination of the keypoint detection input.
-        let originalFilename = imageAccessor.nameForImage(
-          frameIndex: frameIndex, ofType: .original, atSize: .original
-        ) ?? "<no name>"
-        Log.i("frame \(frameIndex) findFeatures input: " +
-              "original=\(originalFrame.description) " +
-              "originalFile=\(originalFilename) " +
-              "mask=\(horizonMask?.image.description ?? "<none>")")
-
-        if let results = ImageAligner.findFeatures(
-             baseImage: originalFrame.mat,
-             frameIndex: Int32(frameIndex),
-             // findFeatures only does SIFT detection; matchMethod is ignored
-             // here, but kept consistent with computeHomography for clarity.
-             matchMethod: .knnLowes,
-             mask: horizonMask?.image.mat,
-             alignmentType: alignmentType,       // earth is zero in mask
-             maxKeypoints: Int32(config.alignmentMaxKeypoints),
-             writeDebugImages: config.alignmentWriteDebugImages,
-             groundHorizonExtension: Int32(config.alignmentGroundHorizonExtension),
-             baseImageDilateSize: Int32(config.alignmentBaseImageDilateSize),
-             baseImageThresholdValue: Int32(config.alignmentBaseImageThresholdValue)
-           )
-        {
-            Log.d("frame \(frameIndex) got \(results.keypointCount) keypoints")
-
-            if results.write(toFilename: fullPath) {
-                Log.d("frame \(frameIndex) wrote results to \(fullPath)")
-            } else {
-                Log.w("frame \(frameIndex) failed to write results to \(fullPath)")
-            }
-
-            // Pre-populate the keypoint cache so neighbor HomographyOps find
-            // this frame's features without a disk round-trip.
-            await keypointCache.store(results, forFilename: fullPath)
-
-            // save results in RAM
-            switch type {
-            case .starAligned:
-                self.skyKeyPoints = results
-            case .earthAligned:
-                self.earthKeyPoints = results
-            default:
-                throw "unknown type \(type)"
-            }
-
-            return results
-        }
-        return nil
-    }    
-    
-    let neighborStarHomographyFilename  = "neighbor_star_homography.json"
-    let neighborEarthHomographyFilename = "neighbor_earth_homography.json"
-
-    public func removeNeighborStarHomography() async throws {
-        try? await configManager.homographyDatabase.delete(frameIndex: frameIndex, type: .star)
-        deleteHomographyJSONFile(neighborStarHomographyFilename)
-    }
-
-    private func write(neighborStarHomography: [AlignmentWarpInfoCodable]) async throws {
-        Log.d("frame \(frameIndex) writing \(neighborStarHomography.count) neighborStarHomographies")
-        let results = HomographyResultsCodable(for: frameIndex, with: neighborStarHomography)
-        try await configManager.homographyDatabase.write(frameIndex: frameIndex, type: .star, results: results)
-        if let observer {
-            Log.d("frame \(frameIndex) notifying observer of star alignment results")
-            await observer.set(starAlignmentResults: results)
-        }
-    }
-
-    private func write(neighborEarthHomography: [AlignmentWarpInfoCodable]) async throws {
-        let results = HomographyResultsCodable(for: frameIndex, with: neighborEarthHomography)
-        try await configManager.homographyDatabase.write(frameIndex: frameIndex, type: .earth, results: results)
-        if let observer {
-            await observer.set(earthAlignmentResults: results)
-        }
-    }
-
-    public func readStarNeighborHomographyForThisFrame() async -> HomographyResultsCodable? {
-        await readHomographyResults(type: .star)
-    }
-
-    public func readEarthNeighborHomographyForThisFrame() async -> HomographyResultsCodable? {
-        await readHomographyResults(type: .earth)
-    }
-
-    private func readHomographyResults(type: HomographyDatabase.HomographyType) async -> HomographyResultsCodable? {
-        let db = configManager.homographyDatabase
-        if let result = try? await db.read(frameIndex: frameIndex, type: type) {
-            return result
-        }
-        // Migration path: read legacy JSON file, write to DB, delete the file
-        let filename = type == .star ? neighborStarHomographyFilename : neighborEarthHomographyFilename
-        guard let result = await readHomographyFromJSONFile(filename) else { return nil }
-        try? await db.write(frameIndex: frameIndex, type: type, results: result)
-        deleteHomographyJSONFile(filename)
-        return result
-    }
-
-    private func readHomographyFromJSONFile(_ filename: String) async -> HomographyResultsCodable? {
-        guard let dirname = imageAccessor.dirForImage(ofType: .starAligned, atSize: .original) else {
-            return nil
-        }
-        do {
-            let fullPath = "\(dirname)/\(frameIndex)/\(filename)"
-            let url = NSURL(fileURLWithPath: fullPath, isDirectory: false) as URL
-            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
-            return try JSONDecoder().decode(HomographyResultsCodable.self, from: data)
-        } catch {
-            return nil
-        }
-    }
-
-    private func deleteHomographyJSONFile(_ filename: String) {
-        guard let dirname = imageAccessor.dirForImage(ofType: .starAligned, atSize: .original) else { return }
-        try? FileManager.default.removeItem(atPath: "\(dirname)/\(frameIndex)/\(filename)")
-    }
-
-    public func removeNumberOfAlignedImagesForThisFrameFile() async throws {
-        try? await configManager.homographyDatabase.deleteAll(frameIndex: frameIndex)
-        // Also clean up any legacy JSON files from pre-DB runs
-        if let dirname = imageAccessor.dirForImage(ofType: .starAligned, atSize: .original) {
-            try? removeFiles(withSuffix: ".json", in: "\(dirname)/\(frameIndex)")
-        }
-    }
 
     public func deleteAllProcessedImages() {
         for viewMode in FrameViewMode.allCases {
@@ -3916,77 +465,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                        atSize: .preview)
     }
 
-    public func getAlignmentFrameIndices() -> [Int] {
-        alignmentFrames
-    }
-    
-    private var alignmentFrames: [Int] = []
-    private var staticNeighborFrames: [Int] = []
-
-    public func getStaticNeighborFrames() -> [Int] { staticNeighborFrames }
-
-    public func getStaticNeighborFilenames() -> [String] {
-        var ret: [String] = []
-        for neighborIndex in staticNeighborFrames {
-            if let filename = self.imageAccessor.nameForImage(
-                 frameIndex: neighborIndex,
-                 ofType: .original,
-                 atSize: .original
-               )
-            {
-                ret.append(filename)
-            }
-        }
-        return ret
-    }
-
-    // the filenames of the original files that we should align with this frame
-    private var alignmentFilenames: [Int:String] {
-        guard let imageSequence else {
-            Log.e("cannot get alignemnt frames images without an image sequence")
-            return [:]
-        }
-        var ret: [Int:String] = [:]
-        for alignmentFrame in alignmentFrames {
-            if alignmentFrame < imageSequence.filenames.count {
-                ret[alignmentFrame] = imageSequence.filenames[alignmentFrame]
-            }
-        }
-        return ret
-    }
-    
-    internal var userSlices: [BoundingBox]? = nil
-
-    public func getUserSlices() async -> [BoundingBox] {
-        if let userSlices { return userSlices }
-
-        await self.loadUserSlices()
-
-        if let userSlices { return userSlices }
-
-        return []               // doh!
-        
-    }
-
-    public var userSliceDirname: String {
-        get async {
-            let config = await configManager.config()
-            return "\(config.tempOutputPath)/\(config.imageSequenceDirname)-star-user-slices"
-        }
-    }
-
-    public var userSliceFilename: String {
-        get async {
-            let dirname = await self.userSliceDirname
-            return "\(dirname)/slices_\(frameIndex).json"
-        }
-    }
-
-    // called from the CLI only, not the GUI
-    public func setupOutliers() async throws {
-        // this takes a long time, and the gui does it later
-        try await loadOutliers()
-    }
 
     public func finish() async throws {
         switch await self.cleanMethod {
@@ -4010,9 +488,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         )
         await MemoryMonitor.shared.waitForMemory(needed: estimatedBytes)
 
-        mkdir(await self.outliersDirname)
+        mkdir(await outlierProcessor.outliersDirname)
         
-        await self.writeOutliersRemoveReasons()
+        await outlierProcessor.writeOutliersRemoveReasons()
 
         self.set(state: .finishing)
 
@@ -4024,7 +502,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             Log.d("frame \(self.frameIndex) finish 1")
             // write out the classifier feature data for this data point
-            try await self.writeOutlierValuesCSV()
+            try await outlierProcessor.writeOutlierValuesCSV()
         }
 
         Log.d("frame \(self.frameIndex) finish 2")
@@ -4078,7 +556,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if config.horizonDetectionEnabled {
             // only load these if we really need them
             var horizonMaskImage: PixelatedImage? = nil
-            let result = try await loadOrCreateEarthAlignedImage()
+            let result = try await alignmentProcessor.loadOrCreateEarthAlignedImage()
             if let mat = result.warpedFrame {
                 earthAlignedImage = PixelatedImage(mat: mat.ensure16Bits())
             }
@@ -4090,11 +568,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 horizonMask = HorizonMask(horizonMaskImage)
             } else {
                 Log.w("frame \(frameIndex) falling back to non-merged horizon mask")
-                horizonMask = try await loadOrCreateFinalHorizonMask()
+                horizonMask = try await horizonProcessor.loadOrCreateFinalHorizonMask()
             }
         }
 
-        let alignmentResult = try await loadOrCreateStarAlignedImage()
+        let alignmentResult = try await alignmentProcessor.loadOrCreateStarAlignedImage()
         
         let starAlignedImage = alignmentResult.warpedFrame
 
@@ -4171,7 +649,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     Log.d("frame \(self.frameIndex) ERROR \(error)")
 
                 }
-                if let outlierGroups {
+                if let outlierGroups = await outlierProcessor.getOutlierGroups() {
                     Log.d("frame \(self.frameIndex) getting validating image")
                     if let validationImage = await outlierGroups.validationImage() {
                         Log.d("frame \(self.frameIndex) writing validated image")
@@ -4213,540 +691,257 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return lhs.frameIndex == rhs.frameIndex
     }
 
-    // Mark - Outliers
-    
+    // MARK: - Horizon forwarding
 
-    // loads outliers from a combination of the outliers.tiff image and the subtraction image,
-    // if they are present
-    public func loadOutliersFromFile() async -> OutlierGroups? {
-        try? await outliersFileSystemMonitor.load() {
-            do {
-                // newer file format, default to this
-                return try await loadOutliersFromBinaryFile()
-            } catch {
-                //Log.i("frame \(frameIndex) failed to load outliers: \(error)")
-                // XXX log here
-            }
-
-            return nil
-        }
+    func setHorizonAccumulator(_ acc: HorizonAccumulator) async {
+        await horizonProcessor.setHorizonAccumulator(acc)
     }
-
-    public var blobBinaryFilename: String { 
-        get async {
-            let config = await configManager.config()
-            return "\(config.outlierOutputDirname)/\(frameIndex)/\(BlobBinarySaver.outlierBinaryFilename)"
-        }
+    public func accumulateDetectedHorizon(_ mask: HorizonMask) async {
+        await horizonProcessor.accumulateDetectedHorizon(mask)
     }
-    
-    public var trashBinaryFilename: String { 
-        get async {
-            let config = await configManager.config()
-            return "\(config.outlierOutputDirname)/\(frameIndex)/\(BlobBinarySaver.trashBinaryFilename)"
-        }
+    public func recomputeMergedHorizonIfExists() async throws {
+        try await horizonProcessor.recomputeMergedHorizonIfExists()
     }
-    
-    public func loadOutliersFromBinaryFile() async throws -> OutlierGroups? {
-        let config = await configManager.config()
-        let dirname = "\(config.outlierOutputDirname)/\(frameIndex)"
-
-        return try await OutlierGroups(
-          at: frameIndex,
-          fromOutlierDir: dirname,
-          config: config
+    public func recomputeMergedHorizon() async throws {
+        try await horizonProcessor.recomputeMergedHorizon()
+    }
+    internal func loadOrCreateHorizonMask() async throws -> HorizonMask {
+        try await horizonProcessor.loadOrCreateHorizonMask()
+    }
+    internal func loadOrCreateFinalHorizonMask() async throws -> HorizonMask? {
+        try await horizonProcessor.loadOrCreateFinalHorizonMask()
+    }
+    public func loadOrCreateMergedHorizonMask() async throws -> HorizonMask? {
+        try await horizonProcessor.loadOrCreateMergedHorizonMask()
+    }
+    public func createMergedHorizonMask() async throws -> HorizonMask? {
+        try await horizonProcessor.createMergedHorizonMask()
+    }
+    public func loadTunedHorizonParameters() async -> HorizonTunedParameters {
+        await horizonProcessor.loadTunedHorizonParameters()
+    }
+    public func saveTunedHorizonParameters(_ params: HorizonTunedParameters) async throws {
+        try await horizonProcessor.saveTunedHorizonParameters(params)
+    }
+    public func computeLiveObjectSelection(
+        topBoundaryY:    [Int?],
+        bottomBoundaryY: [Int?],
+        viewWidth:  Int,
+        viewHeight: Int,
+        bandMode: Bool = false,
+        knownSkyFloorY:      [Int?]? = nil,
+        knownGroundCeilingY: [Int?]? = nil
+    ) async throws -> [Int?] {
+        try await horizonProcessor.computeLiveObjectSelection(
+            topBoundaryY: topBoundaryY,
+            bottomBoundaryY: bottomBoundaryY,
+            viewWidth: viewWidth, viewHeight: viewHeight,
+            bandMode: bandMode,
+            knownSkyFloorY: knownSkyFloorY,
+            knownGroundCeilingY: knownGroundCeilingY
         )
     }
-    
-    // re-runs outlier detection within bounds with current settings
-    public func findOutliers(within bounds: BoundingBox) async throws {
-        Log.d("shovel frame \(frameIndex) finding outliers within bounds \(bounds)")
-
-        if outlierGroups == nil {
-            self.outlierGroups = OutlierGroups(
-              frameIndex: self.frameIndex,
-              config: await configManager.config()
-            )
-        }
-        
-        guard let outlierGroups else {
-            Log.e("cannot find outliers without outlier groups")
-            return
-        }
-        
-        mkdir(await self.outliersDirname)
-
-        let blobProcessor = await constants.getDetectionType().blobProcessor
-
-        let currentMaxID = await outlierGroups.maxID
-
-        Log.i("frame \(frameIndex) found currentMaxID \(currentMaxID)")
-        
-        let newBlobMap = try await blobProcessor.process(
-          frame: self,
-          within: bounds,
-          startingBlobID: currentMaxID + 1
-        )
-
-        // add new blobs to outlier groups, fore-going any classification for now
-        await outlierGroups.add(blobs: newBlobMap, within: bounds)
-
-        try await outlierGroups.writeOutliersBinary(to: self.outliersDirname)
-        Log.d("shovel frame \(frameIndex) done finding outliers within bounds \(bounds)")
-    }
-    
-    public func findOutliers() async throws {
-        
-        mkdir(await self.outliersDirname)
-
-        let blobProcessor = await constants.getDetectionType().blobProcessor
-        
-        let blobMap = try await blobProcessor.process(frame: self)
-
-        // blobs to promote to outlier groups
-        let blobs = Array(blobMap.values)
-
-        Log.i("frame \(frameIndex) has \(blobs.count) blobs")
-        self.set(state: .firstClassification)
-
-        let classifier = OutlierClassifier(frame: self)
-
-        let trashLevel = await constants.getTrashLevel()
-
-        // this changes based upon Y value
-        let smallTrashMax = await constants.getSmallTrashMax()
-        
-        let (good, bad, featureTime, classificationTime, outlierCount) =
-          await classifier.promoteAndClassify(blobs,
-                                              trashLevel: trashLevel,
-                                              smallTrashMax: smallTrashMax)
-        Task {
-            await classificationTimingDataHolder.set(featureTime: featureTime,
-                                                     classificationTime: classificationTime,
-                                                     outlierCount: outlierCount)
-        }
-        
-        // XXX promote featureTime and classificationTime to the gui
-        
-        await self.outlierGroups?.add(good)
-        await self.outlierGroups?.dumpInTrash(bad)
-        
-        // here we write the outlier binaries through the outlierGroups
-        try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)
-
-        // XXX update UI
-        
-        self.set(state: .readyForInterFrameProcessing)
-    }
-
-    public func loadOutliers(loadOnly: Bool = false) async throws {
-        if isLoadingOutliers {
-            Log.w("Not loading twice")
-            return
-        }
-
-        isLoadingOutliers = true
-        if self.outlierGroups == nil {
-            // nil outlier groups means that we haven't tried to get outliers for this frame yet
-            Log.d("frame \(frameIndex) loading outliers")
-            if let outlierGroups = await loadOutliersFromFile() {
-                callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
-                Log.d("frame \(frameIndex) loading outliers from file")
-                for outlier in await outlierGroups.getMembers().values {
-                    await outlier.set(frame: self) 
-                }
-
-                self.outlierGroups = outlierGroups
-                // while these have already decided outlier groups,
-                // we still need to inter frame process them so that
-                // frames are linked with their neighbors and outlier
-                // groups can use these links for decision tree values
-                self.outliersLoadedFromFile = true
-                Log.i("loaded \(String(describing: await self.outlierGroups?.getMembers().count)) outlier groups for frame \(frameIndex)")
-                await self.updateCombineSubjects()
-                
-                callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
-            } else if !loadOnly {
-                callbacks.frameOutliersLoadedCallback?(frameIndex, .loading)
-                Log.d("frame \(frameIndex) calculating outliers")
-                await self.initializeEmptyOutlierGroups()
-
-                Log.i("calculating outlier groups for frame \(frameIndex)")
-                // find outlying bright pixels between frames,
-                // and group neighboring outlying pixels into groups
-                // this can take a long time
-                try await self.findOutliers()
-
-                await self.updateCombineSubjects()
-                
-                // perhaps apply validation image to outliers here if possible
-                callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
-            }
-        }
-        isLoadingOutliers = false
-    }
-
-    public func initializeEmptyOutlierGroups() async {
-        self.outlierGroups = OutlierGroups(
-          frameIndex: frameIndex,
-          config: await configManager.config()
+    public func computeCombinedHorizonInBand(
+        topBoundaryY: [Int?],
+        bottomBoundaryY: [Int?],
+        viewWidth: Int,
+        viewHeight: Int,
+        knownSkyFloorY: [Int?]? = nil,
+        knownGroundCeilingY: [Int?]? = nil
+    ) async throws -> [Int?] {
+        try await horizonProcessor.computeCombinedHorizonInBand(
+            topBoundaryY: topBoundaryY,
+            bottomBoundaryY: bottomBoundaryY,
+            viewWidth: viewWidth,
+            viewHeight: viewHeight,
+            knownSkyFloorY: knownSkyFloorY,
+            knownGroundCeilingY: knownGroundCeilingY
         )
     }
-    
-    public func foreachOutlierGroup(
-      includingTrash: Bool,
-      _ closure: @Sendable (OutlierGroup, Bool) async -> Bool
-    ) async -> Bool {
-        var didChange = false
-        if let outlierGroups {
-            for (_, group) in await outlierGroups.getMembers() {
-                if await closure(group, false) { didChange = true }
-            }
-            if includingTrash {
-                for (_, group) in await outlierGroups.getTrash() {
-                    if await closure(group, true) { didChange = true }
-                }
-            }
-        }
-        return didChange
+    public func computeRandomWalkerHorizon(
+        topBoundaryY:    [Int?],
+        bottomBoundaryY: [Int?],
+        viewWidth:  Int,
+        viewHeight: Int,
+        knownSkyFloorY:      [Int?]? = nil,
+        knownGroundCeilingY: [Int?]? = nil,
+        beta: Double = 90.0
+    ) async throws -> [Int?] {
+        try await horizonProcessor.computeRandomWalkerHorizon(
+            topBoundaryY: topBoundaryY,
+            bottomBoundaryY: bottomBoundaryY,
+            viewWidth: viewWidth,
+            viewHeight: viewHeight,
+            knownSkyFloorY: knownSkyFloorY,
+            knownGroundCeilingY: knownGroundCeilingY,
+            beta: beta
+        )
+    }
+    public func loadExistingHorizonReferenceAsViewY(viewWidth: Int, viewHeight: Int) async throws -> [Int?]? {
+        try await horizonProcessor.loadExistingHorizonReferenceAsViewY(viewWidth: viewWidth, viewHeight: viewHeight)
+    }
+    public func loadBestExistingHorizonAsViewY(viewWidth: Int, viewHeight: Int) async throws -> [Int?]? {
+        try await horizonProcessor.loadBestExistingHorizonAsViewY(viewWidth: viewWidth, viewHeight: viewHeight)
+    }
+    public var hasHorizonReference: Bool {
+        get async { await horizonProcessor.hasHorizonReference }
+    }
+    public func loadHorizonThumbnailOverlay(thumbnailWidth: Int, thumbnailHeight: Int) async throws -> HorizonThumbnailOverlay? {
+        try await horizonProcessor.loadHorizonThumbnailOverlay(thumbnailWidth: thumbnailWidth, thumbnailHeight: thumbnailHeight)
+    }
+    public func saveHorizonReferenceMask(
+        paintedYPerColumn: [Int?],
+        viewWidth: Int,
+        viewHeight: Int
+    ) async throws {
+        try await horizonProcessor.saveHorizonReferenceMask(
+            paintedYPerColumn: paintedYPerColumn,
+            viewWidth: viewWidth,
+            viewHeight: viewHeight
+        )
+    }
+    public func deleteHorizonImages() async {
+        await horizonProcessor.deleteHorizonImages()
     }
 
-    // returns true if any outlier group was changed
-    public func foreachOutlierGroupMulti(
-      includingTrash: Bool,
-      _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Bool
-    ) async -> Bool {
-        var didChange = false
-        if let outlierGroups {
-            didChange = await Task.detached(priority: .userInitiated) {
+    // MARK: - Outlier forwarding
 
-                let outliers = await Array(outlierGroups.getMembers().values)
-                var trash: [OutlierGroup] = []
+    // Computed-property forwarders
+    public var userSliceDirname: String { get async { await outlierProcessor.userSliceDirname } }
+    public var userSliceFilename: String { get async { await outlierProcessor.userSliceFilename } }
+    public var blobBinaryFilename: String { get async { await outlierProcessor.blobBinaryFilename } }
+    public var trashBinaryFilename: String { get async { await outlierProcessor.trashBinaryFilename } }
+    public var outliersDirname: String { get async { await outlierProcessor.outliersDirname } }
 
-                if includingTrash {
-                    trash = await Array(outlierGroups.getTrash().values)
-                }
-                return await foreachOutlier(in: outliers, with: trash, closure)
-            }.value
-        }
-        return didChange
+    // Outlier setup / loading / detection
+    public func setupOutliers() async throws { try await outlierProcessor.setupOutliers() }
+    public func getUserSlices() async -> [BoundingBox] { await outlierProcessor.getUserSlices() }
+    public func loadOutliersFromFile() async -> OutlierGroups? { await outlierProcessor.loadOutliersFromFile() }
+    public func loadOutliersFromBinaryFile() async throws -> OutlierGroups? { try await outlierProcessor.loadOutliersFromBinaryFile() }
+    public func loadOutliers(loadOnly: Bool = false) async throws { try await outlierProcessor.loadOutliers(loadOnly: loadOnly) }
+    public func initializeEmptyOutlierGroups() async { await outlierProcessor.initializeEmptyOutlierGroups() }
+    public func findOutliers() async throws { try await outlierProcessor.findOutliers() }
+    public func findOutliers(within bounds: BoundingBox) async throws { try await outlierProcessor.findOutliers(within: bounds) }
+    public func maybeApplyOutlierGroupClassifier() async throws { try await outlierProcessor.maybeApplyOutlierGroupClassifier() }
+    public func applyDecisionTreeToAllOutliers(overwrite: Bool = true, minimumSize: Int? = nil) async {
+        await outlierProcessor.applyDecisionTreeToAllOutliers(overwrite: overwrite, minimumSize: minimumSize)
+    }
+    public func applyDecisionTreeToAutoSelectedOutliers(includingTrash: Bool, overwrite: Bool = false, minimumSize: Int? = nil) async {
+        await outlierProcessor.applyDecisionTreeToAutoSelectedOutliers(includingTrash: includingTrash, overwrite: overwrite, minimumSize: minimumSize)
+    }
+    public func clearOutlierGroupValueCaches(includingTrash: Bool) async {
+        await outlierProcessor.clearOutlierGroupValueCaches(includingTrash: includingTrash)
     }
 
-    public func outlierGroup(named outlierName: UInt16) async -> OutlierGroup? {
-        await outlierGroups?.getMembers()[outlierName]
+    // Outlier-group queries (getOutlierGroups already declared above)
+    public func outlierGroupList() async -> [OutlierGroup]? { await outlierProcessor.outlierGroupList() }
+    public func outlierGroupTrashList() async -> [OutlierGroup]? { await outlierProcessor.outlierGroupTrashList() }
+    public func outlierGroup(named outlierName: UInt16) async -> OutlierGroup? { await outlierProcessor.outlierGroup(named: outlierName) }
+    public func foreachOutlierGroup(includingTrash: Bool, _ closure: @Sendable (OutlierGroup, Bool) async -> Bool) async -> Bool {
+        await outlierProcessor.foreachOutlierGroup(includingTrash: includingTrash, closure)
+    }
+    public func foreachOutlierGroupMulti(includingTrash: Bool, _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Bool) async -> Bool {
+        await outlierProcessor.foreachOutlierGroupMulti(includingTrash: includingTrash, closure)
+    }
+    public func foreachOutlierGroupMulti(between startLocation: CGPoint, and endLocation: CGPoint, includingTrash: Bool, _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Bool) async -> Bool {
+        await outlierProcessor.foreachOutlierGroupMulti(between: startLocation, and: endLocation, includingTrash: includingTrash, closure)
     }
 
-    // returns true if anything changed 
-    public func foreachOutlierGroupMulti(
-      between startLocation: CGPoint,
-      and endLocation: CGPoint,
-      includingTrash: Bool, 
-      _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Bool
-    ) async -> Bool {
-        // first get bounding box from start and end location
-        var minX: CGFloat = CGFloat.greatestFiniteMagnitude
-        var maxX: CGFloat = 0
-        var minY: CGFloat = CGFloat.greatestFiniteMagnitude
-        var maxY: CGFloat = 0
-
-        if startLocation.x < minX { minX = startLocation.x }
-        if startLocation.x > maxX { maxX = startLocation.x }
-        if startLocation.y < minY { minY = startLocation.y }
-        if startLocation.y > maxY { maxY = startLocation.y }
-        
-        if endLocation.x < minX { minX = endLocation.x }
-        if endLocation.x > maxX { maxX = endLocation.x }
-        if endLocation.y < minY { minY = endLocation.y }
-        if endLocation.y > maxY { maxY = endLocation.y }
-
-        let gestureBounds = BoundingBox(min: Coord(x: Int(minX), y: Int(minY)),
-                                        max: Coord(x: Int(maxX), y: Int(maxY)))
-        
-        return await foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
-            var didChange = false
-            if gestureBounds.contains(other: group.bounds) {
-                // check to make sure this outlier's bounding box is fully contained
-                // otherwise don't change removal status
-                if !isInTrash || (includingTrash && isInTrash) {
-                    if await closure(group, isInTrash) { didChange = true }
-                }
-            }
-            return didChange
-        }
+    // User-selection methods
+    public func userSelectAllOutliers(toShouldRemove shouldRemove: Bool, includingTrash: Bool) async -> Bool {
+        await outlierProcessor.userSelectAllOutliers(toShouldRemove: shouldRemove, includingTrash: includingTrash)
+    }
+    public func userSelectUndecidedOutliers(toShouldRemove shouldRemove: Bool, includingTrash: Bool) async -> Bool {
+        await outlierProcessor.userSelectUndecidedOutliers(toShouldRemove: shouldRemove, includingTrash: includingTrash)
+    }
+    public func userSelectAllOutliers(toShouldRemove shouldRemove: Bool, overlapping group: OutlierGroup) async -> Bool {
+        await outlierProcessor.userSelectAllOutliers(toShouldRemove: shouldRemove, overlapping: group)
+    }
+    public func userSelectAllOutliers(toShouldRemove shouldRemove: Bool, between startLocation: CGPoint, and endLocation: CGPoint, includingTrash: Bool) async {
+        await outlierProcessor.userSelectAllOutliers(toShouldRemove: shouldRemove, between: startLocation, and: endLocation, includingTrash: includingTrash)
     }
 
-    public func maybeApplyOutlierGroupClassifier() async throws {
-
-        var shouldUseDecisionTree = true
-        /*
-         logic here to do validation instead of decision tree
-
-         if:
-           - we calculated the outlier groups here, not loaded from file
-           - and a validation image already exists for this frame
-         then:
-           - load the validation image
-           - don't apply decision tree, use the validation image instead
-         */
-
-        if let image = try await imageAccessor.load(frameIndex: frameIndex,
-                                                    type: .validation,
-                                                    atSize: .original)
-        {
-            switch image.imageData {
-            case .thirtyTwoBit(_):
-                fatalError("frame \(frameIndex) cannot load 32 bit validation image")
-                
-            case .eightBit(let validationArr):
-                await classifyOutliers(with: validationArr)
-                shouldUseDecisionTree = false
-                await self.markAsChanged()
-                
-            case .sixteenBit(_):
-                Log.e("frame \(frameIndex) cannot load 16 bit validation image")
-            }
-        } else {
-            Log.i("frame \(frameIndex) couldn't load validation image from")
-        }
-/*
-        if config.writeOutlierGroupFiles,
-           let outlierGroups
-        {
-            // calculate decision tree values first 
-            for group in outlierGroups.members.values {
-                let _ = group.decisionTreeValues
-            }
-        }
-  */      
-        if shouldUseDecisionTree {
-            Log.i("frame \(frameIndex) classifying outliers with decision tree")
-            self.set(state: .secondClassification)
-            await self.applyDecisionTreeToAllOutliers()
-        }
-    }
-
-    // used to classify outliers given a validation image.
-    // this validation image contains a non zero pixel for each outlier
-    // that should be removed.
-    // any outlier that matches any pixels is classified to remove here.
-    private func classifyOutliers(with validationData: UnsafeBufferPointer<UInt8>) async {
-        Log.d("frame \(frameIndex) classifying outliers with validation image data")
-
-        if let outlierGroups {
-
-            for group in await outlierGroups.getMembers().values {
-                var groupIsValid = false
-                for x in 0 ..< group.bounds.width {
-                    for y in 0 ..< group.bounds.height {
-                        if group.pixels[y*group.bounds.width+x] != 0 {
-                            // test this non zero group pixel against the validation image
-
-                            let validationX = group.bounds.min.x + x
-                            let validationY = group.bounds.min.y + y
-                            let validationIdx = validationY * width + validationX
-
-                            if validationData[validationIdx] != 0 {
-                                //Log.d("frame \(frameIndex) group \(group.id) is valid based upon validation image data")
-                                groupIsValid = true
-                                break
-                            }
-                        }
-                    }
-                    if groupIsValid { break }
-                }
-                //Log.d("group \(group) shouldRemove \(String(describing: group.shouldRemove))")
-                _ = await group.shouldRemove(.userSelected(groupIsValid))
-            }
-        } else {
-            Log.w("cannot classify nil outlier groups")
-        }
-    }
-
-    public func outlierGroupList() async -> [OutlierGroup]? {
-        if let outlierGroups {
-            let groups = await outlierGroups.getMembers()
-            return groups.map {$0.value}
-        }
-        return nil
-    }
-
-    public func outlierGroupTrashList() async -> [OutlierGroup]? {
-        if let outlierGroups {
-            let groups = await outlierGroups.getTrash()
-            return groups.map {$0.value}
-        } else {
-            try? await loadOutliers()
-            if let outlierGroups {
-                let groups = await outlierGroups.getTrash()
-                return groups.map {$0.value}
-            } else {
-                Log.w("NO GROUPS")
-            }
-        }
-        return nil
-    }
-
-    // used for saving different images of blobs
-    public func saveImages(for blobs: [Blob], as frameImageType: FrameViewMode) async throws {
-        var blobImageData = ImageBuffer<UInt8>(width: width, height: height)
-        for blob in blobs {
-            for pixel in await blob.getPixels() {
-                let imageIntensity = pixel.uInt16Value >> 8
-                blobImageData[pixel.y*width+pixel.x] = UInt8(imageIntensity)//0xFF // make different per blob?
-            }
-        }
-        let fuck = frameImageType
-        if let blobImage = blobImageData.image {
-
-            let (_) = await (/*try imageAccessor.save(blobImage, as: fuck,
-                               atSize: .original, overwrite: true),*/
-              try imageAccessor.save(blobImage,
-                                     frameIndex: frameIndex,
-                                     as: fuck,
-                                     atSize: .preview, overwrite: true))
-        } else {
-            Log.w("frame \(frameIndex) unable to get blob image to save")
-        }
-        
-    }
-
+    // Manipulation
     public func applyRazor(in boundingBox: BoundingBox, includingTrash: Bool) async throws {
-        /*
-         - find all outliers that have some match with this bounding box
-         - remove them from outlier groups list
-         - convert them to blobs
-         - do intersection with bounding box to create new blob
-         - convert all of them back to outlier groups
-         */
-
-        if await outlierGroups?.applyRazor(in: boundingBox,
-                                           includingTrash: includingTrash) ?? false
-        {
-            await self.markAsChanged()
-
-            try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)
-
-            await updateUserSlices(with: boundingBox)
-
-            await self.updateCombineSubjects()            
-        }
+        try await outlierProcessor.applyRazor(in: boundingBox, includingTrash: includingTrash)
     }
-
-    private func updateUserSlices(with newSlice: BoundingBox) async {
-
-        if userSlices == nil { await self.loadUserSlices() }
-
-        guard let userSlices else { return }
-        
-        // XXX update this to load them first if not present
-        
-        var newSlices: [BoundingBox] = [newSlice]
-
-        // append bounding box to this frame's razor list
-        // if any overlap, keep the latest
-            
-        for slice in userSlices {
-            if slice.overlap(with: newSlice) == nil {
-                newSlices.append(slice)
-            }
-        }
-
-        self.userSlices = newSlices
-        await saveUserSlices()
-    }
-    
-    public func saveUserSlices() async {
-        guard let userSlices else { return }
-        let encoder = JSONEncoder()
-        do {
-            let jsonData = try encoder.encode(userSlices)
-
-            let fullPath = await self.userSliceFilename
-            if FileManager.default.fileExists(atPath: fullPath) {
-                try FileManager.default.removeItem(atPath: fullPath)
-            } 
-            Log.i("creating \(fullPath)")                      
-            _ = FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
-        } catch {
-            Log.e("\(error)")
-        }
-    }
-    
-    public func loadUserSlices() async {
-        do {
-            let slices_url = NSURL(fileURLWithPath: await self.userSliceFilename,
-                                   isDirectory: false) as URL
-            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: slices_url))
-            let decoder = JSONDecoder()
-            self.userSlices = try decoder.decode([BoundingBox].self, from: data)
-        } catch {
-            //Log.e("cannot load user slices: \(error)")
-
-            mkdir(await self.userSliceDirname)
-        }
-    }
-
-    public var outliersDirname: String {
-        get async {
-            let config = await configManager.config()
-            return "\(config.outlierOutputDirname)/\(frameIndex)"
-        }
-    }
-
     public func promoteDust(in boundingBox: BoundingBox) async throws -> [OutlierGroup] {
-        if outlierGroups == nil {
-            self.outlierGroups = OutlierGroups(
-              frameIndex: self.frameIndex,
-              config: await configManager.config()
-            )
-        }
-        
-        guard let outlierGroups else { return [] }
-        let ret = await outlierGroups.promoteDust(in: boundingBox)
-
-        await self.markAsChanged()
-        await updateCombineSubjects()
-        
-        try await outlierGroups.writeOutliersBinary(to: self.outliersDirname)
-
-        return ret
+        try await outlierProcessor.promoteDust(in: boundingBox)
     }
-
-    public func deleteHorizonImages() {
-        try? self.imageAccessor.deleteImage(
-          frameIndex: self.frameIndex,
-          ofType: .horizon,
-          atSize: .preview
-        )
-        try? self.imageAccessor.deleteImage(
-          frameIndex: self.frameIndex,
-          ofType: .horizon,
-          atSize: .original
-        )
-        try? self.imageAccessor.deleteImage(
-          frameIndex: self.frameIndex,
-          ofType: .mergedHorizon,
-          atSize: .preview
-        )
-        try? self.imageAccessor.deleteImage(
-          frameIndex: self.frameIndex,
-          ofType: .mergedHorizon,
-          atSize: .original
-        )
-
-    }
-    
-    public func deleteOutliers() async throws {
-        try await outlierGroups?.removeOutliersBinary(from: self.outliersDirname)
-        self.outlierGroups = nil
-    }
-    
+    public func deleteOutliers() async throws { try await outlierProcessor.deleteOutliers() }
     public func deleteOutliers(in boundingBox: BoundingBox) async throws {
-        await outlierGroups?.deleteOutliers(in: boundingBox)
+        try await outlierProcessor.deleteOutliers(in: boundingBox)
+    }
+    public func saveImages(for blobs: [Blob], as frameImageType: FrameViewMode) async throws {
+        try await outlierProcessor.saveImages(for: blobs, as: frameImageType)
+    }
 
-        await self.markAsChanged()
-        
-        try await outlierGroups?.writeOutliersBinary(to: self.outliersDirname)
-        // XXX add y-axis here too
+    // File output
+    public func writeOutlierValuesCSV() async throws { try await outlierProcessor.writeOutlierValuesCSV() }
+    public func writeOutliersRemoveReasons() async { await outlierProcessor.writeOutliersRemoveReasons() }
+
+    // MARK: - Alignment forwarding
+    // All callers use `await` (actor isolation), so adding async here is a no-op for them.
+
+    public func skyKeyPointCount() async -> Int { await alignmentProcessor.skyKeyPointCount() }
+    public func earthKeyPointCount() async -> Int { await alignmentProcessor.earthKeyPointCount() }
+    public var numberOfAlignedFrames: Int {
+        get async { await alignmentProcessor.numberOfAlignedFrames }
+    }
+
+    public func setNumberOfStaticNeighborFrames(with config: Config? = nil) async {
+        await alignmentProcessor.setNumberOfStaticNeighborFrames(with: config)
+    }
+    public func setNumberOfAlignedFrames(with config: Config? = nil) async {
+        await alignmentProcessor.setNumberOfAlignedFrames(with: config)
+    }
+    public func getHorizonMergeIndices() async -> [Int] {
+        await alignmentProcessor.getHorizonMergeIndices()
+    }
+    public func getAlignmentFrameIndices() async -> [Int] {
+        await alignmentProcessor.getAlignmentFrameIndices()
+    }
+    public func getStaticNeighborFrames() async -> [Int] {
+        await alignmentProcessor.getStaticNeighborFrames()
+    }
+    public func getStaticNeighborFilenames() async -> [String] {
+        await alignmentProcessor.getStaticNeighborFilenames()
+    }
+    public func set(neighborStarHomography: HomographyResultsCodable) async {
+        await alignmentProcessor.set(neighborStarHomography: neighborStarHomography)
+    }
+    public func set(neighborEarthHomography: HomographyResultsCodable) async {
+        await alignmentProcessor.set(neighborEarthHomography: neighborEarthHomography)
+    }
+    public func getNeighborStarHomography() async -> HomographyResultsCodable? {
+        await alignmentProcessor.getNeighborStarHomography()
+    }
+    public func getNeighborEarthHomography() async -> HomographyResultsCodable? {
+        await alignmentProcessor.getNeighborEarthHomography()
+    }
+    internal func loadOrCreateHomography(of type: FrameViewMode) async throws -> HomographyResultsCodable? {
+        try await alignmentProcessor.loadOrCreateHomography(of: type)
+    }
+    public func loadOrCreateEarthFeatures() async throws -> OCVFeatureSet? {
+        try await alignmentProcessor.loadOrCreateEarthFeatures()
+    }
+    public func loadOrCreateStarFeatures() async throws -> OCVFeatureSet? {
+        try await alignmentProcessor.loadOrCreateStarFeatures()
+    }
+    func loadOrCreateOCVFeatures(of type: FrameViewMode) async throws -> OCVFeatureSet? {
+        try await alignmentProcessor.loadOrCreateOCVFeatures(of: type)
+    }
+    public func removeNeighborStarHomography() async throws {
+        try await alignmentProcessor.removeNeighborStarHomography()
+    }
+    public func readStarNeighborHomographyForThisFrame() async -> HomographyResultsCodable? {
+        await alignmentProcessor.readStarNeighborHomographyForThisFrame()
+    }
+    public func readEarthNeighborHomographyForThisFrame() async -> HomographyResultsCodable? {
+        await alignmentProcessor.readEarthNeighborHomographyForThisFrame()
+    }
+    public func removeNumberOfAlignedImagesForThisFrameFile() async throws {
+        try await alignmentProcessor.removeNumberOfAlignedImagesForThisFrameFile()
     }
 
     // Mark - Removal
@@ -4826,7 +1021,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
         
         // remove every outlier in the list with pixels from the adjecent frames
-        guard let outlierGroups = outlierGroups else {
+        guard let outlierGroups = await outlierProcessor.getOutlierGroups() else {
             Log.e("cannot remove pixels without outlier groups")
             return
         }
@@ -4887,7 +1082,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         self.set(state: .creatingRemovalMask)
 
         // remove every outlier in the list with pixels from the adjecent frames
-        guard let outlierGroups = outlierGroups else {
+        guard let outlierGroups = await outlierProcessor.getOutlierGroups() else {
             Log.e("cannot remove pixels without outlier groups")
             return (false, [], [])
         }
@@ -5079,183 +1274,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    // Mark - UI
-
-    /*
-     UI related methods
-     */
-    
-    public func applyDecisionTreeToAutoSelectedOutliers(includingTrash: Bool,
-                                                        overwrite: Bool = false,
-                                                        minimumSize: Int? = nil) async {
-        if let classifier = await currentClassifier.get(for: .all) {
-            _ = await foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
-                if let minimumSize,
-                   group.size < minimumSize { return false }
-                
-                var apply = true
-                if !overwrite,
-                   let shouldRemove = await group.shouldRemove() {
-                    switch shouldRemove {
-                    case .userSelected(_):
-                        // leave user selected ones in place
-                        apply = false
-                    default:
-                        break
-                    }
-                }
-                var didChange = false
-                if apply {
-                    Log.d("applying decision tree")
-                    if isInTrash {
-                        await self.outlierGroups?.promoteFromTrash(group)
-                        didChange = true
-                    }
-                    if await group.shouldRemove(.fromClassifier(await classifier.classification(of: group))) { didChange = true }
-                }
-                return didChange
-            }
-        } else {
-            Log.w("no classifier")
-        }
-    }
-
-    public func clearOutlierGroupValueCaches(includingTrash: Bool) async {
-        _ = await foreachOutlierGroupMulti(includingTrash: includingTrash) { group, _ in
-            await group.clearFeatureValueCache()
-            return false
-        }
-    }
-
-    public func applyDecisionTreeToAllOutliers(
-      overwrite: Bool = true,
-      minimumSize: Int? = nil
-    ) async {
-      Log.d("frame \(self.frameIndex) applyDecisionTreeToAll \(await self.outlierGroups?.members.count ?? 0) Outliers")
-        let startTime = Date().timeIntervalSince1970
-        if let outlierGroups {
-            let groups = await outlierGroups.getMembers()
-            await Task.detached(priority: .userInitiated) {
-                let classifier = OutlierClassifier(frame: self)
-
-                var values = Array(groups.values)
-
-                if let minimumSize {
-                    values = values.filter { $0.size > minimumSize }
-                }
-                
-                await classifier.classifyAll(values, overwrite: overwrite)
-                let endTime = Date().timeIntervalSince1970
-                Task { @MainActor in
-                    await self.updateCombineSubjects()
-                }
-                
-                Log.i("frame \(self.frameIndex) spent \(endTime - startTime) seconds classifing outlier groups");
-            }.value
-        } else {
-            Log.w("no classifier")
-        }
-        Log.d("frame \(self.frameIndex) DONE applyDecisionTreeToAllOutliers")
-    }
-    
-    public func userSelectAllOutliers(toShouldRemove shouldRemove: Bool,
-                                      includingTrash: Bool) async -> Bool
-    {
-        let didChange = await Task.detached(priority: .userInitiated) {
-            await self.foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
-                var didChange = false
-                if isInTrash {
-                    await self.outlierGroups?.promoteFromTrash(group)
-                    didChange = true
-                }
-                if await group.shouldRemove(.userSelected(shouldRemove)) { didChange = true }
-                return didChange
-            }
-        }.value
-        Task { @MainActor in
-            if didChange {
-                await self.markAsChanged() // only mark as changed if we have changed something
-            }
-            await self.updateCombineSubjects()
-        }
-        return didChange
-    }
-
-    public func userSelectUndecidedOutliers(toShouldRemove shouldRemove: Bool,
-                                            includingTrash: Bool) async -> Bool
-    {
-        let didChange = await Task.detached(priority: .userInitiated) {
-            await self.foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
-                var didChange = false
-                if await group.shouldRemove() == nil {
-                    if isInTrash {
-                        await self.outlierGroups?.promoteFromTrash(group)
-                        didChange = true
-                    }
-                    if await group.shouldRemove(.userSelected(shouldRemove)) { didChange = true }
-                }
-                return didChange
-            }
-        }.value
-        Task { @MainActor in
-            if didChange {
-                await self.markAsChanged()
-            }
-            await self.updateCombineSubjects()
-        }
-        return didChange
-    }
-
-    public func userSelectAllOutliers(toShouldRemove shouldRemove: Bool,
-                                      overlapping group: OutlierGroup) async -> Bool
-    {
-        if outlierGroups == nil {
-            self.outlierGroups = OutlierGroups(
-              frameIndex: self.frameIndex,
-              config: await configManager.config()
-            )
-        }
-        
-        guard let outlierGroups else { return false }
-
-        var didChange = false
-        for group in await outlierGroups.groups(overlapping: group) {
-            if await group.shouldRemove(.userSelected(shouldRemove)) { didChange = true }
-        }
-        Task { @MainActor in
-            if didChange {
-                await self.markAsChanged()
-            }
-            await self.updateCombineSubjects()
-        }
-        return didChange
-    }
-    
-    public func userSelectAllOutliers(toShouldRemove shouldRemove: Bool,
-                                      between startLocation: CGPoint,
-                                      and endLocation: CGPoint,
-                                      includingTrash: Bool) async
-    {
-        let didChange = await foreachOutlierGroupMulti(
-          between: startLocation,
-          and: endLocation,
-          includingTrash: includingTrash)
-        { group, isInTrash in
-            var didChange = false
-            if isInTrash {
-                await self.outlierGroups?.promoteFromTrash(group)
-                didChange = true
-            }
-            if await group.shouldRemove(.userSelected(shouldRemove)) { didChange = true }
-            return didChange
-        }
-        Task { @MainActor in
-            if didChange {
-                await self.markAsChanged()
-            }
-            await self.updateCombineSubjects()
-        }
-    }
 
     // Mark - Auto Mode Logic
 
@@ -5281,7 +1299,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         ) * 2
         await MemoryMonitor.shared.waitForMemory(needed: estimatedBytes)
 
-        let result = try await loadOrCreateStarAlignedImage()
+        let result = try await alignmentProcessor.loadOrCreateStarAlignedImage()
         let starAlignedImage = result.warpedFrame
 
         Log.i("frame \(frameIndex) got result \(result) for star aligned image")
@@ -5315,7 +1333,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             var horizonMask: PixelatedImage? = nil
 
             if config.allowEarthAlignment {
-                let alignmentResult = try await loadOrCreateEarthAlignedImage()
+                let alignmentResult = try await alignmentProcessor.loadOrCreateEarthAlignedImage()
 
                 // XXX add check to see if the alignment was good, and if so, save it
                 // if not, return early
@@ -5327,7 +1345,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 if let mat = alignmentResult.warpedHorizon {
                     horizonMask = PixelatedImage(mat: mat)
                 } else {
-                    horizonMask = try await loadOrCreateFinalHorizonMask()?.image
+                    horizonMask = try await horizonProcessor.loadOrCreateFinalHorizonMask()?.image
                 }
                 
                 if let earthAlignedImage {
@@ -5342,7 +1360,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                   type: .original,
                   atSize: .original)
 
-                horizonMask = try await loadOrCreateFinalHorizonMask()?.image
+                horizonMask = try await horizonProcessor.loadOrCreateFinalHorizonMask()?.image
             }
             
             if let earthImage {
@@ -5359,7 +1377,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 } else {
                     // but if not, fallback to the non-merged one, which is better than nothing
                     Log.w("frame \(frameIndex) falling back to non-merged horizon mask")
-                    if let horizonMask = try await loadOrCreateFinalHorizonMask() {
+                    if let horizonMask = try await horizonProcessor.loadOrCreateFinalHorizonMask() {
                         if let highHorizon = horizonMask.image.shiftImageUp(
                              by: config.horizonVerticalShiftAmount
                            ) {
@@ -5577,9 +1595,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 return
             }
 
-            mkdir(await self.outliersDirname)
+            mkdir(await outlierProcessor.outliersDirname)
             
-            await self.writeOutliersRemoveReasons()
+            await outlierProcessor.writeOutliersRemoveReasons()
 
             self.set(state: .finishing)
 
@@ -5591,7 +1609,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
                 Log.d("frame \(self.frameIndex) finish 1")
                 // write out the classifier feature data for this data point
-                try await self.writeOutlierValuesCSV()
+                try await outlierProcessor.writeOutlierValuesCSV()
             }
 
             Log.d("frame \(self.frameIndex) finish 2")
@@ -5653,7 +1671,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         Log.d("frame \(self.frameIndex) ERROR \(error)")
 
                     }
-                    if let outlierGroups {
+                    if let outlierGroups = await outlierProcessor.getOutlierGroups() {
                         Log.d("frame \(self.frameIndex) getting validating image")
                         if let validationImage = await outlierGroups.validationImage() {
                             Log.d("frame \(self.frameIndex) writing validated image")
@@ -5733,7 +1751,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // load or create the aligned frame
 
         Log.d("frame \(frameIndex) loadOrCreateStarAlignedImage")
-        let result = try await loadOrCreateStarAlignedImage()
+        let result = try await alignmentProcessor.loadOrCreateStarAlignedImage()
         let starAlignedImage = result.warpedFrame
           
         Log.d("frame \(frameIndex) loadedOrCreatedStarAlignedImage")
@@ -5770,7 +1788,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // of the earth and star aligned images, and subtract
             // that from the image instead of just the star aligned image
 
-            let alignmentResult = try await loadOrCreateEarthAlignedImage()
+            let alignmentResult = try await alignmentProcessor.loadOrCreateEarthAlignedImage()
             let earthAlignedImage = alignmentResult.warpedFrame
             let horizonMask = alignmentResult.warpedHorizon
 
@@ -5786,7 +1804,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                       mask: horizon,
                       with: earth
                     )
-                } else if let mask = try await self.loadOrCreateFinalHorizonMask() {
+                } else if let mask = try await horizonProcessor.loadOrCreateFinalHorizonMask() {
                     // fall back to non merged horizon mask if we have to
                     imageToSubtract = try skyImage.apply(
                       mask: mask.image,
@@ -5848,297 +1866,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    // Mark - File output
-
-    // write out just the OutlierGroupValueMatrix, which just what
-    // the decision tree needs, and not very large
-    public func writeOutlierValuesCSV() async throws {
-        try await fileSystemMonitor.save() { try await self.writeOutlierValuesCSVInt() }
-    }
-    
-    private func writeOutlierValuesCSVInt() async throws {
-
-        Log.d("frame \(self.frameIndex) writeOutlierValuesCSV")
-        let config = await configManager.config()
-        
-        if config.writeOutlierGroupFiles {
-            // write out the decision tree value matrix too
-            Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1")
-
-            let frameOutlierDir = "\(config.outlierOutputDirname)/\(self.frameIndex)"
-            let csvFilename = "\(frameOutlierDir)/\(CondensedOutlierGroupValueMatrix.outlierDataFilename)"
-
-            await Task.detached(priority: .userInitiated) {
-                do {
-                    try await writeOutlierValuesCSVPrivate(to: csvFilename,
-                                                           frameOutlierDir: frameOutlierDir,
-                                                           frame: self)
-                } catch {
-                    Log.e("frame \(self.frameIndex) unable to write outlier values csv to \(csvFilename)")
-                }
-            }.value
-        }
-        Log.d("frame \(self.frameIndex) DONE writeOutlierValuesCSV")
-    }
-
-    public func writeOutliersRemoveReasons() async {
-        let config = await configManager.config()
-        if config.writeOutlierGroupFiles {
-            do {
-                try await fileSystemMonitor.save() {
-                    try await self.outlierGroups?.write(to: config.outlierOutputDirname)
-                }
-            } catch {
-                Log.e("error \(error)")
-            }                
-        }
-    }
 }
 
-fileprivate func writeOutlierValuesCSVPrivate(to csvFilename: String,
-                                              frameOutlierDir: String,
-                                              frame: FrameAirplaneRemover) async throws
-{
-    // check to see if both of these files exist already
-    if FileManager.default.fileExists(atPath: csvFilename) {
-        Log.i("frame \(frame.frameIndex) not recalculating outlier values with existing files")
-    } else {
-        let valueMatrix = await CondensedOutlierGroupValueMatrix(for: frame)
-
-        if let outliers = await frame.outlierGroupList() {
-            Log.d("frame \(frame.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")
-            let startTime = Date().timeIntervalSince1970
-            // XXX start time
-            
-            for (index, outlier) in outliers.enumerated() {
-                if index % 100 == 0 {
-                    let duration = Date().timeIntervalSince1970 - startTime
-                    Log.d("frame \(frame.frameIndex) writeOutlierValuesCSV 1b \(index) after \(duration) seconds")
-                }
-                await valueMatrix.append(outlierGroup: outlier)
-            }
-        }
-        Log.d("frame \(frame.frameIndex) writeOutlierValuesCSV 2a")
-        // append trash values too
-        if let trash = await frame.outlierGroups?.getTrash().values {
-            Log.d("frame \(frame.frameIndex) writeOutlierValuesCSV appending trash")
-            for outlier in trash {
-                await valueMatrix.append(outlierGroup: outlier)
-            }
-        }
-        Log.d("frame \(frame.frameIndex) writeOutlierValuesCSV 2")
-
-        try await valueMatrix.writeCSV(to: frameOutlierDir)
-        Log.d("frame \(frame.frameIndex) writeOutlierValuesCSV 3")
-    }
-}
-
-
-fileprivate let outliersFileSystemMonitor = FileSystemMonitor(max: 50)
-
-fileprivate struct OutlierSorter: Sendable {
-    public let classification: Double
-    public let outlier: OutlierGroup
-}
-
-// executes the classification of .isolated blobs in parallel
-fileprivate class OutlierClassifier {
-
-    let frameIndex: Int
-    let frame: FrameAirplaneRemover
-    
-    public init(frame: FrameAirplaneRemover)
-    {
-        self.frameIndex = frame.frameIndex
-        self.frame = frame
-    }
-
-    // classifies OutlierGroup actors in OutlierGroups, marking them as removable or not
-    // uses the .all classifier, which digs into neighboring frames for more data
-    func classifyAll(_ outliers: [OutlierGroup], overwrite: Bool = false) async {
-//        await Task.detached(priority: .userInitiated) {
-        //let dataHarvester = await FrameDataHarvester(for: self.frame)
-            await withTaskGroup(of: Void.self) { taskGroup in
-                guard let classifier = await currentClassifier.get(for: .all) else { return }
-
-                let max = 10            // XXX hardcoded constant
-
-                if outliers.count > 0 {
-                    for chunk in outliers.split(into: max) {
-                        taskGroup.addTask {
-                            for group in chunk {
-                                if await group.shouldRemove() == nil || overwrite {
-                                    // only apply classifier when no other classification is otherwise present
-                                    //let featureData = await group.featureData(dataHarvester: dataHarvester)
-                                    let classification = await classifier.classification(of: group)
-                                    _ = await group.shouldRemove(.fromClassifier(classification))
-                                }
-                            }
-                        }
-                    }
-                }
-                await taskGroup.waitForAll()
-            }
-//        }.value
-    }
-
-    // classifies blobs with the .isolated classifier, and promotes them to separate groups
-    func promoteAndClassify(_ blobs: [Blob],
-                            trashLevel: Double = 0.0,
-                            smallTrashMax: Int = 20) async
-      -> ([OutlierGroup], [OutlierGroup], TimeInterval, TimeInterval, Int)
-    {
-        let frame = self.frame
-        let frameIndex = self.frameIndex
-        
-        return await Task.detached(priority: .userInitiated) {
-            return await withTaskGroup(of: ([OutlierSorter], TimeInterval, TimeInterval, Int).self) { taskGroup in
-
-                // promote found blobs to outlier groups for further processing
-                let classifier = await currentClassifier.get(for: .isolated) 
-
-                //let dataHarvester = await FrameDataHarvester(for: frame, treeType: .isolated)
-
-                let max = 20            // XXX hardcoded constant
-
-                if blobs.count > 0 {
-                    
-                    for chunk in blobs.split(into: max) {
-                        taskGroup.addTask {
-                            var featureDataTime: TimeInterval = 0
-                            var classificationTime: TimeInterval = 0
-                    
-                            var ret: [OutlierSorter] = []
-                            for blob in chunk {
-
-                                // make outlier group from this blob
-                                let outlierGroup = await blob.outlierGroup(at: frameIndex)
-
-                                // vertical position on screen of the center of this outlier group
-                                // 0 is top
-                                // 1 is bottom
-                                let centerY = Double(outlierGroup.bounds.center.y)/Double(IMAGE_HEIGHT!)
-
-                                /*
-                                 to speed things up, smaller blobs are discarded.
-                                 minimum blob size is relative to the y position on screen of the outlier
-
-                                 min at the top of the screen - 20
-                                 min at the middle of the screen - 10
-                                 min at the bottom of the screen - 0
-                                 
-                                 */
-                                let minSize = Int(Double(smallTrashMax)*(1.0 - centerY))
-
-                                // don't process smaller blobs any further
-                                if outlierGroup.size <= minSize {
-                                    ret.append(.init(classification: -1, // classified based on size only
-                                                     outlier: outlierGroup))
-                                    continue
-                                }
-                           
-                                //Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.id) line \(String(describing: blob.line))")
-                                await outlierGroup.set(frame: frame)
-
-                                // when promoting blobs to outlier groups, we first use the .isolated classifier
-                                // and separate blobs into two groups based upon a threshold in this classification.
-                                // one group is the trash, which has a very high likelyhood of not being useful
-                                // the other group are the outlier groups that will get processed further
-
-                                if let classifier {
-                                    let startTime = Date().timeIntervalSince1970
-
-                                    let featureTime = Date().timeIntervalSince1970
-                                    let classification = await classifier.classification(of: outlierGroup)
-                                    let classTime = Date().timeIntervalSince1970
-
-                                    // -1 classification means bad
-                                    //  1 classification means good
-                                    //  0 is undecided
-                                    ret.append(OutlierSorter(classification: classification,
-                                                             outlier: outlierGroup))
-                                    featureDataTime += featureTime - startTime
-                                    classificationTime += classTime - featureTime
-                                } else {
-                                    Log.w("No .isolated classifier!!") // assume it's good
-                                  ret.append(.init(classification: 1,
-                                                   outlier: outlierGroup))
-                                }
-                            }
-                            return (ret,
-                                    featureDataTime,
-                                    classificationTime,
-                                    chunk.count)
-                        }
-                    }
-                }
-
-                var good: [OutlierGroup] = []
-                var bad: [OutlierGroup] = []
-
-                var totalFeatureTime: TimeInterval = 0
-                var totalClassificationTime: TimeInterval = 0
-                var totalOutliers: Int = 0
-                
-                for await (values, featureTime, classTime, chunkCount) in taskGroup {
-                    totalFeatureTime += featureTime
-                    totalClassificationTime += classTime
-                    totalOutliers += chunkCount
-                    for value in values {
-                        if value.classification > trashLevel {
-                            // it's good
-                            good.append(value.outlier)
-                        } else {
-                            // it's bad
-                            bad.append(value.outlier)
-                        }
-                    }
-                }
-
-                return (good, bad, totalFeatureTime, totalClassificationTime, totalOutliers)
-            }
-        }.value
-    }
-}
-
-// closure returns true if an outlier was changed
-fileprivate func foreachOutlier(in outliers: [OutlierGroup],
-                                with trash: [OutlierGroup],
-                                _ closure: @Sendable @escaping (OutlierGroup, Bool) async -> Bool) async -> Bool {
-    return await withTaskGroup(of: Bool.self) { taskGroup in
-        var didChange = false         // did anything change?
-        // max number of concurrent tasks (for each outliers and trash)
-        let max = 10            // XXX hardcoded constant
-
-        let outlierChunkSize = outliers.count/max
-        let trashChunkSize = trash.count/max
-
-        if outliers.count > 0 {
-            for chunk in outliers.chunks(of: outlierChunkSize) {
-                taskGroup.addTask() {
-                    var didChange = false
-                    for group in chunk {
-                        if await closure(group, true) { didChange = true }
-                    }
-                    return didChange
-                }
-            }
-        }
-        if trash.count > 0 {
-            for chunk in trash.chunks(of: trashChunkSize) {
-                taskGroup.addTask() {
-                    var didChange = false
-                    for group in chunk {
-                        if await closure(group, true) { didChange = true }
-                    }
-                    return didChange
-                }
-            }
-        }
-        for await (result) in taskGroup { if result { didChange = true } }
-        return didChange
-    }
-}
 
 
 /// Removes *only* the files in the specified directory URL (non‐recursive)
