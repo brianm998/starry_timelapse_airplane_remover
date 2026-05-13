@@ -365,8 +365,12 @@ struct RightPanel: View {
 
                             Button() {
                                 Task {
-                                    if let frame = viewModel.currentFrame {
-                                        try? await viewModel.render(frame: frame, now: true)
+                                    do {
+                                        if let frame = viewModel.currentFrame {
+                                            try await viewModel.render(frame: frame, now: true)
+                                        }
+                                    } catch {
+                                        viewModel.report(error: "Render failed: \(error)")
                                     }
                                 }
                             } label: {

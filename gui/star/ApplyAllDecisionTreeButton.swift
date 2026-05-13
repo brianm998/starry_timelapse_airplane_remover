@@ -17,7 +17,7 @@ struct ApplyAllDecisionTreeButton: View {
                         let frameView = await viewModel.currentFrameView
                         _ = await frame.applyDecisionTreeToAllOutliers(overwrite: !viewModel.classifyOnlyUnclassified,
                                                                        minimumSize: viewModel.minimumClassificationSize)
-                        try? await viewModel.render(frame: frame) {
+                        try await viewModel.render(frame: frame) {
                             Task {
                                 await viewModel.refresh(frame: frame)
                                 await frameView.setOutlierGroups()
@@ -26,6 +26,8 @@ struct ApplyAllDecisionTreeButton: View {
                     } else {
                         Log.w("FUCK")
                     }
+                } catch {
+                    await viewModel.report(error: "Decision tree render failed: \(error)")
                 }
             }
         }

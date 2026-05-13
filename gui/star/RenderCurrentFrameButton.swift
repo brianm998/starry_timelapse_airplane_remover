@@ -7,8 +7,12 @@ struct RenderCurrentFrameButton: View {
     var body: some View {
         let action: () -> Void = {
             Task {
-                if let frame = viewModel.currentFrame {
-                    try await viewModel.render(frame: frame, closure: nil)
+                do {
+                    if let frame = viewModel.currentFrame {
+                        try await viewModel.render(frame: frame, closure: nil)
+                    }
+                } catch {
+                    viewModel.report(error: "Render failed: \(error)")
                 }
             }
         }

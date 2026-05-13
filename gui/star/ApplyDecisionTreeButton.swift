@@ -12,13 +12,15 @@ struct ApplyDecisionTreeButton: View {
                         await frame.applyDecisionTreeToAutoSelectedOutliers(includingTrash: viewModel.shouldShowTrash,
                                                                             overwrite: !viewModel.classifyOnlyUnclassified,
                                                                             minimumSize: viewModel.minimumClassificationSize)
-                        try? await viewModel.render(frame: frame) {
+                        try await viewModel.render(frame: frame) {
                             Task {
                                 await viewModel.refresh(frame: frame)
                                 await viewModel.frames[frame.frameIndex].setOutlierGroups()
                             }
                         }
                     }
+                } catch {
+                    viewModel.report(error: "Decision tree render failed: \(error)")
                 }
             }
         }

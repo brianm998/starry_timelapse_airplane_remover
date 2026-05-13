@@ -223,7 +223,16 @@ public final class ImageSequenceViewModel {
     var frames: [FrameViewModel] = []
 
     weak var topViewModel: ViewModel? = nil
-    
+
+    var showErrorAlert = false
+    var errorMessage: String = ""
+
+    func report(error: String) {
+        self.showErrorAlert = true
+        self.errorMessage = error
+        topViewModel?.report(error: error)
+    }
+
     var initialLoadInProgress = false
     var loadingAllOutliers = false
     var loadingOutliers = false
@@ -2205,7 +2214,7 @@ public final class ImageSequenceViewModel {
                 }
             } catch {
                 Log.e("error finding outliers for frame \(frame.frameIndex): \(error)")
-
+                await self.report(error: "Error processing frame \(frame.frameIndex): \(error)")
             }
         }
     }

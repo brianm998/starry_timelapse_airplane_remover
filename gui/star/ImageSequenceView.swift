@@ -58,13 +58,10 @@ struct ImageSequenceView: View {
                 .frame(width: 0, height: 0)
                 .allowsHitTesting(false)
         }
-        /* XXX fix this
-          .alert(isPresented: $viewModel.showErrorAlert) {
-              Alert(title: Text("Error"),
-                    message: Text(viewModel.errorMessage),
-                    primaryButton: .default(Text("Ok")) { viewModel.sequenceLoaded = false },
-                    secondaryButton: .default(Text("Sure")) { viewModel.sequenceLoaded = false } )
-              
-          }*/
+          .alert("Error", isPresented: $viewModel.showErrorAlert) {
+              Button("OK") {}
+          } message: {
+              Text(viewModel.errorMessage)
+          }
     }
 }

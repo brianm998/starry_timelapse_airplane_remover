@@ -264,9 +264,13 @@ struct MultiSelectSheetView: View {
                         await frame.writeOutliersRemoveReasons()
 
                         Task {
-                            try? await viewModel.render(frame: frame, now: false)
+                            do {
+                                try await viewModel.render(frame: frame, now: false)
+                            } catch {
+                                await viewModel.report(error: "Render failed: \(error)")
+                            }
                         }
-                        
+
                         await MainActor.run {
                             if currentIndex == frame.frameIndex {
                                 self.selectionStart = nil
@@ -310,7 +314,11 @@ struct MultiSelectSheetView: View {
                             await frame.writeOutliersRemoveReasons()
 
                             Task {
-                                try? await viewModel.render(frame: frame, now: false, ever: false)
+                                do {
+                                    try await viewModel.render(frame: frame, now: false, ever: false)
+                                } catch {
+                                    await viewModel.report(error: "Render failed: \(error)")
+                                }
                             }
                             
                             await MainActor.run {
