@@ -333,6 +333,10 @@ public final class ImageSequenceViewModel {
     /// Which position in `horizonPainterStartupFrameIndices` is currently being painted.
     var horizonPainterStartupFramePosition: Int = 0
 
+    /// Last sky/ground brush mode chosen by the user in the horizon painter.
+    /// Persisted here so it survives the painter being closed and reopened.
+    var horizonPainterIsErasing: Bool = false
+
     /// Called by the horizon painter toolbar when the user confirms a horizon
     /// during the startup flow — marks the reference saved and advances to the
     /// removal step.  For static sequences also sets the hasStaticReferenceHorizon flag.
