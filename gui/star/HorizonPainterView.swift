@@ -254,19 +254,28 @@ struct HorizonPainterView: View {
             .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
 
         Button("") {
-            if paintState.phase == .refinement { paintState.isErasing.toggle() }
+            if paintState.phase == .refinement {
+                paintState.isErasing.toggle()
+                viewModel.horizonPainterIsErasing = paintState.isErasing
+            }
         }
         .keyboardShortcut("-", modifiers: [])
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
 
         Button("") {
-            if paintState.phase == .refinement { paintState.isErasing = false }
+            if paintState.phase == .refinement {
+                paintState.isErasing = false
+                viewModel.horizonPainterIsErasing = false
+            }
         }
         .keyboardShortcut("p", modifiers: [])
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
 
         Button("") {
-            if paintState.phase == .refinement { paintState.isErasing = true }
+            if paintState.phase == .refinement {
+                paintState.isErasing = true
+                viewModel.horizonPainterIsErasing = true
+            }
         }
         .keyboardShortcut("e", modifiers: [])
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
@@ -760,25 +769,37 @@ struct HorizonPainterToolbarView: View {
     @ViewBuilder
     private var paintEraseButtons: some View {
         if paintState.isErasing {
-            Button { paintState.isErasing = false } label: {
+            Button {
+                paintState.isErasing = false
+                viewModel.horizonPainterIsErasing = false
+            } label: {
                 Label("Sky", systemImage: "paintbrush.fill")
             }
             .buttonStyle(.bordered)
             .help("Paint sky — adds to the selection (P)")
 
-            Button { paintState.isErasing = true } label: {
+            Button {
+                paintState.isErasing = true
+                viewModel.horizonPainterIsErasing = true
+            } label: {
                 Label("Ground", systemImage: "eraser.fill")
             }
             .buttonStyle(.borderedProminent)
             .help("Erase sky — removes from the selection (E)")
         } else {
-            Button { paintState.isErasing = false } label: {
+            Button {
+                paintState.isErasing = false
+                viewModel.horizonPainterIsErasing = false
+            } label: {
                 Label("Sky", systemImage: "paintbrush.fill")
             }
             .buttonStyle(.borderedProminent)
             .help("Paint sky — adds to the selection (P)")
 
-            Button { paintState.isErasing = true } label: {
+            Button {
+                paintState.isErasing = true
+                viewModel.horizonPainterIsErasing = true
+            } label: {
                 Label("Ground", systemImage: "eraser.fill")
             }
             .buttonStyle(.bordered)

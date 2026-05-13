@@ -159,6 +159,7 @@ struct FrameEditView: View {
             viewWidth:  viewModel.frameWidth,
             viewHeight: viewModel.frameHeight
         )
+        ps.isErasing = viewModel.horizonPainterIsErasing
         ps.setPhase(.computing)
         horizonPaintState = ps
         loadHorizonReferenceInto(ps)
