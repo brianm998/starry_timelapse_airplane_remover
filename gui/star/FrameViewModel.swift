@@ -219,8 +219,10 @@ public class FrameViewModel {
         } else {
             ZStack {
                 Color(white: 0.15)
-                Text("N/A")
-                  .font(.largeTitle)
+                Text("\(type.longName) image not found for this frame")
+                  .font(.system(size: 28, weight: .medium))
+                  .multilineTextAlignment(.center)
+                  .padding()
                   .foregroundColor(Color(white: 0.45))
             }
               .task(id: reloadID) {
