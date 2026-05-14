@@ -119,6 +119,13 @@ struct StarCommands: Commands {
                 .disabled(viewModel.isShowingHorizonPainter
                           && viewModel.horizonPainterMode == .startup)
 
+                // G — switch to grid mode (Lightroom-style thumbnail grid)
+                Button("Grid Mode") {
+                    viewModel.interactionMode = .grid
+                }
+                .environment(viewModel)
+                .keyboardShortcut("g", modifiers: [])
+
                 // H — toggle the horizon painter overlay
                 Button(viewModel.isShowingHorizonPainter
                        ? "Close Horizon Painter"

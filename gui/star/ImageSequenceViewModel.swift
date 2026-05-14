@@ -94,6 +94,7 @@ public enum ToolType: String, Equatable, CaseIterable {
 public enum InteractionMode: String, Equatable, CaseIterable {
     case edit
     case scrub
+    case grid
 
     var localizedName: LocalizedStringKey {
         LocalizedStringKey(rawValue)
@@ -284,6 +285,24 @@ public final class ImageSequenceViewModel {
     var trashOpacity = 0.7
 
     var interactionMode: InteractionMode = .scrub
+
+    // Scale factor for grid-mode cells relative to the preview image size
+    var gridThumbnailScale: CGFloat = 0.3
+
+    // The scale at which gridHorizonOverlay was last generated on each frame.
+    // Zero means it has never been generated.
+    var gridHorizonRenderedScale: CGFloat = 0
+
+    /// Regenerate grid horizon overlays on all frames that have horizon data,
+    /// sized to match the current grid cell dimensions at `scale`.
+    func refreshGridHorizonOverlays(at scale: CGFloat) {
+        gridHorizonRenderedScale = scale
+        let w = max(1, Int(CGFloat(config.config().previewWidth)  * scale))
+        let h = max(1, Int(CGFloat(config.config().previewHeight) * scale))
+        for frameView in frames where frameView.horizonOverlay != nil {
+            frameView.refreshGridHorizonOverlay(width: w, height: h)
+        }
+    }
 
     var previousInteractionMode: InteractionMode = .scrub
 

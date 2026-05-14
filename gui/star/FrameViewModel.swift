@@ -36,10 +36,16 @@ public class FrameViewModel {
     /// Nil until `refreshFrameHorizonOverlay()` completes.
     var frameHorizonOverlay: HorizonThumbnailOverlay? = nil
 
+    /// Horizon overlay sized to the current grid cell dimensions.
+    /// Falls back to `horizonOverlay` in the grid view until this is ready.
+    /// Nil until `refreshGridHorizonOverlay(width:height:)` completes.
+    var gridHorizonOverlay: HorizonThumbnailOverlay? = nil
+
     /// Monotonically-increasing counter. Each call to refreshHorizonOverlay()
     /// stamps the launched task; only the most-recently-requested result is applied.
     private var horizonOverlayVersion: UInt = 0
     private var frameHorizonOverlayVersion: UInt = 0
+    private var gridHorizonOverlayVersion: UInt = 0
     
     var frameObserver = FrameObserver()
 
@@ -505,6 +511,27 @@ public class FrameViewModel {
             await MainActor.run {
                 guard self.frameHorizonOverlayVersion == version else { return }
                 self.frameHorizonOverlay = overlay
+            }
+        }
+    }
+
+    /// Regenerate the horizon overlay at the given pixel dimensions for accurate
+    /// grid-cell display. Does NOT bump reloadID so the preview image is not re-fetched.
+    func refreshGridHorizonOverlay(width: Int, height: Int) {
+        guard let frame else {
+            gridHorizonOverlay = nil
+            return
+        }
+        gridHorizonOverlayVersion &+= 1
+        let version = gridHorizonOverlayVersion
+        Task.detached(priority: .utility) {
+            let overlay = try? await frame.loadHorizonThumbnailOverlay(
+                thumbnailWidth:  width,
+                thumbnailHeight: height
+            )
+            await MainActor.run {
+                guard self.gridHorizonOverlayVersion == version else { return }
+                self.gridHorizonOverlay = overlay
             }
         }
     }

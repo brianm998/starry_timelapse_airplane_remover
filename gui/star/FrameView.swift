@@ -16,11 +16,14 @@ public struct FrameView: View {
                 // the current frame by itself for fast video playback and scrubbing
                 FrameImageView()
                   .aspectRatio(viewModel.frameSize, contentMode: .fit)
-//                  .padding([.top])
 
-            case .edit: 
+            case .edit:
                 // the currently visible frame with outliers made visible
                 FrameEditView()
+
+            case .grid:
+                // grid mode replaces the frame view; show nothing here
+                EmptyView()
             }
         }
     }

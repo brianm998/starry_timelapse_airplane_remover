@@ -39,6 +39,9 @@
 		D33FFC242A2D48F300F38194 /* FrameEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC222A2D48F300F38194 /* FrameEditView.swift */; };
 		D33FFC262A2D4E8600F38194 /* FilmstripImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC252A2D4E8600F38194 /* FilmstripImageView.swift */; };
 		D33FFC282A2D4F7E00F38194 /* FilmstripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC272A2D4F7E00F38194 /* FilmstripView.swift */; };
+		1A7F22DD0BEA4AA39DBFBA40 /* GridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BFB0B3D72C24D3894B38BE4 /* GridView.swift */; };
+		B30724F465554773A33B4DDF /* GridRightPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95299ED7C1AA4AD994C90666 /* GridRightPanel.swift */; };
+		7254B1E67F704CD899BF4840 /* GridLeftPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 514EC81005944A6AA8DE5513 /* GridLeftPanel.swift */; };
 		D33FFC2A2A2E1A8900F38194 /* OutlierGroupViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC292A2E1A8900F38194 /* OutlierGroupViewModel.swift */; };
 		D35309452D0DE4F200C4AFFF /* BlobProcessingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35309442D0DE4F200C4AFFF /* BlobProcessingView.swift */; };
 		D35618732D24CCF80001814D /* OutlierWindowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35618722D24CCF80001814D /* OutlierWindowViewModel.swift */; };
@@ -161,6 +164,9 @@
 		D33FFC222A2D48F300F38194 /* FrameEditView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameEditView.swift; sourceTree = "<group>"; };
 		D33FFC252A2D4E8600F38194 /* FilmstripImageView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FilmstripImageView.swift; sourceTree = "<group>"; };
 		D33FFC272A2D4F7E00F38194 /* FilmstripView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FilmstripView.swift; sourceTree = "<group>"; };
+		5BFB0B3D72C24D3894B38BE4 /* GridView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GridView.swift; sourceTree = "<group>"; };
+		95299ED7C1AA4AD994C90666 /* GridRightPanel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GridRightPanel.swift; sourceTree = "<group>"; };
+		514EC81005944A6AA8DE5513 /* GridLeftPanel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GridLeftPanel.swift; sourceTree = "<group>"; };
 		D33FFC292A2E1A8900F38194 /* OutlierGroupViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupViewModel.swift; sourceTree = "<group>"; };
 		D35309442D0DE4F200C4AFFF /* BlobProcessingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobProcessingView.swift; sourceTree = "<group>"; };
 		D35618712D24CCF80001814D /* OutlierWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutlierWindowView.swift; sourceTree = "<group>"; };
@@ -356,6 +362,9 @@
 				D33FFC292A2E1A8900F38194 /* OutlierGroupViewModel.swift */,
 				D33FFC272A2D4F7E00F38194 /* FilmstripView.swift */,
 				D33FFC252A2D4E8600F38194 /* FilmstripImageView.swift */,
+				5BFB0B3D72C24D3894B38BE4 /* GridView.swift */,
+				95299ED7C1AA4AD994C90666 /* GridRightPanel.swift */,
+				514EC81005944A6AA8DE5513 /* GridLeftPanel.swift */,
 				D33FFC222A2D48F300F38194 /* FrameEditView.swift */,
 				D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */,
 				D33FFC212A2D48F300F38194 /* FrameView.swift */,
@@ -580,6 +589,9 @@
 				D3FBFA082CE132C400A23FC6 /* ProcessAllFramesButton.swift in Sources */,
 				D33FFC282A2D4F7E00F38194 /* FilmstripView.swift in Sources */,
 				D33FFC262A2D4E8600F38194 /* FilmstripImageView.swift in Sources */,
+				1A7F22DD0BEA4AA39DBFBA40 /* GridView.swift in Sources */,
+				B30724F465554773A33B4DDF /* GridRightPanel.swift in Sources */,
+				7254B1E67F704CD899BF4840 /* GridLeftPanel.swift in Sources */,
 				D3636C562CE087B000514D39 /* ReProcessCurrentFrameButton.swift in Sources */,
 				D3A0D3AE2CF383DF00FD2E9E /* ExpandUpButton.swift in Sources */,
 				D3FF93DF2C75745C00A98088 /* MultiChoiceSheetView.swift in Sources */,

@@ -12,28 +12,62 @@ struct ImageSequenceView: View {
         @Bindable var viewModel = viewModel
         return ZStack {
             VStack {
-                HStack {
+                HStack(spacing: 0) {
                     if viewModel.interactionMode == .edit {
-                        // left panel
+                        // left panel with processing controls
                         LeftPanel()
+                    } else if viewModel.interactionMode == .grid {
+                        // left panel with view mode selector
+                        GridLeftPanel()
                     }
-                    ZStack(alignment: .center) {
-                        // selected frame 
-                        FrameView()
-                          .frame(maxWidth: .infinity, alignment: .center)
-                        
-                        // show progress bars on top of the image at the bottom
-                        ProgressBars()
+
+                    switch viewModel.interactionMode {
+                    case .grid:
+                        // full-width grid of thumbnails
+                        GridView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    case .scrub, .edit:
+                        ZStack(alignment: .center) {
+                            // selected frame
+                            FrameView()
+                              .frame(maxWidth: .infinity, alignment: .center)
+
+                            // show progress bars on top of the image at the bottom
+                            ProgressBars()
+                        }
                     }
+
                     if viewModel.interactionMode == .edit {
-                        // right panel
+                        // right panel with editing tools
                         RightPanel()
+                    } else if viewModel.interactionMode == .grid {
+                        // right panel with frame info
+                        GridRightPanel()
                     }
                 }
+
+                // show left-panel collapse button in grid mode when panel is hidden
+                if viewModel.interactionMode == .grid,
+                   !viewModel.rightPanelShowing
+                {
+                    HStack {
+                        Spacer()
+                        Button {
+                            viewModel.rightPanelShowing = true
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .foregroundColor(.white)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.trailing, 8)
+                    }
+                }
+
                 Spacer()
-                // buttons below the selected frame 
+                // buttons below the selected frame
                 BottomControls()
-                
+
                 if viewModel.interactionMode == .edit,
                    viewModel.showFilmstrip
                 {
@@ -44,9 +78,11 @@ struct ImageSequenceView: View {
                       .transition(.slide)
                     Spacer().frame(minHeight: 15, maxHeight: 25)
                 }
-                
-                // scrub slider at the bottom
-                if viewModel.imageSequenceSize > 0 {
+
+                // scrub slider at the bottom (not needed in grid mode)
+                if viewModel.imageSequenceSize > 0,
+                   viewModel.interactionMode != .grid
+                {
                     ScrubSliderView()
                 }
             }
