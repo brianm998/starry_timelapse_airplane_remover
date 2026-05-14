@@ -83,7 +83,8 @@ struct GridRightPanel: View {
 
     // Global horizon line visibility toggle
     private var horizonSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        @Bindable var viewModel = viewModel
+        return VStack(alignment: .leading, spacing: 6) {
             Text("Display")
                 .font(.headline)
                 .foregroundColor(.white)
@@ -95,6 +96,11 @@ struct GridRightPanel: View {
             .toggleStyle(.switch)
             .font(.caption)
             .foregroundColor(.white)
+
+            Toggle("Show Filmstrip", isOn: $viewModel.showFilmstrip)
+                .toggleStyle(.switch)
+                .font(.caption)
+                .foregroundColor(.white)
         }
     }
 
