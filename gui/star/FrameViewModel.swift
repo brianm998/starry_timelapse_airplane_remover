@@ -162,9 +162,10 @@ public class FrameViewModel {
             }
         } else {
             ZStack {
-                initialImage
-                ProgressView()
-                  .colorScheme(.dark)
+                Color(white: 0.15)
+                Text("N/A")
+                  .font(.largeTitle)
+                  .foregroundColor(Color(white: 0.45))
             }
               .task(id: reloadID) {
                   if let frame = self.frame,
@@ -217,9 +218,10 @@ public class FrameViewModel {
             }
         } else {
             ZStack {
-                initialImage
-                ProgressView()  // XXX this is too small :(
-                  .colorScheme(.dark)
+                Color(white: 0.15)
+                Text("N/A")
+                  .font(.largeTitle)
+                  .foregroundColor(Color(white: 0.45))
             }
               .task(id: reloadID) {
                   if let frame = self.frame,
