@@ -719,10 +719,14 @@ public struct Config: Codable, Sendable {
     //        finds best static horizon
     //        much faster preview generation in GUI
     //        much faster startup in GUI
+    // 0.11.0 new horizon work
+    //        grid mode
+    //        linux cli support
+    //        lots more
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.10.8"
+    public static let latestVersion = "0.11.0"
 
     // defaults to basename below if not set
     public var finalOutputDir: String? = nil
