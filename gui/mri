@@ -1,1 +1,1 @@
-make release && make install
+make local-release && make local-install
