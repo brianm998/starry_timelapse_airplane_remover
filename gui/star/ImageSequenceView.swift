@@ -68,7 +68,7 @@ struct ImageSequenceView: View {
                 // buttons below the selected frame
                 BottomControls()
 
-                if viewModel.interactionMode == .edit,
+                if (viewModel.interactionMode == .edit || viewModel.interactionMode == .grid),
                    viewModel.showFilmstrip
                 {
                     Spacer().frame(maxHeight: 30)
