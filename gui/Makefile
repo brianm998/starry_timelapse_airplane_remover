@@ -10,7 +10,7 @@ install:
 	open .build/star_app_*.pkg
 
 local-install:
-	cp -rf .build/AdHoc/Star.app /Applications/Star.app
+	sudo rm -rf /Applications/Star.app && sudo cp -rf .build/AdHoc/Star.app /Applications/
 
 clean:
 	rm -rf .build
