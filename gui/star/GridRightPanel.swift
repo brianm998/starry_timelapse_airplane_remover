@@ -42,6 +42,7 @@ struct GridRightPanel: View {
             .cursor(.resizeRight)
         }
         .padding(10)
+        .frame(width: 200)
         .frame(maxHeight: .infinity, alignment: .bottomLeading)
         .background(Color(white: 0.22))
     }

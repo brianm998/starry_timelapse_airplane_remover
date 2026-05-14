@@ -20,13 +20,6 @@ struct GridView: View {
                     ForEach(0..<viewModel.frames.count, id: \.self) { index in
                         GridCellView(frameIndex: index)
                             .id(index)
-                            .onTapGesture(count: 2) {
-                                viewModel.currentIndex = index
-                                viewModel.interactionMode = .edit
-                            }
-                            .onTapGesture {
-                                viewModel.currentIndex = index
-                            }
                     }
                 }
                 .padding(8)
@@ -76,7 +69,14 @@ struct GridCellView: View {
         CGFloat(viewModel.config.config().previewHeight) * viewModel.gridThumbnailScale
     }
 
-    var isSelected: Bool { viewModel.currentIndex == frameIndex }
+    // Primary/highlighted frame — shown with brightest selection colour.
+    var isHighlighted: Bool { viewModel.currentIndex == frameIndex }
+    // Part of a multi-frame selection but not the highlighted anchor.
+    var isInSelection: Bool {
+        !isHighlighted && viewModel.selectedFrameIndices.contains(frameIndex)
+    }
+    // Either highlighted or in secondary selection.
+    var isSelected: Bool { isHighlighted || isInSelection }
 
     var body: some View {
         let frameView = viewModel.frames[frameIndex]
@@ -136,15 +136,12 @@ struct GridCellView: View {
             .frame(height: 20)
 
             // Preview image with horizon overlay and processing state badge.
-            // previewImage() already applies .resizable() to the inner image.
             ZStack(alignment: .bottomLeading) {
                 frameView.previewImage(type: viewModel.frameViewMode)
                     .scaledToFill()
                     .frame(width: imageWidth, height: imageHeight)
                     .clipped()
 
-                // Horizon overlay: use gridHorizonOverlay (generated at cell dimensions)
-                // when available; fall back to horizonOverlay (thumbnail-size) while it loads.
                 if (viewModel.userPreferences.showHorizonOnMainView ?? false) {
                     let usingGrid = frameView.gridHorizonOverlay != nil
                     let overlay   = frameView.gridHorizonOverlay ?? frameView.horizonOverlay
@@ -156,9 +153,6 @@ struct GridCellView: View {
                                 case .merged:    .blue
                                 case .reference: .green
                             }}()
-                        // gridHorizonOverlay was generated at (Int(imageWidth), Int(imageHeight)),
-                        // so its y values span [0, Int(imageHeight)).
-                        // horizonOverlay was generated at thumbnailHeight, so scale accordingly.
                         let overlayHeight = usingGrid
                             ? Int(imageHeight)
                             : viewModel.config.config().thumbnailHeight
@@ -191,11 +185,108 @@ struct GridCellView: View {
             }
             .frame(width: imageWidth, height: imageHeight)
         }
-        .background(isSelected ? Color(white: 0.45) : Color(white: 0.22))
+        // Three visual states: highlighted (brightest), in-selection, unselected.
+        .background(
+            isHighlighted  ? Color(white: 0.52) :
+            isInSelection  ? Color(white: 0.38) :
+                             Color(white: 0.22)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 2)
-                .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+                .stroke(
+                    isHighlighted ? Color.accentColor :
+                    isInSelection ? Color.accentColor.opacity(0.55) :
+                                    Color.clear,
+                    lineWidth: isHighlighted ? 2 : 1
+                )
         )
+        .onTapGesture(count: 2) {
+            viewModel.currentIndex = frameIndex
+            viewModel.selectedFrameIndices = [frameIndex]
+            viewModel.interactionMode = .edit
+        }
+        .onTapGesture {
+            handleTap()
+        }
+        .contextMenu {
+            frameContextMenu
+        }
         .environment(frameView)
+    }
+
+    private func handleTap() {
+        let mods = NSEvent.modifierFlags
+        if mods.contains(.shift) {
+            // Range-select from current anchor to this frame.
+            let lo = min(viewModel.currentIndex, frameIndex)
+            let hi = max(viewModel.currentIndex, frameIndex)
+            viewModel.selectedFrameIndices = Set(lo...hi)
+            // currentIndex stays as the anchor highlight; don't change it.
+        } else if mods.contains(.command) {
+            if viewModel.selectedFrameIndices.contains(frameIndex) {
+                // Deselect — but never deselect the highlighted anchor.
+                if frameIndex != viewModel.currentIndex {
+                    viewModel.selectedFrameIndices.remove(frameIndex)
+                }
+            } else {
+                // Add to selection; ensure currentIndex is also in the set.
+                viewModel.selectedFrameIndices.insert(frameIndex)
+                viewModel.selectedFrameIndices.insert(viewModel.currentIndex)
+            }
+        } else {
+            // Plain click — single selection.
+            viewModel.currentIndex = frameIndex
+            viewModel.selectedFrameIndices = [frameIndex]
+        }
+    }
+
+    @ViewBuilder
+    private var frameContextMenu: some View {
+        // Only show processing options when the user right-clicks a selected frame.
+        if isSelected {
+            let count = viewModel.isMultiSelecting
+                ? viewModel.selectedFrameIndices.count
+                : 1
+            let label = count == 1 ? "1 Frame" : "\(count) Frames"
+
+            Text(label)
+                .font(.headline)
+
+            Divider()
+
+            Button {
+                viewModel.processSelectedFrames(with: .none)
+            } label: {
+                Label("Process \(label) (new only)", systemImage: "play.circle")
+            }
+
+            Divider()
+
+            Button {
+                viewModel.processSelectedFrames(with: .alignment)
+            } label: {
+                Label("Re-Process Alignment", systemImage: "arrow.triangle.2.circlepath")
+            }
+
+            Button {
+                viewModel.processSelectedFrames(with: .outliers)
+            } label: {
+                Label("Re-Process Outliers", systemImage: "line.diagonal")
+            }
+
+            Button {
+                viewModel.processSelectedFrames(with: .horizons)
+            } label: {
+                Label("Re-Process Horizons", systemImage: "mountain.2")
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                viewModel.processSelectedFrames(with: .everything)
+            } label: {
+                Label("Re-Process Everything", systemImage: "arrow.clockwise.circle")
+            }
+        }
     }
 }

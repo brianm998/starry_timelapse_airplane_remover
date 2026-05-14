@@ -286,6 +286,14 @@ public final class ImageSequenceViewModel {
 
     var interactionMode: InteractionMode = .scrub
 
+    // Multi-frame selection. Always contains currentIndex when non-empty.
+    // Count > 1 means a genuine multi-selection is active.
+    var selectedFrameIndices: Set<Int> = []
+
+    var isMultiSelecting: Bool { selectedFrameIndices.count > 1 }
+
+    var sortedSelectedIndices: [Int] { selectedFrameIndices.sorted() }
+
     // Scale factor for grid-mode cells relative to the preview image size
     var gridThumbnailScale: CGFloat = 0.3
 
@@ -1952,8 +1960,15 @@ public final class ImageSequenceViewModel {
     }
     
     func nextFrame() -> FrameViewModel {
-        if currentIndex < frames.count - 1 {
-            currentIndex += 1
+        if isMultiSelecting {
+            let sorted = sortedSelectedIndices
+            if let pos = sorted.firstIndex(of: currentIndex) {
+                currentIndex = sorted[(pos + 1) % sorted.count]
+            }
+        } else {
+            if currentIndex < frames.count - 1 {
+                currentIndex += 1
+            }
         }
         Log.d("next frame returning frame from index \(currentIndex)")
         if let frame = frames[currentIndex].frame {
@@ -1965,10 +1980,18 @@ public final class ImageSequenceViewModel {
     }
 
     func previousFrame() -> FrameViewModel {
-        if currentIndex > 0 {
-            currentIndex -= 1
+        if isMultiSelecting {
+            let sorted = sortedSelectedIndices
+            if let pos = sorted.firstIndex(of: currentIndex) {
+                let count = sorted.count
+                currentIndex = sorted[(pos - 1 + count) % count]
+            }
         } else {
-            currentIndex = 0
+            if currentIndex > 0 {
+                currentIndex -= 1
+            } else {
+                currentIndex = 0
+            }
         }
         return frames[currentIndex]
     }
@@ -2075,19 +2098,33 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    func processSelectedFrames(with type: FrameReprocessingType) {
+        let indices = isMultiSelecting ? sortedSelectedIndices : [currentIndex]
+        guard let minIndex = indices.min(), let maxIndex = indices.max() else { return }
+        processFrames(from: minIndex, to: maxIndex,
+                      performClean: type != .none,
+                      overrideReprocessingType: type)
+    }
+
     func processFrames(
       from startIndex: Int,
       to endIndex: Int? = nil,
-      performClean: Bool = false
+      performClean: Bool = false,
+      overrideReprocessingType: FrameReprocessingType? = nil
     ) {
         Log.d("processing frames from \(startIndex) to \(endIndex)")
         //if isProcessingFrames { return }
         isProcessingFrames = true
-        
+
         Log.d("processAllFrames start from \(startIndex) to \(endIndex)")
-        
+
         Task.detached(priority: .medium) { [self] in
-            let reprocessingType = await self.reprocessingType
+            let reprocessingType: FrameReprocessingType
+            if let override = overrideReprocessingType {
+                reprocessingType = override
+            } else {
+                reprocessingType = await self.reprocessingType
+            }
             Log.d("processAllFrames 1")
 
             if performClean {
@@ -2256,13 +2293,20 @@ public final class ImageSequenceViewModel {
 
     // next frame entry point
     func transition(numberOfFrames: Int) {
-        
-        var newIndex = self.currentIndex + numberOfFrames
-        if newIndex < 0 { newIndex = 0 }
-        if newIndex >= self.frames.count {
-            newIndex = self.frames.count-1
+        if isMultiSelecting {
+            let sorted = sortedSelectedIndices
+            guard let pos = sorted.firstIndex(of: currentIndex) else { return }
+            let count = sorted.count
+            let newPos = ((pos + numberOfFrames) % count + count) % count
+            self.currentIndex = sorted[newPos]
+        } else {
+            var newIndex = self.currentIndex + numberOfFrames
+            if newIndex < 0 { newIndex = 0 }
+            if newIndex >= self.frames.count {
+                newIndex = self.frames.count-1
+            }
+            self.currentIndex = newIndex
         }
-        self.currentIndex = newIndex
     }
 
     func transition(until fastAdvancementType: FastAdvancementType,

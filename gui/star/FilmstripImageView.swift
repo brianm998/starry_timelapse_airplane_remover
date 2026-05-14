@@ -155,12 +155,107 @@ struct FilmstripImageView: View {
         }
           .frame(width: CGFloat((viewModel.config.config().thumbnailWidth) + 8),
                  height: CGFloat((viewModel.config.config().thumbnailHeight) + 30))
-        // highlight the selected frame
-          .background(viewModel.currentIndex == frameIndex ? Color(white: 0.45) : Color(white: 0.22))
+          .background(filmstripBackground)
+          .overlay(filmstripBorder)
           .onTapGesture {
-              viewModel.currentIndex = frameIndex
+              handleTap()
+          }
+          .contextMenu {
+              filmstripContextMenu
           }
           .environment(frameView)
+    }
+
+    var isHighlighted: Bool { viewModel.currentIndex == frameIndex }
+    var isInSelection: Bool {
+        !isHighlighted && viewModel.selectedFrameIndices.contains(frameIndex)
+    }
+    var isSelected: Bool { isHighlighted || isInSelection }
+
+    var filmstripBackground: Color {
+        isHighlighted ? Color(white: 0.52) :
+        isInSelection ? Color(white: 0.38) :
+                        Color(white: 0.22)
+    }
+
+    var filmstripBorder: some View {
+        Rectangle()
+            .stroke(
+                isHighlighted ? Color.accentColor :
+                isInSelection ? Color.accentColor.opacity(0.55) :
+                                Color.clear,
+                lineWidth: isHighlighted ? 2 : 1
+            )
+    }
+
+    private func handleTap() {
+        let mods = NSEvent.modifierFlags
+        if mods.contains(.shift) {
+            let lo = min(viewModel.currentIndex, frameIndex)
+            let hi = max(viewModel.currentIndex, frameIndex)
+            viewModel.selectedFrameIndices = Set(lo...hi)
+        } else if mods.contains(.command) {
+            if viewModel.selectedFrameIndices.contains(frameIndex) {
+                if frameIndex != viewModel.currentIndex {
+                    viewModel.selectedFrameIndices.remove(frameIndex)
+                }
+            } else {
+                viewModel.selectedFrameIndices.insert(frameIndex)
+                viewModel.selectedFrameIndices.insert(viewModel.currentIndex)
+            }
+        } else {
+            viewModel.currentIndex = frameIndex
+            viewModel.selectedFrameIndices = [frameIndex]
+        }
+    }
+
+    @ViewBuilder
+    private var filmstripContextMenu: some View {
+        if isSelected {
+            let count = viewModel.isMultiSelecting
+                ? viewModel.selectedFrameIndices.count
+                : 1
+            let label = count == 1 ? "1 Frame" : "\(count) Frames"
+
+            Text(label)
+                .font(.headline)
+
+            Divider()
+
+            Button {
+                viewModel.processSelectedFrames(with: .none)
+            } label: {
+                Label("Process \(label) (new only)", systemImage: "play.circle")
+            }
+
+            Divider()
+
+            Button {
+                viewModel.processSelectedFrames(with: .alignment)
+            } label: {
+                Label("Re-Process Alignment", systemImage: "arrow.triangle.2.circlepath")
+            }
+
+            Button {
+                viewModel.processSelectedFrames(with: .outliers)
+            } label: {
+                Label("Re-Process Outliers", systemImage: "line.diagonal")
+            }
+
+            Button {
+                viewModel.processSelectedFrames(with: .horizons)
+            } label: {
+                Label("Re-Process Horizons", systemImage: "mountain.2")
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                viewModel.processSelectedFrames(with: .everything)
+            } label: {
+                Label("Re-Process Everything", systemImage: "arrow.clockwise.circle")
+            }
+        }
     }
 }
 
