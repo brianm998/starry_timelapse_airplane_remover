@@ -34,13 +34,7 @@ struct GridView: View {
                 }
             }
             .onChange(of: viewModel.gridThumbnailScale) { _, newScale in
-                let rendered = viewModel.gridHorizonRenderedScale
-                // Regenerate when scale has drifted 50% or more from the last render.
-                let drift = rendered == 0 ? CGFloat.infinity
-                                          : abs(newScale - rendered) / rendered
-                if drift >= 0.5 {
-                    viewModel.refreshGridHorizonOverlays(at: newScale)
-                }
+                viewModel.refreshGridHorizonOverlays(at: newScale)
             }
         }
     }
@@ -48,9 +42,7 @@ struct GridView: View {
     private func refreshGridHorizonsIfNeeded() {
         let scale = viewModel.gridThumbnailScale
         let rendered = viewModel.gridHorizonRenderedScale
-        let drift = rendered == 0 ? CGFloat.infinity
-                                  : abs(scale - rendered) / rendered
-        if drift >= 0.5 {
+        if rendered != scale {
             viewModel.refreshGridHorizonOverlays(at: scale)
         }
     }
@@ -143,8 +135,7 @@ struct GridCellView: View {
                     .clipped()
 
                 if (viewModel.userPreferences.showHorizonOnMainView ?? false) {
-                    let usingGrid = frameView.gridHorizonOverlay != nil
-                    let overlay   = frameView.gridHorizonOverlay ?? frameView.horizonOverlay
+                    let overlay = frameView.gridHorizonOverlay ?? frameView.horizonOverlay
                     if let overlay {
                         let strokeColor: Color = frameView.isPendingHorizonRefinement
                             ? .orange
@@ -153,9 +144,7 @@ struct GridCellView: View {
                                 case .merged:    .blue
                                 case .reference: .green
                             }}()
-                        let overlayHeight = usingGrid
-                            ? Int(imageHeight)
-                            : viewModel.config.config().thumbnailHeight
+                        let overlayHeight = overlay.height
                         Canvas { ctx, size in
                             var path = Path()
                             let cols = overlay.yPerColumn.count
