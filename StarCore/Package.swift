@@ -51,7 +51,7 @@ let package = Package(
               //   xcrun coremlc compile tile_classifier.mlpackage \
               //       StarCore/Sources/StarCore/Resources/
               .copy("Resources/tile_classifier.mlmodelc"),
-            ],
+            ]
         ),
         .testTarget(
             name: "StarCoreTests",
