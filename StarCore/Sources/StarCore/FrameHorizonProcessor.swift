@@ -1972,7 +1972,7 @@ final public actor FrameHorizonProcessor {
             }
         }
 
-        return HorizonThumbnailOverlay(kind: kind, yPerColumn: thumbY)
+        return HorizonThumbnailOverlay(kind: kind, yPerColumn: thumbY, height: thumbnailHeight)
     }
 
     // MARK: - Save user-painted reference horizon mask

@@ -24,4 +24,8 @@ public struct HorizonThumbnailOverlay: Sendable {
     /// Per-column horizon Y in **thumbnail** pixel coordinates.
     /// Length == thumbnailWidth; every column is filled (edge-extrapolated).
     public let yPerColumn: [Int]
+
+    /// The thumbnail height this overlay was computed at.
+    /// Use this (not the current canvas height) as the divisor when computing scaleY.
+    public let height: Int
 }
