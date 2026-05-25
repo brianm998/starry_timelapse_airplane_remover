@@ -22,13 +22,9 @@ let package = Package(
       .package(name: "logging", path: "../logging"),
     ],
     targets: [
-        .systemLibrary(
-            name: "CSQLite",
-            pkgConfig: "sqlite3",
-            providers: [
-                .brew(["sqlite3"]),
-                .apt(["libsqlite3-dev"]),
-            ]
+        .target(
+            name: "StarCoreSQLite",
+            path: "Sources/StarCoreSQLite"
         ),
         .target(
             name: "StarCoreC",
@@ -40,7 +36,7 @@ let package = Package(
             name: "StarCore",
             dependencies: [
               "StarCoreC",
-              "CSQLite",
+              "StarCoreSQLite",
               .product(name: "Semaphore", package: "Semaphore"),
               .product(name: "StarCppBridge", package: "StarCpp"),
               .product(name: "logging", package: "logging"),
@@ -58,4 +54,3 @@ let package = Package(
             dependencies: ["StarCore"]),
     ]
 )
-

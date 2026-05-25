@@ -2,7 +2,7 @@ import Foundation
 #if canImport(SQLite3)
 import SQLite3
 #else
-import CSQLite
+import StarCoreSQLite
 #endif
 import logging
 
