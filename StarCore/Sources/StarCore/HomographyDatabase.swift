@@ -1,5 +1,9 @@
 import Foundation
+#if canImport(SQLite3)
 import SQLite3
+#else
+import CSQLite
+#endif
 import logging
 
 // SQLITE_TRANSIENT is not automatically bridged in Swift

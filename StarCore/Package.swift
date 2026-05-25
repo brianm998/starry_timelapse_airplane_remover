@@ -22,6 +22,14 @@ let package = Package(
       .package(name: "logging", path: "../logging"),
     ],
     targets: [
+        .systemLibrary(
+            name: "CSQLite",
+            pkgConfig: "sqlite3",
+            providers: [
+                .brew(["sqlite3"]),
+                .apt(["libsqlite3-dev"]),
+            ]
+        ),
         .target(
             name: "StarCoreC",
             path: "Sources/StarCoreC"
@@ -32,6 +40,7 @@ let package = Package(
             name: "StarCore",
             dependencies: [
               "StarCoreC",
+              "CSQLite",
               .product(name: "Semaphore", package: "Semaphore"),
               .product(name: "StarCppBridge", package: "StarCpp"),
               .product(name: "logging", package: "logging"),
@@ -43,9 +52,6 @@ let package = Package(
               //       StarCore/Sources/StarCore/Resources/
               .copy("Resources/tile_classifier.mlmodelc"),
             ],
-            linkerSettings: [
-              .linkedLibrary("sqlite3"),
-            ]
         ),
         .testTarget(
             name: "StarCoreTests",
