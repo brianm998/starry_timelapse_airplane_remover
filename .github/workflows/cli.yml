@@ -1,0 +1,181 @@
+name: CLI Build
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: cli-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Linux ───────────────────────────────────────────────────────────────────
+  linux:
+    name: Linux (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install apt prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake make git pkg-config perl dpkg-dev zip \
+            libeigen3-dev zlib1g-dev libpng-dev libtiff-dev libjpeg-dev
+
+      - name: Set up Swift
+        uses: SwiftyLab/setup-swift@latest
+        with:
+          swift-version: '6.0'
+
+      - name: Cache OpenCV
+        uses: actions/cache@v4
+        with:
+          path: |
+            opencv/lib/linux
+            opencv/include
+          key: opencv-linux-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+
+      - name: Cache StarDecisionTrees
+        uses: actions/cache@v4
+        with:
+          path: |
+            StarDecisionTrees/lib/release/linux
+            StarDecisionTrees/include/release/linux
+          key: dt-linux-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+
+      - name: Build CLI (.deb)
+        run: bash release_linux.sh
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: star-linux-deb
+          path: cli/.build/*.deb
+          if-no-files-found: error
+
+  # ─── macOS ───────────────────────────────────────────────────────────────────
+  # NOTE: release_darwin.sh also builds the GUI and cli/release.sh runs Apple
+  # notarization (which requires secrets), so we replicate the CLI-only path
+  # inline using the same sub-scripts the macOS release uses.
+  macos:
+    name: macOS (macos-14)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Cache OpenCV
+        uses: actions/cache@v4
+        with:
+          path: |
+            opencv/lib/macos
+            opencv/include
+          key: opencv-macos-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+
+      - name: Cache StarDecisionTrees
+        uses: actions/cache@v4
+        with:
+          path: |
+            StarDecisionTrees/lib/release/macos
+            StarDecisionTrees/include/release/macos
+          key: dt-macos-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+
+      - name: Build OpenCV (if not cached)
+        run: |
+          if [ ! -f opencv/lib/macos/libopencv2.a ]; then
+            cd opencv && ./release.sh
+          else
+            echo "OpenCV: restored from cache"
+          fi
+
+      - name: Build StarDecisionTrees (if not cached)
+        run: |
+          if [ ! -f StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a ]; then
+            cd StarDecisionTrees && ./release.sh
+          else
+            echo "StarDecisionTrees: restored from cache"
+          fi
+
+      - name: Build CLI
+        working-directory: cli
+        run: |
+          swift build -c release
+          strip .build/release/star
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: star-macos
+          path: cli/.build/release/star
+          if-no-files-found: error
+
+  # ─── Windows ─────────────────────────────────────────────────────────────────
+  windows:
+    name: Windows (windows-2022)
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash  # Git Bash; release_windows.sh requires it
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Swift
+        uses: compnerd/gha-setup-swift@main
+        with:
+          branch: swift-6.0-release
+          tag: 6.0-RELEASE
+
+      - name: Install Eigen3 to C:/eigen3
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest `
+            -Uri 'https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.zip' `
+            -OutFile "$env:RUNNER_TEMP\eigen.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\eigen.zip" -DestinationPath C:\
+          Move-Item C:\eigen-3.4.0 C:\eigen3
+
+      - name: Show toolchain
+        run: |
+          swift --version
+          cmake --version
+          perl --version | head -2
+
+      - name: Cache OpenCV
+        uses: actions/cache@v4
+        with:
+          path: |
+            opencv/lib/windows
+            opencv/include
+          key: opencv-windows-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+
+      - name: Cache StarDecisionTrees
+        uses: actions/cache@v4
+        with:
+          path: |
+            StarDecisionTrees/lib/release/windows
+            StarDecisionTrees/include/release/windows
+          key: dt-windows-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+
+      - name: Build CLI (.zip)
+        run: bash release_windows.sh
+
+      - name: Upload .zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: star-windows-zip
+          path: cli/.build/*.zip
+          if-no-files-found: error
