@@ -3,11 +3,14 @@
 
 import PackageDescription
 
-// Platform-specific paths for pre-compiled StarDecisionTrees
+// Platform-specific paths for pre-compiled StarDecisionTrees.
+// All three platforms consume the artifacts produced by
+// StarDecisionTrees/release.sh, which writes into lib/release/<platform>/
+// and include/release/<platform>/. There is no separate debug build script.
 #if os(macOS)
-let dtIncludeDebug   = "../StarDecisionTrees/include/debug/macos"
-let dtLibDebug       = "../StarDecisionTrees/lib/debug/macos"
-let dtLibDebugFile   = "../StarDecisionTrees/lib/debug/macos/libStarDecisionTrees.a"
+let dtIncludeDebug   = "../StarDecisionTrees/include/release/macos"
+let dtLibDebug       = "../StarDecisionTrees/lib/release/macos"
+let dtLibDebugFile   = "../StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a"
 #elseif os(Linux)
 let dtIncludeDebug   = "../StarDecisionTrees/include/release/linux"
 let dtLibDebug       = "../StarDecisionTrees/lib/release/linux"
