@@ -36,7 +36,18 @@ let package = Package(
             name: "StarCore",
             dependencies: [
               "StarCoreC",
-              "StarCoreSQLite",
+              // StarCoreSQLite is a vendored SQLite (newer than the one in
+              // Apple's SDK). On macOS we use the system SQLite3 framework
+              // module via `#if canImport(SQLite3)` in HomographyDatabase.swift
+              // — and depending on StarCoreSQLite there is actively harmful:
+              // SPM would put its include/ on the header search path, and
+              // Clang's <sqlite3.h> resolution while building the system
+              // SQLite3 module would find our newer sqlite3.h first, then
+              // fail with a struct sqlite3_module ODR mismatch ('xIntegrity'
+              // present in ours, absent in Apple's). So gate this dependency
+              // on non-Apple platforms only.
+              .target(name: "StarCoreSQLite",
+                      condition: .when(platforms: [.linux, .windows])),
               .product(name: "Semaphore", package: "Semaphore"),
               .product(name: "StarCppBridge", package: "StarCpp"),
               .product(name: "logging", package: "logging"),
