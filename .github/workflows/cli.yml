@@ -78,6 +78,12 @@ jobs:
           xcodebuild -version
           swift --version
 
+      - name: Install Eigen3 via Homebrew
+        # macos-14 runners don't ship Eigen pre-installed. StarCpp/Package.swift
+        # expects headers at /opt/homebrew/include/eigen3 (Apple Silicon prefix,
+        # which the macos-14 runner uses).
+        run: brew install eigen
+
       - name: Cache OpenCV
         uses: actions/cache@v4
         with:

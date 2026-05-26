@@ -9,6 +9,8 @@
 
 #include <string>
 #include <algorithm>
+#include <filesystem>
+#include <system_error>
 #include <fcntl.h>
 #ifdef _WIN32
   // MSVC ships POSIX-flavoured file I/O in <io.h>, but uses underscore-prefixed
@@ -150,8 +152,16 @@ void mat_wrapper_write_to(MatWrapperRef ref, const char *filename) {
         int fd = open(tmp.c_str(), O_RDONLY);
         if (fd >= 0) { fsync(fd); close(fd); }
 
-        if (rename(tmp.c_str(), fname.c_str()) != 0) {
-            Log_e("writeTo: rename failed for %s", filename);
+        // std::filesystem::rename replaces an existing destination atomically
+        // on every platform we support (POSIX rename(2) does this natively;
+        // the MS STL implements it via MoveFileExW with MOVEFILE_REPLACE_EXISTING).
+        // POSIX rename(3) would also replace, but Windows' CRT rename(3) fails
+        // with EEXIST if the destination already exists — which is why we don't
+        // use the plain C call here.
+        std::error_code ec;
+        std::filesystem::rename(tmp, fname, ec);
+        if (ec) {
+            Log_e("writeTo: rename failed for %s: %s", filename, ec.message().c_str());
         }
     } catch (const cv::Exception &e) {
         Log_e("writeTo: %s OpenCV Exception: %s", filename, e.what());
