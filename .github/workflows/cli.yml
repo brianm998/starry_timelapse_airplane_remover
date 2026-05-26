@@ -57,6 +57,9 @@ jobs:
           name: star-linux-deb
           path: cli/.build/*.deb
           if-no-files-found: error
+          # SPM builds into .build, which upload-artifact@v4 treats as hidden
+          # and skips by default. Opt in to including it.
+          include-hidden-files: true
 
   # ─── macOS ───────────────────────────────────────────────────────────────────
   # NOTE: release_darwin.sh also builds the GUI and cli/release.sh runs Apple
@@ -128,6 +131,8 @@ jobs:
           name: star-macos
           path: cli/.build/release/star
           if-no-files-found: error
+          # cli/.build is hidden; upload-artifact@v4 skips hidden paths by default.
+          include-hidden-files: true
 
   # ─── Windows ─────────────────────────────────────────────────────────────────
   windows:
@@ -168,13 +173,82 @@ jobs:
           cmake --version
           perl --version | head -2
 
+      - name: Install MSVC 14.40 toolset
+        # The windows-2022 runner only ships the latest MSVC toolset, which is
+        # 14.44 as of image 20260518. Swift 6.0's bundled Clang 17 has two
+        # incompatibilities with the 14.44 headers:
+        #   1. <wchar.h> now #includes <intrin.h>, creating a Clang module
+        #      cycle (ucrt -> _visualc_intrinsics -> ucrt via <malloc.h> in
+        #      <xmmintrin.h>). Breaks every Swift compile, including
+        #      third-party packages like Semaphore.
+        #   2. The STL static_asserts on Clang version >= 19 (the
+        #      _ALLOW_COMPILER_AND_STL_VERSION_MISMATCH workaround in
+        #      StarCpp/Package.swift covers this for the C++ compile, but not
+        #      for the Swift Clang importer).
+        # The 14.40 LTSC toolset predates both regressions. Installing it here
+        # so the "Pin MSVC dev env" step below can switch vcvars to it.
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+          $vsPath    = 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise'
+          Write-Host "Adding MSVC 14.40 toolset to $vsPath"
+          $proc = Start-Process -FilePath $installer -ArgumentList @(
+              'modify',
+              '--installPath', "$vsPath",
+              '--add', 'Microsoft.VisualStudio.Component.VC.14.40.17.10.x86.x64',
+              '--quiet', '--norestart', '--nocache'
+          ) -Wait -PassThru -NoNewWindow
+          if ($proc.ExitCode -notin 0,3010) {
+              throw "VS Installer failed (exit code $($proc.ExitCode))"
+          }
+          # Verify the toolset is actually present so we fail fast if the
+          # component ID drifts.
+          $toolsetDir = Get-ChildItem "$vsPath\VC\Tools\MSVC" -Directory `
+              | Where-Object { $_.Name -like '14.40.*' } | Select-Object -First 1
+          if (-not $toolsetDir) {
+              throw "MSVC 14.40 toolset not found under $vsPath\VC\Tools\MSVC after install"
+          }
+          Write-Host "Installed: $($toolsetDir.Name)"
+
+      - name: Pin MSVC dev env to 14.40
+        # gha-setup-swift activates the default (14.44) toolset via vcvars64.
+        # Re-run vcvars64 with -vcvars_ver=14.40 and propagate the resulting
+        # env (INCLUDE / LIB / PATH / VCToolsVersion / etc.) to subsequent
+        # steps. After this, OpenCV's CMake, StarCpp's cl.exe, and Swift's
+        # Clang importer all see the 14.40 headers.
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vsPath = 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise'
+          $vcvars = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
+          $output = & cmd /c "`"$vcvars`" -vcvars_ver=14.40 && set"
+          $wanted = @(
+              'INCLUDE','LIB','LIBPATH','PATH',
+              'VCINSTALLDIR','VCToolsInstallDir','VCToolsVersion',
+              'VSINSTALLDIR','WindowsSdkDir','WindowsSDKVersion','UCRTVersion'
+          )
+          foreach ($line in $output) {
+              if ($line -match '^([A-Za-z_][A-Za-z0-9_(\)]*)=(.*)$') {
+                  $name = $matches[1]; $value = $matches[2]
+                  if ($wanted -contains $name) {
+                      "$name=$value" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+                  }
+              }
+          }
+          $ver = ($output | Where-Object { $_ -match '^VCToolsVersion=' }) -replace '^VCToolsVersion=', ''
+          Write-Host "Active VCToolsVersion: $ver"
+
+      # NOTE: cache keys include "msvc14.40" so changing the toolset pin
+      # above invalidates these caches automatically (otherwise an older
+      # toolset's libs could get linked against a newer toolset's code).
       - name: Cache OpenCV
         uses: actions/cache@v4
         with:
           path: |
             opencv/lib/windows
             opencv/include
-          key: opencv-windows-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-windows-msvc14.40-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -182,7 +256,7 @@ jobs:
           path: |
             StarDecisionTrees/lib/release/windows
             StarDecisionTrees/include/release/windows
-          key: dt-windows-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+          key: dt-windows-msvc14.40-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
 
       - name: Build CLI (.zip)
         # NOTE: do not set CL=/D... here. It propagates to every cl.exe invocation
@@ -199,3 +273,5 @@ jobs:
           name: star-windows-zip
           path: cli/.build/*.zip
           if-no-files-found: error
+          # cli/.build is hidden; upload-artifact@v4 skips hidden paths by default.
+          include-hidden-files: true
