@@ -262,6 +262,49 @@ jobs:
           Write-Host "Active WindowsSDKVersion: $sdkVer"
           Write-Host "Active UCRTVersion:       $ucrt"
 
+      - name: Install Swift modulemaps into the pinned SDK and MSVC toolset
+        # Swift's Windows installer copies four modulemap/apinotes files from
+        # $SDKROOT\usr\share\ into the Windows SDK and the MSVC toolset it
+        # detected at install time. Since we just switched both SDK and MSVC
+        # to non-default versions, the active include directories don't have
+        # those files — which makes Swift's Clang importer fail with
+        #     <unknown>:0: error: missing required module 'ucrt'
+        # the moment any Swift file imports anything that pulls in ucrt.
+        #
+        # Replicate the installer's copy step for the active SDK + toolset.
+        # Files are tolerant: if a source is missing on this Swift version,
+        # we skip it rather than fail.
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $share = Join-Path $env:SDKROOT 'usr\share'
+          if (-not (Test-Path $share)) {
+              throw "Swift SDK share dir not found at $share (SDKROOT=$env:SDKROOT)"
+          }
+
+          # Normalise WindowsSDKVersion (vcvars emits it with a trailing '\').
+          $sdkVer = $env:WindowsSDKVersion.TrimEnd('\')
+          $sdkInc = Join-Path $env:WindowsSdkDir "Include\$sdkVer"
+          $vcInc  = Join-Path $env:VCToolsInstallDir 'include'
+
+          $copies = @(
+              @{ src='ucrt.modulemap';     dst=(Join-Path $sdkInc 'ucrt\module.modulemap') },
+              @{ src='winsdk.modulemap';   dst=(Join-Path $sdkInc 'um\module.modulemap')   },
+              @{ src='visualc.modulemap';  dst=(Join-Path $vcInc  'module.modulemap')      },
+              @{ src='visualc.apinotes';   dst=(Join-Path $vcInc  'visualc.apinotes')      }
+          )
+          foreach ($c in $copies) {
+              $src = Join-Path $share $c.src
+              if (Test-Path $src) {
+                  $dstDir = Split-Path $c.dst -Parent
+                  New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
+                  Copy-Item -Force $src $c.dst
+                  Write-Host "Copied $($c.src) -> $($c.dst)"
+              } else {
+                  Write-Host "Skipped (missing in this Swift toolchain): $src"
+              }
+          }
+
       # NOTE: cache keys include "msvc14.40" so changing the toolset pin
       # above invalidates these caches automatically (otherwise an older
       # toolset's libs could get linked against a newer toolset's code).
