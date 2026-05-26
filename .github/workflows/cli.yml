@@ -217,18 +217,31 @@ jobs:
           }
           Write-Host "Installed: $($toolsetDir.Name)"
 
-      - name: Pin MSVC dev env to 14.40
-        # gha-setup-swift activates the default (14.44) toolset via vcvars64.
-        # Re-run vcvars64 with -vcvars_ver=14.40 and propagate the resulting
-        # env (INCLUDE / LIB / PATH / VCToolsVersion / etc.) to subsequent
-        # steps. After this, OpenCV's CMake, StarCpp's cl.exe, and Swift's
-        # Clang importer all see the 14.40 headers.
+      - name: Pin MSVC dev env to 14.40 + Windows SDK 10.0.22621.0
+        # gha-setup-swift activates the latest toolset + SDK via vcvars64. We
+        # need to override BOTH:
+        #
+        #   * MSVC 14.40 (not 14.44) — see install step above.
+        #
+        #   * Windows SDK 10.0.22621.0 (not the current default 10.0.26100.0).
+        #     The 26100 ucrt's <wchar.h> unconditionally `#include <intrin.h>`,
+        #     which makes Clang build the _visualc_intrinsics module while
+        #     building the ucrt module — and _visualc_intrinsics transitively
+        #     includes <malloc.h> from ucrt, producing
+        #         cyclic dependency in module 'ucrt':
+        #             ucrt -> _visualc_intrinsics -> ucrt
+        #     The cycle kills every Swift compile. SDK 22621 predates that
+        #     wchar.h change. windows-2022 has it preinstalled alongside 26100.
+        #
+        # vcvars64.bat positional arg #1 is the SDK version; -vcvars_ver=
+        # pins the MSVC toolset. Capture the resulting env and push it through
+        # GITHUB_ENV so subsequent steps inherit it.
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $vsPath = 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise'
           $vcvars = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
-          $output = & cmd /c "`"$vcvars`" -vcvars_ver=14.40 && set"
+          $output = & cmd /c "`"$vcvars`" 10.0.22621.0 -vcvars_ver=14.40 && set"
           $wanted = @(
               'INCLUDE','LIB','LIBPATH','PATH',
               'VCINSTALLDIR','VCToolsInstallDir','VCToolsVersion',
@@ -242,8 +255,12 @@ jobs:
                   }
               }
           }
-          $ver = ($output | Where-Object { $_ -match '^VCToolsVersion=' }) -replace '^VCToolsVersion=', ''
-          Write-Host "Active VCToolsVersion: $ver"
+          $ver    = ($output | Where-Object { $_ -match '^VCToolsVersion='     }) -replace '^VCToolsVersion=', ''
+          $sdkVer = ($output | Where-Object { $_ -match '^WindowsSDKVersion='  }) -replace '^WindowsSDKVersion=', ''
+          $ucrt   = ($output | Where-Object { $_ -match '^UCRTVersion='        }) -replace '^UCRTVersion=', ''
+          Write-Host "Active VCToolsVersion:    $ver"
+          Write-Host "Active WindowsSDKVersion: $sdkVer"
+          Write-Host "Active UCRTVersion:       $ucrt"
 
       # NOTE: cache keys include "msvc14.40" so changing the toolset pin
       # above invalidates these caches automatically (otherwise an older
@@ -254,7 +271,7 @@ jobs:
           path: |
             opencv/lib/windows
             opencv/include
-          key: opencv-windows-msvc14.40-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-windows-msvc14.40-sdk22621-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -262,7 +279,7 @@ jobs:
           path: |
             StarDecisionTrees/lib/release/windows
             StarDecisionTrees/include/release/windows
-          key: dt-windows-msvc14.40-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+          key: dt-windows-msvc14.40-sdk22621-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
 
       - name: Build CLI (.zip)
         # NOTE: do not set CL=/D... here. It propagates to every cl.exe invocation
