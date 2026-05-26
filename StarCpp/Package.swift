@@ -131,8 +131,19 @@ let platformLinkerSettings: [LinkerSetting] = [
 
 // Eigen3 headers — unzip to C:\eigen3 (see windows_start.txt step 5f).
 // MSVC headers are found automatically; no need to list them explicitly.
+//
+// _ALLOW_COMPILER_AND_STL_VERSION_MISMATCH: MSVC 14.44 STL headers contain a
+// static_assert requiring Clang 19+, but the Swift toolchain bundles an older
+// Clang. This is the documented Microsoft escape hatch to bypass that check.
+// (Setting CL=/D... globally instead breaks CMake's compiler probe for OpenCV.)
+// NOTE: we use .unsafeFlags rather than .define here — empirically .define
+// did not propagate to the C++ compile on Windows in CI, while unsafeFlags
+// in the same block (the -I flag below) does reliably reach the compiler.
 let starcppCXXSettings: [CXXSetting] = [
-    .unsafeFlags(["-IC:/eigen3"]),
+    .unsafeFlags([
+        "-IC:/eigen3",
+        "-D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH",
+    ]),
 ]
 let bridgeCXXSettings: [CXXSetting] = starcppCXXSettings + [
     .unsafeFlags(["-I../opencv/include"]),
