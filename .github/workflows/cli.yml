@@ -193,9 +193,15 @@ jobs:
           $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
           $vsPath    = 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise'
           Write-Host "Adding MSVC 14.40 toolset to $vsPath"
+          # The path contains spaces ("Program Files", "Visual Studio").
+          # PowerShell's Start-Process -ArgumentList does NOT auto-quote array
+          # elements that contain spaces — passing $vsPath bare results in the
+          # installer parsing --installPath as just "C:\Program" and silently
+          # ignoring the rest. Wrap in literal double quotes so the path stays
+          # intact across the process boundary.
           $proc = Start-Process -FilePath $installer -ArgumentList @(
               'modify',
-              '--installPath', "$vsPath",
+              '--installPath', "`"$vsPath`"",
               '--add', 'Microsoft.VisualStudio.Component.VC.14.40.17.10.x86.x64',
               '--quiet', '--norestart', '--nocache'
           ) -Wait -PassThru -NoNewWindow
