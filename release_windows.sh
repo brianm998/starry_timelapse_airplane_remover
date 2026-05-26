@@ -71,18 +71,23 @@ echo "==> Building star CLI (release configuration)..."
 cd "$REPO_ROOT/cli"
 # No -static-stdlib on Windows; Swift runtime DLLs are bundled in the zip instead.
 #
-# -Xswiftc -disable-batch-mode:
-#   Workaround for a Swift 6.0 driver bug on Windows: when batch-mode
-#   compilation groups multiple files into one swiftc invocation, the driver
-#   sometimes emits an output file map missing an entry, then fails with
+# -Xswiftc -wmo (whole-module-optimization):
+#   Workaround for a Swift 6.0 driver bug on Windows. When the driver groups
+#   multiple .swift files into a single swiftc invocation (either via the
+#   default batch mode or any multi-file primary), it sometimes emits a
+#   supplementary output file map missing an entry, then fails with
 #       <unknown>:0: error: supplementary output file map
 #       '…\supplementaryOutputs-N' is missing an entry for '…file.swift'
 #       (this likely indicates a compiler issue …)
-#   Disabling batch mode forces one swiftc process per source file. Slower
-#   but reliable. We hit this consistently when compiling StarCore on
-#   windows-2022 + Swift 6.0; once Swift on Windows fixes the driver
-#   (tracked upstream as multiple swiftc/driver issues) this can come off.
-swift build -c release -Xswiftc -disable-batch-mode
+#   We hit this consistently when compiling StarCore on windows-2022 +
+#   Swift 6.0. -Xswiftc -disable-batch-mode alone was NOT enough — SPM
+#   still produces multi-primary frontend invocations that trip the same
+#   bug. -wmo collapses each module into a single compile unit so the
+#   supplementary output file map can't fragment, sidestepping the driver
+#   bug entirely. Slightly slower to compile but reliable. Once Swift on
+#   Windows fixes the driver (tracked upstream as multiple swiftc/driver
+#   issues) this can come off.
+swift build -c release -Xswiftc -wmo
 
 BINARY="$REPO_ROOT/cli/.build/release/star.exe"
 
