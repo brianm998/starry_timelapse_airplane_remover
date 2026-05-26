@@ -178,11 +178,12 @@ jobs:
           key: dt-windows-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
 
       - name: Build CLI (.zip)
-        env:
-          # Bypass MSVC STL's static_assert that demands a newer Clang than the
-          # Swift toolchain bundles. clang-cl honors the CL env var.
-          # See: learn.microsoft.com/.../cpp-conformance-improvements (_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH)
-          CL: /D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
+        # NOTE: do not set CL=/D... here. It propagates to every cl.exe invocation
+        # including OpenCV's CMake compiler-identification probe, which then
+        # silently fails ("No CMAKE_CXX_COMPILER could be found"). The
+        # _ALLOW_COMPILER_AND_STL_VERSION_MISMATCH macro is applied surgically
+        # in StarCpp/Package.swift instead, where it only affects StarCpp's
+        # C++ files (which include the MSVC STL headers that need the bypass).
         run: bash release_windows.sh
 
       - name: Upload .zip artifact
