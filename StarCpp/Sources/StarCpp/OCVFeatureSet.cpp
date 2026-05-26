@@ -9,6 +9,13 @@
 #include <cstring>
 #include <sys/stat.h>
 
+// MSVC's <sys/stat.h> does not define the POSIX S_ISDIR macro; it only
+// exposes the S_IFMT / S_IFDIR bit constants. Define S_ISDIR ourselves
+// when it's missing so the same code compiles on Windows, Linux, and macOS.
+#ifndef S_ISDIR
+#define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
+#endif
+
 OCVFeatureSetRef ocv_feature_set_create_empty(void) {
     return new OCVFeatureSetImpl();
 }

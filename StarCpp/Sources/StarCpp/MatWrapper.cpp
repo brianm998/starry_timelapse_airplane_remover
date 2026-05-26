@@ -10,7 +10,21 @@
 #include <string>
 #include <algorithm>
 #include <fcntl.h>
-#include <unistd.h>
+#ifdef _WIN32
+  // MSVC ships POSIX-flavoured file I/O in <io.h>, but uses underscore-prefixed
+  // names (_open / _close / _commit) and has no fsync. Map the POSIX names we
+  // use below onto the MSVC equivalents so the call sites stay portable.
+  #include <io.h>
+  static inline int fsync(int fd) { return _commit(fd); }
+  #ifndef open
+    #define open  _open
+  #endif
+  #ifndef close
+    #define close _close
+  #endif
+#else
+  #include <unistd.h>
+#endif
 
 // Static member definitions
 std::atomic<uint64_t> MatWrapperImpl::totalBytes_{0};

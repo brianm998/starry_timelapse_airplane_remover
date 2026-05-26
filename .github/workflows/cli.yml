@@ -24,7 +24,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             cmake make git pkg-config perl dpkg-dev zip \
-            libeigen3-dev zlib1g-dev libpng-dev libtiff-dev libjpeg-dev
+            libeigen3-dev zlib1g-dev libpng-dev libtiff-dev libjpeg-dev \
+            libcurl4-openssl-dev
 
       - name: Set up Swift
         uses: SwiftyLab/setup-swift@latest
