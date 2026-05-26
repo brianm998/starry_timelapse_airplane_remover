@@ -135,19 +135,15 @@ jobs:
       - name: Set up Swift
         uses: compnerd/gha-setup-swift@main
         with:
-          # Swift 6.0 ships Clang 17, which fails against MSVC 14.44 STL headers
-          # on windows-2022 (they static_assert Clang 19+). Use 6.1.x; the
-          # _ALLOW_COMPILER_AND_STL_VERSION_MISMATCH macro below is the fallback.
-          swift-version: swift-6.1.2-release
-          swift-build: 6.1.2-RELEASE
-
-      # Swift 6.1+ installer no longer leaves the MSVC dev environment on PATH
-      # (Swift 6.0 did, as a side effect of its `Tools` dir). OpenCV's CMake
-      # needs cl.exe + INCLUDE/LIB to be set, so source vcvarsall.bat explicitly.
-      - name: Set up MSVC dev environment
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
+          # Pinned to 6.0: its installer leaves the MSVC dev environment in a
+          # state that lets OpenCV's CMake auto-discover the compiler. Swift
+          # 6.1.x dropped that side effect and CMake fails with
+          # "No CMAKE_CXX_COMPILER could be found"; ilammy/msvc-dev-cmd
+          # doesn't fix it (likely confuses CMake's generator selection).
+          # Swift 6.0 ships Clang 17 which trips the MSVC 14.44 STL version
+          # assert when compiling StarCpp — handled by the CL env var below.
+          swift-version: swift-6.0-release
+          swift-build: 6.0-RELEASE
 
       - name: Install Eigen3 to C:/eigen3
         shell: pwsh
