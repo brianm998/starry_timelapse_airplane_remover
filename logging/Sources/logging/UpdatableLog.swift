@@ -100,11 +100,17 @@ public actor UpdatableLog {
     }
     
     public init() {
+        #if !os(Windows)
+        // POSIX: query the real terminal width via TIOCGWINSZ.
+        // On Windows the equivalent is GetConsoleScreenBufferInfo from the
+        // WinSDK module; until that's wired up we just stay on the 120-col
+        // default initialised above.
         var w = winsize()
         let ioctl_ret = ioctl(STDOUT_FILENO, UInt(TIOCGWINSZ), &w)
         if ioctl_ret == 0 {
             screen_width = w.ws_col
         }
+        #endif
         /*
          XXX attempt to get sigwinch signals to alert us to changes in the console size
          
@@ -117,6 +123,11 @@ public actor UpdatableLog {
 
     @MainActor
     func subscribe() {
+        // POSIX-only: SIGWINCH + TIOCGWINSZ ioctl. Windows has neither
+        // (terminal resize is delivered via console events, not signals),
+        // so we no-op there. Currently the call site in init() is commented
+        // out everywhere, but we still need this to type-check on Windows.
+        #if !os(Windows)
         var w = winsize()
         let sigwinchSrc = DispatchSource.makeSignalSource(signal: SIGWINCH, queue: .main)
         sigwinchSrc.setEventHandler {
@@ -136,6 +147,7 @@ public actor UpdatableLog {
 //        sigwinchSrc.resume()
 
 //        dispatchMain()
+        #endif
     }
     
     func sort() {
