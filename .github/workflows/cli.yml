@@ -141,6 +141,14 @@ jobs:
           swift-version: swift-6.1.2-release
           swift-build: 6.1.2-RELEASE
 
+      # Swift 6.1+ installer no longer leaves the MSVC dev environment on PATH
+      # (Swift 6.0 did, as a side effect of its `Tools` dir). OpenCV's CMake
+      # needs cl.exe + INCLUDE/LIB to be set, so source vcvarsall.bat explicitly.
+      - name: Set up MSVC dev environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Install Eigen3 to C:/eigen3
         shell: pwsh
         run: |
