@@ -23,6 +23,15 @@
 
 set -e
 
+# Anchor the script to its own directory. Without this, invoking the script
+# from anywhere other than opencv/ — e.g. `bash opencv/build.sh` from the
+# repo root — would make the relative `rm -rf opencv` in the CLEAN block and
+# in the version-mismatch branch resolve to `<cwd>/opencv`, which on the
+# project root is THIS script's own directory. Result: the script deletes
+# itself (and README.md, lib/, etc.) the moment a clean/version-bump fires.
+# cd up front so every relative path below is rooted at opencv/.
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
 # detect platform
 PLATFORM="$(uname -s)"
 case "$PLATFORM" in
@@ -155,12 +164,18 @@ if [ "$PLATFORM" = "Darwin" ]; then
     mv "FRAMEWORK_BUILD_${ARCH_ARRAY[0]}/opencv2.framework" ..
     cd ..
 
-    # set up headers (from framework)
+    # Set up headers (from framework).
+    # We deliberately COPY (not symlink) the headers out of the framework so
+    # that include/opencv2/ is self-contained. The CI cache only stores
+    # opencv/include and opencv/lib/$PLATFORM_DIR; symlinks into
+    # ../opencv2.framework/Headers/ would dangle on cache restore because
+    # the framework directory itself isn't cached, breaking the next build
+    # with "fatal error: 'opencv2/core.hpp' file not found".
+    # cp -RL follows symlinks (Headers itself is a symlink to
+    # Versions/Current/Headers inside the framework bundle).
     rm -rf include/opencv2
-    cd include
-    mkdir opencv2
-    cd opencv2
-    ln -s ../../opencv2.framework/Headers/* .
+    mkdir -p include/opencv2
+    cp -RL opencv2.framework/Headers/* include/opencv2/
 
 elif [ "$PLATFORM_DIR" = "windows" ]; then
     #
