@@ -36,6 +36,10 @@ public enum AlignmentState: Int, Codable, CaseIterable, Sendable, CustomStringCo
 
     // MARK: - Convert to Objective-C enum
     public var objcValue: AlignmentStateObjC? {
-        AlignmentStateObjC(rawValue: UInt32(self.rawValue))
+        // AlignmentStateObjC is a plain C enum. Swift's Clang importer picks
+        // a different rawValue integer width per platform: UInt32 on macOS
+        // (Clang) but Int32 on Windows (MSVC) and Linux (Clang on glibc).
+        // numericCast bridges the gap without a #if os() wedge here.
+        AlignmentStateObjC(rawValue: numericCast(self.rawValue))
     }
 }

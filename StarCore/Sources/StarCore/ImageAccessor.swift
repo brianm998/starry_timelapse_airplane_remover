@@ -11,6 +11,11 @@ import SwiftUI
 #if canImport(AppKit)
 import AppKit
 #endif
+#if os(Windows)
+// CreateHardLinkW + GetLastError live in WinSDK; the POSIX link(2) used on
+// macOS/Linux is unavailable on Windows.
+import WinSDK
+#endif
 
 /*
 
@@ -856,7 +861,32 @@ func createHardLinkReplacingDestination(
         }
     }
 
-    // Create hard link (POSIX)
+    // Create hard link.
+    //
+    // POSIX has link(2); Windows doesn't. Use Win32 CreateHardLinkW on
+    // Windows (via WinSDK), which has the matching semantics: same volume,
+    // file content shared, separate directory entry, no symlink follow.
+    // Argument order is reversed (Windows takes new-name first, existing
+    // file second; POSIX is the opposite).
+    #if os(Windows)
+    let success: Bool = destinationPath.withCString(encodedAs: UTF16.self) { dstW in
+        sourcePath.withCString(encodedAs: UTF16.self) { srcW in
+            CreateHardLinkW(dstW, srcW, nil)
+        }
+    }
+    if !success {
+        let win32err = Int(GetLastError())
+        throw NSError(
+            domain: "Win32",
+            code: win32err,
+            userInfo: [
+                NSLocalizedDescriptionKey:
+                    "CreateHardLinkW failed (GetLastError = \(win32err)) "
+                    + "creating '\(destinationPath)' -> '\(sourcePath)'"
+            ]
+        )
+    }
+    #else
     let result = link(sourcePath, destinationPath)
     if result != 0 {
         throw NSError(
@@ -867,6 +897,7 @@ func createHardLinkReplacingDestination(
             ]
         )
     }
+    #endif
 }
 
 func farthestFirstOrder(range: Range<Int>) -> [Int] {
