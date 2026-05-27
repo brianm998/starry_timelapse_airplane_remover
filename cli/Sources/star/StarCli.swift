@@ -409,10 +409,17 @@ struct StarCli: AsyncParsableCommand {
             }
             
             setupKHTLogging()
-        
+
+            // SIGKILL doesn't exist in the Windows C runtime (which only
+            // exposes SIGABRT/SIGFPE/SIGILL/SIGINT/SIGSEGV/SIGTERM), so
+            // gate this for non-Windows. Note that on POSIX this is also
+            // a no-op — SIGKILL is uncatchable, so signal() returns
+            // SIG_ERR and the closure is never invoked.
+            #if !os(Windows)
             signal(SIGKILL) { foo in
                 print("caught SIGKILL \(foo)")
             }
+            #endif
             
             Log.i("looking for files to processes in \(inputImageSequenceDirname)")
             do {
