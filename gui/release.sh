@@ -16,8 +16,31 @@ PKG_NAME=".build/star_app_${STAR_VERSION}.pkg"
 #     APPLE_API_KEY_ID, APPLE_API_ISSUER_ID.
 #   * Keychain profile — local default. Falls back to `--keychain-profile star`
 #     when no API key path is set.
+SIGN_APP="${SIGN_APP:-Developer ID Application: Brian Martin (G3L75S65V9)}"
 SIGN_PKG="${SIGN_PKG:-Developer ID Installer: Brian Martin (G3L75S65V9)}"
 APPLE_TEAM_ID="${APPLE_TEAM_ID:-G3L75S65V9}"
+
+# The Xcode project ships with CODE_SIGN_STYLE=Automatic, which relies on an
+# Apple ID being signed in to Xcode to provision certs/profiles on demand.
+# That works on Brian's Mac but not on a fresh CI runner — there, xcodebuild
+# tries to look up a "Mac Development" cert (the default for archive under
+# automatic signing) and fails because we only imported the Developer ID
+# Application identity into the temp keychain. When APPLE_API_KEY_PATH is set
+# (our CI signal) we therefore override to manual signing on the xcodebuild
+# command line. The entitlements file is empty so no provisioning profile is
+# required for Developer ID distribution.
+XCODEBUILD_SIGNING_ARGS=()
+EXPORT_SIGNING_STYLE=automatic
+if [ -n "$APPLE_API_KEY_PATH" ]; then
+    XCODEBUILD_SIGNING_ARGS=(
+        "CODE_SIGN_STYLE=Manual"
+        "CODE_SIGN_IDENTITY=${SIGN_APP}"
+        "DEVELOPMENT_TEAM=${APPLE_TEAM_ID}"
+        "PROVISIONING_PROFILE_SPECIFIER="
+        "OTHER_CODE_SIGN_FLAGS=--timestamp"
+    )
+    EXPORT_SIGNING_STYLE=manual
+fi
 
 # notarytool helper — abstracts API-key vs keychain-profile auth.
 notarize() {
@@ -48,8 +71,12 @@ xcodebuild \
     -scheme "Star Release" \
     -configuration "Release" \
     -archivePath "${BUILD_DIR}/star.xcarchive" \
+    "${XCODEBUILD_SIGNING_ARGS[@]}" \
     archive
 
+# Under manual signing we have to name the cert explicitly; under automatic
+# signing Xcode picks it from the team's account. The signingCertificate key
+# is ignored when signingStyle=automatic, so it's safe to always include it.
 cat > "${BUILD_DIR}/ExportOptions.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -60,7 +87,9 @@ cat > "${BUILD_DIR}/ExportOptions.plist" <<EOF
     <key>method</key>
     <string>developer-id</string>
     <key>signingStyle</key>
-    <string>automatic</string>
+    <string>${EXPORT_SIGNING_STYLE}</string>
+    <key>signingCertificate</key>
+    <string>${SIGN_APP}</string>
     <key>teamID</key>
     <string>${APPLE_TEAM_ID}</string>
 </dict>

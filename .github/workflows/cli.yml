@@ -292,6 +292,12 @@ jobs:
       - name: Build, sign, notarize, staple GUI
         working-directory: gui
         env:
+          # SIGN_APP is required in CI: the GUI's Xcode project ships with
+          # CODE_SIGN_STYLE=Automatic, and release.sh switches to manual
+          # signing when APPLE_API_KEY_PATH is set, naming this identity
+          # explicitly on the xcodebuild command line (CI runners don't have
+          # an Apple ID logged into Xcode, so automatic signing fails).
+          SIGN_APP: "Developer ID Application: Brian Martin (${{ secrets.APPLE_TEAM_ID }})"
           SIGN_PKG: "Developer ID Installer: Brian Martin (${{ secrets.APPLE_TEAM_ID }})"
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_API_KEY_PATH: ${{ runner.temp }}/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
