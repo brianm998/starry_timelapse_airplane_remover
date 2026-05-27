@@ -115,7 +115,6 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
     }
     
     public func doubleUpdate<T>(_ argsToUpdate: any Argable<T>, _ argType: T, _ value: Double, _ stepIndex: Int) {
-        print("doubleUpdate args \(argsToUpdate) argType \(argType) value \(value) index \(String(describing: index))")
         let currentStep = steps[stepIndex]
         
         switch currentStep {
@@ -185,7 +184,6 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
     }
 
     public func intUpdate<T>(_ argsToUpdate: any Argable<T>, _ argType: T, _ value: Int, _ stepIndex: Int) {
-        print("intUpdate args \(argsToUpdate) argType \(argType) value \(value) index \(String(describing: index))")
         let currentStep = steps[stepIndex]
         switch currentStep {
         case .compactBlobIds:
