@@ -78,9 +78,31 @@ elif [ "$PLATFORM_DIR" = "windows" ]; then
 
     swift build --configuration release -Xswiftc -O -j "$JOBS"
 
-    # SPM on Windows produces TargetName.lib (no "lib" prefix, COFF archive).
-    mv .build/release/StarDecisionTrees.lib lib/release/$PLATFORM_DIR/
-    mv .build/release/Modules/StarDecisionTrees.swiftmodule include/release/$PLATFORM_DIR/
+    # Swift 6.1 on Windows actually produces libStarDecisionTrees.a (GNU ar
+    # archive with "lib" prefix) under the triple-qualified build directory,
+    # mirroring Linux. The earlier comment claimed SPM emitted a COFF-format
+    # StarDecisionTrees.lib in .build/release/ — that is no longer true (and
+    # may never have been; .build/release on Windows isn't guaranteed to be
+    # a junction to the triple dir under Git Bash).
+    #
+    # cli/Package.swift and release_windows.sh both reference the path
+    # StarDecisionTrees.lib, so we rename .a -> .lib at the destination.
+    # clang/lld on Windows accepts the GNU ar archive regardless of the
+    # filename extension, since the cli passes the full path via -Xlinker.
+    BUILD_DIR=.build/x86_64-unknown-windows-msvc/release
+    if [ -f "$BUILD_DIR/libStarDecisionTrees.a" ]; then
+        mv "$BUILD_DIR/libStarDecisionTrees.a" \
+           lib/release/$PLATFORM_DIR/StarDecisionTrees.lib
+    elif [ -f "$BUILD_DIR/StarDecisionTrees.lib" ]; then
+        # Fallback: older Swift / a future toolchain might emit a true .lib.
+        mv "$BUILD_DIR/StarDecisionTrees.lib" lib/release/$PLATFORM_DIR/
+    else
+        echo "ERROR: no StarDecisionTrees static archive found in $BUILD_DIR" >&2
+        ls -la "$BUILD_DIR" >&2 || true
+        exit 1
+    fi
+    mv "$BUILD_DIR/Modules/StarDecisionTrees.swiftmodule" \
+       include/release/$PLATFORM_DIR/
 
 else
     # Linux: single architecture build.
