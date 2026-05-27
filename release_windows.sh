@@ -71,19 +71,17 @@ echo "==> Building star CLI (release configuration)..."
 cd "$REPO_ROOT/cli"
 # No -static-stdlib on Windows; Swift runtime DLLs are bundled in the zip instead.
 #
-# --no-use-integrated-swift-driver:
-#   Falls back from SPM's integrated swift-driver to the classic Swift
-#   driver. Required on Swift 6.0 + Windows to avoid:
-#       <unknown>:0: error: supplementary output file map
-#       '…\supplementaryOutputs-N' is missing an entry for '…file.swift'
-#       (this likely indicates a compiler issue …)
-#   See StarDecisionTrees/release.sh for the full diagnosis — short
-#   version: the integrated driver's batch-index bookkeeping is broken on
-#   Windows here, deterministically aborting on
-#   StarCore/AbstractBlobProcessor.swift regardless of -wmo,
-#   -disable-batch-mode, or -j 1. The classic driver doesn't use those
-#   JSON map files, so it sidesteps the bug entirely.
-swift build -c release --no-use-integrated-swift-driver
+# SWIFTPM_USE_INTEGRATED_DRIVER / SWIFTPM_DISABLE_INTEGRATED_DRIVER:
+#   Attempting to disable SPM's integrated swift-driver to dodge the
+#   Swift 6.0 Windows "supplementary output file map is missing an entry
+#   for AbstractBlobProcessor.swift" bug. See StarDecisionTrees/release.sh
+#   for the full diagnosis. The same vars are set in that script too —
+#   `bash release.sh` runs in a subshell, so we have to re-export here
+#   for the CLI build to see them. Variable spelling has drifted across
+#   SPM versions, so we set both names.
+export SWIFTPM_USE_INTEGRATED_DRIVER=0
+export SWIFTPM_DISABLE_INTEGRATED_DRIVER=1
+swift build -c release
 
 BINARY="$REPO_ROOT/cli/.build/release/star.exe"
 

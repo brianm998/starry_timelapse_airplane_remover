@@ -108,10 +108,22 @@ elif [ "$PLATFORM_DIR" = "windows" ]; then
     MEM_JOBS=$(( AVAIL_MEM_GB / MEM_PER_JOB_GB ))
     JOBS=$(( MEM_JOBS < NCPU ? MEM_JOBS : NCPU ))
     [ "$JOBS" -lt 1 ] && JOBS=1
-    echo "==> swift build -j $JOBS  (${NCPU} CPUs, memory-limited; integrated driver disabled to dodge Swift 6.0 Windows supplementary-output-map bug)"
+    echo "==> swift build -j $JOBS  (${NCPU} CPUs, memory-limited; trying integrated-driver env vars)"
 
-    swift build --configuration release -Xswiftc -O -j "$JOBS" \
-        --no-use-integrated-swift-driver
+    # NOTE: --no-use-integrated-swift-driver is NOT a valid SPM 6.0 flag —
+    # only the positive --use-integrated-swift-driver exists, and there's no
+    # CLI way to turn the integrated driver off. The env vars below are the
+    # only documented switch. Setting both names because the variable spelling
+    # has drifted between SPM versions. May or may not actually fix the
+    # supplementary-output-map bug (the underlying swift-driver is the same
+    # code in either mode), but it's the only knob left short of patching
+    # source. If this run also fails on AbstractBlobProcessor.swift the
+    # conclusion is the bug isn't reachable from build-config flags at all
+    # and we'll have to fix it by changing the StarCore module layout.
+    export SWIFTPM_USE_INTEGRATED_DRIVER=0
+    export SWIFTPM_DISABLE_INTEGRATED_DRIVER=1
+
+    swift build --configuration release -Xswiftc -O -j "$JOBS"
 
     # SPM on Windows produces TargetName.lib (no "lib" prefix, COFF archive).
     mv .build/release/StarDecisionTrees.lib lib/release/$PLATFORM_DIR/
