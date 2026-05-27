@@ -70,17 +70,6 @@ fi
 echo "==> Building star CLI (release configuration)..."
 cd "$REPO_ROOT/cli"
 # No -static-stdlib on Windows; Swift runtime DLLs are bundled in the zip instead.
-#
-# SWIFTPM_USE_INTEGRATED_DRIVER / SWIFTPM_DISABLE_INTEGRATED_DRIVER:
-#   Attempting to disable SPM's integrated swift-driver to dodge the
-#   Swift 6.0 Windows "supplementary output file map is missing an entry
-#   for AbstractBlobProcessor.swift" bug. See StarDecisionTrees/release.sh
-#   for the full diagnosis. The same vars are set in that script too —
-#   `bash release.sh` runs in a subshell, so we have to re-export here
-#   for the CLI build to see them. Variable spelling has drifted across
-#   SPM versions, so we set both names.
-export SWIFTPM_USE_INTEGRATED_DRIVER=0
-export SWIFTPM_DISABLE_INTEGRATED_DRIVER=1
 swift build -c release
 
 BINARY="$REPO_ROOT/cli/.build/release/star.exe"

@@ -147,15 +147,32 @@ jobs:
       - name: Set up Swift
         uses: compnerd/gha-setup-swift@main
         with:
-          # Pinned to 6.0: its installer leaves the MSVC dev environment in a
-          # state that lets OpenCV's CMake auto-discover the compiler. Swift
-          # 6.1.x dropped that side effect and CMake fails with
-          # "No CMAKE_CXX_COMPILER could be found"; ilammy/msvc-dev-cmd
-          # doesn't fix it (likely confuses CMake's generator selection).
-          # Swift 6.0 ships Clang 17 which trips the MSVC 14.44 STL version
-          # assert when compiling StarCpp — handled by the CL env var below.
-          swift-version: swift-6.0-release
-          swift-build: 6.0-RELEASE
+          # Bumped from 6.0 to 6.1: Swift 6.0 on Windows has a swift-driver
+          # bug that deterministically aborts the StarCore module compile
+          # with
+          #   <unknown>:0: error: supplementary output file map
+          #   '…\supplementaryOutputs-N' is missing an entry for
+          #   '…\StarCore\Sources\StarCore\AbstractBlobProcessor.swift'
+          # No build-config flag (-wmo, -disable-batch-mode, -j 1,
+          # SWIFTPM_USE_INTEGRATED_DRIVER=0) avoided it on 6.0. Hoping the
+          # newer driver in 6.1 has the fix.
+          #
+          # Watch for two earlier-known 6.1 gotchas:
+          #   1. The 6.1 installer no longer leaves an MSVC dev env that
+          #      OpenCV's CMake can auto-discover. The "Pin MSVC dev env"
+          #      step below explicitly runs vcvars64.bat afterwards and
+          #      exports INCLUDE/LIB/PATH to GITHUB_ENV, which should
+          #      satisfy CMake — but if CMake still says "No CMAKE_CXX_COMPILER
+          #      could be found" we'll need to also force the Visual Studio
+          #      generator with -G "Visual Studio 17 2022" -A x64 in
+          #      opencv/build.sh.
+          #   2. The 6.1 Clang version may not trip the MSVC 14.44 STL
+          #      static_assert the way 6.0's Clang 17 did. If StarCpp now
+          #      compiles cleanly we can drop the
+          #      _ALLOW_COMPILER_AND_STL_VERSION_MISMATCH workaround in
+          #      StarCpp/Package.swift later.
+          swift-version: swift-6.1-release
+          swift-build: 6.1-RELEASE
 
       - name: Install Eigen3 to C:/eigen3
         shell: pwsh
