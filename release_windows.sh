@@ -87,7 +87,13 @@ cd "$REPO_ROOT/cli"
 #   bug entirely. Slightly slower to compile but reliable. Once Swift on
 #   Windows fixes the driver (tracked upstream as multiple swiftc/driver
 #   issues) this can come off.
-swift build -c release -Xswiftc -wmo
+#
+# -j 1 alongside -wmo: see the long comment in StarDecisionTrees/release.sh
+# for why parallel SPM jobs aren't safe on Swift 6.0 + Windows. We hit the
+# supplementaryOutputs map race in StarCore during the dependency build;
+# keep the CLI build serial too so we don't get bitten the same way here
+# now that StarCore is a transitive dependency of the CLI as well.
+swift build -c release -Xswiftc -wmo -j 1
 
 BINARY="$REPO_ROOT/cli/.build/release/star.exe"
 
