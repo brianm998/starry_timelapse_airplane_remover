@@ -66,6 +66,10 @@ else
         echo "==> OpenCV version changed ($CURRENT_VERSION -> $OPENCV_VERSION), doing fresh clone"
         rm -rf opencv
         NEED_CLONE=1
+    elif [ ! -f opencv/CMakeLists.txt ]; then
+        echo "==> OpenCV source corrupt (CMakeLists.txt missing), forcing fresh clone"
+        rm -rf opencv
+        NEED_CLONE=1
     else
         echo "==> Reusing existing OpenCV $OPENCV_VERSION source and build caches"
     fi
