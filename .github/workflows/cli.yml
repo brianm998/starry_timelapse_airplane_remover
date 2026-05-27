@@ -159,7 +159,10 @@ jobs:
   macos-signed-release:
     name: macOS signed release (macos-14)
     runs-on: macos-14
-    if: startsWith(github.ref, 'refs/tags/release/')
+    # Fires on release/* tag pushes, and on manual "Run workflow" button
+    # clicks from the Actions UI (workflow_dispatch). The dispatch path is
+    # how you test the signing flow without cutting a real release tag.
+    if: startsWith(github.ref, 'refs/tags/release/') || github.event_name == 'workflow_dispatch'
     needs: [macos]  # don't burn notary quota if the smoke build already failed
     steps:
       - uses: actions/checkout@v4
@@ -226,8 +229,28 @@ jobs:
               $(security list-keychains -d user | tr -d '"')
 
           # Verify both expected identities are present — fail fast otherwise.
-          security find-identity -v -p codesigning "$KC"
-          security find-identity -v -p basic       "$KC"
+          # NOTE: do NOT use `-p codesigning` here. The Developer ID *Installer*
+          # cert isn't classified under macOS's `codesigning` trust policy
+          # (it has its own "Developer ID Installer Signing" policy), so the
+          # codesigning filter hides it — making it look like the .p12 is
+          # missing the cert when it isn't. `pkgbuild` looks up identities
+          # without that filter too, which is why local releases work.
+          # Without -p we get all identities across all policies.
+          security find-identity -v "$KC"
+          TEAM_ID='${{ secrets.APPLE_TEAM_ID }}'
+          APP_FOUND=$(security find-identity -v "$KC" \
+              | grep -c "Developer ID Application:.*${TEAM_ID}" || true)
+          INST_FOUND=$(security find-identity -v "$KC" \
+              | grep -c "Developer ID Installer:.*${TEAM_ID}" || true)
+          if [ "$APP_FOUND" -lt 1 ] || [ "$INST_FOUND" -lt 1 ]; then
+              echo "::error::Missing Developer ID identities for team ${TEAM_ID}." \
+                   "Found: Application=${APP_FOUND}, Installer=${INST_FOUND} (need 1 of each)."
+              echo "Check that APPLE_CERTIFICATE_P12_BASE64 was exported from 'My Certificates'" \
+                   "in Keychain Access with BOTH 'Developer ID Application: Brian Martin (${TEAM_ID})'" \
+                   "and 'Developer ID Installer: Brian Martin (${TEAM_ID})' selected, including their" \
+                   "child private-key rows."
+              exit 1
+          fi
 
       - name: Stage App Store Connect API key
         env:
