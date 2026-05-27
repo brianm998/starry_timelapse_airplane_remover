@@ -32,6 +32,12 @@ struct DebugView: View {
 
     @State private var isScrolling: Bool = false
 
+    // Bumped from the @Sendable onPreferenceChange closure to request a
+    // scroll-to-bottom. The actual scroll happens in an @MainActor
+    // .onChange handler below — see the long comment on .onPreferenceChange
+    // for why we can't call proxy.scrollTo directly from there.
+    @State private var scrollToBottomNonce: Int = 0
+
     /// How close (in points) the last message’s bottom must be
     /// to the viewport bottom to be considered “at bottom.”
     private let bottomThreshold: CGFloat = 20
@@ -209,27 +215,47 @@ struct DebugView: View {
                       
                   }
                 
-                // Update our state when preferences change:
+                // Update our state when preferences change.
+                //
+                // Starting with the macOS 15 / iOS 18 SDK, SwiftUI's
+                // onPreferenceChange overload takes a @Sendable closure
+                // (because PreferenceKey.Value is now required to be
+                // Sendable). That means the body can no longer touch
+                // main-actor @State directly, nor capture the non-Sendable
+                // ScrollViewProxy. We work around both:
+                //   * State mutations are wrapped in Task { @MainActor in }
+                //     so they happen back on the main actor.
+                //   * The actual proxy.scrollTo call lives in an .onChange
+                //     handler keyed on a counter we bump from here —
+                //     .onChange's closure is @MainActor, so capturing
+                //     `proxy` there is allowed.
+                // Older Xcodes resolve to the deprecated, non-@Sendable
+                // overload of onPreferenceChange, which is why this still
+                // compiled before. Xcode 16+ on the macOS 15 SDK enforces
+                // the new signature.
                   .onPreferenceChange(LastItemBottomKey.self) { newBottom in
-                      // if that bottom is within threshold of viewport bottom, pin
-                      lastItemBottom = newBottom
-                      if isScrolling {
-                          // only apply this logic when the user is scrolling
-                          if lastItemBottom <= viewportHeight + bottomThreshold {
-                              isPinnedToBottom = true
-                              if let last = loggingViewModel.logs.indices.last  {
-                                  withAnimation(.none) {
-                                      proxy.scrollTo(last, anchor: .bottom)
-                                  }
+                      Task { @MainActor in
+                          // if that bottom is within threshold of viewport bottom, pin
+                          lastItemBottom = newBottom
+                          if isScrolling {
+                              // only apply this logic when the user is scrolling
+                              if lastItemBottom <= viewportHeight + bottomThreshold {
+                                  isPinnedToBottom = true
+                                  scrollToBottomNonce &+= 1
+                              } else {
+                                  isPinnedToBottom = false
                               }
-                          } else {
-                              isPinnedToBottom = false
+                          } else if isPinnedToBottom {
+                              scrollToBottomNonce &+= 1
                           }
-                      } else if isPinnedToBottom {
-                          if let last = loggingViewModel.logs.indices.last  {
-                              withAnimation(.none) {
-                                  proxy.scrollTo(last, anchor: .bottom)
-                              }
+                      }
+                  }
+                  .onChange(of: scrollToBottomNonce) {
+                      // .onChange's closure is @MainActor, so we can safely
+                      // capture and use the non-Sendable ScrollViewProxy here.
+                      if let last = loggingViewModel.logs.indices.last {
+                          withAnimation(.none) {
+                              proxy.scrollTo(last, anchor: .bottom)
                           }
                       }
                   }
