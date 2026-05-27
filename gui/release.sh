@@ -9,6 +9,29 @@ APP_NAME=Star
 STAR_VERSION=`cd ../StarCore ; perl version.pl`
 PKG_NAME=".build/star_app_${STAR_VERSION}.pkg"
 
+# ── signing / notarization identity ──────────────────────────────────────────
+# Defaults match the local Mac. CI overrides via env vars wired to GitHub
+# Actions secrets. Notarization auth has two modes:
+#   * App Store Connect API key — used in CI. Set APPLE_API_KEY_PATH (.p8 file),
+#     APPLE_API_KEY_ID, APPLE_API_ISSUER_ID.
+#   * Keychain profile — local default. Falls back to `--keychain-profile star`
+#     when no API key path is set.
+SIGN_PKG="${SIGN_PKG:-Developer ID Installer: Brian Martin (G3L75S65V9)}"
+APPLE_TEAM_ID="${APPLE_TEAM_ID:-G3L75S65V9}"
+
+# notarytool helper — abstracts API-key vs keychain-profile auth.
+notarize() {
+    if [ -n "$APPLE_API_KEY_PATH" ]; then
+        xcrun notarytool submit "$1" \
+            --key "$APPLE_API_KEY_PATH" \
+            --key-id "$APPLE_API_KEY_ID" \
+            --issuer "$APPLE_API_ISSUER_ID" \
+            --wait
+    else
+        xcrun notarytool submit "$1" --keychain-profile star --wait
+    fi
+}
+
 rm -rf ${BUILD_DIR}
 
 mkdir ${BUILD_DIR}
@@ -38,6 +61,8 @@ cat > "${BUILD_DIR}/ExportOptions.plist" <<EOF
     <string>developer-id</string>
     <key>signingStyle</key>
     <string>automatic</string>
+    <key>teamID</key>
+    <string>${APPLE_TEAM_ID}</string>
 </dict>
 </plist>
 EOF
@@ -77,10 +102,7 @@ ditto \
 # developer.apple.com and clicking around before generating a new app specific password 
 #
 
-xcrun notarytool submit \
-      "${BUILD_DIR}/${APP_NAME}-for-notarization.zip" \
-      --keychain-profile "star" \
-      --wait 
+notarize "${BUILD_DIR}/${APP_NAME}-for-notarization.zip"
 
 WAIT_TIME=20
 
@@ -95,12 +117,12 @@ pkgbuild --root "${BUILD_DIR}/AdHoc/${APP_NAME}.app" \
 	 --identifier com.star \
 	 --version "${STAR_VERSION}" \
 	 --install-location /Applications/${APP_NAME}.app \
- 	 --sign "Developer ID Installer: Brian Martin (G3L75S65V9)" \
+ 	 --sign "$SIGN_PKG" \
 	 $PKG_NAME
 
 # not sure if we need to notarize and staple both the app and the package,
 # seems to work now, adjust as if necessary later
-xcrun notarytool submit $PKG_NAME --keychain-profile star --wait
+notarize "$PKG_NAME"
 xcrun stapler staple $PKG_NAME
 
 # set to build for active arch only for development (as it is in git)
