@@ -247,8 +247,25 @@ elif [ "$PLATFORM_DIR" = "windows" ]; then
     OUTLIB="../../lib/$PLATFORM_DIR/opencv2.lib"
     mkdir -p "$(dirname "$OUTLIB")"
 
-    # Collect all .lib files produced by the Release build.
-    ALL_LIBS=$(find lib/Release 3rdparty/lib/Release -name '*.lib' 2>/dev/null | sort)
+    # Collect all .lib files produced or referenced by the Release build.
+    #
+    # `lib/Release/` holds OpenCV's own modules. `3rdparty/lib/Release/`
+    # holds the from-source 3rdparty deps that CMake builds (zlib, libpng,
+    # libtiff, libjpeg-turbo, ittnotify, ipphal, ippiw).
+    #
+    # BUT the precompiled Intel IPPICV ships its own .lib in
+    # `3rdparty/ippicv/ippicv_win/icv/lib/intel64/` (typically
+    # `ippicvmt.lib`) — NOT under `3rdparty/lib/Release/`. If we don't
+    # bundle it, the final star.exe link fails with undefined
+    # `ippicvi*` symbols referenced by opencv2.lib(mean_ipp.obj),
+    # since OpenCV's HAL uses IPPICV for inner loops on x86.
+    #
+    # Recurse the whole `3rdparty/` tree, excluding any */Debug/* paths
+    # to keep debug variants out of the merged Release archive.
+    ALL_LIBS=$(find lib/Release 3rdparty \
+        -name '*.lib' \
+        -not -path '*/Debug/*' \
+        2>/dev/null | sort -u)
 
     # lib.exe requires Windows-style paths.
     WIN_OUTLIB="$(cygpath -w "$(cd "$(dirname "$OUTLIB")" && pwd)/$(basename "$OUTLIB")")"
