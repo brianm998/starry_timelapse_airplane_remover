@@ -76,7 +76,20 @@ elif [ "$PLATFORM_DIR" = "windows" ]; then
     [ "$JOBS" -lt 1 ] && JOBS=1
     echo "==> swift build -j $JOBS  (${NCPU} CPUs, memory-limited)"
 
-    swift build --configuration release -Xswiftc -O -j "$JOBS"
+    # -Xswiftc -wmo (whole-module-optimization):
+    #   Workaround for a Swift 6.0 Windows driver bug. When the driver groups
+    #   multiple .swift files into a single swiftc invocation, it sometimes
+    #   emits a supplementary output file map missing an entry, then fails:
+    #       <unknown>:0: error: supplementary output file map
+    #       '…\supplementaryOutputs-N' is missing an entry for '…file.swift'
+    #   This reproduces consistently while StarDecisionTrees is building its
+    #   StarCore dependency on windows-2022 + Swift 6.0. -wmo collapses each
+    #   module into a single compile unit so the supplementary output file
+    #   map can't fragment, sidestepping the driver bug entirely. Note this
+    #   must be set HERE (not just in release_windows.sh) because SPM
+    #   recursively rebuilds dependencies, and the failure happens during
+    #   the dependency build, never reaching the CLI build step.
+    swift build --configuration release -Xswiftc -O -Xswiftc -wmo -j "$JOBS"
 
     # SPM on Windows produces TargetName.lib (no "lib" prefix, COFF archive).
     mv .build/release/StarDecisionTrees.lib lib/release/$PLATFORM_DIR/
