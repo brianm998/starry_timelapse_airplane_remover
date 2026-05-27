@@ -115,7 +115,21 @@ done
 echo "    bundled $DLL_COUNT DLL(s)"
 
 cd "$(dirname "$ZIP_FILE")"
-zip -r "$(basename "$ZIP_FILE")" "$(basename "$PKG_DIR")/"
+# Prefer `zip` if present (matches Linux/macOS behavior exactly); otherwise
+# fall back to PowerShell's Compress-Archive, which ships with every Windows
+# install. Git for Windows does NOT include `zip` by default, and neither do
+# the GitHub Actions windows-2022 runners, so the fallback is the common path
+# for CI. Both forms produce a .zip with `<PKG_STEM>/star.exe` inside.
+if command -v zip >/dev/null 2>&1; then
+    zip -r "$(basename "$ZIP_FILE")" "$(basename "$PKG_DIR")/"
+else
+    echo "    zip not found, using PowerShell Compress-Archive"
+    # PowerShell needs Windows-style paths; -Force overwrites an existing zip.
+    PKG_DIR_WIN="$(cygpath -w "$PKG_DIR")"
+    ZIP_FILE_WIN="$(cygpath -w "$ZIP_FILE")"
+    powershell.exe -NoProfile -Command \
+        "Compress-Archive -Path '$PKG_DIR_WIN' -DestinationPath '$ZIP_FILE_WIN' -Force"
+fi
 rm -rf "$PKG_DIR"
 
 echo ""
