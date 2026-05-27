@@ -262,9 +262,19 @@ elif [ "$PLATFORM_DIR" = "windows" ]; then
     #
     # Recurse the whole `3rdparty/` tree, excluding any */Debug/* paths
     # to keep debug variants out of the merged Release archive.
+    #
+    # Also exclude `*.dir/*` paths: CMake names per-target intermediate
+    # output directories `<target>.dir/`, and libjpeg-turbo's build emits
+    # sub-libraries `jpeg12-static.lib` and `jpeg16-static.lib` under
+    # `3rdparty/libjpeg-turbo/jpeg{12,16}-static.dir/Release/` that are
+    # *also* folded into the canonical `3rdparty/lib/Release/libjpeg-turbo.lib`.
+    # Including the intermediates causes duplicate `jpeg12_*` / `jpeg16_*`
+    # symbols in opencv2.lib and the final star.exe link fails under lld-link
+    # (lib.exe only warns LNK4006 during the merge, but keeps the dup objects).
     ALL_LIBS=$(find lib/Release 3rdparty \
         -name '*.lib' \
         -not -path '*/Debug/*' \
+        -not -path '*.dir/*' \
         2>/dev/null | sort -u)
 
     # lib.exe requires Windows-style paths.
