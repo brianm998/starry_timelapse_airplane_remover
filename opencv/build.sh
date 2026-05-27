@@ -189,11 +189,20 @@ elif [ "$PLATFORM_DIR" = "windows" ]; then
 
     mkdir -p build_windows && cd build_windows
 
+    # BUILD_WITH_STATIC_CRT=OFF is critical: OpenCV's CMake defaults to /MT
+    # (static MSVCRT) on Windows, but Swift's clang and SPM-built C++ targets
+    # use /MD (dynamic MSVCRT). Linking would fail with:
+    #   lld-link: /failifmismatch: 'RuntimeLibrary'
+    #   ... has value MD_DynamicRelease
+    #   opencv2.lib(...) has value MT_StaticRelease
+    # Forcing OFF tells OpenCV to compile with /MD, matching the rest of the
+    # build.
     cmake .. \
         -G "Visual Studio 17 2022" \
         -A x64 \
         -DCMAKE_CXX_STANDARD=17 \
         -DBUILD_SHARED_LIBS=OFF \
+        -DBUILD_WITH_STATIC_CRT=OFF \
         -DBUILD_LIST=core,imgproc,imgcodecs,features2d,calib3d,flann,highgui \
         -DBUILD_opencv_apps=OFF \
         -DBUILD_opencv_java=OFF \
