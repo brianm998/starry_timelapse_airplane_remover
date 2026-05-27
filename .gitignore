@@ -12,5 +12,11 @@ DerivedData/
 .venv
 *.tif
 *.mov
+*.mp4
 *.a
 releases/
+
+# Large GUI splash-screen assets — fetched from the `ci-assets` GitHub Release
+# in CI, kept locally for development. See the "Fetch large GUI assets" step
+# in .github/workflows/cli.yml for details on uploading / updating.
+gui/videos/

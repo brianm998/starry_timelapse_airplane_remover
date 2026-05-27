@@ -289,6 +289,28 @@ jobs:
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
         run: bash release.sh
 
+      - name: Fetch large GUI assets from ci-assets release
+        # The GUI's Xcode project bundles gui/videos/11_30_2024-fx3-aurora-topaz-star.mp4
+        # (~386 MB) as a splash-screen resource. That file is too big to keep
+        # in git, so it lives in a dedicated `ci-assets` GitHub Release on
+        # this repo. Re-upload with `--clobber` from a local Mac whenever the
+        # asset changes:
+        #   gh release upload ci-assets gui/videos/*.mp4 --clobber
+        # First-time setup (run once, locally):
+        #   gh release create ci-assets gui/videos/*.mp4 \
+        #     --title "CI build assets" \
+        #     --notes "Bulky non-code resources needed by macOS GUI builds." \
+        #     --prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p gui/videos
+          gh release download ci-assets \
+              --repo "${{ github.repository }}" \
+              --pattern '*.mp4' \
+              --dir gui/videos
+          ls -lh gui/videos
+
       - name: Build, sign, notarize, staple GUI
         working-directory: gui
         env:
