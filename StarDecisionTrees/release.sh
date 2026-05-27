@@ -60,31 +60,41 @@ if [ "$PLATFORM" = "Darwin" ]; then
 elif [ "$PLATFORM_DIR" = "windows" ]; then
     # Windows: single architecture build, forced to one job at a time.
     #
-    # Why -j 1 + -Xswiftc -wmo together:
-    #   Swift 6.0 on Windows has a swift-driver race when multiple swiftc
-    #   invocations are running in parallel — each writes its own
-    #   "supplementaryOutputs-N" JSON file to a shared temp directory, and
-    #   the driver occasionally finalises that map with an entry missing,
-    #   then aborts:
-    #       <unknown>:0: error: supplementary output file map
-    #       '…\supplementaryOutputs-N' is missing an entry for '…file.swift'
-    #       (this likely indicates a compiler issue …)
-    #   We hit this reproducibly on StarCore/AbstractBlobProcessor.swift on
-    #   windows-2022 with -j 4. Tried, insufficient:
-    #     - -Xswiftc -disable-batch-mode (still concurrent invocations)
-    #     - -Xswiftc -wmo alone           (still concurrent invocations)
-    #   What actually works: pin SPM to a single concurrent job (-j 1) so
-    #   there are no parallel writers to the supplementary output map at
-    #   all, AND keep -wmo so each module compiles as one swiftc call (no
-    #   intra-invocation multi-primary batches either). Slower, but the
-    #   only configuration we've seen complete on Swift 6.0 + windows-2022.
-    #   Once we can upgrade Swift on Windows past 6.0 (currently blocked
-    #   because Swift 6.1's installer no longer sets up the MSVC env in a
-    #   way OpenCV's CMake auto-detects), this can come off.
+    # Bypass the integrated Swift driver — required on Swift 6.0 + Windows.
     #
-    # MEM_PER_JOB_GB stays informational — even with -j 1 we leave the
-    # memory probe in place so future maintainers can see why the cap is
-    # what it is if/when the driver bug is fixed.
+    # Symptom we hit on every run of StarCore (transitively built here):
+    #     [29/31] Compiling StarCore AbstractBlobProcessor.swift
+    #     <unknown>:0: error: supplementary output file map
+    #     'C:\…\TemporaryDirectory.XXXXX\supplementaryOutputs-1' is missing
+    #     an entry for '…\StarCore\Sources\StarCore\AbstractBlobProcessor.swift'
+    #     (this likely indicates a compiler issue …)
+    #
+    # The "supplementary output file map" is a JSON file the *integrated*
+    # swift-driver writes per swiftc invocation, mapping each primary input
+    # file to its supplementary outputs (.swiftmodule, .swiftdoc, .o, …).
+    # On Swift 6.0 / windows-2022, the driver's indexing of which batch a
+    # file belongs to gets out of sync with which "supplementaryOutputs-N"
+    # file is consulted, and it aborts with the message above.
+    #
+    # The bug is fully deterministic — same file every run — and is NOT a
+    # parallelism race. We confirmed by reproducing it with:
+    #   - -Xswiftc -disable-batch-mode (no batch grouping)
+    #   - -Xswiftc -wmo                (one swiftc call per module)
+    #   - -j 1                         (one SPM job at a time)
+    # All three insufficient: the integrated driver still emits the broken
+    # map regardless.
+    #
+    # The classic (non-integrated) Swift driver doesn't use these map files
+    # at all — it passes outputs on the command line — so falling back to
+    # it sidesteps the bug entirely. We disable the integrated driver via
+    # SPM's --no-use-integrated-swift-driver. Slightly slower (extra
+    # process per invocation) but completes correctly. Drop this once
+    # Swift on Windows past 6.0 is usable here (currently blocked by
+    # Swift 6.1's installer not setting up the MSVC env in a way OpenCV's
+    # CMake can auto-detect).
+    #
+    # MEM_PER_JOB_GB still informs the job cap; we keep -j ≥ 1 here since
+    # the underlying race never reproduced with the integrated driver off.
     MEM_PER_JOB_GB=2
     NCPU=$(nproc)
     AVAIL_MEM_KB=$(powershell.exe -Command \
@@ -95,10 +105,13 @@ elif [ "$PLATFORM_DIR" = "windows" ]; then
     else
         AVAIL_MEM_GB=4  # conservative fallback if PowerShell query fails
     fi
-    JOBS=1
-    echo "==> swift build -j $JOBS  (${NCPU} CPUs available, capped at 1 to avoid swift-driver supplementary output map race; ${AVAIL_MEM_GB:-?} GB RAM)"
+    MEM_JOBS=$(( AVAIL_MEM_GB / MEM_PER_JOB_GB ))
+    JOBS=$(( MEM_JOBS < NCPU ? MEM_JOBS : NCPU ))
+    [ "$JOBS" -lt 1 ] && JOBS=1
+    echo "==> swift build -j $JOBS  (${NCPU} CPUs, memory-limited; integrated driver disabled to dodge Swift 6.0 Windows supplementary-output-map bug)"
 
-    swift build --configuration release -Xswiftc -O -Xswiftc -wmo -j "$JOBS"
+    swift build --configuration release -Xswiftc -O -j "$JOBS" \
+        --no-use-integrated-swift-driver
 
     # SPM on Windows produces TargetName.lib (no "lib" prefix, COFF archive).
     mv .build/release/StarDecisionTrees.lib lib/release/$PLATFORM_DIR/

@@ -71,29 +71,19 @@ echo "==> Building star CLI (release configuration)..."
 cd "$REPO_ROOT/cli"
 # No -static-stdlib on Windows; Swift runtime DLLs are bundled in the zip instead.
 #
-# -Xswiftc -wmo (whole-module-optimization):
-#   Workaround for a Swift 6.0 driver bug on Windows. When the driver groups
-#   multiple .swift files into a single swiftc invocation (either via the
-#   default batch mode or any multi-file primary), it sometimes emits a
-#   supplementary output file map missing an entry, then fails with
+# --no-use-integrated-swift-driver:
+#   Falls back from SPM's integrated swift-driver to the classic Swift
+#   driver. Required on Swift 6.0 + Windows to avoid:
 #       <unknown>:0: error: supplementary output file map
 #       '…\supplementaryOutputs-N' is missing an entry for '…file.swift'
 #       (this likely indicates a compiler issue …)
-#   We hit this consistently when compiling StarCore on windows-2022 +
-#   Swift 6.0. -Xswiftc -disable-batch-mode alone was NOT enough — SPM
-#   still produces multi-primary frontend invocations that trip the same
-#   bug. -wmo collapses each module into a single compile unit so the
-#   supplementary output file map can't fragment, sidestepping the driver
-#   bug entirely. Slightly slower to compile but reliable. Once Swift on
-#   Windows fixes the driver (tracked upstream as multiple swiftc/driver
-#   issues) this can come off.
-#
-# -j 1 alongside -wmo: see the long comment in StarDecisionTrees/release.sh
-# for why parallel SPM jobs aren't safe on Swift 6.0 + Windows. We hit the
-# supplementaryOutputs map race in StarCore during the dependency build;
-# keep the CLI build serial too so we don't get bitten the same way here
-# now that StarCore is a transitive dependency of the CLI as well.
-swift build -c release -Xswiftc -wmo -j 1
+#   See StarDecisionTrees/release.sh for the full diagnosis — short
+#   version: the integrated driver's batch-index bookkeeping is broken on
+#   Windows here, deterministically aborting on
+#   StarCore/AbstractBlobProcessor.swift regardless of -wmo,
+#   -disable-batch-mode, or -j 1. The classic driver doesn't use those
+#   JSON map files, so it sidesteps the bug entirely.
+swift build -c release --no-use-integrated-swift-driver
 
 BINARY="$REPO_ROOT/cli/.build/release/star.exe"
 
