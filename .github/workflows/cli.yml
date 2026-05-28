@@ -55,6 +55,17 @@ jobs:
       - name: Build CLI (.deb)
         run: bash release_linux.sh
 
+      - name: Smoke-test CLI
+        run: |
+          cli/.build/release/star -l info test_data/test_a7sii_10 star-smoke-output
+          ACTUAL=$(ls -1 star-smoke-output/ | wc -l | tr -d ' ')
+          if [ "$ACTUAL" -ne 19 ]; then
+            echo "::error::Expected 19 output files, got $ACTUAL"
+            ls -la star-smoke-output/ || true
+            exit 1
+          fi
+          echo "Smoke test passed: $ACTUAL/19 output files"
+
       - name: Upload .deb artifact
         uses: actions/upload-artifact@v4
         with:
@@ -128,6 +139,17 @@ jobs:
         run: |
           swift build -c release
           strip .build/release/star
+
+      - name: Smoke-test CLI
+        run: |
+          cli/.build/release/star -l info test_data/test_a7sii_10 star-smoke-output
+          ACTUAL=$(ls -1 star-smoke-output/ | wc -l | tr -d ' ')
+          if [ "$ACTUAL" -ne 19 ]; then
+            echo "::error::Expected 19 output files, got $ACTUAL"
+            ls -la star-smoke-output/ || true
+            exit 1
+          fi
+          echo "Smoke test passed: $ACTUAL/19 output files"
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
@@ -575,6 +597,17 @@ jobs:
         # in StarCpp/Package.swift instead, where it only affects StarCpp's
         # C++ files (which include the MSVC STL headers that need the bypass).
         run: bash release_windows.sh
+
+      - name: Smoke-test CLI
+        run: |
+          cli/.build/release/star.exe -l info test_data/test_a7sii_10 star-smoke-output
+          ACTUAL=$(ls -1 star-smoke-output/ | wc -l | tr -d ' ')
+          if [ "$ACTUAL" -ne 19 ]; then
+            echo "::error::Expected 19 output files, got $ACTUAL"
+            ls -la star-smoke-output/ || true
+            exit 1
+          fi
+          echo "Smoke test passed: $ACTUAL/19 output files"
 
       - name: Upload .zip artifact
         uses: actions/upload-artifact@v4
