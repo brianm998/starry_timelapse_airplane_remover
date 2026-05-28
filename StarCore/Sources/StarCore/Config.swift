@@ -723,10 +723,12 @@ public struct Config: Codable, Sendable {
     //        grid mode
     //        linux cli support
     //        lots more
+    // 0.11.1 use github actions for release
+    //        windows cli support
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.11.0"
+    public static let latestVersion = "0.11.1"
 
     // defaults to basename below if not set
     public var finalOutputDir: String? = nil
