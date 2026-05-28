@@ -559,7 +559,15 @@ jobs:
             StarDecisionTrees/include/release/windows
           key: dt-windows-msvc14.40-sdk22621-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
 
-      - name: Build CLI (.zip)
+      - name: Add NSIS to PATH
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "C:\Program Files (x86)\NSIS\makensis.exe")) {
+              choco install nsis --yes --no-progress
+          }
+          "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build CLI (.zip + NSIS installer)
         # NOTE: do not set CL=/D... here. It propagates to every cl.exe invocation
         # including OpenCV's CMake compiler-identification probe, which then
         # silently fails ("No CMAKE_CXX_COMPILER could be found"). The
@@ -575,4 +583,12 @@ jobs:
           path: cli/.build/*.zip
           if-no-files-found: error
           # cli/.build is hidden; upload-artifact@v4 skips hidden paths by default.
+          include-hidden-files: true
+
+      - name: Upload NSIS installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: star-windows-setup
+          path: cli/.build/*_setup.exe
+          if-no-files-found: error
           include-hidden-files: true

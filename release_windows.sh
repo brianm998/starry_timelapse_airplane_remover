@@ -130,10 +130,33 @@ else
     powershell.exe -NoProfile -Command \
         "Compress-Archive -Path '$PKG_DIR_WIN' -DestinationPath '$ZIP_FILE_WIN' -Force"
 fi
+
+# ── 5. NSIS installer (if makensis is available) ──────────────────────────────
+MAKENSIS="$(command -v makensis.exe 2>/dev/null || command -v makensis 2>/dev/null || true)"
+SETUP_FILE=""
+if [ -n "$MAKENSIS" ]; then
+    echo "==> Building NSIS installer..."
+    SETUP_FILE="$REPO_ROOT/cli/.build/${PKG_STEM}_setup.exe"
+    PKG_DIR_WIN="$(cygpath -w "$PKG_DIR")"
+    SETUP_FILE_WIN="$(cygpath -w "$SETUP_FILE")"
+    NSI_SCRIPT_WIN="$(cygpath -w "$REPO_ROOT/cli/star_installer.nsi")"
+    "$MAKENSIS" \
+        "/DSTAR_VERSION=$STAR_VERSION" \
+        "/DARCH=$WIN_ARCH" \
+        "/DPKG_DIR=$PKG_DIR_WIN" \
+        "/DOUTPUT_FILE=$SETUP_FILE_WIN" \
+        "$NSI_SCRIPT_WIN"
+else
+    echo "==> makensis not found — skipping NSIS installer (install NSIS to build it)"
+fi
+
 rm -rf "$PKG_DIR"
 
 echo ""
 echo "==> Package: $ZIP_FILE"
-echo "    Install:  unzip $PKG_STEM.zip"
-echo "              Add the extracted directory to PATH,"
-echo "              or copy star.exe and the .dll files to a directory already in PATH."
+if [ -n "$SETUP_FILE" ]; then
+    echo "==> Installer: $SETUP_FILE"
+fi
+echo "    Install options:"
+echo "      - Run ${PKG_STEM}_setup.exe (adds star to PATH automatically)"
+echo "      - Or: unzip $PKG_STEM.zip and add the folder to PATH manually"
