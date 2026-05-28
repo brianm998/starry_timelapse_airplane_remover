@@ -141,10 +141,10 @@ if [ -n "$MAKENSIS" ]; then
     SETUP_FILE_WIN="$(cygpath -w "$SETUP_FILE")"
     NSI_SCRIPT_WIN="$(cygpath -w "$REPO_ROOT/cli/star_installer.nsi")"
     "$MAKENSIS" \
-        "/DSTAR_VERSION=$STAR_VERSION" \
-        "/DARCH=$WIN_ARCH" \
-        "/DPKG_DIR=$PKG_DIR_WIN" \
-        "/DOUTPUT_FILE=$SETUP_FILE_WIN" \
+        "-DSTAR_VERSION=$STAR_VERSION" \
+        "-DARCH=$WIN_ARCH" \
+        "-DPKG_DIR=$PKG_DIR_WIN" \
+        "-DOUTPUT_FILE=$SETUP_FILE_WIN" \
         "$NSI_SCRIPT_WIN"
 else
     echo "==> makensis not found — skipping NSIS installer (install NSIS to build it)"
