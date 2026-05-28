@@ -625,3 +625,59 @@ jobs:
           path: cli/.build/*_setup.exe
           if-no-files-found: error
           include-hidden-files: true
+
+  # ─── Draft GitHub Release ────────────────────────────────────────────────────
+  # Fires only on release/* tag pushes. Creates a draft release with all
+  # platform artifacts attached so you can write release notes and click
+  # "Publish release" on GitHub when ready. Skipped on workflow_dispatch so
+  # you can test the signing pipeline without creating a release.
+  release-publish:
+    name: Publish Release (draft)
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/release/')
+    needs: [linux, macos-signed-release, windows]
+    permissions:
+      contents: write
+
+    steps:
+      - name: Extract version from tag
+        id: ver
+        run: |
+          VERSION="${GITHUB_REF_NAME#release/}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: star-linux-deb
+          path: release-artifacts/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: star-cli-macos-pkg
+          path: release-artifacts/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: star-gui-macos-pkg
+          path: release-artifacts/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: star-windows-zip
+          path: release-artifacts/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: star-windows-setup
+          path: release-artifacts/
+
+      - name: List release artifacts
+        run: find release-artifacts -type f | sort
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name:               ${{ github.ref_name }}
+          name:                   "Star ${{ steps.ver.outputs.version }}"
+          draft:                  true
+          generate_release_notes: true
+          files:                  release-artifacts/*
