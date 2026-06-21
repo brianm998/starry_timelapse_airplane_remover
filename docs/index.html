@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Download Star — Starry Timelapse Airplane Remover</title>
+  <meta name="description" content="Download Star — automatically remove airplane and satellite streaks from your night-sky timelapse sequences. Available for macOS, Linux, and Windows.">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:             #0a0c14;
+      --surface:        #13161f;
+      --surface-2:      #1a1e2a;
+      --border:         #262b3a;
+      --border-hover:   #343a50;
+      --text:           #e8eaf2;
+      --text-muted:     #7880a0;
+      --text-dim:       #3a3f55;
+      --accent:         #6090f0;
+      --accent-hover:   #78a2ff;
+      --accent-bg:      rgba(96,144,240,0.08);
+      --accent-border:  rgba(96,144,240,0.25);
+      --radius:         14px;
+      --radius-sm:      8px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 20px 80px;
+      line-height: 1.4;
+    }
+
+    /* ── Page header ──────────────────────────────────────────────────────── */
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 700px;
+      margin-bottom: 10px;
+    }
+
+    .logo-wrap { display: flex; align-items: center; gap: 12px; }
+    .logo-icon { width: 42px; height: 42px; flex-shrink: 0; }
+    .logo-text { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; color: var(--text); }
+
+    .header-feat {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      text-decoration: none;
+      border: 1px solid var(--accent-border);
+      background: var(--accent-bg);
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      flex-shrink: 0;
+      transition: border-color 0.13s, background 0.13s;
+    }
+    .header-feat:hover { border-color: var(--accent); background: rgba(96,144,240,0.14); }
+
+    .tagline {
+      color: var(--text-muted);
+      font-size: 15px;
+      margin-bottom: 44px;
+    }
+
+    /* ── Main card ──────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      max-width: 700px;
+      width: 100%;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    /* ── Platform row ───────────────────────────────────────────────────────── */
+    .platform-row { display: flex; align-items: center; gap: 10px; }
+    .platform-icon { font-size: 18px; }
+    .platform-name { font-size: 16px; font-weight: 500; }
+    .platform-change {
+      font-size: 12px;
+      color: var(--accent);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      margin-left: 2px;
+    }
+    .platform-change:hover { background: var(--accent-bg); }
+
+    .platform-picker {
+      display: none;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .platform-picker.open { display: flex; }
+
+    .os-btn {
+      flex: 1;
+      padding: 10px 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      color: var(--text-muted);
+      font-size: 14px;
+      cursor: pointer;
+      text-align: center;
+      transition: border-color 0.12s, color 0.12s;
+    }
+    .os-btn:hover { border-color: var(--border-hover); color: var(--text); }
+    .os-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+
+    .divider { height: 1px; background: var(--border); margin: 28px 0; }
+
+    /* ── Package cards ──────────────────────────────────────────────────────── */
+    .pkg-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .pkg-grid.single { grid-template-columns: 1fr; }
+    @media (max-width: 520px) { .pkg-grid { grid-template-columns: 1fr; } }
+
+    .pkg-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 20px;
+      display: flex;
+      flex-direction: column;
+    }
+    .pkg-card:hover { border-color: var(--border-hover); }
+
+    .pkg-icon { font-size: 28px; margin-bottom: 12px; line-height: 1; }
+    .pkg-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+    .pkg-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.55;
+      flex: 1;
+      margin-bottom: 20px;
+    }
+
+    /* ── Download buttons ───────────────────────────────────────────────────── */
+    .download-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 13px 18px;
+      background: var(--accent);
+      color: #0a0c14;
+      font-size: 14px;
+      font-weight: 700;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.13s, transform 0.1s;
+    }
+    .download-btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+    .download-btn:active { transform: translateY(0); }
+    .download-btn:not([href]) { opacity: 0.4; cursor: default; pointer-events: none; }
+
+    .download-btn.ghost {
+      background: var(--surface-2);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      font-weight: 500;
+      margin-top: 8px;
+    }
+    .download-btn.ghost:hover { border-color: var(--border-hover); color: var(--text); transform: none; }
+    .download-btn.ghost:not([href]) { opacity: 0.4; cursor: default; pointer-events: none; }
+
+    .pkg-meta {
+      text-align: center;
+      font-size: 11.5px;
+      color: var(--text-dim);
+      margin-top: 6px;
+    }
+
+    /* ── CLI-only note ──────────────────────────────────────────────────────── */
+    .cli-note {
+      margin-top: 18px;
+      padding: 14px 16px;
+      background: var(--accent-bg);
+      border: 1px solid var(--accent-border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+    .cli-note strong { color: var(--text); }
+
+    /* ── Mobile notice ──────────────────────────────────────────────────────── */
+    .platform-notice {
+      display: none;
+      text-align: center;
+      padding: 28px 0 8px;
+    }
+    .platform-notice .notice-icon { font-size: 40px; margin-bottom: 16px; }
+    .platform-notice h2 { font-size: 19px; font-weight: 600; margin-bottom: 10px; }
+    .platform-notice p {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      max-width: 460px;
+      margin: 0 auto 20px;
+    }
+    .server-url {
+      display: inline-block;
+      padding: 9px 14px;
+      background: rgba(0,0,0,0.3);
+      border-radius: var(--radius-sm);
+      font-family: 'SF Mono', Consolas, 'Courier New', monospace;
+      font-size: 12.5px;
+      color: var(--text);
+      word-break: break-all;
+    }
+    .copy-btn {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 14px;
+      font-size: 13px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .copy-btn:hover { border-color: var(--border-hover); }
+
+    /* ── System req note ────────────────────────────────────────────────────── */
+    .sysreq {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 16px;
+    }
+
+    /* ── Status messages ────────────────────────────────────────────────────── */
+    .status-msg {
+      text-align: center;
+      font-size: 14px;
+      color: var(--text-dim);
+      padding: 14px;
+    }
+
+    /* ── Footer ─────────────────────────────────────────────────────────────── */
+    footer {
+      margin-top: 44px;
+      font-size: 12px;
+      color: var(--text-dim);
+      text-align: center;
+    }
+    footer a { color: var(--text-muted); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    footer .sep { margin: 0 6px; }
+  </style>
+</head>
+<body>
+
+  <div class="page-header">
+    <div class="logo-wrap">
+      <!-- 5-pointed star icon -->
+      <svg class="logo-icon" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="21,5 24.8,15.7 36.2,16.1 27.2,23 30.4,33.9 21,27.5 11.6,33.9 14.8,23 5.8,16.1 17.2,15.7" fill="#6090f0"/>
+        <circle cx="5"  cy="5"  r="1.2" fill="#6090f0" opacity="0.5"/>
+        <circle cx="37" cy="7"  r="0.9" fill="#6090f0" opacity="0.5"/>
+        <circle cx="38" cy="33" r="1.2" fill="#6090f0" opacity="0.4"/>
+        <circle cx="4"  cy="36" r="0.9" fill="#6090f0" opacity="0.4"/>
+        <circle cx="31" cy="3"  r="0.7" fill="#6090f0" opacity="0.4"/>
+      </svg>
+      <span class="logo-text">Star</span>
+    </div>
+    <a class="header-feat" href="features.html">Features</a>
+  </div>
+
+  <div class="tagline">Clean night-sky timelapses — airplane and satellite streaks removed automatically.</div>
+
+  <!-- Main download card -->
+  <div class="card" id="main-card">
+
+    <!-- Platform detection -->
+    <div class="section-label">YOUR PLATFORM</div>
+    <div class="platform-row" id="platform-row">
+      <span class="platform-icon" id="os-icon">💻</span>
+      <span class="platform-name" id="os-label">Detecting…</span>
+      <button class="platform-change" onclick="togglePlatformPicker()">Change</button>
+    </div>
+    <div class="platform-picker" id="platform-picker">
+      <button class="os-btn" data-os="mac"     onclick="pickOS(this)">macOS</button>
+      <button class="os-btn" data-os="windows" onclick="pickOS(this)">Windows</button>
+      <button class="os-btn" data-os="linux"   onclick="pickOS(this)">Linux</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Loading state -->
+    <div id="release-status" class="status-msg">Loading latest release…</div>
+
+    <!-- macOS: Star App + CLI -->
+    <div id="macos-section" style="display:none">
+      <div class="pkg-grid" id="macos-pkg-grid">
+        <div class="pkg-card">
+          <div class="pkg-icon">🖥</div>
+          <div class="pkg-title">Star App</div>
+          <div class="pkg-desc">
+            Graphical interface for reviewing and correcting the airplane
+            remover's results frame by frame. Load a processed sequence,
+            play through it, and adjust any misclassified groups before
+            rendering.
+          </div>
+          <a class="download-btn" id="mac-app-btn">⬇ Download Star.app</a>
+          <div class="pkg-meta" id="mac-app-meta"></div>
+        </div>
+        <div class="pkg-card">
+          <div class="pkg-icon">⌨️</div>
+          <div class="pkg-title">star CLI</div>
+          <div class="pkg-desc">
+            Command-line processor for batch-running the full pipeline on
+            an image sequence. Use this first to detect and remove streaks,
+            then load the results in Star App to fine-tune any corrections.
+          </div>
+          <a class="download-btn ghost" id="mac-cli-btn">⬇ Download star CLI</a>
+          <div class="pkg-meta" id="mac-cli-meta"></div>
+        </div>
+      </div>
+      <div class="sysreq" id="mac-sysreq">
+        Requires macOS 13 Ventura or later · Universal binary (Apple Silicon + Intel)
+      </div>
+    </div>
+
+    <!-- Linux: CLI .deb -->
+    <div id="linux-section" style="display:none">
+      <div class="pkg-grid single">
+        <div class="pkg-card">
+          <div class="pkg-icon">⌨️</div>
+          <div class="pkg-title">star CLI</div>
+          <div class="pkg-desc">
+            Command-line processor for batch-running the full pipeline on an
+            image sequence. Detects and removes airplane and satellite streaks
+            from most common image sequence formats.
+          </div>
+          <a class="download-btn" id="linux-cli-btn">⬇ Download star CLI (.deb)</a>
+          <div class="pkg-meta" id="linux-cli-meta"></div>
+        </div>
+      </div>
+      <div class="cli-note">
+        <strong>GUI app not yet available on Linux.</strong>
+        Run <code>star -w /path/to/sequence</code> to process and write sidecar
+        data. Star App (macOS) can then load that config for frame-by-frame
+        review and correction.
+      </div>
+      <div class="sysreq" id="linux-sysreq">
+        Debian/Ubuntu · x86-64
+      </div>
+    </div>
+
+    <!-- Windows: CLI .exe installer + .zip -->
+    <div id="windows-section" style="display:none">
+      <div class="pkg-grid single">
+        <div class="pkg-card">
+          <div class="pkg-icon">⌨️</div>
+          <div class="pkg-title">star CLI</div>
+          <div class="pkg-desc">
+            Command-line processor for batch-running the full pipeline on an
+            image sequence. Detects and removes airplane and satellite streaks
+            from most common image sequence formats.
+          </div>
+          <a class="download-btn" id="win-exe-btn">⬇ Download Installer (.exe)</a>
+          <div class="pkg-meta" id="win-exe-meta"></div>
+          <a class="download-btn ghost" id="win-zip-btn">⬇ Portable ZIP</a>
+          <div class="pkg-meta" id="win-zip-meta"></div>
+        </div>
+      </div>
+      <div class="cli-note">
+        <strong>GUI app not yet available on Windows.</strong>
+        Run <code>star -w \path\to\sequence</code> to process and write sidecar
+        data. Star App (macOS) can then load that config for frame-by-frame
+        review and correction.
+      </div>
+      <div class="sysreq" id="win-sysreq">
+        Requires Windows 10 (64-bit) or later
+      </div>
+    </div>
+
+    <!-- Mobile / other: desktop-only notice -->
+    <div class="platform-notice" id="mobile-notice">
+      <div class="notice-icon">🖥</div>
+      <h2>Star is a desktop application</h2>
+      <p>
+        Star runs on macOS, Linux, and Windows. Open this page on your
+        computer to download it.
+      </p>
+      <code class="server-url" id="page-url-display"></code><br>
+      <button class="copy-btn" id="copy-url-btn" onclick="copyPageUrl()">Copy link</button>
+    </div>
+
+  </div><!-- /main-card -->
+
+  <footer>
+    <a href="features.html">Features</a>
+    <span class="sep">·</span>
+    <a href="https://github.com/brianm998/starry_timelapse_airplane_remover" target="_blank" rel="noopener">GitHub</a>
+    <span class="sep">·</span>
+    <a href="https://github.com/brianm998/starry_timelapse_airplane_remover/releases" target="_blank" rel="noopener">All releases</a>
+    <span class="sep">·</span>
+    <a href="https://github.com/brianm998/starry_timelapse_airplane_remover/blob/develop/README.md" target="_blank" rel="noopener">Documentation</a>
+  </footer>
+
+  <script>
+  (function () {
+    'use strict';
+
+    const REPO    = 'brianm998/starry_timelapse_airplane_remover';
+    const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
+
+    const OS_META = {
+      ios:     { label: 'iOS',     icon: '📱' },
+      android: { label: 'Android', icon: '🤖' },
+      mac:     { label: 'macOS',   icon: '🍎' },
+      windows: { label: 'Windows', icon: '🪟' },
+      linux:   { label: 'Linux',   icon: '🐧' },
+    };
+
+    const DESKTOP_OSES = new Set(['mac', 'windows', 'linux']);
+
+    // ── Platform detection ────────────────────────────────────────────────────
+    function detectOS() {
+      const ua = navigator.userAgent;
+      if (/iPhone|iPad|iPod/.test(ua))                 return 'ios';
+      if (/Android/.test(ua))                          return 'android';
+      if (/Macintosh|MacIntel|MacPPC|Mac68K/.test(ua)) return 'mac';
+      if (/Win32|Win64|Windows|WOW64/.test(ua))        return 'windows';
+      if (/Linux/.test(ua))                            return 'linux';
+      return 'mac';
+    }
+
+    let currentOS = detectOS();
+
+    function applyOS(os) {
+      currentOS = os;
+      const meta = OS_META[os] || OS_META.mac;
+      document.getElementById('os-icon').textContent  = meta.icon;
+      document.getElementById('os-label').textContent = meta.label;
+
+      const isDesktop = DESKTOP_OSES.has(os);
+      document.getElementById('macos-section').style.display   = (os === 'mac' && releaseReady)  ? '' : 'none';
+      document.getElementById('linux-section').style.display   = (os === 'linux' && releaseReady) ? '' : 'none';
+      document.getElementById('windows-section').style.display = (os === 'windows' && releaseReady) ? '' : 'none';
+      document.getElementById('release-status').style.display  = (isDesktop && !releaseReady) ? '' : 'none';
+      document.getElementById('mobile-notice').style.display   = isDesktop ? 'none' : '';
+      document.getElementById('page-url-display').textContent  = location.href;
+
+      document.querySelectorAll('.os-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.os === os);
+      });
+    }
+
+    function togglePlatformPicker() {
+      document.getElementById('platform-picker').classList.toggle('open');
+    }
+
+    function pickOS(btn) {
+      document.getElementById('platform-picker').classList.remove('open');
+      applyOS(btn.dataset.os);
+    }
+
+    window.togglePlatformPicker = togglePlatformPicker;
+    window.pickOS               = pickOS;
+
+    // ── Copy URL ──────────────────────────────────────────────────────────────
+    window.copyPageUrl = function () {
+      navigator.clipboard.writeText(location.href).then(() => {
+        const btn = document.getElementById('copy-url-btn');
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy link'; }, 2000);
+      });
+    };
+
+    // ── Release data ──────────────────────────────────────────────────────────
+    let releaseReady = false;
+
+    function fmtBytes(n) {
+      if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
+      return (n / 1024 / 1024).toFixed(1) + ' MB';
+    }
+
+    function setBtn(btnId, metaId, asset, fallbackLabel) {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      if (asset) {
+        btn.href = asset.browser_download_url;
+        btn.removeAttribute('target');
+        const meta = document.getElementById(metaId);
+        if (meta) meta.textContent = fmtBytes(asset.size);
+      } else {
+        btn.removeAttribute('href');
+        const meta = document.getElementById(metaId);
+        if (meta) meta.textContent = fallbackLabel + ' not in this release';
+      }
+    }
+
+    function setBtnLabel(btnId, label) {
+      const btn = document.getElementById(btnId);
+      if (btn) btn.textContent = label;
+    }
+
+    function populateRelease(rel) {
+      const tag     = rel.tag_name || '';
+      const version = tag.replace(/^release\//, '');
+      const v       = version ? ` ${version}` : '';
+      const assets  = rel.assets || [];
+
+      const find = pattern => assets.find(a => pattern.test(a.name)) || null;
+
+      const macApp   = find(/star_app.*\.pkg$/i);
+      const macCli   = find(/star_cli.*\.pkg$/i);
+      const linuxDeb = find(/_amd64\.deb$/i);
+      const winExe   = find(/_windows_.*setup\.exe$/i);
+      const winZip   = find(/_windows_.*\.zip$/i);
+
+      setBtn('mac-app-btn',   'mac-app-meta',   macApp,   'Star.app');
+      setBtn('mac-cli-btn',   'mac-cli-meta',   macCli,   'star CLI (macOS)');
+      setBtn('linux-cli-btn', 'linux-cli-meta', linuxDeb, 'star CLI (Linux)');
+      setBtn('win-exe-btn',   'win-exe-meta',   winExe,   'Installer (.exe)');
+      setBtn('win-zip-btn',   'win-zip-meta',   winZip,   'Portable ZIP');
+
+      // Stamp version into every button label
+      setBtnLabel('mac-app-btn',   `⬇ Download Star.app${v}`);
+      setBtnLabel('mac-cli-btn',   `⬇ Download star CLI${v}`);
+      setBtnLabel('linux-cli-btn', `⬇ Download star CLI${v} (.deb)`);
+      setBtnLabel('win-exe-btn',   `⬇ Download Installer${v} (.exe)`);
+      setBtnLabel('win-zip-btn',   `⬇ Portable ZIP${v}`);
+
+      const macSysreq = document.getElementById('mac-sysreq');
+      if (macSysreq) macSysreq.textContent =
+        'Requires macOS 13 Ventura or later · Universal binary (Apple Silicon + Intel)';
+      const linuxSysreq = document.getElementById('linux-sysreq');
+      if (linuxSysreq) linuxSysreq.textContent = 'Debian/Ubuntu · x86-64';
+      const winSysreq = document.getElementById('win-sysreq');
+      if (winSysreq) winSysreq.textContent = 'Requires Windows 10 (64-bit) or later';
+
+      releaseReady = true;
+      applyOS(currentOS); // re-apply now that release data is ready
+    }
+
+    function populateFallback() {
+      const url = `https://github.com/${REPO}/releases/latest`;
+      const fallbackLabel = '⬇ View on GitHub';
+      ['mac-app-btn','mac-cli-btn','linux-cli-btn','win-exe-btn'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) { btn.href = url; btn.target = '_blank'; btn.textContent = fallbackLabel; }
+      });
+      const zipBtn = document.getElementById('win-zip-btn');
+      if (zipBtn) { zipBtn.href = url; zipBtn.target = '_blank'; zipBtn.textContent = fallbackLabel; }
+      releaseReady = true;
+      applyOS(currentOS);
+    }
+
+    fetch(API_URL)
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(populateRelease)
+      .catch(populateFallback);
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    applyOS(currentOS);
+
+  }());
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Star — Remove airplane streaks from night-sky timelapses</title>
+  <meta name="description" content="Star detects and removes airplane and satellite streaks from overnight timelapse sequences — fully automatically, using frame alignment and per-pixel median merging.">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:             #0a0c14;
+      --surface:        #13161f;
+      --surface-2:      #1a1e2a;
+      --border:         #262b3a;
+      --border-hover:   #343a50;
+      --text:           #e8eaf2;
+      --text-muted:     #7880a0;
+      --text-dim:       #3a3f55;
+      --accent:         #6090f0;
+      --accent-hover:   #78a2ff;
+      --accent-bg:      rgba(96,144,240,0.08);
+      --accent-border:  rgba(96,144,240,0.25);
+      --radius:         14px;
+      --radius-sm:      8px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 20px 80px;
+      line-height: 1.4;
+    }
+
+    /* ── Page header ─────────────────────────────────────────────────────────── */
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 880px;
+      margin-bottom: 10px;
+    }
+    .logo-wrap { display: flex; align-items: center; gap: 12px; }
+    .logo-icon { width: 42px; height: 42px; flex-shrink: 0; }
+    .logo-text { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; color: var(--text); }
+
+    .header-dl {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      text-decoration: none;
+      border: 1px solid var(--accent-border);
+      background: var(--accent-bg);
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      flex-shrink: 0;
+      transition: border-color 0.13s, background 0.13s;
+    }
+    .header-dl:hover { border-color: var(--accent); background: rgba(96,144,240,0.14); }
+
+    /* ── Hero ────────────────────────────────────────────────────────────────── */
+    .hero {
+      max-width: 700px;
+      width: 100%;
+      text-align: center;
+      margin: 40px 0 12px;
+    }
+    .hero h1 {
+      font-size: 34px;
+      font-weight: 700;
+      letter-spacing: -0.8px;
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+    .hero h1 .hl { color: var(--accent); }
+    .hero p {
+      font-size: 16px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      max-width: 560px;
+      margin: 0 auto;
+    }
+    .hero p strong { color: var(--text); font-weight: 600; }
+
+    /* ── CTA ─────────────────────────────────────────────────────────────────── */
+    .cta-row {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin: 28px 0 8px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 15px 26px;
+      font-size: 15px;
+      font-weight: 700;
+      border-radius: var(--radius);
+      text-decoration: none;
+      border: 1px solid transparent;
+      transition: background 0.13s, transform 0.1s, border-color 0.13s, color 0.13s;
+    }
+    .btn-primary { background: var(--accent); color: #0a0c14; }
+    .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-ghost {
+      background: var(--surface-2);
+      color: var(--text-muted);
+      border-color: var(--border);
+      font-weight: 500;
+    }
+    .btn-ghost:hover { border-color: var(--border-hover); color: var(--text); }
+
+    .req-note {
+      max-width: 560px;
+      margin: 16px auto 0;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+    .req-note .pill {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      border: 1px solid var(--accent-border);
+      background: var(--accent-bg);
+      border-radius: 999px;
+      padding: 2px 9px;
+      margin-right: 6px;
+    }
+
+    /* ── Section label ───────────────────────────────────────────────────────── */
+    .section-label {
+      width: 100%;
+      max-width: 880px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin: 56px 0 16px;
+    }
+
+    /* ── Feature grid ────────────────────────────────────────────────────────── */
+    .grid {
+      width: 100%;
+      max-width: 880px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+
+    .feat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      transition: border-color 0.13s, transform 0.1s;
+    }
+    .feat:hover { border-color: var(--border-hover); transform: translateY(-2px); }
+    .feat.span2 { grid-column: 1 / -1; }
+    .feat-icon { font-size: 26px; margin-bottom: 14px; line-height: 1; }
+    .feat-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+    .feat-desc { font-size: 14px; color: var(--text-muted); line-height: 1.6; }
+    .feat-desc strong { color: var(--text); font-weight: 600; }
+
+    /* ── How it works ────────────────────────────────────────────────────────── */
+    .steps {
+      width: 100%;
+      max-width: 880px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .step-full { grid-column: 1 / -1; }
+    @media (max-width: 680px) { .steps { grid-template-columns: 1fr; } }
+
+    .step-path-label {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-bg);
+      border: 1px solid var(--accent-border);
+      border-radius: 4px;
+      padding: 2px 8px;
+      margin-bottom: 14px;
+    }
+
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+    .step-num {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+    .step-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+    .step-desc { font-size: 13.5px; color: var(--text-muted); line-height: 1.6; }
+
+    /* ── Accuracy callout ────────────────────────────────────────────────────── */
+    .callout {
+      background: var(--accent-bg);
+      border: 1px solid var(--accent-border);
+      border-radius: var(--radius);
+      padding: 28px 32px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    @media (max-width: 560px) { .callout { flex-direction: column; text-align: center; gap: 12px; } }
+    .callout-stat {
+      font-size: 42px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+    .callout-body { font-size: 14px; color: var(--text-muted); line-height: 1.6; }
+    .callout-body strong { color: var(--text); }
+
+    /* ── Workflow card ───────────────────────────────────────────────────────── */
+    .workflow {
+      width: 100%;
+      max-width: 880px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-top: 14px;
+    }
+    .workflow h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+    .workflow ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .workflow li {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.55;
+      padding-left: 22px;
+      position: relative;
+    }
+    .workflow li::before { content: '▸'; color: var(--accent); position: absolute; left: 0; opacity: 0.7; }
+    .workflow li strong { color: var(--text); font-weight: 600; }
+
+    /* ── Closer ──────────────────────────────────────────────────────────────── */
+    .closer {
+      width: 100%;
+      max-width: 880px;
+      text-align: center;
+      margin-top: 56px;
+      padding: 40px 24px;
+      background: linear-gradient(180deg, var(--surface), var(--bg));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .closer h2 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+      margin-bottom: 8px;
+    }
+    .closer p { font-size: 14px; color: var(--text-muted); margin-bottom: 24px; }
+
+    /* ── Footer ──────────────────────────────────────────────────────────────── */
+    footer { margin-top: 44px; font-size: 12px; color: var(--text-dim); text-align: center; }
+    footer a { color: var(--text-muted); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    footer .sep { margin: 0 6px; }
+  </style>
+</head>
+<body>
+
+  <div class="page-header">
+    <div class="logo-wrap">
+      <svg class="logo-icon" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="21,5 24.8,15.7 36.2,16.1 27.2,23 30.4,33.9 21,27.5 11.6,33.9 14.8,23 5.8,16.1 17.2,15.7" fill="#6090f0"/>
+        <circle cx="5"  cy="5"  r="1.2" fill="#6090f0" opacity="0.5"/>
+        <circle cx="37" cy="7"  r="0.9" fill="#6090f0" opacity="0.5"/>
+        <circle cx="38" cy="33" r="1.2" fill="#6090f0" opacity="0.4"/>
+        <circle cx="4"  cy="36" r="0.9" fill="#6090f0" opacity="0.4"/>
+        <circle cx="31" cy="3"  r="0.7" fill="#6090f0" opacity="0.4"/>
+      </svg>
+      <span class="logo-text">Star</span>
+    </div>
+    <a class="header-dl" href="index.html">Download →</a>
+  </div>
+
+  <!-- ── Hero ────────────────────────────────────────────────────────────────── -->
+  <div class="hero">
+    <h1>Your timelapse,<br><span class="hl">without the airplanes.</span></h1>
+    <p>
+      Star automatically detects and removes airplane and satellite streaks from
+      overnight timelapse sequences — aligning neighboring frames and
+      median-merging them so that anything which appears in only one frame simply
+      disappears. No hand-masking. No manual review required.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="index.html">⬇  Download Star</a>
+      <a class="btn btn-ghost" href="https://github.com/brianm998/starry_timelapse_airplane_remover" target="_blank" rel="noopener">View on GitHub</a>
+    </div>
+    <div class="req-note">
+      <span class="pill">macOS · Linux · Windows</span>
+      Works with <strong>most image sequence formats</strong> from any camera.
+      Star App (GUI) is macOS only; the CLI runs on all three platforms.
+    </div>
+  </div>
+
+  <!-- ── How it works ─────────────────────────────────────────────────────────── -->
+  <div class="section-label">HOW IT WORKS</div>
+  <div class="steps">
+    <div class="step step-full">
+      <div class="step-num">Step 1 — Align &amp; Combine</div>
+      <div class="step-title">Neighboring frames, median-merged</div>
+      <div class="step-desc">
+        Star aligns each frame to its temporal neighbors using custom OpenCV-based
+        code. Before alignment, a horizon is detected so that foreground terrain
+        stays fixed while only the sky region tracks star movement — preventing
+        ground detail from smearing across the merge. The aligned neighbors are
+        then combined per-pixel using a statistical median that discards outliers.
+        Airplanes and satellites appear in only one frame, so they vanish
+        completely from the merged result. This approach is standard in deep-field
+        astrophotography and increasingly applied to wide-field timelapse work.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-path-label">Automatic mode</div>
+      <div class="step-num">Step 2 — Replace</div>
+      <div class="step-title">Streaks replaced directly from the merged frame</div>
+      <div class="step-desc">
+        The median-merged image is used directly to paint over any pixel group
+        that doesn't belong. No manual review required — the classifier runs on
+        every candidate group and the cleaned frames are written out immediately,
+        making it practical to process an entire night's shoot unattended.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-path-label">Selective mode</div>
+      <div class="step-num">Step 2 — Classify &amp; Paint</div>
+      <div class="step-title">Subtract, classify, then correct</div>
+      <div class="step-desc">
+        The merged frame is subtracted from the original to isolate brightness
+        outliers. An ML decision tree ensemble scores each pixel group by size,
+        brightness, and Hough-transform linearity to distinguish streaks from
+        clouds, terrain, or meteors. Confirmed streaks are painted with pixels
+        from the merged neighbor frame. Open the result in Star App to flip any
+        individual group's decision before the final render.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-path-label">Auto-Selective mode</div>
+      <div class="step-num">Optional — Restore</div>
+      <div class="step-title">Keep exactly what you want</div>
+      <div class="step-desc">
+        Run the automatic pass first to get a fully clean result, then use
+        Star App to <strong>paint back specific groups from the original
+        frame</strong>. The selection is additive and intentional — instead of
+        telling Star what to remove, you tell it what to keep: a meteor blazing
+        across the sky, a satellite arc you want for effect, or any trail that
+        adds rather than distracts. Everything else stays clean.
+      </div>
+    </div>
+    <div class="callout">
+      <div class="callout-stat">98.6%</div>
+      <div class="callout-body">
+        <strong>Selective-mode classifier accuracy on held-out test data.</strong>
+        In automatic mode Star never calls the classifier — the median merge alone
+        removes streaks. Selective mode adds an ML decision tree that scores each
+        outlier group when you need fine-grained control over what gets painted.
+        Each labeled sequence you validate in Star App can be contributed to grow
+        the training set — improving accuracy for everyone over time.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Feature grid ─────────────────────────────────────────────────────────── -->
+  <div class="section-label">WHAT YOU GET</div>
+  <div class="grid">
+
+    <div class="feat span2">
+      <div class="feat-icon">✈️</div>
+      <div class="feat-title">Batch-process an entire night's shoot unattended</div>
+      <div class="feat-desc">
+        Run <code>star -w /path/to/sequence</code> and walk away. The CLI processes
+        every frame, writes a fully cleaned image sequence next to your originals,
+        and saves a JSON config file you can re-open in the GUI to review or adjust.
+        <strong>No babysitting required</strong> — come back when it's done.
+      </div>
+    </div>
+
+    <div class="feat">
+      <div class="feat-icon">🤖</div>
+      <div class="feat-title">Fully automatic, or bring back what you want to keep</div>
+      <div class="feat-desc">
+        Run the CLI and Star processes the whole sequence unattended — the median
+        merge removes every streak without any classifier. Then open the result
+        in Star App and switch to <strong>edit mode</strong> to restore anything
+        the automatic pass discarded: a meteor you want in the final cut, a
+        satellite trail kept for effect, or any group that shouldn't have been
+        painted. Selective mode puts you in control of the exceptions, not the
+        rule.
+      </div>
+    </div>
+
+    <div class="feat">
+      <div class="feat-icon">🖼</div>
+      <div class="feat-title">Frame-by-frame review in Star App</div>
+      <div class="feat-desc">
+        Load a processed sequence in the GUI, scrub through it, and tap any
+        group to restore or repaint it. Star App shows every decision the
+        automatic pass made — and lets you <strong>flip it with a single tap</strong>
+        to recover meteors, intentional streaks, or anything else you want back
+        in the final cut.
+      </div>
+    </div>
+
+    <div class="feat">
+      <div class="feat-icon">🌙</div>
+      <div class="feat-title">Designed for dark-sky work</div>
+      <div class="feat-desc">
+        Built by a night-sky photographer for night-sky photographers. The
+        classifier was trained on real sequences from remote desert locations —
+        tuned to distinguish faint satellites and dim prop planes from large stars,
+        clouds, and terrain on the horizon.
+      </div>
+    </div>
+
+    <div class="feat">
+      <div class="feat-icon">☄️</div>
+      <div class="feat-title">Meteor-aware — restore what you want to keep</div>
+      <div class="feat-desc">
+        Meteor trails are classified similarly to airplanes and will often be
+        removed automatically. Star App lets you <strong>restore any group</strong>
+        you want to keep — so you can hand back the meteor that lit up frame 347
+        without re-running the whole sequence.
+      </div>
+    </div>
+
+    <div class="feat">
+      <div class="feat-icon">🎥</div>
+      <div class="feat-title">Fits any post-processing pipeline</div>
+      <div class="feat-desc">
+        Star operates on image sequences — it uses OpenCV internally, so most
+        common formats work. 16-bit TIFFs from Lightroom, LRTimelapse, and
+        Topaz Denoise are the typical handoff. Process with Star as your
+        <strong>final step</strong> before encoding to video with ffmpeg or
+        Resolve. Star App can also work directly on an already-rendered video:
+        it decodes the video into a 16-bit image sequence, removes streaks, and
+        re-encodes using the same codec — so no extra generation of encoding
+        loss is introduced. This video round-trip is a Star App feature; the
+        CLI works with image sequences only.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Typical workflow ──────────────────────────────────────────────────────── -->
+  <div class="workflow">
+    <h3>A typical workflow</h3>
+    <ul>
+      <li><strong>Shoot overnight</strong> — capture your timelapse sequence as RAW or high-quality JPEG.</li>
+      <li><strong>Develop in Lightroom + LRTimelapse</strong> — grade, deflicker, and export an image sequence.</li>
+      <li><strong>Denoise (optional)</strong> — run Topaz Denoise AI or similar on the sequence.</li>
+      <li><strong>Run <code>star -w /path/to/sequence</code></strong> — Star processes every frame and writes the cleaned sequence alongside the originals.</li>
+      <li><strong>Review in Star App</strong> — open the config JSON, scrub through, and correct any misclassified groups.</li>
+      <li><strong>Encode to video</strong> — use Star App, ffmpeg, DaVinci Resolve, or <code>star.pl</code> to render the final timelapse.</li>
+    </ul>
+  </div>
+
+  <!-- ── Closer ────────────────────────────────────────────────────────────────── -->
+  <div class="closer">
+    <h2>Stop accepting airplanes in your dark-sky timelapses.</h2>
+    <p>Free, open source, and runs entirely on your Mac — no cloud, no subscription.</p>
+    <a class="btn btn-primary" href="index.html">⬇  Download Star</a>
+  </div>
+
+  <footer>
+    <a href="index.html">Download</a>
+    <span class="sep">·</span>
+    <a href="https://github.com/brianm998/starry_timelapse_airplane_remover" target="_blank" rel="noopener">GitHub</a>
+    <span class="sep">·</span>
+    <a href="https://github.com/brianm998/starry_timelapse_airplane_remover/releases" target="_blank" rel="noopener">All releases</a>
+    <span class="sep">·</span>
+    <a href="https://github.com/brianm998/starry_timelapse_airplane_remover/blob/develop/README.md" target="_blank" rel="noopener">Documentation</a>
+  </footer>
+
+</body>
+</html>
