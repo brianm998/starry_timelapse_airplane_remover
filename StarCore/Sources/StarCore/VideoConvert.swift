@@ -16,6 +16,16 @@ public struct VideoInfo: Sendable {
     public let pixelFormat: FFmpegPixelFormat
     public let muxer: FFmpegMuxer
     public let hasAudio: Bool
+
+    public init(frameRate: FrameRate, codec: FFmpegCodec, encoder: FFmpegEncoder?,
+                pixelFormat: FFmpegPixelFormat, muxer: FFmpegMuxer, hasAudio: Bool) {
+        self.frameRate = frameRate
+        self.codec = codec
+        self.encoder = encoder
+        self.pixelFormat = pixelFormat
+        self.muxer = muxer
+        self.hasAudio = hasAudio
+    }
 }
 
 

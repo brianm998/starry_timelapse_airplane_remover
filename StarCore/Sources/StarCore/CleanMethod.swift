@@ -1,7 +1,7 @@
 import Foundation
 
 // An enum that determines our top level processing mode
-
+// Proto mirror: Star_V1_CleanMethod in daemon/proto/star.proto — keep cases in sync.
 public enum CleanMethod: Identifiable,
                          Hashable,
                          Sendable,

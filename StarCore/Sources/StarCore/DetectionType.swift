@@ -16,6 +16,7 @@ nonisolated(unsafe) public let customBlobProcessor = CustomBlobProcessor()
 
 // how hard to we try to detect airplanes and such?
 // the harder we try, the longer it takes, but the more results we get.
+// Proto mirror: Star_V1_DetectionType in daemon/proto/star.proto — keep cases in sync.
 public enum DetectionType: String, Codable, CaseIterable, Sendable {
     case mild       // 2-4x faster than excessive, finds fewer dimmer airplanes
     case strong     // get more airplanes than normal and not take forever

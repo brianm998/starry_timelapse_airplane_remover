@@ -88,6 +88,7 @@ public enum AlignmentStep: Equatable,
     }
 }
 
+// Proto mirror: Star_V1_FrameProcessingState in daemon/proto/star.proto — keep cases in sync.
 public enum SequenceProcessingState: Codable,
                                      Hashable,
                                      Sendable,
@@ -105,6 +106,7 @@ public enum SequenceProcessingState: Codable,
     case error(String)
 }
 
+// Proto mirror: Star_V1_FrameProcessingState in daemon/proto/star.proto — keep cases in sync.
 public enum FrameProcessingState: Codable,
                                   Hashable,
                                   Sendable,
