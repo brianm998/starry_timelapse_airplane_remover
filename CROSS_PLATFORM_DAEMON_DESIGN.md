@@ -345,6 +345,12 @@ This is the authoritative method list; the daemon's `Dispatcher` registers exact
 | `Processing.Cancel` | `SessionRef` | `CancelResponse` | unary |
 | `Export.RenderSequence` | `SessionRef` | `ProgressEvent` | server-stream |
 | `Export.Video` | `ExportVideoRequest` | `ProgressEvent` | server-stream |
+| `Export.GetVideoCapabilities` | `GetVideoCapabilitiesRequest` | `VideoCapabilities` | unary |
+
+> `Session.OpenVideo`'s terminal `SessionInfo` carries the decoded source's `VideoInfo` (framerate/codec/etc.)
+> so the client can default an export to re-encode matching the source. `Export.GetVideoCapabilities` returns
+> the codec→encoder→{pixel-format, muxer} validity graph that drives the Render Video dialog's cascading
+> pickers (mirrors StarCore's `codec.encoders` / `encoder.pixelFormats` / `encoder.supportedMuxers`).
 
 > `Processing.Cancel` cancels the *processing job*; the transport-level `CANCEL` envelope (§5.3) cancels an
 > individual in-flight request/stream. They are different — keep both.
@@ -367,6 +373,7 @@ message SessionInfo {
   string session_id = 1; int32 frame_count = 2;
   int32 image_width = 3; int32 image_height = 4; int32 components_per_pixel = 5;
   Config config = 6; string scratch_session_dir = 7;
+  VideoInfo source_video_info = 8;   // set iff opened from a video (Session.OpenVideo); else default
 }
 message CloseSessionRequest { string session_id = 1; }  message CloseSessionResponse {}
 message ListSessionsRequest {}  message ListSessionsResponse { repeated SessionInfo sessions = 1; }
@@ -384,6 +391,7 @@ message Config {
   map<int32, int32> static_neighbor_frame_overrides = 10;
   map<int32, int32> aligned_neighbor_frame_overrides = 11;
   bool write_outlier_group_files = 12; bool write_frame_preview_files = 13;
+  VideoEncodeSettings video = 14;     // persisted encode settings; edited by the Render Video dialog
   // extend to match Config.swift as the UI exposes more
 }
 enum CleanMethod { CLEAN_AUTOMATIC = 0; CLEAN_AUTOMATIC_TRUE = 1; CLEAN_SELECTIVE = 2; }
@@ -442,7 +450,33 @@ message FrameSavingEvent { int32 frame_index = 1; int32 old_state = 2; int32 new
 message OutliersLoaded   { int32 frame_index = 1; int32 state = 2; }
 message IoProgress       { int32 current = 1; int32 total = 2; string output_dir = 3; }
 message SequenceStateEvent { string state = 1; }
-message ExportVideoRequest { string session_id = 1; string output_video_path = 2; }
+// Encode settings. codec/encoder/pixel_format/muxer are StarCore FFmpeg* enum **rawValue strings**
+// (those enums have 1000+ cases — proto enums would be unmaintainable; the daemon maps via init?(rawValue:)).
+// frame_rate is FrameRate.rawValue (double). An empty string field means "use the session config default".
+message VideoEncodeSettings {
+  double frame_rate = 1;     // e.g. 24, 29.97, 30, 60
+  string codec = 2;          // FFmpegCodec.rawValue
+  string encoder = 3;        // FFmpegEncoder.rawValue
+  string pixel_format = 4;   // FFmpegPixelFormat.rawValue
+  string muxer = 5;          // FFmpegMuxer.rawValue — also the output container extension
+}
+message VideoInfo { VideoEncodeSettings settings = 1; bool has_audio = 2; }  // mirrors StarCore.VideoInfo
+
+message ExportVideoRequest {
+  string session_id = 1;
+  string output_video_path = 2;        // empty → daemon derives "<basename>.<muxer>"
+  VideoEncodeSettings settings = 3;    // defaults to the session config's persisted settings
+}
+
+// Drives the Render Video dialog's cascading pickers. Built from StarCore's enum relationships.
+message GetVideoCapabilitiesRequest {}
+message VideoCapabilities {
+  repeated double frame_rates = 1;     // FrameRate.allCases rawValues
+  repeated CodecCaps codecs = 2;
+}
+message CodecCaps   { string codec = 1; repeated EncoderCaps encoders = 2; }     // codec.encoders
+message EncoderCaps { string encoder = 1; repeated string pixel_formats = 2; repeated string muxers = 3; }
+// encoder.pixelFormats / encoder.supportedMuxers
 ```
 
 ---
