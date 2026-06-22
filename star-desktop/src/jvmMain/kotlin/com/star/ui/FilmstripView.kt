@@ -78,8 +78,12 @@ private fun FilmstripCell(
         scope.launch {
             try {
                 val ref = frameRepo.getPreview(sessionId, frameIndex, FrameViewMode.VIEW_ORIGINAL)
+                val fileExists = java.io.File(ref.path).exists()
+                println("[Filmstrip] frame=$frameIndex path='${ref.path}' exists=$fileExists")
                 thumbnail = imageCache.load(ref.path)
-            } catch (_: Exception) { }
+            } catch (e: Exception) {
+                println("[Filmstrip] frame=$frameIndex error: $e")
+            }
         }
     }
 

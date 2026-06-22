@@ -33,27 +33,26 @@ enum FrameHandlers {
                 await transport.sendError(id: id, message: "frame index out of range", code: 404); return
             }
 
-            let scratchDir = await session.scratchSessionDir
-            let previewDir = "\(scratchDir)/previews"
-            try FileManager.default.createDirectory(atPath: previewDir, withIntermediateDirectories: true)
-            let previewPath = "\(previewDir)/frame_\(req.frameIndex)_\(req.viewMode.rawValue).png"
-
-            // Load source frame from the image sequence and write as PNG.
-            let imageSequence = await session.imageSequence
-            let filenames = await imageSequence.filenames
             let frameIdx = Int(req.frameIndex)
-            guard frameIdx < filenames.count else {
-                await transport.sendError(id: id, message: "frame index out of range", code: 404); return
+            let starViewMode = Mapping.frameViewMode(from: req.viewMode)
+
+            guard let previewPath = frame.imageAccessor.nameForImage(
+                frameIndex: frameIdx,
+                ofType: starViewMode,
+                atSize: .preview
+            ) else {
+                await transport.sendError(id: id, message: "no preview path for frame \(frameIdx) mode \(starViewMode)"); return
             }
-            let loader = await imageSequence.getImage(withName: filenames[frameIdx])
-            let image = try await loader.image()
-            image.writeTIFFEncoding(toFilename: previewPath)
+
+            guard FileManager.default.fileExists(atPath: previewPath) else {
+                await transport.sendError(id: id, message: "preview not yet generated: \(previewPath)"); return
+            }
 
             var ref = Star_V1_ImageRef()
             ref.path = previewPath
             ref.width = Int32(frame.width)
             ref.height = Int32(frame.height)
-            ref.format = "png"
+            ref.format = "jpg"
             try await transport.respond(id: id, payload: ref.serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")

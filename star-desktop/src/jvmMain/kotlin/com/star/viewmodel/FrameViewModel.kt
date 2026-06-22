@@ -46,11 +46,13 @@ class FrameViewModel(
     private var previewPath: String? = null
 
     fun load() {
+        println("[FrameVM] load() frame=$frameIndex")
         scope.launch {
             _loading.value = true
             try {
                 val info = frameRepo.getInfo(sessionId, frameIndex)
                 _frameInfo.value = info
+                println("[FrameVM] frame=$frameIndex info ok, state=${info.state}")
 
                 // supervisorScope: a failure in one child (e.g. outliers not ready) does not
                 // cancel the other child (preview). Both exceptions surface via await().
@@ -59,11 +61,12 @@ class FrameViewModel(
                     val groupsDeferred  = async { loadOutliers() }
                     // Await both; collect errors but don't let one hide the other.
                     var firstError: Throwable? = null
-                    try { previewDeferred.await() } catch (e: Exception) { firstError = e }
-                    try { groupsDeferred.await()  } catch (e: Exception) { if (firstError == null) firstError = e }
+                    try { previewDeferred.await() } catch (e: Exception) { firstError = e; println("[FrameVM] frame=$frameIndex preview error: $e") }
+                    try { groupsDeferred.await()  } catch (e: Exception) { if (firstError == null) firstError = e; println("[FrameVM] frame=$frameIndex outlier error: $e") }
                     firstError?.let { throw it }
                 }
             } catch (e: Exception) {
+                println("[FrameVM] frame=$frameIndex load failed: $e")
                 _error.value = e.message
             } finally {
                 _loading.value = false
@@ -73,8 +76,12 @@ class FrameViewModel(
 
     private suspend fun loadPreview(mode: FrameViewMode) {
         val ref = frameRepo.getPreview(sessionId, frameIndex, mode)
+        val fileExists = java.io.File(ref.path).exists()
+        println("[FrameVM] frame=$frameIndex getPreview path='${ref.path}' exists=$fileExists")
         previewPath = ref.path
-        _preview.value = imageCache.load(ref.path)
+        val bmp = imageCache.load(ref.path)
+        println("[FrameVM] frame=$frameIndex imageCache.load result=${if (bmp != null) "${bmp.width}x${bmp.height}" else "null"}")
+        _preview.value = bmp
     }
 
     private suspend fun loadOutliers() {

@@ -5,6 +5,18 @@ import StarDaemonMessages
 // Bidirectional type mapping between StarCore types and proto types.
 enum Mapping {
 
+    // MARK: - FrameViewMode
+
+    static func frameViewMode(from proto: Star_V1_FrameViewMode) -> StarCore.FrameViewMode {
+        switch proto {
+        case .viewOriginal:    return .original
+        case .viewProcessed:   return .autoProcessed
+        case .viewSubtraction: return .subtraction
+        case .viewValidation:  return .validation
+        default:               return .original
+        }
+    }
+
     // MARK: - FrameProcessingState
 
     static func frameProcessingState(_ s: FrameProcessingState) -> Star_V1_FrameProcessingState {

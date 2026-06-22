@@ -44,8 +44,16 @@ class ImageCache(private val maxEntries: Int = 120) {
 
     private fun loadFromDisk(path: String): ImageBitmap? {
         val file = File(path)
-        if (!file.exists()) return null
-        val img: BufferedImage = ImageIO.read(file) ?: return null
+        if (!file.exists()) {
+            println("[ImageCache] file not found: $path")
+            return null
+        }
+        val img: BufferedImage? = ImageIO.read(file)
+        if (img == null) {
+            println("[ImageCache] ImageIO.read returned null for: $path (size=${file.length()})")
+            return null
+        }
+        println("[ImageCache] loaded ${img.width}x${img.height} type=${img.type} from: $path")
         return img.toComposeImageBitmap()
     }
 }

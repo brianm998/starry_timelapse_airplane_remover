@@ -60,6 +60,7 @@ class SequenceViewModel(
     fun loadCurrentFrame() {
         val idx = _currentFrameIndex.value
         val existing = _frameViewModel.value
+        println("[SequenceVM] loadCurrentFrame idx=$idx existing=${existing?.frameIndex}")
         if (existing?.frameIndex == idx) return
         val vm = FrameViewModel(
             sessionId = sessionId,
