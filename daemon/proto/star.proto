@@ -43,14 +43,27 @@ message OpenProgress {
   }
 }
 
+// VideoInfo carries the encode parameters for a video session.
+// All codec/pixfmt/muxer/encoder fields are the rawValue strings from
+// StarCore's FFmpegCodec / FFmpegPixelFormat / FFmpegMuxer / FFmpegEncoder enums.
+message VideoInfo {
+  string codec      = 1;  // e.g. "prores", "h264"
+  string pixel_fmt  = 2;  // e.g. "yuv444p10le"
+  string muxer      = 3;  // e.g. "mov"
+  double frame_rate = 4;  // e.g. 24.0, 29.97
+  bool   has_audio  = 5;
+  string encoder    = 6;  // e.g. "prores_ks"; empty = infer from codec+pixfmt
+}
+
 message SessionInfo {
-  string session_id            = 1;
-  int32  frame_count           = 2;
-  int32  image_width           = 3;
-  int32  image_height          = 4;
-  int32  components_per_pixel  = 5;
-  Config config                = 6;
-  string scratch_session_dir   = 7;
+  string    session_id            = 1;
+  int32     frame_count           = 2;
+  int32     image_width           = 3;
+  int32     image_height          = 4;
+  int32     components_per_pixel  = 5;
+  Config    config                = 6;
+  string    scratch_session_dir   = 7;
+  VideoInfo video_info            = 8;  // populated for video sessions
 }
 
 message CloseSessionRequest  { string session_id = 1; }
@@ -235,4 +248,8 @@ message OutliersLoaded     { int32 frame_index = 1; int32 state = 2; }
 message IoProgress         { int32 current = 1; int32 total = 2; string output_dir = 3; }
 message SequenceStateEvent { string state = 1; }
 
-message ExportVideoRequest { string session_id = 1; string output_video_path = 2; }
+message ExportVideoRequest {
+  string    session_id        = 1;
+  string    output_video_path = 2;
+  VideoInfo encode_settings   = 3;  // codec/framerate/pixfmt for the output; falls back to session's VideoInfo
+}

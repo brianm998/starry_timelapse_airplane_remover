@@ -75,8 +75,100 @@ enum ExportHandlers {
         }
     }
 
+    // Assemble processed output TIFFs back into a video using ffmpeg.
+    // Streams ProgressEvent items (io_progress, sequence_state) while encoding.
     static func video(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
-        // Phase 4: Export frames to video via VideoConvert / ffmpeg.
-        await transport.sendError(id: id, message: "Export.Video not yet implemented (Phase 4)", code: 501)
+        do {
+            let req = try Star_V1_ExportVideoRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+
+            // Resolve encode settings: prefer the request's encode_settings, fall back to the
+            // VideoInfo captured when the session was opened from a video.
+            let vi: VideoInfo
+            if let fromProto = Mapping.videoInfo(from: req.encodeSettings) {
+                vi = fromProto
+            } else if let stored = await session.videoInfo {
+                vi = stored
+            } else {
+                await transport.sendError(id: id,
+                    message: "no video encode settings: either pass encode_settings or open from a video file",
+                    code: 400)
+                return
+            }
+
+            let config     = await session.configManager.config()
+            let outputPath = config.outputPath
+            let totalFrames = await session.frameCount
+
+            // Derive the decoded-frames directory from the image sequence filenames
+            // so we can find audio.aac if it exists.
+            let filenames    = await session.imageSequence.filenames
+            let decodedDir   = (filenames.first as NSString?)?.deletingLastPathComponent ?? outputPath
+            let audioPath    = "\(decodedDir)/audio.aac"
+            let hasAudio     = vi.hasAudio && FileManager.default.fileExists(atPath: audioPath)  // StarCore.VideoInfo.hasAudio
+
+            // Determine the encoder name: prefer explicit encoder, then codec's rawValue.
+            let encoderName  = vi.encoder?.rawValue ?? vi.codec.rawValue
+
+            var ffmpegArgs: [String] = [
+                "-framerate", vi.frameRate.rawString,
+                "-start_number", "1",
+                "-i", "\(outputPath)/image_%04d.tiff",
+            ]
+            if hasAudio { ffmpegArgs += ["-i", audioPath] }
+            ffmpegArgs += [
+                "-c:v", encoderName,
+                "-pix_fmt", vi.pixelFormat.rawValue,
+            ]
+            if hasAudio { ffmpegArgs += ["-c:a", "copy"] }
+            ffmpegArgs += ["-y", req.outputVideoPath]
+
+            let (stream, cont) = AsyncStream<Star_V1_ProgressEvent>.makeStream()
+
+            let encodeTask = Task {
+                defer {
+                    var ev = Star_V1_SequenceStateEvent(); ev.state = "done"
+                    var prog = Star_V1_ProgressEvent(); prog.kind = .sequenceState(ev)
+                    cont.yield(prog); cont.finish()
+                }
+                try runFFmpegWithProgress(
+                    arguments: ffmpegArgs,
+                    totalFrames: totalFrames,
+                    outputFolder: outputPath
+                ) { current, total, dir in
+                    var io = Star_V1_IoProgress()
+                    io.current   = Int32(current)
+                    io.total     = Int32(total)
+                    io.outputDir = dir
+                    var prog = Star_V1_ProgressEvent()
+                    prog.kind = .ioProgress(io)
+                    cont.yield(prog)
+                }
+            }
+
+            do {
+                for await event in stream {
+                    try Task.checkCancellation()
+                    if let data = try? event.serializedData() {
+                        await transport.sendStreamItem(id: id, payload: data)
+                    }
+                    if case .sequenceState(_) = event.kind { break }
+                }
+            } catch is CancellationError {
+                encodeTask.cancel()
+            }
+
+            // Surface any ffmpeg error to the client.
+            if case .failure(let err) = await encodeTask.result {
+                await transport.sendError(id: id, message: "\(err)")
+                return
+            }
+
+            await transport.sendStreamEnd(id: id)
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
     }
 }

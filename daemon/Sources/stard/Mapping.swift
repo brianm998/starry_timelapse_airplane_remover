@@ -161,9 +161,42 @@ enum Mapping {
         return out
     }
 
+    // MARK: - VideoInfo
+
+    static func videoInfo(_ vi: VideoInfo) -> Star_V1_VideoInfo {
+        var out = Star_V1_VideoInfo()
+        out.codec     = vi.codec.rawValue
+        out.pixelFmt  = vi.pixelFormat.rawValue
+        out.muxer     = vi.muxer.rawValue
+        out.frameRate = vi.frameRate.rawValue
+        out.hasAudio_p = vi.hasAudio
+        out.encoder   = vi.encoder?.rawValue ?? ""
+        return out
+    }
+
+    // Returns nil when the proto VideoInfo carries no codec (i.e. it was not set by the client).
+    static func videoInfo(from proto: Star_V1_VideoInfo) -> VideoInfo? {
+        guard !proto.codec.isEmpty,
+              let codec    = FFmpegCodec(rawValue: proto.codec),
+              let pixFmt   = FFmpegPixelFormat(rawValue: proto.pixelFmt),
+              let muxer    = FFmpegMuxer(rawValue: proto.muxer)
+        else { return nil }
+        let frameRate = FrameRate(rawValue: proto.frameRate)
+        let encoder: FFmpegEncoder? = proto.encoder.isEmpty ? nil : FFmpegEncoder(rawValue: proto.encoder)
+        return VideoInfo(
+            frameRate: frameRate,
+            codec: codec,
+            encoder: encoder ?? codec.encoder(for: pixFmt),
+            pixelFormat: pixFmt,
+            muxer: muxer,
+            hasAudio: proto.hasAudio_p
+        )
+    }
+
     // MARK: - SessionInfo
 
-    static func sessionInfo(session: Session, config: Config, imageInfo: ImageInfo, frameCount: Int) -> Star_V1_SessionInfo {
+    static func sessionInfo(session: Session, config: Config, imageInfo: ImageInfo,
+                            frameCount: Int, videoInfo vi: VideoInfo? = nil) -> Star_V1_SessionInfo {
         var info = Star_V1_SessionInfo()
         info.sessionID = session.sessionID
         info.frameCount = Int32(frameCount)
@@ -172,6 +205,7 @@ enum Mapping {
         info.componentsPerPixel = Int32(imageInfo.componentsPerPixel)
         info.config = protoConfig(config)
         info.scratchSessionDir = session.scratchSessionDir
+        if let vi { info.videoInfo = videoInfo(vi) }
         return info
     }
 

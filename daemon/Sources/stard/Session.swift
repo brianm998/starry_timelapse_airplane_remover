@@ -13,6 +13,7 @@ actor Session {
     private(set) var imageSequence: ImageSequence
     private(set) var frames: [FrameAirplaneRemover] = []
     private(set) var imageInfo: ImageInfo
+    private(set) var videoInfo: VideoInfo?     // set for sessions opened from a video file
 
     // Active progress stream continuation — set when Processing.StreamProgress is open.
     var progressContinuation: AsyncStream<Star_V1_ProgressEvent>.Continuation?
@@ -25,13 +26,15 @@ actor Session {
         scratchSessionDir: String,
         configManager: ConfigManager,
         imageSequence: ImageSequence,
-        imageInfo: ImageInfo
+        imageInfo: ImageInfo,
+        videoInfo: VideoInfo? = nil
     ) {
         self.sessionID = sessionID
         self.scratchSessionDir = scratchSessionDir
         self.configManager = configManager
         self.imageSequence = imageSequence
         self.imageInfo = imageInfo
+        self.videoInfo = videoInfo
     }
 
     // Build FrameAirplaneRemover graph (does not start processing).
@@ -237,6 +240,68 @@ extension Session {
             configManager: configManager,
             imageSequence: imageSequence,
             imageInfo: imageInfo
+        )
+        try await session.buildFrameGraph()
+        return session
+    }
+
+    // Decode a video file to TIFFs and open as a session.
+    // onProgress is called on each ffmpeg frame so the handler can stream IoProgress back to the client.
+    static func openVideo(
+        sessionID: String,
+        scratchSessionDir: String,
+        videoPath: String,
+        protoConfig: Star_V1_Config,
+        onProgress: @Sendable @escaping (Int, Int, String) -> Void
+    ) async throws -> Session {
+        try FileManager.default.createDirectory(atPath: scratchSessionDir, withIntermediateDirectories: true)
+
+        let (sequenceDir, vi) = try await decodeVideo(named: videoPath, progress: onProgress)
+
+        var filenameParts = videoPath.components(separatedBy: "/")
+        let videoName = filenameParts.isEmpty ? "video" : (filenameParts.removeLast().isEmpty && !filenameParts.isEmpty ? filenameParts.last ?? "video" : filenameParts.last ?? "video")
+        let baseName = videoName.components(separatedBy: ".").first ?? videoName
+
+        let outputPath = protoConfig.outputPath.isEmpty ? "\(scratchSessionDir)/output" : protoConfig.outputPath
+
+        var config = Config(
+            outputPath: outputPath,
+            cleanMethod: Mapping.cleanMethod(from: protoConfig),
+            detectionType: Mapping.detectionType(from: protoConfig.detectionType),
+            imageSequenceName: baseName,
+            imageSequencePath: (videoPath as NSString).deletingLastPathComponent,
+            writeOutlierGroupFiles: protoConfig.writeOutlierGroupFiles,
+            writeFramePreviewFiles: protoConfig.writeFramePreviewFiles,
+            writeFrameProcessedPreviewFiles: protoConfig.writeFramePreviewFiles,
+            writeFrameThumbnailFiles: protoConfig.writeFramePreviewFiles
+        )
+        config.set(videoInfo: vi)
+        config.horizonDetectionEnabled = protoConfig.horizonDetectionEnabled
+        config.tripodHeadWasMoving = protoConfig.tripodHeadWasMoving
+        if protoConfig.numberOfFramesToProcessConcurrently > 0 {
+            config.numberOfFramesToProcessConcurrently = Int(protoConfig.numberOfFramesToProcessConcurrently)
+        }
+
+        let configFilename = "\(scratchSessionDir)/config.json"
+        let configManager = await ConfigManager(configFilename: configFilename, config: config)
+        await constants.set(detectionType: config.detectionType)
+
+        let imageSequence = try ImageSequence(
+            dirname: sequenceDir,
+            supportedImageFileTypes: config.supportedImageFileTypes,
+            maxImages: 40
+        )
+        let imageInfo = try await imageSequence.getImageInfo()
+        IMAGE_WIDTH = Double(imageInfo.imageWidth)
+        IMAGE_HEIGHT = Double(imageInfo.imageHeight)
+
+        let session = Session(
+            sessionID: sessionID,
+            scratchSessionDir: scratchSessionDir,
+            configManager: configManager,
+            imageSequence: imageSequence,
+            imageInfo: imageInfo,
+            videoInfo: vi
         )
         try await session.buildFrameGraph()
         return session

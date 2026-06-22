@@ -49,7 +49,67 @@ enum SessionHandlers {
     }
 
     static func openVideo(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
-        await transport.sendError(id: id, message: "Session.OpenVideo not yet implemented (Phase 4)", code: 501)
+        do {
+            let req = try Star_V1_OpenVideoRequest(serializedBytes: payload)
+            let sessionID = await sessions.newSessionID()
+            let scratchDir = await sessions.scratchDir(for: sessionID)
+
+            // Bridge the synchronous ffmpeg progress callback to an AsyncStream.
+            let (stream, cont) = AsyncStream<Star_V1_OpenProgress>.makeStream()
+
+            // Run decodeVideo + frame-graph build in a detached task.
+            // When it completes (or fails) it finishes the stream so the loop below exits.
+            let sessionTask: Task<Session, Error> = Task {
+                defer { cont.finish() }
+                return try await Session.openVideo(
+                    sessionID: sessionID,
+                    scratchSessionDir: scratchDir,
+                    videoPath: req.videoPath,
+                    protoConfig: req.initialConfig
+                ) { current, total, outputDir in
+                    var io = Star_V1_IoProgress()
+                    io.current   = Int32(current)
+                    io.total     = Int32(total)
+                    io.outputDir = outputDir
+                    var prog = Star_V1_OpenProgress()
+                    prog.kind = .progress(io)
+                    cont.yield(prog)
+                }
+            }
+
+            // Forward IoProgress items to the client while decoding + graph-build run.
+            for await item in stream {
+                if let data = try? item.serializedData() {
+                    await transport.sendStreamItem(id: id, payload: data)
+                }
+            }
+
+            let session: Session
+            do {
+                session = try await sessionTask.value
+            } catch {
+                await transport.sendError(id: id, message: "\(error)")
+                return
+            }
+
+            await sessions.add(session: session)
+
+            // Send final SessionInfo as the last stream item, then STREAM_END.
+            let config     = await session.configManager.config()
+            let imageInfo  = await session.imageInfo
+            let frameCount = await session.frameCount
+            let vi         = await session.videoInfo
+            let info = Mapping.sessionInfo(session: session, config: config, imageInfo: imageInfo,
+                                           frameCount: frameCount, videoInfo: vi)
+            var done = Star_V1_OpenProgress()
+            done.kind = .done(info)
+            if let data = try? done.serializedData() {
+                await transport.sendStreamItem(id: id, payload: data)
+            }
+            await transport.sendStreamEnd(id: id)
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
     }
 
     static func close(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
