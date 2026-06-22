@@ -52,5 +52,18 @@ let package = Package(
                 .linkedLibrary("StarDecisionTrees"),
             ]
         ),
+        .testTarget(
+            name: "StarDaemonTests",
+            dependencies: [
+                "StarDaemonMessages",
+                .product(name: "StarCore", package: "StarCore"),
+                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+            ],
+            path: "Tests/StarDaemonTests",
+            linkerSettings: [
+                .unsafeFlags(["-L\(dtLib)", "-Xlinker", dtLibFile]),
+                .linkedLibrary("StarDecisionTrees"),
+            ]
+        ),
     ]
 )

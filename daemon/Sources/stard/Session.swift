@@ -95,14 +95,19 @@ actor Session {
     }
 
     // Start processing (calls frameGraphBuilder.build).
-    func startProcessing() async {
+    // startIndex/endIndex are 0-based inclusive frame indices; pass nil endIndex to process to the last frame.
+    func startProcessing(startIndex: Int = 0, endIndex: Int? = nil) async {
         guard processingTask == nil else { return }
         await frameGraphBuilder.set(configManager: configManager)
         let fs = frames
         let weakSelf = WeakSessionRef(self)
         processingTask = Task {
             let sem = AsyncSemaphore(value: 0)
-            await frameGraphBuilder.build(frames: fs) { _ in sem.signal() } errorClosure: { _ in }
+            await frameGraphBuilder.build(
+                frames: fs,
+                startIndex: startIndex,
+                endIndex: endIndex
+            ) { _ in sem.signal() } errorClosure: { _ in }
             await sem.wait()
             await weakSelf.session?.emitSequenceState("done")
             await weakSelf.session?.clearProcessingTask()

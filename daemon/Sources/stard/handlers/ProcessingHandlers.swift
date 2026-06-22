@@ -12,7 +12,9 @@ enum ProcessingHandlers {
                 await transport.sendError(id: id, message: "session not found", code: 404)
                 return
             }
-            await session.startProcessing()
+            let startIdx = req.startIndex > 0 ? Int(req.startIndex) : 0
+            let endIdx: Int? = req.endIndex > 0 ? Int(req.endIndex) : nil
+            await session.startProcessing(startIndex: startIdx, endIndex: endIdx)
             try await transport.respond(id: id, payload: Star_V1_StartProcessingResponse().serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")

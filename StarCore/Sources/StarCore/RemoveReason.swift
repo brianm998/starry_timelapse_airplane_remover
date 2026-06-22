@@ -1,6 +1,7 @@
 import Foundation
 
 // why we are or are not removing a group
+// Proto mirror: Star_V1_RemoveReason in daemon/proto/star.proto — keep cases in sync.
 public enum RemoveReason: Equatable,
                           Codable,
                           Sendable,
