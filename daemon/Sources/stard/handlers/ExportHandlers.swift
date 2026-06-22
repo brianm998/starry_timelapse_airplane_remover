@@ -75,6 +75,35 @@ enum ExportHandlers {
         }
     }
 
+    // Return the codec→encoder→{pixel_formats, muxers} capability graph used to
+    // populate the Render Video dialog's cascading pickers.  Mirrors StarCore's
+    // FFmpegCodec.availableVideoCodecs / codec.encoders / encoder.pixelFormats /
+    // encoder.supportedMuxers relationships.
+    static func getVideoCapabilities(id: UInt64, payload: Data, transport: StdioTransport) async {
+        do {
+            var caps = Star_V1_VideoCapabilities()
+            caps.frameRates = FrameRate.allCases
+                .filter { if case .custom = $0 { false } else { true } }
+                .map { $0.rawValue }
+
+            for codec in FFmpegCodec.availableVideoCodecs {
+                var cc = Star_V1_CodecCaps()
+                cc.codec = codec.rawValue
+                for enc in codec.encoders {
+                    var ec = Star_V1_EncoderCaps()
+                    ec.encoder       = enc.rawValue
+                    ec.pixelFormats  = enc.pixelFormats.map { $0.rawValue }
+                    ec.muxers        = enc.supportedMuxers.map { $0.rawValue }
+                    cc.encoders.append(ec)
+                }
+                caps.codecs.append(cc)
+            }
+            try await transport.respond(id: id, payload: caps.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
     // Assemble processed output TIFFs back into a video using ffmpeg.
     // Streams ProgressEvent items (io_progress, sequence_state) while encoding.
     static func video(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
@@ -84,21 +113,20 @@ enum ExportHandlers {
                 await transport.sendError(id: id, message: "session not found", code: 404); return
             }
 
-            // Resolve encode settings: prefer the request's encode_settings, fall back to the
-            // VideoInfo captured when the session was opened from a video.
+            // Resolve encode settings (priority order):
+            //   1. Explicit settings in the request (codec field not empty)
+            //   2. VideoInfo stored on the session (decoded from the source video)
+            //   3. Config's video fields (may be defaults)
+            let config = await session.configManager.config()
             let vi: VideoInfo
-            if let fromProto = Mapping.videoInfo(from: req.encodeSettings) {
-                vi = fromProto
+            if let fromReq = Mapping.videoInfo(from: req.settings, hasAudio: false) {
+                vi = fromReq
             } else if let stored = await session.videoInfo {
                 vi = stored
             } else {
-                await transport.sendError(id: id,
-                    message: "no video encode settings: either pass encode_settings or open from a video file",
-                    code: 400)
-                return
+                vi = Mapping.videoInfoFromConfig(config)
             }
 
-            let config     = await session.configManager.config()
             let outputPath = config.outputPath
             let totalFrames = await session.frameCount
 

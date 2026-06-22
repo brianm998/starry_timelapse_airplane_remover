@@ -43,16 +43,21 @@ message OpenProgress {
   }
 }
 
-// VideoInfo carries the encode parameters for a video session.
-// All codec/pixfmt/muxer/encoder fields are the rawValue strings from
-// StarCore's FFmpegCodec / FFmpegPixelFormat / FFmpegMuxer / FFmpegEncoder enums.
+// Encode settings. codec/encoder/pixel_format/muxer are StarCore FFmpeg* enum rawValue strings
+// (those enums have 1000+ cases — proto enums would be unmaintainable; the daemon maps via init?(rawValue:)).
+// frame_rate is FrameRate.rawValue (double). An empty string field means "use the session config default".
+message VideoEncodeSettings {
+  double frame_rate   = 1;  // e.g. 24, 29.97, 30, 60
+  string codec        = 2;  // FFmpegCodec.rawValue
+  string encoder      = 3;  // FFmpegEncoder.rawValue
+  string pixel_format = 4;  // FFmpegPixelFormat.rawValue
+  string muxer        = 5;  // FFmpegMuxer.rawValue — also the output container extension
+}
+
+// Mirrors StarCore.VideoInfo.
 message VideoInfo {
-  string codec      = 1;  // e.g. "prores", "h264"
-  string pixel_fmt  = 2;  // e.g. "yuv444p10le"
-  string muxer      = 3;  // e.g. "mov"
-  double frame_rate = 4;  // e.g. 24.0, 29.97
-  bool   has_audio  = 5;
-  string encoder    = 6;  // e.g. "prores_ks"; empty = infer from codec+pixfmt
+  VideoEncodeSettings settings  = 1;
+  bool                has_audio = 2;
 }
 
 message SessionInfo {
@@ -63,7 +68,7 @@ message SessionInfo {
   int32     components_per_pixel  = 5;
   Config    config                = 6;
   string    scratch_session_dir   = 7;
-  VideoInfo video_info            = 8;  // populated for video sessions
+  VideoInfo source_video_info     = 8;  // set iff opened from a video (Session.OpenVideo); else default
 }
 
 message CloseSessionRequest  { string session_id = 1; }
@@ -77,17 +82,20 @@ message SessionRef           { string session_id = 1; }
 message UpdateConfigRequest { string session_id = 1; Config config = 2; }
 
 message Config {
-  string      output_path                           = 1;
-  string      temp_output_path                      = 2;
-  CleanMethod clean_method                          = 3;
-  DetectionType detection_type                      = 4;
-  bool        horizon_detection_enabled             = 5;
-  bool        tripod_head_was_moving                = 6;
-  int32       number_of_frames_to_process_concurrently = 7;
-  int32       ignore_lower_pixels                   = 8;
-  bool        write_outlier_group_files             = 9;
-  bool        write_frame_preview_files             = 10;
-  bool        clean_method_auto_preservation        = 11;
+  string        output_path                              = 1;
+  string        temp_output_path                         = 2;
+  CleanMethod   clean_method                             = 3;
+  DetectionType detection_type                           = 4;
+  bool          horizon_detection_enabled                = 5;
+  bool          tripod_head_was_moving                   = 6;
+  int32         number_of_frames_to_process_concurrently = 7;
+  int32         ignore_lower_pixels                      = 8;   // -1 = unset
+  map<int32, CleanMethod> pixel_replacement_overrides    = 9;
+  map<int32, int32>       static_neighbor_frame_overrides   = 10;
+  map<int32, int32>       aligned_neighbor_frame_overrides  = 11;
+  bool                    write_outlier_group_files          = 12;
+  bool                    write_frame_preview_files          = 13;
+  VideoEncodeSettings     video                             = 14;  // persisted encode settings
 }
 
 enum CleanMethod {
@@ -249,7 +257,16 @@ message IoProgress         { int32 current = 1; int32 total = 2; string output_d
 message SequenceStateEvent { string state = 1; }
 
 message ExportVideoRequest {
-  string    session_id        = 1;
-  string    output_video_path = 2;
-  VideoInfo encode_settings   = 3;  // codec/framerate/pixfmt for the output; falls back to session's VideoInfo
+  string              session_id        = 1;
+  string              output_video_path = 2;  // empty → daemon derives "<basename>.<muxer>"
+  VideoEncodeSettings settings          = 3;  // defaults to the session config's persisted settings
 }
+
+// Drives the Render Video dialog's cascading pickers. Built from StarCore's enum relationships.
+message GetVideoCapabilitiesRequest {}
+message VideoCapabilities {
+  repeated double     frame_rates = 1;  // FrameRate.allCases rawValues
+  repeated CodecCaps  codecs      = 2;
+}
+message CodecCaps   { string codec    = 1; repeated EncoderCaps encoders = 2; }
+message EncoderCaps { string encoder  = 1; repeated string pixel_formats = 2; repeated string muxers = 3; }

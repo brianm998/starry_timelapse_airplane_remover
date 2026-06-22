@@ -633,95 +633,100 @@ public nonisolated struct Star_V1_OpenProgress: Sendable {
   public init() {}
 }
 
-/// VideoInfo carries the encode parameters for a video session.
-/// All codec/pixfmt/muxer/encoder fields are the rawValue strings from
-/// StarCore's FFmpegCodec / FFmpegPixelFormat / FFmpegMuxer / FFmpegEncoder enums.
-public nonisolated struct Star_V1_VideoInfo: Sendable {
+/// Encode settings. codec/encoder/pixel_format/muxer are StarCore FFmpeg* enum rawValue strings
+/// (those enums have 1000+ cases — proto enums would be unmaintainable; the daemon maps via init?(rawValue:)).
+/// frame_rate is FrameRate.rawValue (double). An empty string field means "use the session config default".
+public nonisolated struct Star_V1_VideoEncodeSettings: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// e.g. "prores", "h264"
-  public var codec: String = String()
-
-  /// e.g. "yuv444p10le"
-  public var pixelFmt: String = String()
-
-  /// e.g. "mov"
-  public var muxer: String = String()
-
-  /// e.g. 24.0, 29.97
+  /// e.g. 24, 29.97, 30, 60
   public var frameRate: Double = 0
 
-  public var hasAudio_p: Bool = false
+  /// FFmpegCodec.rawValue
+  public var codec: String = String()
 
-  /// e.g. "prores_ks"; empty = infer from codec+pixfmt
+  /// FFmpegEncoder.rawValue
   public var encoder: String = String()
+
+  /// FFmpegPixelFormat.rawValue
+  public var pixelFormat: String = String()
+
+  /// FFmpegMuxer.rawValue — also the output container extension
+  public var muxer: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-public nonisolated struct Star_V1_SessionInfo: @unchecked Sendable {
+/// Mirrors StarCore.VideoInfo.
+public nonisolated struct Star_V1_VideoInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var sessionID: String {
-    get {_storage._sessionID}
-    set {_uniqueStorage()._sessionID = newValue}
+  public var settings: Star_V1_VideoEncodeSettings {
+    get {_settings ?? Star_V1_VideoEncodeSettings()}
+    set {_settings = newValue}
   }
+  /// Returns true if `settings` has been explicitly set.
+  public var hasSettings: Bool {self._settings != nil}
+  /// Clears the value of `settings`. Subsequent reads from it will return its default value.
+  public mutating func clearSettings() {self._settings = nil}
 
-  public var frameCount: Int32 {
-    get {_storage._frameCount}
-    set {_uniqueStorage()._frameCount = newValue}
-  }
-
-  public var imageWidth: Int32 {
-    get {_storage._imageWidth}
-    set {_uniqueStorage()._imageWidth = newValue}
-  }
-
-  public var imageHeight: Int32 {
-    get {_storage._imageHeight}
-    set {_uniqueStorage()._imageHeight = newValue}
-  }
-
-  public var componentsPerPixel: Int32 {
-    get {_storage._componentsPerPixel}
-    set {_uniqueStorage()._componentsPerPixel = newValue}
-  }
-
-  public var config: Star_V1_Config {
-    get {_storage._config ?? Star_V1_Config()}
-    set {_uniqueStorage()._config = newValue}
-  }
-  /// Returns true if `config` has been explicitly set.
-  public var hasConfig: Bool {_storage._config != nil}
-  /// Clears the value of `config`. Subsequent reads from it will return its default value.
-  public mutating func clearConfig() {_uniqueStorage()._config = nil}
-
-  public var scratchSessionDir: String {
-    get {_storage._scratchSessionDir}
-    set {_uniqueStorage()._scratchSessionDir = newValue}
-  }
-
-  /// populated for video sessions
-  public var videoInfo: Star_V1_VideoInfo {
-    get {_storage._videoInfo ?? Star_V1_VideoInfo()}
-    set {_uniqueStorage()._videoInfo = newValue}
-  }
-  /// Returns true if `videoInfo` has been explicitly set.
-  public var hasVideoInfo: Bool {_storage._videoInfo != nil}
-  /// Clears the value of `videoInfo`. Subsequent reads from it will return its default value.
-  public mutating func clearVideoInfo() {_uniqueStorage()._videoInfo = nil}
+  public var hasAudio_p: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _storage = _StorageClass.defaultInstance
+  fileprivate var _settings: Star_V1_VideoEncodeSettings? = nil
+}
+
+public nonisolated struct Star_V1_SessionInfo: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sessionID: String = String()
+
+  public var frameCount: Int32 = 0
+
+  public var imageWidth: Int32 = 0
+
+  public var imageHeight: Int32 = 0
+
+  public var componentsPerPixel: Int32 = 0
+
+  public var config: Star_V1_Config {
+    get {_config ?? Star_V1_Config()}
+    set {_config = newValue}
+  }
+  /// Returns true if `config` has been explicitly set.
+  public var hasConfig: Bool {self._config != nil}
+  /// Clears the value of `config`. Subsequent reads from it will return its default value.
+  public mutating func clearConfig() {self._config = nil}
+
+  public var scratchSessionDir: String = String()
+
+  /// set iff opened from a video (Session.OpenVideo); else default
+  public var sourceVideoInfo: Star_V1_VideoInfo {
+    get {_sourceVideoInfo ?? Star_V1_VideoInfo()}
+    set {_sourceVideoInfo = newValue}
+  }
+  /// Returns true if `sourceVideoInfo` has been explicitly set.
+  public var hasSourceVideoInfo: Bool {self._sourceVideoInfo != nil}
+  /// Clears the value of `sourceVideoInfo`. Subsequent reads from it will return its default value.
+  public mutating func clearSourceVideoInfo() {self._sourceVideoInfo = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _config: Star_V1_Config? = nil
+  fileprivate var _sourceVideoInfo: Star_V1_VideoInfo? = nil
 }
 
 public nonisolated struct Star_V1_CloseSessionRequest: Sendable {
@@ -803,36 +808,92 @@ public nonisolated struct Star_V1_UpdateConfigRequest: Sendable {
   fileprivate var _config: Star_V1_Config? = nil
 }
 
-public nonisolated struct Star_V1_Config: Sendable {
+public nonisolated struct Star_V1_Config: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var outputPath: String = String()
+  public var outputPath: String {
+    get {_storage._outputPath}
+    set {_uniqueStorage()._outputPath = newValue}
+  }
 
-  public var tempOutputPath: String = String()
+  public var tempOutputPath: String {
+    get {_storage._tempOutputPath}
+    set {_uniqueStorage()._tempOutputPath = newValue}
+  }
 
-  public var cleanMethod: Star_V1_CleanMethod = .cleanAutomatic
+  public var cleanMethod: Star_V1_CleanMethod {
+    get {_storage._cleanMethod}
+    set {_uniqueStorage()._cleanMethod = newValue}
+  }
 
-  public var detectionType: Star_V1_DetectionType = .detectionMild
+  public var detectionType: Star_V1_DetectionType {
+    get {_storage._detectionType}
+    set {_uniqueStorage()._detectionType = newValue}
+  }
 
-  public var horizonDetectionEnabled: Bool = false
+  public var horizonDetectionEnabled: Bool {
+    get {_storage._horizonDetectionEnabled}
+    set {_uniqueStorage()._horizonDetectionEnabled = newValue}
+  }
 
-  public var tripodHeadWasMoving: Bool = false
+  public var tripodHeadWasMoving: Bool {
+    get {_storage._tripodHeadWasMoving}
+    set {_uniqueStorage()._tripodHeadWasMoving = newValue}
+  }
 
-  public var numberOfFramesToProcessConcurrently: Int32 = 0
+  public var numberOfFramesToProcessConcurrently: Int32 {
+    get {_storage._numberOfFramesToProcessConcurrently}
+    set {_uniqueStorage()._numberOfFramesToProcessConcurrently = newValue}
+  }
 
-  public var ignoreLowerPixels: Int32 = 0
+  /// -1 = unset
+  public var ignoreLowerPixels: Int32 {
+    get {_storage._ignoreLowerPixels}
+    set {_uniqueStorage()._ignoreLowerPixels = newValue}
+  }
 
-  public var writeOutlierGroupFiles: Bool = false
+  public var pixelReplacementOverrides: Dictionary<Int32,Star_V1_CleanMethod> {
+    get {_storage._pixelReplacementOverrides}
+    set {_uniqueStorage()._pixelReplacementOverrides = newValue}
+  }
 
-  public var writeFramePreviewFiles: Bool = false
+  public var staticNeighborFrameOverrides: Dictionary<Int32,Int32> {
+    get {_storage._staticNeighborFrameOverrides}
+    set {_uniqueStorage()._staticNeighborFrameOverrides = newValue}
+  }
 
-  public var cleanMethodAutoPreservation: Bool = false
+  public var alignedNeighborFrameOverrides: Dictionary<Int32,Int32> {
+    get {_storage._alignedNeighborFrameOverrides}
+    set {_uniqueStorage()._alignedNeighborFrameOverrides = newValue}
+  }
+
+  public var writeOutlierGroupFiles: Bool {
+    get {_storage._writeOutlierGroupFiles}
+    set {_uniqueStorage()._writeOutlierGroupFiles = newValue}
+  }
+
+  public var writeFramePreviewFiles: Bool {
+    get {_storage._writeFramePreviewFiles}
+    set {_uniqueStorage()._writeFramePreviewFiles = newValue}
+  }
+
+  /// persisted encode settings
+  public var video: Star_V1_VideoEncodeSettings {
+    get {_storage._video ?? Star_V1_VideoEncodeSettings()}
+    set {_uniqueStorage()._video = newValue}
+  }
+  /// Returns true if `video` has been explicitly set.
+  public var hasVideo: Bool {_storage._video != nil}
+  /// Clears the value of `video`. Subsequent reads from it will return its default value.
+  public mutating func clearVideo() {_uniqueStorage()._video = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 public nonisolated struct Star_V1_FrameRef: Sendable {
@@ -1256,23 +1317,80 @@ public nonisolated struct Star_V1_ExportVideoRequest: Sendable {
 
   public var sessionID: String = String()
 
+  /// empty → daemon derives "<basename>.<muxer>"
   public var outputVideoPath: String = String()
 
-  /// codec/framerate/pixfmt for the output; falls back to session's VideoInfo
-  public var encodeSettings: Star_V1_VideoInfo {
-    get {_encodeSettings ?? Star_V1_VideoInfo()}
-    set {_encodeSettings = newValue}
+  /// defaults to the session config's persisted settings
+  public var settings: Star_V1_VideoEncodeSettings {
+    get {_settings ?? Star_V1_VideoEncodeSettings()}
+    set {_settings = newValue}
   }
-  /// Returns true if `encodeSettings` has been explicitly set.
-  public var hasEncodeSettings: Bool {self._encodeSettings != nil}
-  /// Clears the value of `encodeSettings`. Subsequent reads from it will return its default value.
-  public mutating func clearEncodeSettings() {self._encodeSettings = nil}
+  /// Returns true if `settings` has been explicitly set.
+  public var hasSettings: Bool {self._settings != nil}
+  /// Clears the value of `settings`. Subsequent reads from it will return its default value.
+  public mutating func clearSettings() {self._settings = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _encodeSettings: Star_V1_VideoInfo? = nil
+  fileprivate var _settings: Star_V1_VideoEncodeSettings? = nil
+}
+
+/// Drives the Render Video dialog's cascading pickers. Built from StarCore's enum relationships.
+public nonisolated struct Star_V1_GetVideoCapabilitiesRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Star_V1_VideoCapabilities: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// FrameRate.allCases rawValues
+  public var frameRates: [Double] = []
+
+  public var codecs: [Star_V1_CodecCaps] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Star_V1_CodecCaps: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var codec: String = String()
+
+  public var encoders: [Star_V1_EncoderCaps] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Star_V1_EncoderCaps: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var encoder: String = String()
+
+  public var pixelFormats: [String] = []
+
+  public var muxers: [String] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -1636,9 +1754,9 @@ nonisolated extension Star_V1_OpenProgress: SwiftProtobuf.Message, SwiftProtobuf
   }
 }
 
-nonisolated extension Star_V1_VideoInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".VideoInfo"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}codec\0\u{3}pixel_fmt\0\u{1}muxer\0\u{3}frame_rate\0\u{3}has_audio\0\u{1}encoder\0")
+nonisolated extension Star_V1_VideoEncodeSettings: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VideoEncodeSettings"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_rate\0\u{1}codec\0\u{1}encoder\0\u{3}pixel_format\0\u{1}muxer\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1646,46 +1764,80 @@ nonisolated extension Star_V1_VideoInfo: SwiftProtobuf.Message, SwiftProtobuf._M
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.codec) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.pixelFmt) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.muxer) }()
-      case 4: try { try decoder.decodeSingularDoubleField(value: &self.frameRate) }()
-      case 5: try { try decoder.decodeSingularBoolField(value: &self.hasAudio_p) }()
-      case 6: try { try decoder.decodeSingularStringField(value: &self.encoder) }()
+      case 1: try { try decoder.decodeSingularDoubleField(value: &self.frameRate) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.codec) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.encoder) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.pixelFormat) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.muxer) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.codec.isEmpty {
-      try visitor.visitSingularStringField(value: self.codec, fieldNumber: 1)
-    }
-    if !self.pixelFmt.isEmpty {
-      try visitor.visitSingularStringField(value: self.pixelFmt, fieldNumber: 2)
-    }
-    if !self.muxer.isEmpty {
-      try visitor.visitSingularStringField(value: self.muxer, fieldNumber: 3)
-    }
     if self.frameRate.bitPattern != 0 {
-      try visitor.visitSingularDoubleField(value: self.frameRate, fieldNumber: 4)
+      try visitor.visitSingularDoubleField(value: self.frameRate, fieldNumber: 1)
     }
-    if self.hasAudio_p != false {
-      try visitor.visitSingularBoolField(value: self.hasAudio_p, fieldNumber: 5)
+    if !self.codec.isEmpty {
+      try visitor.visitSingularStringField(value: self.codec, fieldNumber: 2)
     }
     if !self.encoder.isEmpty {
-      try visitor.visitSingularStringField(value: self.encoder, fieldNumber: 6)
+      try visitor.visitSingularStringField(value: self.encoder, fieldNumber: 3)
+    }
+    if !self.pixelFormat.isEmpty {
+      try visitor.visitSingularStringField(value: self.pixelFormat, fieldNumber: 4)
+    }
+    if !self.muxer.isEmpty {
+      try visitor.visitSingularStringField(value: self.muxer, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_VideoEncodeSettings, rhs: Star_V1_VideoEncodeSettings) -> Bool {
+    if lhs.frameRate != rhs.frameRate {return false}
+    if lhs.codec != rhs.codec {return false}
+    if lhs.encoder != rhs.encoder {return false}
+    if lhs.pixelFormat != rhs.pixelFormat {return false}
+    if lhs.muxer != rhs.muxer {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Star_V1_VideoInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VideoInfo"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}settings\0\u{3}has_audio\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._settings) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.hasAudio_p) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._settings {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if self.hasAudio_p != false {
+      try visitor.visitSingularBoolField(value: self.hasAudio_p, fieldNumber: 2)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Star_V1_VideoInfo, rhs: Star_V1_VideoInfo) -> Bool {
-    if lhs.codec != rhs.codec {return false}
-    if lhs.pixelFmt != rhs.pixelFmt {return false}
-    if lhs.muxer != rhs.muxer {return false}
-    if lhs.frameRate != rhs.frameRate {return false}
+    if lhs._settings != rhs._settings {return false}
     if lhs.hasAudio_p != rhs.hasAudio_p {return false}
-    if lhs.encoder != rhs.encoder {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1693,118 +1845,68 @@ nonisolated extension Star_V1_VideoInfo: SwiftProtobuf.Message, SwiftProtobuf._M
 
 nonisolated extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SessionInfo"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_count\0\u{3}image_width\0\u{3}image_height\0\u{3}components_per_pixel\0\u{1}config\0\u{3}scratch_session_dir\0\u{3}video_info\0")
-
-  fileprivate class _StorageClass {
-    var _sessionID: String = String()
-    var _frameCount: Int32 = 0
-    var _imageWidth: Int32 = 0
-    var _imageHeight: Int32 = 0
-    var _componentsPerPixel: Int32 = 0
-    var _config: Star_V1_Config? = nil
-    var _scratchSessionDir: String = String()
-    var _videoInfo: Star_V1_VideoInfo? = nil
-
-      // This property is used as the initial default value for new instances of the type.
-      // The type itself is protecting the reference to its storage via CoW semantics.
-      // This will force a copy to be made of this reference when the first mutation occurs;
-      // hence, it is safe to mark this as `nonisolated(unsafe)`.
-      static nonisolated(unsafe) let defaultInstance = _StorageClass()
-
-    private init() {}
-
-    init(copying source: _StorageClass) {
-      _sessionID = source._sessionID
-      _frameCount = source._frameCount
-      _imageWidth = source._imageWidth
-      _imageHeight = source._imageHeight
-      _componentsPerPixel = source._componentsPerPixel
-      _config = source._config
-      _scratchSessionDir = source._scratchSessionDir
-      _videoInfo = source._videoInfo
-    }
-  }
-
-  fileprivate mutating func _uniqueStorage() -> _StorageClass {
-    if !isKnownUniquelyReferenced(&_storage) {
-      _storage = _StorageClass(copying: _storage)
-    }
-    return _storage
-  }
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_count\0\u{3}image_width\0\u{3}image_height\0\u{3}components_per_pixel\0\u{1}config\0\u{3}scratch_session_dir\0\u{3}source_video_info\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    _ = _uniqueStorage()
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      while let fieldNumber = try decoder.nextFieldNumber() {
-        // The use of inline closures is to circumvent an issue where the compiler
-        // allocates stack space for every case branch when no optimizations are
-        // enabled. https://github.com/apple/swift-protobuf/issues/1034
-        switch fieldNumber {
-        case 1: try { try decoder.decodeSingularStringField(value: &_storage._sessionID) }()
-        case 2: try { try decoder.decodeSingularInt32Field(value: &_storage._frameCount) }()
-        case 3: try { try decoder.decodeSingularInt32Field(value: &_storage._imageWidth) }()
-        case 4: try { try decoder.decodeSingularInt32Field(value: &_storage._imageHeight) }()
-        case 5: try { try decoder.decodeSingularInt32Field(value: &_storage._componentsPerPixel) }()
-        case 6: try { try decoder.decodeSingularMessageField(value: &_storage._config) }()
-        case 7: try { try decoder.decodeSingularStringField(value: &_storage._scratchSessionDir) }()
-        case 8: try { try decoder.decodeSingularMessageField(value: &_storage._videoInfo) }()
-        default: break
-        }
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.frameCount) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.imageWidth) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.imageHeight) }()
+      case 5: try { try decoder.decodeSingularInt32Field(value: &self.componentsPerPixel) }()
+      case 6: try { try decoder.decodeSingularMessageField(value: &self._config) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.scratchSessionDir) }()
+      case 8: try { try decoder.decodeSingularMessageField(value: &self._sourceVideoInfo) }()
+      default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every if/case branch local when no optimizations
-      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-      // https://github.com/apple/swift-protobuf/issues/1182
-      if !_storage._sessionID.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._sessionID, fieldNumber: 1)
-      }
-      if _storage._frameCount != 0 {
-        try visitor.visitSingularInt32Field(value: _storage._frameCount, fieldNumber: 2)
-      }
-      if _storage._imageWidth != 0 {
-        try visitor.visitSingularInt32Field(value: _storage._imageWidth, fieldNumber: 3)
-      }
-      if _storage._imageHeight != 0 {
-        try visitor.visitSingularInt32Field(value: _storage._imageHeight, fieldNumber: 4)
-      }
-      if _storage._componentsPerPixel != 0 {
-        try visitor.visitSingularInt32Field(value: _storage._componentsPerPixel, fieldNumber: 5)
-      }
-      try { if let v = _storage._config {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
-      } }()
-      if !_storage._scratchSessionDir.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._scratchSessionDir, fieldNumber: 7)
-      }
-      try { if let v = _storage._videoInfo {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
-      } }()
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.sessionID.isEmpty {
+      try visitor.visitSingularStringField(value: self.sessionID, fieldNumber: 1)
     }
+    if self.frameCount != 0 {
+      try visitor.visitSingularInt32Field(value: self.frameCount, fieldNumber: 2)
+    }
+    if self.imageWidth != 0 {
+      try visitor.visitSingularInt32Field(value: self.imageWidth, fieldNumber: 3)
+    }
+    if self.imageHeight != 0 {
+      try visitor.visitSingularInt32Field(value: self.imageHeight, fieldNumber: 4)
+    }
+    if self.componentsPerPixel != 0 {
+      try visitor.visitSingularInt32Field(value: self.componentsPerPixel, fieldNumber: 5)
+    }
+    try { if let v = self._config {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    } }()
+    if !self.scratchSessionDir.isEmpty {
+      try visitor.visitSingularStringField(value: self.scratchSessionDir, fieldNumber: 7)
+    }
+    try { if let v = self._sourceVideoInfo {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Star_V1_SessionInfo, rhs: Star_V1_SessionInfo) -> Bool {
-    if lhs._storage !== rhs._storage {
-      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
-        let _storage = _args.0
-        let rhs_storage = _args.1
-        if _storage._sessionID != rhs_storage._sessionID {return false}
-        if _storage._frameCount != rhs_storage._frameCount {return false}
-        if _storage._imageWidth != rhs_storage._imageWidth {return false}
-        if _storage._imageHeight != rhs_storage._imageHeight {return false}
-        if _storage._componentsPerPixel != rhs_storage._componentsPerPixel {return false}
-        if _storage._config != rhs_storage._config {return false}
-        if _storage._scratchSessionDir != rhs_storage._scratchSessionDir {return false}
-        if _storage._videoInfo != rhs_storage._videoInfo {return false}
-        return true
-      }
-      if !storagesAreEqual {return false}
-    }
+    if lhs.sessionID != rhs.sessionID {return false}
+    if lhs.frameCount != rhs.frameCount {return false}
+    if lhs.imageWidth != rhs.imageWidth {return false}
+    if lhs.imageHeight != rhs.imageHeight {return false}
+    if lhs.componentsPerPixel != rhs.componentsPerPixel {return false}
+    if lhs._config != rhs._config {return false}
+    if lhs.scratchSessionDir != rhs.scratchSessionDir {return false}
+    if lhs._sourceVideoInfo != rhs._sourceVideoInfo {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1979,79 +2081,160 @@ nonisolated extension Star_V1_UpdateConfigRequest: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Config"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{3}clean_method_auto_preservation\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0")
+
+  fileprivate class _StorageClass {
+    var _outputPath: String = String()
+    var _tempOutputPath: String = String()
+    var _cleanMethod: Star_V1_CleanMethod = .cleanAutomatic
+    var _detectionType: Star_V1_DetectionType = .detectionMild
+    var _horizonDetectionEnabled: Bool = false
+    var _tripodHeadWasMoving: Bool = false
+    var _numberOfFramesToProcessConcurrently: Int32 = 0
+    var _ignoreLowerPixels: Int32 = 0
+    var _pixelReplacementOverrides: Dictionary<Int32,Star_V1_CleanMethod> = [:]
+    var _staticNeighborFrameOverrides: Dictionary<Int32,Int32> = [:]
+    var _alignedNeighborFrameOverrides: Dictionary<Int32,Int32> = [:]
+    var _writeOutlierGroupFiles: Bool = false
+    var _writeFramePreviewFiles: Bool = false
+    var _video: Star_V1_VideoEncodeSettings? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _outputPath = source._outputPath
+      _tempOutputPath = source._tempOutputPath
+      _cleanMethod = source._cleanMethod
+      _detectionType = source._detectionType
+      _horizonDetectionEnabled = source._horizonDetectionEnabled
+      _tripodHeadWasMoving = source._tripodHeadWasMoving
+      _numberOfFramesToProcessConcurrently = source._numberOfFramesToProcessConcurrently
+      _ignoreLowerPixels = source._ignoreLowerPixels
+      _pixelReplacementOverrides = source._pixelReplacementOverrides
+      _staticNeighborFrameOverrides = source._staticNeighborFrameOverrides
+      _alignedNeighborFrameOverrides = source._alignedNeighborFrameOverrides
+      _writeOutlierGroupFiles = source._writeOutlierGroupFiles
+      _writeFramePreviewFiles = source._writeFramePreviewFiles
+      _video = source._video
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.outputPath) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.tempOutputPath) }()
-      case 3: try { try decoder.decodeSingularEnumField(value: &self.cleanMethod) }()
-      case 4: try { try decoder.decodeSingularEnumField(value: &self.detectionType) }()
-      case 5: try { try decoder.decodeSingularBoolField(value: &self.horizonDetectionEnabled) }()
-      case 6: try { try decoder.decodeSingularBoolField(value: &self.tripodHeadWasMoving) }()
-      case 7: try { try decoder.decodeSingularInt32Field(value: &self.numberOfFramesToProcessConcurrently) }()
-      case 8: try { try decoder.decodeSingularInt32Field(value: &self.ignoreLowerPixels) }()
-      case 9: try { try decoder.decodeSingularBoolField(value: &self.writeOutlierGroupFiles) }()
-      case 10: try { try decoder.decodeSingularBoolField(value: &self.writeFramePreviewFiles) }()
-      case 11: try { try decoder.decodeSingularBoolField(value: &self.cleanMethodAutoPreservation) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularStringField(value: &_storage._outputPath) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._tempOutputPath) }()
+        case 3: try { try decoder.decodeSingularEnumField(value: &_storage._cleanMethod) }()
+        case 4: try { try decoder.decodeSingularEnumField(value: &_storage._detectionType) }()
+        case 5: try { try decoder.decodeSingularBoolField(value: &_storage._horizonDetectionEnabled) }()
+        case 6: try { try decoder.decodeSingularBoolField(value: &_storage._tripodHeadWasMoving) }()
+        case 7: try { try decoder.decodeSingularInt32Field(value: &_storage._numberOfFramesToProcessConcurrently) }()
+        case 8: try { try decoder.decodeSingularInt32Field(value: &_storage._ignoreLowerPixels) }()
+        case 9: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufEnumMap<SwiftProtobuf.ProtobufInt32,Star_V1_CleanMethod>.self, value: &_storage._pixelReplacementOverrides) }()
+        case 10: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufInt32,SwiftProtobuf.ProtobufInt32>.self, value: &_storage._staticNeighborFrameOverrides) }()
+        case 11: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufInt32,SwiftProtobuf.ProtobufInt32>.self, value: &_storage._alignedNeighborFrameOverrides) }()
+        case 12: try { try decoder.decodeSingularBoolField(value: &_storage._writeOutlierGroupFiles) }()
+        case 13: try { try decoder.decodeSingularBoolField(value: &_storage._writeFramePreviewFiles) }()
+        case 14: try { try decoder.decodeSingularMessageField(value: &_storage._video) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.outputPath.isEmpty {
-      try visitor.visitSingularStringField(value: self.outputPath, fieldNumber: 1)
-    }
-    if !self.tempOutputPath.isEmpty {
-      try visitor.visitSingularStringField(value: self.tempOutputPath, fieldNumber: 2)
-    }
-    if self.cleanMethod != .cleanAutomatic {
-      try visitor.visitSingularEnumField(value: self.cleanMethod, fieldNumber: 3)
-    }
-    if self.detectionType != .detectionMild {
-      try visitor.visitSingularEnumField(value: self.detectionType, fieldNumber: 4)
-    }
-    if self.horizonDetectionEnabled != false {
-      try visitor.visitSingularBoolField(value: self.horizonDetectionEnabled, fieldNumber: 5)
-    }
-    if self.tripodHeadWasMoving != false {
-      try visitor.visitSingularBoolField(value: self.tripodHeadWasMoving, fieldNumber: 6)
-    }
-    if self.numberOfFramesToProcessConcurrently != 0 {
-      try visitor.visitSingularInt32Field(value: self.numberOfFramesToProcessConcurrently, fieldNumber: 7)
-    }
-    if self.ignoreLowerPixels != 0 {
-      try visitor.visitSingularInt32Field(value: self.ignoreLowerPixels, fieldNumber: 8)
-    }
-    if self.writeOutlierGroupFiles != false {
-      try visitor.visitSingularBoolField(value: self.writeOutlierGroupFiles, fieldNumber: 9)
-    }
-    if self.writeFramePreviewFiles != false {
-      try visitor.visitSingularBoolField(value: self.writeFramePreviewFiles, fieldNumber: 10)
-    }
-    if self.cleanMethodAutoPreservation != false {
-      try visitor.visitSingularBoolField(value: self.cleanMethodAutoPreservation, fieldNumber: 11)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._outputPath.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._outputPath, fieldNumber: 1)
+      }
+      if !_storage._tempOutputPath.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._tempOutputPath, fieldNumber: 2)
+      }
+      if _storage._cleanMethod != .cleanAutomatic {
+        try visitor.visitSingularEnumField(value: _storage._cleanMethod, fieldNumber: 3)
+      }
+      if _storage._detectionType != .detectionMild {
+        try visitor.visitSingularEnumField(value: _storage._detectionType, fieldNumber: 4)
+      }
+      if _storage._horizonDetectionEnabled != false {
+        try visitor.visitSingularBoolField(value: _storage._horizonDetectionEnabled, fieldNumber: 5)
+      }
+      if _storage._tripodHeadWasMoving != false {
+        try visitor.visitSingularBoolField(value: _storage._tripodHeadWasMoving, fieldNumber: 6)
+      }
+      if _storage._numberOfFramesToProcessConcurrently != 0 {
+        try visitor.visitSingularInt32Field(value: _storage._numberOfFramesToProcessConcurrently, fieldNumber: 7)
+      }
+      if _storage._ignoreLowerPixels != 0 {
+        try visitor.visitSingularInt32Field(value: _storage._ignoreLowerPixels, fieldNumber: 8)
+      }
+      if !_storage._pixelReplacementOverrides.isEmpty {
+        try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufEnumMap<SwiftProtobuf.ProtobufInt32,Star_V1_CleanMethod>.self, value: _storage._pixelReplacementOverrides, fieldNumber: 9)
+      }
+      if !_storage._staticNeighborFrameOverrides.isEmpty {
+        try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufInt32,SwiftProtobuf.ProtobufInt32>.self, value: _storage._staticNeighborFrameOverrides, fieldNumber: 10)
+      }
+      if !_storage._alignedNeighborFrameOverrides.isEmpty {
+        try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufInt32,SwiftProtobuf.ProtobufInt32>.self, value: _storage._alignedNeighborFrameOverrides, fieldNumber: 11)
+      }
+      if _storage._writeOutlierGroupFiles != false {
+        try visitor.visitSingularBoolField(value: _storage._writeOutlierGroupFiles, fieldNumber: 12)
+      }
+      if _storage._writeFramePreviewFiles != false {
+        try visitor.visitSingularBoolField(value: _storage._writeFramePreviewFiles, fieldNumber: 13)
+      }
+      try { if let v = _storage._video {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 14)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Star_V1_Config, rhs: Star_V1_Config) -> Bool {
-    if lhs.outputPath != rhs.outputPath {return false}
-    if lhs.tempOutputPath != rhs.tempOutputPath {return false}
-    if lhs.cleanMethod != rhs.cleanMethod {return false}
-    if lhs.detectionType != rhs.detectionType {return false}
-    if lhs.horizonDetectionEnabled != rhs.horizonDetectionEnabled {return false}
-    if lhs.tripodHeadWasMoving != rhs.tripodHeadWasMoving {return false}
-    if lhs.numberOfFramesToProcessConcurrently != rhs.numberOfFramesToProcessConcurrently {return false}
-    if lhs.ignoreLowerPixels != rhs.ignoreLowerPixels {return false}
-    if lhs.writeOutlierGroupFiles != rhs.writeOutlierGroupFiles {return false}
-    if lhs.writeFramePreviewFiles != rhs.writeFramePreviewFiles {return false}
-    if lhs.cleanMethodAutoPreservation != rhs.cleanMethodAutoPreservation {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._outputPath != rhs_storage._outputPath {return false}
+        if _storage._tempOutputPath != rhs_storage._tempOutputPath {return false}
+        if _storage._cleanMethod != rhs_storage._cleanMethod {return false}
+        if _storage._detectionType != rhs_storage._detectionType {return false}
+        if _storage._horizonDetectionEnabled != rhs_storage._horizonDetectionEnabled {return false}
+        if _storage._tripodHeadWasMoving != rhs_storage._tripodHeadWasMoving {return false}
+        if _storage._numberOfFramesToProcessConcurrently != rhs_storage._numberOfFramesToProcessConcurrently {return false}
+        if _storage._ignoreLowerPixels != rhs_storage._ignoreLowerPixels {return false}
+        if _storage._pixelReplacementOverrides != rhs_storage._pixelReplacementOverrides {return false}
+        if _storage._staticNeighborFrameOverrides != rhs_storage._staticNeighborFrameOverrides {return false}
+        if _storage._alignedNeighborFrameOverrides != rhs_storage._alignedNeighborFrameOverrides {return false}
+        if _storage._writeOutlierGroupFiles != rhs_storage._writeOutlierGroupFiles {return false}
+        if _storage._writeFramePreviewFiles != rhs_storage._writeFramePreviewFiles {return false}
+        if _storage._video != rhs_storage._video {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2960,7 +3143,7 @@ nonisolated extension Star_V1_SequenceStateEvent: SwiftProtobuf.Message, SwiftPr
 
 nonisolated extension Star_V1_ExportVideoRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ExportVideoRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}output_video_path\0\u{3}encode_settings\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}output_video_path\0\u{1}settings\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2970,7 +3153,7 @@ nonisolated extension Star_V1_ExportVideoRequest: SwiftProtobuf.Message, SwiftPr
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.outputVideoPath) }()
-      case 3: try { try decoder.decodeSingularMessageField(value: &self._encodeSettings) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._settings) }()
       default: break
       }
     }
@@ -2987,7 +3170,7 @@ nonisolated extension Star_V1_ExportVideoRequest: SwiftProtobuf.Message, SwiftPr
     if !self.outputVideoPath.isEmpty {
       try visitor.visitSingularStringField(value: self.outputVideoPath, fieldNumber: 2)
     }
-    try { if let v = self._encodeSettings {
+    try { if let v = self._settings {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
     try unknownFields.traverse(visitor: &visitor)
@@ -2996,7 +3179,136 @@ nonisolated extension Star_V1_ExportVideoRequest: SwiftProtobuf.Message, SwiftPr
   public static func ==(lhs: Star_V1_ExportVideoRequest, rhs: Star_V1_ExportVideoRequest) -> Bool {
     if lhs.sessionID != rhs.sessionID {return false}
     if lhs.outputVideoPath != rhs.outputVideoPath {return false}
-    if lhs._encodeSettings != rhs._encodeSettings {return false}
+    if lhs._settings != rhs._settings {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Star_V1_GetVideoCapabilitiesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetVideoCapabilitiesRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_GetVideoCapabilitiesRequest, rhs: Star_V1_GetVideoCapabilitiesRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Star_V1_VideoCapabilities: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VideoCapabilities"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_rates\0\u{1}codecs\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedDoubleField(value: &self.frameRates) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.codecs) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.frameRates.isEmpty {
+      try visitor.visitPackedDoubleField(value: self.frameRates, fieldNumber: 1)
+    }
+    if !self.codecs.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.codecs, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_VideoCapabilities, rhs: Star_V1_VideoCapabilities) -> Bool {
+    if lhs.frameRates != rhs.frameRates {return false}
+    if lhs.codecs != rhs.codecs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Star_V1_CodecCaps: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CodecCaps"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}codec\0\u{1}encoders\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.codec) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.encoders) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.codec.isEmpty {
+      try visitor.visitSingularStringField(value: self.codec, fieldNumber: 1)
+    }
+    if !self.encoders.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.encoders, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_CodecCaps, rhs: Star_V1_CodecCaps) -> Bool {
+    if lhs.codec != rhs.codec {return false}
+    if lhs.encoders != rhs.encoders {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Star_V1_EncoderCaps: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".EncoderCaps"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}encoder\0\u{3}pixel_formats\0\u{1}muxers\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.encoder) }()
+      case 2: try { try decoder.decodeRepeatedStringField(value: &self.pixelFormats) }()
+      case 3: try { try decoder.decodeRepeatedStringField(value: &self.muxers) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.encoder.isEmpty {
+      try visitor.visitSingularStringField(value: self.encoder, fieldNumber: 1)
+    }
+    if !self.pixelFormats.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.pixelFormats, fieldNumber: 2)
+    }
+    if !self.muxers.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.muxers, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_EncoderCaps, rhs: Star_V1_EncoderCaps) -> Bool {
+    if lhs.encoder != rhs.encoder {return false}
+    if lhs.pixelFormats != rhs.pixelFormats {return false}
+    if lhs.muxers != rhs.muxers {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

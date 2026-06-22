@@ -158,28 +158,53 @@ enum Mapping {
         if c.ignoreLowerPixels != 0 { out.ignoreLowerPixels = Int32(c.ignoreLowerPixels) }
         out.writeOutlierGroupFiles = c.writeOutlierGroupFiles
         out.writeFramePreviewFiles = c.writeFramePreviewFiles
+        var ves = Star_V1_VideoEncodeSettings()
+        ves.frameRate   = c.frameRate.rawValue
+        ves.codec       = c.codec.rawValue
+        ves.encoder     = c.encoder.rawValue
+        ves.pixelFormat = c.pixelFormat.rawValue
+        ves.muxer       = c.muxer.rawValue
+        out.video = ves
         return out
     }
 
-    // MARK: - VideoInfo
+    // Build a VideoInfo from Swift Config's video fields (for use in Export.Video fallback).
+    static func videoInfoFromConfig(_ c: Config) -> VideoInfo {
+        VideoInfo(
+            frameRate: c.frameRate,
+            codec: c.codec,
+            encoder: c.encoder,
+            pixelFormat: c.pixelFormat,
+            muxer: c.muxer,
+            hasAudio: c.hasAudio
+        )
+    }
+
+    // MARK: - VideoEncodeSettings / VideoInfo
+
+    static func videoEncodeSettings(_ vi: VideoInfo) -> Star_V1_VideoEncodeSettings {
+        var out = Star_V1_VideoEncodeSettings()
+        out.codec        = vi.codec.rawValue
+        out.pixelFormat  = vi.pixelFormat.rawValue
+        out.muxer        = vi.muxer.rawValue
+        out.frameRate    = vi.frameRate.rawValue
+        out.encoder      = vi.encoder?.rawValue ?? ""
+        return out
+    }
 
     static func videoInfo(_ vi: VideoInfo) -> Star_V1_VideoInfo {
         var out = Star_V1_VideoInfo()
-        out.codec     = vi.codec.rawValue
-        out.pixelFmt  = vi.pixelFormat.rawValue
-        out.muxer     = vi.muxer.rawValue
-        out.frameRate = vi.frameRate.rawValue
+        out.settings   = videoEncodeSettings(vi)
         out.hasAudio_p = vi.hasAudio
-        out.encoder   = vi.encoder?.rawValue ?? ""
         return out
     }
 
-    // Returns nil when the proto VideoInfo carries no codec (i.e. it was not set by the client).
-    static func videoInfo(from proto: Star_V1_VideoInfo) -> VideoInfo? {
+    // Returns nil when the VideoEncodeSettings carries no codec (i.e. the client omitted it).
+    static func videoInfo(from proto: Star_V1_VideoEncodeSettings, hasAudio: Bool) -> VideoInfo? {
         guard !proto.codec.isEmpty,
-              let codec    = FFmpegCodec(rawValue: proto.codec),
-              let pixFmt   = FFmpegPixelFormat(rawValue: proto.pixelFmt),
-              let muxer    = FFmpegMuxer(rawValue: proto.muxer)
+              let codec  = FFmpegCodec(rawValue: proto.codec),
+              let pixFmt = FFmpegPixelFormat(rawValue: proto.pixelFormat),
+              let muxer  = FFmpegMuxer(rawValue: proto.muxer)
         else { return nil }
         let frameRate = FrameRate(rawValue: proto.frameRate)
         let encoder: FFmpegEncoder? = proto.encoder.isEmpty ? nil : FFmpegEncoder(rawValue: proto.encoder)
@@ -189,7 +214,7 @@ enum Mapping {
             encoder: encoder ?? codec.encoder(for: pixFmt),
             pixelFormat: pixFmt,
             muxer: muxer,
-            hasAudio: proto.hasAudio_p
+            hasAudio: hasAudio
         )
     }
 
@@ -205,7 +230,7 @@ enum Mapping {
         info.componentsPerPixel = Int32(imageInfo.componentsPerPixel)
         info.config = protoConfig(config)
         info.scratchSessionDir = session.scratchSessionDir
-        if let vi { info.videoInfo = videoInfo(vi) }
+        if let vi { info.sourceVideoInfo = videoInfo(vi) }
         return info
     }
 
