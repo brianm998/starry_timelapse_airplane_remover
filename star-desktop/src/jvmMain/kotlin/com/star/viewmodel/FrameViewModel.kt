@@ -52,11 +52,17 @@ class FrameViewModel(
                 val info = frameRepo.getInfo(sessionId, frameIndex)
                 _frameInfo.value = info
 
-                // Load preview and outlier groups concurrently.
-                val previewDeferred = async { loadPreview(_viewMode.value) }
-                val groupsDeferred = async { loadOutliers() }
-                previewDeferred.await()
-                groupsDeferred.await()
+                // supervisorScope: a failure in one child (e.g. outliers not ready) does not
+                // cancel the other child (preview). Both exceptions surface via await().
+                supervisorScope {
+                    val previewDeferred = async { loadPreview(_viewMode.value) }
+                    val groupsDeferred  = async { loadOutliers() }
+                    // Await both; collect errors but don't let one hide the other.
+                    var firstError: Throwable? = null
+                    try { previewDeferred.await() } catch (e: Exception) { firstError = e }
+                    try { groupsDeferred.await()  } catch (e: Exception) { if (firstError == null) firstError = e }
+                    firstError?.let { throw it }
+                }
             } catch (e: Exception) {
                 _error.value = e.message
             } finally {

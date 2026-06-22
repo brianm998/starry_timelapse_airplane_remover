@@ -1,6 +1,7 @@
 package com.star.data
 
 import com.star.engine.StarClient
+import com.star.engine.StarRpcException
 import com.star.proto.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -29,7 +30,12 @@ class LabelImage(
 class OutlierRepository(private val client: StarClient) {
 
     suspend fun getGroups(sessionId: String, frameIndex: Int): List<OutlierGroup> =
-        client.listOutliers(sessionId, frameIndex).groupsList
+        try {
+            client.listOutliers(sessionId, frameIndex).groupsList
+        } catch (_: StarRpcException) {
+            // Daemon returns an error when outlier data isn't loaded yet (frame not yet processed).
+            emptyList()
+        }
 
     suspend fun getLabelImage(sessionId: String, frameIndex: Int): LabelImage? {
         val ref = try {
