@@ -182,9 +182,15 @@ class SequenceViewModel(
     private suspend fun loadPreview(index: Int, mode: FrameViewMode) {
         previewJob?.cancel()
         previewJob = scope.launch {
-            // Try requested mode; fall back to original if the processed preview isn't ready.
-            val ref = frames.previewPath(sessionId, index, mode)
-                ?: if (mode != FrameViewMode.VIEW_ORIGINAL) frames.previewPath(sessionId, index, FrameViewMode.VIEW_ORIGINAL) else null
+            // Try the requested mode, then fall back through the others — which preview types the
+            // daemon actually wrote depends on the clean method (e.g. selective writes a subtraction
+            // preview but no auto-processed/original preview), so we show whatever exists.
+            val order = (listOf(mode) + PREVIEW_FALLBACK).distinct()
+            var ref: com.star.proto.ImageRef? = null
+            for (m in order) {
+                ref = frames.previewPath(sessionId, index, m)
+                if (ref != null) break
+            }
             if (ref == null) {
                 _previewAvailable.value = false
                 _currentPreview.value = null
@@ -196,6 +202,15 @@ class SequenceViewModel(
                 _previewAvailable.value = bmp != null
             }
         }
+    }
+
+    private companion object {
+        val PREVIEW_FALLBACK = listOf(
+            FrameViewMode.VIEW_PROCESSED,
+            FrameViewMode.VIEW_SUBTRACTION,
+            FrameViewMode.VIEW_ORIGINAL,
+            FrameViewMode.VIEW_VALIDATION,
+        )
     }
 
     private fun prefetchAround(index: Int) {

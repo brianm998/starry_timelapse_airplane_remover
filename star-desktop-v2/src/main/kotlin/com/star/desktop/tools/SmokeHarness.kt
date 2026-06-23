@@ -60,8 +60,19 @@ object SmokeHarness {
         if (mode == "process" || mode == "processall" || mode == "selective") {
             val done = CompletableDeferred<Unit>()
             val sub = scope.launch {
-                client.streamProgress(info.sessionId).collect { ev ->
-                    if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE && ev.sequenceState.state == "done") done.complete(Unit)
+                var n = 0
+                try {
+                    client.streamProgress(info.sessionId).collect { ev ->
+                        n++
+                        if (n <= 4 || ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE) {
+                            val extra = if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE) " '${ev.sequenceState.state}'" else ""
+                            println("  [recv #$n] ${ev.kindCase}$extra")
+                        }
+                        if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE && ev.sequenceState.state == "done") done.complete(Unit)
+                    }
+                    println("  [client] progress stream ENDED after $n events")
+                } catch (e: Throwable) {
+                    println("  [client] progress stream FAILED after $n events: ${e.message}")
                 }
             }
             delay(400)

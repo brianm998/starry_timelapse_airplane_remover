@@ -27,8 +27,10 @@ struct Stard: AsyncParsableCommand {
         setBinaryStdIO()
 
         // All logging goes to stderr (never stdout — that carries the binary frame stream).
+        // NB: the shared ConsoleLogHandler uses print(), which writes to STDOUT and corrupts the
+        // frame stream; we use a dedicated stderr handler instead (see StderrLogHandler).
         Log.name = "stard"
-        Log.add(handler: ConsoleLogHandler(at: logLevel), for: .console)
+        Log.add(handler: StderrLogHandler(at: logLevel), for: .console)
 
         // Register decision-tree classifiers (same as CLI).
         await StarCore.currentClassifier.set(for: .all)      { OutlierGroupForestClassifier_2436760d() }
@@ -46,29 +48,36 @@ struct Stard: AsyncParsableCommand {
 
         Log.i("stard: ready (scratch=\(scratchDir)) pid=\(ProcessInfo.processInfo.processIdentifier)")
 
-        // Read loop: blocks on stdin, dispatches envelopes, exits on EOF.
-        while true {
-            guard let frameData = readFrame() else {
-                Log.i("stard: stdin EOF — exiting")
-                break
+        // Run the blocking stdin read loop on a DEDICATED thread, not here.
+        //
+        // AsyncParsableCommand runs `run()` on the MainActor. `readFrame()` does a *synchronous*
+        // blocking `read()` on stdin, which — if run on the MainActor executor — blocks it for the
+        // entire time we're waiting for the next client frame. That starves every
+        // `Task { @MainActor in … }` in StarCore, most importantly `GraphCompletionOp`'s completion:
+        // processing finishes (all output written) but the graph never signals "done", so the client
+        // waits forever. Reading on a dedicated thread keeps the MainActor free to service that work.
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            let reader = Thread {
+                while true {
+                    guard let frameData = readFrame() else {
+                        Log.i("stard: stdin EOF — exiting")
+                        break
+                    }
+                    guard let envelope = try? Star_V1_Envelope(serializedBytes: frameData) else {
+                        Log.e("stard: failed to decode envelope")
+                        continue
+                    }
+                    switch envelope.kind {
+                    case .request: Task { await dispatcher.dispatch(envelope: envelope) }
+                    case .cancel:  Task { await dispatcher.cancel(id: envelope.id) }
+                    default:       Log.w("stard: unexpected envelope kind from client — ignoring")
+                    }
+                }
+                cont.resume()
             }
-
-            let envelope: Star_V1_Envelope
-            do {
-                envelope = try Star_V1_Envelope(serializedBytes: frameData)
-            } catch {
-                Log.e("stard: failed to decode envelope: \(error)")
-                continue
-            }
-
-            switch envelope.kind {
-            case .request:
-                await dispatcher.dispatch(envelope: envelope)
-            case .cancel:
-                await dispatcher.cancel(id: envelope.id)
-            default:
-                Log.w("stard: unexpected envelope kind from client — ignoring")
-            }
+            reader.name = "stard-stdin-reader"
+            reader.stackSize = 4 << 20
+            reader.start()
         }
 
         await TaskWaiter.shared.finish()
