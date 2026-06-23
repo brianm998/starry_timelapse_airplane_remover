@@ -175,7 +175,7 @@ class AppViewModel(
         _recentFiles.value = prefs.recentFiles
         currentSequence?.close()
         val proc = ProcessingRepository(scope) { engine.client }
-        val svm = SequenceViewModel(scope, info, frameRepo, proc, outlierRepo, imageCache)
+        val svm = SequenceViewModel(scope, info, frameRepo, proc, outlierRepo, imageCache, export)
         when (autoMode) {
             "edit" -> svm.setMode(com.star.desktop.domain.InteractionMode.EDIT)
             "grid" -> svm.setMode(com.star.desktop.domain.InteractionMode.GRID)

@@ -4,6 +4,8 @@ import com.star.desktop.data.FrameRepository
 import com.star.desktop.data.OutlierRepository
 import com.star.desktop.domain.OutlierDecisions
 import com.star.desktop.domain.ToolType
+import com.star.proto.CleanMethod
+import com.star.proto.FrameInfo
 import com.star.proto.OutlierDecision
 import com.star.proto.OutlierGroup
 import com.star.proto.RemoveReason
@@ -41,6 +43,10 @@ class FrameViewModel(
     private val _selected = MutableStateFlow<Int?>(null)
     val selected: StateFlow<Int?> = _selected.asStateFlow()
 
+    /** Per-frame info (status, outlier counts, clean method) from `Frame.Get`. */
+    private val _info = MutableStateFlow<FrameInfo?>(null)
+    val info: StateFlow<FrameInfo?> = _info.asStateFlow()
+
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
@@ -53,6 +59,7 @@ class FrameViewModel(
         scope.launch {
             _loading.value = true
             try {
+                runCatching { _info.value = frames.info(sessionId, frameIndex) }
                 val gs = outliers.list(sessionId, frameIndex)
                 _groups.value = gs
                 _decisions.value = gs.associate { it.id to it.shouldRemove }
@@ -67,6 +74,15 @@ class FrameViewModel(
     fun decisionFor(groupId: Int): RemoveReason = _decisions.value[groupId] ?: RemoveReason.RR_UNDECIDED
 
     fun selectGroup(groupId: Int?) { _selected.value = groupId }
+
+    /** Override this frame's clean method (`Frame.SetCleanMethod`); the daemon returns updated info. */
+    fun setCleanMethod(method: CleanMethod) {
+        if (_info.value?.cleanMethod == method) return
+        scope.launch {
+            runCatching { frames.setCleanMethod(sessionId, frameIndex, method) }
+                .onSuccess { _info.value = it }
+        }
+    }
 
     /** Apply the active [tool] to the clicked group. */
     fun applyTool(groupId: Int, tool: ToolType) {

@@ -26,7 +26,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
 
     MenuBar {
         Menu("File", mnemonic = 'F') {
-            Item("Open Image Sequence…", shortcut = KeyShortcut(Key.O, meta = true)) {
+            Item("Open Image Sequence…", shortcut = primaryShortcut(Key.O)) {
                 chooseDirectory()?.let { app.openSequence(it) }
             }
             Item("Open Video…") {
@@ -36,7 +36,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
                 chooseFile("Resume from config.json")?.let { app.openConfig(it) }
             }
             Separator()
-            Item("Close Session", enabled = hasSession, shortcut = KeyShortcut(Key.W, meta = true)) {
+            Item("Close Session", enabled = hasSession, shortcut = primaryShortcut(Key.W)) {
                 app.closeSession()
             }
         }
@@ -57,7 +57,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
             Separator()
             Item("Cancel Processing", enabled = hasSession) { svm?.cancelProcessing() }
             Separator()
-            Item("Processing Settings…", enabled = hasSession, shortcut = KeyShortcut(Key.Comma, meta = true)) { app.openSettings() }
+            Item("Processing Settings…", enabled = hasSession, shortcut = primaryShortcut(Key.Comma)) { app.openSettings() }
         }
 
         Menu("Export", mnemonic = 'E') {
@@ -65,8 +65,8 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
         }
 
         Menu("Window", mnemonic = 'W') {
-            Item("Outlier Table", enabled = hasSession, shortcut = KeyShortcut(Key.X, meta = true, alt = true)) { app.toggleOutlierWindow() }
-            Item("Alignment", enabled = hasSession, shortcut = KeyShortcut(Key.A, meta = true, alt = true)) { app.toggleAlignmentWindow() }
+            Item("Outlier Table", enabled = hasSession, shortcut = primaryShortcut(Key.X, alt = true)) { app.toggleOutlierWindow() }
+            Item("Alignment", enabled = hasSession, shortcut = primaryShortcut(Key.A, alt = true)) { app.toggleAlignmentWindow() }
             Separator()
             Item("Paint Reference Horizon", enabled = hasSession) {
                 svm?.let { if (it.mode.value != InteractionMode.EDIT) it.setMode(InteractionMode.EDIT); it.toggleHorizonPaint() }
@@ -74,10 +74,12 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
         }
 
         Menu("Outliers", mnemonic = 'O') {
-            Item("Keep All", enabled = hasSession, shortcut = KeyShortcut(Key.A)) {
+            // Accelerators per the authoritative Swift source (StarCommands.swift): 'a' removes all,
+            // 'k' keeps all, 'u' clears undecided. (KOTLIN_CLIENT_SPEC §5.8's prose had a/k swapped.)
+            Item("Keep All", enabled = hasSession, shortcut = KeyShortcut(Key.K)) {
                 svm?.let { it.frameVMFor(it.currentIndex.value).keepAll() }
             }
-            Item("Remove All", enabled = hasSession, shortcut = KeyShortcut(Key.K)) {
+            Item("Remove All", enabled = hasSession, shortcut = KeyShortcut(Key.A)) {
                 svm?.let { it.frameVMFor(it.currentIndex.value).removeAll() }
             }
             Item("Clear Undecided", enabled = hasSession, shortcut = KeyShortcut(Key.U)) {
@@ -90,3 +92,14 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
         }
     }
 }
+
+/** True on macOS — used to map the primary modifier to Cmd there and Ctrl elsewhere. */
+private val IS_MAC: Boolean = System.getProperty("os.name").orEmpty().lowercase().contains("mac")
+
+/**
+ * The platform's primary-accelerator modifier: Cmd on macOS, Ctrl on Windows/Linux. Compose Desktop's
+ * `meta` does **not** fall back to Ctrl off-Mac, so ⌘O/⌘W/⌘, (and the Cmd+Opt window toggles) would
+ * be dead on Windows/Linux without this branch.
+ */
+private fun primaryShortcut(key: Key, alt: Boolean = false, shift: Boolean = false): KeyShortcut =
+    KeyShortcut(key, meta = IS_MAC, ctrl = !IS_MAC, alt = alt, shift = shift)

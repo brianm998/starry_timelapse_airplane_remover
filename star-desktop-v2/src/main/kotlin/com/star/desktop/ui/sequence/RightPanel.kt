@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.ToolType
 import com.star.desktop.ui.components.toolPainter
 import com.star.desktop.ui.theme.StarColors
+import com.star.proto.CleanMethod
 
 /**
  * Right panel (macOS `RightPanel`): the editing tool picker. Tool *paint* behavior is wired in
@@ -43,6 +44,7 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val groups by fvm.groups.collectAsState()
     val decisions by fvm.decisions.collectAsState()
     val selected by fvm.selected.collectAsState()
+    val info by fvm.info.collectAsState()
 
     Column(
         modifier = modifier
@@ -73,6 +75,37 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         BulkButton("Remove All", StarColors.red) { fvm.removeAll() }
         BulkButton("Clear Undecided", StarColors.gray) { fvm.clearUndecided() }
         selected?.let { Text("Selected #$it", color = StarColors.orange, fontSize = 10.sp) }
+
+        androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
+        Text("Clean Method", color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+        val activeMethod = info?.cleanMethod ?: CleanMethod.CLEAN_SELECTIVE
+        CLEAN_METHODS.forEach { (method, label) ->
+            CleanMethodRow(label, selected = method == activeMethod) { fvm.setCleanMethod(method) }
+        }
+    }
+}
+
+/** Per-frame clean methods (proto `CleanMethod`) with display labels matching the macOS picker. */
+private val CLEAN_METHODS: List<Pair<CleanMethod, String>> = listOf(
+    CleanMethod.CLEAN_AUTOMATIC to "Automatic",
+    CleanMethod.CLEAN_AUTOMATIC_TRUE to "Auto + Outliers",
+    CleanMethod.CLEAN_SELECTIVE to "Selective",
+)
+
+@Composable
+private fun CleanMethodRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    val accent = StarColors.accent
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(5.dp))
+            .background(if (selected) accent.copy(alpha = 0.22f) else Color.Transparent)
+            .then(if (selected) Modifier.border(1.dp, SolidColor(accent), RoundedCornerShape(5.dp)) else Modifier)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+    ) {
+        Text(label, color = if (selected) StarColors.textPrimary else StarColors.textSecondary, fontSize = 11.sp)
     }
 }
 

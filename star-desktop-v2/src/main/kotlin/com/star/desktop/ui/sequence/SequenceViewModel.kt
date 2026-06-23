@@ -1,14 +1,17 @@
 package com.star.desktop.ui.sequence
 
 import androidx.compose.ui.graphics.ImageBitmap
+import com.star.desktop.data.ExportRepository
 import com.star.desktop.data.FrameRepository
 import com.star.desktop.data.ImageCache
 import com.star.desktop.data.OutlierRepository
 import com.star.desktop.data.ProcessingRepository
 import com.star.desktop.domain.InteractionMode
 import com.star.desktop.domain.ToolType
+import com.star.desktop.util.Log
 import com.star.proto.FrameProcessingState
 import com.star.proto.FrameViewMode
+import com.star.proto.ProgressEvent
 import com.star.proto.SessionInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -35,6 +38,7 @@ class SequenceViewModel(
     val processing: ProcessingRepository,
     val outliers: OutlierRepository,
     private val imageCache: ImageCache,
+    private val export: ExportRepository,
 ) {
     val sessionId: String = info.sessionId
     val frameCount: Int = info.frameCount
@@ -80,6 +84,12 @@ class SequenceViewModel(
     private val _playbackFps = MutableStateFlow(30)
     val playbackFps: StateFlow<Int> = _playbackFps.asStateFlow()
     private var playbackJob: Job? = null
+
+    // ---- render (Outlier.RenderFrame / Export.RenderSequence) ----
+    private val _rendering = MutableStateFlow(false)
+    val rendering: StateFlow<Boolean> = _rendering.asStateFlow()
+    private val _renderProgress = MutableStateFlow<Float?>(null) // null = current-frame (indeterminate)
+    val renderProgress: StateFlow<Float?> = _renderProgress.asStateFlow()
 
     private var previewJob: Job? = null
 
@@ -145,6 +155,56 @@ class SequenceViewModel(
     fun processRemaining() = scope.launch { processing.start(sessionId, 0, -1) } // daemon resumes completed frames
     fun processCurrent() = scope.launch { processing.start(sessionId, _currentIndex.value, _currentIndex.value) }
     fun cancelProcessing() = scope.launch { processing.cancel(sessionId) }
+
+    // ---- render ----
+    /** Paint the current frame with its decisions (`Outlier.RenderFrame`) and show the result. */
+    fun renderCurrentFrame() = scope.launch {
+        if (_rendering.value || isProcessing.value) return@launch
+        val idx = _currentIndex.value
+        _rendering.value = true
+        _renderProgress.value = null // indeterminate: a single frame
+        try {
+            val ref = outliers.renderFrame(sessionId, idx)
+            imageCache.invalidate(ref.path) // daemon overwrites the same path — drop the stale bitmap
+            val bmp = imageCache.load(ref.path)
+            if (_currentIndex.value == idx && bmp != null) {
+                _currentPreview.value = bmp
+                _previewAvailable.value = true
+            }
+        } catch (e: Throwable) {
+            Log.w("Sequence") { "render current frame failed: ${e.message}" }
+        } finally {
+            _rendering.value = false
+        }
+    }
+
+    /**
+     * Render every frame's final output (`Export.RenderSequence`). The daemon shares one progress slot
+     * per session with the processing stream, so we drop that subscription for the duration and restore
+     * it afterward (mirrors the Render Video dialog).
+     */
+    fun renderAllFrames() = scope.launch {
+        if (_rendering.value || isProcessing.value) return@launch
+        _rendering.value = true
+        _renderProgress.value = 0f
+        processing.stop() // free the shared progress slot
+        try {
+            export.renderSequence(sessionId).collect { ev ->
+                if (ev.kindCase == ProgressEvent.KindCase.IO_PROGRESS) {
+                    val io = ev.ioProgress
+                    _renderProgress.value = if (io.total > 0) io.current.toFloat() / io.total else null
+                }
+            }
+            imageCache.clear() // every output frame changed; reload the visible one fresh
+            loadPreview(_currentIndex.value, _viewMode.value)
+        } catch (e: Throwable) {
+            Log.w("Sequence") { "render all frames failed: ${e.message}" }
+        } finally {
+            _renderProgress.value = null
+            _rendering.value = false
+            processing.subscribe(sessionId) // restore live progress
+        }
+    }
 
     // ---- playback ----
     fun setPlaybackFps(fps: Int) { _playbackFps.value = fps.coerceIn(1, 90) }

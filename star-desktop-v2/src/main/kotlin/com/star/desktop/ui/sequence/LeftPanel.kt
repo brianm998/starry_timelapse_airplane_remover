@@ -38,9 +38,12 @@ import com.star.proto.FrameProcessingState
 @Composable
 fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val processing by vm.isProcessing.collectAsState()
+    val rendering by vm.rendering.collectAsState()
+    val renderProgress by vm.renderProgress.collectAsState()
     val states by vm.frameStates.collectAsState()
     val current by vm.currentIndex.collectAsState()
     val seqState by vm.sequenceState.collectAsState()
+    val busy = processing || rendering
 
     val complete = states.values.count { it == FrameProcessingState.FPS_COMPLETE }
     val total = vm.frameCount
@@ -58,15 +61,15 @@ fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
 
         Button(
             onClick = { vm.processAll() },
-            enabled = !processing,
+            enabled = !busy,
             colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Process All Frames") }
 
-        OutlinedButton(onClick = { vm.processRemaining() }, enabled = !processing, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = { vm.processRemaining() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Text("Process Remaining")
         }
-        OutlinedButton(onClick = { vm.processCurrent() }, enabled = !processing, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = { vm.processCurrent() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Text("Process Current Frame")
         }
 
@@ -76,6 +79,22 @@ fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = StarColors.red),
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Cancel") }
+        }
+
+        Text("Render", color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+        OutlinedButton(onClick = { vm.renderCurrentFrame() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+            Text("Render Current Frame")
+        }
+        OutlinedButton(onClick = { vm.renderAllFrames() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+            Text("Render All Frames")
+        }
+        if (rendering) {
+            LinearProgressIndicator(
+                progress = { renderProgress ?: 0f },
+                modifier = Modifier.fillMaxWidth(),
+                color = StarColors.accent,
+                trackColor = StarColors.cellDefault,
+            )
         }
 
         LinearProgressIndicator(
