@@ -1,0 +1,127 @@
+package com.star.desktop.ui.sequence
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.star.desktop.domain.FrameState
+import com.star.desktop.ui.theme.StarColors
+import com.star.proto.FrameProcessingState
+
+/** Left panel (macOS `LeftPanel`): processing controls, progress, and a per-frame state grid. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
+    val processing by vm.isProcessing.collectAsState()
+    val states by vm.frameStates.collectAsState()
+    val current by vm.currentIndex.collectAsState()
+    val seqState by vm.sequenceState.collectAsState()
+
+    val complete = states.values.count { it == FrameProcessingState.FPS_COMPLETE }
+    val total = vm.frameCount
+
+    Column(
+        modifier = modifier
+            .width(220.dp)
+            .fillMaxHeight()
+            .background(StarColors.sidePanel)
+            .verticalScroll(rememberScrollState())
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("Processing", color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+
+        Button(
+            onClick = { vm.processAll() },
+            enabled = !processing,
+            colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Process All Frames") }
+
+        OutlinedButton(onClick = { vm.processRemaining() }, enabled = !processing, modifier = Modifier.fillMaxWidth()) {
+            Text("Process Remaining")
+        }
+        OutlinedButton(onClick = { vm.processCurrent() }, enabled = !processing, modifier = Modifier.fillMaxWidth()) {
+            Text("Process Current Frame")
+        }
+
+        if (processing) {
+            OutlinedButton(
+                onClick = { vm.cancelProcessing() },
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = StarColors.red),
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Cancel") }
+        }
+
+        LinearProgressIndicator(
+            progress = { if (total > 0) complete.toFloat() / total else 0f },
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            color = StarColors.accent,
+            trackColor = StarColors.cellDefault,
+        )
+        Text(
+            "$complete / $total complete" + (seqState?.let { " · $it" } ?: ""),
+            color = StarColors.textSecondary,
+            fontSize = 11.sp,
+        )
+
+        Text("Frames", color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            for (i in 0 until total) {
+                val s = states[i]
+                val color = when {
+                    s == FrameProcessingState.FPS_COMPLETE -> StarColors.green
+                    s == null || s == FrameProcessingState.FPS_UNPROCESSED -> StarColors.cellDefault
+                    else -> StarColors.yellow
+                }
+                Box(
+                    Modifier
+                        .size(14.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(if (i == current) StarColors.accent else color)
+                        .clickable { vm.setCurrentIndex(i) },
+                    contentAlignment = Alignment.Center,
+                ) {}
+            }
+        }
+        seqStateTooltip(states, current)
+    }
+}
+
+@Composable
+private fun seqStateTooltip(states: Map<Int, FrameProcessingState>, current: Int) {
+    val s = states[current]
+    if (s != null) {
+        Text(
+            "Frame ${current + 1}: ${FrameState.shortString(s)}",
+            color = StarColors.textDisabled,
+            fontSize = 10.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}

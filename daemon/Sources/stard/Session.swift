@@ -103,6 +103,7 @@ actor Session {
         guard processingTask == nil else { return }
         await frameGraphBuilder.set(configManager: configManager)
         let fs = frames
+        let scratch = scratchSessionDir
         let weakSelf = WeakSessionRef(self)
         processingTask = Task {
             let sem = AsyncSemaphore(value: 0)
@@ -110,7 +111,18 @@ actor Session {
                 frames: fs,
                 startIndex: startIndex,
                 endIndex: endIndex
-            ) { _ in sem.signal() } errorClosure: { _ in }
+            ) { errorList in
+                if errorList.isEmpty {
+                    Log.i("stard: processing finished cleanly")
+                } else {
+                    let joined = errorList.joined(separator: "\n")
+                    Log.e("stard: processing finished with \(errorList.count) error(s):\n\(joined)")
+                    try? joined.write(toFile: "\(scratch)/processing_errors.log", atomically: true, encoding: .utf8)
+                }
+                sem.signal()
+            } errorClosure: { errorString in
+                Log.e("stard: op error: \(errorString)")
+            }
             await sem.wait()
             await weakSelf.session?.emitSequenceState("done")
             await weakSelf.session?.clearProcessingTask()
@@ -195,9 +207,9 @@ extension Session {
     ) async throws -> Session {
         try FileManager.default.createDirectory(atPath: scratchSessionDir, withIntermediateDirectories: true)
 
-        var filenamePaths = sequenceDir.components(separatedBy: "/")
-        let seqName = filenamePaths.isEmpty ? sequenceDir : (filenamePaths.removeLast().isEmpty && !filenamePaths.isEmpty ? filenamePaths.removeLast() : filenamePaths.last ?? sequenceDir)
-        let seqPath = filenamePaths.joined(separator: "/").isEmpty ? "/" : filenamePaths.joined(separator: "/")
+        // The sequence's directory name and parent path. StarCore's ImageAccessor locates the
+        // original frames at "\(imageSequencePath)/\(imageSequenceDirname)", so these must be exact.
+        let (seqName, seqPath) = splitDirPath(sequenceDir)
 
         let outputPath = protoConfig.outputPath.isEmpty ? "\(scratchSessionDir)/output" : protoConfig.outputPath
 
@@ -223,6 +235,7 @@ extension Session {
 
         let configFilename = "\(scratchSessionDir)/config.json"
         let configManager = await ConfigManager(configFilename: configFilename, config: config)
+        writeConfigJson(config, toDir: scratchSessionDir)  // persist config.json (writeJson mangles abs paths)
         await constants.set(detectionType: config.detectionType)
 
         let imageSequence = try ImageSequence(
@@ -258,9 +271,9 @@ extension Session {
 
         let (sequenceDir, vi) = try await decodeVideo(named: videoPath, progress: onProgress)
 
-        var filenameParts = videoPath.components(separatedBy: "/")
-        let videoName = filenameParts.isEmpty ? "video" : (filenameParts.removeLast().isEmpty && !filenameParts.isEmpty ? filenameParts.last ?? "video" : filenameParts.last ?? "video")
-        let baseName = videoName.components(separatedBy: ".").first ?? videoName
+        // Originals live in the decoded-frames directory, not next to the source video — derive the
+        // sequence name/path from sequenceDir so ImageAccessor resolves the originals correctly.
+        let (seqName, seqPath) = splitDirPath(sequenceDir)
 
         let outputPath = protoConfig.outputPath.isEmpty ? "\(scratchSessionDir)/output" : protoConfig.outputPath
 
@@ -268,8 +281,8 @@ extension Session {
             outputPath: outputPath,
             cleanMethod: Mapping.cleanMethod(from: protoConfig),
             detectionType: Mapping.detectionType(from: protoConfig.detectionType),
-            imageSequenceName: baseName,
-            imageSequencePath: (videoPath as NSString).deletingLastPathComponent,
+            imageSequenceName: seqName,
+            imageSequencePath: seqPath,
             writeOutlierGroupFiles: protoConfig.writeOutlierGroupFiles,
             writeFramePreviewFiles: protoConfig.writeFramePreviewFiles,
             writeFrameProcessedPreviewFiles: protoConfig.writeFramePreviewFiles,
@@ -284,6 +297,7 @@ extension Session {
 
         let configFilename = "\(scratchSessionDir)/config.json"
         let configManager = await ConfigManager(configFilename: configFilename, config: config)
+        writeConfigJson(config, toDir: scratchSessionDir)  // persist config.json (writeJson mangles abs paths)
         await constants.set(detectionType: config.detectionType)
 
         let imageSequence = try ImageSequence(
@@ -345,6 +359,26 @@ extension Session {
 func removePath(fromString string: String) -> String {
     let parts = string.components(separatedBy: "/")
     return parts.last ?? string
+}
+
+// Split a directory path into (lastComponent, parentPath), tolerating a trailing slash.
+// e.g. "/a/b/seq" -> ("seq", "/a/b"); "/a/b/seq/" -> ("seq", "/a/b").
+func splitDirPath(_ dir: String) -> (name: String, path: String) {
+    let trimmed = (dir.count > 1 && dir.hasSuffix("/")) ? String(dir.dropLast()) : dir
+    let ns = trimmed as NSString
+    return (ns.lastPathComponent, ns.deletingLastPathComponent)
+}
+
+// Persist the session's config.json to the scratch session root so OpenConfig can resume it
+// (and the macOS app can interop). Config is Codable; we write it directly rather than via
+// ConfigManager.save() → Config.writeJson, which resolves a non-prefixed absolute path against
+// tempOutputPath and silently writes to a bogus location.
+func writeConfigJson(_ config: Config, toDir dir: String) {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+    if let data = try? encoder.encode(config) {
+        try? data.write(to: URL(fileURLWithPath: "\(dir)/config.json"))
+    }
 }
 
 private extension FrameSavingState {
