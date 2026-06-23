@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Surface
@@ -37,13 +37,13 @@ fun ShrinkingButton(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed && enabled) 0.92f else 1f, label = "shrink")
+    val scale by animateFloatAsState(if (pressed && enabled) 0.9f else 1f, label = "shrink")
     Surface(
         onClick = onClick,
         enabled = enabled,
         interactionSource = interaction,
         color = Color.Transparent,
-        shape = RoundedCornerShape(6.dp),
+        shape = CircleShape, // macOS ShrinkingButton clips to a capsule
         modifier = modifier.scale(scale).alpha(if (enabled) 1f else 0.4f),
     ) {
         content()
