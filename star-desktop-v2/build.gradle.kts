@@ -76,6 +76,10 @@ compose.desktop {
 
 tasks.test {
     useJUnitPlatform()
+    // Forward integration-test opt-ins to the test JVM (InteropIntegrationTest no-ops without them).
+    for (k in listOf("star.it.config", "star.it.seq", "star.stard.path")) {
+        System.getProperty(k)?.let { systemProperty(k, it) }
+    }
 }
 
 // Headless engine smoke harness (no spaces in any property value — Gradle's CLI parser otherwise

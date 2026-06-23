@@ -1,0 +1,48 @@
+name: Kotlin Client
+
+# Builds and tests the Kotlin/Compose desktop client (star-desktop-v2) on Linux and Windows.
+# This covers §8.2's "CI on Linux and Windows": proto generation, compile, and the transport unit
+# tests run on both OSes. The integration tests (InteropIntegrationTest) self-skip here because no
+# -Dstar.it.* fixture / stard binary is provided — they're for local runs against a real daemon.
+
+on:
+  push:
+    branches: [main, develop]
+    paths: ['star-desktop-v2/**', 'daemon/proto/**', '.github/workflows/kotlin-client.yml']
+  pull_request:
+    branches: [main, develop]
+    paths: ['star-desktop-v2/**', 'daemon/proto/**', '.github/workflows/kotlin-client.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: kotlin-client-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: star-desktop-v2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Check proto is in sync with the daemon
+        run: ./gradlew checkProtoSync --no-daemon
+
+      - name: Build + unit tests
+        run: ./gradlew test --no-daemon --stacktrace
