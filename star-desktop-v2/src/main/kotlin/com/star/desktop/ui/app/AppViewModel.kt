@@ -244,11 +244,7 @@ class AppViewModel(
         _recentFiles.value = prefs.recentFiles
         // Warn if the session was last written by a different engine version (req #4).
         val engineVer = (engine.status.value as? EngineStatus.Connected)?.daemonVersion
-        val sessionVer = info.config.starVersion
-        _versionWarning.value =
-            if (!sessionVer.isNullOrEmpty() && !engineVer.isNullOrEmpty() && sessionVer != engineVer)
-                "This sequence was last processed with Star $sessionVer; the engine is $engineVer."
-            else null
+        _versionWarning.value = com.star.desktop.util.versionMismatchWarning(info.config.starVersion, engineVer)
         currentSequence?.close()
         val proc = ProcessingRepository(scope) { engine.client }
         // Fire the post-processing render prompt when a prompted process-all run reaches "done".

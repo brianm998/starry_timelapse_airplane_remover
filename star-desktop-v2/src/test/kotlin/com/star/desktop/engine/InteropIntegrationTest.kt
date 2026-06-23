@@ -3,10 +3,16 @@ package com.star.desktop.engine
 import com.star.desktop.data.SessionRepository
 import com.star.proto.CleanMethod
 import com.star.proto.Config
+import com.star.proto.ProgressEvent
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
+import java.security.MessageDigest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -24,6 +30,7 @@ class InteropIntegrationTest {
 
     private val configPath: String? = System.getProperty("star.it.config")?.takeIf { it.isNotBlank() }
     private val seqPath: String? = System.getProperty("star.it.seq")?.takeIf { it.isNotBlank() }
+    private val runProcess: Boolean = System.getProperty("star.it.process") == "true"
 
     /** Spawn a fresh stard, run [block] with a connected client, then shut down. */
     private fun <T> withEngine(block: suspend (StarClient) -> T): T = runBlocking {
@@ -94,4 +101,62 @@ class InteropIntegrationTest {
             assertTrue(client.listSessions().sessionsCount >= 0)
         }
     }
+
+    /**
+     * §8.4 golden output: process + render the same sequence twice via independent daemon processes
+     * and assert the rendered output frames are byte-identical — the §4.4 "same engine + same inputs ⇒
+     * same output" guarantee that underpins cross-client output identity. Heavy (real processing), so
+     * gated behind -Dstar.it.process=true (and needs -Dstar.it.seq).
+     */
+    @Test
+    fun goldenRenderIsDeterministic() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] goldenRenderIsDeterministic — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        val hashesA = processAndRenderHashes(seq)
+        val hashesB = processAndRenderHashes(seq)
+        assertTrue(hashesA.isNotEmpty(), "no rendered output frames found")
+        assertEquals(hashesA, hashesB, "rendered output differs between identical runs (non-deterministic output)")
+    }
+
+    /** Open → process(all) → render the sequence; return SHA-256 of each rendered output frame by name. */
+    private fun processAndRenderHashes(seqDir: String): Map<String, String> = runBlocking {
+        val scope = CoroutineScope(SupervisorJob())
+        val engine = EngineState(scope)
+        assertTrue(engine.start(), "engine failed to start: ${engine.status.value}")
+        try {
+            val client = engine.client ?: error("no client after start")
+            val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+                .setCleanMethod(CleanMethod.CLEAN_AUTOMATIC).build()  // fast path (no per-blob classification)
+            val info = client.openSequence(File(seqDir).absolutePath, cfg)
+
+            val done = CompletableDeferred<Unit>()
+            val sub = scope.launch {
+                runCatching {
+                    client.streamProgress(info.sessionId).collect { ev ->
+                        if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE && ev.sequenceState.state == "done") done.complete(Unit)
+                    }
+                }
+            }
+            delay(400)
+            client.startProcessing(info.sessionId, 0, -1)
+            assertTrue(withTimeoutOrNull(1_200_000) { done.await() } != null, "processing timed out")
+            sub.cancel()
+
+            client.renderSequence(info.sessionId).collect { } // drain to completion
+            val outDir = File(client.getConfig(info.sessionId).outputPath)
+            val hashes = hashImagesUnder(outDir)
+            client.closeSession(info.sessionId)
+            hashes
+        } finally {
+            engine.shutdown()
+        }
+    }
+
+    private fun hashImagesUnder(dir: File): Map<String, String> =
+        dir.walkTopDown()
+            .filter { it.isFile && it.extension.lowercase() in setOf("tif", "tiff", "png", "jpg", "jpeg") }
+            .associate { it.name to MessageDigest.getInstance("SHA-256").digest(it.readBytes()).joinToString("") { b -> "%02x".format(b) } }
 }
