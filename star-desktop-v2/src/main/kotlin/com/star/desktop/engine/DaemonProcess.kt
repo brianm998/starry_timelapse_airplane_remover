@@ -54,6 +54,7 @@ class DaemonProcess(
 
     fun destroy() {
         stderrJob?.cancel()
+        runCatching { process?.outputStream?.close() } // close stdin → daemon gets EOF (clean-exit backstop, design §2.1)
         process?.destroy()
         process = null
     }

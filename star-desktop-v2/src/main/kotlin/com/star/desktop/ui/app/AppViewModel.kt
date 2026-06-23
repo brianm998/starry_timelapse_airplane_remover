@@ -59,6 +59,12 @@ class AppViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    // Crash recovery: when the engine dies mid-session we offer Restart (re-opens via OpenConfig).
+    private val _engineDown = MutableStateFlow<String?>(null)
+    val engineDown: StateFlow<String?> = _engineDown.asStateFlow()
+    private var lastResumePath: String? = null   // config.json of the open session, for re-open after restart
+    private var restarting = false
+
     private val _recentFiles = MutableStateFlow(prefs.recentFiles)
     val recentFiles: StateFlow<List<String>> = _recentFiles.asStateFlow()
 
@@ -157,12 +163,10 @@ class AppViewModel(
         scope.launch { engine.start() }
         scope.launch {
             engine.status.collect { st ->
-                if (st is EngineStatus.Failed && _screen.value is AppScreen.Sequence) {
-                    currentSequence?.close()
-                    currentSequence = null
-                    sessions.clearLocal()
-                    _error.value = "Engine stopped: ${st.message}"
-                    _screen.value = AppScreen.Initial
+                // Engine died while a session was open: offer Restart (don't tear the session down yet —
+                // restart re-opens it via OpenConfig). A deliberate restart() sets `restarting` to suppress this.
+                if (st is EngineStatus.Failed && _screen.value is AppScreen.Sequence && !restarting) {
+                    _engineDown.value = st.message
                 }
             }
         }
@@ -220,6 +224,38 @@ class AppViewModel(
 
     fun dismissError() { _error.value = null }
 
+    /** Restart a crashed engine and re-open the last session from its config.json (§2.1 crash recovery). */
+    fun restartEngine() {
+        val resume = lastResumePath
+        scope.launch {
+            restarting = true
+            _engineDown.value = null
+            _screen.value = AppScreen.Loading("Restarting engine", null, null)
+            val ok = engine.restart()
+            restarting = false
+            if (!ok) { fail("Failed to restart the engine"); return@launch }
+            if (resume != null && java.io.File(resume).exists()) {
+                _screen.value = AppScreen.Loading("Resuming session", resume, null)
+                try {
+                    onOpened(resume, sessions.openConfig(resume), addToRecent = false)
+                } catch (e: Throwable) {
+                    fail(e.message ?: "failed to resume session after restart")
+                }
+            } else {
+                _screen.value = AppScreen.Initial
+            }
+        }
+    }
+
+    /** Give up on a crashed engine: close the dead session and return to the start screen. */
+    fun dismissEngineDown() {
+        _engineDown.value = null
+        currentSequence?.close()
+        currentSequence = null
+        runCatching { sessions.clearLocal() }
+        _screen.value = AppScreen.Initial
+    }
+
     fun removeRecent(path: String) {
         prefs.removeRecentFile(path)
         _recentFiles.value = prefs.recentFiles
@@ -239,9 +275,14 @@ class AppViewModel(
         }
     }
 
-    private fun onOpened(path: String, info: SessionInfo) {
-        prefs.addRecentFile(path)
-        _recentFiles.value = prefs.recentFiles
+    private fun onOpened(path: String, info: SessionInfo, addToRecent: Boolean = true) {
+        if (addToRecent) {
+            prefs.addRecentFile(path)
+            _recentFiles.value = prefs.recentFiles
+        }
+        // The session's on-disk config.json — the resume path for crash recovery (cross-client resume).
+        lastResumePath = "${info.scratchSessionDir}/config.json"
+        _engineDown.value = null
         // Warn if the session was last written by a different engine version (req #4).
         val engineVer = (engine.status.value as? EngineStatus.Connected)?.daemonVersion
         _versionWarning.value = com.star.desktop.util.versionMismatchWarning(info.config.starVersion, engineVer)

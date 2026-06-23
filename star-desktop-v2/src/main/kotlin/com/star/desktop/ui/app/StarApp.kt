@@ -66,7 +66,38 @@ fun StarApp(vm: AppViewModel) {
                 VersionWarningBanner(versionWarning!!, onDismiss = vm::dismissVersionWarning, modifier = Modifier.align(Alignment.TopCenter))
             }
 
+            val engineDown by vm.engineDown.collectAsState()
+            engineDown?.let { EngineDownOverlay(it, onRestart = vm::restartEngine, onClose = vm::dismissEngineDown) }
+
             error?.let { ErrorOverlay(it, onDismiss = vm::dismissError) }
+        }
+    }
+}
+
+@Composable
+private fun EngineDownOverlay(message: String, onRestart: () -> Unit, onClose: () -> Unit) {
+    Box(Modifier.fillMaxSize().background(StarColors.scrim), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .widthIn(max = 460.dp)
+                .clip(StarShapes.errorCard)
+                .background(StarColors.prefsCard)
+                .padding(32.dp),
+        ) {
+            Text("Engine stopped", color = StarColors.red, fontSize = 16.sp)
+            Text(message, color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+            Text(
+                "Restart re-opens this session from its saved config.",
+                color = StarColors.textDisabled, fontSize = 11.sp, modifier = Modifier.padding(top = 12.dp),
+            )
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.padding(top = 20.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+            ) {
+                androidx.compose.material3.OutlinedButton(onClick = onClose) { Text("Close Session") }
+                Button(onClick = onRestart) { Text("Restart Engine") }
+            }
         }
     }
 }
