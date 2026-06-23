@@ -34,41 +34,59 @@ import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 
+/** An action a sheet can apply: keep/remove, optionally to outliers *overlapping* those in the area. */
+private data class MultiAction(val label: String, val shouldRemove: Boolean, val overlapping: Boolean, val accent: Color)
+
 /** Multi-choice sheet (macOS `MultiChoiceSheetView`): propagate a decision to overlapping outliers. */
 @Composable
 fun MultiChoiceSheet(vm: SequenceViewModel, target: SequenceViewModel.MultiChoiceTarget) {
+    val actions = listOf(
+        MultiAction("Remove", true, false, StarColors.red),
+        MultiAction("Keep", false, false, StarColors.green),
+    )
     MultiFrameSheet(
         title = "Change overlapping outliers in other frames to:",
-        actionLabel = { if (it) "Remove" else "Keep" },
-        defaultRemove = !target.currentlyRemoves,           // pre-select the opposite of the clicked group
+        actions = actions,
+        defaultIndex = if (target.currentlyRemoves) 1 else 0,   // pre-select the opposite of the clicked group
+        actionButtonLabel = { it.label },
         onCancel = vm::dismissMultiSheets,
-        onApply = { remove, range, n -> vm.applyMultiChoice(remove, range, n) },
+        onApply = { a, range, n -> vm.applyMultiChoice(a.shouldRemove, range, n) },
     )
 }
 
 /** Multi-select sheet (macOS `MultiSelectSheetView`): apply a decision to a rectangular area. */
 @Composable
 fun MultiSelectSheet(vm: SequenceViewModel, @Suppress("UNUSED_PARAMETER") sel: SequenceViewModel.RectSelection) {
+    val actions = listOf(
+        MultiAction("Remove", true, false, StarColors.red),
+        MultiAction("Keep", false, false, StarColors.green),
+        MultiAction("Remove overlapping", true, true, StarColors.red),
+        MultiAction("Keep overlapping", false, true, StarColors.green),
+    )
     MultiFrameSheet(
         title = "Change outliers in the selected area across frames:",
-        actionLabel = { "Modify" },
-        defaultRemove = true,
+        actions = actions,
+        defaultIndex = 0,
+        actionButtonLabel = { "Modify" },
         onCancel = vm::dismissMultiSheets,
-        onApply = { remove, range, n -> vm.applyMultiSelect(remove, range, n) },
+        onApply = { a, range, n -> vm.applyMultiSelect(a.shouldRemove, a.overlapping, range, n) },
     )
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun MultiFrameSheet(
     title: String,
-    actionLabel: (Boolean) -> String,
-    defaultRemove: Boolean,
+    actions: List<MultiAction>,
+    defaultIndex: Int,
+    actionButtonLabel: (MultiAction) -> String,
     onCancel: () -> Unit,
-    onApply: (Boolean, MultiFrameRange, Int) -> Unit,
+    onApply: (MultiAction, MultiFrameRange, Int) -> Unit,
 ) {
-    var remove by remember { mutableStateOf(defaultRemove) }
+    var actionIdx by remember { mutableStateOf(defaultIndex.coerceIn(0, actions.size - 1)) }
     var range by remember { mutableStateOf(MultiFrameRange.ALL) }
     var nText by remember { mutableStateOf("5") }
+    val action = actions[actionIdx]
 
     Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(onClick = onCancel), contentAlignment = Alignment.Center) {
         Column(
@@ -81,9 +99,10 @@ private fun MultiFrameSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(title, color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Pill("Remove", remove, StarColors.red) { remove = true }
-                Pill("Keep", !remove, StarColors.green) { remove = false }
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                actions.forEachIndexed { i, a ->
+                    Pill(a.label, selected = i == actionIdx, accent = a.accent) { actionIdx = i }
+                }
             }
             Text("What frames should we modify?", color = StarColors.textSecondary, fontSize = 12.sp)
             MultiFrameRange.entries.forEach { r ->
@@ -101,9 +120,9 @@ private fun MultiFrameSheet(
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                 OutlinedButton(onClick = onCancel) { Text("Cancel") }
                 Button(
-                    onClick = { onApply(remove, range, nText.toIntOrNull() ?: 5) },
+                    onClick = { onApply(action, range, nText.toIntOrNull() ?: 5) },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                ) { Text(actionLabel(remove)) }
+                ) { Text(actionButtonLabel(action)) }
             }
         }
     }

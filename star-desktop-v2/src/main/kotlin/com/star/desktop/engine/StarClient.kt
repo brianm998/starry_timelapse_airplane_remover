@@ -202,13 +202,14 @@ class StarClient(private val conn: StdioConnection) {
 
     suspend fun setOutlierDecisionsInArea(
         sessionId: String, startIndex: Int, endIndex: Int, shouldRemove: Boolean,
-        start: Point, end: Point, includingTrash: Boolean = false, rerender: Boolean = false,
+        start: Point, end: Point, includingTrash: Boolean = false, rerender: Boolean = false, overlapping: Boolean = false,
     ): MultiFrameDecisionsResponse =
         call(
             "Outlier.SetDecisionsInArea",
             SetOutlierDecisionsInAreaRequest.newBuilder()
                 .setSessionId(sessionId).setStartIndex(startIndex).setEndIndex(endIndex).setShouldRemove(shouldRemove)
-                .setStartLocation(start).setEndLocation(end).setIncludingTrash(includingTrash).setRerender(rerender).build(),
+                .setStartLocation(start).setEndLocation(end).setIncludingTrash(includingTrash).setRerender(rerender)
+                .setOverlapping(overlapping).build(),
             MultiFrameDecisionsResponse.parser(),
         )
 

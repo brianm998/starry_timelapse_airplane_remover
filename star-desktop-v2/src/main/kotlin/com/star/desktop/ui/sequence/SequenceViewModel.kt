@@ -240,10 +240,10 @@ class SequenceViewModel(
     }
 
     /** Apply a keep/remove to outliers in the drag rectangle across [range] (multi-select sheet). */
-    fun applyMultiSelect(shouldRemove: Boolean, range: MultiFrameRange, n: Int) = scope.launch {
+    fun applyMultiSelect(shouldRemove: Boolean, overlapping: Boolean, range: MultiFrameRange, n: Int) = scope.launch {
         val sel = _multiSelect.value ?: return@launch
         val (s, e) = range.indices(_currentIndex.value, frameCount, n)
-        runCatching { outliers.setDecisionsInArea(sessionId, s, e, shouldRemove, sel.startX, sel.startY, sel.endX, sel.endY) }
+        runCatching { outliers.setDecisionsInArea(sessionId, s, e, shouldRemove, sel.startX, sel.startY, sel.endX, sel.endY, overlapping) }
         dismissMultiSheets()
         frameVMFor(_currentIndex.value).load(force = true)
     }

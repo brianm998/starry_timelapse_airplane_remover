@@ -1435,6 +1435,9 @@ public nonisolated struct Star_V1_SetOutlierDecisionsInAreaRequest: Sendable {
 
   public var rerender: Bool = false
 
+  /// true → also mark groups overlapping each group in the area (macOS removeOverlaps)
+  public var overlapping: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -3731,7 +3734,7 @@ nonisolated extension Star_V1_Point: SwiftProtobuf.Message, SwiftProtobuf._Messa
 
 nonisolated extension Star_V1_SetOutlierDecisionsInAreaRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SetOutlierDecisionsInAreaRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}start_index\0\u{3}end_index\0\u{3}should_remove\0\u{3}start_location\0\u{3}end_location\0\u{3}including_trash\0\u{1}rerender\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}start_index\0\u{3}end_index\0\u{3}should_remove\0\u{3}start_location\0\u{3}end_location\0\u{3}including_trash\0\u{1}rerender\0\u{1}overlapping\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -3747,6 +3750,7 @@ nonisolated extension Star_V1_SetOutlierDecisionsInAreaRequest: SwiftProtobuf.Me
       case 6: try { try decoder.decodeSingularMessageField(value: &self._endLocation) }()
       case 7: try { try decoder.decodeSingularBoolField(value: &self.includingTrash) }()
       case 8: try { try decoder.decodeSingularBoolField(value: &self.rerender) }()
+      case 9: try { try decoder.decodeSingularBoolField(value: &self.overlapping) }()
       default: break
       }
     }
@@ -3781,6 +3785,9 @@ nonisolated extension Star_V1_SetOutlierDecisionsInAreaRequest: SwiftProtobuf.Me
     if self.rerender != false {
       try visitor.visitSingularBoolField(value: self.rerender, fieldNumber: 8)
     }
+    if self.overlapping != false {
+      try visitor.visitSingularBoolField(value: self.overlapping, fieldNumber: 9)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -3793,6 +3800,7 @@ nonisolated extension Star_V1_SetOutlierDecisionsInAreaRequest: SwiftProtobuf.Me
     if lhs._endLocation != rhs._endLocation {return false}
     if lhs.includingTrash != rhs.includingTrash {return false}
     if lhs.rerender != rhs.rerender {return false}
+    if lhs.overlapping != rhs.overlapping {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

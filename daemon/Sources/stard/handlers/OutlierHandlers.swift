@@ -90,7 +90,15 @@ enum OutlierHandlers {
             if start <= end {
                 for i in start...end {
                     guard let frame = await session.frame(at: i) else { continue }
-                    await frame.userSelectAllOutliers(toShouldRemove: req.shouldRemove, between: a, and: b, includingTrash: req.includingTrash)
+                    if req.overlapping {
+                        // For each group touching the area, propagate the decision to groups overlapping it.
+                        _ = await frame.foreachOutlierGroupMulti(between: a, and: b, includingTrash: req.includingTrash) { group, _ in
+                            _ = await frame.userSelectAllOutliers(toShouldRemove: req.shouldRemove, overlapping: group)
+                            return true
+                        }
+                    } else {
+                        await frame.userSelectAllOutliers(toShouldRemove: req.shouldRemove, between: a, and: b, includingTrash: req.includingTrash)
+                    }
                     await frame.markAsChanged()
                     await frame.writeOutliersRemoveReasons()
                     resp.frames.append(await Mapping.frameInfo(frame: frame, outlierGroups: await frame.getOutlierGroups()))
