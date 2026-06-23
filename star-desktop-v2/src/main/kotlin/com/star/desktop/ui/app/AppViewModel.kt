@@ -262,6 +262,7 @@ class AppViewModel(
             "info" -> openInfoDialog()                  // dev hook: screenshot the Info dialog
             "prerender" -> _showPreRenderPrompt.value = true   // dev hook: screenshot the pre-render prompt
             "postrender" -> _showPostRenderPrompt.value = true // dev hook: screenshot the post-render prompt
+            "multiselect" -> svm.openMultiSelect(SequenceViewModel.RectSelection(100f, 100f, 400f, 400f)) // dev hook
             else -> Unit
         }
         autoFrame?.let { svm.setCurrentIndex(it) }

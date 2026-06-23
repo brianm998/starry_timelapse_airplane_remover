@@ -45,6 +45,22 @@ class OutlierRepository(private val clientProvider: () -> StarClient?) {
     suspend fun applyDecisionTreeAllFrames(sessionId: String, overwrite: Boolean) =
         c().applyDecisionTreeAllFrames(sessionId, overwrite = overwrite)
 
+    /** Set keep/remove for outliers in a rectangular area across [startIndex,endIndex] (image px). */
+    suspend fun setDecisionsInArea(
+        sessionId: String, startIndex: Int, endIndex: Int, shouldRemove: Boolean,
+        startX: Float, startY: Float, endX: Float, endY: Float,
+    ) = c().setOutlierDecisionsInArea(
+        sessionId, startIndex, endIndex, shouldRemove,
+        com.star.proto.Point.newBuilder().setX(startX.toDouble()).setY(startY.toDouble()).build(),
+        com.star.proto.Point.newBuilder().setX(endX.toDouble()).setY(endY.toDouble()).build(),
+    )
+
+    /** Set keep/remove for outliers overlapping a reference group across [startIndex,endIndex]. */
+    suspend fun setDecisionsOverlapping(
+        sessionId: String, startIndex: Int, endIndex: Int, shouldRemove: Boolean,
+        referenceFrame: Int, referenceGroupId: Int,
+    ) = c().setOutlierDecisionsOverlapping(sessionId, startIndex, endIndex, shouldRemove, referenceFrame, referenceGroupId)
+
     /**
      * Load the 16-bit single-channel label PNG at [path] into a `group-id per pixel` array
      * (row-major, length w*h). Used for local click hit-testing without per-click round-trips.

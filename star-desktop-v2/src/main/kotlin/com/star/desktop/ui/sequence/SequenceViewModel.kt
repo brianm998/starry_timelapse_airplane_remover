@@ -9,6 +9,7 @@ import com.star.desktop.data.OutlierRepository
 import com.star.desktop.data.ProcessingRepository
 import com.star.desktop.domain.FastAdvancementType
 import com.star.desktop.domain.InteractionMode
+import com.star.desktop.domain.MultiFrameRange
 import com.star.desktop.domain.ToolType
 import com.star.desktop.domain.VideoPlayMode
 import com.star.desktop.util.Log
@@ -213,6 +214,39 @@ class SequenceViewModel(
     /** Per-cell grid horizon overlay (kind + per-column Y), or null if none. */
     suspend fun gridHorizonOverlay(index: Int, width: Int, height: Int) =
         horizon.getOverlay(sessionId, index, width, height)
+
+    // ---- multi-frame outlier sheets (macOS MultiChoice / MultiSelect) ----
+    data class MultiChoiceTarget(val frameIndex: Int, val groupId: Int, val currentlyRemoves: Boolean)
+    data class RectSelection(val startX: Float, val startY: Float, val endX: Float, val endY: Float)
+
+    private val _multiChoice = MutableStateFlow<MultiChoiceTarget?>(null)
+    val multiChoice: StateFlow<MultiChoiceTarget?> = _multiChoice.asStateFlow()
+    private val _multiSelect = MutableStateFlow<RectSelection?>(null)
+    val multiSelect: StateFlow<RectSelection?> = _multiSelect.asStateFlow()
+
+    fun openMultiChoice(frameIndex: Int, groupId: Int, currentlyRemoves: Boolean) {
+        _multiChoice.value = MultiChoiceTarget(frameIndex, groupId, currentlyRemoves)
+    }
+    fun openMultiSelect(sel: RectSelection) { _multiSelect.value = sel }
+    fun dismissMultiSheets() { _multiChoice.value = null; _multiSelect.value = null }
+
+    /** Apply a keep/remove to outliers overlapping the chosen group across [range] (multi-choice sheet). */
+    fun applyMultiChoice(shouldRemove: Boolean, range: MultiFrameRange, n: Int) = scope.launch {
+        val t = _multiChoice.value ?: return@launch
+        val (s, e) = range.indices(_currentIndex.value, frameCount, n)
+        runCatching { outliers.setDecisionsOverlapping(sessionId, s, e, shouldRemove, t.frameIndex, t.groupId) }
+        dismissMultiSheets()
+        frameVMFor(_currentIndex.value).load(force = true)
+    }
+
+    /** Apply a keep/remove to outliers in the drag rectangle across [range] (multi-select sheet). */
+    fun applyMultiSelect(shouldRemove: Boolean, range: MultiFrameRange, n: Int) = scope.launch {
+        val sel = _multiSelect.value ?: return@launch
+        val (s, e) = range.indices(_currentIndex.value, frameCount, n)
+        runCatching { outliers.setDecisionsInArea(sessionId, s, e, shouldRemove, sel.startX, sel.startY, sel.endX, sel.endY) }
+        dismissMultiSheets()
+        frameVMFor(_currentIndex.value).load(force = true)
+    }
 
     // ---- render ----
     /** Paint the current frame with its decisions (`Outlier.RenderFrame`) and show the result. */

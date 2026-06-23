@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.toSize
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -54,6 +55,9 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val transform = remember(current) { FrameTransform(vm.info.imageWidth, vm.info.imageHeight) }
     var canvasSize by remember { mutableStateOf(Size.Zero) }
     var dragging by remember { mutableStateOf(false) }
+    // Rubber-band selection (image coords) while the multi tool drags.
+    var selStartImg by remember { mutableStateOf<Offset?>(null) }
+    var selEndImg by remember { mutableStateOf<Offset?>(null) }
 
     // Tool-dependent cursor: pointing while dragging or hovering a group, else the tool crosshair.
     val cursorIcon = when {
@@ -77,14 +81,24 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                     change.consume()
                 }
             }
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = { dragging = true },
-                    onDragEnd = { dragging = false },
-                    onDragCancel = { dragging = false },
-                ) { change, drag ->
-                    transform.panBy(drag)
-                    change.consume()
+            .pointerInput(tool, canvasSize) {
+                if (tool == com.star.desktop.domain.ToolType.MULTI) {
+                    // Multi tool: drag a rubber-band rectangle, then open the multi-select sheet.
+                    detectDragGestures(
+                        onDragStart = { pos -> selStartImg = transform.canvasToImage(pos, canvasSize); selEndImg = selStartImg },
+                        onDragEnd = {
+                            val s = selStartImg; val e = selEndImg
+                            if (s != null && e != null) vm.openMultiSelect(SequenceViewModel.RectSelection(s.x, s.y, e.x, e.y))
+                            selStartImg = null; selEndImg = null
+                        },
+                        onDragCancel = { selStartImg = null; selEndImg = null },
+                    ) { change, _ -> selEndImg = transform.canvasToImage(change.position, canvasSize); change.consume() }
+                } else {
+                    detectDragGestures(
+                        onDragStart = { dragging = true },
+                        onDragEnd = { dragging = false },
+                        onDragCancel = { dragging = false },
+                    ) { change, drag -> transform.panBy(drag); change.consume() }
                 }
             }
             .pointerInput(tool, labelMap, groups) {
@@ -92,7 +106,14 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                     val map = labelMap ?: return@detectTapGestures
                     val img = transform.canvasToImage(pos, canvasSize)
                     val gid = map.idAt(img.x.roundToInt(), img.y.roundToInt())
-                    if (gid > 0) fvm.applyTool(gid, tool)
+                    if (gid > 0) {
+                        if (tool == com.star.desktop.domain.ToolType.MULTI) {
+                            val willRemove = com.star.desktop.domain.OutlierDecisions.willRemove(fvm.decisionFor(gid)) == true
+                            vm.openMultiChoice(current, gid, willRemove)
+                        } else {
+                            fvm.applyTool(gid, tool)
+                        }
+                    }
                 }
             }
             // Hover tracking drives arrow/line color + visibility (macOS `arrowSelected`).
@@ -174,6 +195,18 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                     tri(fw, cy, fw + al, cy - ah / 2f, fw + al, cy + ah / 2f)     // right (points left)
                     tri(cx, fh, cx - ah / 2f, fh + al, cx + ah / 2f, fh + al)     // bottom (points up)
                 }
+            }
+
+            // Rubber-band selection rectangle (multi tool drag).
+            val ss = selStartImg
+            val se = selEndImg
+            if (ss != null && se != null) {
+                val p1 = transform.imageToCanvas(ss, size)
+                val p2 = transform.imageToCanvas(se, size)
+                val rtl = Offset(minOf(p1.x, p2.x), minOf(p1.y, p2.y))
+                val rsz = Size(abs(p2.x - p1.x), abs(p2.y - p1.y))
+                drawRect(color = StarColors.accent.copy(alpha = 0.2f), topLeft = rtl, size = rsz)
+                drawRect(color = StarColors.accent, topLeft = rtl, size = rsz, style = Stroke(width = 1.5f))
             }
         }
     }

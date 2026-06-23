@@ -79,6 +79,12 @@ fun SequenceScreen(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier 
             else -> if (showFilmstrip) Filmstrip(vm)
         }
     }
+
+    // Multi-frame outlier sheets (overlay the whole screen when active).
+    val multiChoice by vm.multiChoice.collectAsState()
+    multiChoice?.let { com.star.desktop.ui.dialogs.MultiChoiceSheet(vm, it) }
+    val multiSelect by vm.multiSelect.collectAsState()
+    multiSelect?.let { com.star.desktop.ui.dialogs.MultiSelectSheet(vm, it) }
 }
 
 @Composable
