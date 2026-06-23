@@ -6,8 +6,10 @@ import com.star.desktop.data.FrameRepository
 import com.star.desktop.data.ImageCache
 import com.star.desktop.data.OutlierRepository
 import com.star.desktop.data.ProcessingRepository
+import com.star.desktop.domain.FastAdvancementType
 import com.star.desktop.domain.InteractionMode
 import com.star.desktop.domain.ToolType
+import com.star.desktop.domain.VideoPlayMode
 import com.star.desktop.util.Log
 import com.star.proto.FrameProcessingState
 import com.star.proto.FrameViewMode
@@ -81,8 +83,13 @@ class SequenceViewModel(
     // ---- playback ----
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
-    private val _playbackFps = MutableStateFlow(30)
+    private val _playbackFps = MutableStateFlow(30) // macOS videoPlaybackFramerate (distinct from export fps)
     val playbackFps: StateFlow<Int> = _playbackFps.asStateFlow()
+    private val _playMode = MutableStateFlow(VideoPlayMode.FORWARD)
+    val playMode: StateFlow<VideoPlayMode> = _playMode.asStateFlow()
+    private val _fastAdvancement = MutableStateFlow(FastAdvancementType.NORMAL)
+    val fastAdvancement: StateFlow<FastAdvancementType> = _fastAdvancement.asStateFlow()
+    fun setFastAdvancement(t: FastAdvancementType) { _fastAdvancement.value = t }
     private var playbackJob: Job? = null
 
     // ---- render (Outlier.RenderFrame / Export.RenderSequence) ----
@@ -206,22 +213,66 @@ class SequenceViewModel(
         }
     }
 
+    // ---- transport ----
+    fun goToFirst() = setCurrentIndex(0)
+    fun goToLast() = setCurrentIndex(frameCount - 1)
+    fun fastForward() = fastSkip(forward = true)
+    fun fastPrevious() = fastSkip(forward = false)
+
+    /**
+     * Fast-skip per the active [FastAdvancementType]: NORMAL jumps [FAST_SKIP_AMOUNT] frames;
+     * the category modes scan frame-by-frame (via `Frame.Get` counts) to the next non-empty frame,
+     * stopping at the sequence boundary (macOS `transition(until:)`).
+     */
+    private fun fastSkip(forward: Boolean) {
+        val mode = _fastAdvancement.value
+        if (mode == FastAdvancementType.NORMAL) {
+            setCurrentIndex(_currentIndex.value + if (forward) FAST_SKIP_AMOUNT else -FAST_SKIP_AMOUNT)
+            return
+        }
+        scope.launch {
+            var i = _currentIndex.value
+            while (true) {
+                val next = i + if (forward) 1 else -1
+                if (next < 0 || next >= frameCount) { if (i != _currentIndex.value) setCurrentIndex(i); break }
+                val c = runCatching { frames.info(sessionId, next) }.getOrNull()
+                val skip = c != null && when (mode) {
+                    FastAdvancementType.SKIP_EMPTIES ->
+                        (c.numPositiveOutliers + c.numNegativeOutliers + c.numUndecidedOutliers) == 0
+                    FastAdvancementType.TO_NEXT_POSITIVE -> c.numPositiveOutliers == 0
+                    FastAdvancementType.TO_NEXT_NEGATIVE -> c.numNegativeOutliers == 0
+                    FastAdvancementType.TO_NEXT_UNKNOWN -> c.numUndecidedOutliers == 0
+                    else -> false
+                }
+                if (skip) i = next else { setCurrentIndex(next); break }
+            }
+        }
+    }
+
     // ---- playback ----
     fun setPlaybackFps(fps: Int) { _playbackFps.value = fps.coerceIn(1, 90) }
 
     fun togglePlayback() = if (_isPlaying.value) stopPlayback() else startPlayback()
+    fun playForward() { _playMode.value = VideoPlayMode.FORWARD; togglePlayback() }
+    fun playReverse() { _playMode.value = VideoPlayMode.REVERSE; togglePlayback() }
 
     fun startPlayback() {
         if (_isPlaying.value || frameCount <= 1) return
         _isPlaying.value = true
         _mode.value = InteractionMode.SCRUB // macOS forces scrub + black bg while playing
+        val step = if (_playMode.value == VideoPlayMode.REVERSE) -1 else 1
         playbackJob = scope.launch {
             while (isActive && _isPlaying.value) {
                 val frameDelay = (1000L / _playbackFps.value).coerceAtLeast(11L)
                 delay(frameDelay)
-                val nextIdx = (_currentIndex.value + 1) % frameCount
-                setCurrentIndex(nextIdx)
-                prefetchAround(nextIdx)
+                val next = _currentIndex.value + step
+                if (next < 0 || next >= frameCount) {        // stop at the boundary; no wrap
+                    setCurrentIndex(if (next < 0) 0 else frameCount - 1)
+                    _isPlaying.value = false
+                    break
+                }
+                setCurrentIndex(next)
+                prefetchAround(next, step)
             }
         }
     }
@@ -270,6 +321,8 @@ class SequenceViewModel(
     }
 
     private companion object {
+        const val FAST_SKIP_AMOUNT = 20 // macOS fastSkipAmount
+
         val PREVIEW_FALLBACK = listOf(
             FrameViewMode.VIEW_PROCESSED,
             FrameViewMode.VIEW_SUBTRACTION,
@@ -278,10 +331,12 @@ class SequenceViewModel(
         )
     }
 
-    private fun prefetchAround(index: Int) {
+    /** Prefetch the next few frames in the play [direction] (+1 forward, -1 reverse). */
+    private fun prefetchAround(index: Int, direction: Int = 1) {
         scope.launch {
-            for (i in (index + 1)..(index + 3)) {
-                if (i < frameCount) previewRefPath(i)?.let { imageCache.load(it) }
+            for (n in 1..3) {
+                val i = index + direction * n
+                if (i in 0 until frameCount) previewRefPath(i)?.let { imageCache.load(it) }
             }
         }
     }

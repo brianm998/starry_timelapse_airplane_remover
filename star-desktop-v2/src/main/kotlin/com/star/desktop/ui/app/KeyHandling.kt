@@ -26,6 +26,12 @@ fun handleGlobalKey(event: KeyEvent, app: AppViewModel): Boolean {
         Key.DirectionRight -> { svm.next(); return true }
         Key.Home -> { svm.setCurrentIndex(0); return true }
         Key.MoveEnd -> { svm.setCurrentIndex(svm.frameCount - 1); return true }
+        // Transport letter keys (macOS VideoPlaybackButtons): b/f ends, z/x fast-skip, w reverse-play.
+        Key.B -> { svm.goToFirst(); return true }
+        Key.F -> { svm.goToLast(); return true }
+        Key.Z -> { svm.fastPrevious(); return true }
+        Key.X -> { svm.fastForward(); return true }
+        Key.W -> { svm.playReverse(); return true }
     }
 
     val digit = DIGIT_KEYS[event.key]

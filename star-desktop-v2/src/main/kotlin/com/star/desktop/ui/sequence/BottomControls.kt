@@ -43,11 +43,23 @@ fun BottomControls(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        // transport
+        // transport — 8 buttons when stopped; collapses to just play/pause while playing (macOS)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            GlyphButton("⏮", "Previous", vm::previous, enabled = idx > 0 && !playing)
-            GlyphButton(if (playing) "⏸" else "▶", if (playing) "Pause" else "Play", vm::togglePlayback)
-            GlyphButton("⏭", "Next", vm::next, enabled = idx < vm.frameCount - 1 && !playing)
+            if (playing) {
+                GlyphButton("⏸", "Pause", vm::togglePlayback, size = 40, fontSize = 24, tint = StarColors.blue)
+            } else {
+                val atStart = idx <= 0
+                val atEnd = idx >= vm.frameCount - 1
+                val multi = vm.frameCount > 1
+                GlyphButton("⏮", "Go to first frame (b)", vm::goToFirst, enabled = !atStart)
+                GlyphButton("⏪", "Back 20 frames (z)", vm::fastPrevious, enabled = !atStart)
+                GlyphButton("◂", "Previous frame (←)", vm::previous, enabled = !atStart, fontSize = 13)
+                GlyphButton("◀", "Play in reverse (w)", vm::playReverse, enabled = multi, size = 40, fontSize = 20)
+                GlyphButton("▶", "Play (space)", vm::playForward, enabled = multi, size = 40, fontSize = 20)
+                GlyphButton("▸", "Next frame (→)", vm::next, enabled = !atEnd, fontSize = 13)
+                GlyphButton("⏩", "Forward 20 frames (x)", vm::fastForward, enabled = !atEnd)
+                GlyphButton("⏭", "Go to last frame (f)", vm::goToLast, enabled = !atEnd)
+            }
         }
 
         // editable frame number
