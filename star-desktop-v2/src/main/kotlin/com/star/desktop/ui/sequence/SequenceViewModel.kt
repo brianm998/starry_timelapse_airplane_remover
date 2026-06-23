@@ -58,6 +58,11 @@ class SequenceViewModel(
     private val _showFilmstrip = MutableStateFlow(true)
     val showFilmstrip: StateFlow<Boolean> = _showFilmstrip.asStateFlow()
 
+    // Edit sub-mode: when on, the center view is the horizon painter instead of the outlier overlay.
+    private val _horizonPaintMode = MutableStateFlow(false)
+    val horizonPaintMode: StateFlow<Boolean> = _horizonPaintMode.asStateFlow()
+    fun toggleHorizonPaint() { _horizonPaintMode.value = !_horizonPaintMode.value }
+
     // ---- processing state (delegated) ----
     val frameStates: StateFlow<Map<Int, FrameProcessingState>> = processing.frameStates
     val isProcessing: StateFlow<Boolean> = processing.processing

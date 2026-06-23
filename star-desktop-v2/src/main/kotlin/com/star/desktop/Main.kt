@@ -56,4 +56,18 @@ fun main(args: Array<String>) = application {
             }
         }
     }
+
+    // Secondary Alignment diagnostics window.
+    val showAlign by vm.showAlignmentWindow.collectAsState()
+    if (showAlign && svm != null) {
+        Window(
+            onCloseRequest = vm::closeAlignmentWindow,
+            title = "Alignment",
+            state = rememberWindowState(size = DpSize(720.dp, 560.dp)),
+        ) {
+            com.star.desktop.ui.theme.StarTheme {
+                com.star.desktop.ui.windows.AlignmentWindowView(vm, svm)
+            }
+        }
+    }
 }

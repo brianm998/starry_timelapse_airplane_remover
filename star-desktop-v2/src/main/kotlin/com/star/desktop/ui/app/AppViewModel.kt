@@ -46,6 +46,8 @@ class AppViewModel(
     // Stateless wrappers shared across sessions; ProcessingRepository is per-session (holds folded state).
     private val frameRepo = FrameRepository { engine.client }
     private val outlierRepo = OutlierRepository { engine.client }
+    val alignmentRepo = com.star.desktop.data.AlignmentRepository { engine.client }
+    val horizonRepo = com.star.desktop.data.HorizonRepository { engine.client }
 
     private var currentSequence: SequenceViewModel? = null
 
@@ -76,6 +78,11 @@ class AppViewModel(
     val showOutlierWindow: StateFlow<Boolean> = _showOutlierWindow.asStateFlow()
     fun toggleOutlierWindow() { _showOutlierWindow.value = !_showOutlierWindow.value }
     fun closeOutlierWindow() { _showOutlierWindow.value = false }
+
+    private val _showAlignmentWindow = MutableStateFlow(false)
+    val showAlignmentWindow: StateFlow<Boolean> = _showAlignmentWindow.asStateFlow()
+    fun toggleAlignmentWindow() { _showAlignmentWindow.value = !_showAlignmentWindow.value }
+    fun closeAlignmentWindow() { _showAlignmentWindow.value = false }
 
     init {
         scope.launch { engine.start() }
@@ -172,6 +179,8 @@ class AppViewModel(
         when (autoMode) {
             "edit" -> svm.setMode(com.star.desktop.domain.InteractionMode.EDIT)
             "grid" -> svm.setMode(com.star.desktop.domain.InteractionMode.GRID)
+            "align" -> toggleAlignmentWindow()
+            "horizon" -> { svm.setMode(com.star.desktop.domain.InteractionMode.EDIT); svm.toggleHorizonPaint() }
             else -> Unit
         }
         autoFrame?.let { svm.setCurrentIndex(it) }

@@ -66,6 +66,11 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
 
         Menu("Window", mnemonic = 'W') {
             Item("Outlier Table", enabled = hasSession, shortcut = KeyShortcut(Key.X, meta = true, alt = true)) { app.toggleOutlierWindow() }
+            Item("Alignment", enabled = hasSession, shortcut = KeyShortcut(Key.A, meta = true, alt = true)) { app.toggleAlignmentWindow() }
+            Separator()
+            Item("Paint Reference Horizon", enabled = hasSession) {
+                svm?.let { if (it.mode.value != InteractionMode.EDIT) it.setMode(InteractionMode.EDIT); it.toggleHorizonPaint() }
+            }
         }
 
         Menu("Outliers", mnemonic = 'O') {

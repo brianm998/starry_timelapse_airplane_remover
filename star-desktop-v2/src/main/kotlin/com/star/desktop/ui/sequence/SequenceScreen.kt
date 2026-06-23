@@ -46,7 +46,14 @@ fun SequenceScreen(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier 
                 )
                 InteractionMode.EDIT -> Row(Modifier.fillMaxSize()) {
                     LeftPanel(vm)
-                    com.star.desktop.ui.sequence.edit.FrameEditView(vm, Modifier.weight(1f).fillMaxSize())
+                    val painting by vm.horizonPaintMode.collectAsState()
+                    Box(Modifier.weight(1f).fillMaxSize()) {
+                        if (painting) {
+                            com.star.desktop.ui.sequence.edit.HorizonPainterView(app, vm)
+                        } else {
+                            com.star.desktop.ui.sequence.edit.FrameEditView(vm)
+                        }
+                    }
                     RightPanel(vm)
                 }
                 InteractionMode.GRID -> Row(Modifier.fillMaxSize()) {
@@ -85,6 +92,11 @@ private fun TopBar(app: AppViewModel, vm: SequenceViewModel, mode: InteractionMo
             Chip("Original", selected = viewMode == FrameViewMode.VIEW_ORIGINAL) { vm.setViewMode(FrameViewMode.VIEW_ORIGINAL) }
             Chip("Processed", selected = viewMode == FrameViewMode.VIEW_PROCESSED) { vm.setViewMode(FrameViewMode.VIEW_PROCESSED) }
         }
+        if (mode == InteractionMode.EDIT) {
+            val painting by vm.horizonPaintMode.collectAsState()
+            Chip("Paint Horizon", selected = painting) { vm.toggleHorizonPaint() }
+        }
+        Chip("Align", selected = false) { app.toggleAlignmentWindow() }
         Chip("Close", selected = false) { app.closeSession() }
     }
 }
