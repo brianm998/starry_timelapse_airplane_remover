@@ -82,23 +82,37 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 }
             }
             .pointerInput(tool, canvasSize) {
-                if (tool == com.star.desktop.domain.ToolType.MULTI) {
-                    // Multi tool: drag a rubber-band rectangle, then open the multi-select sheet.
-                    detectDragGestures(
-                        onDragStart = { pos -> selStartImg = transform.canvasToImage(pos, canvasSize); selEndImg = selStartImg },
-                        onDragEnd = {
-                            val s = selStartImg; val e = selEndImg
-                            if (s != null && e != null) vm.openMultiSelect(SequenceViewModel.RectSelection(s.x, s.y, e.x, e.y))
-                            selStartImg = null; selEndImg = null
-                        },
-                        onDragCancel = { selStartImg = null; selEndImg = null },
-                    ) { change, _ -> selEndImg = transform.canvasToImage(change.position, canvasSize); change.consume() }
-                } else {
-                    detectDragGestures(
-                        onDragStart = { dragging = true },
-                        onDragEnd = { dragging = false },
-                        onDragCancel = { dragging = false },
-                    ) { change, drag -> transform.panBy(drag); change.consume() }
+                // The finally clears transient drag state if this gesture is cancelled because `tool`/`canvasSize`
+                // changed mid-drag (Compose disposes the pointerInput then; onDragEnd/Cancel may not run), so the
+                // pointing cursor and rubber-band rectangle can't get stuck.
+                try {
+                    if (tool.isAreaDrag) {
+                        // Area tools: drag a rubber-band rectangle, then either open the multi-select sheet
+                        // (MULTI) or apply the editing tool directly to the rectangle (razor/shovel/trash/extract).
+                        detectDragGestures(
+                            onDragStart = { pos -> dragging = true; selStartImg = transform.canvasToImage(pos, canvasSize); selEndImg = selStartImg },
+                            onDragEnd = {
+                                val s = selStartImg; val e = selEndImg
+                                if (s != null && e != null) {
+                                    if (tool == com.star.desktop.domain.ToolType.MULTI) {
+                                        vm.openMultiSelect(SequenceViewModel.RectSelection(s.x, s.y, e.x, e.y))
+                                    } else {
+                                        fvm.applyAreaTool(tool, s.x, s.y, e.x, e.y)
+                                    }
+                                }
+                                selStartImg = null; selEndImg = null; dragging = false
+                            },
+                            onDragCancel = { selStartImg = null; selEndImg = null; dragging = false },
+                        ) { change, _ -> selEndImg = transform.canvasToImage(change.position, canvasSize); change.consume() }
+                    } else {
+                        detectDragGestures(
+                            onDragStart = { dragging = true },
+                            onDragEnd = { dragging = false },
+                            onDragCancel = { dragging = false },
+                        ) { change, drag -> transform.panBy(drag); change.consume() }
+                    }
+                } finally {
+                    dragging = false; selStartImg = null; selEndImg = null
                 }
             }
             .pointerInput(tool, labelMap, groups) {

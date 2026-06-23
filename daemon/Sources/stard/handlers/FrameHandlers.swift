@@ -70,6 +70,7 @@ enum FrameHandlers {
             guard let frame = await session.frame(at: Int(req.frameIndex)) else {
                 await transport.sendError(id: id, message: "frame index out of range", code: 404); return
             }
+            await ensureOutliersLoaded(frame)
             guard let groups = await frame.getOutlierGroups() else {
                 await transport.sendError(id: id, message: "outlier groups not yet loaded for frame \(req.frameIndex)"); return
             }

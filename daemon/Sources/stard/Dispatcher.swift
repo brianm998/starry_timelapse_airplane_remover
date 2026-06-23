@@ -94,6 +94,7 @@ extension Dispatcher {
         register(method: "Outlier.ApplyDecisionTreeAllFrames") { id, payload, transport in await OutlierHandlers.applyDecisionTreeAllFrames(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Outlier.SetDecisionsInArea")         { id, payload, transport in await OutlierHandlers.setDecisionsInArea(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Outlier.SetDecisionsOverlapping")    { id, payload, transport in await OutlierHandlers.setDecisionsOverlapping(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Outlier.ApplyAreaTool")              { id, payload, transport in await OutlierHandlers.applyAreaTool(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
 
         // Processing
         register(method: "Processing.Start")          { id, payload, transport in await ProcessingHandlers.start(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }

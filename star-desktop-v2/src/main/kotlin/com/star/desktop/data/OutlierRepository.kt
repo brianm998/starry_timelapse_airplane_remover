@@ -63,6 +63,20 @@ class OutlierRepository(private val clientProvider: () -> StarClient?) {
     ) = c().setOutlierDecisionsOverlapping(sessionId, startIndex, endIndex, shouldRemove, referenceFrame, referenceGroupId)
 
     /**
+     * Apply a single-frame area editing tool (razor/shovel/trash/extract) to a drag rectangle (image px).
+     * [groupId] > 0 is TRASH-only: dump exactly that group (single-tap), ignoring the rectangle.
+     */
+    suspend fun applyAreaTool(
+        sessionId: String, frameIndex: Int, tool: com.star.proto.OutlierAreaTool,
+        startX: Float, startY: Float, endX: Float, endY: Float, includingTrash: Boolean = false, groupId: Int = 0,
+    ) = c().applyOutlierAreaTool(
+        sessionId, frameIndex, tool,
+        com.star.proto.Point.newBuilder().setX(startX.toDouble()).setY(startY.toDouble()).build(),
+        com.star.proto.Point.newBuilder().setX(endX.toDouble()).setY(endY.toDouble()).build(),
+        includingTrash = includingTrash, groupId = groupId,
+    )
+
+    /**
      * Load the 16-bit single-channel label PNG at [path] into a `group-id per pixel` array
      * (row-major, length w*h). Used for local click hit-testing without per-click round-trips.
      */

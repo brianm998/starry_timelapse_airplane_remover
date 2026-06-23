@@ -8,6 +8,9 @@ import com.star.proto.ApplyDecisionTreeAllFramesRequest
 import com.star.proto.ApplyDecisionTreeAllFramesResponse
 import com.star.proto.ApplyDecisionTreeRequest
 import com.star.proto.ApplyDecisionTreeResponse
+import com.star.proto.ApplyOutlierAreaToolRequest
+import com.star.proto.ApplyOutlierAreaToolResponse
+import com.star.proto.OutlierAreaTool
 import com.star.proto.CancelResponse
 import com.star.proto.CleanMethod
 import com.star.proto.ClearReferenceHorizonRequest
@@ -223,6 +226,23 @@ class StarClient(private val conn: StdioConnection) {
                 .setSessionId(sessionId).setStartIndex(startIndex).setEndIndex(endIndex).setShouldRemove(shouldRemove)
                 .setReferenceFrame(referenceFrame).setReferenceGroupId(referenceGroupId).setRerender(rerender).build(),
             MultiFrameDecisionsResponse.parser(),
+        )
+
+    /**
+     * Apply a single-frame area editing tool (razor/shovel/trash/extract) to a drag rectangle (image px).
+     * [groupId] > 0 is TRASH-only: dump exactly that group (single-tap), ignoring the rectangle.
+     */
+    suspend fun applyOutlierAreaTool(
+        sessionId: String, frameIndex: Int, tool: OutlierAreaTool,
+        start: Point, end: Point, includingTrash: Boolean = false, rerender: Boolean = false, groupId: Int = 0,
+    ): ApplyOutlierAreaToolResponse =
+        call(
+            "Outlier.ApplyAreaTool",
+            ApplyOutlierAreaToolRequest.newBuilder()
+                .setSessionId(sessionId).setFrameIndex(frameIndex).setTool(tool)
+                .setStartLocation(start).setEndLocation(end).setIncludingTrash(includingTrash).setRerender(rerender)
+                .setGroupId(groupId).build(),
+            ApplyOutlierAreaToolResponse.parser(),
         )
 
     // ---- Processing ----

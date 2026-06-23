@@ -89,13 +89,46 @@ class FrameViewModel(
         }
     }
 
-    /** Apply the active [tool] to the clicked group. */
+    /**
+     * Apply the active [tool] to the clicked group (single-group tap path; macOS `OutlierGroupView.onTapGesture`).
+     * TRASH dumps the tapped group into the trash (via the area tool over the group's own bounds, which
+     * `contains` it). Razor/shovel/get-from-trash have no single-group action in macOS — they toggle the
+     * tapped group's decision, matching the macOS `toggleRemoveReason` fallback. The real razor/shovel/trash/
+     * extract behavior is the rubber-band drag (see [applyAreaTool]).
+     */
     fun applyTool(groupId: Int, tool: ToolType) {
         when (tool) {
             ToolType.REMOVE -> setDecision(groupId, RemoveReason.RR_USER_REMOVE)
             ToolType.KEEP -> setDecision(groupId, RemoveReason.RR_USER_KEEP)
             ToolType.INFORMATION -> selectGroup(groupId)
-            else -> toggle(groupId) // razor/shovel/trash/multi have no daemon endpoint yet → toggle as a fallback
+            ToolType.TRASH -> {
+                val g = _groups.value.firstOrNull { it.id == groupId } ?: return
+                // Dump EXACTLY the tapped group by id (macOS dumpInTrash(_:)); the rect is ignored when groupId > 0.
+                applyAreaTool(tool, g.bounds.minX.toFloat(), g.bounds.minY.toFloat(), g.bounds.maxX.toFloat(), g.bounds.maxY.toFloat(), groupId)
+            }
+            else -> toggle(groupId)
+        }
+    }
+
+    /** Map an area-drag editing tool to its daemon [com.star.proto.OutlierAreaTool] (null for MULTI / non-area tools). */
+    private fun ToolType.toAreaTool(): com.star.proto.OutlierAreaTool? = when (this) {
+        ToolType.RAZOR -> com.star.proto.OutlierAreaTool.AREA_TOOL_RAZOR
+        ToolType.SHOVEL -> com.star.proto.OutlierAreaTool.AREA_TOOL_SHOVEL
+        ToolType.TRASH -> com.star.proto.OutlierAreaTool.AREA_TOOL_TRASH
+        ToolType.REMOVE_FROM_TRASH -> com.star.proto.OutlierAreaTool.AREA_TOOL_EXTRACT_TRASH
+        else -> null
+    }
+
+    /**
+     * Apply an area editing tool (razor/shovel/trash/get-from-trash) to the drag rectangle (image px),
+     * then refresh this frame's groups so the overlay reflects the new membership. [groupId] > 0 is
+     * TRASH-only (single-tap): dump exactly that group, ignoring the rectangle.
+     */
+    fun applyAreaTool(tool: ToolType, startX: Float, startY: Float, endX: Float, endY: Float, groupId: Int = 0) {
+        val areaTool = tool.toAreaTool() ?: return
+        scope.launch {
+            runCatching { outliers.applyAreaTool(sessionId, frameIndex, areaTool, startX, startY, endX, endY, groupId = groupId) }
+            load(force = true)
         }
     }
 

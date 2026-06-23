@@ -419,6 +419,62 @@ public nonisolated enum Star_V1_RemoveReason: SwiftProtobuf.Enum, Swift.CaseIter
 
 }
 
+/// Single-frame area editing tools (macOS razor / shovel / trash / get-from-trash), applied to a drag
+/// rectangle on the current frame. Each maps to an existing StarCore op; see the daemon handler.
+public nonisolated enum Star_V1_OutlierAreaTool: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case areaToolUnspecified // = 0
+
+  /// applyRazor(in:includingTrash:) — cut groups crossing the rectangle
+  case areaToolRazor // = 1
+
+  /// findOutliers(within:) — re-detect outliers inside the rectangle, then mark complete
+  case areaToolShovel // = 2
+
+  /// move groups fully inside the rectangle into the trash
+  case areaToolTrash // = 3
+
+  /// promote trashed groups inside the rectangle back into view (promoteDust)
+  case areaToolExtractTrash // = 4
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .areaToolUnspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .areaToolUnspecified
+    case 1: self = .areaToolRazor
+    case 2: self = .areaToolShovel
+    case 3: self = .areaToolTrash
+    case 4: self = .areaToolExtractTrash
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .areaToolUnspecified: return 0
+    case .areaToolRazor: return 1
+    case .areaToolShovel: return 2
+    case .areaToolTrash: return 3
+    case .areaToolExtractTrash: return 4
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Star_V1_OutlierAreaTool] = [
+    .areaToolUnspecified,
+    .areaToolRazor,
+    .areaToolShovel,
+    .areaToolTrash,
+    .areaToolExtractTrash,
+  ]
+
+}
+
 /// Granular per-frame reprocess (grid context menu).
 public nonisolated enum Star_V1_ReprocessingType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
@@ -1751,6 +1807,84 @@ public nonisolated struct Star_V1_MultiFrameDecisionsResponse: Sendable {
   public init() {}
 }
 
+public nonisolated struct Star_V1_ApplyOutlierAreaToolRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sessionID: String = String()
+
+  public var frameIndex: Int32 = 0
+
+  public var tool: Star_V1_OutlierAreaTool = .areaToolUnspecified
+
+  /// rect corner (image px)
+  public var startLocation: Star_V1_Point {
+    get {_startLocation ?? Star_V1_Point()}
+    set {_startLocation = newValue}
+  }
+  /// Returns true if `startLocation` has been explicitly set.
+  public var hasStartLocation: Bool {self._startLocation != nil}
+  /// Clears the value of `startLocation`. Subsequent reads from it will return its default value.
+  public mutating func clearStartLocation() {self._startLocation = nil}
+
+  /// opposite corner (image px)
+  public var endLocation: Star_V1_Point {
+    get {_endLocation ?? Star_V1_Point()}
+    set {_endLocation = newValue}
+  }
+  /// Returns true if `endLocation` has been explicitly set.
+  public var hasEndLocation: Bool {self._endLocation != nil}
+  /// Clears the value of `endLocation`. Subsequent reads from it will return its default value.
+  public mutating func clearEndLocation() {self._endLocation = nil}
+
+  /// razor: also cut trashed groups (mirrors macOS shouldShowTrash)
+  public var includingTrash: Bool = false
+
+  public var rerender: Bool = false
+
+  /// TRASH only: when > 0, dump exactly this group (single-tap, macOS dumpInTrash(_:)); 0 = use the rectangle
+  public var groupID: UInt32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _startLocation: Star_V1_Point? = nil
+  fileprivate var _endLocation: Star_V1_Point? = nil
+}
+
+public nonisolated struct Star_V1_ApplyOutlierAreaToolResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var frame: Star_V1_FrameInfo {
+    get {_frame ?? Star_V1_FrameInfo()}
+    set {_frame = newValue}
+  }
+  /// Returns true if `frame` has been explicitly set.
+  public var hasFrame: Bool {self._frame != nil}
+  /// Clears the value of `frame`. Subsequent reads from it will return its default value.
+  public mutating func clearFrame() {self._frame = nil}
+
+  public var preview: Star_V1_ImageRef {
+    get {_preview ?? Star_V1_ImageRef()}
+    set {_preview = newValue}
+  }
+  /// Returns true if `preview` has been explicitly set.
+  public var hasPreview: Bool {self._preview != nil}
+  /// Clears the value of `preview`. Subsequent reads from it will return its default value.
+  public mutating func clearPreview() {self._preview = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _frame: Star_V1_FrameInfo? = nil
+  fileprivate var _preview: Star_V1_ImageRef? = nil
+}
+
 public nonisolated struct Star_V1_StartProcessingRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -2429,6 +2563,10 @@ nonisolated extension Star_V1_FrameProcessingState: SwiftProtobuf._ProtoNameProv
 
 nonisolated extension Star_V1_RemoveReason: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0RR_UNDECIDED\0\u{1}RR_USER_REMOVE\0\u{1}RR_USER_KEEP\0\u{1}RR_CLASSIFIER_REMOVE\0\u{1}RR_CLASSIFIER_KEEP\0")
+}
+
+nonisolated extension Star_V1_OutlierAreaTool: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AREA_TOOL_UNSPECIFIED\0\u{1}AREA_TOOL_RAZOR\0\u{1}AREA_TOOL_SHOVEL\0\u{1}AREA_TOOL_TRASH\0\u{1}AREA_TOOL_EXTRACT_TRASH\0")
 }
 
 nonisolated extension Star_V1_ReprocessingType: SwiftProtobuf._ProtoNameProviding {
@@ -4362,6 +4500,114 @@ nonisolated extension Star_V1_MultiFrameDecisionsResponse: SwiftProtobuf.Message
   public static func ==(lhs: Star_V1_MultiFrameDecisionsResponse, rhs: Star_V1_MultiFrameDecisionsResponse) -> Bool {
     if lhs.frames != rhs.frames {return false}
     if lhs.previews != rhs.previews {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Star_V1_ApplyOutlierAreaToolRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ApplyOutlierAreaToolRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{1}tool\0\u{3}start_location\0\u{3}end_location\0\u{3}including_trash\0\u{1}rerender\0\u{3}group_id\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.frameIndex) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.tool) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._startLocation) }()
+      case 5: try { try decoder.decodeSingularMessageField(value: &self._endLocation) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.includingTrash) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.rerender) }()
+      case 8: try { try decoder.decodeSingularUInt32Field(value: &self.groupID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.sessionID.isEmpty {
+      try visitor.visitSingularStringField(value: self.sessionID, fieldNumber: 1)
+    }
+    if self.frameIndex != 0 {
+      try visitor.visitSingularInt32Field(value: self.frameIndex, fieldNumber: 2)
+    }
+    if self.tool != .areaToolUnspecified {
+      try visitor.visitSingularEnumField(value: self.tool, fieldNumber: 3)
+    }
+    try { if let v = self._startLocation {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
+    try { if let v = self._endLocation {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    } }()
+    if self.includingTrash != false {
+      try visitor.visitSingularBoolField(value: self.includingTrash, fieldNumber: 6)
+    }
+    if self.rerender != false {
+      try visitor.visitSingularBoolField(value: self.rerender, fieldNumber: 7)
+    }
+    if self.groupID != 0 {
+      try visitor.visitSingularUInt32Field(value: self.groupID, fieldNumber: 8)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_ApplyOutlierAreaToolRequest, rhs: Star_V1_ApplyOutlierAreaToolRequest) -> Bool {
+    if lhs.sessionID != rhs.sessionID {return false}
+    if lhs.frameIndex != rhs.frameIndex {return false}
+    if lhs.tool != rhs.tool {return false}
+    if lhs._startLocation != rhs._startLocation {return false}
+    if lhs._endLocation != rhs._endLocation {return false}
+    if lhs.includingTrash != rhs.includingTrash {return false}
+    if lhs.rerender != rhs.rerender {return false}
+    if lhs.groupID != rhs.groupID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Star_V1_ApplyOutlierAreaToolResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ApplyOutlierAreaToolResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}frame\0\u{1}preview\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._frame) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._preview) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._frame {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._preview {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_ApplyOutlierAreaToolResponse, rhs: Star_V1_ApplyOutlierAreaToolResponse) -> Bool {
+    if lhs._frame != rhs._frame {return false}
+    if lhs._preview != rhs._preview {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

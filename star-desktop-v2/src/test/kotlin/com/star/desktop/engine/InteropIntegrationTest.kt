@@ -121,6 +121,77 @@ class InteropIntegrationTest {
         assertEquals(hashesA, hashesB, "rendered output differs between identical runs (non-deterministic output)")
     }
 
+    /**
+     * Area editing tools round-trip (`Outlier.ApplyAreaTool`): process a sequence with a usesOutliers
+     * clean method (so outlier groups are loaded), then drive razor/shovel/trash/extract against the real
+     * daemon. Asserts the trash op moves a group into the trash and extract pulls it back — the behavior the
+     * macOS FrameEditView drag relies on. Heavy (real selective processing), so gated like the golden test.
+     */
+    @Test
+    fun areaToolRoundTrip() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] areaToolRoundTrip — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        withEngine { client ->
+            val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+                .setCleanMethod(CleanMethod.CLEAN_SELECTIVE).build() // selective → outlier groups exist + loaded
+            val info = client.openSequence(File(seq).absolutePath, cfg)
+
+            val done = CompletableDeferred<Unit>()
+            val sub = CoroutineScope(SupervisorJob()).launch {
+                runCatching {
+                    client.streamProgress(info.sessionId).collect { ev ->
+                        if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE && ev.sequenceState.state == "done") done.complete(Unit)
+                    }
+                }
+            }
+            delay(400)
+            client.startProcessing(info.sessionId, 0, -1)
+            assertTrue(withTimeoutOrNull(1_200_000) { done.await() } != null, "processing timed out")
+            sub.cancel()
+
+            // Find a frame that actually has outlier groups (some frames legitimately have none). This
+            // also exercises the daemon's load-on-demand: StarCore purges groups to disk after processing,
+            // so listing returning groups at all proves the reload path works.
+            val frameIdx = (0 until info.frameCount).firstOrNull { client.listOutliers(info.sessionId, it).groupsCount > 0 }
+            if (frameIdx == null) {
+                println("[skip] areaToolRoundTrip — no frame has outlier groups after processing")
+                client.closeSession(info.sessionId); return@withEngine
+            }
+            val before = client.listOutliers(info.sessionId, frameIdx).groupsList
+            // Pick the largest group (most likely cleanly isolated within its own bounds).
+            val g = before.maxBy { (it.bounds.maxX - it.bounds.minX).toLong() * (it.bounds.maxY - it.bounds.minY) }
+            val sx = g.bounds.minX.toDouble(); val sy = g.bounds.minY.toDouble()
+            val ex = g.bounds.maxX.toDouble(); val ey = g.bounds.maxY.toDouble()
+            fun pt(x: Double, y: Double) = com.star.proto.Point.newBuilder().setX(x).setY(y).build()
+
+            // TRASH single-group (groupId > 0, the client's single-tap path): EXACTLY the tapped group leaves
+            // the member list — never any nested group. Member count must drop by exactly one.
+            val trashed = client.applyOutlierAreaTool(info.sessionId, frameIdx, com.star.proto.OutlierAreaTool.AREA_TOOL_TRASH, pt(sx, sy), pt(ex, ey), groupId = g.id)
+            val afterTrash = client.listOutliers(info.sessionId, frameIdx).groupsList
+            assertTrue(afterTrash.none { it.id == g.id }, "trash did not remove group ${g.id} from the member list")
+            assertEquals(before.size - 1, afterTrash.size, "single-group trash changed the member count by more than one (over-trashed)")
+            assertTrue(trashed.frame.numTrashOutliers >= 1, "trash count did not rise after dumping a group")
+
+            // EXTRACT: the group returns to the member list and the trash count drops back.
+            val extracted = client.applyOutlierAreaTool(info.sessionId, frameIdx, com.star.proto.OutlierAreaTool.AREA_TOOL_EXTRACT_TRASH, pt(sx, sy), pt(ex, ey))
+            val afterExtract = client.listOutliers(info.sessionId, frameIdx).groupsList
+            assertTrue(extracted.frame.numTrashOutliers < trashed.frame.numTrashOutliers, "extract did not reduce the trash count")
+            assertTrue(afterExtract.size > afterTrash.size, "extract did not restore any group to the member list")
+
+            // RAZOR + SHOVEL over a small central area must succeed (return a frame), not break the connection.
+            val cx = info.imageWidth / 2.0; val cy = info.imageHeight / 2.0
+            val razor = client.applyOutlierAreaTool(info.sessionId, frameIdx, com.star.proto.OutlierAreaTool.AREA_TOOL_RAZOR, pt(cx - 5, cy - 5), pt(cx + 5, cy + 5))
+            assertTrue(razor.hasFrame(), "razor returned no frame")
+            val shovel = client.applyOutlierAreaTool(info.sessionId, frameIdx, com.star.proto.OutlierAreaTool.AREA_TOOL_SHOVEL, pt(cx - 20, cy - 20), pt(cx + 20, cy + 20))
+            assertTrue(shovel.hasFrame(), "shovel returned no frame")
+
+            client.closeSession(info.sessionId)
+        }
+    }
+
     /** Open → process(all) → render the sequence; return SHA-256 of each rendered output frame by name. */
     private fun processAndRenderHashes(seqDir: String): Map<String, String> = runBlocking {
         val scope = CoroutineScope(SupervisorJob())

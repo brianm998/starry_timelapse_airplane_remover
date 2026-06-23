@@ -25,6 +25,13 @@ enum class ToolType(val displayName: String, val iconBaseName: String, val curso
     /** Whether this tool only sets a keep/remove decision (mappable to `Outlier.SetDecisions` today). */
     val setsDecisionOnly: Boolean get() = this == REMOVE || this == KEEP
 
+    /**
+     * Whether this tool acts on a dragged rectangle (rubber-band) rather than a single group click.
+     * MULTI opens the multi-select sheet; RAZOR/SHOVEL/TRASH/REMOVE_FROM_TRASH apply via `Outlier.ApplyAreaTool`.
+     */
+    val isAreaDrag: Boolean
+        get() = this == MULTI || this == RAZOR || this == SHOVEL || this == TRASH || this == REMOVE_FROM_TRASH
+
     companion object {
         /** Tools bound to shortcuts 1–8, in order. */
         val selectable = listOf(REMOVE, KEEP, RAZOR, SHOVEL, TRASH, REMOVE_FROM_TRASH, MULTI, INFORMATION)
