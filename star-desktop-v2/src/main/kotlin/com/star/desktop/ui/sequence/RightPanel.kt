@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.domain.FastAdvancementType
 import com.star.desktop.domain.ToolType
 import com.star.desktop.ui.components.toolPainter
 import com.star.desktop.ui.theme.StarColors
@@ -45,6 +46,7 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val decisions by fvm.decisions.collectAsState()
     val selected by fvm.selected.collectAsState()
     val info by fvm.info.collectAsState()
+    val fastAdv by vm.fastAdvancement.collectAsState()
 
     Column(modifier.width(150.dp).fillMaxHeight().background(StarColors.sidePanel)) {
       Column(
@@ -82,6 +84,12 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         CLEAN_METHODS.forEach { (method, label) ->
             CleanMethodRow(label, selected = method == activeMethod) { fvm.setCleanMethod(method) }
         }
+
+        androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
+        Text("Fast Skip (z / x)", color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+        FAST_MODES.forEach { (mode, label) ->
+            CleanMethodRow(label, selected = mode == fastAdv) { vm.setFastAdvancement(mode) }
+        }
       }
       com.star.desktop.ui.components.PanelChevron("»", { vm.setRightPanel(false) }, Modifier.padding(6.dp))
     }
@@ -92,6 +100,15 @@ private val CLEAN_METHODS: List<Pair<CleanMethod, String>> = listOf(
     CleanMethod.CLEAN_AUTOMATIC to "Automatic",
     CleanMethod.CLEAN_AUTOMATIC_TRUE to "Auto + Outliers",
     CleanMethod.CLEAN_SELECTIVE to "Selective",
+)
+
+/** Fast-skip strategies for the z/x transport keys (macOS `FastAdvancementType`). */
+private val FAST_MODES: List<Pair<FastAdvancementType, String>> = listOf(
+    FastAdvancementType.NORMAL to "Skip 20 frames",
+    FastAdvancementType.SKIP_EMPTIES to "Skip empty frames",
+    FastAdvancementType.TO_NEXT_POSITIVE to "Next w/ removals",
+    FastAdvancementType.TO_NEXT_NEGATIVE to "Next w/ keeps",
+    FastAdvancementType.TO_NEXT_UNKNOWN to "Next undecided",
 )
 
 @Composable
