@@ -68,11 +68,11 @@ class ProcessingRepository(
         }
     }
 
-    suspend fun start(sessionId: String, startIndex: Int = 0, endIndex: Int = -1) {
+    suspend fun start(sessionId: String, startIndex: Int = 0, endIndex: Int = -1, force: Boolean = false) {
         _sequenceState.value = null
         _processing.value = true
         try {
-            c().startProcessing(sessionId, startIndex, endIndex)
+            c().startProcessing(sessionId, startIndex, endIndex, force)
         } catch (e: Throwable) {
             _processing.value = false
             throw e

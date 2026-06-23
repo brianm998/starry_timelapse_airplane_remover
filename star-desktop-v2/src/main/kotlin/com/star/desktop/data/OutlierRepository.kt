@@ -37,6 +37,14 @@ class OutlierRepository(private val clientProvider: () -> StarClient?) {
 
     suspend fun renderFrame(sessionId: String, frameIndex: Int): ImageRef = c().renderFrame(sessionId, frameIndex)
 
+    /** Re-run the decision-tree classifier on one frame's outliers (`Outlier.ApplyDecisionTree`). */
+    suspend fun applyDecisionTree(sessionId: String, frameIndex: Int, overwrite: Boolean) =
+        c().applyDecisionTree(sessionId, frameIndex, overwrite = overwrite)
+
+    /** Re-run the classifier over every frame (`Outlier.ApplyDecisionTreeAllFrames`). */
+    suspend fun applyDecisionTreeAllFrames(sessionId: String, overwrite: Boolean) =
+        c().applyDecisionTreeAllFrames(sessionId, overwrite = overwrite)
+
     /**
      * Load the 16-bit single-channel label PNG at [path] into a `group-id per pixel` array
      * (row-major, length w*h). Used for local click hit-testing without per-click round-trips.

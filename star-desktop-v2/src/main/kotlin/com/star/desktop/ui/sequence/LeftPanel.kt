@@ -72,6 +72,9 @@ fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier, onProcessAll
         OutlinedButton(onClick = { vm.processCurrent() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Text("Process Current Frame")
         }
+        OutlinedButton(onClick = { vm.reprocessCurrent() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+            Text("Reprocess Current (force)")
+        }
 
         if (processing) {
             OutlinedButton(

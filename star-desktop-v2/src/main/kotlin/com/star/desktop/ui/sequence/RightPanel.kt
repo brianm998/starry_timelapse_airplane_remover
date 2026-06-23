@@ -76,6 +76,8 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         BulkButton("Keep All", StarColors.green) { fvm.keepAll() }
         BulkButton("Remove All", StarColors.red) { fvm.removeAll() }
         BulkButton("Clear Undecided", StarColors.gray) { fvm.clearUndecided() }
+        BulkButton("Apply Decision Tree", StarColors.blue) { fvm.applyDecisionTree(overwrite = true) }
+        BulkButton("Apply Tree (All Frames)", StarColors.blue) { vm.applyDecisionTreeAll() }
         selected?.let { Text("Selected #$it", color = StarColors.orange, fontSize = 10.sp) }
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))

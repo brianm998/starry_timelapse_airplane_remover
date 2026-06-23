@@ -187,7 +187,15 @@ class SequenceViewModel(
     fun processAll() = scope.launch { processing.start(sessionId, 0, -1) }
     fun processRemaining() = scope.launch { processing.start(sessionId, 0, -1) } // daemon resumes completed frames
     fun processCurrent() = scope.launch { processing.start(sessionId, _currentIndex.value, _currentIndex.value) }
+    /** Reprocess the current frame from scratch (Processing.Start force=true). */
+    fun reprocessCurrent() = scope.launch { processing.start(sessionId, _currentIndex.value, _currentIndex.value, force = true) }
     fun cancelProcessing() = scope.launch { processing.cancel(sessionId) }
+
+    /** Re-run the decision-tree classifier across all frames, then refresh the current frame. */
+    fun applyDecisionTreeAll() = scope.launch {
+        runCatching { outliers.applyDecisionTreeAllFrames(sessionId, overwrite = true) }
+            .onSuccess { frameVMFor(_currentIndex.value).load(force = true) }
+    }
 
     // ---- render ----
     /** Paint the current frame with its decisions (`Outlier.RenderFrame`) and show the result. */

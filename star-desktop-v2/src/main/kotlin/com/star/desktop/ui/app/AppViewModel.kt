@@ -148,6 +148,11 @@ class AppViewModel(
     fun openInfoDialog() { _showInfoDialog.value = true }
     fun closeInfoDialog() { _showInfoDialog.value = false }
 
+    // §4.4: non-blocking warning when a resumed session's config.starVersion ≠ the running engine.
+    private val _versionWarning = MutableStateFlow<String?>(null)
+    val versionWarning: StateFlow<String?> = _versionWarning.asStateFlow()
+    fun dismissVersionWarning() { _versionWarning.value = null }
+
     init {
         scope.launch { engine.start() }
         scope.launch {
@@ -237,6 +242,13 @@ class AppViewModel(
     private fun onOpened(path: String, info: SessionInfo) {
         prefs.addRecentFile(path)
         _recentFiles.value = prefs.recentFiles
+        // Warn if the session was last written by a different engine version (req #4).
+        val engineVer = (engine.status.value as? EngineStatus.Connected)?.daemonVersion
+        val sessionVer = info.config.starVersion
+        _versionWarning.value =
+            if (!sessionVer.isNullOrEmpty() && !engineVer.isNullOrEmpty() && sessionVer != engineVer)
+                "This sequence was last processed with Star $sessionVer; the engine is $engineVer."
+            else null
         currentSequence?.close()
         val proc = ProcessingRepository(scope) { engine.client }
         // Fire the post-processing render prompt when a prompted process-all run reaches "done".

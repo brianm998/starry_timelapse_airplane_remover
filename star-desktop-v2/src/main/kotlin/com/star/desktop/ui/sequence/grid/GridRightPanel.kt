@@ -74,6 +74,7 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                     InfoRow("Positive", "${fi.numPositiveOutliers}", if (fi.numPositiveOutliers > 0) StarColors.red else StarColors.white)
                     InfoRow("Negative", "${fi.numNegativeOutliers}", if (fi.numNegativeOutliers > 0) StarColors.green else StarColors.white)
                     InfoRow("Undecided", "${fi.numUndecidedOutliers}", if (fi.numUndecidedOutliers > 0) StarColors.orange else StarColors.white)
+                    InfoRow("Trash", "${fi.numTrashOutliers}", if (fi.numTrashOutliers > 0) StarColors.gray else StarColors.white)
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     SectionTitle("Processing")

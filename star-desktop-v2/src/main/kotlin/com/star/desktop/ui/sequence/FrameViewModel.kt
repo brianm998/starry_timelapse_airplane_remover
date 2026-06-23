@@ -99,6 +99,14 @@ class FrameViewModel(
         }
     }
 
+    /** Re-run the decision-tree classifier on this frame, then refresh the decisions from the daemon. */
+    fun applyDecisionTree(overwrite: Boolean = true) {
+        scope.launch {
+            runCatching { outliers.applyDecisionTree(sessionId, frameIndex, overwrite) }
+                .onSuccess { load(force = true) }
+        }
+    }
+
     fun toggle(groupId: Int) = setDecision(groupId, OutlierDecisions.toggled(decisionFor(groupId)))
 
     fun setDecision(groupId: Int, reason: RemoveReason) = apply(listOf(groupId to reason))

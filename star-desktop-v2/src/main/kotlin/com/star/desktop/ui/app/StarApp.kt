@@ -61,8 +61,28 @@ fun StarApp(vm: AppViewModel) {
             val showPost by vm.showPostRenderPrompt.collectAsState()
             if (showPost && screen is AppScreen.Sequence) com.star.desktop.ui.dialogs.PostProcessingRenderPrompt(vm)
 
+            val versionWarning by vm.versionWarning.collectAsState()
+            if (versionWarning != null && screen is AppScreen.Sequence) {
+                VersionWarningBanner(versionWarning!!, onDismiss = vm::dismissVersionWarning, modifier = Modifier.align(Alignment.TopCenter))
+            }
+
             error?.let { ErrorOverlay(it, onDismiss = vm::dismissError) }
         }
+    }
+}
+
+@Composable
+private fun VersionWarningBanner(message: String, onDismiss: () -> Unit, modifier: Modifier) {
+    androidx.compose.foundation.layout.Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .padding(8.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(StarColors.yellow.copy(alpha = 0.92f))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text("⚠  $message", color = Color.Black, fontSize = 12.sp)
+        androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Dismiss", fontSize = 12.sp) }
     }
 }
 

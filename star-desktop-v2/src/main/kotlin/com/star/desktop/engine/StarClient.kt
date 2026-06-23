@@ -4,6 +4,10 @@ import com.google.protobuf.MessageLite
 import com.google.protobuf.Parser
 import com.star.proto.AlignmentInfo
 import com.star.proto.AlignmentSequence
+import com.star.proto.ApplyDecisionTreeAllFramesRequest
+import com.star.proto.ApplyDecisionTreeAllFramesResponse
+import com.star.proto.ApplyDecisionTreeRequest
+import com.star.proto.ApplyDecisionTreeResponse
 import com.star.proto.CancelResponse
 import com.star.proto.CleanMethod
 import com.star.proto.ClearReferenceHorizonRequest
@@ -23,22 +27,31 @@ import com.star.proto.FrameInfo
 import com.star.proto.FrameRef
 import com.star.proto.FrameViewMode
 import com.star.proto.GetFramePreviewRequest
+import com.star.proto.GetHorizonOverlayRequest
+import com.star.proto.GetHorizonOverlayResponse
 import com.star.proto.GetVideoCapabilitiesRequest
 import com.star.proto.HelloRequest
 import com.star.proto.HelloResponse
 import com.star.proto.ImageRef
 import com.star.proto.ListSessionsRequest
 import com.star.proto.ListSessionsResponse
+import com.star.proto.MultiFrameDecisionsResponse
 import com.star.proto.OpenConfigRequest
 import com.star.proto.OpenProgress
 import com.star.proto.OpenSequenceRequest
 import com.star.proto.OpenVideoRequest
 import com.star.proto.OutlierDecision
 import com.star.proto.OutlierGroupList
+import com.star.proto.Point
 import com.star.proto.ProgressEvent
+import com.star.proto.ReprocessFramesRequest
+import com.star.proto.ReprocessFramesResponse
+import com.star.proto.ReprocessingType
 import com.star.proto.SessionInfo
 import com.star.proto.SessionRef
 import com.star.proto.SetFrameCleanMethodRequest
+import com.star.proto.SetOutlierDecisionsInAreaRequest
+import com.star.proto.SetOutlierDecisionsOverlappingRequest
 import com.star.proto.SetOutlierDecisionsRequest
 import com.star.proto.SetOutlierDecisionsResponse
 import com.star.proto.ShutdownRequest
@@ -163,12 +176,60 @@ class StarClient(private val conn: StdioConnection) {
     suspend fun renderFrame(sessionId: String, frameIndex: Int): ImageRef =
         call("Outlier.RenderFrame", frameRef(sessionId, frameIndex), ImageRef.parser())
 
+    suspend fun applyDecisionTree(
+        sessionId: String,
+        frameIndex: Int,
+        overwrite: Boolean,
+        autoOnly: Boolean = false,
+        includingTrash: Boolean = false,
+        minimumSize: Int = 0,
+        rerender: Boolean = false,
+    ): ApplyDecisionTreeResponse =
+        call(
+            "Outlier.ApplyDecisionTree",
+            ApplyDecisionTreeRequest.newBuilder()
+                .setSessionId(sessionId).setFrameIndex(frameIndex).setOverwrite(overwrite)
+                .setAutoOnly(autoOnly).setIncludingTrash(includingTrash).setMinimumSize(minimumSize).setRerender(rerender).build(),
+            ApplyDecisionTreeResponse.parser(),
+        )
+
+    suspend fun applyDecisionTreeAllFrames(sessionId: String, overwrite: Boolean, minimumSize: Int = 0): ApplyDecisionTreeAllFramesResponse =
+        call(
+            "Outlier.ApplyDecisionTreeAllFrames",
+            ApplyDecisionTreeAllFramesRequest.newBuilder().setSessionId(sessionId).setOverwrite(overwrite).setMinimumSize(minimumSize).build(),
+            ApplyDecisionTreeAllFramesResponse.parser(),
+        )
+
+    suspend fun setOutlierDecisionsInArea(
+        sessionId: String, startIndex: Int, endIndex: Int, shouldRemove: Boolean,
+        start: Point, end: Point, includingTrash: Boolean = false, rerender: Boolean = false,
+    ): MultiFrameDecisionsResponse =
+        call(
+            "Outlier.SetDecisionsInArea",
+            SetOutlierDecisionsInAreaRequest.newBuilder()
+                .setSessionId(sessionId).setStartIndex(startIndex).setEndIndex(endIndex).setShouldRemove(shouldRemove)
+                .setStartLocation(start).setEndLocation(end).setIncludingTrash(includingTrash).setRerender(rerender).build(),
+            MultiFrameDecisionsResponse.parser(),
+        )
+
+    suspend fun setOutlierDecisionsOverlapping(
+        sessionId: String, startIndex: Int, endIndex: Int, shouldRemove: Boolean,
+        referenceFrame: Int, referenceGroupId: Int, rerender: Boolean = false,
+    ): MultiFrameDecisionsResponse =
+        call(
+            "Outlier.SetDecisionsOverlapping",
+            SetOutlierDecisionsOverlappingRequest.newBuilder()
+                .setSessionId(sessionId).setStartIndex(startIndex).setEndIndex(endIndex).setShouldRemove(shouldRemove)
+                .setReferenceFrame(referenceFrame).setReferenceGroupId(referenceGroupId).setRerender(rerender).build(),
+            MultiFrameDecisionsResponse.parser(),
+        )
+
     // ---- Processing ----
 
-    suspend fun startProcessing(sessionId: String, startIndex: Int = 0, endIndex: Int = -1): StartProcessingResponse =
+    suspend fun startProcessing(sessionId: String, startIndex: Int = 0, endIndex: Int = -1, force: Boolean = false): StartProcessingResponse =
         call(
             "Processing.Start",
-            StartProcessingRequest.newBuilder().setSessionId(sessionId).setStartIndex(startIndex).setEndIndex(endIndex).build(),
+            StartProcessingRequest.newBuilder().setSessionId(sessionId).setStartIndex(startIndex).setEndIndex(endIndex).setForce(force).build(),
             StartProcessingResponse.parser(),
         )
 
@@ -177,6 +238,13 @@ class StarClient(private val conn: StdioConnection) {
 
     suspend fun cancelProcessing(sessionId: String): CancelResponse =
         call("Processing.Cancel", sessionRef(sessionId), CancelResponse.parser())
+
+    suspend fun reprocessFrames(sessionId: String, frameIndices: List<Int>, type: ReprocessingType): ReprocessFramesResponse =
+        call(
+            "Processing.ReprocessFrames",
+            ReprocessFramesRequest.newBuilder().setSessionId(sessionId).addAllFrameIndices(frameIndices).setType(type).build(),
+            ReprocessFramesResponse.parser(),
+        )
 
     // ---- Export ----
 
@@ -234,6 +302,13 @@ class StarClient(private val conn: StdioConnection) {
             "Horizon.Reprocess",
             ReprocessHorizonsRequest.newBuilder().setSessionId(sessionId).addAllEditedFrameIndices(editedFrames).build(),
             ProgressEvent.parser(),
+        )
+
+    suspend fun getHorizonOverlay(sessionId: String, frameIndex: Int, width: Int, height: Int): GetHorizonOverlayResponse =
+        call(
+            "Horizon.GetOverlay",
+            GetHorizonOverlayRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setWidth(width).setHeight(height).build(),
+            GetHorizonOverlayResponse.parser(),
         )
 
     // ---- helpers ----
