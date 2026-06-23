@@ -64,6 +64,11 @@ class SequenceViewModel(
     private val _showFilmstrip = MutableStateFlow(true)
     val showFilmstrip: StateFlow<Boolean> = _showFilmstrip.asStateFlow()
 
+    // Grid thumbnail size (macOS gridThumbnailScale): a fraction of the full image width, 0.02..0.5.
+    private val _gridThumbnailScale = MutableStateFlow(0.12f)
+    val gridThumbnailScale: StateFlow<Float> = _gridThumbnailScale.asStateFlow()
+    fun setGridThumbnailScale(v: Float) { _gridThumbnailScale.value = v.coerceIn(0.02f, 0.5f) }
+
     private val _leftPanelShowing = MutableStateFlow(true)
     val leftPanelShowing: StateFlow<Boolean> = _leftPanelShowing.asStateFlow()
     private val _rightPanelShowing = MutableStateFlow(true)
@@ -158,17 +163,25 @@ class SequenceViewModel(
     fun next() = setCurrentIndex(_currentIndex.value + 1)
     fun previous() = setCurrentIndex(_currentIndex.value - 1)
 
+    /**
+     * Selection (macOS GridView): shift = range from the anchor (currentIndex stays put);
+     * cmd/ctrl = additive toggle but the anchor is never deselected; plain = single + move anchor.
+     */
     fun select(index: Int, additive: Boolean = false, range: Boolean = false) {
         when {
             range -> {
                 val lo = minOf(_currentIndex.value, index)
                 val hi = maxOf(_currentIndex.value, index)
-                _selected.value = (lo..hi).toSet()
+                _selected.value = (lo..hi).toSet() // anchor stays
             }
-            additive -> _selected.value = _selected.value.toMutableSet().apply { if (!add(index)) remove(index) }
-            else -> _selected.value = setOf(index)
+            additive -> {
+                val cur = _currentIndex.value
+                _selected.value = _selected.value.toMutableSet().apply {
+                    if (index in this) { if (index != cur) remove(index) } else { add(index); add(cur) }
+                } // anchor stays
+            }
+            else -> { _selected.value = setOf(index); setCurrentIndex(index) }
         }
-        setCurrentIndex(index)
     }
 
     fun processAll() = scope.launch { processing.start(sessionId, 0, -1) }
@@ -296,12 +309,20 @@ class SequenceViewModel(
         playbackJob = null
     }
 
-    /** Preview path for [index] (for the filmstrip / grid to load). Null if not generated yet. */
-    suspend fun previewRefPath(index: Int): String? =
-        frames.previewPath(sessionId, index, FrameViewMode.VIEW_ORIGINAL)?.path
+    /** Preview path for [index] in [mode], falling back through the other view modes. Null if none exist. */
+    suspend fun previewRefPath(index: Int, mode: FrameViewMode = FrameViewMode.VIEW_ORIGINAL): String? {
+        for (m in (listOf(mode) + PREVIEW_FALLBACK).distinct()) {
+            frames.previewPath(sessionId, index, m)?.let { return it.path }
+        }
+        return null
+    }
 
-    suspend fun loadThumb(index: Int): ImageBitmap? =
-        previewRefPath(index)?.let { imageCache.load(it) }
+    suspend fun loadThumb(index: Int, mode: FrameViewMode = FrameViewMode.VIEW_ORIGINAL): ImageBitmap? =
+        previewRefPath(index, mode)?.let { imageCache.load(it) }
+
+    /** Per-frame status/counts/clean-method for the grid header & right panel (`Frame.Get`). */
+    suspend fun frameInfo(index: Int): com.star.proto.FrameInfo? =
+        runCatching { frames.info(sessionId, index) }.getOrNull()
 
     fun close() {
         stopPlayback()

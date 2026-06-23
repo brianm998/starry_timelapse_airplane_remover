@@ -5,9 +5,11 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -23,97 +27,145 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.Text
 import com.star.desktop.domain.FrameState
 import com.star.desktop.domain.InteractionMode
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
+import com.star.proto.FrameInfo
 import com.star.proto.FrameProcessingState
+import com.star.proto.FrameViewMode
 
-/** Grid mode (macOS `GridView`): Lightroom-style adaptive thumbnail grid; double-click → edit. */
+/** Grid mode (macOS `GridView`): Lightroom-style thumbnail grid with per-cell status, sized by the scale slider. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GridView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val states by vm.frameStates.collectAsState()
     val current by vm.currentIndex.collectAsState()
     val selected by vm.selected.collectAsState()
+    val viewMode by vm.viewMode.collectAsState()
+    val scale by vm.gridThumbnailScale.collectAsState()
+
+    val cellWidth = (vm.info.imageWidth * scale).coerceIn(70f, 1000f)
+    val gridState = rememberLazyGridState()
+    LaunchedEffect(Unit) { gridState.scrollToItem(current.coerceAtLeast(0)) }
+    LaunchedEffect(current) { gridState.animateScrollToItem(current.coerceAtLeast(0)) }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 200.dp),
+        state = gridState,
+        columns = GridCells.Adaptive(minSize = cellWidth.dp),
         modifier = modifier.fillMaxSize().background(StarColors.appBackground),
         contentPadding = PaddingValues(8.dp),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
-        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         items((0 until vm.frameCount).toList(), key = { it }) { i ->
             GridCell(
                 vm = vm,
                 index = i,
                 isCurrent = i == current,
-                isSelected = i in selected,
+                isInSelection = i != current && i in selected,
                 state = states[i],
+                viewMode = viewMode,
             )
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
 private fun GridCell(
     vm: SequenceViewModel,
     index: Int,
     isCurrent: Boolean,
-    isSelected: Boolean,
+    isInSelection: Boolean,
     state: FrameProcessingState?,
+    viewMode: FrameViewMode,
 ) {
     var thumb by remember(index) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(index, state) { if (thumb == null) thumb = vm.loadThumb(index) }
+    var info by remember(index) { mutableStateOf<FrameInfo?>(null) }
+    LaunchedEffect(index, viewMode, state) { thumb = vm.loadThumb(index, viewMode) }
+    LaunchedEffect(index, state) { info = vm.frameInfo(index) }
+    var mods by remember { mutableStateOf<PointerKeyboardModifiers?>(null) }
 
     val bg = when {
         isCurrent -> StarColors.cellHighlighted
-        isSelected -> StarColors.cellSelected
+        isInSelection -> StarColors.cellSelected
         else -> StarColors.cellDefault
     }
+    val borderMod = when {
+        isCurrent -> Modifier.border(2.dp, SolidColor(StarColors.accent), StarShapes.gridCell)
+        isInSelection -> Modifier.border(1.dp, SolidColor(StarColors.accent.copy(alpha = 0.55f)), StarShapes.gridCell)
+        else -> Modifier
+    }
+    val aspect = if (vm.info.imageHeight > 0) vm.info.imageWidth.toFloat() / vm.info.imageHeight else 1.5f
 
     Column(
         Modifier
             .clip(StarShapes.gridCell)
             .background(bg)
-            .then(if (isCurrent) Modifier.border(2.dp, SolidColor(StarColors.accent), StarShapes.gridCell) else Modifier)
+            .then(borderMod)
+            .onPointerEvent(PointerEventType.Press) { mods = it.keyboardModifiers }
             .combinedClickable(
-                onClick = { vm.select(index) },
-                onDoubleClick = {
-                    vm.setCurrentIndex(index)
-                    vm.setMode(InteractionMode.EDIT)
+                onClick = {
+                    val m = mods
+                    when {
+                        m?.isShiftPressed == true -> vm.select(index, range = true)
+                        m?.isCtrlPressed == true || m?.isMetaPressed == true -> vm.select(index, additive = true)
+                        else -> vm.select(index)
+                    }
                 },
+                onDoubleClick = { vm.setCurrentIndex(index); vm.select(index); vm.setMode(InteractionMode.EDIT) },
             )
             .padding(4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(1.5f).clip(StarShapes.gridCell), contentAlignment = Alignment.Center) {
+        // Header: 0-based frame number · outlier dots · clean-method icon.
+        Row(Modifier.fillMaxWidth().padding(bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("$index", color = StarColors.white, fontSize = 11.sp)
+            Box(Modifier.weight(1f))
+            val fi = info
+            if (fi != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy((-4).dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (fi.numPositiveOutliers != 0) OutlierDot(StarColors.red)
+                    if (fi.numUndecidedOutliers != 0) OutlierDot(StarColors.orange)
+                    if (fi.numNegativeOutliers != 0) OutlierDot(StarColors.green)
+                }
+                Box(Modifier.padding(start = 3.dp)) { CleanMethodIcon(fi.cleanMethod, StarColors.white, 9.dp) }
+            }
+        }
+
+        Box(Modifier.fillMaxWidth().aspectRatio(aspect).clip(StarShapes.gridCell), contentAlignment = Alignment.BottomStart) {
             val t = thumb
             if (t != null) {
                 Image(bitmap = t, contentDescription = "Frame $index", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            } else {
-                Text("${index + 1}", color = StarColors.textSecondary, fontSize = 16.sp)
+            }
+            if (state != null) {
+                val s = FrameState.shortString(state)
+                if (s.isNotEmpty()) {
+                    Text(s, color = StarColors.green, fontSize = 10.sp, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
+                }
             }
         }
-        Text(
-            "${index + 1} · ${state?.let { FrameState.shortString(it) } ?: "—"}",
-            color = if (state == FrameProcessingState.FPS_COMPLETE) StarColors.green else StarColors.textDisabled,
-            fontSize = 10.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 2.dp),
-        )
     }
+}
+
+/** A small diagonal stroke standing in for the macOS `line.diagonal` outlier indicator. */
+@Composable
+private fun OutlierDot(color: Color) {
+    Text("╱", color = color, fontSize = 9.sp)
 }
