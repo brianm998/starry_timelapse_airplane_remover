@@ -253,7 +253,7 @@ class AppViewModel(
         val proc = ProcessingRepository(scope) { engine.client }
         // Fire the post-processing render prompt when a prompted process-all run reaches "done".
         scope.launch { proc.sequenceState.collect { if (it == "done") handleProcessingDone() } }
-        val svm = SequenceViewModel(scope, info, frameRepo, proc, outlierRepo, imageCache, export)
+        val svm = SequenceViewModel(scope, info, frameRepo, proc, outlierRepo, imageCache, export, horizonRepo)
         when (autoMode) {
             "edit" -> svm.setMode(com.star.desktop.domain.InteractionMode.EDIT)
             "grid" -> svm.setMode(com.star.desktop.domain.InteractionMode.GRID)

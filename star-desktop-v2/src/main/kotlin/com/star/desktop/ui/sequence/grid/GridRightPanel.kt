@@ -39,6 +39,7 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val current by vm.currentIndex.collectAsState()
     val scale by vm.gridThumbnailScale.collectAsState()
     val showFilmstrip by vm.showFilmstrip.collectAsState()
+    val showHorizon by vm.showHorizonOnGrid.collectAsState()
     val states by vm.frameStates.collectAsState()
     var info by remember(current) { mutableStateOf<FrameInfo?>(null) }
     LaunchedEffect(current, states[current]) { info = vm.frameInfo(current) }
@@ -59,6 +60,10 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Switch(checked = showFilmstrip, onCheckedChange = { vm.toggleFilmstrip() })
                     Text("Show Filmstrip", color = StarColors.white, fontSize = 11.sp)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Switch(checked = showHorizon, onCheckedChange = { vm.toggleHorizonOnGrid() })
+                    Text("Show Horizon Lines", color = StarColors.white, fontSize = 11.sp)
                 }
             }
 

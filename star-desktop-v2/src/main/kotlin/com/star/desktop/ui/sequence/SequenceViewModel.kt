@@ -3,6 +3,7 @@ package com.star.desktop.ui.sequence
 import androidx.compose.ui.graphics.ImageBitmap
 import com.star.desktop.data.ExportRepository
 import com.star.desktop.data.FrameRepository
+import com.star.desktop.data.HorizonRepository
 import com.star.desktop.data.ImageCache
 import com.star.desktop.data.OutlierRepository
 import com.star.desktop.data.ProcessingRepository
@@ -41,6 +42,7 @@ class SequenceViewModel(
     val outliers: OutlierRepository,
     private val imageCache: ImageCache,
     private val export: ExportRepository,
+    val horizon: HorizonRepository,
 ) {
     val sessionId: String = info.sessionId
     val frameCount: Int = info.frameCount
@@ -68,6 +70,11 @@ class SequenceViewModel(
     private val _gridThumbnailScale = MutableStateFlow(0.12f)
     val gridThumbnailScale: StateFlow<Float> = _gridThumbnailScale.asStateFlow()
     fun setGridThumbnailScale(v: Float) { _gridThumbnailScale.value = v.coerceIn(0.02f, 0.5f) }
+
+    // Draw per-cell horizon overlays in the grid (macOS showHorizonOnMainView).
+    private val _showHorizonOnGrid = MutableStateFlow(false)
+    val showHorizonOnGrid: StateFlow<Boolean> = _showHorizonOnGrid.asStateFlow()
+    fun toggleHorizonOnGrid() { _showHorizonOnGrid.value = !_showHorizonOnGrid.value }
 
     private val _leftPanelShowing = MutableStateFlow(true)
     val leftPanelShowing: StateFlow<Boolean> = _leftPanelShowing.asStateFlow()
@@ -196,6 +203,16 @@ class SequenceViewModel(
         runCatching { outliers.applyDecisionTreeAllFrames(sessionId, overwrite = true) }
             .onSuccess { frameVMFor(_currentIndex.value).load(force = true) }
     }
+
+    /** Granular reprocess (grid context menu) of the selected frames, or the current frame if none. */
+    fun reprocessSelected(type: com.star.proto.ReprocessingType) = scope.launch {
+        val indices = (_selected.value.takeIf { it.isNotEmpty() } ?: setOf(_currentIndex.value)).sorted()
+        runCatching { processing.reprocessFrames(sessionId, indices, type) }
+    }
+
+    /** Per-cell grid horizon overlay (kind + per-column Y), or null if none. */
+    suspend fun gridHorizonOverlay(index: Int, width: Int, height: Int) =
+        horizon.getOverlay(sessionId, index, width, height)
 
     // ---- render ----
     /** Paint the current frame with its decisions (`Outlier.RenderFrame`) and show the result. */

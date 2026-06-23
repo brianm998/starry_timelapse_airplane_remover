@@ -84,6 +84,19 @@ class ProcessingRepository(
         _processing.value = false
     }
 
+    /** Granular reprocess of selected frames; progress arrives over the live StreamProgress subscription. */
+    suspend fun reprocessFrames(sessionId: String, indices: List<Int>, type: com.star.proto.ReprocessingType) {
+        if (indices.isEmpty()) return
+        _sequenceState.value = null
+        _processing.value = true
+        try {
+            c().reprocessFrames(sessionId, indices, type)
+        } catch (e: Throwable) {
+            _processing.value = false
+            throw e
+        }
+    }
+
     /** Tear down the subscription (session close). */
     fun stop() {
         subJob?.cancel()

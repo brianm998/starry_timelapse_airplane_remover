@@ -2,6 +2,7 @@ package com.star.desktop.data
 
 import com.star.desktop.engine.StarClient
 import com.star.desktop.engine.StarRpcException
+import com.star.proto.GetHorizonOverlayResponse
 import com.star.proto.GetReferenceHorizonResponse
 import com.star.proto.HorizonColumns
 import com.star.proto.ProgressEvent
@@ -52,4 +53,12 @@ class HorizonRepository(private val clientProvider: () -> StarClient?) {
 
     fun reprocess(sessionId: String, editedFrames: List<Int>): Flow<ProgressEvent> =
         c().reprocessHorizons(sessionId, editedFrames)
+
+    /** Per-frame horizon overlay (kind + per-column Y) for grid drawing; null if unavailable. */
+    suspend fun getOverlay(sessionId: String, frameIndex: Int, width: Int, height: Int): GetHorizonOverlayResponse? =
+        try {
+            c().getHorizonOverlay(sessionId, frameIndex, width, height)
+        } catch (e: StarRpcException) {
+            null
+        }
 }

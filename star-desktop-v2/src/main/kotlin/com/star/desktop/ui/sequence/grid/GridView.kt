@@ -1,5 +1,8 @@
 package com.star.desktop.ui.sequence.grid
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ContextMenuArea
+import androidx.compose.foundation.ContextMenuItem
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -32,7 +35,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
 import androidx.compose.ui.input.pointer.isCtrlPressed
@@ -50,6 +55,9 @@ import com.star.desktop.ui.theme.StarShapes
 import com.star.proto.FrameInfo
 import com.star.proto.FrameProcessingState
 import com.star.proto.FrameViewMode
+import com.star.proto.GetHorizonOverlayResponse
+import com.star.proto.HorizonOverlayKind
+import com.star.proto.ReprocessingType
 
 /** Grid mode (macOS `GridView`): Lightroom-style thumbnail grid with per-cell status, sized by the scale slider. */
 @OptIn(ExperimentalFoundationApi::class)
@@ -60,6 +68,7 @@ fun GridView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val selected by vm.selected.collectAsState()
     val viewMode by vm.viewMode.collectAsState()
     val scale by vm.gridThumbnailScale.collectAsState()
+    val showHorizon by vm.showHorizonOnGrid.collectAsState()
 
     val cellWidth = (vm.info.imageWidth * scale).coerceIn(70f, 1000f)
     val gridState = rememberLazyGridState()
@@ -82,6 +91,7 @@ fun GridView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 isInSelection = i != current && i in selected,
                 state = states[i],
                 viewMode = viewMode,
+                showHorizon = showHorizon,
             )
         }
     }
@@ -96,12 +106,30 @@ private fun GridCell(
     isInSelection: Boolean,
     state: FrameProcessingState?,
     viewMode: FrameViewMode,
+    showHorizon: Boolean,
 ) {
     var thumb by remember(index) { mutableStateOf<ImageBitmap?>(null) }
     var info by remember(index) { mutableStateOf<FrameInfo?>(null) }
+    var overlay by remember(index) { mutableStateOf<GetHorizonOverlayResponse?>(null) }
     LaunchedEffect(index, viewMode, state) { thumb = vm.loadThumb(index, viewMode) }
     LaunchedEffect(index, state) { info = vm.frameInfo(index) }
+    LaunchedEffect(index, showHorizon, state) {
+        overlay = if (showHorizon) {
+            val h = (256f * vm.info.imageHeight / vm.info.imageWidth.coerceAtLeast(1)).toInt().coerceAtLeast(1)
+            vm.gridHorizonOverlay(index, 256, h)
+        } else null
+    }
     var mods by remember { mutableStateOf<PointerKeyboardModifiers?>(null) }
+
+    val reprocessItems = {
+        listOf(
+            ContextMenuItem("Process (new only)") { vm.reprocessSelected(ReprocessingType.REPROCESS_NONE) },
+            ContextMenuItem("Re-Process Alignment") { vm.reprocessSelected(ReprocessingType.REPROCESS_ALIGNMENT) },
+            ContextMenuItem("Re-Process Outliers") { vm.reprocessSelected(ReprocessingType.REPROCESS_OUTLIERS) },
+            ContextMenuItem("Re-Process Horizons") { vm.reprocessSelected(ReprocessingType.REPROCESS_HORIZONS) },
+            ContextMenuItem("Re-Process Everything") { vm.reprocessSelected(ReprocessingType.REPROCESS_EVERYTHING) },
+        )
+    }
 
     val bg = when {
         isCurrent -> StarColors.cellHighlighted
@@ -115,7 +143,8 @@ private fun GridCell(
     }
     val aspect = if (vm.info.imageHeight > 0) vm.info.imageWidth.toFloat() / vm.info.imageHeight else 1.5f
 
-    Column(
+    ContextMenuArea(items = reprocessItems) {
+      Column(
         Modifier
             .clip(StarShapes.gridCell)
             .background(bg)
@@ -154,6 +183,27 @@ private fun GridCell(
             if (t != null) {
                 Image(bitmap = t, contentDescription = "Frame $index", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             }
+            // Per-cell horizon overlay (kind → color), scaled from the overlay's draw space.
+            val ov = overlay
+            if (ov != null && ov.exists && ov.yPerColumnList.isNotEmpty()) {
+                val lineColor = when (ov.kind) {
+                    HorizonOverlayKind.HORIZON_OVERLAY_KIND_REFERENCE -> StarColors.green
+                    HorizonOverlayKind.HORIZON_OVERLAY_KIND_MERGED -> StarColors.blue
+                    else -> StarColors.white
+                }
+                Canvas(Modifier.fillMaxSize()) {
+                    val ys = ov.yPerColumnList
+                    val sx = size.width / ys.size
+                    val sy = if (ov.height > 0) size.height / ov.height else 1f
+                    val path = Path()
+                    ys.forEachIndexed { i, y ->
+                        val px = i * sx
+                        val py = y * sy
+                        if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                    }
+                    drawPath(path, color = lineColor, style = Stroke(width = 1.5.dp.toPx()))
+                }
+            }
             if (state != null) {
                 val s = FrameState.shortString(state)
                 if (s.isNotEmpty()) {
@@ -161,6 +211,7 @@ private fun GridCell(
                 }
             }
         }
+      }
     }
 }
 
