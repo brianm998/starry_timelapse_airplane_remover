@@ -24,12 +24,13 @@ fun main(args: Array<String>) = application {
     // App-lifetime scope for the root view model (engine, repositories, progress streams).
     val appScope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     // Dev convenience: `./gradlew run --args="/path/to/seq"` opens it on launch.
-    // Dev arg form: "<path>" or "<path>::<mode>" (mode = edit/scrub/grid). The "::" separator avoids
-    // Gradle's --args splitting a space into a separate task argument.
-    val raw = args.firstOrNull()
-    val openPath = raw?.substringBefore("::")
-    val openMode = raw?.substringAfter("::", "")?.ifBlank { null }
-    val vm = remember { AppViewModel(appScope, autoOpenPath = openPath, autoMode = openMode) }
+    // Dev arg form: "<path>", "<path>::<mode>", or "<path>::<mode>::<frame>" (mode = edit/scrub/grid).
+    // The "::" separator avoids Gradle's --args splitting a space into a separate task argument.
+    val parts = args.firstOrNull()?.split("::") ?: emptyList()
+    val openPath = parts.getOrNull(0)?.ifBlank { null }
+    val openMode = parts.getOrNull(1)?.ifBlank { null }
+    val openFrame = parts.getOrNull(2)?.toIntOrNull()
+    val vm = remember { AppViewModel(appScope, autoOpenPath = openPath, autoMode = openMode, autoFrame = openFrame) }
     Window(
         onCloseRequest = ::exitApplication,
         title = "Star",

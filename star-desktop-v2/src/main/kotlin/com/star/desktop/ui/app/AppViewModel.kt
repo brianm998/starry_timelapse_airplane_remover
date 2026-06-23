@@ -35,6 +35,7 @@ class AppViewModel(
     private val scope: CoroutineScope,
     autoOpenPath: String? = null,
     private val autoMode: String? = null, // dev hook: "edit"/"scrub"/"grid" to land in a mode after auto-open
+    private val autoFrame: Int? = null,   // dev hook: start at this frame index after auto-open
 ) {
 
     val engine = EngineState(scope)
@@ -173,6 +174,7 @@ class AppViewModel(
             "grid" -> svm.setMode(com.star.desktop.domain.InteractionMode.GRID)
             else -> Unit
         }
+        autoFrame?.let { svm.setCurrentIndex(it) }
         currentSequence = svm
         _screen.value = AppScreen.Sequence(svm)
     }
