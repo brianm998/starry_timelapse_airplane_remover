@@ -45,7 +45,10 @@ fun SequenceScreen(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier 
                     background = if (playing) StarColors.playbackBackground else StarColors.appBackground,
                 )
                 InteractionMode.EDIT -> Row(Modifier.fillMaxSize()) {
-                    LeftPanel(vm)
+                    val leftShowing by vm.leftPanelShowing.collectAsState()
+                    val rightShowing by vm.rightPanelShowing.collectAsState()
+                    if (leftShowing) LeftPanel(vm)
+                    else com.star.desktop.ui.components.CollapsedPanelRail({ vm.setLeftPanel(true) }, pointLeft = false)
                     val painting by vm.horizonPaintMode.collectAsState()
                     Box(Modifier.weight(1f).fillMaxSize()) {
                         if (painting) {
@@ -54,7 +57,8 @@ fun SequenceScreen(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier 
                             com.star.desktop.ui.sequence.edit.FrameEditView(vm)
                         }
                     }
-                    RightPanel(vm)
+                    if (rightShowing) RightPanel(vm)
+                    else com.star.desktop.ui.components.CollapsedPanelRail({ vm.setRightPanel(true) }, pointLeft = true)
                 }
                 InteractionMode.GRID -> Row(Modifier.fillMaxSize()) {
                     LeftPanel(vm)

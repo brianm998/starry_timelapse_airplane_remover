@@ -46,11 +46,11 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val selected by fvm.selected.collectAsState()
     val info by fvm.info.collectAsState()
 
-    Column(
-        modifier = modifier
-            .width(150.dp)
-            .fillMaxHeight()
-            .background(StarColors.sidePanel)
+    Column(modifier.width(150.dp).fillMaxHeight().background(StarColors.sidePanel)) {
+      Column(
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -82,6 +82,8 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         CLEAN_METHODS.forEach { (method, label) ->
             CleanMethodRow(label, selected = method == activeMethod) { fvm.setCleanMethod(method) }
         }
+      }
+      com.star.desktop.ui.components.PanelChevron("»", { vm.setRightPanel(false) }, Modifier.padding(6.dp))
     }
 }
 

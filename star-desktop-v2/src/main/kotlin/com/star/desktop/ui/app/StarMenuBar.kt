@@ -68,7 +68,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
             Item("Outlier Table", enabled = hasSession, shortcut = primaryShortcut(Key.X, alt = true)) { app.toggleOutlierWindow() }
             Item("Alignment", enabled = hasSession, shortcut = primaryShortcut(Key.A, alt = true)) { app.toggleAlignmentWindow() }
             Separator()
-            Item("Paint Reference Horizon", enabled = hasSession) {
+            Item("Paint Reference Horizon", enabled = hasSession, shortcut = KeyShortcut(Key.H)) {
                 svm?.let { if (it.mode.value != InteractionMode.EDIT) it.setMode(InteractionMode.EDIT); it.toggleHorizonPaint() }
             }
         }

@@ -32,6 +32,10 @@ fun handleGlobalKey(event: KeyEvent, app: AppViewModel): Boolean {
         Key.Z -> { svm.fastPrevious(); return true }
         Key.X -> { svm.fastForward(); return true }
         Key.W -> { svm.playReverse(); return true }
+        // Editing accelerators. r renders the current frame; Tab toggles the side panels (macOS
+        // TabCatcher). h (toggle horizon painter) lives on the menu bar so it isn't double-handled.
+        Key.R -> { svm.renderCurrentFrame(); return true }
+        Key.Tab -> { svm.toggleSidePanels(); return true }
     }
 
     val digit = DIGIT_KEYS[event.key]

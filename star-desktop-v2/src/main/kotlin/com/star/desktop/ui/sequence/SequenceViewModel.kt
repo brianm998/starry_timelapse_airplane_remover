@@ -64,6 +64,19 @@ class SequenceViewModel(
     private val _showFilmstrip = MutableStateFlow(true)
     val showFilmstrip: StateFlow<Boolean> = _showFilmstrip.asStateFlow()
 
+    private val _leftPanelShowing = MutableStateFlow(true)
+    val leftPanelShowing: StateFlow<Boolean> = _leftPanelShowing.asStateFlow()
+    private val _rightPanelShowing = MutableStateFlow(true)
+    val rightPanelShowing: StateFlow<Boolean> = _rightPanelShowing.asStateFlow()
+    fun setLeftPanel(showing: Boolean) { _leftPanelShowing.value = showing }
+    fun setRightPanel(showing: Boolean) { _rightPanelShowing.value = showing }
+    /** macOS `toggleSidePanels` (Tab): both shown → both hide; otherwise → both show. */
+    fun toggleSidePanels() {
+        val hide = _leftPanelShowing.value && _rightPanelShowing.value
+        _leftPanelShowing.value = !hide
+        _rightPanelShowing.value = !hide
+    }
+
     // Edit sub-mode: when on, the center view is the horizon painter instead of the outlier overlay.
     private val _horizonPaintMode = MutableStateFlow(false)
     val horizonPaintMode: StateFlow<Boolean> = _horizonPaintMode.asStateFlow()

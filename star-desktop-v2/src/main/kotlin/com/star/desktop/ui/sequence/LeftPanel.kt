@@ -48,11 +48,11 @@ fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val complete = states.values.count { it == FrameProcessingState.FPS_COMPLETE }
     val total = vm.frameCount
 
-    Column(
-        modifier = modifier
-            .width(220.dp)
-            .fillMaxHeight()
-            .background(StarColors.sidePanel)
+    Column(modifier.width(220.dp).fillMaxHeight().background(StarColors.sidePanel)) {
+      Column(
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -129,6 +129,8 @@ fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             }
         }
         seqStateTooltip(states, current)
+      }
+      com.star.desktop.ui.components.PanelChevron("«", { vm.setLeftPanel(false) }, Modifier.padding(6.dp))
     }
 }
 
