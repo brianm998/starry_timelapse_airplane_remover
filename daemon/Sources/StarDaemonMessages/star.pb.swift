@@ -1047,6 +1047,269 @@ public nonisolated struct Star_V1_Config: @unchecked Sendable {
     set {_uniqueStorage()._starVersion = newValue}
   }
 
+  /// Expert settings (StarCore Config). All `optional` so an unset field keeps StarCore's (non-zero)
+  /// default instead of being clobbered by a proto3 zero. The daemon applies only present fields.
+  public var numberAlignedNeighborFrames: Int32 {
+    get {_storage._numberAlignedNeighborFrames ?? 0}
+    set {_uniqueStorage()._numberAlignedNeighborFrames = newValue}
+  }
+  /// Returns true if `numberAlignedNeighborFrames` has been explicitly set.
+  public var hasNumberAlignedNeighborFrames: Bool {_storage._numberAlignedNeighborFrames != nil}
+  /// Clears the value of `numberAlignedNeighborFrames`. Subsequent reads from it will return its default value.
+  public mutating func clearNumberAlignedNeighborFrames() {_uniqueStorage()._numberAlignedNeighborFrames = nil}
+
+  public var numberStaticNeighborFrames: Int32 {
+    get {_storage._numberStaticNeighborFrames ?? 0}
+    set {_uniqueStorage()._numberStaticNeighborFrames = newValue}
+  }
+  /// Returns true if `numberStaticNeighborFrames` has been explicitly set.
+  public var hasNumberStaticNeighborFrames: Bool {_storage._numberStaticNeighborFrames != nil}
+  /// Clears the value of `numberStaticNeighborFrames`. Subsequent reads from it will return its default value.
+  public mutating func clearNumberStaticNeighborFrames() {_uniqueStorage()._numberStaticNeighborFrames = nil}
+
+  public var homographySmoothingEpsilon: Double {
+    get {_storage._homographySmoothingEpsilon ?? 0}
+    set {_uniqueStorage()._homographySmoothingEpsilon = newValue}
+  }
+  /// Returns true if `homographySmoothingEpsilon` has been explicitly set.
+  public var hasHomographySmoothingEpsilon: Bool {_storage._homographySmoothingEpsilon != nil}
+  /// Clears the value of `homographySmoothingEpsilon`. Subsequent reads from it will return its default value.
+  public mutating func clearHomographySmoothingEpsilon() {_uniqueStorage()._homographySmoothingEpsilon = nil}
+
+  public var keypointMemoryMultiplier: Int32 {
+    get {_storage._keypointMemoryMultiplier ?? 0}
+    set {_uniqueStorage()._keypointMemoryMultiplier = newValue}
+  }
+  /// Returns true if `keypointMemoryMultiplier` has been explicitly set.
+  public var hasKeypointMemoryMultiplier: Bool {_storage._keypointMemoryMultiplier != nil}
+  /// Clears the value of `keypointMemoryMultiplier`. Subsequent reads from it will return its default value.
+  public mutating func clearKeypointMemoryMultiplier() {_uniqueStorage()._keypointMemoryMultiplier = nil}
+
+  public var outlierMemoryMultiplier: Int32 {
+    get {_storage._outlierMemoryMultiplier ?? 0}
+    set {_uniqueStorage()._outlierMemoryMultiplier = newValue}
+  }
+  /// Returns true if `outlierMemoryMultiplier` has been explicitly set.
+  public var hasOutlierMemoryMultiplier: Bool {_storage._outlierMemoryMultiplier != nil}
+  /// Clears the value of `outlierMemoryMultiplier`. Subsequent reads from it will return its default value.
+  public mutating func clearOutlierMemoryMultiplier() {_uniqueStorage()._outlierMemoryMultiplier = nil}
+
+  public var mergeMemoryMultiplier: Int32 {
+    get {_storage._mergeMemoryMultiplier ?? 0}
+    set {_uniqueStorage()._mergeMemoryMultiplier = newValue}
+  }
+  /// Returns true if `mergeMemoryMultiplier` has been explicitly set.
+  public var hasMergeMemoryMultiplier: Bool {_storage._mergeMemoryMultiplier != nil}
+  /// Clears the value of `mergeMemoryMultiplier`. Subsequent reads from it will return its default value.
+  public mutating func clearMergeMemoryMultiplier() {_uniqueStorage()._mergeMemoryMultiplier = nil}
+
+  public var useReferenceHorizonSmoothing: Bool {
+    get {_storage._useReferenceHorizonSmoothing ?? false}
+    set {_uniqueStorage()._useReferenceHorizonSmoothing = newValue}
+  }
+  /// Returns true if `useReferenceHorizonSmoothing` has been explicitly set.
+  public var hasUseReferenceHorizonSmoothing: Bool {_storage._useReferenceHorizonSmoothing != nil}
+  /// Clears the value of `useReferenceHorizonSmoothing`. Subsequent reads from it will return its default value.
+  public mutating func clearUseReferenceHorizonSmoothing() {_uniqueStorage()._useReferenceHorizonSmoothing = nil}
+
+  public var referenceHorizonSmoothingMaxDistance: Int32 {
+    get {_storage._referenceHorizonSmoothingMaxDistance ?? 0}
+    set {_uniqueStorage()._referenceHorizonSmoothingMaxDistance = newValue}
+  }
+  /// Returns true if `referenceHorizonSmoothingMaxDistance` has been explicitly set.
+  public var hasReferenceHorizonSmoothingMaxDistance: Bool {_storage._referenceHorizonSmoothingMaxDistance != nil}
+  /// Clears the value of `referenceHorizonSmoothingMaxDistance`. Subsequent reads from it will return its default value.
+  public mutating func clearReferenceHorizonSmoothingMaxDistance() {_uniqueStorage()._referenceHorizonSmoothingMaxDistance = nil}
+
+  public var useReferenceHorizonBrightnessRefinement: Bool {
+    get {_storage._useReferenceHorizonBrightnessRefinement ?? false}
+    set {_uniqueStorage()._useReferenceHorizonBrightnessRefinement = newValue}
+  }
+  /// Returns true if `useReferenceHorizonBrightnessRefinement` has been explicitly set.
+  public var hasUseReferenceHorizonBrightnessRefinement: Bool {_storage._useReferenceHorizonBrightnessRefinement != nil}
+  /// Clears the value of `useReferenceHorizonBrightnessRefinement`. Subsequent reads from it will return its default value.
+  public mutating func clearUseReferenceHorizonBrightnessRefinement() {_uniqueStorage()._useReferenceHorizonBrightnessRefinement = nil}
+
+  public var referenceHorizonBrightnessRefinementSearchRadius: Int32 {
+    get {_storage._referenceHorizonBrightnessRefinementSearchRadius ?? 0}
+    set {_uniqueStorage()._referenceHorizonBrightnessRefinementSearchRadius = newValue}
+  }
+  /// Returns true if `referenceHorizonBrightnessRefinementSearchRadius` has been explicitly set.
+  public var hasReferenceHorizonBrightnessRefinementSearchRadius: Bool {_storage._referenceHorizonBrightnessRefinementSearchRadius != nil}
+  /// Clears the value of `referenceHorizonBrightnessRefinementSearchRadius`. Subsequent reads from it will return its default value.
+  public mutating func clearReferenceHorizonBrightnessRefinementSearchRadius() {_uniqueStorage()._referenceHorizonBrightnessRefinementSearchRadius = nil}
+
+  public var referenceHorizonBrightnessRefinementHistBuckets: Int32 {
+    get {_storage._referenceHorizonBrightnessRefinementHistBuckets ?? 0}
+    set {_uniqueStorage()._referenceHorizonBrightnessRefinementHistBuckets = newValue}
+  }
+  /// Returns true if `referenceHorizonBrightnessRefinementHistBuckets` has been explicitly set.
+  public var hasReferenceHorizonBrightnessRefinementHistBuckets: Bool {_storage._referenceHorizonBrightnessRefinementHistBuckets != nil}
+  /// Clears the value of `referenceHorizonBrightnessRefinementHistBuckets`. Subsequent reads from it will return its default value.
+  public mutating func clearReferenceHorizonBrightnessRefinementHistBuckets() {_uniqueStorage()._referenceHorizonBrightnessRefinementHistBuckets = nil}
+
+  public var referenceHorizonNeighborhoodSize: Int32 {
+    get {_storage._referenceHorizonNeighborhoodSize ?? 0}
+    set {_uniqueStorage()._referenceHorizonNeighborhoodSize = newValue}
+  }
+  /// Returns true if `referenceHorizonNeighborhoodSize` has been explicitly set.
+  public var hasReferenceHorizonNeighborhoodSize: Bool {_storage._referenceHorizonNeighborhoodSize != nil}
+  /// Clears the value of `referenceHorizonNeighborhoodSize`. Subsequent reads from it will return its default value.
+  public mutating func clearReferenceHorizonNeighborhoodSize() {_uniqueStorage()._referenceHorizonNeighborhoodSize = nil}
+
+  public var horizonSpikeRemovalEnabled: Bool {
+    get {_storage._horizonSpikeRemovalEnabled ?? false}
+    set {_uniqueStorage()._horizonSpikeRemovalEnabled = newValue}
+  }
+  /// Returns true if `horizonSpikeRemovalEnabled` has been explicitly set.
+  public var hasHorizonSpikeRemovalEnabled: Bool {_storage._horizonSpikeRemovalEnabled != nil}
+  /// Clears the value of `horizonSpikeRemovalEnabled`. Subsequent reads from it will return its default value.
+  public mutating func clearHorizonSpikeRemovalEnabled() {_uniqueStorage()._horizonSpikeRemovalEnabled = nil}
+
+  public var horizonSpikeMaxWidth: Int32 {
+    get {_storage._horizonSpikeMaxWidth ?? 0}
+    set {_uniqueStorage()._horizonSpikeMaxWidth = newValue}
+  }
+  /// Returns true if `horizonSpikeMaxWidth` has been explicitly set.
+  public var hasHorizonSpikeMaxWidth: Bool {_storage._horizonSpikeMaxWidth != nil}
+  /// Clears the value of `horizonSpikeMaxWidth`. Subsequent reads from it will return its default value.
+  public mutating func clearHorizonSpikeMaxWidth() {_uniqueStorage()._horizonSpikeMaxWidth = nil}
+
+  public var horizonSpikeMaxDeviationFraction: Double {
+    get {_storage._horizonSpikeMaxDeviationFraction ?? 0}
+    set {_uniqueStorage()._horizonSpikeMaxDeviationFraction = newValue}
+  }
+  /// Returns true if `horizonSpikeMaxDeviationFraction` has been explicitly set.
+  public var hasHorizonSpikeMaxDeviationFraction: Bool {_storage._horizonSpikeMaxDeviationFraction != nil}
+  /// Clears the value of `horizonSpikeMaxDeviationFraction`. Subsequent reads from it will return its default value.
+  public mutating func clearHorizonSpikeMaxDeviationFraction() {_uniqueStorage()._horizonSpikeMaxDeviationFraction = nil}
+
+  public var horizonSpikeWindowHalf: Int32 {
+    get {_storage._horizonSpikeWindowHalf ?? 0}
+    set {_uniqueStorage()._horizonSpikeWindowHalf = newValue}
+  }
+  /// Returns true if `horizonSpikeWindowHalf` has been explicitly set.
+  public var hasHorizonSpikeWindowHalf: Bool {_storage._horizonSpikeWindowHalf != nil}
+  /// Clears the value of `horizonSpikeWindowHalf`. Subsequent reads from it will return its default value.
+  public mutating func clearHorizonSpikeWindowHalf() {_uniqueStorage()._horizonSpikeWindowHalf = nil}
+
+  public var horizonStripWidth: Int32 {
+    get {_storage._horizonStripWidth ?? 0}
+    set {_uniqueStorage()._horizonStripWidth = newValue}
+  }
+  /// Returns true if `horizonStripWidth` has been explicitly set.
+  public var hasHorizonStripWidth: Bool {_storage._horizonStripWidth != nil}
+  /// Clears the value of `horizonStripWidth`. Subsequent reads from it will return its default value.
+  public mutating func clearHorizonStripWidth() {_uniqueStorage()._horizonStripWidth = nil}
+
+  public var useCannyForHorizonDetection: Bool {
+    get {_storage._useCannyForHorizonDetection ?? false}
+    set {_uniqueStorage()._useCannyForHorizonDetection = newValue}
+  }
+  /// Returns true if `useCannyForHorizonDetection` has been explicitly set.
+  public var hasUseCannyForHorizonDetection: Bool {_storage._useCannyForHorizonDetection != nil}
+  /// Clears the value of `useCannyForHorizonDetection`. Subsequent reads from it will return its default value.
+  public mutating func clearUseCannyForHorizonDetection() {_uniqueStorage()._useCannyForHorizonDetection = nil}
+
+  public var cannyMinThreshold: Double {
+    get {_storage._cannyMinThreshold ?? 0}
+    set {_uniqueStorage()._cannyMinThreshold = newValue}
+  }
+  /// Returns true if `cannyMinThreshold` has been explicitly set.
+  public var hasCannyMinThreshold: Bool {_storage._cannyMinThreshold != nil}
+  /// Clears the value of `cannyMinThreshold`. Subsequent reads from it will return its default value.
+  public mutating func clearCannyMinThreshold() {_uniqueStorage()._cannyMinThreshold = nil}
+
+  public var cannyMaxThreshold: Double {
+    get {_storage._cannyMaxThreshold ?? 0}
+    set {_uniqueStorage()._cannyMaxThreshold = newValue}
+  }
+  /// Returns true if `cannyMaxThreshold` has been explicitly set.
+  public var hasCannyMaxThreshold: Bool {_storage._cannyMaxThreshold != nil}
+  /// Clears the value of `cannyMaxThreshold`. Subsequent reads from it will return its default value.
+  public mutating func clearCannyMaxThreshold() {_uniqueStorage()._cannyMaxThreshold = nil}
+
+  public var cannyUseL2Gradient: Bool {
+    get {_storage._cannyUseL2Gradient ?? false}
+    set {_uniqueStorage()._cannyUseL2Gradient = newValue}
+  }
+  /// Returns true if `cannyUseL2Gradient` has been explicitly set.
+  public var hasCannyUseL2Gradient: Bool {_storage._cannyUseL2Gradient != nil}
+  /// Clears the value of `cannyUseL2Gradient`. Subsequent reads from it will return its default value.
+  public mutating func clearCannyUseL2Gradient() {_uniqueStorage()._cannyUseL2Gradient = nil}
+
+  public var horizonVerticalShiftAmount: Int32 {
+    get {_storage._horizonVerticalShiftAmount ?? 0}
+    set {_uniqueStorage()._horizonVerticalShiftAmount = newValue}
+  }
+  /// Returns true if `horizonVerticalShiftAmount` has been explicitly set.
+  public var hasHorizonVerticalShiftAmount: Bool {_storage._horizonVerticalShiftAmount != nil}
+  /// Clears the value of `horizonVerticalShiftAmount`. Subsequent reads from it will return its default value.
+  public mutating func clearHorizonVerticalShiftAmount() {_uniqueStorage()._horizonVerticalShiftAmount = nil}
+
+  public var allowEarthAlignment: Bool {
+    get {_storage._allowEarthAlignment ?? false}
+    set {_uniqueStorage()._allowEarthAlignment = newValue}
+  }
+  /// Returns true if `allowEarthAlignment` has been explicitly set.
+  public var hasAllowEarthAlignment: Bool {_storage._allowEarthAlignment != nil}
+  /// Clears the value of `allowEarthAlignment`. Subsequent reads from it will return its default value.
+  public mutating func clearAllowEarthAlignment() {_uniqueStorage()._allowEarthAlignment = nil}
+
+  public var alignmentMaxKeypoints: Int32 {
+    get {_storage._alignmentMaxKeypoints ?? 0}
+    set {_uniqueStorage()._alignmentMaxKeypoints = newValue}
+  }
+  /// Returns true if `alignmentMaxKeypoints` has been explicitly set.
+  public var hasAlignmentMaxKeypoints: Bool {_storage._alignmentMaxKeypoints != nil}
+  /// Clears the value of `alignmentMaxKeypoints`. Subsequent reads from it will return its default value.
+  public mutating func clearAlignmentMaxKeypoints() {_uniqueStorage()._alignmentMaxKeypoints = nil}
+
+  public var alignmentWriteDebugImages: Bool {
+    get {_storage._alignmentWriteDebugImages ?? false}
+    set {_uniqueStorage()._alignmentWriteDebugImages = newValue}
+  }
+  /// Returns true if `alignmentWriteDebugImages` has been explicitly set.
+  public var hasAlignmentWriteDebugImages: Bool {_storage._alignmentWriteDebugImages != nil}
+  /// Clears the value of `alignmentWriteDebugImages`. Subsequent reads from it will return its default value.
+  public mutating func clearAlignmentWriteDebugImages() {_uniqueStorage()._alignmentWriteDebugImages = nil}
+
+  public var alignmentGroundHorizonExtension: Int32 {
+    get {_storage._alignmentGroundHorizonExtension ?? 0}
+    set {_uniqueStorage()._alignmentGroundHorizonExtension = newValue}
+  }
+  /// Returns true if `alignmentGroundHorizonExtension` has been explicitly set.
+  public var hasAlignmentGroundHorizonExtension: Bool {_storage._alignmentGroundHorizonExtension != nil}
+  /// Clears the value of `alignmentGroundHorizonExtension`. Subsequent reads from it will return its default value.
+  public mutating func clearAlignmentGroundHorizonExtension() {_uniqueStorage()._alignmentGroundHorizonExtension = nil}
+
+  public var alignmentSkyHorizonExtension: Int32 {
+    get {_storage._alignmentSkyHorizonExtension ?? 0}
+    set {_uniqueStorage()._alignmentSkyHorizonExtension = newValue}
+  }
+  /// Returns true if `alignmentSkyHorizonExtension` has been explicitly set.
+  public var hasAlignmentSkyHorizonExtension: Bool {_storage._alignmentSkyHorizonExtension != nil}
+  /// Clears the value of `alignmentSkyHorizonExtension`. Subsequent reads from it will return its default value.
+  public mutating func clearAlignmentSkyHorizonExtension() {_uniqueStorage()._alignmentSkyHorizonExtension = nil}
+
+  public var alignmentBaseImageDilateSize: Int32 {
+    get {_storage._alignmentBaseImageDilateSize ?? 0}
+    set {_uniqueStorage()._alignmentBaseImageDilateSize = newValue}
+  }
+  /// Returns true if `alignmentBaseImageDilateSize` has been explicitly set.
+  public var hasAlignmentBaseImageDilateSize: Bool {_storage._alignmentBaseImageDilateSize != nil}
+  /// Clears the value of `alignmentBaseImageDilateSize`. Subsequent reads from it will return its default value.
+  public mutating func clearAlignmentBaseImageDilateSize() {_uniqueStorage()._alignmentBaseImageDilateSize = nil}
+
+  public var alignmentBaseImageThresholdValue: Int32 {
+    get {_storage._alignmentBaseImageThresholdValue ?? 0}
+    set {_uniqueStorage()._alignmentBaseImageThresholdValue = newValue}
+  }
+  /// Returns true if `alignmentBaseImageThresholdValue` has been explicitly set.
+  public var hasAlignmentBaseImageThresholdValue: Bool {_storage._alignmentBaseImageThresholdValue != nil}
+  /// Clears the value of `alignmentBaseImageThresholdValue`. Subsequent reads from it will return its default value.
+  public mutating func clearAlignmentBaseImageThresholdValue() {_uniqueStorage()._alignmentBaseImageThresholdValue = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -2844,7 +3107,7 @@ nonisolated extension Star_V1_UpdateConfigRequest: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Config"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{3}horizon_strip_width\0\u{3}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{3}horizon_vertical_shift_amount\0\u{3}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0")
 
   fileprivate class _StorageClass {
     var _outputPath: String = String()
@@ -2862,6 +3125,35 @@ nonisolated extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._Mess
     var _writeFramePreviewFiles: Bool = false
     var _video: Star_V1_VideoEncodeSettings? = nil
     var _starVersion: String = String()
+    var _numberAlignedNeighborFrames: Int32? = nil
+    var _numberStaticNeighborFrames: Int32? = nil
+    var _homographySmoothingEpsilon: Double? = nil
+    var _keypointMemoryMultiplier: Int32? = nil
+    var _outlierMemoryMultiplier: Int32? = nil
+    var _mergeMemoryMultiplier: Int32? = nil
+    var _useReferenceHorizonSmoothing: Bool? = nil
+    var _referenceHorizonSmoothingMaxDistance: Int32? = nil
+    var _useReferenceHorizonBrightnessRefinement: Bool? = nil
+    var _referenceHorizonBrightnessRefinementSearchRadius: Int32? = nil
+    var _referenceHorizonBrightnessRefinementHistBuckets: Int32? = nil
+    var _referenceHorizonNeighborhoodSize: Int32? = nil
+    var _horizonSpikeRemovalEnabled: Bool? = nil
+    var _horizonSpikeMaxWidth: Int32? = nil
+    var _horizonSpikeMaxDeviationFraction: Double? = nil
+    var _horizonSpikeWindowHalf: Int32? = nil
+    var _horizonStripWidth: Int32? = nil
+    var _useCannyForHorizonDetection: Bool? = nil
+    var _cannyMinThreshold: Double? = nil
+    var _cannyMaxThreshold: Double? = nil
+    var _cannyUseL2Gradient: Bool? = nil
+    var _horizonVerticalShiftAmount: Int32? = nil
+    var _allowEarthAlignment: Bool? = nil
+    var _alignmentMaxKeypoints: Int32? = nil
+    var _alignmentWriteDebugImages: Bool? = nil
+    var _alignmentGroundHorizonExtension: Int32? = nil
+    var _alignmentSkyHorizonExtension: Int32? = nil
+    var _alignmentBaseImageDilateSize: Int32? = nil
+    var _alignmentBaseImageThresholdValue: Int32? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -2887,6 +3179,35 @@ nonisolated extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._Mess
       _writeFramePreviewFiles = source._writeFramePreviewFiles
       _video = source._video
       _starVersion = source._starVersion
+      _numberAlignedNeighborFrames = source._numberAlignedNeighborFrames
+      _numberStaticNeighborFrames = source._numberStaticNeighborFrames
+      _homographySmoothingEpsilon = source._homographySmoothingEpsilon
+      _keypointMemoryMultiplier = source._keypointMemoryMultiplier
+      _outlierMemoryMultiplier = source._outlierMemoryMultiplier
+      _mergeMemoryMultiplier = source._mergeMemoryMultiplier
+      _useReferenceHorizonSmoothing = source._useReferenceHorizonSmoothing
+      _referenceHorizonSmoothingMaxDistance = source._referenceHorizonSmoothingMaxDistance
+      _useReferenceHorizonBrightnessRefinement = source._useReferenceHorizonBrightnessRefinement
+      _referenceHorizonBrightnessRefinementSearchRadius = source._referenceHorizonBrightnessRefinementSearchRadius
+      _referenceHorizonBrightnessRefinementHistBuckets = source._referenceHorizonBrightnessRefinementHistBuckets
+      _referenceHorizonNeighborhoodSize = source._referenceHorizonNeighborhoodSize
+      _horizonSpikeRemovalEnabled = source._horizonSpikeRemovalEnabled
+      _horizonSpikeMaxWidth = source._horizonSpikeMaxWidth
+      _horizonSpikeMaxDeviationFraction = source._horizonSpikeMaxDeviationFraction
+      _horizonSpikeWindowHalf = source._horizonSpikeWindowHalf
+      _horizonStripWidth = source._horizonStripWidth
+      _useCannyForHorizonDetection = source._useCannyForHorizonDetection
+      _cannyMinThreshold = source._cannyMinThreshold
+      _cannyMaxThreshold = source._cannyMaxThreshold
+      _cannyUseL2Gradient = source._cannyUseL2Gradient
+      _horizonVerticalShiftAmount = source._horizonVerticalShiftAmount
+      _allowEarthAlignment = source._allowEarthAlignment
+      _alignmentMaxKeypoints = source._alignmentMaxKeypoints
+      _alignmentWriteDebugImages = source._alignmentWriteDebugImages
+      _alignmentGroundHorizonExtension = source._alignmentGroundHorizonExtension
+      _alignmentSkyHorizonExtension = source._alignmentSkyHorizonExtension
+      _alignmentBaseImageDilateSize = source._alignmentBaseImageDilateSize
+      _alignmentBaseImageThresholdValue = source._alignmentBaseImageThresholdValue
     }
   }
 
@@ -2920,6 +3241,35 @@ nonisolated extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._Mess
         case 13: try { try decoder.decodeSingularBoolField(value: &_storage._writeFramePreviewFiles) }()
         case 14: try { try decoder.decodeSingularMessageField(value: &_storage._video) }()
         case 15: try { try decoder.decodeSingularStringField(value: &_storage._starVersion) }()
+        case 16: try { try decoder.decodeSingularInt32Field(value: &_storage._numberAlignedNeighborFrames) }()
+        case 17: try { try decoder.decodeSingularInt32Field(value: &_storage._numberStaticNeighborFrames) }()
+        case 18: try { try decoder.decodeSingularDoubleField(value: &_storage._homographySmoothingEpsilon) }()
+        case 19: try { try decoder.decodeSingularInt32Field(value: &_storage._keypointMemoryMultiplier) }()
+        case 20: try { try decoder.decodeSingularInt32Field(value: &_storage._outlierMemoryMultiplier) }()
+        case 21: try { try decoder.decodeSingularInt32Field(value: &_storage._mergeMemoryMultiplier) }()
+        case 22: try { try decoder.decodeSingularBoolField(value: &_storage._useReferenceHorizonSmoothing) }()
+        case 23: try { try decoder.decodeSingularInt32Field(value: &_storage._referenceHorizonSmoothingMaxDistance) }()
+        case 24: try { try decoder.decodeSingularBoolField(value: &_storage._useReferenceHorizonBrightnessRefinement) }()
+        case 25: try { try decoder.decodeSingularInt32Field(value: &_storage._referenceHorizonBrightnessRefinementSearchRadius) }()
+        case 26: try { try decoder.decodeSingularInt32Field(value: &_storage._referenceHorizonBrightnessRefinementHistBuckets) }()
+        case 27: try { try decoder.decodeSingularInt32Field(value: &_storage._referenceHorizonNeighborhoodSize) }()
+        case 28: try { try decoder.decodeSingularBoolField(value: &_storage._horizonSpikeRemovalEnabled) }()
+        case 29: try { try decoder.decodeSingularInt32Field(value: &_storage._horizonSpikeMaxWidth) }()
+        case 30: try { try decoder.decodeSingularDoubleField(value: &_storage._horizonSpikeMaxDeviationFraction) }()
+        case 31: try { try decoder.decodeSingularInt32Field(value: &_storage._horizonSpikeWindowHalf) }()
+        case 32: try { try decoder.decodeSingularInt32Field(value: &_storage._horizonStripWidth) }()
+        case 33: try { try decoder.decodeSingularBoolField(value: &_storage._useCannyForHorizonDetection) }()
+        case 34: try { try decoder.decodeSingularDoubleField(value: &_storage._cannyMinThreshold) }()
+        case 35: try { try decoder.decodeSingularDoubleField(value: &_storage._cannyMaxThreshold) }()
+        case 36: try { try decoder.decodeSingularBoolField(value: &_storage._cannyUseL2Gradient) }()
+        case 37: try { try decoder.decodeSingularInt32Field(value: &_storage._horizonVerticalShiftAmount) }()
+        case 38: try { try decoder.decodeSingularBoolField(value: &_storage._allowEarthAlignment) }()
+        case 39: try { try decoder.decodeSingularInt32Field(value: &_storage._alignmentMaxKeypoints) }()
+        case 40: try { try decoder.decodeSingularBoolField(value: &_storage._alignmentWriteDebugImages) }()
+        case 41: try { try decoder.decodeSingularInt32Field(value: &_storage._alignmentGroundHorizonExtension) }()
+        case 42: try { try decoder.decodeSingularInt32Field(value: &_storage._alignmentSkyHorizonExtension) }()
+        case 43: try { try decoder.decodeSingularInt32Field(value: &_storage._alignmentBaseImageDilateSize) }()
+        case 44: try { try decoder.decodeSingularInt32Field(value: &_storage._alignmentBaseImageThresholdValue) }()
         default: break
         }
       }
@@ -2977,6 +3327,93 @@ nonisolated extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._Mess
       if !_storage._starVersion.isEmpty {
         try visitor.visitSingularStringField(value: _storage._starVersion, fieldNumber: 15)
       }
+      try { if let v = _storage._numberAlignedNeighborFrames {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 16)
+      } }()
+      try { if let v = _storage._numberStaticNeighborFrames {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 17)
+      } }()
+      try { if let v = _storage._homographySmoothingEpsilon {
+        try visitor.visitSingularDoubleField(value: v, fieldNumber: 18)
+      } }()
+      try { if let v = _storage._keypointMemoryMultiplier {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 19)
+      } }()
+      try { if let v = _storage._outlierMemoryMultiplier {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 20)
+      } }()
+      try { if let v = _storage._mergeMemoryMultiplier {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 21)
+      } }()
+      try { if let v = _storage._useReferenceHorizonSmoothing {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 22)
+      } }()
+      try { if let v = _storage._referenceHorizonSmoothingMaxDistance {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 23)
+      } }()
+      try { if let v = _storage._useReferenceHorizonBrightnessRefinement {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 24)
+      } }()
+      try { if let v = _storage._referenceHorizonBrightnessRefinementSearchRadius {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 25)
+      } }()
+      try { if let v = _storage._referenceHorizonBrightnessRefinementHistBuckets {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 26)
+      } }()
+      try { if let v = _storage._referenceHorizonNeighborhoodSize {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 27)
+      } }()
+      try { if let v = _storage._horizonSpikeRemovalEnabled {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 28)
+      } }()
+      try { if let v = _storage._horizonSpikeMaxWidth {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 29)
+      } }()
+      try { if let v = _storage._horizonSpikeMaxDeviationFraction {
+        try visitor.visitSingularDoubleField(value: v, fieldNumber: 30)
+      } }()
+      try { if let v = _storage._horizonSpikeWindowHalf {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 31)
+      } }()
+      try { if let v = _storage._horizonStripWidth {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 32)
+      } }()
+      try { if let v = _storage._useCannyForHorizonDetection {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 33)
+      } }()
+      try { if let v = _storage._cannyMinThreshold {
+        try visitor.visitSingularDoubleField(value: v, fieldNumber: 34)
+      } }()
+      try { if let v = _storage._cannyMaxThreshold {
+        try visitor.visitSingularDoubleField(value: v, fieldNumber: 35)
+      } }()
+      try { if let v = _storage._cannyUseL2Gradient {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 36)
+      } }()
+      try { if let v = _storage._horizonVerticalShiftAmount {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 37)
+      } }()
+      try { if let v = _storage._allowEarthAlignment {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 38)
+      } }()
+      try { if let v = _storage._alignmentMaxKeypoints {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 39)
+      } }()
+      try { if let v = _storage._alignmentWriteDebugImages {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 40)
+      } }()
+      try { if let v = _storage._alignmentGroundHorizonExtension {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 41)
+      } }()
+      try { if let v = _storage._alignmentSkyHorizonExtension {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 42)
+      } }()
+      try { if let v = _storage._alignmentBaseImageDilateSize {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 43)
+      } }()
+      try { if let v = _storage._alignmentBaseImageThresholdValue {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 44)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -3001,6 +3438,35 @@ nonisolated extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._Mess
         if _storage._writeFramePreviewFiles != rhs_storage._writeFramePreviewFiles {return false}
         if _storage._video != rhs_storage._video {return false}
         if _storage._starVersion != rhs_storage._starVersion {return false}
+        if _storage._numberAlignedNeighborFrames != rhs_storage._numberAlignedNeighborFrames {return false}
+        if _storage._numberStaticNeighborFrames != rhs_storage._numberStaticNeighborFrames {return false}
+        if _storage._homographySmoothingEpsilon != rhs_storage._homographySmoothingEpsilon {return false}
+        if _storage._keypointMemoryMultiplier != rhs_storage._keypointMemoryMultiplier {return false}
+        if _storage._outlierMemoryMultiplier != rhs_storage._outlierMemoryMultiplier {return false}
+        if _storage._mergeMemoryMultiplier != rhs_storage._mergeMemoryMultiplier {return false}
+        if _storage._useReferenceHorizonSmoothing != rhs_storage._useReferenceHorizonSmoothing {return false}
+        if _storage._referenceHorizonSmoothingMaxDistance != rhs_storage._referenceHorizonSmoothingMaxDistance {return false}
+        if _storage._useReferenceHorizonBrightnessRefinement != rhs_storage._useReferenceHorizonBrightnessRefinement {return false}
+        if _storage._referenceHorizonBrightnessRefinementSearchRadius != rhs_storage._referenceHorizonBrightnessRefinementSearchRadius {return false}
+        if _storage._referenceHorizonBrightnessRefinementHistBuckets != rhs_storage._referenceHorizonBrightnessRefinementHistBuckets {return false}
+        if _storage._referenceHorizonNeighborhoodSize != rhs_storage._referenceHorizonNeighborhoodSize {return false}
+        if _storage._horizonSpikeRemovalEnabled != rhs_storage._horizonSpikeRemovalEnabled {return false}
+        if _storage._horizonSpikeMaxWidth != rhs_storage._horizonSpikeMaxWidth {return false}
+        if _storage._horizonSpikeMaxDeviationFraction != rhs_storage._horizonSpikeMaxDeviationFraction {return false}
+        if _storage._horizonSpikeWindowHalf != rhs_storage._horizonSpikeWindowHalf {return false}
+        if _storage._horizonStripWidth != rhs_storage._horizonStripWidth {return false}
+        if _storage._useCannyForHorizonDetection != rhs_storage._useCannyForHorizonDetection {return false}
+        if _storage._cannyMinThreshold != rhs_storage._cannyMinThreshold {return false}
+        if _storage._cannyMaxThreshold != rhs_storage._cannyMaxThreshold {return false}
+        if _storage._cannyUseL2Gradient != rhs_storage._cannyUseL2Gradient {return false}
+        if _storage._horizonVerticalShiftAmount != rhs_storage._horizonVerticalShiftAmount {return false}
+        if _storage._allowEarthAlignment != rhs_storage._allowEarthAlignment {return false}
+        if _storage._alignmentMaxKeypoints != rhs_storage._alignmentMaxKeypoints {return false}
+        if _storage._alignmentWriteDebugImages != rhs_storage._alignmentWriteDebugImages {return false}
+        if _storage._alignmentGroundHorizonExtension != rhs_storage._alignmentGroundHorizonExtension {return false}
+        if _storage._alignmentSkyHorizonExtension != rhs_storage._alignmentSkyHorizonExtension {return false}
+        if _storage._alignmentBaseImageDilateSize != rhs_storage._alignmentBaseImageDilateSize {return false}
+        if _storage._alignmentBaseImageThresholdValue != rhs_storage._alignmentBaseImageThresholdValue {return false}
         return true
       }
       if !storagesAreEqual {return false}

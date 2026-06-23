@@ -287,6 +287,7 @@ extension Session {
         if protoConfig.ignoreLowerPixels != 0 {
             config.ignoreLowerPixels = Int(protoConfig.ignoreLowerPixels)
         }
+        Mapping.applyExpertConfig(&config, from: protoConfig)
 
         let configFilename = "\(scratchSessionDir)/config.json"
         let configManager = await ConfigManager(configFilename: configFilename, config: config)
@@ -349,6 +350,7 @@ extension Session {
         if protoConfig.numberOfFramesToProcessConcurrently > 0 {
             config.numberOfFramesToProcessConcurrently = Int(protoConfig.numberOfFramesToProcessConcurrently)
         }
+        Mapping.applyExpertConfig(&config, from: protoConfig)
 
         let configFilename = "\(scratchSessionDir)/config.json"
         let configManager = await ConfigManager(configFilename: configFilename, config: config)

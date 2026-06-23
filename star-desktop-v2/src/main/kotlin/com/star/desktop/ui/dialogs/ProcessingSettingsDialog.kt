@@ -16,8 +16,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -75,6 +77,10 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
             var horizon by remember(cfg) { mutableStateOf(cfg.horizonDetectionEnabled) }
             var tripod by remember(cfg) { mutableStateOf(cfg.tripodHeadWasMoving) }
             var concurrency by remember(cfg) { mutableStateOf(cfg.numberOfFramesToProcessConcurrently.coerceAtLeast(1)) }
+            var showExpert by remember { mutableStateOf(false) }
+            // Expert-field edits: bools and raw text (parsed on save) keyed by field label.
+            val boolEdits = remember(cfg) { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+            val textEdits = remember(cfg) { androidx.compose.runtime.mutableStateMapOf<String, String>() }
 
             SettingGroup("Clean Method") {
                 Segmented(
@@ -116,17 +122,32 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 }
             }
 
+            ToggleRow(if (showExpert) "Hide Expert Settings" else "Show Expert Settings", showExpert) { showExpert = it }
+            if (showExpert) {
+                ExpertGroup("Alignment", ALIGNMENT_FIELDS, cfg, boolEdits, textEdits)
+                ExpertGroup("Horizon", HORIZON_FIELDS, cfg, boolEdits, textEdits)
+                ExpertGroup("Memory", MEMORY_FIELDS, cfg, boolEdits, textEdits)
+            }
+
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                 OutlinedButton(onClick = app::closeSettings) { Text("Cancel") }
                 Button(
                     onClick = {
-                        val updated = cfg.toBuilder()
+                        val b = cfg.toBuilder()
                             .setCleanMethod(clean)
                             .setDetectionType(detection)
                             .setHorizonDetectionEnabled(horizon)
                             .setTripodHeadWasMoving(tripod)
                             .setNumberOfFramesToProcessConcurrently(concurrency)
-                            .build()
+                        // Apply expert edits (cfg already carries current values; only changed ones differ).
+                        (ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS).forEach { f ->
+                            when (f) {
+                                is BoolField -> boolEdits[f.label]?.let { f.set(b, it) }
+                                is IntField -> textEdits[f.label]?.toIntOrNull()?.let { f.set(b, it.coerceIn(f.min, f.max)) }
+                                is DoubleField -> textEdits[f.label]?.toDoubleOrNull()?.let { f.set(b, it) }
+                            }
+                        }
+                        val updated = b.build()
                         scope.launch {
                             runCatching { app.sessions.updateConfig(updated) }
                             app.closeSettings()
@@ -168,5 +189,87 @@ private fun ToggleRow(label: String, value: Boolean, onChange: (Boolean) -> Unit
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, color = StarColors.textPrimary, fontSize = 13.sp)
         Switch(checked = value, onCheckedChange = onChange)
+    }
+}
+
+// ---- Expert settings (StarCore Config expert fields, data-driven) ----
+
+private sealed interface ExpertField { val label: String }
+private class IntField(override val label: String, val get: (Config) -> Int, val set: (Config.Builder, Int) -> Config.Builder, val min: Int, val max: Int) : ExpertField
+private class DoubleField(override val label: String, val get: (Config) -> Double, val set: (Config.Builder, Double) -> Config.Builder) : ExpertField
+private class BoolField(override val label: String, val get: (Config) -> Boolean, val set: (Config.Builder, Boolean) -> Config.Builder) : ExpertField
+
+private val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
+    IntField("Neighbor frames", { it.numberAlignedNeighborFrames }, { b, v -> b.setNumberAlignedNeighborFrames(v) }, 1, 1000),
+    IntField("Static neighbor frames", { it.numberStaticNeighborFrames }, { b, v -> b.setNumberStaticNeighborFrames(v) }, 1, 1000),
+    IntField("Max keypoints", { it.alignmentMaxKeypoints }, { b, v -> b.setAlignmentMaxKeypoints(v) }, 4, 10000),
+    IntField("Ground horizon extension", { it.alignmentGroundHorizonExtension }, { b, v -> b.setAlignmentGroundHorizonExtension(v) }, 0, 10000),
+    IntField("Sky horizon extension", { it.alignmentSkyHorizonExtension }, { b, v -> b.setAlignmentSkyHorizonExtension(v) }, 0, 10000),
+    IntField("Base image dilate size", { it.alignmentBaseImageDilateSize }, { b, v -> b.setAlignmentBaseImageDilateSize(v) }, 4, 10000),
+    IntField("Base image threshold", { it.alignmentBaseImageThresholdValue }, { b, v -> b.setAlignmentBaseImageThresholdValue(v) }, 1, 255),
+    DoubleField("Homography smoothing ε", { it.homographySmoothingEpsilon }, { b, v -> b.setHomographySmoothingEpsilon(v) }),
+    BoolField("Allow earth alignment", { it.allowEarthAlignment }, { b, v -> b.setAllowEarthAlignment(v) }),
+    BoolField("Write debug images", { it.alignmentWriteDebugImages }, { b, v -> b.setAlignmentWriteDebugImages(v) }),
+)
+
+private val HORIZON_FIELDS: List<ExpertField> = listOf(
+    IntField("Strip width", { it.horizonStripWidth }, { b, v -> b.setHorizonStripWidth(v) }, 1, 8000),
+    BoolField("Canny edge detection", { it.useCannyForHorizonDetection }, { b, v -> b.setUseCannyForHorizonDetection(v) }),
+    DoubleField("Canny min threshold", { it.cannyMinThreshold }, { b, v -> b.setCannyMinThreshold(v) }),
+    DoubleField("Canny max threshold", { it.cannyMaxThreshold }, { b, v -> b.setCannyMaxThreshold(v) }),
+    BoolField("Canny L2 gradient", { it.cannyUseL2Gradient }, { b, v -> b.setCannyUseL2Gradient(v) }),
+    IntField("Horizon shift", { it.horizonVerticalShiftAmount }, { b, v -> b.setHorizonVerticalShiftAmount(v) }, 0, 300),
+    BoolField("Reference horizon smoothing", { it.useReferenceHorizonSmoothing }, { b, v -> b.setUseReferenceHorizonSmoothing(v) }),
+    IntField("Smoothing max distance", { it.referenceHorizonSmoothingMaxDistance }, { b, v -> b.setReferenceHorizonSmoothingMaxDistance(v) }, 1, 10000),
+    BoolField("Brightness refinement", { it.useReferenceHorizonBrightnessRefinement }, { b, v -> b.setUseReferenceHorizonBrightnessRefinement(v) }),
+    IntField("Refinement search radius", { it.referenceHorizonBrightnessRefinementSearchRadius }, { b, v -> b.setReferenceHorizonBrightnessRefinementSearchRadius(v) }, 1, 10000),
+    IntField("Refinement hist buckets", { it.referenceHorizonBrightnessRefinementHistBuckets }, { b, v -> b.setReferenceHorizonBrightnessRefinementHistBuckets(v) }, 2, 65536),
+    IntField("Neighborhood size", { it.referenceHorizonNeighborhoodSize }, { b, v -> b.setReferenceHorizonNeighborhoodSize(v) }, 1, 99),
+    BoolField("Spike removal", { it.horizonSpikeRemovalEnabled }, { b, v -> b.setHorizonSpikeRemovalEnabled(v) }),
+    IntField("Spike max width", { it.horizonSpikeMaxWidth }, { b, v -> b.setHorizonSpikeMaxWidth(v) }, 1, 500),
+    DoubleField("Spike max deviation", { it.horizonSpikeMaxDeviationFraction }, { b, v -> b.setHorizonSpikeMaxDeviationFraction(v) }),
+    IntField("Spike window half", { it.horizonSpikeWindowHalf }, { b, v -> b.setHorizonSpikeWindowHalf(v) }, 10, 2000),
+)
+
+private val MEMORY_FIELDS: List<ExpertField> = listOf(
+    IntField("Keypoint mem ×", { it.keypointMemoryMultiplier }, { b, v -> b.setKeypointMemoryMultiplier(v) }, 1, 200),
+    IntField("Outlier mem ×", { it.outlierMemoryMultiplier }, { b, v -> b.setOutlierMemoryMultiplier(v) }, 1, 50),
+    IntField("Merge mem ×", { it.mergeMemoryMultiplier }, { b, v -> b.setMergeMemoryMultiplier(v) }, 1, 50),
+)
+
+@Composable
+private fun ExpertGroup(
+    title: String,
+    fields: List<ExpertField>,
+    cfg: Config,
+    boolEdits: SnapshotStateMap<String, Boolean>,
+    textEdits: SnapshotStateMap<String, String>,
+) {
+    SettingGroup(title) {
+        fields.forEach { f ->
+            when (f) {
+                is BoolField -> ToggleRow(f.label, boolEdits[f.label] ?: f.get(cfg)) { boolEdits[f.label] = it }
+                is IntField -> NumberRow(f.label, textEdits[f.label] ?: f.get(cfg).toString()) {
+                    textEdits[f.label] = it.filter { c -> c.isDigit() }
+                }
+                is DoubleField -> NumberRow(f.label, textEdits[f.label] ?: f.get(cfg).toString()) {
+                    textEdits[f.label] = it.filter { c -> c.isDigit() || c == '.' }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NumberRow(label: String, value: String, onChange: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(label, color = StarColors.textPrimary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+        OutlinedTextField(
+            value = value,
+            onValueChange = onChange,
+            singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
+            modifier = Modifier.widthIn(max = 110.dp),
+        )
     }
 }

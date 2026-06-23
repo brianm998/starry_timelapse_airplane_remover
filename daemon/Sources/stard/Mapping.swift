@@ -210,7 +210,71 @@ enum Mapping {
         ves.pixelFormat = c.pixelFormat.rawValue
         ves.muxer       = c.muxer.rawValue
         out.video = ves
+        // Expert settings (always present in the outgoing proto so the client dialog shows current values).
+        out.numberAlignedNeighborFrames = Int32(c.numberAlignedNeighborFrames)
+        out.numberStaticNeighborFrames = Int32(c.numberStaticNeighborFrames)
+        out.homographySmoothingEpsilon = c.homographySmoothingEpsilon
+        out.keypointMemoryMultiplier = Int32(c.keypointMemoryMultiplier)
+        out.outlierMemoryMultiplier = Int32(c.outlierMemoryMultiplier)
+        out.mergeMemoryMultiplier = Int32(c.mergeMemoryMultiplier)
+        out.useReferenceHorizonSmoothing = c.useReferenceHorizonSmoothing
+        out.referenceHorizonSmoothingMaxDistance = Int32(c.referenceHorizonSmoothingMaxDistance)
+        out.useReferenceHorizonBrightnessRefinement = c.useReferenceHorizonBrightnessRefinement
+        out.referenceHorizonBrightnessRefinementSearchRadius = Int32(c.referenceHorizonBrightnessRefinementSearchRadius)
+        out.referenceHorizonBrightnessRefinementHistBuckets = Int32(c.referenceHorizonBrightnessRefinementHistogramBuckets)
+        out.referenceHorizonNeighborhoodSize = Int32(c.referenceHorizonNeighborhoodSize)
+        out.horizonSpikeRemovalEnabled = c.horizonSpikeRemovalEnabled
+        out.horizonSpikeMaxWidth = Int32(c.horizonSpikeMaxWidth)
+        out.horizonSpikeMaxDeviationFraction = c.horizonSpikeMaxDeviationFraction
+        out.horizonSpikeWindowHalf = Int32(c.horizonSpikeWindowHalf)
+        out.horizonStripWidth = Int32(c.horizonStripWidth)
+        out.useCannyForHorizonDetection = c.useCannyForHorizonDetection
+        out.cannyMinThreshold = c.cannyMinThreshold
+        out.cannyMaxThreshold = c.cannyMaxThreshold
+        out.cannyUseL2Gradient = c.cannyUseL2Gradient
+        out.horizonVerticalShiftAmount = Int32(c.horizonVerticalShiftAmount)
+        out.allowEarthAlignment = c.allowEarthAlignment
+        out.alignmentMaxKeypoints = Int32(c.alignmentMaxKeypoints)
+        out.alignmentWriteDebugImages = c.alignmentWriteDebugImages
+        out.alignmentGroundHorizonExtension = Int32(c.alignmentGroundHorizonExtension)
+        out.alignmentSkyHorizonExtension = Int32(c.alignmentSkyHorizonExtension)
+        out.alignmentBaseImageDilateSize = Int32(c.alignmentBaseImageDilateSize)
+        out.alignmentBaseImageThresholdValue = Int32(c.alignmentBaseImageThresholdValue)
         return out
+    }
+
+    /// Apply only the *present* expert-setting fields from a proto Config onto a StarCore Config,
+    /// so an unset field keeps StarCore's (non-zero) default rather than being clobbered by a proto zero.
+    static func applyExpertConfig(_ c: inout Config, from p: Star_V1_Config) {
+        if p.hasNumberAlignedNeighborFrames { c.numberAlignedNeighborFrames = Int(p.numberAlignedNeighborFrames) }
+        if p.hasNumberStaticNeighborFrames { c.numberStaticNeighborFrames = Int(p.numberStaticNeighborFrames) }
+        if p.hasHomographySmoothingEpsilon { c.homographySmoothingEpsilon = p.homographySmoothingEpsilon }
+        if p.hasKeypointMemoryMultiplier { c.keypointMemoryMultiplier = Int(p.keypointMemoryMultiplier) }
+        if p.hasOutlierMemoryMultiplier { c.outlierMemoryMultiplier = Int(p.outlierMemoryMultiplier) }
+        if p.hasMergeMemoryMultiplier { c.mergeMemoryMultiplier = Int(p.mergeMemoryMultiplier) }
+        if p.hasUseReferenceHorizonSmoothing { c.useReferenceHorizonSmoothing = p.useReferenceHorizonSmoothing }
+        if p.hasReferenceHorizonSmoothingMaxDistance { c.referenceHorizonSmoothingMaxDistance = Int(p.referenceHorizonSmoothingMaxDistance) }
+        if p.hasUseReferenceHorizonBrightnessRefinement { c.useReferenceHorizonBrightnessRefinement = p.useReferenceHorizonBrightnessRefinement }
+        if p.hasReferenceHorizonBrightnessRefinementSearchRadius { c.referenceHorizonBrightnessRefinementSearchRadius = Int(p.referenceHorizonBrightnessRefinementSearchRadius) }
+        if p.hasReferenceHorizonBrightnessRefinementHistBuckets { c.referenceHorizonBrightnessRefinementHistogramBuckets = Int(p.referenceHorizonBrightnessRefinementHistBuckets) }
+        if p.hasReferenceHorizonNeighborhoodSize { c.referenceHorizonNeighborhoodSize = Int(p.referenceHorizonNeighborhoodSize) }
+        if p.hasHorizonSpikeRemovalEnabled { c.horizonSpikeRemovalEnabled = p.horizonSpikeRemovalEnabled }
+        if p.hasHorizonSpikeMaxWidth { c.horizonSpikeMaxWidth = Int(p.horizonSpikeMaxWidth) }
+        if p.hasHorizonSpikeMaxDeviationFraction { c.horizonSpikeMaxDeviationFraction = p.horizonSpikeMaxDeviationFraction }
+        if p.hasHorizonSpikeWindowHalf { c.horizonSpikeWindowHalf = Int(p.horizonSpikeWindowHalf) }
+        if p.hasHorizonStripWidth { c.horizonStripWidth = Int(p.horizonStripWidth) }
+        if p.hasUseCannyForHorizonDetection { c.useCannyForHorizonDetection = p.useCannyForHorizonDetection }
+        if p.hasCannyMinThreshold { c.cannyMinThreshold = p.cannyMinThreshold }
+        if p.hasCannyMaxThreshold { c.cannyMaxThreshold = p.cannyMaxThreshold }
+        if p.hasCannyUseL2Gradient { c.cannyUseL2Gradient = p.cannyUseL2Gradient }
+        if p.hasHorizonVerticalShiftAmount { c.horizonVerticalShiftAmount = Int(p.horizonVerticalShiftAmount) }
+        if p.hasAllowEarthAlignment { c.allowEarthAlignment = p.allowEarthAlignment }
+        if p.hasAlignmentMaxKeypoints { c.alignmentMaxKeypoints = Int(p.alignmentMaxKeypoints) }
+        if p.hasAlignmentWriteDebugImages { c.alignmentWriteDebugImages = p.alignmentWriteDebugImages }
+        if p.hasAlignmentGroundHorizonExtension { c.alignmentGroundHorizonExtension = Int(p.alignmentGroundHorizonExtension) }
+        if p.hasAlignmentSkyHorizonExtension { c.alignmentSkyHorizonExtension = Int(p.alignmentSkyHorizonExtension) }
+        if p.hasAlignmentBaseImageDilateSize { c.alignmentBaseImageDilateSize = Int(p.alignmentBaseImageDilateSize) }
+        if p.hasAlignmentBaseImageThresholdValue { c.alignmentBaseImageThresholdValue = Int(p.alignmentBaseImageThresholdValue) }
     }
 
     // Build a VideoInfo from Swift Config's video fields (for use in Export.Video fallback).

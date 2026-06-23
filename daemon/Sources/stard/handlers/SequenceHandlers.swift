@@ -35,6 +35,7 @@ enum SequenceHandlers {
             if proto.numberOfFramesToProcessConcurrently > 0 {
                 config.numberOfFramesToProcessConcurrently = Int(proto.numberOfFramesToProcessConcurrently)
             }
+            Mapping.applyExpertConfig(&config, from: proto)
             await session.configManager.update(config)
             try await transport.respond(id: id, payload: Mapping.protoConfig(config).serializedData())
         } catch {
