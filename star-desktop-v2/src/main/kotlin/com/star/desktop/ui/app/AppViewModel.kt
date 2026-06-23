@@ -71,8 +71,67 @@ class AppViewModel(
 
     private val _showRenderVideo = MutableStateFlow(false)
     val showRenderVideo: StateFlow<Boolean> = _showRenderVideo.asStateFlow()
-    fun openRenderVideo() { _showRenderVideo.value = true }
-    fun closeRenderVideo() { _showRenderVideo.value = false }
+    private val _renderVideoAutoStart = MutableStateFlow(false)
+    val renderVideoAutoStart: StateFlow<Boolean> = _renderVideoAutoStart.asStateFlow()
+    fun openRenderVideo(autoStart: Boolean = false) { _renderVideoAutoStart.value = autoStart; _showRenderVideo.value = true }
+    fun closeRenderVideo() { _showRenderVideo.value = false; _renderVideoAutoStart.value = false }
+
+    // ---- process → render prompt flow (macOS Pre/PostProcessingRenderPrompt) ----
+    private val _showPreRenderPrompt = MutableStateFlow(false)
+    val showPreRenderPrompt: StateFlow<Boolean> = _showPreRenderPrompt.asStateFlow()
+    private val _showPostRenderPrompt = MutableStateFlow(false)
+    val showPostRenderPrompt: StateFlow<Boolean> = _showPostRenderPrompt.asStateFlow()
+    private var autoRenderAfterProcessing = false
+    private var awaitingProcessingPrompt = false
+
+    /** Entry point for "Process All": skip-pref → start directly; otherwise show the pre-render prompt. */
+    fun requestProcessAll() {
+        val svm = currentSequence ?: return
+        if (prefs.skipRenderPromptAfterProcessing) {
+            autoRenderAfterProcessing = false
+            awaitingProcessingPrompt = false
+            svm.processAll()
+        } else {
+            _showPreRenderPrompt.value = true
+        }
+    }
+
+    fun confirmStartProcessing(autoRender: Boolean, dontAskAgain: Boolean) {
+        if (dontAskAgain) prefs.setSkipRenderPrompt(true)
+        autoRenderAfterProcessing = autoRender
+        awaitingProcessingPrompt = !dontAskAgain
+        _showPreRenderPrompt.value = false
+        currentSequence?.processAll()
+    }
+
+    fun dismissPreRenderPrompt() { _showPreRenderPrompt.value = false }
+    fun dismissPostRenderPrompt() { _showPostRenderPrompt.value = false }
+
+    /** Post-prompt "Preview first": play the final frames from the start. */
+    fun previewFinalFrames() {
+        _showPostRenderPrompt.value = false
+        currentSequence?.let {
+            it.setViewMode(com.star.proto.FrameViewMode.VIEW_PROCESSED)
+            it.goToFirst()
+            it.playForward()
+        }
+    }
+
+    fun confirmRenderAfterProcessing() {
+        _showPostRenderPrompt.value = false
+        openRenderVideo(autoStart = true)
+    }
+
+    private fun handleProcessingDone() {
+        if (!awaitingProcessingPrompt) return
+        awaitingProcessingPrompt = false
+        if (autoRenderAfterProcessing) {
+            autoRenderAfterProcessing = false
+            openRenderVideo(autoStart = true)
+        } else {
+            _showPostRenderPrompt.value = true
+        }
+    }
 
     private val _showOutlierWindow = MutableStateFlow(false)
     val showOutlierWindow: StateFlow<Boolean> = _showOutlierWindow.asStateFlow()
@@ -83,6 +142,11 @@ class AppViewModel(
     val showAlignmentWindow: StateFlow<Boolean> = _showAlignmentWindow.asStateFlow()
     fun toggleAlignmentWindow() { _showAlignmentWindow.value = !_showAlignmentWindow.value }
     fun closeAlignmentWindow() { _showAlignmentWindow.value = false }
+
+    private val _showInfoDialog = MutableStateFlow(false)
+    val showInfoDialog: StateFlow<Boolean> = _showInfoDialog.asStateFlow()
+    fun openInfoDialog() { _showInfoDialog.value = true }
+    fun closeInfoDialog() { _showInfoDialog.value = false }
 
     init {
         scope.launch { engine.start() }
@@ -175,12 +239,17 @@ class AppViewModel(
         _recentFiles.value = prefs.recentFiles
         currentSequence?.close()
         val proc = ProcessingRepository(scope) { engine.client }
+        // Fire the post-processing render prompt when a prompted process-all run reaches "done".
+        scope.launch { proc.sequenceState.collect { if (it == "done") handleProcessingDone() } }
         val svm = SequenceViewModel(scope, info, frameRepo, proc, outlierRepo, imageCache, export)
         when (autoMode) {
             "edit" -> svm.setMode(com.star.desktop.domain.InteractionMode.EDIT)
             "grid" -> svm.setMode(com.star.desktop.domain.InteractionMode.GRID)
             "align" -> toggleAlignmentWindow()
             "horizon" -> { svm.setMode(com.star.desktop.domain.InteractionMode.EDIT); svm.toggleHorizonPaint() }
+            "info" -> openInfoDialog()                  // dev hook: screenshot the Info dialog
+            "prerender" -> _showPreRenderPrompt.value = true   // dev hook: screenshot the pre-render prompt
+            "postrender" -> _showPostRenderPrompt.value = true // dev hook: screenshot the post-render prompt
             else -> Unit
         }
         autoFrame?.let { svm.setCurrentIndex(it) }

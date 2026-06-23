@@ -52,6 +52,14 @@ fun StarApp(vm: AppViewModel) {
             if (showRenderVideo && screen is AppScreen.Sequence) {
                 com.star.desktop.ui.dialogs.RenderVideoDialog(vm)
             }
+            val showInfo by vm.showInfoDialog.collectAsState()
+            if (showInfo) {
+                com.star.desktop.ui.dialogs.InfoDialog(onClose = vm::closeInfoDialog)
+            }
+            val showPre by vm.showPreRenderPrompt.collectAsState()
+            if (showPre && screen is AppScreen.Sequence) com.star.desktop.ui.dialogs.PreProcessingRenderPrompt(vm)
+            val showPost by vm.showPostRenderPrompt.collectAsState()
+            if (showPost && screen is AppScreen.Sequence) com.star.desktop.ui.dialogs.PostProcessingRenderPrompt(vm)
 
             error?.let { ErrorOverlay(it, onDismiss = vm::dismissError) }
         }

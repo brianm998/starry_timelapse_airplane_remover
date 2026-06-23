@@ -20,6 +20,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -94,6 +96,37 @@ fun RenderVideoDialog(app: AppViewModel) {
             var progress by remember { mutableStateOf<Float?>(null) }
             var rendering by remember { mutableStateOf(false) }
 
+            fun doRender() {
+                val sid = app.sessions.sessionId ?: return
+                if (rendering || encoder.isEmpty()) return
+                (app.screen.value as? AppScreen.Sequence)?.vm?.processing?.stop() // free the shared progress slot
+                rendering = true
+                status = "Rendering…"
+                val settings = VideoEncodeSettings.newBuilder()
+                    .setFrameRate(frameRate).setCodec(codec).setEncoder(encoder)
+                    .setPixelFormat(pixelFormat).setMuxer(muxer).build()
+                scope.launch {
+                    try {
+                        app.export.exportVideo(sid, "", settings).collect { ev ->
+                            if (ev.kindCase == ProgressEvent.KindCase.IO_PROGRESS) {
+                                val io = ev.ioProgress
+                                progress = if (io.total > 0) io.current.toFloat() / io.total else null
+                                status = "Rendering ${io.current} / ${io.total}"
+                            }
+                        }
+                        status = "Done"
+                    } catch (e: Throwable) {
+                        status = "Error: ${e.message}"
+                    } finally {
+                        rendering = false
+                    }
+                }
+            }
+
+            // Auto-start when opened from the render prompt's "Yes" (once codecs + a default encoder load).
+            val autoStart by app.renderVideoAutoStart.collectAsState()
+            LaunchedEffect(autoStart, encoder) { if (autoStart && !rendering && encoder.isNotEmpty()) doRender() }
+
             status?.let { Text(it, color = StarColors.textSecondary, fontSize = 12.sp) }
             if (rendering) LinearProgressIndicator(progress = { progress ?: 0f }, modifier = Modifier.fillMaxWidth(), color = StarColors.accent)
 
@@ -101,31 +134,7 @@ fun RenderVideoDialog(app: AppViewModel) {
                 OutlinedButton(onClick = app::closeRenderVideo, enabled = !rendering) { Text("Cancel") }
                 Button(
                     enabled = !rendering && encoder.isNotEmpty(),
-                    onClick = {
-                        val sid = app.sessions.sessionId ?: return@Button
-                        (app.screen.value as? AppScreen.Sequence)?.vm?.processing?.stop() // free the shared progress slot
-                        rendering = true
-                        status = "Rendering…"
-                        val settings = VideoEncodeSettings.newBuilder()
-                            .setFrameRate(frameRate).setCodec(codec).setEncoder(encoder)
-                            .setPixelFormat(pixelFormat).setMuxer(muxer).build()
-                        scope.launch {
-                            try {
-                                app.export.exportVideo(sid, "", settings).collect { ev ->
-                                    if (ev.kindCase == ProgressEvent.KindCase.IO_PROGRESS) {
-                                        val io = ev.ioProgress
-                                        progress = if (io.total > 0) io.current.toFloat() / io.total else null
-                                        status = "Rendering ${io.current} / ${io.total}"
-                                    }
-                                }
-                                status = "Done"
-                            } catch (e: Throwable) {
-                                status = "Error: ${e.message}"
-                            } finally {
-                                rendering = false
-                            }
-                        }
-                    },
+                    onClick = { doRender() },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                 ) { Text("Render") }
             }

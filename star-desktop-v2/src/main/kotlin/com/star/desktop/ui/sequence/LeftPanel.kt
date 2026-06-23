@@ -36,7 +36,7 @@ import com.star.proto.FrameProcessingState
 /** Left panel (macOS `LeftPanel`): processing controls, progress, and a per-frame state grid. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
+fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier, onProcessAll: () -> Unit = { vm.processAll() }) {
     val processing by vm.isProcessing.collectAsState()
     val rendering by vm.rendering.collectAsState()
     val renderProgress by vm.renderProgress.collectAsState()
@@ -60,7 +60,7 @@ fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         Text("Processing", color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
 
         Button(
-            onClick = { vm.processAll() },
+            onClick = onProcessAll,
             enabled = !busy,
             colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
             modifier = Modifier.fillMaxWidth(),

@@ -52,6 +52,7 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
         ) {
             Text("Star", color = StarColors.textPrimary, fontSize = 40.sp, fontWeight = FontWeight.Light)
             Text("Nighttime Timelapse Airplane Remover", color = StarColors.textSecondary, fontSize = 13.sp)
+            OutlinedButton(onClick = vm::openInfoDialog) { Text("ⓘ  About Star") }
 
             DropZone(onOpenSequence = { open(vm, OpenKind.SEQUENCE) })
 

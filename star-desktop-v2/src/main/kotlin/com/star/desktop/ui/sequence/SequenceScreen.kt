@@ -47,7 +47,7 @@ fun SequenceScreen(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier 
                 InteractionMode.EDIT -> Row(Modifier.fillMaxSize()) {
                     val leftShowing by vm.leftPanelShowing.collectAsState()
                     val rightShowing by vm.rightPanelShowing.collectAsState()
-                    if (leftShowing) LeftPanel(vm)
+                    if (leftShowing) LeftPanel(vm, onProcessAll = { app.requestProcessAll() })
                     else com.star.desktop.ui.components.CollapsedPanelRail({ vm.setLeftPanel(true) }, pointLeft = false)
                     val painting by vm.horizonPaintMode.collectAsState()
                     Box(Modifier.weight(1f).fillMaxSize()) {

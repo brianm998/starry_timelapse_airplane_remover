@@ -17,9 +17,20 @@ class LocalPreferences {
     private val gson = Gson()
 
     private val recent = linkedMapOf<String, Long>()
+    private val others = linkedMapOf<String, Any?>() // unknown keys written by the Swift app — preserved on save
+
+    /** macOS `skipRenderPromptAfterProcessing`: once set, processing starts without the render prompt. */
+    @Volatile
+    var skipRenderPromptAfterProcessing: Boolean = false
+        private set
 
     init {
         load()
+    }
+
+    fun setSkipRenderPrompt(value: Boolean) {
+        skipRenderPromptAfterProcessing = value
+        save()
     }
 
     /** Recent sequence paths, most-recent first. */
@@ -44,13 +55,18 @@ class LocalPreferences {
     private fun load() {
         if (!prefsFile.exists()) return
         try {
-            val type = object : TypeToken<Map<String, Any>>() {}.type
-            val map: Map<String, Any> = gson.fromJson(prefsFile.readText(), type) ?: return
+            val type = object : TypeToken<MutableMap<String, Any?>>() {}.type
+            val map: MutableMap<String, Any?> = gson.fromJson(prefsFile.readText(), type) ?: return
             @Suppress("UNCHECKED_CAST")
-            val raw = map["recentlyOpenedSequencelist"] as? Map<String, Double> ?: emptyMap()
+            val raw = map["recentlyOpenedSequencelist"] as? Map<String, Any?> ?: emptyMap()
             synchronized(recent) {
                 recent.clear()
-                raw.forEach { (k, v) -> recent[k] = v.toLong() }
+                raw.forEach { (k, v) -> recent[k] = (v as? Double)?.toLong() ?: 0L }
+            }
+            skipRenderPromptAfterProcessing = map["skipRenderPromptAfterProcessing"] as? Boolean ?: false
+            synchronized(others) {
+                others.clear()
+                map.forEach { (k, v) -> if (k !in MANAGED_KEYS) others[k] = v }
             }
         } catch (e: Exception) {
             Log.w("Prefs") { "failed to read $prefsFile: ${e.message}" }
@@ -59,10 +75,16 @@ class LocalPreferences {
 
     private fun save() {
         try {
-            val snapshot = synchronized(recent) { LinkedHashMap(recent) }
-            prefsFile.writeText(gson.toJson(mapOf("recentlyOpenedSequencelist" to snapshot)))
+            val out = LinkedHashMap<String, Any?>(synchronized(others) { LinkedHashMap(others) })
+            out["recentlyOpenedSequencelist"] = synchronized(recent) { LinkedHashMap(recent) }
+            out["skipRenderPromptAfterProcessing"] = skipRenderPromptAfterProcessing
+            prefsFile.writeText(gson.toJson(out))
         } catch (e: Exception) {
             Log.w("Prefs") { "failed to write $prefsFile: ${e.message}" }
         }
+    }
+
+    private companion object {
+        val MANAGED_KEYS = setOf("recentlyOpenedSequencelist", "skipRenderPromptAfterProcessing")
     }
 }
