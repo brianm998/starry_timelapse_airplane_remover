@@ -7,19 +7,52 @@ import logging
 import ucrt
 #endif
 
-// Called once at startup so Windows does not translate \n or treat 0x1A as EOF.
-func setBinaryStdIO() {
-    #if os(Windows)
+// MARK: - Protocol FD isolation
+//
+// The binary frame stream must NOT ride on the process-wide stdout (fd 1), because any code in the
+// process — StarCore, OpenCV, a dependency, a stray print()/Log — can write to fd 1 and corrupt the
+// stream (this caused a real hang: log text interleaved into frames, the client desynced). JVM
+// ProcessBuilder can't hand the child an extra FD portably, and the design rules out sockets for
+// Windows, so we isolate the protocol *inside* stard:
+//
+//   1. dup() the real stdin/stdout (the pipes the parent connected) to PRIVATE fds — the protocol
+//      reads/writes only these.
+//   2. Redirect fd 1 (stdout) → fd 2 (stderr) and fd 0 (stdin) → /dev/null, so any generic
+//      read/write on the process-wide std streams can never touch the protocol.
+//
+// The client side is unchanged: it still reads the child's stdout pipe, which now carries only
+// frames (written via the private dup of the original fd 1).
+
+// Set once in setupProtocolIO() before the reader/writer ever run, then only read — hence
+// nonisolated(unsafe) (no concurrent mutation to guard).
+nonisolated(unsafe) private var inHandle  = FileHandle.standardInput
+nonisolated(unsafe) private var outHandle = FileHandle.standardOutput
+
+// Call ONCE at startup, before any logging or I/O.
+func setupProtocolIO() {
+#if os(Windows)
     let O_BINARY: Int32 = 0x8000
-    _ = _setmode(_fileno(stdin),  O_BINARY)
-    _ = _setmode(_fileno(stdout), O_BINARY)
-    #endif
+    let inFD  = _dup(_fileno(stdin))
+    let outFD = _dup(_fileno(stdout))
+    _ = _setmode(inFD,  O_BINARY)
+    _ = _setmode(outFD, O_BINARY)
+    _ = _dup2(_fileno(stderr), _fileno(stdout))           // stray stdout writes → stderr
+    let nul = _open("NUL", 0 /* _O_RDONLY */)
+    if nul >= 0 { _ = _dup2(nul, _fileno(stdin)); _ = _close(nul) } // stray stdin reads → EOF
+    inHandle  = FileHandle(fileDescriptor: inFD,  closeOnDealloc: false)
+    outHandle = FileHandle(fileDescriptor: outFD, closeOnDealloc: false)
+#else
+    let inFD  = dup(0)
+    let outFD = dup(1)
+    _ = dup2(2, 1)                                          // stray stdout writes → stderr
+    let devnull = open("/dev/null", O_RDONLY)
+    if devnull >= 0 { _ = dup2(devnull, 0); close(devnull) } // stray stdin reads → EOF
+    inHandle  = FileHandle(fileDescriptor: inFD,  closeOnDealloc: false)
+    outHandle = FileHandle(fileDescriptor: outFD, closeOnDealloc: false)
+#endif
 }
 
 // MARK: - Framing primitives (validated per §6.3)
-
-private let inHandle  = FileHandle.standardInput
-private let outHandle = FileHandle.standardOutput
 
 private func readExactly(_ n: Int) -> Data? {
     var buf = Data()

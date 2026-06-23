@@ -23,12 +23,14 @@ struct Stard: AsyncParsableCommand {
     var logLevel: Log.Level = .info
 
     mutating func run() async throws {
-        // Must be called before any stdin/stdout I/O on Windows.
-        setBinaryStdIO()
+        // FIRST, before any I/O or logging: move the protocol onto private FDs and redirect the
+        // process-wide stdout→stderr / stdin→/dev/null, so no stray write/read can corrupt the
+        // frame stream. Also sets binary mode on Windows. (See StdioTransport.setupProtocolIO.)
+        setupProtocolIO()
 
-        // All logging goes to stderr (never stdout — that carries the binary frame stream).
-        // NB: the shared ConsoleLogHandler uses print(), which writes to STDOUT and corrupts the
-        // frame stream; we use a dedicated stderr handler instead (see StderrLogHandler).
+        // Logging goes to stderr (never the protocol stream). StderrLogHandler writes fd 2 directly;
+        // and because setupProtocolIO redirected fd 1→fd 2, even a stray print()/ConsoleLogHandler
+        // can no longer reach the protocol.
         Log.name = "stard"
         Log.add(handler: StderrLogHandler(at: logLevel), for: .console)
 
