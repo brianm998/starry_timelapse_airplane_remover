@@ -90,11 +90,16 @@ extension Dispatcher {
         register(method: "Outlier.List")         { id, payload, transport in await OutlierHandlers.list(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Outlier.SetDecisions") { id, payload, transport in await OutlierHandlers.setDecisions(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Outlier.RenderFrame")  { id, payload, transport in await OutlierHandlers.renderFrame(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Outlier.ApplyDecisionTree")          { id, payload, transport in await OutlierHandlers.applyDecisionTree(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Outlier.ApplyDecisionTreeAllFrames") { id, payload, transport in await OutlierHandlers.applyDecisionTreeAllFrames(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Outlier.SetDecisionsInArea")         { id, payload, transport in await OutlierHandlers.setDecisionsInArea(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Outlier.SetDecisionsOverlapping")    { id, payload, transport in await OutlierHandlers.setDecisionsOverlapping(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
 
         // Processing
         register(method: "Processing.Start")          { id, payload, transport in await ProcessingHandlers.start(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Processing.StreamProgress") { id, payload, transport in await ProcessingHandlers.streamProgress(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Processing.Cancel")         { id, payload, transport in await ProcessingHandlers.cancel(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Processing.ReprocessFrames"){ id, payload, transport in await ProcessingHandlers.reprocessFrames(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
 
         // Export
         register(method: "Export.RenderSequence")       { id, payload, transport in await ExportHandlers.renderSequence(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
@@ -110,5 +115,6 @@ extension Dispatcher {
         register(method: "Horizon.GetReference")   { id, payload, transport in await HorizonHandlers.getReference(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.ClearReference") { id, payload, transport in await HorizonHandlers.clearReference(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.Reprocess")      { id, payload, transport in await HorizonHandlers.reprocess(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.GetOverlay")     { id, payload, transport in await HorizonHandlers.getOverlay(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
     }
 }

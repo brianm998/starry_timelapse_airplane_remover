@@ -91,6 +91,33 @@ enum HorizonHandlers {
         }
     }
 
+    // Per-frame horizon overlay (kind + per-column Y) for the grid; nil overlay → exists=false.
+    static func getOverlay(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_GetHorizonOverlayRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            guard let frame = await session.frame(at: Int(req.frameIndex)) else {
+                await transport.sendError(id: id, message: "frame index out of range", code: 404); return
+            }
+            let w = req.width > 0 ? Int(req.width) : frame.width
+            let h = req.height > 0 ? Int(req.height) : frame.height
+            var resp = Star_V1_GetHorizonOverlayResponse()
+            if let overlay = try await frame.loadHorizonThumbnailOverlay(thumbnailWidth: w, thumbnailHeight: h) {
+                resp.exists = true
+                resp.kind = Mapping.horizonOverlayKind(overlay.kind)
+                resp.yPerColumn = overlay.yPerColumn.map { Int32($0) }
+                resp.height = Int32(overlay.height)
+            } else {
+                resp.exists = false
+            }
+            try await transport.respond(id: id, payload: resp.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
     static func clearReference(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {
             let req = try Star_V1_ClearReferenceHorizonRequest(serializedBytes: payload)

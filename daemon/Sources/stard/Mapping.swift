@@ -202,6 +202,7 @@ enum Mapping {
         if c.ignoreLowerPixels != 0 { out.ignoreLowerPixels = Int32(c.ignoreLowerPixels) }
         out.writeOutlierGroupFiles = c.writeOutlierGroupFiles
         out.writeFramePreviewFiles = c.writeFramePreviewFiles
+        out.starVersion = c.starVersion
         var ves = Star_V1_VideoEncodeSettings()
         ves.frameRate   = c.frameRate.rawValue
         ves.codec       = c.codec.rawValue
@@ -306,7 +307,29 @@ enum Mapping {
             fi.numPositiveOutliers  = Int32(pos)
             fi.numNegativeOutliers  = Int32(neg)
             fi.numUndecidedOutliers = Int32(und)
+            fi.numTrashOutliers     = Int32(await groups.getTrash().count)
         }
         return fi
+    }
+
+    /// Map proto ReprocessingType → StarCore FrameReprocessingType.
+    static func reprocessingType(_ t: Star_V1_ReprocessingType) -> FrameReprocessingType {
+        switch t {
+        case .reprocessEverything:  return .everything
+        case .reprocessAlignment:   return .alignment
+        case .reprocessOutliers:    return .outliers
+        case .reprocessHorizons:    return .horizons
+        case .reprocessAllHorizons: return .allHorizons
+        default:                    return .none
+        }
+    }
+
+    /// Map StarCore HorizonThumbnailOverlay.Kind → proto HorizonOverlayKind.
+    static func horizonOverlayKind(_ k: HorizonThumbnailOverlay.Kind) -> Star_V1_HorizonOverlayKind {
+        switch k {
+        case .initial:   return .initial
+        case .merged:    return .merged
+        case .reference: return .reference
+        }
     }
 }

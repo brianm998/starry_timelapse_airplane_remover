@@ -157,6 +157,42 @@ actor Session {
         processingTask = nil
     }
 
+    // Reset per-frame work files so the frame graph recomputes them (mirrors the macOS
+    // ImageSequenceViewModel.clearProcessing reset). Used by force-reprocess and granular reprocess.
+    func resetFrames(indices: [Int], type: FrameReprocessingType) async {
+        for i in indices {
+            guard let frame = frame(at: i) else { continue }
+            await frame.set(state: .unprocessed)
+            frame.imageAccessor.deleteAllImages(frameIndex: frame.frameIndex, reprocessingType: type)
+            await frame.setNumberOfAlignedFrames()
+            await frame.setNumberOfStaticNeighborFrames()
+            try? await frame.removeNumberOfAlignedImagesForThisFrameFile()
+            if type == .everything || type == .outliers || type == .alignment {
+                try? await frame.deleteOutliers()
+            }
+        }
+    }
+
+    // Force-reprocess a contiguous range: reset the frames, then run the graph over [start, end].
+    func forceReprocess(startIndex: Int, endIndex: Int?) async {
+        processingTask?.cancel()
+        processingTask = nil
+        let hi = endIndex ?? (frames.count - 1)
+        let range = Array(max(0, startIndex)...min(frames.count - 1, hi))
+        await resetFrames(indices: range, type: .everything)
+        await startProcessing(startIndex: startIndex, endIndex: endIndex)
+    }
+
+    // Granular reprocess of a specific (possibly non-contiguous) set of frames. Untouched .complete
+    // frames in [min,max] are skipped by the ops' state check, so only the reset frames recompute.
+    func reprocessFrames(indices: [Int], type: FrameReprocessingType) async {
+        guard !indices.isEmpty else { return }
+        processingTask?.cancel()
+        processingTask = nil
+        await resetFrames(indices: indices, type: type)
+        await startProcessing(startIndex: indices.min()!, endIndex: indices.max()!)
+    }
+
     // Called by Dispatcher when the Processing.StreamProgress stream is opened.
     func setProgressContinuation(_ cont: AsyncStream<Star_V1_ProgressEvent>.Continuation?) {
         progressContinuation = cont

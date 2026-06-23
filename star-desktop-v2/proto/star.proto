@@ -98,6 +98,7 @@ message Config {
   bool                    write_outlier_group_files          = 12;
   bool                    write_frame_preview_files          = 13;
   VideoEncodeSettings     video                             = 14;  // persisted encode settings
+  string                  star_version                      = 15;  // engine version that wrote this config; compare to HelloResponse.daemon_version
 }
 
 enum CleanMethod {
@@ -125,6 +126,7 @@ message FrameInfo {
   int32                num_negative_outliers   = 4;
   int32                num_undecided_outliers  = 5;
   CleanMethod          clean_method            = 6;
+  int32                num_trash_outliers      = 7;
 }
 
 message GetFramePreviewRequest {
@@ -235,10 +237,70 @@ message SetOutlierDecisionsRequest {
 message OutlierDecision  { uint32 group_id = 1; RemoveReason decision = 2; }
 message SetOutlierDecisionsResponse { FrameInfo frame = 1; ImageRef preview = 2; }
 
+// Re-run the StarCore decision-tree classifier over a frame's outlier groups.
+message ApplyDecisionTreeRequest {
+  string session_id     = 1;
+  int32  frame_index    = 2;
+  bool   overwrite      = 3;   // false = keep existing user/classifier decisions; true = reclassify all
+  bool   auto_only      = 4;   // true => applyDecisionTreeToAutoSelectedOutliers; false => ...ToAllOutliers
+  bool   including_trash = 5;  // auto_only path: also promote+classify trashed groups
+  int32  minimum_size   = 6;   // 0 => no minimum (nil)
+  bool   rerender       = 7;
+}
+message ApplyDecisionTreeResponse { FrameInfo frame = 1; ImageRef preview = 2; }
+
+message ApplyDecisionTreeAllFramesRequest {
+  string session_id   = 1;
+  bool   overwrite    = 2;
+  int32  minimum_size = 3;   // 0 => no minimum (nil)
+}
+message ApplyDecisionTreeAllFramesResponse { repeated FrameInfo frames = 1; }
+
+// Bulk decisions across a frame range (multi-choice / multi-select sheets). Locations are image pixels.
+message Point { double x = 1; double y = 2; }
+
+message SetOutlierDecisionsInAreaRequest {
+  string session_id      = 1;
+  int32  start_index     = 2;   // inclusive
+  int32  end_index       = 3;   // inclusive
+  bool   should_remove   = 4;
+  Point  start_location  = 5;   // rect corner (image px)
+  Point  end_location    = 6;   // opposite corner (image px)
+  bool   including_trash = 7;
+  bool   rerender        = 8;
+}
+
+message SetOutlierDecisionsOverlappingRequest {
+  string session_id         = 1;
+  int32  start_index        = 2;   // inclusive
+  int32  end_index          = 3;   // inclusive
+  bool   should_remove      = 4;
+  int32  reference_frame    = 5;   // frame the reference group lives in
+  uint32 reference_group_id = 6;
+  bool   rerender           = 7;
+}
+
+message MultiFrameDecisionsResponse {
+  repeated FrameInfo frames   = 1;
+  repeated ImageRef  previews = 2;   // populated when rerender = true (parallel to frames)
+}
+
 // ---- Processing / Export ----
 
-message StartProcessingRequest  { string session_id = 1; int32 start_index = 2; int32 end_index = 3; }
+message StartProcessingRequest  { string session_id = 1; int32 start_index = 2; int32 end_index = 3; bool force = 4; }
 message StartProcessingResponse {}
+
+// Granular per-frame reprocess (grid context menu).
+enum ReprocessingType {
+  REPROCESS_NONE         = 0;
+  REPROCESS_EVERYTHING   = 1;
+  REPROCESS_ALIGNMENT    = 2;
+  REPROCESS_OUTLIERS     = 3;
+  REPROCESS_HORIZONS     = 4;
+  REPROCESS_ALL_HORIZONS = 5;
+}
+message ReprocessFramesRequest  { string session_id = 1; repeated int32 frame_indices = 2; ReprocessingType type = 3; }
+message ReprocessFramesResponse {}
 message CancelResponse          {}
 
 message ProgressEvent {
@@ -362,3 +424,19 @@ message ClearReferenceHorizonResponse {}
 
 // Reprocess after a reference-horizon change; streams ProgressEvent like Processing.StreamProgress.
 message ReprocessHorizonsRequest { string session_id = 1; repeated int32 edited_frame_indices = 2; }
+
+// Per-frame horizon overlay for the grid (kind drives color: initial=white, merged=blue, reference=green).
+// `isPendingHorizonRefinement` is NOT engine-derived — the client tracks it from edited reference frames.
+enum HorizonOverlayKind {
+  HORIZON_OVERLAY_KIND_UNSPECIFIED = 0;  // no horizon computed (overlay nil)
+  HORIZON_OVERLAY_KIND_INITIAL     = 1;
+  HORIZON_OVERLAY_KIND_MERGED      = 2;
+  HORIZON_OVERLAY_KIND_REFERENCE   = 3;
+}
+message GetHorizonOverlayRequest  { string session_id = 1; int32 frame_index = 2; int32 width = 3; int32 height = 4; }
+message GetHorizonOverlayResponse {
+  bool               exists       = 1;
+  HorizonOverlayKind kind         = 2;
+  repeated int32     y_per_column = 3;   // draw-space Y, length == width
+  int32              height       = 4;   // height the overlay was computed at (scaleY divisor)
+}

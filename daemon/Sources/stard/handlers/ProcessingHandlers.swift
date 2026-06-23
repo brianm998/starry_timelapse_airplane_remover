@@ -14,7 +14,11 @@ enum ProcessingHandlers {
             }
             let startIdx = req.startIndex > 0 ? Int(req.startIndex) : 0
             let endIdx: Int? = req.endIndex > 0 ? Int(req.endIndex) : nil
-            await session.startProcessing(startIndex: startIdx, endIndex: endIdx)
+            if req.force {
+                await session.forceReprocess(startIndex: startIdx, endIndex: endIdx)
+            } else {
+                await session.startProcessing(startIndex: startIdx, endIndex: endIdx)
+            }
             try await transport.respond(id: id, payload: Star_V1_StartProcessingResponse().serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")
@@ -47,6 +51,21 @@ enum ProcessingHandlers {
             }
             await transport.sendStreamEnd(id: id)
             await session.setProgressContinuation(nil)
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    // Granular reprocess of selected frames (grid context menu). Progress streams over StreamProgress.
+    static func reprocessFrames(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_ReprocessFramesRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            let indices = req.frameIndices.map { Int($0) }
+            await session.reprocessFrames(indices: indices, type: Mapping.reprocessingType(req.type))
+            try await transport.respond(id: id, payload: Star_V1_ReprocessFramesResponse().serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")
         }
