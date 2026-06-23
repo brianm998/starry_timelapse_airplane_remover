@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
@@ -52,11 +53,21 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
 
     val transform = remember(current) { FrameTransform(vm.info.imageWidth, vm.info.imageHeight) }
     var canvasSize by remember { mutableStateOf(Size.Zero) }
+    var dragging by remember { mutableStateOf(false) }
+
+    // Tool-dependent cursor: pointing while dragging or hovering a group, else the tool crosshair.
+    val cursorIcon = when {
+        tool == com.star.desktop.domain.ToolType.NONE -> androidx.compose.ui.input.pointer.PointerIcon.Default
+        dragging -> ToolCursors.pointing(tool)
+        hovered != null -> ToolCursors.groupPointing(tool, com.star.desktop.domain.OutlierDecisions.willRemove(decisions[hovered] ?: com.star.proto.RemoveReason.RR_UNDECIDED))
+        else -> ToolCursors.crosshair(tool)
+    }
 
     Box(
         modifier
             .fillMaxSize()
             .background(StarColors.appBackground)
+            .pointerHoverIcon(cursorIcon, overrideDescendants = true)
             .onSizeChanged { canvasSize = it.toSize() }
             .onPointerEvent(PointerEventType.Scroll) { ev ->
                 val change = ev.changes.firstOrNull() ?: return@onPointerEvent
@@ -67,7 +78,11 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 }
             }
             .pointerInput(Unit) {
-                detectDragGestures { change, drag ->
+                detectDragGestures(
+                    onDragStart = { dragging = true },
+                    onDragEnd = { dragging = false },
+                    onDragCancel = { dragging = false },
+                ) { change, drag ->
                     transform.panBy(drag)
                     change.consume()
                 }

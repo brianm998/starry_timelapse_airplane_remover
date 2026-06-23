@@ -6,17 +6,21 @@ package com.star.desktop.domain
  *
  * [iconBaseName] resolves to `icons/<name>.png` in classpath resources (re-exported from the macOS
  * asset catalog). Per-tool selection colors live in `ui/theme/StarColors`.
+ *
+ * [cursorBaseName] is the base for the tool's frame cursors — `icons/<base>_crosshair.png` (hover)
+ * and `icons/<base>_pointing.png` (drag / group hover). Null for [NONE] (system arrow). Note these
+ * bases differ from [iconBaseName] (e.g. TRASH's cursor is `delete_trash`, not `add_to_trash_icon`).
  */
-enum class ToolType(val displayName: String, val iconBaseName: String) {
-    REMOVE("Remove", "remove_icon"),
-    KEEP("Keep", "keep_icon"),
-    RAZOR("Razor", "razor_icon"),
-    SHOVEL("Shovel", "shovel_icon"),
-    TRASH("Trash", "add_to_trash_icon"),
-    REMOVE_FROM_TRASH("Get from Trash", "remove_from_trash_icon"),
-    MULTI("Multi", "multi_choice_icon"),
-    INFORMATION("Information", "info_icon"),
-    NONE("None", "shovel_icon");
+enum class ToolType(val displayName: String, val iconBaseName: String, val cursorBaseName: String?) {
+    REMOVE("Remove", "remove_icon", "remove"),
+    KEEP("Keep", "keep_icon", "keep"),
+    RAZOR("Razor", "razor_icon", "razor"),
+    SHOVEL("Shovel", "shovel_icon", "shovel"),
+    TRASH("Trash", "add_to_trash_icon", "delete_trash"),
+    REMOVE_FROM_TRASH("Get from Trash", "remove_from_trash_icon", "extract_trash"),
+    MULTI("Multi", "multi_choice_icon", "multi"),
+    INFORMATION("Information", "info_icon", "info"),
+    NONE("None", "shovel_icon", null);
 
     /** Whether this tool only sets a keep/remove decision (mappable to `Outlier.SetDecisions` today). */
     val setsDecisionOnly: Boolean get() = this == REMOVE || this == KEEP
