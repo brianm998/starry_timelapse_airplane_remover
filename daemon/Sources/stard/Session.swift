@@ -97,6 +97,17 @@ actor Session {
         return frames[index]
     }
 
+    // Current config snapshot.
+    func config() async -> Config { await configManager.config() }
+
+    // Set/clear the static reference-horizon flag and persist config.json (resume/interop).
+    func setStaticReferenceHorizon(_ enabled: Bool) async {
+        var cfg = await configManager.config()
+        cfg.hasStaticReferenceHorizon = enabled
+        await configManager.update(cfg)
+        writeConfigJson(cfg, toDir: scratchSessionDir)
+    }
+
     // Start processing (calls frameGraphBuilder.build).
     // startIndex/endIndex are 0-based inclusive frame indices; pass nil endIndex to process to the last frame.
     func startProcessing(startIndex: Int = 0, endIndex: Int? = nil) async {
@@ -132,6 +143,14 @@ actor Session {
     func cancelProcessing() {
         processingTask?.cancel()
         processingTask = nil
+    }
+
+    // Re-run the whole frame graph after a reference-horizon change. With hasStaticReferenceHorizon
+    // set, the graph skips per-frame horizon detection and reads reference.tiff directly.
+    func reprocessWithReferenceHorizon() async {
+        processingTask?.cancel()
+        processingTask = nil
+        await startProcessing(startIndex: 0, endIndex: nil)
     }
 
     private func clearProcessingTask() {

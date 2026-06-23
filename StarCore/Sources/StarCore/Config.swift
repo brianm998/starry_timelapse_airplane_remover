@@ -570,6 +570,10 @@ public struct Config: Codable, Sendable {
 
         self.allowEarthAlignment = try c.decodeIfPresent(Bool.self, forKey: .allowEarthAlignment) ?? self.allowEarthAlignment
 
+        // Was previously not decoded, so a painted static reference horizon was lost on config
+        // reload/resume even though it is encoded. Decode it for round-trip fidelity.
+        self.hasStaticReferenceHorizon = try c.decodeIfPresent(Bool.self, forKey: .hasStaticReferenceHorizon) ?? self.hasStaticReferenceHorizon
+
         self.alignmentMaxKeypoints = try c.decodeIfPresent(Int.self, forKey: .alignmentMaxKeypoints) ?? self.alignmentMaxKeypoints
         self.alignmentWriteDebugImages = try c.decodeIfPresent(Bool.self, forKey: .alignmentWriteDebugImages) ?? self.alignmentWriteDebugImages
         self.alignmentGroundHorizonExtension = try c.decodeIfPresent(Int.self, forKey: .alignmentGroundHorizonExtension) ?? self.alignmentGroundHorizonExtension

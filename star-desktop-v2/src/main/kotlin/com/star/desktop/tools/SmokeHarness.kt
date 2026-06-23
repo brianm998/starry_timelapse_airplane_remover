@@ -97,6 +97,29 @@ object SmokeHarness {
             }
             val label = runCatching { client.getOutlierLabelImage(info.sessionId, 0) }.getOrNull()
             println("  labelImage[0] = ${label?.path?.substringAfterLast('/') ?: "—"}")
+
+            // ---- Alignment endpoints ----
+            val seq = runCatching { client.getAlignmentSequence(info.sessionId, includeHomography = true, includePreviews = true) }.getOrNull()
+            println("  alignment: ${seq?.framesCount ?: "error"} frames")
+            seq?.framesList?.getOrNull(1)?.let { a ->
+                println("    frame1: star=${a.hasStarResults} neighbors=${a.star.neighborsCount} compositeDev=${"%.4f".format(a.star.compositeDeviation)} ok=${a.star.alignmentLooksOk} skyKp=${a.numSkyKeypoints}")
+                a.star.neighborsList.firstOrNull()?.let { n ->
+                    println("    neighbor0: idx=${n.frameIndex} dev=${"%.4f".format(n.deviation)} state=${n.state} hom=${n.homographyCount} preview=${n.alignedPreview.path.substringAfterLast('/').ifEmpty { "—" }}")
+                }
+            }
+
+            // ---- Horizon endpoints ---- (paint a flat reference at mid-height, then read it back)
+            val w = info.imageWidth; val h = info.imageHeight
+            val setResp = runCatching {
+                val cols = com.star.proto.HorizonColumns.newBuilder().setSpaceWidth(w).setSpaceHeight(h).addAllHorizonY(List(w) { h / 2 }).build()
+                client.setReferenceHorizon(
+                    com.star.proto.SetReferenceHorizonRequest.newBuilder()
+                        .setSessionId(info.sessionId).setFrameIndex(1).setColumns(cols).setSetStaticReference(true).build(),
+                )
+            }.getOrElse { println("  horizon set ERROR: ${it.message}"); null }
+            println("  horizon set: global=${setResp?.isGlobal} mask=${setResp?.referenceMask?.path?.substringAfterLast('/') ?: "—"}")
+            val getResp = runCatching { client.getReferenceHorizon(info.sessionId, 1) }.getOrNull()
+            println("  horizon get: exists=${getResp?.exists} cols=${getResp?.columns?.horizonYCount ?: 0}")
         }
 
         if (!path.endsWith("config.json")) client.closeSession(info.sessionId)

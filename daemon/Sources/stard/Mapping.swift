@@ -156,6 +156,38 @@ enum Mapping {
         return out
     }
 
+    // MARK: - Alignment
+
+    static func protoAlignmentState(_ s: AlignmentState) -> Star_V1_AlignmentState {
+        switch s {
+        case .unableToDetectKeypoints: return .alignUnableToDetectKeypoints
+        case .notEnoughKeypoints:      return .alignNotEnoughKeypoints
+        case .noHomographyFound:       return .alignNoHomographyFound
+        case .homographySuccess:       return .alignHomographySuccess
+        case .usedExistingHomography:  return .alignUsedExistingHomography
+        case .noAlignment:             return .alignNoAlignment
+        case .unknown:                 return .alignUnknown
+        }
+    }
+
+    static func protoNeighborHomography(_ w: AlignmentWarpInfoCodable, includeHomography: Bool) -> Star_V1_NeighborHomography {
+        var out = Star_V1_NeighborHomography()
+        out.frameIndex = Int32(w.frameIndex)
+        out.deviation = w.deviation
+        out.state = protoAlignmentState(w.alignmentState)
+        if includeHomography, let h = w.homography { out.homography = h }
+        return out
+    }
+
+    static func protoHomographyResults(_ h: HomographyResultsCodable, includeHomography: Bool) -> Star_V1_HomographyResults {
+        var out = Star_V1_HomographyResults()
+        out.frameIndex = Int32(h.frameIndex)
+        out.compositeDeviation = h.compositeDeviation
+        out.alignmentLooksOk = h.alignmentLooksOk
+        out.neighbors = h.neighborHomography.map { protoNeighborHomography($0, includeHomography: includeHomography) }
+        return out
+    }
+
     // MARK: - Config round-trip
 
     static func protoConfig(_ c: Config) -> Star_V1_Config {

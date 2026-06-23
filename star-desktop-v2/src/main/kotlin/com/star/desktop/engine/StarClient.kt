@@ -2,8 +2,19 @@ package com.star.desktop.engine
 
 import com.google.protobuf.MessageLite
 import com.google.protobuf.Parser
+import com.star.proto.AlignmentInfo
+import com.star.proto.AlignmentSequence
 import com.star.proto.CancelResponse
 import com.star.proto.CleanMethod
+import com.star.proto.ClearReferenceHorizonRequest
+import com.star.proto.ClearReferenceHorizonResponse
+import com.star.proto.GetAlignmentRequest
+import com.star.proto.GetAlignmentSequenceRequest
+import com.star.proto.GetReferenceHorizonRequest
+import com.star.proto.GetReferenceHorizonResponse
+import com.star.proto.ReprocessHorizonsRequest
+import com.star.proto.SetReferenceHorizonRequest
+import com.star.proto.SetReferenceHorizonResponse
 import com.star.proto.CloseSessionRequest
 import com.star.proto.CloseSessionResponse
 import com.star.proto.Config
@@ -185,6 +196,45 @@ class StarClient(private val conn: StdioConnection) {
 
     suspend fun getVideoCapabilities(): VideoCapabilities =
         call("Export.GetVideoCapabilities", GetVideoCapabilitiesRequest.getDefaultInstance(), VideoCapabilities.parser())
+
+    // ---- Alignment ----
+
+    suspend fun getAlignment(sessionId: String, frameIndex: Int): AlignmentInfo =
+        call("Alignment.Get", GetAlignmentRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).build(), AlignmentInfo.parser())
+
+    suspend fun getAlignmentSequence(
+        sessionId: String,
+        includeHomography: Boolean = false,
+        includePreviews: Boolean = false,
+    ): AlignmentSequence =
+        call(
+            "Alignment.GetSequence",
+            GetAlignmentSequenceRequest.newBuilder().setSessionId(sessionId)
+                .setIncludeHomography(includeHomography).setIncludePreviews(includePreviews).build(),
+            AlignmentSequence.parser(),
+        )
+
+    // ---- Horizon ----
+
+    suspend fun setReferenceHorizon(req: SetReferenceHorizonRequest): SetReferenceHorizonResponse =
+        call("Horizon.SetReference", req, SetReferenceHorizonResponse.parser())
+
+    suspend fun getReferenceHorizon(sessionId: String, frameIndex: Int): GetReferenceHorizonResponse =
+        call("Horizon.GetReference", GetReferenceHorizonRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).build(), GetReferenceHorizonResponse.parser())
+
+    suspend fun clearReferenceHorizon(sessionId: String, frameIndex: Int, clearGlobal: Boolean): ClearReferenceHorizonResponse =
+        call(
+            "Horizon.ClearReference",
+            ClearReferenceHorizonRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setClearGlobal(clearGlobal).build(),
+            ClearReferenceHorizonResponse.parser(),
+        )
+
+    fun reprocessHorizons(sessionId: String, editedFrames: List<Int>): Flow<ProgressEvent> =
+        serverStream(
+            "Horizon.Reprocess",
+            ReprocessHorizonsRequest.newBuilder().setSessionId(sessionId).addAllEditedFrameIndices(editedFrames).build(),
+            ProgressEvent.parser(),
+        )
 
     // ---- helpers ----
 

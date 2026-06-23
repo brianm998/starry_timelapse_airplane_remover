@@ -100,5 +100,15 @@ extension Dispatcher {
         register(method: "Export.RenderSequence")       { id, payload, transport in await ExportHandlers.renderSequence(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Export.Video")                { id, payload, transport in await ExportHandlers.video(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Export.GetVideoCapabilities") { id, payload, transport in await ExportHandlers.getVideoCapabilities(id: id, payload: payload, transport: transport); await t.taskCompleted(id: id) }
+
+        // Alignment
+        register(method: "Alignment.Get")         { id, payload, transport in await AlignmentHandlers.get(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Alignment.GetSequence") { id, payload, transport in await AlignmentHandlers.getSequence(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+
+        // Horizon
+        register(method: "Horizon.SetReference")   { id, payload, transport in await HorizonHandlers.setReference(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.GetReference")   { id, payload, transport in await HorizonHandlers.getReference(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.ClearReference") { id, payload, transport in await HorizonHandlers.clearReference(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.Reprocess")      { id, payload, transport in await HorizonHandlers.reprocess(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
     }
 }
