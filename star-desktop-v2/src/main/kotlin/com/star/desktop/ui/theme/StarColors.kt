@@ -1,6 +1,7 @@
 package com.star.desktop.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import com.star.desktop.domain.OutlierDecisions
 import com.star.desktop.domain.ToolType
 import com.star.proto.RemoveReason
 
@@ -68,5 +69,19 @@ object StarColors {
         reason == RemoveReason.RR_USER_REMOVE || reason == RemoveReason.RR_CLASSIFIER_REMOVE -> red
         reason == RemoveReason.RR_USER_KEEP || reason == RemoveReason.RR_CLASSIFIER_KEEP -> green
         else -> blue
+    }
+
+    /**
+     * Direction-arrow & guide-line color (macOS `OutlierGroupViewModel.arrowColor`): selected → blue;
+     * decided & hovered → red/green by decision; decided & idle → white; undecided & hovered → red;
+     * undecided & idle → blue. (Distinct from [groupColor], which the box uses.)
+     */
+    fun arrowColor(reason: RemoveReason, selected: Boolean, hovered: Boolean): Color {
+        val willRemove = OutlierDecisions.willRemove(reason)
+        return when {
+            selected -> blue
+            willRemove != null -> if (hovered) (if (willRemove) red else green) else white
+            else -> if (hovered) red else blue
+        }
     }
 }

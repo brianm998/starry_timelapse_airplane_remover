@@ -43,6 +43,11 @@ class FrameViewModel(
     private val _selected = MutableStateFlow<Int?>(null)
     val selected: StateFlow<Int?> = _selected.asStateFlow()
 
+    /** groupId currently under the pointer (macOS `arrowSelected`); single-valued, like the macOS hover. */
+    private val _hovered = MutableStateFlow<Int?>(null)
+    val hovered: StateFlow<Int?> = _hovered.asStateFlow()
+    fun hover(groupId: Int?) { _hovered.value = groupId }
+
     /** Per-frame info (status, outlier counts, clean method) from `Frame.Get`. */
     private val _info = MutableStateFlow<FrameInfo?>(null)
     val info: StateFlow<FrameInfo?> = _info.asStateFlow()
