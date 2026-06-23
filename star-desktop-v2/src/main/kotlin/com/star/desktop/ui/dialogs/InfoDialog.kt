@@ -133,21 +133,13 @@ fun InfoDialog(onClose: () -> Unit) {
         ) {
             Text("Information about Star", color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 24.sp)
             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Column(Modifier.width(120.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    InfoType.entries.forEach { t ->
-                        Text(
-                            t.shortName,
-                            color = if (t == selected) Color.Black else StarColors.white,
-                            fontSize = 15.sp,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(if (t == selected) StarColors.accent else Color.Transparent)
-                                .clickable { selected = t }
-                                .padding(horizontal = 8.dp, vertical = 6.dp),
-                        )
-                    }
-                }
+                com.star.desktop.ui.components.VerticalStarPicker(
+                    options = InfoType.entries.toList(),
+                    selected = selected,
+                    label = { it.shortName },
+                    onSelect = { selected = it },
+                    modifier = Modifier.width(120.dp),
+                )
                 Text(
                     selected.infoText,
                     color = StarColors.white,

@@ -96,17 +96,20 @@ private fun TopBar(app: AppViewModel, vm: SequenceViewModel, mode: InteractionMo
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // Mode segmented control
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            InteractionMode.entries.forEach { m ->
-                Chip(m.displayName, selected = m == mode) { vm.setMode(m) }
-            }
-        }
+        com.star.desktop.ui.components.StarPicker(
+            options = InteractionMode.entries,
+            selected = mode,
+            label = { it.displayName },
+            onSelect = { vm.setMode(it) },
+        )
         Box(Modifier.weight(1f))
         // View-mode toggle
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            Chip("Original", selected = viewMode == FrameViewMode.VIEW_ORIGINAL) { vm.setViewMode(FrameViewMode.VIEW_ORIGINAL) }
-            Chip("Processed", selected = viewMode == FrameViewMode.VIEW_PROCESSED) { vm.setViewMode(FrameViewMode.VIEW_PROCESSED) }
-        }
+        com.star.desktop.ui.components.StarPicker(
+            options = listOf(FrameViewMode.VIEW_ORIGINAL, FrameViewMode.VIEW_PROCESSED),
+            selected = viewMode, // grid 'Show' may set SUBTRACTION/VALIDATION → no pill highlights (matches old chips)
+            label = { if (it == FrameViewMode.VIEW_PROCESSED) "Processed" else "Original" },
+            onSelect = { vm.setViewMode(it) },
+        )
         if (mode == InteractionMode.EDIT) {
             val painting by vm.horizonPaintMode.collectAsState()
             Chip("Paint Horizon", selected = painting) { vm.toggleHorizonPaint() }
@@ -125,7 +128,7 @@ private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 4.dp),
     ) {
-        Text(label, color = if (selected) Color.White else StarColors.textPrimary, fontSize = 12.sp)
+        Text(label, color = if (selected) Color.White else StarColors.textPrimary, fontSize = 13.sp) // match StarPicker label size
     }
 }
 

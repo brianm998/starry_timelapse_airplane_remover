@@ -83,15 +83,25 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
         Text("Clean Method", color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
         val activeMethod = info?.cleanMethod ?: CleanMethod.CLEAN_SELECTIVE
-        CLEAN_METHODS.forEach { (method, label) ->
-            CleanMethodRow(label, selected = method == activeMethod) { fvm.setCleanMethod(method) }
-        }
+        val cmLabels = CLEAN_METHODS.toMap()
+        com.star.desktop.ui.components.VerticalStarPicker(
+            options = CLEAN_METHODS.map { it.first },
+            selected = activeMethod,
+            label = { cmLabels[it] ?: "" },
+            onSelect = { fvm.setCleanMethod(it) },
+            modifier = Modifier.fillMaxWidth(),
+        )
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
         Text("Fast Skip (z / x)", color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-        FAST_MODES.forEach { (mode, label) ->
-            CleanMethodRow(label, selected = mode == fastAdv) { vm.setFastAdvancement(mode) }
-        }
+        val fastLabels = FAST_MODES.toMap()
+        com.star.desktop.ui.components.VerticalStarPicker(
+            options = FAST_MODES.map { it.first },
+            selected = fastAdv,
+            label = { fastLabels[it] ?: "" },
+            onSelect = { vm.setFastAdvancement(it) },
+            modifier = Modifier.fillMaxWidth(),
+        )
       }
       com.star.desktop.ui.components.PanelChevron("»", { vm.setRightPanel(false) }, Modifier.padding(6.dp))
     }
@@ -112,23 +122,6 @@ private val FAST_MODES: List<Pair<FastAdvancementType, String>> = listOf(
     FastAdvancementType.TO_NEXT_NEGATIVE to "Next w/ keeps",
     FastAdvancementType.TO_NEXT_UNKNOWN to "Next undecided",
 )
-
-@Composable
-private fun CleanMethodRow(label: String, selected: Boolean, onClick: () -> Unit) {
-    val accent = StarColors.accent
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(5.dp))
-            .background(if (selected) accent.copy(alpha = 0.22f) else Color.Transparent)
-            .then(if (selected) Modifier.border(1.dp, SolidColor(accent), RoundedCornerShape(5.dp)) else Modifier)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 5.dp),
-    ) {
-        Text(label, color = if (selected) StarColors.textPrimary else StarColors.textSecondary, fontSize = 11.sp)
-    }
-}
 
 @Composable
 private fun BulkButton(label: String, color: Color, onClick: () -> Unit) {

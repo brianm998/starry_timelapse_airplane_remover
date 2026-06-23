@@ -21,6 +21,7 @@ private val DarkColors = darkColorScheme(
 fun StarTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = DarkColors,
+        typography = StarTypography,
         content = content,
     )
 }
