@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Hardened-runtime exceptions the JVM needs (JIT + generated code). -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <!-- The app spawns the bundled `stard`, which spawns `ffmpeg`/`ffprobe`; these load their own
+       dylibs and are not part of the JVM's signature, so library validation must be relaxed. -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+  <!-- The JVM launcher sets DYLD_* when bootstrapping the bundled runtime. -->
+  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+  <true/>
+
+  <!-- Read image sequences from anywhere the user points us; network for any update/telemetry use. -->
+  <key>com.apple.security.files.user-selected.read-write</key>
+  <true/>
+  <key>com.apple.security.files.absolute-path.read-only</key>
+  <array>
+    <string>/</string>
+  </array>
+  <key>com.apple.security.network.client</key>
+  <true/>
+</dict>
+</plist>

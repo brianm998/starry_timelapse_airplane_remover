@@ -61,6 +61,10 @@ protobuf {
     }
 }
 
+// Developer ID identity for signing the macOS distribution (null → unsigned). Declared before the
+// compose.desktop block so it resolves inside the nested nativeDistributions DSL.
+val macSignIdentity: String? = (findProperty("star.sign.identity") as String?) ?: System.getenv("STAR_SIGN_IDENTITY")
+
 compose.desktop {
     application {
         mainClass = "com.star.desktop.MainKt"
@@ -81,7 +85,21 @@ compose.desktop {
             // so StarCore.ToolPaths (sibling-of-executable) resolves them with no daemon code change.
             appResourcesRootDir.set(layout.projectDirectory.dir("app-resources"))
             includeAllModules = true // the daemon-driving GUI loads classes reflectively; ship the full JDK module set
-            macOS { bundleID = "com.star.desktop" }
+            macOS {
+                bundleID = "com.star.desktop"
+                // Optional Developer ID signing (off by default → an unsigned app image). Enable with
+                // -Pstar.sign.identity="Developer ID Application: Name (TEAMID)" or STAR_SIGN_IDENTITY.
+                // Signs the .app and its embedded native binaries (stard/ffmpeg/ffprobe) with the hardened
+                // runtime; entitlements allow the JVM + unsigned-3rd-party tools to run (notarization is separate).
+                if (!macSignIdentity.isNullOrBlank()) {
+                    signing {
+                        sign.set(true)
+                        identity.set(macSignIdentity)
+                    }
+                    entitlementsFile.set(project.file("packaging/macos-entitlements.plist"))
+                    runtimeEntitlementsFile.set(project.file("packaging/macos-entitlements.plist"))
+                }
+            }
         }
     }
 }
@@ -147,6 +165,45 @@ tasks.register("stageAppResources") {
 
 // Compose's prepareAppResources copies app-resources into the image; stage the binaries first.
 tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn("stageAppResources") }
+
+// jpackage copies appResources as DATA: it strips the execute bit and does not code-sign them. So after the
+// app image is built, restore +x on the bundled binaries and (when signing) codesign each with the hardened
+// runtime + entitlements, then re-seal the .app. Without this the shipped app can't spawn the daemon, and a
+// signed/notarized build would be rejected for unsigned nested executables. (macOS-only; no-op elsewhere.)
+tasks.register("fixBundledBinaries") {
+    group = "star"
+    description = "chmod +x and codesign the bundled stard/ffmpeg/ffprobe inside the built .app, then re-seal it."
+    doLast {
+        val id = macSignIdentity
+        val ent = layout.projectDirectory.file("packaging/macos-entitlements.plist").asFile
+        val apps = layout.buildDirectory.dir("compose/binaries").get().asFile.listFiles().orEmpty()
+            .flatMap { File(it, "app").listFiles().orEmpty().toList() }
+            .filter { it.name.endsWith(".app") }
+        if (apps.isEmpty()) { logger.warn("fixBundledBinaries: no .app under build/compose/binaries — nothing to do"); return@doLast }
+        for (app in apps) {
+            val resDir = File(app, "Contents/app/resources")
+            val bins = listOf("stard", "ffmpeg", "ffprobe").map { File(resDir, it) }.filter { it.exists() }
+            if (bins.isEmpty()) continue
+            bins.forEach { it.setExecutable(true, false) }
+            if (!id.isNullOrBlank()) {
+                // Sign nested executables first, then re-seal the bundle (signing inner code invalidates the outer seal).
+                bins.forEach { bin ->
+                    exec { commandLine("codesign", "--force", "--options", "runtime", "--timestamp", "--entitlements", ent.absolutePath, "--sign", id, bin.absolutePath) }
+                }
+                exec { commandLine("codesign", "--force", "--options", "runtime", "--timestamp", "--entitlements", ent.absolutePath, "--sign", id, app.absolutePath) }
+                logger.lifecycle("fixBundledBinaries: signed ${bins.size} bundled binaries + re-sealed ${app.name}")
+            } else {
+                logger.lifecycle("fixBundledBinaries: chmod +x ${bins.size} bundled binaries in ${app.name} (unsigned build)")
+            }
+        }
+    }
+}
+// Run the fixup right after the app image is assembled, including when it's a step of package* (which build
+// the .app then wrap it). finalizedBy ensures it runs even when createDistributable is up-to-date.
+tasks.matching { it.name == "createDistributable" || it.name == "createReleaseDistributable" }
+    .configureEach { finalizedBy("fixBundledBinaries") }
+// package*/dmg/msi/deb wrap the .app into an installer — they must run AFTER the fixup, not race the finalizer.
+tasks.matching { it.name.startsWith("package") }.configureEach { mustRunAfter("fixBundledBinaries") }
 
 tasks.test {
     useJUnitPlatform()
