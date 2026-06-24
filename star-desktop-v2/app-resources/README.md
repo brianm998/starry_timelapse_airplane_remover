@@ -37,6 +37,29 @@ Android Studio. Point the packaging step at a full JDK 21+ (with jpackage) witho
 JVM: `-Pstar.jpackage.jdk=/path/to/jdk` or `STAR_JPACKAGE_JDK=/path/to/jdk`. (The binary-staging step,
 `stageAppResources` → `prepareAppResources`, needs no jpackage.)
 
+## Signing (macOS)
+
+Signing is opt-in (default builds are unsigned). Pass a Developer ID identity via env (the `gradlew`
+wrapper mangles `()` in `-P` values, so prefer env vars here):
+
+```bash
+export STAR_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+export STAR_JPACKAGE_JDK="/path/to/jdk-21"            # must contain jpackage (the JBR does not)
+./gradlew packageDmg -Pcompose.desktop.packaging.checkJdkVendor=false   # the flag is only needed for a Homebrew JDK
+```
+
+The `.app` is signed with the hardened runtime + `packaging/macos-entitlements.plist`. jpackage copies
+the bundled binaries as *data* (strips +x, leaves them unsigned), so a post-step (`fixBundledBinaries`)
+restores the execute bit and codesigns `stard`/`ffmpeg`/`ffprobe`, then re-seals the `.app`. Verify:
+
+```bash
+codesign --verify --deep --strict build/compose/binaries/main/app/Star.app   # → valid on disk
+```
+
+**Notarization is a separate step** (`xcrun notarytool submit` + `stapler staple`, needs an Apple ID /
+app-specific password). Until then `spctl -a` reports "Unnotarized Developer ID" — the signature is valid,
+it just hasn't been notarized for Gatekeeper on other machines.
+
 ## Per-OS / CI
 
 `stard` is a Swift binary and must be built **on each target OS** (its OpenCV + StarDecisionTrees
