@@ -20,12 +20,12 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
-public nonisolated enum Star_V1_CleanMethod: SwiftProtobuf.Enum, Swift.CaseIterable {
+public enum Star_V1_CleanMethod: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case cleanAutomatic // = 0
   case cleanAutomaticTrue // = 1
@@ -63,7 +63,7 @@ public nonisolated enum Star_V1_CleanMethod: SwiftProtobuf.Enum, Swift.CaseItera
 
 }
 
-public nonisolated enum Star_V1_DetectionType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public enum Star_V1_DetectionType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case detectionMild // = 0
   case detectionStrong // = 1
@@ -109,7 +109,7 @@ public nonisolated enum Star_V1_DetectionType: SwiftProtobuf.Enum, Swift.CaseIte
 
 }
 
-public nonisolated enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
+public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case viewOriginal // = 0
   case viewProcessed // = 1
@@ -151,7 +151,7 @@ public nonisolated enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIte
 
 }
 
-public nonisolated enum Star_V1_FrameProcessingState: SwiftProtobuf.Enum, Swift.CaseIterable {
+public enum Star_V1_FrameProcessingState: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case fpsUnprocessed // = 0
   case fpsHorizonDetection // = 1
@@ -373,7 +373,7 @@ public nonisolated enum Star_V1_FrameProcessingState: SwiftProtobuf.Enum, Swift.
 
 }
 
-public nonisolated enum Star_V1_RemoveReason: SwiftProtobuf.Enum, Swift.CaseIterable {
+public enum Star_V1_RemoveReason: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case rrUndecided // = 0
   case rrUserRemove // = 1
@@ -421,7 +421,7 @@ public nonisolated enum Star_V1_RemoveReason: SwiftProtobuf.Enum, Swift.CaseIter
 
 /// Single-frame area editing tools (macOS razor / shovel / trash / get-from-trash), applied to a drag
 /// rectangle on the current frame. Each maps to an existing StarCore op; see the daemon handler.
-public nonisolated enum Star_V1_OutlierAreaTool: SwiftProtobuf.Enum, Swift.CaseIterable {
+public enum Star_V1_OutlierAreaTool: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case areaToolUnspecified // = 0
 
@@ -476,7 +476,7 @@ public nonisolated enum Star_V1_OutlierAreaTool: SwiftProtobuf.Enum, Swift.CaseI
 }
 
 /// Granular per-frame reprocess (grid context menu).
-public nonisolated enum Star_V1_ReprocessingType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public enum Star_V1_ReprocessingType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case reprocessNone // = 0
   case reprocessEverything // = 1
@@ -527,7 +527,7 @@ public nonisolated enum Star_V1_ReprocessingType: SwiftProtobuf.Enum, Swift.Case
 }
 
 /// Mirrors StarCore.AlignmentState rawValues 0..6 exactly.
-public nonisolated enum Star_V1_AlignmentState: SwiftProtobuf.Enum, Swift.CaseIterable {
+public enum Star_V1_AlignmentState: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case alignUnableToDetectKeypoints // = 0
   case alignNotEnoughKeypoints // = 1
@@ -583,7 +583,7 @@ public nonisolated enum Star_V1_AlignmentState: SwiftProtobuf.Enum, Swift.CaseIt
 
 /// Per-frame horizon overlay for the grid (kind drives color: initial=white, merged=blue, reference=green).
 /// `isPendingHorizonRefinement` is NOT engine-derived — the client tracks it from edited reference frames.
-public nonisolated enum Star_V1_HorizonOverlayKind: SwiftProtobuf.Enum, Swift.CaseIterable {
+public enum Star_V1_HorizonOverlayKind: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// no horizon computed (overlay nil)
@@ -627,7 +627,7 @@ public nonisolated enum Star_V1_HorizonOverlayKind: SwiftProtobuf.Enum, Swift.Ca
 
 }
 
-public nonisolated struct Star_V1_Envelope: Sendable {
+public struct Star_V1_Envelope: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -646,7 +646,7 @@ public nonisolated struct Star_V1_Envelope: Sendable {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public nonisolated enum Kind: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public enum Kind: SwiftProtobuf.Enum, Swift.CaseIterable {
     public typealias RawValue = Int
     case request // = 0
     case response // = 1
@@ -703,7 +703,7 @@ public nonisolated struct Star_V1_Envelope: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_HelloRequest: Sendable {
+public struct Star_V1_HelloRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -715,7 +715,7 @@ public nonisolated struct Star_V1_HelloRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_HelloResponse: Sendable {
+public struct Star_V1_HelloResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -729,7 +729,7 @@ public nonisolated struct Star_V1_HelloResponse: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_ShutdownRequest: Sendable {
+public struct Star_V1_ShutdownRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -739,7 +739,7 @@ public nonisolated struct Star_V1_ShutdownRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_ShutdownResponse: Sendable {
+public struct Star_V1_ShutdownResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -749,7 +749,7 @@ public nonisolated struct Star_V1_ShutdownResponse: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_OpenVideoRequest: Sendable {
+public struct Star_V1_OpenVideoRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -772,7 +772,7 @@ public nonisolated struct Star_V1_OpenVideoRequest: Sendable {
   fileprivate var _initialConfig: Star_V1_Config? = nil
 }
 
-public nonisolated struct Star_V1_OpenSequenceRequest: Sendable {
+public struct Star_V1_OpenSequenceRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -795,7 +795,7 @@ public nonisolated struct Star_V1_OpenSequenceRequest: Sendable {
   fileprivate var _initialConfig: Star_V1_Config? = nil
 }
 
-public nonisolated struct Star_V1_OpenConfigRequest: Sendable {
+public struct Star_V1_OpenConfigRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -807,7 +807,7 @@ public nonisolated struct Star_V1_OpenConfigRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_OpenProgress: Sendable {
+public struct Star_V1_OpenProgress: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -832,7 +832,7 @@ public nonisolated struct Star_V1_OpenProgress: Sendable {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public nonisolated enum OneOf_Kind: Equatable, Sendable {
+  public enum OneOf_Kind: Equatable, Sendable {
     case progress(Star_V1_IoProgress)
     case done(Star_V1_SessionInfo)
 
@@ -844,7 +844,7 @@ public nonisolated struct Star_V1_OpenProgress: Sendable {
 /// Encode settings. codec/encoder/pixel_format/muxer are StarCore FFmpeg* enum rawValue strings
 /// (those enums have 1000+ cases — proto enums would be unmaintainable; the daemon maps via init?(rawValue:)).
 /// frame_rate is FrameRate.rawValue (double). An empty string field means "use the session config default".
-public nonisolated struct Star_V1_VideoEncodeSettings: Sendable {
+public struct Star_V1_VideoEncodeSettings: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -870,7 +870,7 @@ public nonisolated struct Star_V1_VideoEncodeSettings: Sendable {
 }
 
 /// Mirrors StarCore.VideoInfo.
-public nonisolated struct Star_V1_VideoInfo: Sendable {
+public struct Star_V1_VideoInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -893,7 +893,7 @@ public nonisolated struct Star_V1_VideoInfo: Sendable {
   fileprivate var _settings: Star_V1_VideoEncodeSettings? = nil
 }
 
-public nonisolated struct Star_V1_SessionInfo: Sendable {
+public struct Star_V1_SessionInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -937,7 +937,7 @@ public nonisolated struct Star_V1_SessionInfo: Sendable {
   fileprivate var _sourceVideoInfo: Star_V1_VideoInfo? = nil
 }
 
-public nonisolated struct Star_V1_CloseSessionRequest: Sendable {
+public struct Star_V1_CloseSessionRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -949,7 +949,7 @@ public nonisolated struct Star_V1_CloseSessionRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_CloseSessionResponse: Sendable {
+public struct Star_V1_CloseSessionResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -959,7 +959,7 @@ public nonisolated struct Star_V1_CloseSessionResponse: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_ListSessionsRequest: Sendable {
+public struct Star_V1_ListSessionsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -969,7 +969,7 @@ public nonisolated struct Star_V1_ListSessionsRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_ListSessionsResponse: Sendable {
+public struct Star_V1_ListSessionsResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -981,7 +981,7 @@ public nonisolated struct Star_V1_ListSessionsResponse: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_SessionRef: Sendable {
+public struct Star_V1_SessionRef: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -993,7 +993,7 @@ public nonisolated struct Star_V1_SessionRef: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_UpdateConfigRequest: Sendable {
+public struct Star_V1_UpdateConfigRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1016,7 +1016,7 @@ public nonisolated struct Star_V1_UpdateConfigRequest: Sendable {
   fileprivate var _config: Star_V1_Config? = nil
 }
 
-public nonisolated struct Star_V1_Config: @unchecked Sendable {
+public struct Star_V1_Config: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1373,7 +1373,7 @@ public nonisolated struct Star_V1_Config: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-public nonisolated struct Star_V1_FrameRef: Sendable {
+public struct Star_V1_FrameRef: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1387,7 +1387,7 @@ public nonisolated struct Star_V1_FrameRef: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_FrameInfo: Sendable {
+public struct Star_V1_FrameInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1411,7 +1411,7 @@ public nonisolated struct Star_V1_FrameInfo: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_GetFramePreviewRequest: Sendable {
+public struct Star_V1_GetFramePreviewRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1427,7 +1427,7 @@ public nonisolated struct Star_V1_GetFramePreviewRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_ImageRef: Sendable {
+public struct Star_V1_ImageRef: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1445,7 +1445,7 @@ public nonisolated struct Star_V1_ImageRef: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_SetFrameCleanMethodRequest: Sendable {
+public struct Star_V1_SetFrameCleanMethodRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1461,7 +1461,7 @@ public nonisolated struct Star_V1_SetFrameCleanMethodRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_OutlierGroupList: Sendable {
+public struct Star_V1_OutlierGroupList: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1473,7 +1473,7 @@ public nonisolated struct Star_V1_OutlierGroupList: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_OutlierGroup: Sendable {
+public struct Star_V1_OutlierGroup: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1514,7 +1514,7 @@ public nonisolated struct Star_V1_OutlierGroup: Sendable {
   fileprivate var _line: Star_V1_Line? = nil
 }
 
-public nonisolated struct Star_V1_BoundingBox: Sendable {
+public struct Star_V1_BoundingBox: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1532,7 +1532,7 @@ public nonisolated struct Star_V1_BoundingBox: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_Line: Sendable {
+public struct Star_V1_Line: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1548,7 +1548,7 @@ public nonisolated struct Star_V1_Line: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_SetOutlierDecisionsRequest: Sendable {
+public struct Star_V1_SetOutlierDecisionsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1566,7 +1566,7 @@ public nonisolated struct Star_V1_SetOutlierDecisionsRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_OutlierDecision: Sendable {
+public struct Star_V1_OutlierDecision: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1580,7 +1580,7 @@ public nonisolated struct Star_V1_OutlierDecision: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_SetOutlierDecisionsResponse: Sendable {
+public struct Star_V1_SetOutlierDecisionsResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1612,7 +1612,7 @@ public nonisolated struct Star_V1_SetOutlierDecisionsResponse: Sendable {
 }
 
 /// Re-run the StarCore decision-tree classifier over a frame's outlier groups.
-public nonisolated struct Star_V1_ApplyDecisionTreeRequest: Sendable {
+public struct Star_V1_ApplyDecisionTreeRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1640,7 +1640,7 @@ public nonisolated struct Star_V1_ApplyDecisionTreeRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_ApplyDecisionTreeResponse: Sendable {
+public struct Star_V1_ApplyDecisionTreeResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1671,7 +1671,7 @@ public nonisolated struct Star_V1_ApplyDecisionTreeResponse: Sendable {
   fileprivate var _preview: Star_V1_ImageRef? = nil
 }
 
-public nonisolated struct Star_V1_ApplyDecisionTreeAllFramesRequest: Sendable {
+public struct Star_V1_ApplyDecisionTreeAllFramesRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1688,7 +1688,7 @@ public nonisolated struct Star_V1_ApplyDecisionTreeAllFramesRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_ApplyDecisionTreeAllFramesResponse: Sendable {
+public struct Star_V1_ApplyDecisionTreeAllFramesResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1701,7 +1701,7 @@ public nonisolated struct Star_V1_ApplyDecisionTreeAllFramesResponse: Sendable {
 }
 
 /// Bulk decisions across a frame range (multi-choice / multi-select sheets). Locations are image pixels.
-public nonisolated struct Star_V1_Point: Sendable {
+public struct Star_V1_Point: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1715,7 +1715,7 @@ public nonisolated struct Star_V1_Point: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_SetOutlierDecisionsInAreaRequest: Sendable {
+public struct Star_V1_SetOutlierDecisionsInAreaRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1765,7 +1765,7 @@ public nonisolated struct Star_V1_SetOutlierDecisionsInAreaRequest: Sendable {
   fileprivate var _endLocation: Star_V1_Point? = nil
 }
 
-public nonisolated struct Star_V1_SetOutlierDecisionsOverlappingRequest: Sendable {
+public struct Star_V1_SetOutlierDecisionsOverlappingRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1792,7 +1792,7 @@ public nonisolated struct Star_V1_SetOutlierDecisionsOverlappingRequest: Sendabl
   public init() {}
 }
 
-public nonisolated struct Star_V1_MultiFrameDecisionsResponse: Sendable {
+public struct Star_V1_MultiFrameDecisionsResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1807,7 +1807,7 @@ public nonisolated struct Star_V1_MultiFrameDecisionsResponse: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_ApplyOutlierAreaToolRequest: Sendable {
+public struct Star_V1_ApplyOutlierAreaToolRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1854,7 +1854,7 @@ public nonisolated struct Star_V1_ApplyOutlierAreaToolRequest: Sendable {
   fileprivate var _endLocation: Star_V1_Point? = nil
 }
 
-public nonisolated struct Star_V1_ApplyOutlierAreaToolResponse: Sendable {
+public struct Star_V1_ApplyOutlierAreaToolResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1885,7 +1885,7 @@ public nonisolated struct Star_V1_ApplyOutlierAreaToolResponse: Sendable {
   fileprivate var _preview: Star_V1_ImageRef? = nil
 }
 
-public nonisolated struct Star_V1_StartProcessingRequest: Sendable {
+public struct Star_V1_StartProcessingRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1903,7 +1903,7 @@ public nonisolated struct Star_V1_StartProcessingRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_StartProcessingResponse: Sendable {
+public struct Star_V1_StartProcessingResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1913,7 +1913,7 @@ public nonisolated struct Star_V1_StartProcessingResponse: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_ReprocessFramesRequest: Sendable {
+public struct Star_V1_ReprocessFramesRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1929,7 +1929,7 @@ public nonisolated struct Star_V1_ReprocessFramesRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_ReprocessFramesResponse: Sendable {
+public struct Star_V1_ReprocessFramesResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1939,7 +1939,7 @@ public nonisolated struct Star_V1_ReprocessFramesResponse: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_CancelResponse: Sendable {
+public struct Star_V1_CancelResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1949,7 +1949,7 @@ public nonisolated struct Star_V1_CancelResponse: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_ProgressEvent: Sendable {
+public struct Star_V1_ProgressEvent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2006,7 +2006,7 @@ public nonisolated struct Star_V1_ProgressEvent: Sendable {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public nonisolated enum OneOf_Kind: Equatable, Sendable {
+  public enum OneOf_Kind: Equatable, Sendable {
     case frameState(Star_V1_FrameStateEvent)
     case frameSavingState(Star_V1_FrameSavingEvent)
     case frameExisting(Int32)
@@ -2019,7 +2019,7 @@ public nonisolated struct Star_V1_ProgressEvent: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_FrameStateEvent: Sendable {
+public struct Star_V1_FrameStateEvent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2033,7 +2033,7 @@ public nonisolated struct Star_V1_FrameStateEvent: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_FrameSavingEvent: Sendable {
+public struct Star_V1_FrameSavingEvent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2049,7 +2049,7 @@ public nonisolated struct Star_V1_FrameSavingEvent: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_OutliersLoaded: Sendable {
+public struct Star_V1_OutliersLoaded: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2063,7 +2063,7 @@ public nonisolated struct Star_V1_OutliersLoaded: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_IoProgress: Sendable {
+public struct Star_V1_IoProgress: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2079,7 +2079,7 @@ public nonisolated struct Star_V1_IoProgress: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_SequenceStateEvent: Sendable {
+public struct Star_V1_SequenceStateEvent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2091,7 +2091,7 @@ public nonisolated struct Star_V1_SequenceStateEvent: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_ExportVideoRequest: Sendable {
+public struct Star_V1_ExportVideoRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2119,7 +2119,7 @@ public nonisolated struct Star_V1_ExportVideoRequest: Sendable {
 }
 
 /// Drives the Render Video dialog's cascading pickers. Built from StarCore's enum relationships.
-public nonisolated struct Star_V1_GetVideoCapabilitiesRequest: Sendable {
+public struct Star_V1_GetVideoCapabilitiesRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2129,7 +2129,7 @@ public nonisolated struct Star_V1_GetVideoCapabilitiesRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_VideoCapabilities: Sendable {
+public struct Star_V1_VideoCapabilities: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2144,7 +2144,7 @@ public nonisolated struct Star_V1_VideoCapabilities: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_CodecCaps: Sendable {
+public struct Star_V1_CodecCaps: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2158,7 +2158,7 @@ public nonisolated struct Star_V1_CodecCaps: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_EncoderCaps: Sendable {
+public struct Star_V1_EncoderCaps: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2174,7 +2174,7 @@ public nonisolated struct Star_V1_EncoderCaps: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_GetAlignmentRequest: Sendable {
+public struct Star_V1_GetAlignmentRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2190,7 +2190,7 @@ public nonisolated struct Star_V1_GetAlignmentRequest: Sendable {
 
 /// One unary call returns the whole sequence (the window needs all frames at once).
 /// include_* gate the heavier payloads (homography matrices / aligned-image preview paths).
-public nonisolated struct Star_V1_GetAlignmentSequenceRequest: Sendable {
+public struct Star_V1_GetAlignmentSequenceRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2206,7 +2206,7 @@ public nonisolated struct Star_V1_GetAlignmentSequenceRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_AlignmentSequence: Sendable {
+public struct Star_V1_AlignmentSequence: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2218,7 +2218,7 @@ public nonisolated struct Star_V1_AlignmentSequence: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_AlignmentInfo: Sendable {
+public struct Star_V1_AlignmentInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2272,7 +2272,7 @@ public nonisolated struct Star_V1_AlignmentInfo: Sendable {
 }
 
 /// Mirrors StarCore.HomographyResultsCodable.
-public nonisolated struct Star_V1_HomographyResults: Sendable {
+public struct Star_V1_HomographyResults: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2293,7 +2293,7 @@ public nonisolated struct Star_V1_HomographyResults: Sendable {
 }
 
 /// Mirrors StarCore.AlignmentWarpInfoCodable.
-public nonisolated struct Star_V1_NeighborHomography: Sendable {
+public struct Star_V1_NeighborHomography: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2327,7 +2327,7 @@ public nonisolated struct Star_V1_NeighborHomography: Sendable {
 
 /// Per-column horizon-Y in space_width x space_height coordinates; StarCore scales+interpolates to
 /// image space. horizon_y length == space_width; -1 = unpainted/all-sky column.
-public nonisolated struct Star_V1_HorizonColumns: Sendable {
+public struct Star_V1_HorizonColumns: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2343,7 +2343,7 @@ public nonisolated struct Star_V1_HorizonColumns: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_SetReferenceHorizonRequest: Sendable {
+public struct Star_V1_SetReferenceHorizonRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2377,7 +2377,7 @@ public nonisolated struct Star_V1_SetReferenceHorizonRequest: Sendable {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public nonisolated enum OneOf_Source: Equatable, Sendable {
+  public enum OneOf_Source: Equatable, Sendable {
     /// preferred: per-column horizon line
     case columns(Star_V1_HorizonColumns)
     /// alt: client wrote a CV_8UC1 {0,255} mask to a scratch path
@@ -2388,7 +2388,7 @@ public nonisolated struct Star_V1_SetReferenceHorizonRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_SetReferenceHorizonResponse: Sendable {
+public struct Star_V1_SetReferenceHorizonResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2413,7 +2413,7 @@ public nonisolated struct Star_V1_SetReferenceHorizonResponse: Sendable {
   fileprivate var _referenceMask: Star_V1_ImageRef? = nil
 }
 
-public nonisolated struct Star_V1_GetReferenceHorizonRequest: Sendable {
+public struct Star_V1_GetReferenceHorizonRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2427,7 +2427,7 @@ public nonisolated struct Star_V1_GetReferenceHorizonRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_GetReferenceHorizonResponse: Sendable {
+public struct Star_V1_GetReferenceHorizonResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2462,7 +2462,7 @@ public nonisolated struct Star_V1_GetReferenceHorizonResponse: Sendable {
   fileprivate var _columns: Star_V1_HorizonColumns? = nil
 }
 
-public nonisolated struct Star_V1_ClearReferenceHorizonRequest: Sendable {
+public struct Star_V1_ClearReferenceHorizonRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2478,7 +2478,7 @@ public nonisolated struct Star_V1_ClearReferenceHorizonRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_ClearReferenceHorizonResponse: Sendable {
+public struct Star_V1_ClearReferenceHorizonResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2489,7 +2489,7 @@ public nonisolated struct Star_V1_ClearReferenceHorizonResponse: Sendable {
 }
 
 /// Reprocess after a reference-horizon change; streams ProgressEvent like Processing.StreamProgress.
-public nonisolated struct Star_V1_ReprocessHorizonsRequest: Sendable {
+public struct Star_V1_ReprocessHorizonsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2503,7 +2503,7 @@ public nonisolated struct Star_V1_ReprocessHorizonsRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_GetHorizonOverlayRequest: Sendable {
+public struct Star_V1_GetHorizonOverlayRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2521,7 +2521,7 @@ public nonisolated struct Star_V1_GetHorizonOverlayRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Star_V1_GetHorizonOverlayResponse: Sendable {
+public struct Star_V1_GetHorizonOverlayResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2543,45 +2543,45 @@ public nonisolated struct Star_V1_GetHorizonOverlayResponse: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate nonisolated let _protobuf_package = "star.v1"
+fileprivate let _protobuf_package = "star.v1"
 
-nonisolated extension Star_V1_CleanMethod: SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_CleanMethod: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CLEAN_AUTOMATIC\0\u{1}CLEAN_AUTOMATIC_TRUE\0\u{1}CLEAN_SELECTIVE\0")
 }
 
-nonisolated extension Star_V1_DetectionType: SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_DetectionType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0DETECTION_MILD\0\u{1}DETECTION_STRONG\0\u{1}DETECTION_STRONGER\0\u{1}DETECTION_EXCESSIVE\0\u{1}DETECTION_CUSTOM\0")
 }
 
-nonisolated extension Star_V1_FrameViewMode: SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_FrameViewMode: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0VIEW_ORIGINAL\0\u{1}VIEW_PROCESSED\0\u{1}VIEW_SUBTRACTION\0\u{1}VIEW_VALIDATION\0")
 }
 
-nonisolated extension Star_V1_FrameProcessingState: SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_FrameProcessingState: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0FPS_UNPROCESSED\0\u{1}FPS_HORIZON_DETECTION\0\u{1}FPS_HORIZON_DETECTED\0\u{1}FPS_MERGING_HORIZON\0\u{1}FPS_EARTH_ALIGNMENT_START\0\u{1}FPS_EARTH_ALIGNMENT_BASE_KP\0\u{1}FPS_EARTH_ALIGNMENT_BASE_KP_DONE\0\u{1}FPS_EARTH_ALIGNMENT_ALIGNING\0\u{1}FPS_EARTH_ALIGNMENT_LOADING\0\u{1}FPS_EARTH_ALIGNMENT_COMPLETE\0\u{1}FPS_CREATING_EARTH_ALIGNED\0\u{1}FPS_STAR_KEYPOINTS\0\u{1}FPS_EARTH_KEYPOINTS\0\u{1}FPS_STAR_KEYPOINTS_FOUND\0\u{1}FPS_EARTH_KEYPOINTS_FOUND\0\u{1}FPS_STAR_ALIGNMENT_START\0\u{1}FPS_STAR_ALIGNMENT_BASE_KP\0\u{1}FPS_STAR_ALIGNMENT_BASE_KP_DONE\0\u{1}FPS_STAR_ALIGNMENT_ALIGNING\0\u{1}FPS_STAR_ALIGNMENT_LOADING\0\u{1}FPS_STAR_ALIGNMENT_COMPLETE\0\u{1}FPS_STAR_ALIGNMENT_FAILED\0\u{1}FPS_CREATING_STAR_ALIGNED\0\u{1}FPS_SUBTRACTING_NEIGHBOR\0\u{1}FPS_ASSEMBLING_PIXELS\0\u{1}FPS_SORTING_PIXELS\0\u{1}FPS_DETECTING_BLOBS\0\u{1}FPS_FILTER_1\0\u{1}FPS_FILTER_2\0\u{1}FPS_FILTER_3\0\u{1}FPS_FILTER_4\0\u{1}FPS_FILTER_5\0\u{1}FPS_FILTER_6\0\u{1}FPS_FILTER_7\0\u{1}FPS_FILTER_8\0\u{1}FPS_FIRST_CLASSIFICATION\0\u{1}FPS_READY_FOR_INTER_FRAME\0\u{1}FPS_SECOND_CLASSIFICATION\0\u{1}FPS_OUTLIER_PROCESSING_COMPLETE\0\u{1}FPS_FINISHING\0\u{1}FPS_USER_MODIFIED\0\u{1}FPS_WRITING_OUTLIER_VALUES\0\u{1}FPS_WAITING_TO_LOAD_IMAGES\0\u{1}FPS_LOADING_IMAGES\0\u{1}FPS_LOADING_IMAGES_1\0\u{1}FPS_CREATING_REMOVAL_MASK\0\u{1}FPS_ASSEMBLING_PROCESSED_FRAME\0\u{1}FPS_WRITING_OUTPUT_FILE\0\u{1}FPS_COMPLETE\0")
 }
 
-nonisolated extension Star_V1_RemoveReason: SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_RemoveReason: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0RR_UNDECIDED\0\u{1}RR_USER_REMOVE\0\u{1}RR_USER_KEEP\0\u{1}RR_CLASSIFIER_REMOVE\0\u{1}RR_CLASSIFIER_KEEP\0")
 }
 
-nonisolated extension Star_V1_OutlierAreaTool: SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_OutlierAreaTool: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AREA_TOOL_UNSPECIFIED\0\u{1}AREA_TOOL_RAZOR\0\u{1}AREA_TOOL_SHOVEL\0\u{1}AREA_TOOL_TRASH\0\u{1}AREA_TOOL_EXTRACT_TRASH\0")
 }
 
-nonisolated extension Star_V1_ReprocessingType: SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ReprocessingType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0REPROCESS_NONE\0\u{1}REPROCESS_EVERYTHING\0\u{1}REPROCESS_ALIGNMENT\0\u{1}REPROCESS_OUTLIERS\0\u{1}REPROCESS_HORIZONS\0\u{1}REPROCESS_ALL_HORIZONS\0")
 }
 
-nonisolated extension Star_V1_AlignmentState: SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_AlignmentState: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ALIGN_UNABLE_TO_DETECT_KEYPOINTS\0\u{1}ALIGN_NOT_ENOUGH_KEYPOINTS\0\u{1}ALIGN_NO_HOMOGRAPHY_FOUND\0\u{1}ALIGN_HOMOGRAPHY_SUCCESS\0\u{1}ALIGN_USED_EXISTING_HOMOGRAPHY\0\u{1}ALIGN_NO_ALIGNMENT\0\u{1}ALIGN_UNKNOWN\0")
 }
 
-nonisolated extension Star_V1_HorizonOverlayKind: SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_HorizonOverlayKind: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HORIZON_OVERLAY_KIND_UNSPECIFIED\0\u{1}HORIZON_OVERLAY_KIND_INITIAL\0\u{1}HORIZON_OVERLAY_KIND_MERGED\0\u{1}HORIZON_OVERLAY_KIND_REFERENCE\0")
 }
 
-nonisolated extension Star_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Envelope"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}kind\0\u{1}method\0\u{1}payload\0\u{1}error\0\u{3}error_code\0")
 
@@ -2636,11 +2636,11 @@ nonisolated extension Star_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._Me
   }
 }
 
-nonisolated extension Star_V1_Envelope.Kind: SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_Envelope.Kind: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0REQUEST\0\u{1}RESPONSE\0\u{1}ERROR\0\u{1}STREAM_ITEM\0\u{1}STREAM_END\0\u{1}CANCEL\0\u{1}NOTIFICATION\0")
 }
 
-nonisolated extension Star_V1_HelloRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_HelloRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".HelloRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}client_version\0")
 
@@ -2670,7 +2670,7 @@ nonisolated extension Star_V1_HelloRequest: SwiftProtobuf.Message, SwiftProtobuf
   }
 }
 
-nonisolated extension Star_V1_HelloResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_HelloResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".HelloResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}daemon_version\0\u{3}scratch_dir\0")
 
@@ -2705,7 +2705,7 @@ nonisolated extension Star_V1_HelloResponse: SwiftProtobuf.Message, SwiftProtobu
   }
 }
 
-nonisolated extension Star_V1_ShutdownRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ShutdownRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ShutdownRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -2724,7 +2724,7 @@ nonisolated extension Star_V1_ShutdownRequest: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-nonisolated extension Star_V1_ShutdownResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ShutdownResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ShutdownResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -2743,7 +2743,7 @@ nonisolated extension Star_V1_ShutdownResponse: SwiftProtobuf.Message, SwiftProt
   }
 }
 
-nonisolated extension Star_V1_OpenVideoRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_OpenVideoRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OpenVideoRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}video_path\0\u{3}initial_config\0")
 
@@ -2782,7 +2782,7 @@ nonisolated extension Star_V1_OpenVideoRequest: SwiftProtobuf.Message, SwiftProt
   }
 }
 
-nonisolated extension Star_V1_OpenSequenceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_OpenSequenceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OpenSequenceRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sequence_dir\0\u{3}initial_config\0")
 
@@ -2821,7 +2821,7 @@ nonisolated extension Star_V1_OpenSequenceRequest: SwiftProtobuf.Message, SwiftP
   }
 }
 
-nonisolated extension Star_V1_OpenConfigRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_OpenConfigRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OpenConfigRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}config_json_path\0")
 
@@ -2851,7 +2851,7 @@ nonisolated extension Star_V1_OpenConfigRequest: SwiftProtobuf.Message, SwiftPro
   }
 }
 
-nonisolated extension Star_V1_OpenProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_OpenProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OpenProgress"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}progress\0\u{1}done\0")
 
@@ -2918,7 +2918,7 @@ nonisolated extension Star_V1_OpenProgress: SwiftProtobuf.Message, SwiftProtobuf
   }
 }
 
-nonisolated extension Star_V1_VideoEncodeSettings: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_VideoEncodeSettings: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VideoEncodeSettings"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_rate\0\u{1}codec\0\u{1}encoder\0\u{3}pixel_format\0\u{1}muxer\0")
 
@@ -2968,7 +2968,7 @@ nonisolated extension Star_V1_VideoEncodeSettings: SwiftProtobuf.Message, SwiftP
   }
 }
 
-nonisolated extension Star_V1_VideoInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_VideoInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VideoInfo"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}settings\0\u{3}has_audio\0")
 
@@ -3007,7 +3007,7 @@ nonisolated extension Star_V1_VideoInfo: SwiftProtobuf.Message, SwiftProtobuf._M
   }
 }
 
-nonisolated extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SessionInfo"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_count\0\u{3}image_width\0\u{3}image_height\0\u{3}components_per_pixel\0\u{1}config\0\u{3}scratch_session_dir\0\u{3}source_video_info\0")
 
@@ -3076,7 +3076,7 @@ nonisolated extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf.
   }
 }
 
-nonisolated extension Star_V1_CloseSessionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_CloseSessionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CloseSessionRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0")
 
@@ -3106,7 +3106,7 @@ nonisolated extension Star_V1_CloseSessionRequest: SwiftProtobuf.Message, SwiftP
   }
 }
 
-nonisolated extension Star_V1_CloseSessionResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_CloseSessionResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CloseSessionResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -3125,7 +3125,7 @@ nonisolated extension Star_V1_CloseSessionResponse: SwiftProtobuf.Message, Swift
   }
 }
 
-nonisolated extension Star_V1_ListSessionsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ListSessionsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ListSessionsRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -3144,7 +3144,7 @@ nonisolated extension Star_V1_ListSessionsRequest: SwiftProtobuf.Message, SwiftP
   }
 }
 
-nonisolated extension Star_V1_ListSessionsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ListSessionsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ListSessionsResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sessions\0")
 
@@ -3174,7 +3174,7 @@ nonisolated extension Star_V1_ListSessionsResponse: SwiftProtobuf.Message, Swift
   }
 }
 
-nonisolated extension Star_V1_SessionRef: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_SessionRef: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SessionRef"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0")
 
@@ -3204,7 +3204,7 @@ nonisolated extension Star_V1_SessionRef: SwiftProtobuf.Message, SwiftProtobuf._
   }
 }
 
-nonisolated extension Star_V1_UpdateConfigRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_UpdateConfigRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UpdateConfigRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{1}config\0")
 
@@ -3243,7 +3243,7 @@ nonisolated extension Star_V1_UpdateConfigRequest: SwiftProtobuf.Message, SwiftP
   }
 }
 
-nonisolated extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Config"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{3}horizon_strip_width\0\u{3}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{3}horizon_vertical_shift_amount\0\u{3}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0")
 
@@ -3614,7 +3614,7 @@ nonisolated extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._Mess
   }
 }
 
-nonisolated extension Star_V1_FrameRef: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_FrameRef: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FrameRef"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0")
 
@@ -3649,7 +3649,7 @@ nonisolated extension Star_V1_FrameRef: SwiftProtobuf.Message, SwiftProtobuf._Me
   }
 }
 
-nonisolated extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FrameInfo"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{1}state\0\u{3}num_positive_outliers\0\u{3}num_negative_outliers\0\u{3}num_undecided_outliers\0\u{3}clean_method\0\u{3}num_trash_outliers\0")
 
@@ -3709,7 +3709,7 @@ nonisolated extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._M
   }
 }
 
-nonisolated extension Star_V1_GetFramePreviewRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_GetFramePreviewRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetFramePreviewRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{3}view_mode\0")
 
@@ -3749,7 +3749,7 @@ nonisolated extension Star_V1_GetFramePreviewRequest: SwiftProtobuf.Message, Swi
   }
 }
 
-nonisolated extension Star_V1_ImageRef: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ImageRef: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ImageRef"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}path\0\u{1}width\0\u{1}height\0\u{1}format\0")
 
@@ -3794,7 +3794,7 @@ nonisolated extension Star_V1_ImageRef: SwiftProtobuf.Message, SwiftProtobuf._Me
   }
 }
 
-nonisolated extension Star_V1_SetFrameCleanMethodRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_SetFrameCleanMethodRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SetFrameCleanMethodRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{3}clean_method\0")
 
@@ -3834,7 +3834,7 @@ nonisolated extension Star_V1_SetFrameCleanMethodRequest: SwiftProtobuf.Message,
   }
 }
 
-nonisolated extension Star_V1_OutlierGroupList: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_OutlierGroupList: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OutlierGroupList"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}groups\0")
 
@@ -3864,7 +3864,7 @@ nonisolated extension Star_V1_OutlierGroupList: SwiftProtobuf.Message, SwiftProt
   }
 }
 
-nonisolated extension Star_V1_OutlierGroup: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_OutlierGroup: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OutlierGroup"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}size\0\u{1}bounds\0\u{1}brightness\0\u{3}should_remove\0\u{3}classification_score\0\u{1}line\0")
 
@@ -3928,7 +3928,7 @@ nonisolated extension Star_V1_OutlierGroup: SwiftProtobuf.Message, SwiftProtobuf
   }
 }
 
-nonisolated extension Star_V1_BoundingBox: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_BoundingBox: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".BoundingBox"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}min_x\0\u{3}min_y\0\u{3}max_x\0\u{3}max_y\0")
 
@@ -3973,7 +3973,7 @@ nonisolated extension Star_V1_BoundingBox: SwiftProtobuf.Message, SwiftProtobuf.
   }
 }
 
-nonisolated extension Star_V1_Line: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_Line: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Line"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}theta\0\u{1}rho\0\u{1}votes\0")
 
@@ -4013,7 +4013,7 @@ nonisolated extension Star_V1_Line: SwiftProtobuf.Message, SwiftProtobuf._Messag
   }
 }
 
-nonisolated extension Star_V1_SetOutlierDecisionsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_SetOutlierDecisionsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SetOutlierDecisionsRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{1}decisions\0\u{1}rerender\0")
 
@@ -4058,7 +4058,7 @@ nonisolated extension Star_V1_SetOutlierDecisionsRequest: SwiftProtobuf.Message,
   }
 }
 
-nonisolated extension Star_V1_OutlierDecision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_OutlierDecision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OutlierDecision"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}decision\0")
 
@@ -4093,7 +4093,7 @@ nonisolated extension Star_V1_OutlierDecision: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-nonisolated extension Star_V1_SetOutlierDecisionsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_SetOutlierDecisionsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SetOutlierDecisionsResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}frame\0\u{1}preview\0")
 
@@ -4132,7 +4132,7 @@ nonisolated extension Star_V1_SetOutlierDecisionsResponse: SwiftProtobuf.Message
   }
 }
 
-nonisolated extension Star_V1_ApplyDecisionTreeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ApplyDecisionTreeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ApplyDecisionTreeRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{1}overwrite\0\u{3}auto_only\0\u{3}including_trash\0\u{3}minimum_size\0\u{1}rerender\0")
 
@@ -4192,7 +4192,7 @@ nonisolated extension Star_V1_ApplyDecisionTreeRequest: SwiftProtobuf.Message, S
   }
 }
 
-nonisolated extension Star_V1_ApplyDecisionTreeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ApplyDecisionTreeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ApplyDecisionTreeResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}frame\0\u{1}preview\0")
 
@@ -4231,7 +4231,7 @@ nonisolated extension Star_V1_ApplyDecisionTreeResponse: SwiftProtobuf.Message, 
   }
 }
 
-nonisolated extension Star_V1_ApplyDecisionTreeAllFramesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ApplyDecisionTreeAllFramesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ApplyDecisionTreeAllFramesRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{1}overwrite\0\u{3}minimum_size\0")
 
@@ -4271,7 +4271,7 @@ nonisolated extension Star_V1_ApplyDecisionTreeAllFramesRequest: SwiftProtobuf.M
   }
 }
 
-nonisolated extension Star_V1_ApplyDecisionTreeAllFramesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ApplyDecisionTreeAllFramesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ApplyDecisionTreeAllFramesResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}frames\0")
 
@@ -4301,7 +4301,7 @@ nonisolated extension Star_V1_ApplyDecisionTreeAllFramesResponse: SwiftProtobuf.
   }
 }
 
-nonisolated extension Star_V1_Point: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_Point: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Point"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}x\0\u{1}y\0")
 
@@ -4336,7 +4336,7 @@ nonisolated extension Star_V1_Point: SwiftProtobuf.Message, SwiftProtobuf._Messa
   }
 }
 
-nonisolated extension Star_V1_SetOutlierDecisionsInAreaRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_SetOutlierDecisionsInAreaRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SetOutlierDecisionsInAreaRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}start_index\0\u{3}end_index\0\u{3}should_remove\0\u{3}start_location\0\u{3}end_location\0\u{3}including_trash\0\u{1}rerender\0\u{1}overlapping\0")
 
@@ -4410,7 +4410,7 @@ nonisolated extension Star_V1_SetOutlierDecisionsInAreaRequest: SwiftProtobuf.Me
   }
 }
 
-nonisolated extension Star_V1_SetOutlierDecisionsOverlappingRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_SetOutlierDecisionsOverlappingRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SetOutlierDecisionsOverlappingRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}start_index\0\u{3}end_index\0\u{3}should_remove\0\u{3}reference_frame\0\u{3}reference_group_id\0\u{1}rerender\0")
 
@@ -4470,7 +4470,7 @@ nonisolated extension Star_V1_SetOutlierDecisionsOverlappingRequest: SwiftProtob
   }
 }
 
-nonisolated extension Star_V1_MultiFrameDecisionsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_MultiFrameDecisionsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MultiFrameDecisionsResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}frames\0\u{1}previews\0")
 
@@ -4505,7 +4505,7 @@ nonisolated extension Star_V1_MultiFrameDecisionsResponse: SwiftProtobuf.Message
   }
 }
 
-nonisolated extension Star_V1_ApplyOutlierAreaToolRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ApplyOutlierAreaToolRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ApplyOutlierAreaToolRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{1}tool\0\u{3}start_location\0\u{3}end_location\0\u{3}including_trash\0\u{1}rerender\0\u{3}group_id\0")
 
@@ -4574,7 +4574,7 @@ nonisolated extension Star_V1_ApplyOutlierAreaToolRequest: SwiftProtobuf.Message
   }
 }
 
-nonisolated extension Star_V1_ApplyOutlierAreaToolResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ApplyOutlierAreaToolResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ApplyOutlierAreaToolResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}frame\0\u{1}preview\0")
 
@@ -4613,7 +4613,7 @@ nonisolated extension Star_V1_ApplyOutlierAreaToolResponse: SwiftProtobuf.Messag
   }
 }
 
-nonisolated extension Star_V1_StartProcessingRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_StartProcessingRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".StartProcessingRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}start_index\0\u{3}end_index\0\u{1}force\0")
 
@@ -4658,7 +4658,7 @@ nonisolated extension Star_V1_StartProcessingRequest: SwiftProtobuf.Message, Swi
   }
 }
 
-nonisolated extension Star_V1_StartProcessingResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_StartProcessingResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".StartProcessingResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -4677,7 +4677,7 @@ nonisolated extension Star_V1_StartProcessingResponse: SwiftProtobuf.Message, Sw
   }
 }
 
-nonisolated extension Star_V1_ReprocessFramesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ReprocessFramesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ReprocessFramesRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_indices\0\u{1}type\0")
 
@@ -4717,7 +4717,7 @@ nonisolated extension Star_V1_ReprocessFramesRequest: SwiftProtobuf.Message, Swi
   }
 }
 
-nonisolated extension Star_V1_ReprocessFramesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ReprocessFramesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ReprocessFramesResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -4736,7 +4736,7 @@ nonisolated extension Star_V1_ReprocessFramesResponse: SwiftProtobuf.Message, Sw
   }
 }
 
-nonisolated extension Star_V1_CancelResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_CancelResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CancelResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -4755,7 +4755,7 @@ nonisolated extension Star_V1_CancelResponse: SwiftProtobuf.Message, SwiftProtob
   }
 }
 
-nonisolated extension Star_V1_ProgressEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ProgressEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgressEvent"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_state\0\u{3}frame_saving_state\0\u{3}frame_existing\0\u{3}outliers_loaded\0\u{3}io_progress\0\u{3}sequence_state\0")
 
@@ -4885,7 +4885,7 @@ nonisolated extension Star_V1_ProgressEvent: SwiftProtobuf.Message, SwiftProtobu
   }
 }
 
-nonisolated extension Star_V1_FrameStateEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_FrameStateEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FrameStateEvent"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{1}state\0")
 
@@ -4920,7 +4920,7 @@ nonisolated extension Star_V1_FrameStateEvent: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-nonisolated extension Star_V1_FrameSavingEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_FrameSavingEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FrameSavingEvent"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{3}old_state\0\u{3}new_state\0")
 
@@ -4960,7 +4960,7 @@ nonisolated extension Star_V1_FrameSavingEvent: SwiftProtobuf.Message, SwiftProt
   }
 }
 
-nonisolated extension Star_V1_OutliersLoaded: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_OutliersLoaded: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OutliersLoaded"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{1}state\0")
 
@@ -4995,7 +4995,7 @@ nonisolated extension Star_V1_OutliersLoaded: SwiftProtobuf.Message, SwiftProtob
   }
 }
 
-nonisolated extension Star_V1_IoProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_IoProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IoProgress"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}current\0\u{1}total\0\u{3}output_dir\0")
 
@@ -5035,7 +5035,7 @@ nonisolated extension Star_V1_IoProgress: SwiftProtobuf.Message, SwiftProtobuf._
   }
 }
 
-nonisolated extension Star_V1_SequenceStateEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_SequenceStateEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SequenceStateEvent"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}state\0")
 
@@ -5065,7 +5065,7 @@ nonisolated extension Star_V1_SequenceStateEvent: SwiftProtobuf.Message, SwiftPr
   }
 }
 
-nonisolated extension Star_V1_ExportVideoRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ExportVideoRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ExportVideoRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}output_video_path\0\u{1}settings\0")
 
@@ -5109,7 +5109,7 @@ nonisolated extension Star_V1_ExportVideoRequest: SwiftProtobuf.Message, SwiftPr
   }
 }
 
-nonisolated extension Star_V1_GetVideoCapabilitiesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_GetVideoCapabilitiesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetVideoCapabilitiesRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -5128,7 +5128,7 @@ nonisolated extension Star_V1_GetVideoCapabilitiesRequest: SwiftProtobuf.Message
   }
 }
 
-nonisolated extension Star_V1_VideoCapabilities: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_VideoCapabilities: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VideoCapabilities"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_rates\0\u{1}codecs\0")
 
@@ -5163,7 +5163,7 @@ nonisolated extension Star_V1_VideoCapabilities: SwiftProtobuf.Message, SwiftPro
   }
 }
 
-nonisolated extension Star_V1_CodecCaps: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_CodecCaps: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CodecCaps"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}codec\0\u{1}encoders\0")
 
@@ -5198,7 +5198,7 @@ nonisolated extension Star_V1_CodecCaps: SwiftProtobuf.Message, SwiftProtobuf._M
   }
 }
 
-nonisolated extension Star_V1_EncoderCaps: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_EncoderCaps: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".EncoderCaps"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}encoder\0\u{3}pixel_formats\0\u{1}muxers\0")
 
@@ -5238,7 +5238,7 @@ nonisolated extension Star_V1_EncoderCaps: SwiftProtobuf.Message, SwiftProtobuf.
   }
 }
 
-nonisolated extension Star_V1_GetAlignmentRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_GetAlignmentRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetAlignmentRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0")
 
@@ -5273,7 +5273,7 @@ nonisolated extension Star_V1_GetAlignmentRequest: SwiftProtobuf.Message, SwiftP
   }
 }
 
-nonisolated extension Star_V1_GetAlignmentSequenceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_GetAlignmentSequenceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetAlignmentSequenceRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}include_homography\0\u{3}include_previews\0")
 
@@ -5313,7 +5313,7 @@ nonisolated extension Star_V1_GetAlignmentSequenceRequest: SwiftProtobuf.Message
   }
 }
 
-nonisolated extension Star_V1_AlignmentSequence: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_AlignmentSequence: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AlignmentSequence"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}frames\0")
 
@@ -5343,7 +5343,7 @@ nonisolated extension Star_V1_AlignmentSequence: SwiftProtobuf.Message, SwiftPro
   }
 }
 
-nonisolated extension Star_V1_AlignmentInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_AlignmentInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AlignmentInfo"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{3}has_star_results\0\u{3}has_earth_results\0\u{3}allow_earth_alignment\0\u{3}num_sky_keypoints\0\u{3}num_earth_keypoints\0\u{3}alignment_frame_indices\0\u{1}star\0\u{1}earth\0")
 
@@ -5417,7 +5417,7 @@ nonisolated extension Star_V1_AlignmentInfo: SwiftProtobuf.Message, SwiftProtobu
   }
 }
 
-nonisolated extension Star_V1_HomographyResults: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_HomographyResults: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".HomographyResults"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{1}neighbors\0\u{3}composite_deviation\0\u{3}alignment_looks_ok\0")
 
@@ -5462,7 +5462,7 @@ nonisolated extension Star_V1_HomographyResults: SwiftProtobuf.Message, SwiftPro
   }
 }
 
-nonisolated extension Star_V1_NeighborHomography: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_NeighborHomography: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".NeighborHomography"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{1}deviation\0\u{1}state\0\u{1}homography\0\u{3}aligned_preview\0")
 
@@ -5516,7 +5516,7 @@ nonisolated extension Star_V1_NeighborHomography: SwiftProtobuf.Message, SwiftPr
   }
 }
 
-nonisolated extension Star_V1_HorizonColumns: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_HorizonColumns: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".HorizonColumns"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}space_width\0\u{3}space_height\0\u{3}horizon_y\0")
 
@@ -5556,7 +5556,7 @@ nonisolated extension Star_V1_HorizonColumns: SwiftProtobuf.Message, SwiftProtob
   }
 }
 
-nonisolated extension Star_V1_SetReferenceHorizonRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_SetReferenceHorizonRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SetReferenceHorizonRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{1}columns\0\u{3}mask_path\0\u{3}set_static_reference\0")
 
@@ -5633,7 +5633,7 @@ nonisolated extension Star_V1_SetReferenceHorizonRequest: SwiftProtobuf.Message,
   }
 }
 
-nonisolated extension Star_V1_SetReferenceHorizonResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_SetReferenceHorizonResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SetReferenceHorizonResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}reference_mask\0\u{3}is_global\0")
 
@@ -5672,7 +5672,7 @@ nonisolated extension Star_V1_SetReferenceHorizonResponse: SwiftProtobuf.Message
   }
 }
 
-nonisolated extension Star_V1_GetReferenceHorizonRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_GetReferenceHorizonRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetReferenceHorizonRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0")
 
@@ -5707,7 +5707,7 @@ nonisolated extension Star_V1_GetReferenceHorizonRequest: SwiftProtobuf.Message,
   }
 }
 
-nonisolated extension Star_V1_GetReferenceHorizonResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_GetReferenceHorizonResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetReferenceHorizonResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}exists\0\u{3}reference_mask\0\u{1}columns\0")
 
@@ -5751,7 +5751,7 @@ nonisolated extension Star_V1_GetReferenceHorizonResponse: SwiftProtobuf.Message
   }
 }
 
-nonisolated extension Star_V1_ClearReferenceHorizonRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ClearReferenceHorizonRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ClearReferenceHorizonRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{3}clear_global\0")
 
@@ -5791,7 +5791,7 @@ nonisolated extension Star_V1_ClearReferenceHorizonRequest: SwiftProtobuf.Messag
   }
 }
 
-nonisolated extension Star_V1_ClearReferenceHorizonResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ClearReferenceHorizonResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ClearReferenceHorizonResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -5810,7 +5810,7 @@ nonisolated extension Star_V1_ClearReferenceHorizonResponse: SwiftProtobuf.Messa
   }
 }
 
-nonisolated extension Star_V1_ReprocessHorizonsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_ReprocessHorizonsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ReprocessHorizonsRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}edited_frame_indices\0")
 
@@ -5845,7 +5845,7 @@ nonisolated extension Star_V1_ReprocessHorizonsRequest: SwiftProtobuf.Message, S
   }
 }
 
-nonisolated extension Star_V1_GetHorizonOverlayRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_GetHorizonOverlayRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetHorizonOverlayRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{1}width\0\u{1}height\0")
 
@@ -5890,7 +5890,7 @@ nonisolated extension Star_V1_GetHorizonOverlayRequest: SwiftProtobuf.Message, S
   }
 }
 
-nonisolated extension Star_V1_GetHorizonOverlayResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension Star_V1_GetHorizonOverlayResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetHorizonOverlayResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}exists\0\u{1}kind\0\u{3}y_per_column\0\u{1}height\0")
 
