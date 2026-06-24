@@ -64,8 +64,10 @@ class DaemonProcess(
          * Resolve the `stard` binary. Precedence:
          *  1. `-Dstar.stard.path=...` system property (dev override),
          *  2. `STARD_PATH` env var,
-         *  3. next to the app executable (distribution bundle),
-         *  4. developer build trees (daemon/.build/{debug,release}/stard relative to common roots).
+         *  3. the packaged distribution's bundled resources (`compose.application.resources.dir`,
+         *     where `stageAppResources` placed stard alongside ffmpeg/ffprobe),
+         *  4. next to the app executable (distribution bundle),
+         *  5. developer build trees (daemon/.build/{release,debug}/stard relative to common roots).
          */
         fun resolveStardBinary(): String {
             System.getProperty("star.stard.path")?.let { if (File(it).canExecute()) return it }
@@ -77,6 +79,8 @@ class DaemonProcess(
 
             val exeName = if (isWindows()) "stard.exe" else "stard"
             val candidates = buildList {
+                // Packaged app: Compose stages the native binaries (stard + ffmpeg/ffprobe) here.
+                System.getProperty("compose.application.resources.dir")?.let { add(File(it, exeName)) }
                 if (execDir != null) {
                     add(File(execDir, exeName))
                     add(File(execDir.parentFile ?: execDir, exeName))

@@ -64,15 +64,89 @@ protobuf {
 compose.desktop {
     application {
         mainClass = "com.star.desktop.MainKt"
+        // jpackage is absent from some JDKs used to run Gradle (notably the JetBrains Runtime that ships
+        // with Android Studio). Point the packaging step at a full JDK (21+, with jpackage) without
+        // changing the JVM used for compilation: -Pstar.jpackage.jdk=/path or STAR_JPACKAGE_JDK env.
+        (findProperty("star.jpackage.jdk") as String? ?: System.getenv("STAR_JPACKAGE_JDK"))?.let { javaHome = it }
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "Star"
             packageVersion = "2.0.0"
             description = "Star — Nighttime Timelapse Airplane Remover"
             vendor = "Star"
+            // Bundle the native daemon (stard) + ffmpeg/ffprobe so the app is self-contained. The
+            // `stageAppResources` task copies the host-OS binaries into app-resources/<os-arch>/ before
+            // packaging; Compose merges that dir into the app and exposes it at runtime via the
+            // `compose.application.resources.dir` system property. ffmpeg/ffprobe sit next to stard there,
+            // so StarCore.ToolPaths (sibling-of-executable) resolves them with no daemon code change.
+            appResourcesRootDir.set(layout.projectDirectory.dir("app-resources"))
+            includeAllModules = true // the daemon-driving GUI loads classes reflectively; ship the full JDK module set
+            macOS { bundleID = "com.star.desktop" }
         }
     }
 }
+
+// Host platform → the app-resources subdir Compose copies for this build (matches Compose's own naming).
+val hostResourceDir: String = run {
+    val os = System.getProperty("os.name").lowercase()
+    val arch = System.getProperty("os.arch").lowercase()
+    val a = if (arch.contains("aarch64") || arch.contains("arm")) "arm64" else "x64"
+    when {
+        os.contains("mac") || os.contains("darwin") -> "macos-$a"
+        os.contains("win") -> "windows-$a"
+        else -> "linux-$a"
+    }
+}
+
+// Stage the native daemon + ffmpeg/ffprobe into app-resources/<os-arch>/ for the bundle.
+//   stard:   -Pstard=<path>, else daemon/.build/release/stard, else daemon/.build/debug/stard
+//   ffmpeg:  -Pffmpegdir=<dir>, else repo-root external_binaries/bin
+tasks.register("stageAppResources") {
+    group = "star"
+    description = "Copy host-OS stard + ffmpeg/ffprobe into app-resources/<os-arch>/ for nativeDistributions bundling."
+    // `run`/`runDistributable`/`prepareAppResources` also pull this in, and there the daemon is resolved at
+    // runtime from the dev build tree — so a missing stard must NOT fail those. Only a real packaging task
+    // (package*/createDistributable*) treats a missing daemon as fatal, to avoid silently shipping a daemon-less app.
+    val packagingRequested = gradle.startParameter.taskNames.any {
+        val t = it.substringAfterLast(':')
+        t.startsWith("package") || t.startsWith("createDistributable") || t.startsWith("createRelease")
+    }
+    doLast {
+        val isWin = hostResourceDir.startsWith("windows")
+        val exe = if (isWin) ".exe" else ""
+        val outDir = layout.projectDirectory.dir("app-resources/$hostResourceDir").asFile
+        outDir.mkdirs()
+
+        fun stage(src: File, name: String) {
+            if (!src.exists()) { logger.warn("stageAppResources: $name not found at $src — skipping"); return }
+            val dst = File(outDir, name)
+            src.copyTo(dst, overwrite = true)
+            dst.setExecutable(true, false)
+            logger.lifecycle("stageAppResources: ${dst.relativeTo(projectDir)} (${src.length() / 1_000_000}MB)")
+        }
+
+        val stardName = "stard$exe"
+        val stard = listOfNotNull(
+            (findProperty("stard") as String?)?.let { file(it) },
+            rootProject.file("../daemon/.build/release/$stardName"),
+            rootProject.file("../daemon/.build/debug/$stardName"),
+        ).firstOrNull { it.exists() }
+        if (stard == null) {
+            val msg = "stageAppResources: stard not found — build it (cd daemon && swift build -c release) or pass -Pstard=/path/to/$stardName. The bundle will contain NO daemon."
+            if (packagingRequested) throw GradleException(msg)
+            logger.warn("$msg (dev run resolves stard from the build tree, so continuing)")
+            return@doLast
+        }
+        stage(stard, stardName)
+
+        val ffDir = (findProperty("ffmpegdir") as String?)?.let { file(it) } ?: rootProject.file("../external_binaries/bin")
+        stage(File(ffDir, "ffmpeg$exe"), "ffmpeg$exe")
+        stage(File(ffDir, "ffprobe$exe"), "ffprobe$exe")
+    }
+}
+
+// Compose's prepareAppResources copies app-resources into the image; stage the binaries first.
+tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn("stageAppResources") }
 
 tasks.test {
     useJUnitPlatform()
