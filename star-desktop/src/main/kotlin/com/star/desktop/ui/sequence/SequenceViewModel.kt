@@ -215,6 +215,22 @@ class SequenceViewModel(
     suspend fun gridHorizonOverlay(index: Int, width: Int, height: Int) =
         horizon.getOverlay(sessionId, index, width, height)
 
+    /**
+     * The view modes that actually have a preview on disk for [index] (no fallback) — drives the
+     * edit-mode "Show:" picker so only modes that exist for the shown frame appear. Mirrors macOS
+     * `FrameViewModel.hasImage(type:)`: `.original` is always present, the rest appear as processing
+     * writes them.
+     */
+    suspend fun availableViewModes(index: Int): List<FrameViewMode> {
+        val candidates = listOf(
+            FrameViewMode.VIEW_ORIGINAL,
+            FrameViewMode.VIEW_PROCESSED,
+            FrameViewMode.VIEW_SUBTRACTION,
+            FrameViewMode.VIEW_VALIDATION,
+        )
+        return candidates.filter { runCatching { frames.previewPath(sessionId, index, it) }.getOrNull() != null }
+    }
+
     // ---- multi-frame outlier sheets (macOS MultiChoice / MultiSelect) ----
     data class MultiChoiceTarget(val frameIndex: Int, val groupId: Int, val currentlyRemoves: Boolean)
     data class RectSelection(val startX: Float, val startY: Float, val endX: Float, val endY: Float)

@@ -15,15 +15,21 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FrameState
+import com.star.desktop.ui.components.VerticalStarPicker
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.FrameProcessingState
+import com.star.proto.FrameViewMode
 
 /** Left panel (macOS `LeftPanel`): processing controls, progress, and current-frame state. */
 @Composable
@@ -103,6 +109,9 @@ fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier, onProcessAll
             fontSize = 11.sp,
         )
 
+        // "Show:" — pick which available view mode the center frame displays (macOS frameModeView).
+        ShowViewModes(vm)
+
         // Per-frame navigation now lives in the bottom scrub slider (shared with scrub mode), so the
         // old rounded-square frame grid was removed; just surface the current frame's state here.
         seqStateTooltip(states, current)
@@ -110,6 +119,40 @@ fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier, onProcessAll
       com.star.desktop.ui.components.PanelChevron("«", { vm.setLeftPanel(false) }, Modifier.padding(6.dp))
     }
 }
+
+/**
+ * The "Show:" view-mode picker (macOS `LeftPanel.frameModeView`). Lists only the view modes that
+ * actually exist for the current frame, so subtraction/validation/etc. appear as processing writes
+ * them. Selecting one drives the shared [SequenceViewModel.viewMode] (kept in sync with the top bar).
+ */
+@Composable
+private fun ShowViewModes(vm: SequenceViewModel) {
+    val current by vm.currentIndex.collectAsState()
+    val viewMode by vm.viewMode.collectAsState()
+    val states by vm.frameStates.collectAsState()
+    var available by remember { mutableStateOf<List<FrameViewMode>>(emptyList()) }
+    // Recompute when the frame changes or its processing state advances (new previews may now exist).
+    LaunchedEffect(current, states[current]) { available = vm.availableViewModes(current) }
+
+    if (available.size <= 1) return // nothing meaningful to choose between
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
+        Text("Show:", color = StarColors.textSecondary, fontSize = 11.sp)
+        VerticalStarPicker(
+            options = available,
+            selected = viewMode,
+            label = { VIEW_MODE_LABELS[it] ?: it.name },
+            onSelect = { vm.setViewMode(it) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+private val VIEW_MODE_LABELS = mapOf(
+    FrameViewMode.VIEW_ORIGINAL to "original frame",
+    FrameViewMode.VIEW_PROCESSED to "final processed frame",
+    FrameViewMode.VIEW_SUBTRACTION to "subtracted frame",
+    FrameViewMode.VIEW_VALIDATION to "validation data",
+)
 
 @Composable
 private fun seqStateTooltip(states: Map<Int, FrameProcessingState>, current: Int) {
