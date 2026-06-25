@@ -1,6 +1,6 @@
 name: Kotlin Client
 
-# Builds and tests the Kotlin/Compose desktop client (star-desktop-v2) on Linux and Windows.
+# Builds and tests the Kotlin/Compose desktop client (star-desktop) on Linux and Windows.
 # This covers §8.2's "CI on Linux and Windows": proto generation, compile, and the transport unit
 # tests run on both OSes. The integration tests (InteropIntegrationTest) self-skip here because no
 # -Dstar.it.* fixture / stard binary is provided — they're for local runs against a real daemon.
@@ -8,10 +8,10 @@ name: Kotlin Client
 on:
   push:
     branches: [main, develop]
-    paths: ['star-desktop-v2/**', 'daemon/proto/**', '.github/workflows/kotlin-client.yml']
+    paths: ['star-desktop/**', 'daemon/proto/**', '.github/workflows/kotlin-client.yml']
   pull_request:
     branches: [main, develop]
-    paths: ['star-desktop-v2/**', 'daemon/proto/**', '.github/workflows/kotlin-client.yml']
+    paths: ['star-desktop/**', 'daemon/proto/**', '.github/workflows/kotlin-client.yml']
   workflow_dispatch:
 
 concurrency:
@@ -28,7 +28,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     defaults:
       run:
-        working-directory: star-desktop-v2
+        working-directory: star-desktop
     steps:
       - uses: actions/checkout@v4
 
@@ -146,7 +146,7 @@ jobs:
           echo "$KEY_B64" | base64 --decode > "$RUNNER_TEMP/private_keys/AuthKey_${KEY_ID}.p8"
 
       - name: Build signed .dmg
-        working-directory: star-desktop-v2
+        working-directory: star-desktop
         env:
           # Drives the opt-in signing in build.gradle.kts. JAVA_HOME (Temurin 21, set by setup-java) is used
           # for both the Gradle JVM and jpackage — Temurin bundles jpackage and is a non-Homebrew vendor, so no
@@ -156,7 +156,7 @@ jobs:
         run: ./gradlew packageDmg --no-daemon --stacktrace
 
       - name: Notarize + staple the .dmg
-        working-directory: star-desktop-v2
+        working-directory: star-desktop
         env:
           KEY_PATH: ${{ runner.temp }}/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
           KEY_ID:   ${{ secrets.APPLE_API_KEY_ID }}
@@ -179,7 +179,7 @@ jobs:
           echo "Notarized + stapled: $DMG"
 
       - name: Verify Gatekeeper acceptance of the notarized app
-        working-directory: star-desktop-v2
+        working-directory: star-desktop
         run: |
           set -e
           DMG=$(ls build/compose/binaries/main/dmg/*.dmg | head -1)
@@ -191,8 +191,8 @@ jobs:
       - name: Upload notarized .dmg
         uses: actions/upload-artifact@v4
         with:
-          name: star-desktop-v2-macos-dmg
-          path: star-desktop-v2/build/compose/binaries/main/dmg/*.dmg
+          name: star-desktop-macos-dmg
+          path: star-desktop/build/compose/binaries/main/dmg/*.dmg
           if-no-files-found: error
 
       - name: Clean up keychain + secrets

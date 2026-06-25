@@ -2,7 +2,7 @@
 #
 # Regenerate the Swift protobuf bindings (Sources/StarDaemonMessages/star.pb.swift)
 # from proto/star.proto. Run from anywhere; mirror the client copy afterwards with
-#   (cd ../star-desktop-v2 && ./gradlew syncProto)
+#   (cd ../star-desktop && ./gradlew syncProto)
 #
 # Why the post-process: protoc-gen-swift built with Swift 6.2 (e.g. 1.38.0) emits the
 # `nonisolated` modifier on the generated TYPES (enum/struct/extension). That syntax only

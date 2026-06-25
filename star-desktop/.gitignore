@@ -1,2 +1,8 @@
-.gradle/
 build/
+.gradle/
+.kotlin/
+*.log
+
+# Native binaries staged into the app bundle by `./gradlew stageAppResources`
+# (large, OS-specific; rebuilt from daemon/.build + external_binaries). Keep the README.
+/app-resources/*/
