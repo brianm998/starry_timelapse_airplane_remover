@@ -116,6 +116,8 @@ private fun TopBar(app: AppViewModel, vm: SequenceViewModel, mode: InteractionMo
         }
         Chip("Align", selected = false) { app.toggleAlignmentWindow() }
         Chip("Close", selected = false) { app.closeSession() }
+        // Engine status badge, laid out in the top bar (no longer a floating bottom-right overlay).
+        com.star.desktop.ui.app.EngineBadge(app)
     }
 }
 

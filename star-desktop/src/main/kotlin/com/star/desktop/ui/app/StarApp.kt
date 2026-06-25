@@ -42,7 +42,11 @@ fun StarApp(vm: AppViewModel) {
                 is AppScreen.Sequence -> SequenceScreen(vm, s.vm)
             }
 
-            EngineBadge(vm, Modifier.align(Alignment.BottomEnd).padding(8.dp))
+            // On the start/loading screens the badge floats top-right (nothing there to overlap).
+            // While a session is open it lives inside the SequenceScreen top bar instead (see TopBar).
+            if (screen !is AppScreen.Sequence) {
+                EngineBadge(vm, Modifier.align(Alignment.TopEnd).padding(8.dp))
+            }
 
             val showSettings by vm.showSettings.collectAsState()
             if (showSettings && screen is AppScreen.Sequence) {
@@ -122,7 +126,7 @@ private fun VersionWarningBanner(message: String, onDismiss: () -> Unit, modifie
 }
 
 @Composable
-private fun EngineBadge(vm: AppViewModel, modifier: Modifier) {
+fun EngineBadge(vm: AppViewModel, modifier: Modifier = Modifier) {
     val status by vm.engineStatus.collectAsState()
     val (color, label) = when (val s = status) {
         is EngineStatus.Connected -> StarColors.green to "engine ${s.daemonVersion}"
