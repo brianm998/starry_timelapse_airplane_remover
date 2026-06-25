@@ -1,19 +1,13 @@
 package com.star.desktop.ui.sequence
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -23,9 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,8 +25,7 @@ import com.star.desktop.domain.FrameState
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.FrameProcessingState
 
-/** Left panel (macOS `LeftPanel`): processing controls, progress, and a per-frame state grid. */
-@OptIn(ExperimentalLayoutApi::class)
+/** Left panel (macOS `LeftPanel`): processing controls, progress, and current-frame state. */
 @Composable
 fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier, onProcessAll: () -> Unit = { vm.processAll() }) {
     val processing by vm.isProcessing.collectAsState()
@@ -112,25 +103,8 @@ fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier, onProcessAll
             fontSize = 11.sp,
         )
 
-        Text("Frames", color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            for (i in 0 until total) {
-                val s = states[i]
-                val color = when {
-                    s == FrameProcessingState.FPS_COMPLETE -> StarColors.green
-                    s == null || s == FrameProcessingState.FPS_UNPROCESSED -> StarColors.cellDefault
-                    else -> StarColors.yellow
-                }
-                Box(
-                    Modifier
-                        .size(14.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(if (i == current) StarColors.accent else color)
-                        .clickable { vm.setCurrentIndex(i) },
-                    contentAlignment = Alignment.Center,
-                ) {}
-            }
-        }
+        // Per-frame navigation now lives in the bottom scrub slider (shared with scrub mode), so the
+        // old rounded-square frame grid was removed; just surface the current frame's state here.
         seqStateTooltip(states, current)
       }
       com.star.desktop.ui.components.PanelChevron("«", { vm.setLeftPanel(false) }, Modifier.padding(6.dp))

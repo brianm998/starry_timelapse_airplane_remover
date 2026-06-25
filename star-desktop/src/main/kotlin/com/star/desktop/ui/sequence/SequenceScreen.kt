@@ -74,10 +74,10 @@ fun SequenceScreen(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier 
 
         BottomControls(vm)
 
-        when (mode) {
-            InteractionMode.SCRUB -> ScrubSlider(vm)
-            else -> if (showFilmstrip) Filmstrip(vm)
-        }
+        // Bottom layout mirrors macOS ImageSequenceView: an optional filmstrip (edit/grid) above a
+        // full-width scrub slider shown in every mode except grid — identical in scrub & edit.
+        if (mode != InteractionMode.SCRUB && showFilmstrip) Filmstrip(vm)
+        if (mode != InteractionMode.GRID) ScrubSlider(vm)
     }
 
     // Multi-frame outlier sheets (overlay the whole screen when active).
