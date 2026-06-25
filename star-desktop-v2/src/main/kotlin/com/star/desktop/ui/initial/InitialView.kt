@@ -1,8 +1,10 @@
 package com.star.desktop.ui.initial
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,8 +28,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
@@ -37,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
+import java.awt.datatransfer.DataFlavor
 import java.io.File
 
 /** The startup screen (macOS `StartupView`/`InitialView`): open actions, a drop zone, recent files. */
@@ -54,7 +64,7 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
             Text("Nighttime Timelapse Airplane Remover", color = StarColors.textSecondary, fontSize = 13.sp)
             OutlinedButton(onClick = vm::openInfoDialog) { Text("ⓘ  About Star") }
 
-            DropZone(onOpenSequence = { open(vm, OpenKind.SEQUENCE) })
+            DropZone(vm = vm, onOpenSequence = { open(vm, OpenKind.SEQUENCE) })
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
@@ -78,16 +88,38 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
-private fun DropZone(onOpenSequence: () -> Unit) {
+private fun DropZone(vm: AppViewModel, onOpenSequence: () -> Unit) {
+    var isHovering by remember { mutableStateOf(false) }
+    val target = remember(vm) {
+        object : DragAndDropTarget {
+            override fun onEntered(event: DragAndDropEvent) { isHovering = true }
+            override fun onExited(event: DragAndDropEvent) { isHovering = false }
+            override fun onEnded(event: DragAndDropEvent) { isHovering = false }
+            override fun onDrop(event: DragAndDropEvent): Boolean {
+                isHovering = false
+                val files = event.droppedFiles()
+                if (files.isEmpty()) return false
+                handleDroppedFiles(vm, files)
+                return true
+            }
+        }
+    }
     Box(
         Modifier
             .fillMaxWidth()
             .height(160.dp)
             .clip(StarShapes.card)
-            .border(2.dp, SolidColor(StarColors.textDisabled), StarShapes.card)
-            .background(StarColors.sidePanel.copy(alpha = 0.35f))
-            .clickable(onClick = onOpenSequence),
+            .border(
+                2.dp,
+                SolidColor(if (isHovering) StarColors.accent else StarColors.textDisabled),
+                StarShapes.card,
+            )
+            .background(StarColors.sidePanel.copy(alpha = if (isHovering) 0.55f else 0.35f))
+            .clickable(onClick = onOpenSequence)
+            // Accept every drag; the actual file extraction + validation happens in onDrop.
+            .dragAndDropTarget(shouldStartDragAndDrop = { true }, target = target),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -95,6 +127,30 @@ private fun DropZone(onOpenSequence: () -> Unit) {
             color = StarColors.textSecondary,
             fontSize = 13.sp,
         )
+    }
+}
+
+/** Pull the dropped file list out of the desktop AWT transferable, or empty if it isn't a file drag. */
+@OptIn(ExperimentalComposeUiApi::class)
+private fun DragAndDropEvent.droppedFiles(): List<File> = try {
+    val transferable = awtTransferable
+    if (transferable.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+        @Suppress("UNCHECKED_CAST")
+        (transferable.getTransferData(DataFlavor.javaFileListFlavor) as? List<File>).orEmpty()
+    } else {
+        emptyList()
+    }
+} catch (t: Throwable) {
+    emptyList()
+}
+
+/** Open the dropped files, routing them via [resolveDrop] (mirrors macOS `InitialView.handleDrop`). */
+private fun handleDroppedFiles(vm: AppViewModel, files: List<File>) {
+    val action = resolveDrop(files) ?: return
+    when (action.kind) {
+        OpenKind.SEQUENCE -> vm.openSequence(action.path)
+        OpenKind.VIDEO -> vm.openVideo(action.path)
+        OpenKind.CONFIG -> vm.openConfig(action.path)
     }
 }
 
