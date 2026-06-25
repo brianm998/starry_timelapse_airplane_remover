@@ -6,10 +6,12 @@ import com.star.desktop.data.LocalPreferences
 import com.star.desktop.data.OutlierRepository
 import com.star.desktop.data.ProcessingRepository
 import com.star.desktop.data.SessionRepository
+import com.star.desktop.domain.InteractionMode
 import com.star.desktop.engine.EngineState
 import com.star.desktop.engine.EngineStatus
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.util.Log
+import com.star.proto.CleanMethod
 import com.star.proto.OpenProgress
 import com.star.proto.SessionInfo
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +27,13 @@ sealed interface AppScreen {
     data class Loading(val title: String, val detail: String?, val fraction: Float?) : AppScreen
     data class Sequence(val vm: SequenceViewModel) : AppScreen
 }
+
+/**
+ * The new-source startup prompt flow (macOS `StartupView` / `StartupState`). Walked when a fresh
+ * image sequence or video is opened: horizon? → camera moving? → (paint horizon yourself?) → what
+ * to remove? Resuming a saved session (`OpenConfig`) skips it.
+ */
+enum class StartupStep { HORIZON, MOVING, SELECT_HORIZON, REMOVAL }
 
 /**
  * Root app state (macOS `ViewModel`): owns the engine, repositories, prefs, and the current screen.
@@ -159,6 +168,79 @@ class AppViewModel(
     val versionWarning: StateFlow<String?> = _versionWarning.asStateFlow()
     fun dismissVersionWarning() { _versionWarning.value = null }
 
+    // ---- new-source startup prompts (macOS StartupView) ----
+    private val _startupStep = MutableStateFlow<StartupStep?>(null) // null = not showing
+    val startupStep: StateFlow<StartupStep?> = _startupStep.asStateFlow()
+    // Accumulated answers, applied to the session config when the user opens Advanced or starts processing.
+    private var startupHasHorizon = false
+    private var startupCameraMoving = false
+    private var startupAllowEarth = false
+
+    private fun resetStartupChoices() {
+        startupHasHorizon = false
+        startupCameraMoving = false
+        startupAllowEarth = false
+    }
+
+    /** Prompt 1 answer: does the sequence include a horizon? */
+    fun startupAnswerHorizon(hasHorizon: Boolean) {
+        startupHasHorizon = hasHorizon
+        _startupStep.value = StartupStep.MOVING
+    }
+
+    /** Prompt 2 answer: was the camera moving (false = static on a tripod)? */
+    fun startupAnswerMoving(moving: Boolean) {
+        startupCameraMoving = moving
+        startupAllowEarth = !moving // macOS defaults earth alignment on for static cameras
+        _startupStep.value = if (startupHasHorizon) StartupStep.SELECT_HORIZON else StartupStep.REMOVAL
+    }
+
+    /** Prompt 3 answer: paint the horizon yourself? Yes → open the horizon painter; No → removal. */
+    fun startupAnswerSelectHorizon(selectYourself: Boolean) {
+        if (selectYourself) {
+            scope.launch { applyStartupChoices() }
+            _startupStep.value = null
+            currentSequence?.let {
+                it.setMode(InteractionMode.EDIT)
+                if (!it.horizonPaintMode.value) it.toggleHorizonPaint()
+            }
+        } else {
+            _startupStep.value = StartupStep.REMOVAL
+        }
+    }
+
+    /** "Advanced" gear on a prompt: persist the answers so the dialog reflects them, then open settings. */
+    fun startupOpenAdvanced() {
+        scope.launch {
+            applyStartupChoices()
+            _startupStep.value = null
+            openSettings()
+        }
+    }
+
+    /** Removal prompt "Start Processing": apply the chosen clean method + answers, then process. */
+    fun startupStartProcessing(cleanMethod: CleanMethod) {
+        scope.launch {
+            applyStartupChoices(cleanMethod)
+            _startupStep.value = null
+            requestProcessAll()
+        }
+    }
+
+    /** Removal prompt "Close": dismiss the prompts without processing (keeps the default config). */
+    fun dismissStartup() { _startupStep.value = null }
+
+    /** Fold the accumulated startup answers (and optionally a clean method) into the live session config. */
+    private suspend fun applyStartupChoices(cleanMethod: CleanMethod? = null) {
+        val current = runCatching { sessions.getConfig() }.getOrNull() ?: return
+        val b = current.toBuilder()
+            .setHorizonDetectionEnabled(startupHasHorizon)
+            .setTripodHeadWasMoving(startupCameraMoving)
+            .setAllowEarthAlignment(startupAllowEarth)
+        cleanMethod?.let { b.setCleanMethod(it) }
+        runCatching { sessions.updateConfig(b.build()) }
+    }
+
     init {
         scope.launch { engine.start() }
         scope.launch {
@@ -179,7 +261,7 @@ class AppViewModel(
         }
     }
 
-    fun openSequence(dir: String) = launchOpen("Opening image sequence", dir) { sessions.openSequence(dir) }
+    fun openSequence(dir: String) = launchOpen("Opening image sequence", dir, promptStartup = true) { sessions.openSequence(dir) }
 
     fun openConfig(path: String) = launchOpen("Resuming session", path) { sessions.openConfig(path) }
 
@@ -203,7 +285,7 @@ class AppViewModel(
                 val finalInfo = info
                 if (finalInfo != null) {
                     sessions.applySessionInfo(finalInfo)
-                    onOpened(path, finalInfo)
+                    onOpened(path, finalInfo, promptStartup = true)
                 } else {
                     fail("video import produced no session")
                 }
@@ -263,19 +345,19 @@ class AppViewModel(
 
     suspend fun shutdown() = engine.shutdown()
 
-    private fun launchOpen(title: String, path: String, block: suspend () -> SessionInfo) {
+    private fun launchOpen(title: String, path: String, promptStartup: Boolean = false, block: suspend () -> SessionInfo) {
         scope.launch {
             ensureConnected()
             _screen.value = AppScreen.Loading(title, path, null)
             try {
-                onOpened(path, block())
+                onOpened(path, block(), promptStartup = promptStartup)
             } catch (e: Throwable) {
                 fail(e.message ?: "failed to open")
             }
         }
     }
 
-    private fun onOpened(path: String, info: SessionInfo, addToRecent: Boolean = true) {
+    private fun onOpened(path: String, info: SessionInfo, addToRecent: Boolean = true, promptStartup: Boolean = false) {
         if (addToRecent) {
             prefs.addRecentFile(path)
             _recentFiles.value = prefs.recentFiles
@@ -301,11 +383,17 @@ class AppViewModel(
             "postrender" -> _showPostRenderPrompt.value = true // dev hook: screenshot the post-render prompt
             "multiselect" -> svm.openMultiSelect(SequenceViewModel.RectSelection(100f, 100f, 400f, 400f)) // dev hook
             "settings" -> openSettings() // dev hook: screenshot the Processing Settings dialog
+            "startup" -> { resetStartupChoices(); _startupStep.value = StartupStep.HORIZON } // dev hook: startup prompts
             else -> Unit
         }
         autoFrame?.let { svm.setCurrentIndex(it) }
         currentSequence = svm
         _screen.value = AppScreen.Sequence(svm)
+        // Fresh source → walk the startup prompts (skipped for config resume + dev auto-open hooks).
+        if (promptStartup && autoMode == null) {
+            resetStartupChoices()
+            _startupStep.value = StartupStep.HORIZON
+        }
     }
 
     private fun fail(message: String) {

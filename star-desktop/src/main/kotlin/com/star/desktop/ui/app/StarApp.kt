@@ -56,6 +56,10 @@ fun StarApp(vm: AppViewModel) {
             if (showInfo) {
                 com.star.desktop.ui.dialogs.InfoDialog(onClose = vm::closeInfoDialog)
             }
+            val startupStep by vm.startupStep.collectAsState()
+            if (startupStep != null && screen is AppScreen.Sequence) {
+                com.star.desktop.ui.dialogs.StartupPrompts(vm, startupStep!!)
+            }
             val showPre by vm.showPreRenderPrompt.collectAsState()
             if (showPre && screen is AppScreen.Sequence) com.star.desktop.ui.dialogs.PreProcessingRenderPrompt(vm)
             val showPost by vm.showPostRenderPrompt.collectAsState()
