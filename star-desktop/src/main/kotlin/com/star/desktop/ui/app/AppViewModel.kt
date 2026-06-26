@@ -32,8 +32,24 @@ sealed interface AppScreen {
  * The new-source startup prompt flow (macOS `StartupView` / `StartupState`). Walked when a fresh
  * image sequence or video is opened: horizon? → camera moving? → (paint horizon yourself?) → what
  * to remove? Resuming a saved session (`OpenConfig`) skips it.
+ *
+ * `SELECT_HORIZON` is the static (single-horizon) variant; `SELECT_MOVING_HORIZONS` is the moving
+ * variant where the user picks how many evenly-spaced frames to paint.
  */
-enum class StartupStep { HORIZON, MOVING, SELECT_HORIZON, REMOVAL }
+enum class StartupStep { HORIZON, MOVING, SELECT_HORIZON, SELECT_MOVING_HORIZONS, REMOVAL }
+
+/**
+ * Evenly-spaced frame indices for [count] horizons over [total] frames (macOS
+ * `ImageSequenceViewModel.calculateFrameIndices`): `count == 1` → `[0]`; `count >= total` → every
+ * frame; otherwise `round(i * (total - 1) / (count - 1))` so the first is frame 0, the last is
+ * `total - 1`, and the rest are spread evenly between.
+ */
+internal fun evenlySpacedFrameIndices(count: Int, total: Int): List<Int> {
+    if (count <= 0 || total <= 0) return emptyList()
+    if (count == 1) return listOf(0)
+    if (count >= total) return (0 until total).toList()
+    return (0 until count).map { i -> Math.round(i.toDouble() * (total - 1) / (count - 1)).toInt() }
+}
 
 /**
  * Root app state (macOS `ViewModel`): owns the engine, repositories, prefs, and the current screen.
@@ -192,22 +208,67 @@ class AppViewModel(
     fun startupAnswerMoving(moving: Boolean) {
         startupCameraMoving = moving
         startupAllowEarth = !moving // macOS defaults earth alignment on for static cameras
-        _startupStep.value = if (startupHasHorizon) StartupStep.SELECT_HORIZON else StartupStep.REMOVAL
-    }
-
-    /** Prompt 3 answer: paint the horizon yourself? Yes → open the horizon painter; No → removal. */
-    fun startupAnswerSelectHorizon(selectYourself: Boolean) {
-        if (selectYourself) {
-            scope.launch { applyStartupChoices() }
-            _startupStep.value = null
-            currentSequence?.let {
-                it.setMode(InteractionMode.EDIT)
-                if (!it.horizonPaintMode.value) it.toggleHorizonPaint()
-            }
-        } else {
-            _startupStep.value = StartupStep.REMOVAL
+        _startupStep.value = when {
+            !startupHasHorizon -> StartupStep.REMOVAL
+            moving -> StartupStep.SELECT_MOVING_HORIZONS
+            else -> StartupStep.SELECT_HORIZON
         }
     }
+
+    /**
+     * Prompt 3 (static) answer: paint the horizon yourself? Yes → open the painter on the current
+     * frame in startup mode (single horizon); No → removal. (macOS `SelectHorizonView`.)
+     */
+    fun startupAnswerSelectHorizon(selectYourself: Boolean) {
+        if (selectYourself) startStaticHorizonStartupFlow()
+        else _startupStep.value = StartupStep.REMOVAL
+    }
+
+    /**
+     * Prompt 3 (moving) "Yes, select N horizons": open the painter in startup mode and step through
+     * [count] evenly-spaced frames (macOS `startMovingHorizonStartupFlow`). "No" goes to removal via
+     * [startupAnswerSelectHorizon].
+     */
+    fun startMovingHorizonStartupFlow(count: Int) {
+        val svm = currentSequence ?: return
+        scope.launch {
+            applyStartupChoices() // persist moving/horizon to config before saving per-frame references
+            svm.beginStartupHorizon(evenlySpacedFrameIndices(count, svm.frameCount))
+            _startupStep.value = null
+        }
+    }
+
+    /** Static SelectHorizon "Yes": paint the single current frame in startup mode. */
+    private fun startStaticHorizonStartupFlow() {
+        val svm = currentSequence ?: return
+        scope.launch {
+            applyStartupChoices()
+            svm.beginStartupHorizon(emptyList()) // empty = single frame (the one currently shown)
+            _startupStep.value = null
+        }
+    }
+
+    /** Painter "Next"/"Continue" in startup mode: advance to the next frame, or finish → removal. */
+    fun startupHorizonAdvanceOrContinue() {
+        val svm = currentSequence ?: return
+        if (svm.startupHorizonHasMore()) svm.advanceStartupHorizon()
+        else continueToRemovalFromHorizonPainter()
+    }
+
+    /** Finish startup horizon painting → show the removal prompt (macOS `continueToRemovalFromHorizonPainter`). */
+    fun continueToRemovalFromHorizonPainter() {
+        currentSequence?.endStartupHorizon()
+        _startupStep.value = StartupStep.REMOVAL
+    }
+
+    /** Painter "Cancel" in startup mode → back to the moving/stationary question (macOS `returnToMovingViewFromHorizonPainter`). */
+    fun cancelStartupHorizon() {
+        currentSequence?.endStartupHorizon()
+        _startupStep.value = StartupStep.MOVING
+    }
+
+    /** Total frames in the open sequence — bounds the moving-horizon count stepper. */
+    fun startupFrameCount(): Int = (currentSequence?.frameCount ?: 1).coerceAtLeast(1)
 
     /** "Advanced" gear on a prompt: persist the answers so the dialog reflects them, then open settings. */
     fun startupOpenAdvanced() {

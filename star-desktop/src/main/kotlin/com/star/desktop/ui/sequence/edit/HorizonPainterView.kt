@@ -61,6 +61,14 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
     var status by remember(current) { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
+    // Startup-flow state (macOS horizonPainterMode == .startup): "i / N" progress + Next/Continue.
+    val startup by vm.horizonPainterStartup.collectAsState()
+    val startupIndices by vm.startupHorizonIndices.collectAsState()
+    val startupPos by vm.startupHorizonPosition.collectAsState()
+    // Read state.version during composition so the Save/Next button enables as soon as paint exists
+    // (the Canvas reads it in the draw phase, which doesn't recompose the toolbar).
+    val canSave = state.version.let { state.hasAnyPaint() }
+
     // Seed from an existing saved reference for this frame.
     LaunchedEffect(current) {
         app.horizonRepo.getReference(vm.sessionId, current)?.let { r ->
@@ -75,6 +83,10 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            // Step "i / N" progress when stepping through several startup frames (macOS startupProgressLabel).
+            if (startup && startupIndices.size > 1) {
+                Text("${startupPos + 1} / ${startupIndices.size}", color = StarColors.textSecondary, fontSize = 12.sp)
+            }
             Text("Horizon", color = StarColors.textPrimary, fontSize = 13.sp)
             Text("brush", color = StarColors.textDisabled, fontSize = 10.sp)
             Slider(
@@ -85,17 +97,36 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
             )
             Box(Modifier.weight(1f))
             status?.let { Text(it, color = StarColors.textSecondary, fontSize = 11.sp) }
-            OutlinedButton(onClick = { state.clear() }, enabled = !busy) { Text("Clear") }
-            OutlinedButton(
-                enabled = !busy && state.hasAnyPaint(),
-                onClick = { scope.launch { saveReference(app, vm, current, state, imgW, imgH, reprocess = false) { status = it; busy = it == "Saving…" } } },
-            ) { Text("Save") }
-            Button(
-                enabled = !busy && state.hasAnyPaint(),
-                colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                onClick = { scope.launch { busy = true; saveReference(app, vm, current, state, imgW, imgH, reprocess = true) { status = it }; busy = false } },
-            ) { Text("Save & Reprocess") }
-            OutlinedButton(onClick = { vm.toggleHorizonPaint() }, enabled = !busy) { Text("Done") }
+            if (startup) {
+                // Save the painted reference for this frame, then advance or finish → removal prompt.
+                val hasMore = startupIndices.isNotEmpty() && startupPos + 1 < startupIndices.size
+                OutlinedButton(onClick = { state.clear() }, enabled = !busy) { Text("Reset") }
+                Button(
+                    enabled = !busy && canSave,
+                    colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                    onClick = {
+                        scope.launch {
+                            busy = true
+                            saveReference(app, vm, current, state, imgW, imgH, reprocess = false) { status = it }
+                            busy = false
+                            app.startupHorizonAdvanceOrContinue()
+                        }
+                    },
+                ) { Text(if (hasMore) "Next" else "Continue") }
+                OutlinedButton(onClick = { app.cancelStartupHorizon() }, enabled = !busy) { Text("Cancel") }
+            } else {
+                OutlinedButton(onClick = { state.clear() }, enabled = !busy) { Text("Clear") }
+                OutlinedButton(
+                    enabled = !busy && canSave,
+                    onClick = { scope.launch { saveReference(app, vm, current, state, imgW, imgH, reprocess = false) { status = it; busy = it == "Saving…" } } },
+                ) { Text("Save") }
+                Button(
+                    enabled = !busy && canSave,
+                    colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                    onClick = { scope.launch { busy = true; saveReference(app, vm, current, state, imgW, imgH, reprocess = true) { status = it }; busy = false } },
+                ) { Text("Save & Reprocess") }
+                OutlinedButton(onClick = { vm.toggleHorizonPaint() }, enabled = !busy) { Text("Done") }
+            }
         }
 
         Box(

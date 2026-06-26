@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -49,6 +50,7 @@ fun StartupPrompts(app: AppViewModel, step: StartupStep) {
             StartupStep.HORIZON -> HorizonPrompt(app)
             StartupStep.MOVING -> MovingPrompt(app)
             StartupStep.SELECT_HORIZON -> SelectHorizonPrompt(app)
+            StartupStep.SELECT_MOVING_HORIZONS -> SelectMovingHorizonsPrompt(app)
             StartupStep.REMOVAL -> RemovalPrompt(app)
         }
     }
@@ -104,6 +106,36 @@ private fun SelectHorizonPrompt(app: AppViewModel) {
         PrimaryButton("Yes") { app.startupAnswerSelectHorizon(true) }
     }
 }
+
+/**
+ * Moving-video variant (macOS `SelectMovingHorizonsView`): the user picks how many evenly-spaced
+ * frames to paint a horizon for. "Yes" steps through each in the painter; "No" goes to removal.
+ */
+@Composable
+private fun SelectMovingHorizonsPrompt(app: AppViewModel) {
+    val maxCount = app.startupFrameCount()
+    var count by remember { mutableStateOf(minOf(3, maxCount)) }
+
+    Title("Do you want to select the horizons yourself?")
+    Body(
+        "Star lets you tell it where the horizon is for specific frames of this moving video. If you " +
+            "define horizons on evenly-spaced frames now, you will speed up Star's processing and avoid " +
+            "horizon-detection errors. Star will use these painted frames as references for all frames in " +
+            "the sequence.",
+    )
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Spacer(Modifier.weight(1f))
+        SecondaryButton("No") { app.startupAnswerSelectHorizon(false) }
+        Spacer(Modifier.width(28.dp))
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Stepper("Define $count ${horizonWord(count)}", count, 1, maxCount) { count = it }
+            PrimaryButton("Yes, select $count ${horizonWord(count)}") { app.startMovingHorizonStartupFlow(count) }
+        }
+        Spacer(Modifier.weight(1f))
+    }
+}
+
+private fun horizonWord(count: Int) = if (count == 1) "horizon" else "horizons"
 
 @Composable
 private fun RemovalPrompt(app: AppViewModel) {
@@ -190,6 +222,16 @@ private fun AdvancedButton(onClick: () -> Unit) {
     ) {
         Text("⚙", color = StarColors.textSecondary, fontSize = 30.sp)
         Text("Advanced", color = StarColors.textSecondary, fontSize = 11.sp)
+    }
+}
+
+/** Minus/value/plus count control (macOS `Stepper`), clamped to [min]..[max]. */
+@Composable
+private fun Stepper(label: String, value: Int, min: Int, max: Int, onChange: (Int) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(label, color = StarColors.textPrimary, fontSize = 16.sp)
+        OutlinedButton(onClick = { onChange(value - 1) }, enabled = value > min) { Text("−") }
+        OutlinedButton(onClick = { onChange(value + 1) }, enabled = value < max) { Text("+") }
     }
 }
 

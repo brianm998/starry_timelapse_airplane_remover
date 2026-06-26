@@ -95,6 +95,52 @@ class SequenceViewModel(
     val horizonPaintMode: StateFlow<Boolean> = _horizonPaintMode.asStateFlow()
     fun toggleHorizonPaint() { _horizonPaintMode.value = !_horizonPaintMode.value }
 
+    // ---- startup horizon flow (macOS horizonPainterMode == .startup + startup frame indices/position) ----
+    // When true the painter shows "i / N" progress + Next/Continue and the AppViewModel routes the
+    // painter exit back into the startup prompt chain (→ removal, or back to the moving question).
+    private val _horizonPainterStartup = MutableStateFlow(false)
+    val horizonPainterStartup: StateFlow<Boolean> = _horizonPainterStartup.asStateFlow()
+    // The evenly-spaced frames to paint (empty = a single static frame, the one currently shown).
+    private val _startupHorizonIndices = MutableStateFlow<List<Int>>(emptyList())
+    val startupHorizonIndices: StateFlow<List<Int>> = _startupHorizonIndices.asStateFlow()
+    // Position within [startupHorizonIndices] currently being painted.
+    private val _startupHorizonPosition = MutableStateFlow(0)
+    val startupHorizonPosition: StateFlow<Int> = _startupHorizonPosition.asStateFlow()
+
+    /** Enter startup horizon-painting on [indices] (empty = the single current frame). */
+    fun beginStartupHorizon(indices: List<Int>) {
+        _startupHorizonIndices.value = indices
+        _startupHorizonPosition.value = 0
+        _horizonPainterStartup.value = true
+        indices.firstOrNull()?.let { setCurrentIndex(it) }
+        _mode.value = InteractionMode.EDIT
+        _horizonPaintMode.value = true
+    }
+
+    /** True when more startup frames remain to paint after the current one. */
+    fun startupHorizonHasMore(): Boolean {
+        val idx = _startupHorizonIndices.value
+        return idx.isNotEmpty() && _startupHorizonPosition.value + 1 < idx.size
+    }
+
+    /** Advance to the next startup horizon frame (macOS `advanceToNextStartupHorizonFrame`). */
+    fun advanceStartupHorizon() {
+        val idx = _startupHorizonIndices.value
+        val next = _startupHorizonPosition.value + 1
+        if (next >= idx.size) return
+        _startupHorizonPosition.value = next
+        setCurrentIndex(idx[next])
+    }
+
+    /** Leave startup horizon-painting and close the painter (macOS resets horizonPainterMode to .normal). */
+    fun endStartupHorizon() {
+        _horizonPainterStartup.value = false
+        _startupHorizonIndices.value = emptyList()
+        _startupHorizonPosition.value = 0
+        _horizonPaintMode.value = false
+        _mode.value = InteractionMode.SCRUB
+    }
+
     // ---- processing state (delegated) ----
     val frameStates: StateFlow<Map<Int, FrameProcessingState>> = processing.frameStates
     val isProcessing: StateFlow<Boolean> = processing.processing
