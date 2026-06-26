@@ -166,6 +166,48 @@ tasks.register("stageAppResources") {
 // Compose's prepareAppResources copies app-resources into the image; stage the binaries first.
 tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn("stageAppResources") }
 
+// Always launch the dev app against a RELEASE daemon. Debug Swift runs the StarCore image pipeline
+// ~5-10x slower, and no debugger is ever attached to stard under the Kotlin client, so `run`/`smoke`
+// compile the daemon in release first. Incremental: a near no-op when the daemon source is unchanged.
+// Lenient: if the Swift toolchain or the daemon's native deps (opencv/StarDecisionTrees — present only
+// in a full checkout) are unavailable, warn and continue; DaemonProcess.resolveStardBinary then falls
+// back to any existing stard. CI builds release separately (kotlin-client.yml); packaging bundles the
+// release binary via stageAppResources (which already prefers .build/release over .build/debug).
+tasks.register("buildStardRelease") {
+    group = "star"
+    description = "Compile the stard daemon in release mode (the fast path) before a dev launch."
+    val daemonDir = rootProject.file("../daemon")
+    val repoRoot = rootProject.file("..")
+    val releaseBin = File(daemonDir, ".build/release/${if (hostResourceDir.startsWith("windows")) "stard.exe" else "stard"}")
+    // Up-to-date check: SwiftPM's own scan is slow (~50s) even when nothing changed, so let GRADLE
+    // decide whether to invoke it. Inputs = every LOCAL Swift source the daemon compiles (itself + the
+    // StarCore/StarCpp/logging path-deps) + the manifest/lockfile (external dep versions). opencv and
+    // StarDecisionTrees are immutable prebuilt artifacts, so they're intentionally not tracked.
+    inputs.files(
+        File(daemonDir, "Package.swift"),
+        File(daemonDir, "Package.resolved"),
+        fileTree(File(daemonDir, "Sources")),
+        fileTree(File(repoRoot, "StarCore/Sources")),
+        fileTree(File(repoRoot, "StarCpp/Sources")),
+        fileTree(File(repoRoot, "logging/Sources")),
+    ).withPropertyName("swiftSources")
+    outputs.file(releaseBin).withPropertyName("stardReleaseBinary")
+    onlyIf { File(daemonDir, "Package.swift").exists() }
+    doLast {
+        try {
+            val code = ProcessBuilder("swift", "build", "-c", "release")
+                .directory(daemonDir).inheritIO().start().waitFor()
+            if (code == 0) logger.lifecycle("buildStardRelease: stard release ready ($releaseBin)")
+            else logger.warn("buildStardRelease: `swift build -c release` exited $code — using any existing stard")
+        } catch (e: Exception) {
+            logger.warn("buildStardRelease: could not run `swift` (${e.message}) — using any existing stard")
+        }
+    }
+}
+
+// `run` (Compose dev launch — resolves stard from the build tree) always uses a release daemon.
+tasks.matching { it.name == "run" }.configureEach { dependsOn("buildStardRelease") }
+
 // jpackage copies appResources as DATA: it strips the execute bit and does not code-sign them. So after the
 // app image is built, restore +x on the bundled binaries and (when signing) codesign each with the hardened
 // runtime + entitlements, then re-seal the .app. Without this the shipped app can't spawn the daemon, and a
@@ -220,6 +262,7 @@ tasks.test {
 tasks.register<JavaExec>("smoke") {
     group = "star"
     description = "Run the headless engine smoke harness against a real stard."
+    dependsOn("buildStardRelease") // run the harness against a release daemon, not a slow debug one
     mainClass.set("com.star.desktop.tools.SmokeHarness")
     classpath = sourceSets["main"].runtimeClasspath
     if (project.hasProperty("seq")) {

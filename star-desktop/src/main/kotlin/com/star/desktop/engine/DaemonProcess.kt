@@ -1,5 +1,6 @@
 package com.star.desktop.engine
 
+import com.star.desktop.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -67,7 +68,9 @@ class DaemonProcess(
          *  3. the packaged distribution's bundled resources (`compose.application.resources.dir`,
          *     where `stageAppResources` placed stard alongside ffmpeg/ffprobe),
          *  4. next to the app executable (distribution bundle),
-         *  5. developer build trees (daemon/.build/{release,debug}/stard relative to common roots).
+         *  5. developer build trees, RELEASE preferred over debug (daemon/.build/{release,debug}/stard
+         *     relative to common roots). Debug stard runs the StarCore pipeline ~5-10x slower and is never
+         *     debugged under this client, so a debug fallback is allowed but warned about loudly.
          */
         fun resolveStardBinary(): String {
             System.getProperty("star.stard.path")?.let { if (File(it).canExecute()) return it }
@@ -92,11 +95,18 @@ class DaemonProcess(
                     add(File(r, "daemon/.build/debug/$exeName"))
                 }
             }
-            return candidates.firstOrNull { it.exists() && it.canExecute() }?.absolutePath
+            val resolved = candidates.firstOrNull { it.exists() && it.canExecute() }?.absolutePath
                 ?: error(
                     "stard binary not found. Set -Dstar.stard.path=/path/to/stard, or build the daemon " +
-                        "(cd daemon && swift build) so daemon/.build/debug/stard exists.",
+                        "(cd daemon && swift build -c release) so daemon/.build/release/stard exists.",
                 )
+            if (resolved.replace(File.separatorChar, '/').contains("/.build/debug/")) {
+                Log.w("Daemon") {
+                    "using a DEBUG stard at $resolved — the StarCore pipeline runs ~5-10x slower here. " +
+                        "Build release instead: (cd daemon && swift build -c release)"
+                }
+            }
+            return resolved
         }
 
         fun defaultScratchDir(): String =

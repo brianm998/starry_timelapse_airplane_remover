@@ -386,9 +386,14 @@ class SequenceViewModel(
 
     /** Preview path for [index] in [mode], falling back through the other view modes. Null if none exist. */
     suspend fun previewRefPath(index: Int, mode: FrameViewMode = FrameViewMode.VIEW_ORIGINAL): String? {
-        for (m in (listOf(mode) + PREVIEW_FALLBACK).distinct()) {
-            frames.previewPath(sessionId, index, m)?.let { return it.path }
+        val order = (listOf(mode) + PREVIEW_FALLBACK).distinct()
+        for (m in order) {
+            frames.previewPath(sessionId, index, m)?.let {
+                Log.d("Sequence") { "previewRefPath(frame=$index): resolved via $m -> ${it.path}" }
+                return it.path
+            }
         }
+        Log.d("Sequence") { "previewRefPath(frame=$index): no preview for any mode (tried $order)" }
         return null
     }
 
@@ -412,16 +417,19 @@ class SequenceViewModel(
             // preview but no auto-processed/original preview), so we show whatever exists.
             val order = (listOf(mode) + PREVIEW_FALLBACK).distinct()
             var ref: com.star.proto.ImageRef? = null
+            var resolvedMode: FrameViewMode? = null
             for (m in order) {
                 ref = frames.previewPath(sessionId, index, m)
-                if (ref != null) break
+                if (ref != null) { resolvedMode = m; break }
             }
             if (ref == null) {
+                Log.d("Sequence") { "loadPreview(frame=$index, want=$mode): no preview available (tried $order)" }
                 _previewAvailable.value = false
                 _currentPreview.value = null
                 return@launch
             }
             val bmp = imageCache.load(ref.path)
+            Log.d("Sequence") { "loadPreview(frame=$index, want=$mode): using $resolvedMode -> ${ref.path} (decoded=${bmp != null})" }
             if (_currentIndex.value == index) {
                 _currentPreview.value = bmp
                 _previewAvailable.value = bmp != null

@@ -94,7 +94,15 @@ class InteropIntegrationTest {
             val frame = client.getFrame(info.sessionId, 0)
             assertEquals(0, frame.frameIndex)
 
-            // Outliers/previews may not exist pre-processing; the calls must not break the connection.
+            // On-demand preview generation: a freshly-opened, unprocessed sequence has no preview
+            // JPEGs on disk, but Frame.GetPreview must generate the VIEW_ORIGINAL preview on demand
+            // (mirroring the macOS GUI's PreviewOp/makeMissingImage). Without this the Kotlin client
+            // shows blank frames + "loading…" thumbnails forever on every new sequence.
+            val preview = client.getFramePreview(info.sessionId, 0, com.star.proto.FrameViewMode.VIEW_ORIGINAL)
+            assertTrue(preview.path.isNotEmpty(), "GetPreview(VIEW_ORIGINAL) returned no path on a fresh sequence")
+            assertTrue(File(preview.path).exists(), "GetPreview(VIEW_ORIGINAL) path does not exist on disk: ${preview.path}")
+
+            // Outliers may not exist pre-processing; the call must not break the connection.
             runCatching { client.listOutliers(info.sessionId, 0) }
             client.closeSession(info.sessionId)
             // Connection still healthy after the round-trip.
