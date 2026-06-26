@@ -117,5 +117,7 @@ extension Dispatcher {
         register(method: "Horizon.ClearReference") { id, payload, transport in await HorizonHandlers.clearReference(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.Reprocess")      { id, payload, transport in await HorizonHandlers.reprocess(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.GetOverlay")     { id, payload, transport in await HorizonHandlers.getOverlay(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.ComputeInBand")  { id, payload, transport in await HorizonHandlers.computeInBand(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.GetBest")        { id, payload, transport in await HorizonHandlers.getBest(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
     }
 }

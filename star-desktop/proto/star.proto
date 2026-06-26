@@ -495,3 +495,41 @@ message GetHorizonOverlayResponse {
   repeated int32     y_per_column = 3;   // draw-space Y, length == width
   int32              height       = 4;   // height the overlay was computed at (scaleY divisor)
 }
+
+// ---- Horizon: interactive band detection (the live painter) ----
+
+// Which StarCore detector to run on the painted band:
+//   COMBINED_SIOX = computeCombinedHorizonInBand (initial detect once the band spans the frame)
+//   RANDOM_WALKER = computeRandomWalkerHorizon   (edge-aware sky/ground refinement)
+enum HorizonBandMethod {
+  HORIZON_BAND_METHOD_UNSPECIFIED   = 0;
+  HORIZON_BAND_METHOD_COMBINED_SIOX = 1;
+  HORIZON_BAND_METHOD_RANDOM_WALKER = 2;
+}
+
+// Run a horizon detector over a user-painted band. All per-column arrays are in
+// space_width x space_height coords, length == space_width; -1 = unset/unpainted column.
+// top/bottom_boundary_y are required; known_*_y are optional (leave empty to pass nil).
+message ComputeHorizonInBandRequest {
+  string            session_id  = 1;
+  int32             frame_index = 2;
+  HorizonBandMethod method      = 3;
+  int32             space_width  = 4;
+  int32             space_height = 5;
+  repeated int32    top_boundary_y         = 6;
+  repeated int32    bottom_boundary_y      = 7;
+  repeated int32    known_sky_floor_y      = 8;  // empty => nil
+  repeated int32    known_ground_ceiling_y = 9;  // empty => nil
+  double            beta = 10;                   // RANDOM_WALKER edge sensitivity; <= 0 => engine default (90)
+}
+message ComputeHorizonInBandResponse {
+  HorizonColumns columns = 1;   // per-column horizon Y in the same coords; -1 = column with no result
+}
+
+// Best existing horizon (user reference > merged > raw) as a per-column line, for seeding the
+// painter when re-opening a frame that already has a (possibly auto-computed) horizon.
+message GetBestHorizonRequest  { string session_id = 1; int32 frame_index = 2; int32 space_width = 3; int32 space_height = 4; }
+message GetBestHorizonResponse {
+  bool           exists  = 1;
+  HorizonColumns columns = 2;   // empty if !exists
+}

@@ -627,6 +627,47 @@ public enum Star_V1_HorizonOverlayKind: SwiftProtobuf.Enum, Swift.CaseIterable {
 
 }
 
+/// Which StarCore detector to run on the painted band:
+///   COMBINED_SIOX = computeCombinedHorizonInBand (initial detect once the band spans the frame)
+///   RANDOM_WALKER = computeRandomWalkerHorizon   (edge-aware sky/ground refinement)
+public enum Star_V1_HorizonBandMethod: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case combinedSiox // = 1
+  case randomWalker // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .combinedSiox
+    case 2: self = .randomWalker
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .combinedSiox: return 1
+    case .randomWalker: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Star_V1_HorizonBandMethod] = [
+    .unspecified,
+    .combinedSiox,
+    .randomWalker,
+  ]
+
+}
+
 public struct Star_V1_Envelope: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -2541,6 +2582,108 @@ public struct Star_V1_GetHorizonOverlayResponse: Sendable {
   public init() {}
 }
 
+/// Run a horizon detector over a user-painted band. All per-column arrays are in
+/// space_width x space_height coords, length == space_width; -1 = unset/unpainted column.
+/// top/bottom_boundary_y are required; known_*_y are optional (leave empty to pass nil).
+public struct Star_V1_ComputeHorizonInBandRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sessionID: String = String()
+
+  public var frameIndex: Int32 = 0
+
+  public var method: Star_V1_HorizonBandMethod = .unspecified
+
+  public var spaceWidth: Int32 = 0
+
+  public var spaceHeight: Int32 = 0
+
+  public var topBoundaryY: [Int32] = []
+
+  public var bottomBoundaryY: [Int32] = []
+
+  /// empty => nil
+  public var knownSkyFloorY: [Int32] = []
+
+  /// empty => nil
+  public var knownGroundCeilingY: [Int32] = []
+
+  /// RANDOM_WALKER edge sensitivity; <= 0 => engine default (90)
+  public var beta: Double = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_ComputeHorizonInBandResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// per-column horizon Y in the same coords; -1 = column with no result
+  public var columns: Star_V1_HorizonColumns {
+    get {_columns ?? Star_V1_HorizonColumns()}
+    set {_columns = newValue}
+  }
+  /// Returns true if `columns` has been explicitly set.
+  public var hasColumns: Bool {self._columns != nil}
+  /// Clears the value of `columns`. Subsequent reads from it will return its default value.
+  public mutating func clearColumns() {self._columns = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _columns: Star_V1_HorizonColumns? = nil
+}
+
+/// Best existing horizon (user reference > merged > raw) as a per-column line, for seeding the
+/// painter when re-opening a frame that already has a (possibly auto-computed) horizon.
+public struct Star_V1_GetBestHorizonRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sessionID: String = String()
+
+  public var frameIndex: Int32 = 0
+
+  public var spaceWidth: Int32 = 0
+
+  public var spaceHeight: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_GetBestHorizonResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var exists: Bool = false
+
+  /// empty if !exists
+  public var columns: Star_V1_HorizonColumns {
+    get {_columns ?? Star_V1_HorizonColumns()}
+    set {_columns = newValue}
+  }
+  /// Returns true if `columns` has been explicitly set.
+  public var hasColumns: Bool {self._columns != nil}
+  /// Clears the value of `columns`. Subsequent reads from it will return its default value.
+  public mutating func clearColumns() {self._columns = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _columns: Star_V1_HorizonColumns? = nil
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate let _protobuf_package = "star.v1"
@@ -2579,6 +2722,10 @@ extension Star_V1_AlignmentState: SwiftProtobuf._ProtoNameProviding {
 
 extension Star_V1_HorizonOverlayKind: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HORIZON_OVERLAY_KIND_UNSPECIFIED\0\u{1}HORIZON_OVERLAY_KIND_INITIAL\0\u{1}HORIZON_OVERLAY_KIND_MERGED\0\u{1}HORIZON_OVERLAY_KIND_REFERENCE\0")
+}
+
+extension Star_V1_HorizonBandMethod: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HORIZON_BAND_METHOD_UNSPECIFIED\0\u{1}HORIZON_BAND_METHOD_COMBINED_SIOX\0\u{1}HORIZON_BAND_METHOD_RANDOM_WALKER\0")
 }
 
 extension Star_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
@@ -5930,6 +6077,199 @@ extension Star_V1_GetHorizonOverlayResponse: SwiftProtobuf.Message, SwiftProtobu
     if lhs.kind != rhs.kind {return false}
     if lhs.yPerColumn != rhs.yPerColumn {return false}
     if lhs.height != rhs.height {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_ComputeHorizonInBandRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComputeHorizonInBandRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{1}method\0\u{3}space_width\0\u{3}space_height\0\u{3}top_boundary_y\0\u{3}bottom_boundary_y\0\u{3}known_sky_floor_y\0\u{3}known_ground_ceiling_y\0\u{1}beta\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.frameIndex) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.method) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.spaceWidth) }()
+      case 5: try { try decoder.decodeSingularInt32Field(value: &self.spaceHeight) }()
+      case 6: try { try decoder.decodeRepeatedInt32Field(value: &self.topBoundaryY) }()
+      case 7: try { try decoder.decodeRepeatedInt32Field(value: &self.bottomBoundaryY) }()
+      case 8: try { try decoder.decodeRepeatedInt32Field(value: &self.knownSkyFloorY) }()
+      case 9: try { try decoder.decodeRepeatedInt32Field(value: &self.knownGroundCeilingY) }()
+      case 10: try { try decoder.decodeSingularDoubleField(value: &self.beta) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sessionID.isEmpty {
+      try visitor.visitSingularStringField(value: self.sessionID, fieldNumber: 1)
+    }
+    if self.frameIndex != 0 {
+      try visitor.visitSingularInt32Field(value: self.frameIndex, fieldNumber: 2)
+    }
+    if self.method != .unspecified {
+      try visitor.visitSingularEnumField(value: self.method, fieldNumber: 3)
+    }
+    if self.spaceWidth != 0 {
+      try visitor.visitSingularInt32Field(value: self.spaceWidth, fieldNumber: 4)
+    }
+    if self.spaceHeight != 0 {
+      try visitor.visitSingularInt32Field(value: self.spaceHeight, fieldNumber: 5)
+    }
+    if !self.topBoundaryY.isEmpty {
+      try visitor.visitPackedInt32Field(value: self.topBoundaryY, fieldNumber: 6)
+    }
+    if !self.bottomBoundaryY.isEmpty {
+      try visitor.visitPackedInt32Field(value: self.bottomBoundaryY, fieldNumber: 7)
+    }
+    if !self.knownSkyFloorY.isEmpty {
+      try visitor.visitPackedInt32Field(value: self.knownSkyFloorY, fieldNumber: 8)
+    }
+    if !self.knownGroundCeilingY.isEmpty {
+      try visitor.visitPackedInt32Field(value: self.knownGroundCeilingY, fieldNumber: 9)
+    }
+    if self.beta.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.beta, fieldNumber: 10)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_ComputeHorizonInBandRequest, rhs: Star_V1_ComputeHorizonInBandRequest) -> Bool {
+    if lhs.sessionID != rhs.sessionID {return false}
+    if lhs.frameIndex != rhs.frameIndex {return false}
+    if lhs.method != rhs.method {return false}
+    if lhs.spaceWidth != rhs.spaceWidth {return false}
+    if lhs.spaceHeight != rhs.spaceHeight {return false}
+    if lhs.topBoundaryY != rhs.topBoundaryY {return false}
+    if lhs.bottomBoundaryY != rhs.bottomBoundaryY {return false}
+    if lhs.knownSkyFloorY != rhs.knownSkyFloorY {return false}
+    if lhs.knownGroundCeilingY != rhs.knownGroundCeilingY {return false}
+    if lhs.beta != rhs.beta {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_ComputeHorizonInBandResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComputeHorizonInBandResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}columns\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._columns) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._columns {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_ComputeHorizonInBandResponse, rhs: Star_V1_ComputeHorizonInBandResponse) -> Bool {
+    if lhs._columns != rhs._columns {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_GetBestHorizonRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetBestHorizonRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{3}space_width\0\u{3}space_height\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.frameIndex) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.spaceWidth) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.spaceHeight) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sessionID.isEmpty {
+      try visitor.visitSingularStringField(value: self.sessionID, fieldNumber: 1)
+    }
+    if self.frameIndex != 0 {
+      try visitor.visitSingularInt32Field(value: self.frameIndex, fieldNumber: 2)
+    }
+    if self.spaceWidth != 0 {
+      try visitor.visitSingularInt32Field(value: self.spaceWidth, fieldNumber: 3)
+    }
+    if self.spaceHeight != 0 {
+      try visitor.visitSingularInt32Field(value: self.spaceHeight, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_GetBestHorizonRequest, rhs: Star_V1_GetBestHorizonRequest) -> Bool {
+    if lhs.sessionID != rhs.sessionID {return false}
+    if lhs.frameIndex != rhs.frameIndex {return false}
+    if lhs.spaceWidth != rhs.spaceWidth {return false}
+    if lhs.spaceHeight != rhs.spaceHeight {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_GetBestHorizonResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetBestHorizonResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}exists\0\u{1}columns\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.exists) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._columns) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if self.exists != false {
+      try visitor.visitSingularBoolField(value: self.exists, fieldNumber: 1)
+    }
+    try { if let v = self._columns {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_GetBestHorizonResponse, rhs: Star_V1_GetBestHorizonResponse) -> Bool {
+    if lhs.exists != rhs.exists {return false}
+    if lhs._columns != rhs._columns {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

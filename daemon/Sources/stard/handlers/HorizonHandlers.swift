@@ -142,6 +142,87 @@ enum HorizonHandlers {
         }
     }
 
+    // Run a horizon detector over a user-painted band (the live painter): COMBINED_SIOX for the
+    // initial detect, RANDOM_WALKER for sky/ground refinement. Pure per-frame compute — no state
+    // mutation; returns the per-column horizon line for the client to display and (later) save.
+    static func computeInBand(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_ComputeHorizonInBandRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            guard let frame = await session.frame(at: Int(req.frameIndex)) else {
+                await transport.sendError(id: id, message: "frame index out of range", code: 404); return
+            }
+
+            // -1 sentinel → nil. top/bottom always present; known_* may be empty (=> nil).
+            func toOptional(_ a: [Int32]) -> [Int?] { a.map { $0 < 0 ? nil : Int($0) } }
+            func toOptionalOrNil(_ a: [Int32]) -> [Int?]? { a.isEmpty ? nil : toOptional(a) }
+            let top = toOptional(req.topBoundaryY)
+            let bottom = toOptional(req.bottomBoundaryY)
+            let skyFloor = toOptionalOrNil(req.knownSkyFloorY)
+            let gndCeiling = toOptionalOrNil(req.knownGroundCeilingY)
+            let vw = Int(req.spaceWidth)
+            let vh = Int(req.spaceHeight)
+
+            let horizon: [Int?]
+            switch req.method {
+            case .randomWalker:
+                let beta = req.beta > 0 ? req.beta : 90.0
+                horizon = try await frame.computeRandomWalkerHorizon(
+                    topBoundaryY: top, bottomBoundaryY: bottom,
+                    viewWidth: vw, viewHeight: vh,
+                    knownSkyFloorY: skyFloor, knownGroundCeilingY: gndCeiling, beta: beta)
+            default: // COMBINED_SIOX / UNSPECIFIED
+                horizon = try await frame.computeCombinedHorizonInBand(
+                    topBoundaryY: top, bottomBoundaryY: bottom,
+                    viewWidth: vw, viewHeight: vh,
+                    knownSkyFloorY: skyFloor, knownGroundCeilingY: gndCeiling)
+            }
+
+            var resp = Star_V1_ComputeHorizonInBandResponse()
+            var cols = Star_V1_HorizonColumns()
+            cols.spaceWidth = Int32(vw)
+            cols.spaceHeight = Int32(vh)
+            cols.horizonY = horizon.map { Int32($0 ?? -1) }
+            resp.columns = cols
+            try await transport.respond(id: id, payload: resp.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    // Best existing horizon (user reference > merged > raw) as per-column Y, for seeding the painter
+    // when re-opening a frame that already has a (possibly auto-computed) horizon. exists=false → none.
+    static func getBest(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_GetBestHorizonRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            guard let frame = await session.frame(at: Int(req.frameIndex)) else {
+                await transport.sendError(id: id, message: "frame index out of range", code: 404); return
+            }
+            let vw = req.spaceWidth > 0 ? Int(req.spaceWidth) : frame.width
+            let vh = req.spaceHeight > 0 ? Int(req.spaceHeight) : frame.height
+
+            var resp = Star_V1_GetBestHorizonResponse()
+            if let ys = try? await frame.loadBestExistingHorizonAsViewY(viewWidth: vw, viewHeight: vh) {
+                resp.exists = true
+                var cols = Star_V1_HorizonColumns()
+                cols.spaceWidth = Int32(vw)
+                cols.spaceHeight = Int32(vh)
+                cols.horizonY = ys.map { Int32($0 ?? -1) }
+                resp.columns = cols
+            } else {
+                resp.exists = false
+            }
+            try await transport.respond(id: id, payload: resp.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
     // Reprocess with the (already-set) reference horizon; streams ProgressEvent like Processing.StreamProgress.
     static func reprocess(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {

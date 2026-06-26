@@ -111,6 +111,47 @@ class InteropIntegrationTest {
     }
 
     /**
+     * Interactive horizon painter RPCs (`Horizon.GetBest` + `Horizon.ComputeInBand`) against a real
+     * stard: a fresh sequence has no best-existing horizon; the combined detector over a full-width
+     * band returns a per-column line of the right length without breaking the connection. This is the
+     * daemon side of the Kotlin horizon-painter parity — the live band→detect path the macOS app runs.
+     */
+    @Test
+    fun horizonComputeInBandRoundTrip() {
+        val seq = seqPath ?: run {
+            println("[skip] horizonComputeInBandRoundTrip — set -Dstar.it.seq=<sequence dir>")
+            return
+        }
+        withEngine { client ->
+            val info = client.openSequence(File(seq).absolutePath, SessionRepository.defaultInitialConfig())
+            val w = info.imageWidth
+            val h = info.imageHeight
+
+            // No reference/horizon yet on a fresh sequence → best-existing reports none.
+            val best = client.getBestHorizon(info.sessionId, 0, w, h)
+            assertTrue(!best.exists, "fresh sequence unexpectedly reported a best-existing horizon")
+
+            // A horizontal band across the full width through the vertical middle.
+            val top = List(w) { (h * 0.40).toInt() }
+            val bottom = List(w) { (h * 0.60).toInt() }
+            val req = com.star.proto.ComputeHorizonInBandRequest.newBuilder()
+                .setSessionId(info.sessionId).setFrameIndex(0)
+                .setMethod(com.star.proto.HorizonBandMethod.HORIZON_BAND_METHOD_COMBINED_SIOX)
+                .setSpaceWidth(w).setSpaceHeight(h)
+                .addAllTopBoundaryY(top).addAllBottomBoundaryY(bottom)
+                .build()
+            val resp = client.computeHorizonInBand(req)
+            assertEquals(w, resp.columns.horizonYCount, "detector returned a per-column line of the wrong length")
+            // At least some columns should resolve to a horizon row in [0, h).
+            assertTrue(resp.columns.horizonYList.any { it in 0 until h }, "detector produced no in-range horizon rows")
+
+            // Connection still healthy.
+            client.closeSession(info.sessionId)
+            assertTrue(client.listSessions().sessionsCount >= 0)
+        }
+    }
+
+    /**
      * §8.4 golden output: process + render the same sequence twice via independent daemon processes
      * and assert the rendered output frames are byte-identical — the §4.4 "same engine + same inputs ⇒
      * same output" guarantee that underpins cross-client output identity. Heavy (real processing), so

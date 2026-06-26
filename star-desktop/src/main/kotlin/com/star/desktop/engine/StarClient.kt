@@ -15,6 +15,10 @@ import com.star.proto.CancelResponse
 import com.star.proto.CleanMethod
 import com.star.proto.ClearReferenceHorizonRequest
 import com.star.proto.ClearReferenceHorizonResponse
+import com.star.proto.ComputeHorizonInBandRequest
+import com.star.proto.ComputeHorizonInBandResponse
+import com.star.proto.GetBestHorizonRequest
+import com.star.proto.GetBestHorizonResponse
 import com.star.proto.GetAlignmentRequest
 import com.star.proto.GetAlignmentSequenceRequest
 import com.star.proto.GetReferenceHorizonRequest
@@ -330,6 +334,17 @@ class StarClient(private val conn: StdioConnection) {
             "Horizon.GetOverlay",
             GetHorizonOverlayRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setWidth(width).setHeight(height).build(),
             GetHorizonOverlayResponse.parser(),
+        )
+
+    suspend fun computeHorizonInBand(req: ComputeHorizonInBandRequest): ComputeHorizonInBandResponse =
+        call("Horizon.ComputeInBand", req, ComputeHorizonInBandResponse.parser())
+
+    suspend fun getBestHorizon(sessionId: String, frameIndex: Int, spaceWidth: Int, spaceHeight: Int): GetBestHorizonResponse =
+        call(
+            "Horizon.GetBest",
+            GetBestHorizonRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex)
+                .setSpaceWidth(spaceWidth).setSpaceHeight(spaceHeight).build(),
+            GetBestHorizonResponse.parser(),
         )
 
     // ---- helpers ----
