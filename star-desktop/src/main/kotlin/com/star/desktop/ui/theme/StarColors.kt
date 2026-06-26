@@ -3,6 +3,7 @@ package com.star.desktop.ui.theme
 import androidx.compose.ui.graphics.Color
 import com.star.desktop.domain.OutlierDecisions
 import com.star.desktop.domain.ToolType
+import com.star.proto.FrameProcessingState
 import com.star.proto.RemoveReason
 
 /**
@@ -43,6 +44,7 @@ object StarColors {
     val purple = Color(0.686f, 0.322f, 0.871f)
     val pink = Color(1.0f, 0.176f, 0.333f)
     val mint = Color(0.0f, 0.78f, 0.745f)
+    val cyan = Color(0.196f, 0.843f, 0.929f)
     val gray = Color(0.557f, 0.557f, 0.576f)
     val white = Color.White
     val accent = blue
@@ -83,5 +85,38 @@ object StarColors {
             willRemove != null -> if (hovered) (if (willRemove) red else green) else white
             else -> if (hovered) red else blue
         }
+    }
+
+    /**
+     * Per-state status-label color (macOS `FrameProcessingState.color`): unprocessed → red;
+     * horizon-detected / keypoints-found / alignment-complete / complete → green; horizon-detection /
+     * assembling → blue; merging-horizon / earth-alignment / sorting / creating-star-aligned → cyan;
+     * keypoints / star-failed / subtract → orange; creating-earth-aligned → purple; every other
+     * mid-pipeline stage → yellow.
+     */
+    fun stateColor(s: FrameProcessingState): Color = when (s) {
+        FrameProcessingState.FPS_UNPROCESSED -> red
+        FrameProcessingState.FPS_HORIZON_DETECTION -> blue
+        FrameProcessingState.FPS_MERGING_HORIZON -> cyan
+        FrameProcessingState.FPS_HORIZON_DETECTED -> green
+        FrameProcessingState.FPS_STAR_KEYPOINTS -> orange
+        FrameProcessingState.FPS_STAR_KEYPOINTS_FOUND -> green
+        FrameProcessingState.FPS_EARTH_KEYPOINTS -> orange
+        FrameProcessingState.FPS_EARTH_KEYPOINTS_FOUND -> green
+        FrameProcessingState.FPS_STAR_ALIGNMENT_COMPLETE -> green
+        FrameProcessingState.FPS_EARTH_ALIGNMENT_COMPLETE -> green
+        FrameProcessingState.FPS_EARTH_ALIGNMENT_START,
+        FrameProcessingState.FPS_EARTH_ALIGNMENT_BASE_KP,
+        FrameProcessingState.FPS_EARTH_ALIGNMENT_BASE_KP_DONE,
+        FrameProcessingState.FPS_EARTH_ALIGNMENT_ALIGNING,
+        FrameProcessingState.FPS_EARTH_ALIGNMENT_LOADING -> cyan
+        FrameProcessingState.FPS_STAR_ALIGNMENT_FAILED -> orange
+        FrameProcessingState.FPS_CREATING_STAR_ALIGNED -> cyan
+        FrameProcessingState.FPS_CREATING_EARTH_ALIGNED -> purple
+        FrameProcessingState.FPS_SUBTRACTING_NEIGHBOR -> orange
+        FrameProcessingState.FPS_ASSEMBLING_PIXELS -> blue
+        FrameProcessingState.FPS_SORTING_PIXELS -> cyan
+        FrameProcessingState.FPS_COMPLETE -> green
+        else -> yellow
     }
 }
