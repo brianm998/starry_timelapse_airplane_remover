@@ -186,9 +186,9 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
     }
     val fillColor = if (state.phase == HorizonPhase.REFINEMENT) StarColors.blue.copy(alpha = 0.30f) else StarColors.yellow.copy(alpha = 0.28f)
 
-    Box(modifier.fillMaxSize().background(StarColors.appBackground)) {
+    Column(modifier.fillMaxSize().background(StarColors.appBackground)) {
         Box(
-            Modifier.fillMaxSize()
+            Modifier.weight(1f).fillMaxSize()
                 .onSizeChanged { canvasSize = it.toSize() }
                 .pointerHoverIcon(blankCursor)
                 .onPointerEvent(PointerEventType.Move) { hover = it.changes.firstOrNull()?.position }
@@ -266,10 +266,11 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
                 }
                 hover?.let { drawBrushCursor(it, state.brushRadius * s, cursorColor(state)) }
             }
-        }
 
-        if (startup) {
-            HorizonInstructionTip(isMoving = startupIndices.size > 1, modifier = Modifier.align(Alignment.TopCenter))
+            // Instruction tip overlays the top of the frame (startup only; macOS parity).
+            if (startup) {
+                HorizonInstructionTip(isMoving = startupIndices.size > 1, modifier = Modifier.align(Alignment.TopCenter))
+            }
         }
 
         HorizonControlBar(
@@ -303,7 +304,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
                 }
             },
             onCancel = { if (startup) app.cancelStartupHorizon() else vm.toggleHorizonPaint() },
-            modifier = Modifier.align(Alignment.BottomCenter),
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }
