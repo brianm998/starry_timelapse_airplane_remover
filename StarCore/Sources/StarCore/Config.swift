@@ -298,8 +298,36 @@ public struct Config: Codable, Sendable {
     /// `keypointMemoryMultiplier`, which distorts the accounting for every op.
     public var maxConcurrentKeypointOps: Int = 0
 
-    public var outlierMemoryMultiplier: Int = 3
-    public var mergeMemoryMultiplier: Int = 4
+    /// Estimated peak memory of one merge op, and of one outlier op, as a multiple of
+    /// the raw frame. Both are 14 for a structural reason rather than a coincidence:
+    /// either op can be the one that builds the star-aligned frame, and that build is
+    /// the dominant cost in both.
+    ///
+    /// Derived, not guessed. Building an aligned frame warps every neighbour and banks
+    /// all of them before merging: `ia_align_with_homography` releases only the source
+    /// neighbour each iteration (ImageAligner.cpp:891), never the warp, so
+    /// `imagesToMerge` at FrameAlignmentProcessor.swift:867 is the original plus
+    /// `numberAlignedNeighborFrames` (8) warps, and the merge then allocates its output
+    /// — ten full frames live at once. Measured directly: a 9-source resident merge at
+    /// 42MP peaks at 2422MB against a 241.3MiB raw frame, i.e. 10.0x, which agrees with
+    /// 10.17x computed by walking the allocations.
+    ///
+    /// The worst case adds a little on top of that 10x. For a merge it is
+    /// `cleanMethod = .selective`, which holds the original and an
+    /// `ensure16Bits` clone of the earth-aligned frame across the star build (12.4x).
+    /// For an outlier op it is `tripodHeadWasMoving`, whose earth align also banks 8
+    /// warped horizon masks (12.7x). 14 is that peak plus ~10% margin; 13 is the floor.
+    ///
+    /// Note these do NOT come down as a result of the streaming median merge
+    /// (Config.mergeStreamingThresholdMB). Streaming only reaches
+    /// `ia_median_merge_image_with_filenames`, whose sole caller is the static-earth
+    /// branch at FrameAlignmentProcessor.swift:818. The star-aligned path — which every
+    /// configuration takes — goes through `ia_median_merge` instead, which accepts
+    /// already-resident mats and has no threshold at all. Giving that path a scratch
+    /// spill too would remove the 8x warp term and let both constants drop to roughly
+    /// 6 and 9; until then they have to cover it.
+    public var outlierMemoryMultiplier: Int = 14
+    public var mergeMemoryMultiplier: Int = 14
 
     // used by updatable log
     public var progressBarLength = 35

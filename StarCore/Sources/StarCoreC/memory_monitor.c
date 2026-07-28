@@ -53,3 +53,52 @@ uint64_t star_available_system_memory(void) {
 uint64_t star_available_system_memory(void) { return 0; }
 
 #endif
+
+// --- Per-process footprint --------------------------------------------------
+
+#if defined(__APPLE__)
+
+#include <mach/task.h>
+#include <mach/task_info.h>
+
+uint64_t star_process_footprint(void) {
+    task_vm_info_data_t info;
+    mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+    if (task_info(mach_task_self(), TASK_VM_INFO,
+                  (task_info_t)&info, &count) != KERN_SUCCESS) {
+        return 0;
+    }
+    return (uint64_t)info.phys_footprint;
+}
+
+#elif defined(__linux__)
+
+#include <stdio.h>
+
+uint64_t star_process_footprint(void) {
+    // statm field 2 is resident pages.
+    FILE *f = fopen("/proc/self/statm", "r");
+    if (!f) return 0;
+    unsigned long long total = 0, resident = 0;
+    int read = fscanf(f, "%llu %llu", &total, &resident);
+    fclose(f);
+    if (read < 2) return 0;
+    return (uint64_t)resident * (uint64_t)getpagesize();
+}
+
+#elif defined(_WIN32)
+
+#include <windows.h>
+#include <psapi.h>
+
+uint64_t star_process_footprint(void) {
+    PROCESS_MEMORY_COUNTERS pmc;
+    if (!GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) return 0;
+    return (uint64_t)pmc.WorkingSetSize;
+}
+
+#else
+
+uint64_t star_process_footprint(void) { return 0; }
+
+#endif

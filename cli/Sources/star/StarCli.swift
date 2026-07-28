@@ -222,6 +222,14 @@ struct StarCli: AsyncParsableCommand {
         the memory budget allows.  Omit or 0 for no explicit cap.
         """)
     var maxKeypointOps: Int?
+
+    @Flag(name: [.customLong("log-op-memory")], help:"""
+        Log each operation's actual peak memory against what it reserved.
+        Use with --num-concurrent-renders 1 so the process footprint delta is
+        attributable to a single operation.  This is how the per-op memory
+        multipliers are derived from measurement rather than guessed.
+        """)
+    var logOpMemory: Bool = false
     
     @Option(name: [.short, .customLong("file-log-level")], help:"""
         If present, star will output a file log at the given level.
@@ -387,6 +395,7 @@ struct StarCli: AsyncParsableCommand {
                 if let maxKeypointOps {
                     config.maxConcurrentKeypointOps = maxKeypointOps
                 }
+                logOperationMemory = logOpMemory
                 config.numberOfFramesToProcessConcurrently = Int(numConcurrentRenders)
                 config.writeOutlierClassificationValues = shouldWriteOutlierClassificationValues
                 

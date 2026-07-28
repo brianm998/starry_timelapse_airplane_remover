@@ -39,8 +39,10 @@ extension OperationType {
         case .starHomography:      return 0
         case .earthHomography:     return 0
         case .alignmentValidation: return 0
-        case .outliers:            return 3
-        case .merge:               return 4
+        // Fallbacks only — FrameGraphBuilder passes the config values explicitly.
+        // Kept in step with those defaults (14, derived) so they cannot drift apart.
+        case .outliers:            return 14
+        case .merge:               return 14
         }
     }
 }

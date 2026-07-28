@@ -1,4 +1,15 @@
 import Foundation
+import StarCoreC
+import logging
+
+/// Set to sample each operation's actual peak memory and log it against what the op
+/// reserved. Off by default: it spawns one polling task per operation.
+///
+/// This exists so the per-op multipliers in `Config` can be derived from measurement
+/// rather than guessed. Run with concurrency 1 (`--num-concurrent-renders 1`) so the
+/// process-wide footprint delta is attributable to a single op, and read the
+/// `actual/reserved` ratios out of the log.
+public nonisolated(unsafe) var logOperationMemory = false
 
 open class AsyncOperation: Operation, @unchecked Sendable {
 
@@ -106,7 +117,12 @@ open class AsyncOperation: Operation, @unchecked Sendable {
                 await MemoryMonitor.shared.reserve(bytes: memBytes)
             }
 
+            let probe = logOperationMemory ? MemoryProbe(type: self.type,
+                                                         name: self.name,
+                                                         reserved: memBytes)
+                                           : nil
             await self.asyncExecute()
+            await probe?.finish()
 
             // Release reservation, then mark complete so the queue can start
             // the next operation.
