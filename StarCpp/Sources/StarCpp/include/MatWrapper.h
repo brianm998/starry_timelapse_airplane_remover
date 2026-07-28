@@ -10,6 +10,18 @@ extern "C" {
 // --- Create / Destroy ---
 MatWrapperRef mat_wrapper_load(const char *filename);
 MatWrapperRef mat_wrapper_clone(MatWrapperRef ref);
+
+// Returns a NEW ref that SHARES ref's pixel buffer through OpenCV's refcount
+// instead of copying it. Use this for pure ownership transfer, where the caller
+// is about to drop its own handle and a full copy would be wasted — notably the
+// ImageCache trampoline, whose Swift MatWrapper deinits as the closure returns.
+//
+// The buffer is shared, so neither handle may be mutated: a write through one
+// would be visible through the other. Use mat_wrapper_clone when the result must
+// be independent. Falls back to a deep copy when the buffer cannot be shared
+// safely (see MatWrapperImpl::canAdopt).
+MatWrapperRef mat_wrapper_alias(MatWrapperRef ref);
+
 void          mat_wrapper_release(MatWrapperRef ref);
 
 // Create from external data buffer

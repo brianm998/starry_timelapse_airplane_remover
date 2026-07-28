@@ -243,7 +243,9 @@ MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
         std::vector<cv::Mat> mats;
         for (int i = 0; i < count; i++) {
             MatWrapperRef img = image_cache_load(filenames[i]);
-            if (img) { mats.push_back(img->mat.clone()); mat_wrapper_release(img); }
+            // Shallow push: the vector's cv::Mat holds a reference, so the buffer
+            // outlives the release below. medianImageFromMats only reads its inputs.
+            if (img) { mats.push_back(img->mat); mat_wrapper_release(img); }
         }
         return medianImageFromMats(mats, outlierThreshold, includeAll);
     } KHT_CATCH_LOG("ia_median_merge_filenames")
@@ -258,7 +260,10 @@ MatWrapperRef ia_median_merge_image_with_filenames(MatWrapperRef baseImage,
         if (baseImage) mats.push_back(baseImage->mat);
         for (int i = 0; i < count; i++) {
             MatWrapperRef img = image_cache_load(filenames[i]);
-            if (img) { mats.push_back(img->mat.clone()); mat_wrapper_release(img); }
+            // Shallow push, matching baseImage above and ia_median_merge below: the
+            // vector's cv::Mat keeps the buffer alive past the release, and
+            // medianImageFromMats only reads its inputs.
+            if (img) { mats.push_back(img->mat); mat_wrapper_release(img); }
         }
         return medianImageFromMats(mats, outlierThreshold, includeAll);
     } KHT_CATCH_LOG("ia_median_merge_image_with_filenames")

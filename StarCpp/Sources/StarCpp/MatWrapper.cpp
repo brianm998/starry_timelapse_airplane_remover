@@ -81,6 +81,15 @@ MatWrapperRef mat_wrapper_clone(MatWrapperRef ref) {
     return nullptr;
 }
 
+// Shares ref's buffer rather than copying it — see the contract in MatWrapper.h.
+MatWrapperRef mat_wrapper_alias(MatWrapperRef ref) {
+    if (!ref) return nullptr;
+    try {
+        return new MatWrapperImpl(MatWrapperImpl::Adopt{}, ref->mat);
+    } KHT_CATCH_LOG("mat_wrapper_alias")
+    return nullptr;
+}
+
 void mat_wrapper_release(MatWrapperRef ref) {
     delete ref;
 }
