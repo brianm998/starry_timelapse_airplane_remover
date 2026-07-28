@@ -15,6 +15,7 @@ final class KeypointLimiterTests: XCTestCase {
         private let limiter: KeypointLimiter
         private let tally: Tally
         private let work: TimeInterval
+        private var heldSlot = false
 
         init(limiter: KeypointLimiter, work: TimeInterval, tally: Tally) {
             self.limiter = limiter
@@ -23,8 +24,10 @@ final class KeypointLimiterTests: XCTestCase {
             super.init(for: .starKeypoints)
         }
 
-        override func acquireExecutionSlot() async { await limiter.acquire() }
-        override func releaseExecutionSlot() async { limiter.release() }
+        override func acquireExecutionSlot() async { heldSlot = await limiter.acquire() }
+        override func releaseExecutionSlot() async {
+            if heldSlot { limiter.release(); heldSlot = false }
+        }
 
         override func asyncExecute() async {
             // Bracket the work itself, not the operation lifetime: the concurrency the
@@ -154,6 +157,47 @@ final class KeypointLimiterTests: XCTestCase {
         limiter.release()
         limiter.release()
         XCTAssertEqual(limiter.inFlight, 0)
+    }
+
+    /// The bounded wait: a waiter that never gets a slot proceeds ungated rather than
+    /// hanging the pipeline, and reports that it holds nothing so the caller does not
+    /// release a slot it never took.
+    func testWaitTimesOutRatherThanHanging() async throws {
+        let limiter = KeypointLimiter(max: 1)
+
+        let held = await limiter.acquire()
+        XCTAssertTrue(held)
+
+        let start = Date()
+        let second = await limiter.acquire(timeout: 0.2)
+        let elapsed = Date().timeIntervalSince(start)
+
+        XCTAssertFalse(second, "a timed-out acquire must report that it holds no slot")
+        XCTAssertLessThan(elapsed, 20, "acquire hung instead of timing out")
+        XCTAssertEqual(limiter.inFlight, 1, "a timed-out waiter must not have taken a slot")
+        XCTAssertEqual(limiter.waiting, 0)
+
+        limiter.release()
+        XCTAssertEqual(limiter.inFlight, 0)
+    }
+
+    /// An unbalanced `release()` must not inflate the cap for the rest of the run.
+    func testExcessReleaseCannotInflateTheCap() async throws {
+        let limiter = KeypointLimiter(max: 1)
+
+        limiter.release()
+        limiter.release()
+        XCTAssertEqual(limiter.inFlight, 0, "release must not drive the count below zero")
+
+        let held = await limiter.acquire()
+        XCTAssertTrue(held)
+        XCTAssertEqual(limiter.inFlight, 1)
+
+        // The cap must still bind at 1, not at 1 + the stray releases.
+        let extra = await limiter.acquire(timeout: 0.2)
+        XCTAssertFalse(extra, "cap was inflated by the stray releases")
+
+        limiter.release()
     }
 
     /// A cancelled waiter must not hang, and must still be balanced — `acquire()`

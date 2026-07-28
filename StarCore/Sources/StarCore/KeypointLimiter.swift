@@ -1,6 +1,7 @@
 import Foundation
+import logging
 
-/// Bounds how many keypoint operations run at once.
+/// Bounds how many keypoint detections run at once, wherever they are driven from.
 ///
 /// An *execution* gate, deliberately not a readiness gate.  It used to be enforced from
 /// `KeypointOp.isReady`, which deadlocked the pipeline:
@@ -17,21 +18,31 @@ import Foundation
 ///     released by `finish()`, which never ran, so they leaked permanently — a single
 ///     stray poll could wedge the limiter even once readiness was re-evaluated.
 ///
-/// So the gate moved to where the work actually happens: `acquire()` suspends the op's
-/// task, `isReady` stays a pure function of dependencies, and the queue's view of
-/// readiness is never a lie.
+/// So there is one way in for everyone now: `acquire()` suspends the caller.  `isReady`
+/// stays a pure function of dependencies and the queue's view of readiness is never a
+/// lie, while callers that are not operations at all — the homography fallback, which
+/// re-runs detection outside any `KeypointOp` — wait on exactly the same gate.
 ///
-/// `max` is always `<= numberOfFramesToProcessConcurrently`, which is also the frame
-/// queue's `maxConcurrentOperationCount` (see `Config.keypointConcurrency`).  That is
-/// what makes suspending here safe rather than a different deadlock: waiting ops occupy
-/// queue slots, but at least one keypoint op is always running, and it needs nothing
-/// from the queue to finish.
-final class KeypointLimiter: @unchecked Sendable {
+/// Suspending an operation here is safe rather than a different deadlock because `max`
+/// is always `<= numberOfFramesToProcessConcurrently` (see `Config.keypointConcurrency`),
+/// which is also the frame queue's `maxConcurrentOperationCount`.  So the queue can
+/// never be filled entirely by ops parked here: at least one slot holder is always
+/// running, whether that is a `KeypointOp` or a self-gating homography fallback, and
+/// neither needs anything from the queue in order to finish.
+///
+/// Public so the gating behaviour can be exercised directly, alongside MemoryMonitor.
+public final class KeypointLimiter: @unchecked Sendable {
     private let lock = NSLock()
     private var max: Int
     private var current = 0
 
-    private var waiters: [(id: Int, continuation: CheckedContinuation<Void, Never>)] = []
+    private struct Waiter {
+        let id: Int
+        let continuation: CheckedContinuation<Bool, Never>
+        let deadline: Date
+    }
+
+    private var waiters: [Waiter] = []
     private var nextWaiterId = 0
 
     /// Waiters cancelled before their continuation was installed.  `onCancel` can run
@@ -39,45 +50,69 @@ final class KeypointLimiter: @unchecked Sendable {
     /// parked somewhere the body will find it.
     private var cancelledBeforeSuspend = Set<Int>()
 
-    init(max: Int) {
+    /// Sweeps for waiters past their deadline.  One task for all of them, running only
+    /// while somebody is parked — the same shape as `MemoryMonitor`'s poll task.  It is
+    /// not how a waiter normally wakes: `release()` hands slots over directly and
+    /// immediately, so this only ever fires on the pathological path.
+    private var timeoutSweeper: Task<Void, Never>?
+    private static let sweepInterval: Duration = .seconds(1)
+
+    public init(max: Int) {
         self.max = max
     }
 
-    func set(max: Int) {
+    public func set(max: Int) {
         lock.lock()
         self.max = max
         // Raising the limit has to wake anyone already parked; nothing else will.
         let resumable = grantLocked()
         lock.unlock()
-        for continuation in resumable { continuation.resume() }
+        for continuation in resumable { continuation.resume(returning: true) }
     }
 
-    /// Suspends until a slot is free.  Always pairs with exactly one `release()`,
-    /// including when the calling task is cancelled — a cancelled waiter is granted a
-    /// slot immediately so it can unwind, and it releases without doing any work.
-    func acquire() async {
+    /// Suspends until a slot is free.
+    ///
+    /// Returns true when a slot was taken, and the caller owes exactly one `release()`.
+    /// Returns false only when the wait timed out: the caller then holds nothing, must
+    /// not release, and proceeds ungated.
+    ///
+    /// Bounded, and proceeding with a warning beats waiting forever, on the same
+    /// reasoning as `MemoryMonitor`'s forced admission: slots are only ever held by work
+    /// that does finish, so a genuine wait should be short — but hanging the pipeline
+    /// would be worse than briefly exceeding the cap.
+    ///
+    /// A cancelled waiter is granted a slot rather than dropped, so `acquire()` still
+    /// answers true and the caller's release path stays balanced whether it was
+    /// cancelled or not.  Going briefly over `max` costs nothing there: a cancelled
+    /// caller checks `Task.isCancelled` and returns without doing any work.
+    @discardableResult
+    public func acquire(timeout: TimeInterval = 300) async -> Bool {
         let id = claimWaiterId()
 
-        await withTaskCancellationHandler {
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        let granted = await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
                 lock.lock()
 
                 if cancelledBeforeSuspend.remove(id) != nil {
                     current += 1
                     lock.unlock()
-                    continuation.resume()
+                    continuation.resume(returning: true)
                     return
                 }
 
                 if current < max {
                     current += 1
                     lock.unlock()
-                    continuation.resume()
+                    continuation.resume(returning: true)
                     return
                 }
 
-                waiters.append((id: id, continuation: continuation))
+                waiters.append(Waiter(id: id,
+                                      continuation: continuation,
+                                      deadline: Date().addingTimeInterval(timeout)))
                 lock.unlock()
+
+                startSweeperIfNeeded()
             }
         } onCancel: {
             cancelWaiter(id)
@@ -88,25 +123,29 @@ final class KeypointLimiter: @unchecked Sendable {
         // ever read it, so drop it here rather than growing the set for the life of
         // the run.
         discardCancelNote(id)
+
+        return granted
     }
 
-    func release() {
+    public func release() {
         lock.lock()
-        current -= 1
+        // Never below zero: an extra release would otherwise inflate the cap for the
+        // rest of the run rather than merely wasting a slot.
+        if current > 0 { current -= 1 }
         let resumable = grantLocked()
         lock.unlock()
-        for continuation in resumable { continuation.resume() }
+        for continuation in resumable { continuation.resume(returning: true) }
     }
 
     /// In-flight count, for tests and diagnostics.
-    var inFlight: Int {
+    public var inFlight: Int {
         lock.lock()
         defer { lock.unlock() }
         return current
     }
 
     /// Parked count, for tests and diagnostics.
-    var waiting: Int {
+    public var waiting: Int {
         lock.lock()
         defer { lock.unlock() }
         return waiters.count
@@ -125,8 +164,8 @@ final class KeypointLimiter: @unchecked Sendable {
     /// Hand slots to as many parked waiters as now fit.  Caller holds `lock` and must
     /// resume the returned continuations *after* dropping it — resuming under a lock
     /// can re-enter this type on the resumed task's thread.
-    private func grantLocked() -> [CheckedContinuation<Void, Never>] {
-        var resumable: [CheckedContinuation<Void, Never>] = []
+    private func grantLocked() -> [CheckedContinuation<Bool, Never>] {
+        var resumable: [CheckedContinuation<Bool, Never>] = []
         while current < max, !waiters.isEmpty {
             resumable.append(waiters.removeFirst().continuation)
             current += 1
@@ -134,17 +173,13 @@ final class KeypointLimiter: @unchecked Sendable {
         return resumable
     }
 
-    /// Let a cancelled waiter through rather than dropping it.  Going briefly over `max`
-    /// costs nothing — the op it unblocks checks `Task.isCancelled` and returns without
-    /// doing any work — and it keeps `acquire()`/`release()` balanced for every caller,
-    /// cancelled or not.
     private func cancelWaiter(_ id: Int) {
         lock.lock()
         if let index = waiters.firstIndex(where: { $0.id == id }) {
             let continuation = waiters.remove(at: index).continuation
             current += 1
             lock.unlock()
-            continuation.resume()
+            continuation.resume(returning: true)
             return
         }
         // Not parked yet.  Either it already has its slot (nothing to do) or it is about
@@ -157,5 +192,53 @@ final class KeypointLimiter: @unchecked Sendable {
         lock.lock()
         cancelledBeforeSuspend.remove(id)
         lock.unlock()
+    }
+
+    private func startSweeperIfNeeded() {
+        lock.lock()
+        defer { lock.unlock() }
+        guard timeoutSweeper == nil, !waiters.isEmpty else { return }
+        timeoutSweeper = Task { [weak self] in
+            while true {
+                try? await Task.sleep(for: KeypointLimiter.sweepInterval)
+                guard let self, self.sweepOnce() else { break }
+            }
+        }
+    }
+
+    /// One sweep: time out anyone past their deadline, and say whether to sweep again.
+    ///
+    /// Deciding to stop and clearing `timeoutSweeper` happen under the same lock
+    /// acquisition that reads `waiters`.  Splitting them would leave a window where a
+    /// waiter parks, sees a non-nil sweeper and so does not start one, and then has its
+    /// sweeper cleared out from under it — parked with no timeout backstop.
+    private func sweepOnce() -> Bool {
+        let now = Date()
+
+        lock.lock()
+        var expired: [CheckedContinuation<Bool, Never>] = []
+        var remaining: [Waiter] = []
+        for waiter in waiters {
+            if now >= waiter.deadline {
+                expired.append(waiter.continuation)
+            } else {
+                remaining.append(waiter)
+            }
+        }
+        waiters = remaining
+        let cap = max
+        let keepSweeping = !waiters.isEmpty
+        if !keepSweeping { timeoutSweeper = nil }
+        lock.unlock()
+
+        if !expired.isEmpty {
+            Log.w("KeypointLimiter: \(expired.count) waiter(s) hit their deadline and are " +
+                  "proceeding ungated — the \(cap)-op cap will be exceeded until they " +
+                  "finish. Something holding a keypoint slot is not completing.")
+        }
+        // Timed-out waiters hold no slot, so they must not release one.
+        for continuation in expired { continuation.resume(returning: false) }
+
+        return keepSweeping
     }
 }

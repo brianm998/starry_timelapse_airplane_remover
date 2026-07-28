@@ -7,6 +7,11 @@ final class KeypointOp: AsyncOperation, @unchecked Sendable {
     let errorClosure: (String) -> Void
     private let limiter: KeypointLimiter
 
+    /// Whether `acquireExecutionSlot()` actually got a slot, so `releaseExecutionSlot()`
+    /// knows whether it owes one back.  Needs no lock: both hooks run in order on the
+    /// single task `AsyncOperation.start()` creates, and nothing else touches it.
+    private var heldLimiterSlot = false
+
     init(
       forStars: Bool,
       frame: FrameAirplaneRemover,
@@ -30,15 +35,22 @@ final class KeypointOp: AsyncOperation, @unchecked Sendable {
     }
 
     // Note there is no `isReady` override.  Gating readiness on the limiter deadlocked
-    // the keypoint phase outright — `KeypointLimiter` has the full account.  The gate
-    // lives in `acquireExecutionSlot()` now, which suspends this op's task instead of
-    // lying to the queue about whether it can run.
+    // the keypoint phase outright, and the guarded-`acquired` flag that used to live
+    // here was treating a symptom of that — `KeypointLimiter` has the full account.  The
+    // gate gained a wait, so this op can take it the same way every other caller does:
+    // by suspending, rather than lying to the queue about whether it can run.
     override func acquireExecutionSlot() async {
-        await limiter.acquire()
+        heldLimiterSlot = await limiter.acquire()
+        if !heldLimiterSlot {
+            Log.w("frame \(frame.frameIndex) timed out waiting for a keypoint slot, proceeding")
+        }
     }
 
     override func releaseExecutionSlot() async {
-        limiter.release()
+        if heldLimiterSlot {
+            limiter.release()
+            heldLimiterSlot = false
+        }
     }
 
     override func asyncExecute() async {

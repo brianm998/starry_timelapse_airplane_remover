@@ -362,8 +362,14 @@ final public actor FrameAlignmentProcessor {
         }
 
         if baseKeypoints == nil {
+            // Normally a cheap load of the keypoint file this frame's KeypointOp wrote.
+            // But if that op failed — or was never created, as happens when the graph is
+            // built for a subrange, since keypoint ops are made only for the range while
+            // homography ops are made for every frame — this re-runs full detection. This
+            // op reserved nothing (.starHomography/.earthHomography multiply by 0) and
+            // holds no limiter slot, so selfGating makes the call take both itself.
             Log.w("frame \(frameIndex) didn't have keypoints in ram for alignment type \(alignmentType), trying to load or create them")
-            baseKeypoints = try await loadOrCreateOCVFeatures(of: type)
+            baseKeypoints = try await loadOrCreateOCVFeatures(of: type, selfGating: true)
         }
 
         guard let baseKeypoints else {
@@ -465,8 +471,16 @@ final public actor FrameAlignmentProcessor {
     }
 
     // key points detected in the image are OpenCV features
+    //
+    // `selfGating` is for callers that are NOT already inside a KeypointOp. A KeypointOp
+    // holds a KeypointLimiter slot and an AsyncOperation memory reservation for the whole
+    // time it runs, so it passes false. The homography fallback holds neither — its op is
+    // typed .starHomography/.earthHomography, whose memory multiplier is 0 — so it passes
+    // true and this function acquires both itself, but only around the detection, since
+    // the common case is a cheap load from the keypoint file.
     func loadOrCreateOCVFeatures(
-      of type: FrameViewMode
+      of type: FrameViewMode,
+      selfGating: Bool = false
     ) async throws -> OCVFeatureSet? {
         var alignmentType: AlignmentType = .sky
 
@@ -488,6 +502,35 @@ final public actor FrameAlignmentProcessor {
         let fullPath = "\(config.dirForKeypointData)/\(filename)"
         if let features = await keypointCache.load(fromFilename: fullPath) {
             return features
+        }
+
+        // Past this point we are going to run SIFT/AKAZE, which measures ~42x the raw
+        // frame — 9.9GB at 42MP. A caller that is not a KeypointOp has to take the same
+        // limiter slot and reservation a KeypointOp would, or N of these run concurrently
+        // with no gating at all. That is a feedback loop, not just an overshoot: memory
+        // pressure makes keypoint detection throw, a failed KeypointOp leaves no
+        // keypoint file, and the homography phase then re-runs detection for every
+        // affected frame at once.
+        var heldLimiterSlot = false
+        var reservedBytes: UInt64 = 0
+        if selfGating {
+            Log.w("frame \(frameIndex) running keypoint detection outside a KeypointOp " +
+                  "for type \(type) — gating it as one")
+            heldLimiterSlot = await frameGraphBuilder.keypointLimiter.acquire()
+            if !heldLimiterSlot {
+                Log.w("frame \(frameIndex) timed out waiting for a keypoint slot, proceeding")
+            }
+            reservedBytes = config.rawImageBytes * UInt64(config.keypointMemoryMultiplier)
+            if reservedBytes > 0 {
+                await MemoryMonitor.shared.reserve(bytes: reservedBytes)
+            }
+        }
+        defer {
+            if heldLimiterSlot { frameGraphBuilder.keypointLimiter.release() }
+            if reservedBytes > 0 {
+                let toRelease = reservedBytes
+                Task { await MemoryMonitor.shared.release(bytes: toRelease) }
+            }
         }
 
         Log.i("frame \(frameIndex) creating aligned image of type \(type)")
@@ -522,12 +565,11 @@ final public actor FrameAlignmentProcessor {
 
         Log.d("frame \(frameIndex) finding keypoints of type \(alignmentType)")
 
-        // SIFT builds a multi-octave Gaussian scale-space pyramid that uses
-        // substantially more memory than the image itself.  Gate here so concurrent
-        // keypoint operations don't collectively exhaust RAM.
-        // The 8x multiplier is empirically derived: ~2.5 GB observed per 42 MP frame.
-        let siftMemoryEstimate = UInt64(originalFrame.byteCount) * 8
-        await MemoryMonitor.shared.waitForMemory(needed: siftMemoryEstimate)
+        // The gate that used to be here was a call to MemoryMonitor.waitForMemory, which
+        // is an empty stub — it never gated anything. Its estimate was also wrong by 4x:
+        // the comment claimed ~2.5GB per 42MP frame where the measured figure is 9.9GB.
+        // The real reservation is taken by whoever owns this work: the KeypointOp via
+        // AsyncOperation, or the selfGating block above.
 
         let originalFilename = imageAccessor.nameForImage(
           frameIndex: frameIndex, ofType: .original, atSize: .original
@@ -611,14 +653,10 @@ final public actor FrameAlignmentProcessor {
     ) async throws -> WarpedImageResult {
         var alignmentType: AlignmentType = .sky
 
-        // Gate on memory before loading full-resolution images for alignment.
-        // Each aligned image is roughly width × height × cpp × 2 bytes (16-bit).
-        let estimatedBytes = MemoryMonitor.estimatedImageBytes(
-            width: width,
-            height: height,
-            componentsPerPixel: componentsPerPixel
-        )
-        await MemoryMonitor.shared.waitForMemory(needed: estimatedBytes)
+        // No gate here either: this was another waitForMemory call, and that function is
+        // an empty stub. The reservation for this work belongs to the op that drives it —
+        // MergeOp or OutlierOp, at mergeMemoryMultiplier / outlierMemoryMultiplier, which
+        // were re-derived to cover exactly this path (it is the dominant cost in both).
 
         Log.d("frame \(frameIndex) loadOrCreateAlignedImage of type \(type)")
 
