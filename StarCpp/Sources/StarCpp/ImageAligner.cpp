@@ -446,7 +446,11 @@ static cv::Mat toGray8UWithMask(const cv::Mat& src, const cv::Mat& mask) {
     }
 }
 
-static cv::Mat makeStarMask(const cv::Mat &gray, int dilateSize = 3, int thresholdVal = 200) {
+// No defaults: they were 3 and 200 while the config defaults are 20 and 100, so they
+// only ever served to make a wrong call look plausible. Both arguments are ints in
+// adjacent positions, which is how the threshold came to be passed the dilate size —
+// so require every caller to say what it means.
+static cv::Mat makeStarMask(const cv::Mat &gray, int dilateSize, int thresholdVal) {
     cv::Mat thresh, mask;
     cv::threshold(gray, thresh, thresholdVal, 255, cv::THRESH_BINARY);
     if (dilateSize > 0) {
@@ -703,7 +707,15 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
         // Derived from the downscaled gray so the mask matches detection resolution.
         cv::Mat detectionMask = detectHorizonMask;
         if (alignmentType == AlignmentTypeSky) {
-            detectionMask = makeStarMask(detectGray, baseImageDilateSize, baseImageDilateSize);
+            // baseImageThresholdValue, not baseImageDilateSize. The dilate size was being
+            // passed for both, so the threshold was whatever
+            // alignmentBaseImageDilateSize happened to be (20 by default) rather than
+            // alignmentBaseImageThresholdValue (100) — and alignmentBaseImageThresholdValue
+            // was plumbed the whole way down here only to be ignored. On a gray that
+            // toGray8UWithMask has normalised to 0-255, a threshold of 20 passes nearly
+            // every pixel, so the "star mask" selected the whole frame and SIFT ranked
+            // noise alongside stars.
+            detectionMask = makeStarMask(detectGray, baseImageDilateSize, baseImageThresholdValue);
         }
 
         std::vector<cv::KeyPoint> keypoints;
