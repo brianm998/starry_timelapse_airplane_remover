@@ -48,7 +48,8 @@ public enum ImageAligner {
                                      writeDebugImages: Bool,
                                      groundHorizonExtension: Int32,
                                      baseImageDilateSize: Int32,
-                                     baseImageThresholdValue: Int32) -> OCVFeatureSet? {
+                                     baseImageThresholdValue: Int32,
+                                     detectionScale: Double = 1.0) -> OCVFeatureSet? {
         var errMsg: UnsafePointer<CChar>?
         guard let r = ia_find_features(baseImage.ref, frameIndex,
                                         matchMethod, mask?.ref,
@@ -57,6 +58,7 @@ public enum ImageAligner {
                                         groundHorizonExtension,
                                         baseImageDilateSize,
                                         baseImageThresholdValue,
+                                        detectionScale,
                                         &errMsg) else { return nil }
         return OCVFeatureSet(ref: r)
     }

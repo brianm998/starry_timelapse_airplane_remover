@@ -42,6 +42,13 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
                                   int groundHorizonExtension,
                                   int baseImageDilateSize,
                                   int baseImageThresholdValue,
+                                  // Fraction of full resolution to detect at; 1.0 (or
+                                  // any value <= 0) detects at full size.  Keypoint
+                                  // coordinates are always returned in full-resolution
+                                  // space, but descriptors are computed at this scale,
+                                  // so feature sets detected at different scales must
+                                  // not be matched against each other.
+                                  double detectionScale,
                                   const char **errorMsg);
 
 // --- Homography computation ---

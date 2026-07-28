@@ -192,6 +192,16 @@ struct StarCli: AsyncParsableCommand {
         By default star assumes the video was shot on a stationary tripod head.
         """)
     var movingCamera: Bool = false
+
+    @Flag(name: [.customLong("half-res-keypoints")], help:"""
+        Detect keypoints on a half size copy of each frame.
+        Cuts the peak memory of the keypoint step by around 3.5x (measured
+        9921MB -> 2824MB at 42 megapixels) and runs about 4x faster, at the cost
+        of finding fewer and slightly less precise keypoints.  May reduce
+        alignment quality on some sequences, so compare against a full
+        resolution run.  Keypoint files are stored separately per setting.
+        """)
+    var halfResKeypoints: Bool = false
     
     @Option(name: [.short, .customLong("file-log-level")], help:"""
         If present, star will output a file log at the given level.
@@ -350,6 +360,7 @@ struct StarCli: AsyncParsableCommand {
                 config.horizonDetectionEnabled = !noHorizon
                 config.finalOutputDir = finalOutputDirname
                 config.tripodHeadWasMoving = movingCamera
+                config.alignmentHalfResolutionKeypoints = halfResKeypoints
                 config.numberOfFramesToProcessConcurrently = Int(numConcurrentRenders)
                 
                 let configFilename = "config.json"

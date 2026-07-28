@@ -491,6 +491,21 @@ public struct Config: Codable, Sendable {
     public var alignmentBaseImageDilateSize: Int = 20
     public var alignmentBaseImageThresholdValue: Int = 100
 
+    /// Detect keypoints on a half-size copy of each frame instead of the full image.
+    ///
+    /// SIFT's scale space costs a near-constant ~210 bytes per pixel of whatever image
+    /// it is handed — measured at 38.4x the raw frame at 42MP — so halving each
+    /// dimension cuts the detector's peak memory by roughly 4x (9256MB -> 2090MB at
+    /// 42MP). Keypoint coordinates are scaled back to full resolution, so homographies
+    /// stay in full-frame space, but fewer and slightly less precise keypoints are
+    /// found. Whether that costs alignment quality depends on the sequence, so this is
+    /// off by default and worth A/B-ing per sequence.
+    ///
+    /// Feature files are keyed by detection scale (`<n>.sky.half.yaml` vs
+    /// `<n>.sky.yaml`), so toggling this does not mix descriptors computed at
+    /// different scales.
+    public var alignmentHalfResolutionKeypoints: Bool = false
+
     public var imageWidth: Int = 0
     public var imageHeight: Int = 0
     public var imageBytesPerPixel: Int = 0
@@ -586,6 +601,7 @@ public struct Config: Codable, Sendable {
         self.alignmentSkyHorizonExtension = try c.decodeIfPresent(Int.self, forKey: .alignmentSkyHorizonExtension) ?? self.alignmentSkyHorizonExtension
         self.alignmentBaseImageDilateSize = try c.decodeIfPresent(Int.self, forKey: .alignmentBaseImageDilateSize) ?? self.alignmentBaseImageDilateSize
         self.alignmentBaseImageThresholdValue = try c.decodeIfPresent(Int.self, forKey: .alignmentBaseImageThresholdValue) ?? self.alignmentBaseImageThresholdValue
+        self.alignmentHalfResolutionKeypoints = try c.decodeIfPresent(Bool.self, forKey: .alignmentHalfResolutionKeypoints) ?? self.alignmentHalfResolutionKeypoints
         
 
         self.starVersion = try c.decodeIfPresent(String.self, forKey: .starVersion) ?? self.starVersion
@@ -789,7 +805,27 @@ public struct Config: Codable, Sendable {
     public var dirForKeypointData: String {
         "\(self.tempOutputPath)/keypoints"
     }
-    
+
+    /// Filename of a frame's persisted OpenCV feature set, within `dirForKeypointData`.
+    ///
+    /// Keyed by detection scale, because a descriptor describes the image patch at the
+    /// resolution it was detected at. A feature set found at half res must never be
+    /// matched against one found at full res, so the two scales live in separate files
+    /// (`3.sky.half.yaml` vs `3.sky.yaml`) and toggling
+    /// `alignmentHalfResolutionKeypoints` cannot pick up the wrong one.
+    ///
+    /// Build the name here rather than at each call site: the base frame and each of its
+    /// neighbours are loaded from different places, and they must all agree.
+    public func keypointFilename(frameIndex: Int, ofType type: FrameViewMode) -> String? {
+        let scaleSuffix = self.alignmentHalfResolutionKeypoints ? ".half" : ""
+        switch type {
+        case .starAligned:  return "\(frameIndex).sky\(scaleSuffix).yaml"
+        case .earthAligned: return "\(frameIndex).earth\(scaleSuffix).yaml"
+        default:            return nil
+        }
+    }
+
+
     public func dirForImage(ofType type: FrameViewMode,
                             atSize size: ImageDisplaySize = .original) -> String?
     {

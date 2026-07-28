@@ -420,6 +420,7 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
                                    int groundHorizonExtension,
                                    int baseImageDilateSize,
                                    int baseImageThresholdValue,
+                                   double detectionScale,
                                    const char **errorMsg) {
     if (!baseImage) { if (errorMsg) *errorMsg = "null base image"; return nullptr; }
     try {
@@ -436,9 +437,30 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
 
         cv::Mat baseImageGray = toGray8UWithMask(baseImage->mat, horizonMask);
 
-        cv::Mat detectionMask = horizonMask;
+        // Optionally run detection on a downscaled copy.  SIFT's scale space costs a
+        // near-constant ~210 bytes per pixel of the image it is handed (measured 38.4x
+        // the raw frame at 42MP), so halving each dimension cuts the detector's peak
+        // by roughly 4x.  Keypoint coordinates are scaled back to full resolution
+        // below, so homographies and everything downstream stay in full-frame space.
+        const double scale = (detectionScale > 0.0 && detectionScale < 1.0) ? detectionScale : 1.0;
+        cv::Mat detectGray = baseImageGray;
+        cv::Mat detectHorizonMask = horizonMask;
+        if (scale < 1.0) {
+            const cv::Size ds(std::max(1, (int)std::lround(baseImageGray.cols * scale)),
+                              std::max(1, (int)std::lround(baseImageGray.rows * scale)));
+            cv::resize(baseImageGray, detectGray, ds, 0, 0, cv::INTER_AREA);
+            // NEAREST keeps the mask strictly binary; INTER_AREA would blend the
+            // edges into intermediate values that no longer read as pass/fail.
+            if (!horizonMask.empty())
+                cv::resize(horizonMask, detectHorizonMask, ds, 0, 0, cv::INTER_NEAREST);
+            Log_d("detecting at %dx%d instead of %dx%d (scale %.3f)",
+                  ds.width, ds.height, baseImageGray.cols, baseImageGray.rows, scale);
+        }
+
+        // Derived from the downscaled gray so the mask matches detection resolution.
+        cv::Mat detectionMask = detectHorizonMask;
         if (alignmentType == AlignmentTypeSky) {
-            detectionMask = makeStarMask(baseImageGray, baseImageDilateSize, baseImageDilateSize);
+            detectionMask = makeStarMask(detectGray, baseImageDilateSize, baseImageDilateSize);
         }
 
         std::vector<cv::KeyPoint> keypoints;
@@ -447,7 +469,7 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
         if (alignmentType == AlignmentTypeEarth) {
             cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(4.0, cv::Size(8,8));
             cv::Mat baseImageProcessed;
-            clahe->apply(baseImageGray, baseImageProcessed);
+            clahe->apply(detectGray, baseImageProcessed);
             baseImageProcessed.convertTo(baseImageProcessed, CV_32F, 1.0/255.0);
             cv::pow(baseImageProcessed, 0.5, baseImageProcessed);
             baseImageProcessed.convertTo(baseImageProcessed, CV_8U, 255.0);
@@ -456,7 +478,20 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
             akazeBase->detectAndCompute(baseImageProcessed, detectionMask, keypoints, descriptors);
         } else {
             cv::Ptr<cv::SIFT> siftBase = cv::SIFT::create(maxKeypoints);
-            siftBase->detectAndCompute(baseImageGray, detectionMask, keypoints, descriptors);
+            siftBase->detectAndCompute(detectGray, detectionMask, keypoints, descriptors);
+        }
+
+        // Map keypoints back into full-resolution coordinates.  Descriptors are left
+        // as computed: they describe the patch at detection scale, which is why the
+        // caller keys the cached feature file by scale — mixing full-res and
+        // half-res descriptors in one matcher would silently degrade matching.
+        if (scale < 1.0) {
+            const float inv = (float)(1.0 / scale);
+            for (auto &kp : keypoints) {
+                kp.pt.x *= inv;
+                kp.pt.y *= inv;
+                kp.size *= inv;
+            }
         }
 
         keypoints.shrink_to_fit();

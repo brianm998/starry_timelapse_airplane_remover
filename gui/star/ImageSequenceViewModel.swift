@@ -1033,6 +1033,14 @@ public final class ImageSequenceViewModel {
             config.update(realConfig)
         }
     }
+
+    public var alignmentHalfResolutionKeypoints: Bool {
+        didSet {
+            var realConfig = config.config()
+            realConfig.alignmentHalfResolutionKeypoints = alignmentHalfResolutionKeypoints
+            config.update(realConfig)
+        }
+    }
     
     public var alignmentGroundHorizonExtension: Int {
         didSet {
@@ -1334,6 +1342,7 @@ public final class ImageSequenceViewModel {
         self.alignmentBaseImageThresholdValue = config.alignmentBaseImageThresholdValue
         //
         self.alignmentWriteDebugImages = config.alignmentWriteDebugImages
+        self.alignmentHalfResolutionKeypoints = config.alignmentHalfResolutionKeypoints
         //
         
         self.config = configManager

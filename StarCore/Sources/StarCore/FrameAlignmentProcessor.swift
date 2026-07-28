@@ -303,12 +303,11 @@ final public actor FrameAlignmentProcessor {
             {
                 var keypointFilename = ""
 
-                switch type {
-                case .starAligned:
-                    keypointFilename = "\(neighborIndex).sky.yaml"
-                case .earthAligned:
-                    keypointFilename = "\(neighborIndex).earth.yaml"
-                default:
+                // Must match what loadOrCreateOCVFeatures wrote for this neighbour,
+                // including the detection-scale suffix — see Config.keypointFilename.
+                if let name = config.keypointFilename(frameIndex: neighborIndex, ofType: type) {
+                    keypointFilename = name
+                } else {
                     Log.e("not loading keypoints for type \(type)")
                 }
 
@@ -472,20 +471,19 @@ final public actor FrameAlignmentProcessor {
         var alignmentType: AlignmentType = .sky
 
         Log.d("frame \(frameIndex) loadOrCreateOCVFeatures")
-        var filename = ""
+
+        let config = await configManager.config()
 
         switch type {
-        case .starAligned:
-            alignmentType = .sky
-            filename = "\(frameIndex).sky.yaml"
-        case .earthAligned:
-            alignmentType = .earth
-            filename = "\(frameIndex).earth.yaml"
+        case .starAligned:  alignmentType = .sky
+        case .earthAligned: alignmentType = .earth
         default:
             throw "unable to loadOrCreateOCVFeatures of type \(type)"
         }
 
-        let config = await configManager.config()
+        guard let filename = config.keypointFilename(frameIndex: frameIndex, ofType: type) else {
+            throw "unable to loadOrCreateOCVFeatures of type \(type)"
+        }
 
         let fullPath = "\(config.dirForKeypointData)/\(filename)"
         if let features = await keypointCache.load(fromFilename: fullPath) {
@@ -549,7 +547,8 @@ final public actor FrameAlignmentProcessor {
              writeDebugImages: config.alignmentWriteDebugImages,
              groundHorizonExtension: Int32(config.alignmentGroundHorizonExtension),
              baseImageDilateSize: Int32(config.alignmentBaseImageDilateSize),
-             baseImageThresholdValue: Int32(config.alignmentBaseImageThresholdValue)
+             baseImageThresholdValue: Int32(config.alignmentBaseImageThresholdValue),
+             detectionScale: config.alignmentHalfResolutionKeypoints ? 0.5 : 1.0
            )
         {
             Log.d("frame \(frameIndex) got \(results.keypointCount) keypoints")
@@ -752,12 +751,11 @@ final public actor FrameAlignmentProcessor {
             {
                 var keypointFilename = ""
 
-                switch type {
-                case .starAligned:
-                    keypointFilename = "\(neighborIndex).sky.yaml"
-                case .earthAligned:
-                    keypointFilename = "\(neighborIndex).earth.yaml"
-                default:
+                // Must match what loadOrCreateOCVFeatures wrote for this neighbour,
+                // including the detection-scale suffix — see Config.keypointFilename.
+                if let name = config.keypointFilename(frameIndex: neighborIndex, ofType: type) {
+                    keypointFilename = name
+                } else {
                     Log.e("not loading keypoints for type \(type)")
                 }
 

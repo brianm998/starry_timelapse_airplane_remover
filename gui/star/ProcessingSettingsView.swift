@@ -192,6 +192,7 @@ struct ProcessingSettingsView: View {
     @State private var showAlignmentNeighborDilateSizeInfo = false
     @State private var showAlignmentNeighborThresholdValueInfo = false
 
+    @State private var showAlignmentHalfResolutionKeypointsInfo = false
     @State private var showAlignmentWriteDebugImagesInfo = false
     @State private var showAlignmentAllowEarthAlignmentInfo = false
     @State private var showUseReferenceHorizonSmoothingInfo = false
@@ -232,6 +233,7 @@ struct ProcessingSettingsView: View {
         showAlignmentBaseImageThresholdValueInfo ||
         showAlignmentNeighborDilateSizeInfo ||
         showAlignmentNeighborThresholdValueInfo ||
+        showAlignmentHalfResolutionKeypointsInfo ||
         showAlignmentWriteDebugImagesInfo ||
         showAlignmentAllowEarthAlignmentInfo ||
         showUseReferenceHorizonSmoothingInfo ||
@@ -278,6 +280,7 @@ struct ProcessingSettingsView: View {
         showAlignmentBaseImageThresholdValueInfo = true
         showAlignmentNeighborDilateSizeInfo = true
         showAlignmentNeighborThresholdValueInfo = true
+        showAlignmentHalfResolutionKeypointsInfo = true
         showAlignmentWriteDebugImagesInfo = true
         showAlignmentAllowEarthAlignmentInfo = true
         showUseReferenceHorizonSmoothingInfo = true
@@ -324,6 +327,7 @@ struct ProcessingSettingsView: View {
         showAlignmentBaseImageThresholdValueInfo = false
         showAlignmentNeighborDilateSizeInfo = false
         showAlignmentNeighborThresholdValueInfo = false
+        showAlignmentHalfResolutionKeypointsInfo = false
         showAlignmentWriteDebugImagesInfo = false
         showAlignmentAllowEarthAlignmentInfo = false
         showUseReferenceHorizonSmoothingInfo = false
@@ -443,6 +447,8 @@ struct ProcessingSettingsView: View {
                                   self.alignmentBaseImageThresholdValueView
                                   Divider()
                                   self.alignmentAllowEarthAlignmentView
+                                  Divider()
+                                  self.alignmentHalfResolutionKeypointsView
                                   Divider()
                                   self.alignmentWriteDebugImagesViewValueView
                                   Divider()
@@ -863,6 +869,40 @@ struct ProcessingSettingsView: View {
                       focusField: .alignmentMaxKeypoints,
                       alwaysOpen: true            
                     )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var alignmentHalfResolutionKeypointsView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showAlignmentHalfResolutionKeypointsInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            Detect keypoints on a half-size copy of each frame instead of the full image.
+
+            Keypoint detection is by far the most memory hungry step, and its cost scales with the number of pixels it is given — about 210 bytes per pixel, or roughly 38x the size of the frame itself.  Halving each dimension quarters the pixel count, which cuts peak memory for this step by around 4x.  On a 42 megapixel sequence that is the difference between about 9GB and about 2GB per frame in flight, which is usually what decides whether a large sequence runs smoothly or thrashes the machine.
+
+            The tradeoff is quality: fewer stars are found, and their positions are less precise, so alignment can be worse on some sequences.  Coordinates are scaled back up to full resolution so everything downstream still works, but the detail lost at half size cannot be recovered.
+
+            Off by default.  Worth trying on high resolution sequences that struggle, and comparing the result against a full resolution run.  Keypoint files are stored separately for each setting, so switching back and forth does not mix the two.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Half Resolution Keypoints:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    Space(width: 10)
+                    Toggle(isOn: $viewModel.alignmentHalfResolutionKeypoints) {
+                        Text("")
+                    }
                     Spacer()
                 }
             }
