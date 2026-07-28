@@ -181,7 +181,10 @@ public class FrameViewModel {
                             imageAccessor: frame.imageAccessor,
                             frameIndex: frame.frameIndex,
                             type: .original,
-                            size: .thumbnail
+                            size: .thumbnail,
+                            // A preview loads the full-resolution image to downscale it;
+                            // without a unit the .preview multiplier gates nothing.
+                            rawImageBytes: await frame.configManager.config().workingFrameBytes
                           ) { errorString in
                               Log.e("frame \(frame.frameIndex) unable to create thumbnail: \(errorString)")
                           }
@@ -239,7 +242,8 @@ public class FrameViewModel {
                             imageAccessor: frame.imageAccessor,
                             frameIndex: frame.frameIndex,
                             type: type,
-                            size: .preview
+                            size: .preview,
+                            rawImageBytes: await frame.configManager.config().workingFrameBytes
                           ) { errorString in
                               Log.e("frame \(frame.frameIndex) unable to create thumbnail: \(errorString)")
                           }

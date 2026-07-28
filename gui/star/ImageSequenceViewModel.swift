@@ -1557,6 +1557,11 @@ public final class ImageSequenceViewModel {
                 Log.d("frame \(frameView.frameIndex) checking for missing images")
                 var updateFrame = false
                 if let frame = await frameView.frame {
+                    // Preview ops load a full-resolution image to downscale it, so they
+                    // need a reservation like anything else. Without this the unit is 0
+                    // and the .preview multiplier has nothing to multiply — three of them
+                    // run concurrently on the preview queue, entirely ungated.
+                    let previewUnit = await frame.configManager.config().workingFrameBytes
                     for mode in FrameViewMode.allCases {
                         if imageAccessor.urlForImage(
                              frameIndex: frame.frameIndex,
@@ -1574,7 +1579,8 @@ public final class ImageSequenceViewModel {
                               imageAccessor: frame.imageAccessor,
                               frameIndex: frame.frameIndex,
                               type: mode,
-                              size: .preview
+                              size: .preview,
+                              rawImageBytes: previewUnit
                             ) { errorString in
                                 Log.e("frame \(frame.frameIndex) unable to create preview: \(errorString)")
                             }
@@ -1593,7 +1599,8 @@ public final class ImageSequenceViewModel {
                           imageAccessor: frame.imageAccessor,
                           frameIndex: frame.frameIndex,
                           type: .original,
-                          size: .thumbnail
+                          size: .thumbnail,
+                          rawImageBytes: previewUnit
                         ) { errorString in
                             Log.e("frame \(frame.frameIndex) unable to create thumbnail: \(errorString)")
                         }

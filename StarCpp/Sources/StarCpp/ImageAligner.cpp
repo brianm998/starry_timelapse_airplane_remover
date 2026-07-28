@@ -730,7 +730,25 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
             baseImageProcessed.convertTo(baseImageProcessed, CV_8U, 255.0);
             cv::Ptr<cv::AKAZE> akazeBase = cv::AKAZE::create();
             akazeBase->setThreshold(1e-5);
-            akazeBase->detectAndCompute(baseImageProcessed, detectionMask, keypoints, descriptors);
+
+            // AKAZE has no nfeatures equivalent, so maxKeypoints has to be applied by
+            // hand — it was reaching this function and being ignored, leaving earth
+            // detection uncapped where sky is capped by SIFT::create below. With a 1e-5
+            // threshold on a high-resolution frame that runs to six figures of
+            // keypoints, and each one costs a 61-byte descriptor plus a KeyPoint, plus
+            // its share of a YAML file that gets parsed back by every neighbour's
+            // homography op and held in keypointCache.
+            //
+            // Detect, keep the strongest, and only then describe: computing descriptors
+            // for every extremum and discarding most of them is the expensive half.
+            akazeBase->detect(baseImageProcessed, keypoints, detectionMask);
+            if (maxKeypoints > 0 && (int)keypoints.size() > maxKeypoints) {
+                Log_d("earth keypoints: keeping the strongest %d of %zu",
+                      maxKeypoints, keypoints.size());
+                cv::KeyPointsFilter::retainBest(keypoints, maxKeypoints);
+            }
+            // compute() drops any keypoint it cannot describe, so the two stay in step.
+            akazeBase->compute(baseImageProcessed, keypoints, descriptors);
         } else {
             cv::Ptr<cv::SIFT> siftBase = cv::SIFT::create(maxKeypoints);
             siftBase->detectAndCompute(detectGray, detectionMask, keypoints, descriptors);
