@@ -7,6 +7,13 @@ final class KeypointOp: AsyncOperation, @unchecked Sendable {
     let errorClosure: (String) -> Void
     private let limiter: KeypointLimiter
     // Prevents double-acquiring a limiter slot if isReady is polled multiple times.
+    //
+    // Needs the lock: OperationQueue polls isReady from arbitrary threads, so an
+    // unguarded check-then-set let two concurrent polls both see acquired == false and
+    // both succeed at tryAcquire. Only one slot is ever released in finish(), so the
+    // other leaked permanently — each leak shrinking the effective keypoint cap for the
+    // rest of the run.
+    private let acquireLock = NSLock()
     private var acquired = false
 
     init(
@@ -32,6 +39,8 @@ final class KeypointOp: AsyncOperation, @unchecked Sendable {
     }
 
     override var isReady: Bool {
+        acquireLock.lock()
+        defer { acquireLock.unlock() }
         if acquired { return super.isReady }
         guard super.isReady else { return false }
         if limiter.tryAcquire() {
@@ -42,10 +51,14 @@ final class KeypointOp: AsyncOperation, @unchecked Sendable {
     }
 
     override func finish() {
-        if acquired {
-            limiter.release()
-            acquired = false
-        }
+        // Release the lock before calling super: super.finish() drives KVO, which can
+        // re-enter isReady on another thread.
+        acquireLock.lock()
+        let held = acquired
+        acquired = false
+        acquireLock.unlock()
+
+        if held { limiter.release() }
         super.finish()
     }
 
