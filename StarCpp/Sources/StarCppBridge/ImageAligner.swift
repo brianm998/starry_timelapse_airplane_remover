@@ -177,6 +177,67 @@ public enum ImageAligner {
         }
     }
 
+    /// Warp `neighbors` with `homography` and median merge them with `baseImage`,
+    /// returning the merged frame and how many neighbours went into it.
+    ///
+    /// Fused deliberately: `align` hands every warp back to Swift, so all of them are
+    /// live when the merge starts — the original plus eight warps plus the output is
+    /// ten whole frames. Keeping the warps inside the C++ call is what lets each one
+    /// be spilled to a scratch file under `scratchDir` and released immediately once
+    /// the set would exceed `streamingThresholdBytes`. Pass 0 to keep them resident;
+    /// the output is identical either way.
+    ///
+    /// Returns nil when no neighbour could be warped, which is the caller's cue to
+    /// fall back to the unaligned frame.
+    public static func alignAndMedianMerge(baseImage: MatWrapper,
+                                            baseFrameIndex: Int32,
+                                            neighbors: [AlignmentNeighborInfo],
+                                            homography: [Int: MatWrapper],
+                                            outlierThreshold: Double,
+                                            includeAll: Bool,
+                                            scratchDir: String? = nil,
+                                            streamingThresholdBytes: Int64 = 0)
+      -> (merged: MatWrapper, warpCount: Int)?
+    {
+        let cNeighbors = neighbors.map { n in
+            AlignmentNeighborData(filename: strdup(n.filename),
+                                   maskFilename: n.maskFilename.flatMap { strdup($0) },
+                                   keypoints: n.keypoints?.ref,
+                                   frameIndex: n.frameIndex)
+        }
+        defer {
+            for n in cNeighbors {
+                free(UnsafeMutablePointer(mutating: n.filename))
+                if let m = n.maskFilename { free(UnsafeMutablePointer(mutating: m)) }
+            }
+        }
+
+        let sortedKeys = homography.keys.sorted()
+        var keys = sortedKeys.map { Int32($0) }
+        var values = sortedKeys.map { homography[$0]!.ref as MatWrapperRef? }
+
+        var warpCount: Int32 = 0
+        var errMsg: UnsafePointer<CChar>?
+
+        let merged = cNeighbors.withUnsafeBufferPointer { nBuf in
+            keys.withUnsafeMutableBufferPointer { kBuf in
+                values.withUnsafeMutableBufferPointer { vBuf in
+                    ia_align_and_median_merge(baseImage.ref, baseFrameIndex,
+                                               nBuf.baseAddress, Int32(nBuf.count),
+                                               kBuf.baseAddress, vBuf.baseAddress,
+                                               Int32(kBuf.count),
+                                               outlierThreshold, includeAll,
+                                               scratchDir,
+                                               streamingThresholdBytes,
+                                               &warpCount, &errMsg)
+                }
+            }
+        }
+
+        guard let merged else { return nil }
+        return (MatWrapper(ref: merged), Int(warpCount))
+    }
+
     /// Accumulate horizon masks from files using a producer/consumer pipeline and
     /// return a binary mask via majority vote (>50 % non-zero → white).
     public static func accumulateHorizonMasks(filenames: [String]) -> MatWrapper? {

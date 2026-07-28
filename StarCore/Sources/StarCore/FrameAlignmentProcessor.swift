@@ -888,25 +888,31 @@ final public actor FrameAlignmentProcessor {
             }
             Log.d("frame \(frameIndex) using homography \(homography as Any)")
             if let homography {
-                let result = ImageAligner.align(
+                // Aligning and merging in one call, rather than aligning into an
+                // array and merging that, is what keeps this off ten resident
+                // frames: the warps never come back here, so each one can be
+                // spilled to scratch and released as it is produced. See
+                // Config.mergeStreamingThresholdMB for when that engages.
+                let result = ImageAligner.alignAndMedianMerge(
+                  baseImage: originalFrame.mat,
                   baseFrameIndex: Int32(frameIndex),
                   neighbors: neighbors,
-                  homography: homography
+                  homography: homography,
+                  outlierThreshold: config.pixelThreshold,
+                  includeAll: false,
+                  scratchDir: config.tempOutputPath,
+                  streamingThresholdBytes:
+                    Int64(config.mergeStreamingThresholdMB) * 1024 * 1024
                 )
 
-                if !result.isEmpty {
-                    Log.d("frame \(frameIndex) got \(result.count) results back from alignment")
-
-                    var imagesToMerge: [MatWrapper] = [originalFrame.mat]
-                    imagesToMerge += result.compactMap { $0.warpedFrame }
+                if let result {
+                    Log.d("frame \(frameIndex) merged \(result.warpCount) aligned neighbors")
 
                     warpedResult = WarpedImageResult(
-                      warpedFrame: ImageAligner.medianMerge(
-                        imagesToMerge,
-                        outlierThreshold: config.pixelThreshold,
-                        includeAll: false
-                      ),
-                      warpedHorizon: nil // XXX
+                      warpedFrame: result.merged,
+                      // XXX still unused downstream, and no longer computed: the
+                      // warped neighbour masks were being built and dropped here.
+                      warpedHorizon: nil
                     )
                 } else {
                     Log.w("frame \(frameIndex) alignment returned no results")

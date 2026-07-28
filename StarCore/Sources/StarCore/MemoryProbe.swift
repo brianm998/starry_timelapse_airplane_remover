@@ -27,6 +27,13 @@ import logging
 ///   - The footprint is process-wide. With concurrency 1 the delta is mostly
 ///     attributable to the sampled op, but preview ops run on a separate queue and can
 ///     overlap.
+///   - **`--num-concurrent-renders 1` does not currently get you that**: a run with it
+///     completes horizon detection, runs exactly one star keypoint op and then sits
+///     idle, so the advice above cannot be followed as written. At concurrency 2 the
+///     deltas come in pairs — both ops of a pair are charged the same process growth —
+///     so a pair figure has to be read against two reservations, not one. The
+///     multipliers in `Config` were derived that way, and cross-checked against
+///     single-op runs of a standalone harness.
 ///   - `phys_footprint` is what the OS charges the process, so it includes allocator
 ///     fragmentation the op is not really "using". That is the right conservative
 ///     choice for sizing a reservation.
