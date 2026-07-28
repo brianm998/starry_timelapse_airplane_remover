@@ -43,6 +43,15 @@ public class Processor {
         // still needed by the decision trees :(
         IMAGE_WIDTH = Double(imageInfo.imageWidth)
         IMAGE_HEIGHT = Double(imageInfo.imageHeight)
+
+        // Everything else reads image sizes from the config, and the memory gating
+        // is useless without them: FrameGraphBuilder.build computes rawImageBytes
+        // from config.imageWidth/Height/BytesPerPixel, so leaving them at 0 makes
+        // every op's estimatedMemoryBytes 0 (AsyncOperation skips reserve() entirely)
+        // and drops the keypoint limiter back to numberOfFramesToProcessConcurrently.
+        var updatedConfig = await configManager.config()
+        updatedConfig.set(imageInfo: imageInfo)
+        await configManager.update(updatedConfig)
     }
 
     public var frameCount: Int {

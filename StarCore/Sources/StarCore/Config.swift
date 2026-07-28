@@ -88,9 +88,15 @@ public class ConfigManager {
     
     public func config() -> Config { _config }
 
-    public func update(_ config: Config) {
+    /// Replace the managed config and notify observers.
+    ///
+    /// Pass `save: false` when the caller persists the config itself. `save()` goes
+    /// through `Config.writeJson`, which resolves a filename that isn't prefixed by
+    /// `tempOutputPath` against `tempOutputPath` — so for an absolute json path
+    /// (as stard uses) saving here would write to a bogus location.
+    public func update(_ config: Config, save shouldSave: Bool = true) {
         self._config = config
-        save()
+        if shouldSave { save() }
         for callback in updateCallbacks {
             callback(config)
         }

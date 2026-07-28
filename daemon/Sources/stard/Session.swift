@@ -303,6 +303,16 @@ extension Session {
         IMAGE_WIDTH = Double(imageInfo.imageWidth)
         IMAGE_HEIGHT = Double(imageInfo.imageHeight)
 
+        // Propagate the dimensions into the config too. FrameGraphBuilder.build derives
+        // rawImageBytes from config.imageWidth/Height/BytesPerPixel, so leaving them at 0
+        // makes every op's estimatedMemoryBytes 0 (AsyncOperation then skips reserve()
+        // entirely) and drops the keypoint limiter back to
+        // numberOfFramesToProcessConcurrently — i.e. no memory gating at all.
+        // save: false because this session persists config.json itself via writeConfigJson.
+        var configWithImageInfo = await configManager.config()
+        configWithImageInfo.set(imageInfo: imageInfo)
+        await configManager.update(configWithImageInfo, save: false)
+
         let session = Session(
             sessionID: sessionID,
             scratchSessionDir: scratchSessionDir,
@@ -366,6 +376,16 @@ extension Session {
         IMAGE_WIDTH = Double(imageInfo.imageWidth)
         IMAGE_HEIGHT = Double(imageInfo.imageHeight)
 
+        // Propagate the dimensions into the config too. FrameGraphBuilder.build derives
+        // rawImageBytes from config.imageWidth/Height/BytesPerPixel, so leaving them at 0
+        // makes every op's estimatedMemoryBytes 0 (AsyncOperation then skips reserve()
+        // entirely) and drops the keypoint limiter back to
+        // numberOfFramesToProcessConcurrently — i.e. no memory gating at all.
+        // save: false because this session persists config.json itself via writeConfigJson.
+        var configWithImageInfo = await configManager.config()
+        configWithImageInfo.set(imageInfo: imageInfo)
+        await configManager.update(configWithImageInfo, save: false)
+
         let session = Session(
             sessionID: sessionID,
             scratchSessionDir: scratchSessionDir,
@@ -399,6 +419,16 @@ extension Session {
         let imageInfo = try await imageSequence.getImageInfo()
         IMAGE_WIDTH = Double(imageInfo.imageWidth)
         IMAGE_HEIGHT = Double(imageInfo.imageHeight)
+
+        // Propagate the dimensions into the config too. FrameGraphBuilder.build derives
+        // rawImageBytes from config.imageWidth/Height/BytesPerPixel, so leaving them at 0
+        // makes every op's estimatedMemoryBytes 0 (AsyncOperation then skips reserve()
+        // entirely) and drops the keypoint limiter back to
+        // numberOfFramesToProcessConcurrently — i.e. no memory gating at all.
+        // save: false because this session persists config.json itself via writeConfigJson.
+        var configWithImageInfo = await configManager.config()
+        configWithImageInfo.set(imageInfo: imageInfo)
+        await configManager.update(configWithImageInfo, save: false)
 
         let session = Session(
             sessionID: sessionID,

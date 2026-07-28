@@ -154,6 +154,19 @@ public final actor FrameGraphBuilder {
                   "rawBytes=\(rawImageBytes/(1024*1024))MB, " +
                   "×\(config.keypointMemoryMultiplier)=\(bytesPerOp/(1024*1024))MB/op, " +
                   "budget=\(budget/(1024*1024))MB → memMax=\(memMax))")
+        } else {
+            // Whoever built this config never called Config.set(imageInfo:).  Everything
+            // downstream degrades silently: rawImageBytes is 0, so every op's
+            // estimatedMemoryBytes is 0 and AsyncOperation skips reserve() altogether,
+            // and the keypoint limiter falls back to the frame concurrency count.  On
+            // high-resolution sequences that means N concurrent SIFT ops with no gating
+            // whatsoever.  Loud, because it is invisible otherwise.
+            Log.e("MEMORY GATING DISABLED: config has no image dimensions " +
+                  "(\(config.imageWidth)×\(config.imageHeight)×\(config.imageBytesPerPixel)B). " +
+                  "Call config.set(imageInfo:) before building the frame graph. " +
+                  "Every operation will reserve 0 bytes and the keypoint limiter is " +
+                  "capped only by numberOfFramesToProcessConcurrently " +
+                  "(\(config.numberOfFramesToProcessConcurrently)).")
         }
 
         let hasHorizon = config.horizonDetectionEnabled
