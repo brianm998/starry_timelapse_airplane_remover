@@ -74,9 +74,20 @@ MatWrapperRef pib_combine_image(MatWrapperRef image1, MatWrapperRef mask,
         cv::Mat matMaskThreshold;
         cv::threshold(matMask, matMaskThreshold, 128, 255, cv::THRESH_BINARY);
 
+        // Only convert when there is actually an alpha channel to drop.  On 3-channel
+        // input — which is what this pipeline produces — cvtColor(BGRA2BGR) accepts
+        // scn==3 and just copies, so these were two full-frame copies that changed
+        // nothing: ~482MB per call at 42MP.  Sharing instead of copying is safe here
+        // because both are only ever read, as copyTo sources.
+        //
+        // Note the 4-channel branch was already broken and is left as it was: `result`
+        // is created with mat1.type() above, so for 4-channel input it has 4 channels
+        // while these have 3, and copyTo would throw on the mismatch.
         cv::Mat mat1_3, mat2_3;
-        cv::cvtColor(mat1, mat1_3, cv::COLOR_BGRA2BGR);
-        cv::cvtColor(mat2, mat2_3, cv::COLOR_BGRA2BGR);
+        if (mat1.channels() == 3) mat1_3 = mat1;
+        else cv::cvtColor(mat1, mat1_3, cv::COLOR_BGRA2BGR);
+        if (mat2.channels() == 3) mat2_3 = mat2;
+        else cv::cvtColor(mat2, mat2_3, cv::COLOR_BGRA2BGR);
 
         mat1_3.copyTo(result, matMaskThreshold);
         cv::bitwise_not(matMaskThreshold, matMaskThreshold);

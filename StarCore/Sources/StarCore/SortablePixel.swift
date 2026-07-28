@@ -25,8 +25,13 @@ public struct SortablePixel: Hashable,
         self.value = value
     }
 
-    fileprivate let impossibilyLargeImageWidth = 5000000000000
-    public var id: String { "\(y*impossibilyLargeImageWidth+x)" } 
+    // `static`, not an instance property. As a stored `let` this added 8 bytes to every
+    // SortablePixel — and the blobber allocates one per pixel, in
+    // FullFrameBlobber.pixels ([[SortablePixel?]]), so at 42MP those 8 bytes cost ~322MB
+    // per concurrent blobber to hold a constant used only to build the id string below.
+    // Moving it to the type leaves `id` computing exactly the same value.
+    fileprivate static let impossibilyLargeImageWidth = 5000000000000
+    public var id: String { "\(y*Self.impossibilyLargeImageWidth+x)" }
     
     public enum Status: Sendable {
         case unknown
