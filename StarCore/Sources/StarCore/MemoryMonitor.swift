@@ -70,6 +70,44 @@ public actor MemoryMonitor {
     /// When the last over-budget waiter was forced through, if any.
     private var lastForcedAdmission: Date?
 
+    // MARK: - Ground truth
+
+    /// Where the monitor reads actual memory state from. Injectable so tests can drive
+    /// the brake below without allocating gigabytes.
+    public struct RealityProbe: Sendable {
+        public var processFootprint: @Sendable () -> UInt64
+        public var systemAvailable: @Sendable () -> UInt64
+
+        public init(processFootprint: @escaping @Sendable () -> UInt64,
+                    systemAvailable: @escaping @Sendable () -> UInt64) {
+            self.processFootprint = processFootprint
+            self.systemAvailable = systemAvailable
+        }
+
+        public static let live = RealityProbe(
+          processFootprint: { star_process_footprint() },
+          systemAvailable: { star_available_system_memory() }
+        )
+    }
+
+    private var reality: RealityProbe = .live
+
+    /// Refuse new admissions when the system has less than this much left. Below this
+    /// the OS starts swapping, and swapping is the failure mode being avoided — an op
+    /// that "fits the ledger" is no help if the machine is already thrashing.
+    private var systemFloorBytes: UInt64 = 2 * 1024 * 1024 * 1024
+
+    /// Set by the OS memory-pressure source.
+    private var underMemoryPressure = false
+    private var pressureSources: [DispatchSourceMemoryPressure] = []
+
+    /// Count of admissions the reality brake has held back, for `stats()`.
+    private var realityHolds: Int = 0
+
+    public func setRealityProbe(_ probe: RealityProbe) { self.reality = probe }
+
+    public func setSystemFloor(bytes: UInt64) { self.systemFloorBytes = bytes }
+
     // MARK: - Derived limits
 
     private let physicalMemory: UInt64 = UInt64(ProcessInfo.processInfo.physicalMemory)
@@ -149,11 +187,20 @@ public actor MemoryMonitor {
             return
         }
 
+        startPressureMonitoringIfNeeded()
+
+        // The ledger says there is room. Check reality agrees before believing it.
         if reservedBytes + bytes <= budget {
-            reservedBytes += bytes
-            Log.d("MemoryMonitor: reserved \(bytes / (1024*1024))MB — " +
-                  "total=\(reservedBytes / (1024*1024))MB / \(budget / (1024*1024))MB")
-            return
+            if let blocked = realityBlock() {
+                realityHolds += 1
+                Log.w("MemoryMonitor: ledger has room for \(bytes / (1024*1024))MB but " +
+                      "\(blocked) — waiting instead of admitting")
+            } else {
+                reservedBytes += bytes
+                Log.d("MemoryMonitor: reserved \(bytes / (1024*1024))MB — " +
+                      "total=\(reservedBytes / (1024*1024))MB / \(budget / (1024*1024))MB")
+                return
+            }
         }
 
         let startTime = Date()
@@ -192,12 +239,19 @@ public actor MemoryMonitor {
 
     /// Returns a summary of memory monitor stats for logging.
     public func stats() -> String {
-        let systemFree = star_available_system_memory()
+        let footprint = reality.processFootprint()
+        // The gap between these two is the whole reason the reality brake exists: what
+        // the ledger knows about versus what the process is actually holding.
+        let unaccounted = footprint > reservedBytes ? footprint - reservedBytes : 0
         return "MemoryMonitor: \(totalWaits) waits, " +
             "avg \(totalWaits > 0 ? String(format: "%.1f", totalWaitTime / Double(totalWaits)) : "0")s, " +
             "\(waiters.count) queued, " +
             "reserved=\(reservedBytes / (1024*1024))MB / \(budget / (1024*1024))MB, " +
-            "systemFree=\(systemFree / (1024*1024))MB"
+            "footprint=\(footprint / (1024*1024))MB " +
+            "(unaccounted \(unaccounted / (1024*1024))MB), " +
+            "systemFree=\(reality.systemAvailable() / (1024*1024))MB, " +
+            "realityHolds=\(realityHolds)" +
+            (underMemoryPressure ? ", UNDER PRESSURE" : "")
     }
 
     // MARK: - Estimation helpers
@@ -209,6 +263,84 @@ public actor MemoryMonitor {
         bytesPerComponent: Int = 2
     ) -> UInt64 {
         UInt64(width) * UInt64(height) * UInt64(componentsPerPixel) * UInt64(bytesPerComponent)
+    }
+
+    // MARK: - Reality brake
+
+    /// Why a reservation is being held back by actual memory state, or nil if reality
+    /// permits it.
+    ///
+    /// The ledger above is predictive: it knows what an op *intends* to allocate. This
+    /// is the opposite — it knows what is actually resident, including everything the
+    /// ledger never hears about: per-frame state retained on frames
+    /// (`cachedFinalHorizonMask`, `outlierImageData`), the unbounded `KeypointCache`,
+    /// any path that allocates without reserving, and allocator slack.
+    ///
+    /// Deliberately a brake rather than a co-equal gate. It refuses only once reality
+    /// has already crossed the line, never on `footprint + needed`, because process
+    /// footprint does not drop promptly when memory is freed back to the allocator —
+    /// measured on this codebase, an op that allocates and frees 450MB leaves the
+    /// footprint at its peak. Gating on `footprint + needed` would therefore starve
+    /// admissions permanently after the first heavy frame.
+    ///
+    /// A held-back reservation becomes a normal waiter, so the forced-admission escape
+    /// hatch still applies and the brake cannot deadlock the pipeline.
+    private func realityBlock() -> String? {
+        if underMemoryPressure {
+            return "the OS reports memory pressure"
+        }
+        let footprint = reality.processFootprint()
+        if footprint > 0, footprint >= budget {
+            return "process footprint \(footprint / (1024*1024))MB is already at or past " +
+                   "the \(budget / (1024*1024))MB budget — the ledger is under-counting " +
+                   "by at least \(footprint > reservedBytes ? (footprint - reservedBytes) / (1024*1024) : 0)MB"
+        }
+        let available = reality.systemAvailable()
+        if available > 0, available < systemFloorBytes {
+            return "only \(available / (1024*1024))MB available system-wide, floor is " +
+                   "\(systemFloorBytes / (1024*1024))MB"
+        }
+        return nil
+    }
+
+    /// Start listening for OS memory-pressure notifications. Idempotent.
+    ///
+    /// One source per state rather than one source reading `.data`: the event handler is
+    /// a `sending` closure, and capturing the source in order to read `.data` off it
+    /// would pull a non-Sendable value into that closure. Splitting by mask means each
+    /// handler captures only a `Bool`.
+    private func startPressureMonitoringIfNeeded() {
+        guard pressureSources.isEmpty else { return }
+        let states: [(DispatchSource.MemoryPressureEvent, Bool)] = [
+            ([.warning, .critical], true),
+            ([.normal], false),
+        ]
+        for (mask, pressured) in states {
+            let source = DispatchSource.makeMemoryPressureSource(
+              eventMask: mask,
+              queue: .global(qos: .utility)
+            )
+            // Capture nothing but the Bool — going through `shared` rather than `self`
+            // keeps this closure Sendable, which `setEventHandler` requires.
+            source.setEventHandler { @Sendable in
+                Task { await MemoryMonitor.shared.pressureChanged(pressured: pressured) }
+            }
+            source.activate()
+            pressureSources.append(source)
+        }
+    }
+
+    private func pressureChanged(pressured: Bool) {
+        guard pressured != underMemoryPressure else { return }
+        underMemoryPressure = pressured
+        if pressured {
+            Log.w("MemoryMonitor: OS memory pressure — holding new reservations " +
+                  "(reserved \(reservedBytes / (1024*1024))MB, footprint " +
+                  "\(reality.processFootprint() / (1024*1024))MB)")
+        } else {
+            Log.i("MemoryMonitor: memory pressure cleared, resuming admissions")
+            drainReadyWaiters()
+        }
     }
 
     // MARK: - Internal
@@ -247,20 +379,37 @@ public actor MemoryMonitor {
             now.timeIntervalSince($0) >= forcedAdmissionInterval
         } ?? true)
 
+        // Evaluated once per drain, not per waiter — it reads the process footprint.
+        // Note this does NOT gate the forced path below: forcing is the deadlock escape
+        // hatch, and reality being unhappy is exactly when a stuck queue must still
+        // eventually make progress.
+        let blocked = realityBlock()
+        if let blocked, !waiters.isEmpty {
+            Log.d("MemoryMonitor: holding \(waiters.count) waiter(s) — \(blocked)")
+        }
+
         for waiter in waiters {
-            if speculativeReserved + waiter.needed <= budget {
+            if blocked == nil, speculativeReserved + waiter.needed <= budget {
                 released.append(waiter)
                 speculativeReserved += waiter.needed
                 continue
             }
 
             if mayForce, now >= waiter.deadline {
-                let over = (speculativeReserved + waiter.needed) - budget
+                // Two different reasons a waiter can be sitting here, and the ledger is
+                // only one of them: since the reality brake can hold a waiter while the
+                // ledger still has room, `projected` may be UNDER budget. Subtracting
+                // unconditionally underflows — this trapped as soon as the brake landed.
+                let projected = speculativeReserved + waiter.needed
+                let why = projected > budget
+                    ? "this puts us \((projected - budget) / (1024*1024))MB over the " +
+                      "\(budget / (1024*1024))MB budget"
+                    : "the ledger has room (\(projected / (1024*1024))MB of " +
+                      "\(budget / (1024*1024))MB) but " + (blocked ?? "reality disagreed")
                 Log.w("MemoryMonitor: forcing waiter \(waiter.id) " +
                       "(\(waiter.needed / (1024*1024))MB) through — waited " +
                       "\(String(format: "%.0f", now.timeIntervalSince(waiter.deadline) + maxWaitTime))s, " +
-                      "this puts us \(over / (1024*1024))MB over the " +
-                      "\(budget / (1024*1024))MB budget. Further forced admissions " +
+                      why + ". Further forced admissions " +
                       "held for \(Int(forcedAdmissionInterval))s so \(waiters.count - 1) " +
                       "other waiter(s) do not pile on.")
                 released.append(waiter)
