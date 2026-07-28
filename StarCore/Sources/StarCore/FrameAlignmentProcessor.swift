@@ -749,19 +749,14 @@ final public actor FrameAlignmentProcessor {
                  atSize: .original
                )
             {
-                var keypointFilename = ""
-
-                // Must match what loadOrCreateOCVFeatures wrote for this neighbour,
-                // including the detection-scale suffix — see Config.keypointFilename.
-                if let name = config.keypointFilename(frameIndex: neighborIndex, ofType: type) {
-                    keypointFilename = name
-                } else {
-                    Log.e("not loading keypoints for type \(type)")
-                }
-
-                let keypoints = await keypointCache.load(
-                  fromFilename: "\(config.dirForKeypointData)/\(keypointFilename)"
-                )
+                // No keypoints needed here. This is the warp path: the homographies were
+                // computed earlier and are passed in, and ia_align_with_homography reads
+                // only filename, maskFilename and frameIndex off each neighbour — it
+                // never touches the keypoints field. Loading them was pinning up to
+                // numberAlignedNeighborFrames feature sets per frame in the strong,
+                // never-evicted keypointCache for nothing. (The homography path, which
+                // does need them, loads them separately.)
+                let keypoints: OCVFeatureSet? = nil
 
                 switch alignmentType {
                 case .earth:

@@ -157,7 +157,22 @@ public actor OutlierGroups {
             calculateOutlierImageData()
         }
         return outlierImageData
-    } 
+    }
+
+    /// Drop the cached outlier-id image.
+    ///
+    /// This is a cache, not state: `outlierImageDataFunc()` rebuilds it from `members`
+    /// and `trash`, which are untouched here, so dropping it loses nothing. Callers that
+    /// already hold the array keep their own copy — Swift arrays are values, so this
+    /// cannot pull the ground out from under a reader mid-use.
+    ///
+    /// Worth dropping because at 42MP it is `imageWidth * imageHeight * 2` = ~80MB per
+    /// frame, retained for the life of the frame, and the MemoryMonitor never hears
+    /// about it.
+    public func releaseOutlierImageData() {
+        guard !outlierImageData.isEmpty else { return }
+        outlierImageData = []
+    }
     
     public func set(outlierImageData: [UInt16]) {
         self.outlierImageData = outlierImageData

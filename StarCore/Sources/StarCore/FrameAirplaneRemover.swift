@@ -100,6 +100,47 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func set(state: FrameProcessingState) {
         Log.i("frame \(frameIndex) transitioning to state \(state)")
         self.state = state
+        if state == .complete {
+            Task { await self.releaseRecomputableState(alsoNudgingNeighbours: true) }
+        }
+    }
+
+    /// Release the per-frame buffers that can be rebuilt on demand.
+    ///
+    /// These are caches, not state. `outlierImageData` is rebuilt by
+    /// `OutlierGroups.outlierImageDataFunc()` from the groups the frame still holds, and
+    /// `cachedFinalHorizonMask` by `loadOrCreateFinalHorizonMask()` from the mask on
+    /// disk. Nothing is lost by dropping them — but at 42MP they are ~80MB and ~40MB
+    /// per frame, they live as long as the frame does, and no reservation covers them:
+    /// the MemoryMonitor never hears about them at all. Across a long sequence that
+    /// accumulation is larger than anything the gate does account for.
+    ///
+    /// Neighbours read this frame's `outlierImageData` while classifying — see
+    /// OutlierGroupFeature's nearbyDirectOverlapScore / boundingBoxOverlapScore /
+    /// neighborLineThetaScore, which reach into the previous and next frames — so it can
+    /// be re-materialised after we drop it. That is why a completing frame also nudges
+    /// any already-complete neighbour: frame N+1 completing collects the buffer that
+    /// N+1's own classification rebuilt on frame N. Without that, the steady state is
+    /// one live buffer per frame again, which is what we are trying to avoid.
+    ///
+    /// Deliberately does NOT drop `skyKeyPoints` / `earthKeyPoints`: they are ~1MB
+    /// against the ~120MB above, and their `didSet` reports keypoint counts to the
+    /// frame observer, so clearing them would make completed frames read as having zero
+    /// keypoints in the UI.
+    public func releaseRecomputableState(alsoNudgingNeighbours: Bool = false) async {
+        Log.d("frame \(frameIndex) releasing recomputable per-frame buffers" +
+              (alsoNudgingNeighbours ? " (and nudging neighbours)" : " (nudged)"))
+        await outlierProcessor.releaseOutlierImageData()
+        await horizonProcessor.releaseCachedFinalHorizonMask()
+
+        // One level only — a nudged neighbour must not nudge back.
+        guard alsoNudgingNeighbours else { return }
+        for neighbour in [previousFrame, nextFrame] {
+            guard let neighbour else { continue }
+            if await neighbour.processingState() == .complete {
+                await neighbour.releaseRecomputableState()
+            }
+        }
     }
     
     public func set(frameSavingState: FrameSavingState) {
@@ -140,7 +181,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func getOutlierGroups() async -> OutlierGroups? { await outlierProcessor.getOutlierGroups() }
     
-    public func changesHandled() { self.state = .complete }
+    // Goes through set(state:) rather than assigning directly so the completion hook
+    // that releases this frame's recomputable buffers actually fires.
+    public func changesHandled() { self.set(state: .complete) }
 
     public func updateCombineSubjects() async {
         if let outlierGroups = await outlierProcessor.getOutlierGroups() {

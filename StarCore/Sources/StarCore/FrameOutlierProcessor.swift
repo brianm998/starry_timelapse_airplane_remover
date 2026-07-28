@@ -52,6 +52,12 @@ final public actor FrameOutlierProcessor {
     /// Convenience accessor so external callers can read outlierGroups via await.
     public func getOutlierGroups() -> OutlierGroups? { outlierGroups }
 
+    /// Drop the cached outlier-id image, which rebuilds on demand. See
+    /// `OutlierGroups.releaseOutlierImageData()`.
+    public func releaseOutlierImageData() async {
+        await outlierGroups?.releaseOutlierImageData()
+    }
+
     // Private duplicate of FAR's outputSizes — avoids a cross-actor hop.
     private var outputSizes: [ImageDisplaySize] {
         get async {

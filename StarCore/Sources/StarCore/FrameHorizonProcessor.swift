@@ -111,6 +111,15 @@ final public actor FrameHorizonProcessor {
         // straight to creation.  createMergedHorizonMask saves with overwrite:true.
         cachedFinalHorizonMask = try await createMergedHorizonMask()
     }
+    /// Drop the cached final horizon mask.
+    ///
+    /// `loadOrCreateFinalHorizonMask()` rebuilds it from the merged (or raw) horizon on
+    /// disk, so nothing is lost. At 42MP the mask is a full-frame 8-bit plane, ~40MB,
+    /// held for the life of the frame and invisible to the MemoryMonitor.
+    internal func releaseCachedFinalHorizonMask() {
+        cachedFinalHorizonMask = nil
+    }
+
     internal func loadOrCreateFinalHorizonMask() async throws -> HorizonMask? {
         if let cached = cachedFinalHorizonMask { return cached }
         let mask: HorizonMask?
