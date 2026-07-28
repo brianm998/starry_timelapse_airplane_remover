@@ -150,7 +150,6 @@ public actor OutlierGroups {
 
     // image data from an image with non zero pixels set with an outlier id
     public var outlierImageData: [UInt16] = [] // outlier ids for frame, row major indexed
-    public var outlierYAxisImageData: [UInt8]? // y axis of the outlierImage data
 
     public func outlierImageDataFunc() -> [UInt16] { // XXX rename this
         if outlierImageData.count == 0 {
@@ -176,10 +175,6 @@ public actor OutlierGroups {
     
     public func set(outlierImageData: [UInt16]) {
         self.outlierImageData = outlierImageData
-    }
-
-    public func set(outlierYAxisImageData: [UInt8]) {
-        self.outlierYAxisImageData = outlierYAxisImageData
     }
 
     public func calculateOutlierImageData() {
@@ -216,8 +211,7 @@ public actor OutlierGroups {
         self.frameIndex = frameIndex
         self.members = members
         self.trash = trash
-        self.outlierImageData = [UInt16](repeating: 0, count: 0) // XXX ???
-        self.outlierYAxisImageData = [UInt8](repeating: 0, count: 0) // XXX
+        self.outlierImageData = []
     }
 
     public static func loadOutlierGroupPaintData(from filename: String) async throws -> [UInt16:RemoveReason]? {
@@ -321,9 +315,6 @@ public actor OutlierGroups {
 
         if minY <= maxY {
             for y in minY...maxY {
-                //            if let outlierYAxisImageData,
-                //               outlierYAxisImageData[y] == 0 { continue }
-                
                 for x in minX...maxX {
                     let index = y * config.imageWidth + x
                     let outlierId = outlierImageData[index]
