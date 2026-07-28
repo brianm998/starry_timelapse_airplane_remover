@@ -88,9 +88,7 @@ public final actor FrameGraphBuilder {
         if config.imageWidth > 0 && config.imageHeight > 0 && config.imageBytesPerPixel > 0 {
             let physMem = UInt64(ProcessInfo.processInfo.physicalMemory)
             let budget = UInt64(Double(physMem) * config.maxMatMemoryFraction)
-            let rawBytes = UInt64(config.imageWidth) *
-                           UInt64(config.imageHeight) *
-                           UInt64(config.imageBytesPerPixel)
+            let rawBytes = config.rawImageBytes
             let bytesPerOp = rawBytes * UInt64(config.keypointMemoryMultiplier)
             let memMax = Int(max(1, budget / bytesPerOp))
             keypointMax = min(config.numberOfFramesToProcessConcurrently, memMax)
@@ -135,9 +133,7 @@ public final actor FrameGraphBuilder {
 
         // Bytes in one uncompressed source frame.  Used by each op to compute
         // its memory reservation via OperationType.memoryMultiplier.
-        let rawImageBytes = UInt64(config.imageWidth) *
-                            UInt64(config.imageHeight) *
-                            UInt64(max(config.imageBytesPerPixel, 1))
+        let rawImageBytes = config.rawImageBytes
 
         // Recalculate the keypoint limiter now that we have actual image dimensions.
         // update(from:) runs at startup before image dims are known, so it falls back
@@ -598,9 +594,7 @@ public final actor FrameGraphBuilder {
             return
         }
         let config = await configManager.config()
-        let rawImageBytes = UInt64(config.imageWidth) *
-                            UInt64(config.imageHeight) *
-                            UInt64(max(config.imageBytesPerPixel, 1))
+        let rawImageBytes = config.rawImageBytes
 
         let errors = ArrayActor<String>([])
 

@@ -818,6 +818,16 @@ public struct Config: Codable, Sendable {
         }
     }
 
+    /// Bytes in one uncompressed source frame — the unit every operation's memory
+    /// reservation is derived from, via `OperationType.memoryMultiplier`.
+    ///
+    /// Zero until `set(imageInfo:)` has been called, which is the condition
+    /// `FrameGraphBuilder.build` warns loudly about: a zero here silently disables
+    /// all memory gating.
+    public var rawImageBytes: UInt64 {
+        UInt64(imageWidth) * UInt64(imageHeight) * UInt64(max(imageBytesPerPixel, 1))
+    }
+
     public var dirForKeypointData: String {
         "\(self.tempOutputPath)/keypoints"
     }

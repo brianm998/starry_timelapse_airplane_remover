@@ -1,17 +1,29 @@
 import Foundation
 import logging
 
-fileprivate let frameSaveMonitor = FileSystemMonitor(max: 16) // guess, make configurable?
-// XXX this needs to track numberOfFramesToProcessConcurrently
-
 @MainActor
 public class FrameSaveQueue {
 
-    public init() { } 
+    public init() { }
 
     public var savingCount: Int = 0
     public var pendingSavingCount: Int = 0
     public var purgatoryCount: Int = 0
+
+    /// Bounds how many saves run at once.  Built on first use from
+    /// `numberOfFramesToProcessConcurrently` rather than the hardcoded 16 this used to
+    /// use, so it tracks the same concurrency the frame graph is configured for.
+    /// One semaphore for the lifetime of the queue — rebuilding it per save would
+    /// bound nothing.
+    private var saveMonitor: FileSystemMonitor?
+
+    private func monitor(concurrency: Int) -> FileSystemMonitor {
+        if let saveMonitor { return saveMonitor }
+        let created = FileSystemMonitor(max: max(1, concurrency))
+        Log.i("FrameSaveQueue: bounding saves to \(max(1, concurrency)) at a time")
+        saveMonitor = created
+        return created
+    }
 
     public func readyToSave(
       frame: FrameAirplaneRemover,
@@ -41,25 +53,47 @@ public class FrameSaveQueue {
       frame: FrameAirplaneRemover,
       completionClosure: @Sendable @escaping () async -> Void
     ) async throws {
+        // Read the config here, on the main actor, before detaching.
+        let config = frame.configManager.config()
+        let saveMonitor = monitor(concurrency: config.numberOfFramesToProcessConcurrently)
+
+        // finish() runs the same merge work MergeOp does — including creating the
+        // aligned image if it is not on disk yet — but this path lives outside the
+        // frame graph's OperationQueue, so nothing was charging it to the
+        // MemoryMonitor.  That left up to `concurrency` full merge pipelines running
+        // completely unaccounted for, concurrently with the graph's own work.  Charge
+        // the same estimate MergeOp would.
+        let reservation = config.rawImageBytes * UInt64(config.mergeMemoryMultiplier)
+
         Task.detached(priority: .high) {
             Log.d("frame \(frame.frameIndex) saveNow")
             try Task.checkCancellation()
             await frame.set(frameSavingState: .savePending)
-            try await frameSaveMonitor.save() {
+            try await saveMonitor.save() {
                 await frame.set(frameSavingState: .saving)
                 Log.d("frame \(frame.frameIndex) saveNow for real")
+
+                if reservation > 0 {
+                    await MemoryMonitor.shared.reserve(bytes: reservation)
+                }
                 do {
                     // update values that may have been changed by the user in the gui
 
                     // set number of aligned images
                     await frame.setNumberOfAlignedFrames()
-                    
+
                     try await frame.loadOutliers()
                     try await frame.finish()
                     await frame.changesHandled()
                 } catch {
                     Log.e("frame \(frame.frameIndex) frame save error: \(error)")
                 }
+                // Every throwing call above is inside the do/catch, and neither
+                // reserve() nor frame.set() throws, so this is always reached.
+                if reservation > 0 {
+                    await MemoryMonitor.shared.release(bytes: reservation)
+                }
+
                 await frame.set(frameSavingState: .notSaving)
                 await completionClosure()
             }
