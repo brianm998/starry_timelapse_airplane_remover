@@ -49,10 +49,11 @@ extension OperationType {
         case .earthHomography:     return 0
         case .alignmentValidation: return 0
         // Fallbacks only — FrameGraphBuilder passes config.effective*MemoryMultiplier
-        // explicitly.  These are the config defaults (9 and 6) plus the largest
-        // residentBuildExtraMultiplier those defaults can produce
-        // (numberStaticNeighborFrames - 1 = 15): a fallback cannot see the frame size,
-        // so it assumes no merge inside the op streams.
+        // explicitly, with the frame's actual neighbour counts.  These are the config
+        // defaults (9 and 6) plus the largest residentBuildExtraMultiplier those defaults
+        // can produce (numberStaticNeighborFrames - 1 = 15): a fallback can see neither
+        // the frame size nor the neighbour counts, so it assumes the worst of both — no
+        // merge inside the op streams, and every neighbour is present.
         case .outliers:            return 24
         case .merge:               return 21
         }
@@ -517,10 +518,19 @@ public final actor FrameGraphBuilder {
             // Outlier operations for selective and auto selective
             // all frames get an op, but it may be a nop for auto only
             if await frame.usesOutliers {
+                // Actual neighbour counts, not the configured ones: calculateNeighborIndices
+                // clamps to the sequence bounds, so a frame near either end has fewer —
+                // possibly none at all — and charging for the configured count
+                // over-reserves.  Both are populated in FrameAirplaneRemover's init, so
+                // they are real counts here, never a stand-in for "not known yet".
+                let aligned = await frame.numberOfAlignedFrames
+                let statics = await frame.getStaticNeighborFrames().count
                 let outlierOp = OutlierOp(
                   frame: frame,
                   rawImageBytes: rawImageBytes,
-                  memoryMultiplier: UInt64(config.effectiveOutlierMemoryMultiplier)
+                  memoryMultiplier: UInt64(config.effectiveOutlierMemoryMultiplier(
+                                             alignedNeighbours: aligned,
+                                             staticNeighbours: statics))
                 ) { errorString in
                     Task { await errors.append(errorString) }
                     errorClosure(errorString)
@@ -534,11 +544,15 @@ public final actor FrameGraphBuilder {
 
         // 5. Merge (depends on global validation later)
         for frame in frames {
-            
+
+            let aligned = await frame.numberOfAlignedFrames
+            let statics = await frame.getStaticNeighborFrames().count
             let mergeOp = MergeOp(
               frame: frame,
               rawImageBytes: rawImageBytes,
-              memoryMultiplier: UInt64(config.effectiveMergeMemoryMultiplier)
+              memoryMultiplier: UInt64(config.effectiveMergeMemoryMultiplier(
+                                         alignedNeighbours: aligned,
+                                         staticNeighbours: statics))
             ) { errorString in
                 Task { await errors.append(errorString) }
                 errorClosure(errorString)
@@ -634,10 +648,14 @@ public final actor FrameGraphBuilder {
 
         var mergeOps: [MergeOp] = []
         for frame in mergeFrames {
+            let aligned = await frame.numberOfAlignedFrames
+            let statics = await frame.getStaticNeighborFrames().count
             let mergeOp = MergeOp(
               frame: frame,
               rawImageBytes: rawImageBytes,
-              memoryMultiplier: UInt64(config.effectiveMergeMemoryMultiplier)
+              memoryMultiplier: UInt64(config.effectiveMergeMemoryMultiplier(
+                                         alignedNeighbours: aligned,
+                                         staticNeighbours: statics))
             ) { errorString in
                 Task { await errors.append(errorString) }
                 errorClosure(errorString)

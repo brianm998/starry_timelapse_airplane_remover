@@ -57,14 +57,6 @@ public class FrameSaveQueue {
         let config = frame.configManager.config()
         let saveMonitor = monitor(concurrency: config.numberOfFramesToProcessConcurrently)
 
-        // finish() runs the same merge work MergeOp does — including creating the
-        // aligned image if it is not on disk yet — but this path lives outside the
-        // frame graph's OperationQueue, so nothing was charging it to the
-        // MemoryMonitor.  That left up to `concurrency` full merge pipelines running
-        // completely unaccounted for, concurrently with the graph's own work.  Charge
-        // the same estimate MergeOp would.
-        let reservation = config.workingFrameBytes * UInt64(config.effectiveMergeMemoryMultiplier)
-
         Task.detached(priority: .high) {
             Log.d("frame \(frame.frameIndex) saveNow")
             try Task.checkCancellation()
@@ -73,15 +65,28 @@ public class FrameSaveQueue {
                 await frame.set(frameSavingState: .saving)
                 Log.d("frame \(frame.frameIndex) saveNow for real")
 
+                // update values that may have been changed by the user in the gui
+
+                // set number of aligned images.  Before the reservation is sized, since
+                // it reads the count this sets.
+                await frame.setNumberOfAlignedFrames()
+
+                // finish() runs the same merge work MergeOp does — including creating
+                // the aligned image if it is not on disk yet — but this path lives
+                // outside the frame graph's OperationQueue, so nothing was charging it
+                // to the MemoryMonitor.  That left up to `concurrency` full merge
+                // pipelines running completely unaccounted for, concurrently with the
+                // graph's own work.  Charge the same estimate MergeOp would, off this
+                // frame's actual neighbour counts.
+                let reservation = config.workingFrameBytes *
+                  UInt64(config.effectiveMergeMemoryMultiplier(
+                           alignedNeighbours: await frame.numberOfAlignedFrames,
+                           staticNeighbours: await frame.getStaticNeighborFrames().count))
+
                 if reservation > 0 {
                     await MemoryMonitor.shared.reserve(bytes: reservation)
                 }
                 do {
-                    // update values that may have been changed by the user in the gui
-
-                    // set number of aligned images
-                    await frame.setNumberOfAlignedFrames()
-
                     try await frame.loadOutliers()
                     try await frame.finish()
                     await frame.changesHandled()

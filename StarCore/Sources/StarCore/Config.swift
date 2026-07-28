@@ -1019,25 +1019,48 @@ public struct Config: Codable, Sendable {
     /// This is what the old flat 14 was missing: at 12MP the static-earth build is
     /// resident by default and needs ~18x, which is why merge ops in a 12MP run were
     /// logging OVER RESERVATION against it.
-    public var residentBuildExtraMultiplier: Int {
+    /// Pass the ACTUAL neighbour counts for the frame, not the configured ones.
+    /// `FrameAlignmentProcessor.calculateNeighborIndices` clamps to the sequence bounds,
+    /// so a frame near either end — or any frame at all in a sequence shorter than the
+    /// configured count — has fewer neighbours than configured. Charging for eight when
+    /// one exists over-reserves by seven whole frames: measured on a 2-frame 24MP
+    /// sequence, an outlier op reserved 2197MB (16x) and used 255MB, and a merge op
+    /// 1785MB (13x) against 137MB.
+    ///
+    /// `nil` means the caller could not determine the count, and falls back to the
+    /// configured value — over-reserving, which only costs concurrency, rather than
+    /// under-reserving, which costs the machine. An actual 0 is honoured as 0: a frame
+    /// really can have no neighbours (frame 0 of a two-frame sequence does), and a merge
+    /// with no sources to merge holds nothing extra.
+    public func residentBuildExtraMultiplier(alignedNeighbours: Int?,
+                                             staticNeighbours: Int?) -> Int {
+        let aligned = alignedNeighbours ?? numberAlignedNeighborFrames
+        let statics = staticNeighbours ?? numberStaticNeighborFrames
+
         var extra = 0
-        if !mergeStreams(sourceCount: numberAlignedNeighborFrames + 1) {
-            extra = max(extra, numberAlignedNeighborFrames - 1)
+        if !mergeStreams(sourceCount: aligned + 1) {
+            extra = max(extra, aligned - 1)
         }
-        if !mergeStreams(sourceCount: numberStaticNeighborFrames + 1) {
-            extra = max(extra, numberStaticNeighborFrames - 1)
+        if !mergeStreams(sourceCount: statics + 1) {
+            extra = max(extra, statics - 1)
         }
         return max(extra, 0)
     }
 
     /// What one merge op should reserve, as a multiple of the raw frame.
-    public var effectiveMergeMemoryMultiplier: Int {
-        mergeMemoryMultiplier + residentBuildExtraMultiplier
+    /// See `residentBuildExtraMultiplier` for what the counts mean, and what `nil` costs.
+    public func effectiveMergeMemoryMultiplier(alignedNeighbours: Int?,
+                                              staticNeighbours: Int?) -> Int {
+        mergeMemoryMultiplier + residentBuildExtraMultiplier(alignedNeighbours: alignedNeighbours,
+                                                            staticNeighbours: staticNeighbours)
     }
 
     /// What one outlier op should reserve, as a multiple of the raw frame.
-    public var effectiveOutlierMemoryMultiplier: Int {
-        outlierMemoryMultiplier + residentBuildExtraMultiplier
+    /// See `residentBuildExtraMultiplier` for what the counts mean, and what `nil` costs.
+    public func effectiveOutlierMemoryMultiplier(alignedNeighbours: Int?,
+                                                staticNeighbours: Int?) -> Int {
+        outlierMemoryMultiplier + residentBuildExtraMultiplier(alignedNeighbours: alignedNeighbours,
+                                                              staticNeighbours: staticNeighbours)
     }
 
     /// The result of `keypointConcurrency(physicalMemory:)`.
