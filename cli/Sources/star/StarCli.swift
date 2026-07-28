@@ -212,6 +212,16 @@ struct StarCli: AsyncParsableCommand {
         Set to 0 to always keep every source in memory.
         """)
     var mergeStreamingThresholdMB: Int?
+
+    @Option(name: [.customLong("max-keypoint-ops")], help:"""
+        Cap how many keypoint detection ops run at once.
+        Independent of the memory estimate: use this to be more conservative than
+        the budget math instead of raising the keypoint memory multiplier, which
+        also inflates every keypoint op's reservation.
+        This is a cap, so it can only lower the limit, never raise it above what
+        the memory budget allows.  Omit or 0 for no explicit cap.
+        """)
+    var maxKeypointOps: Int?
     
     @Option(name: [.short, .customLong("file-log-level")], help:"""
         If present, star will output a file log at the given level.
@@ -373,6 +383,9 @@ struct StarCli: AsyncParsableCommand {
                 config.alignmentHalfResolutionKeypoints = halfResKeypoints
                 if let mergeStreamingThresholdMB {
                     config.mergeStreamingThresholdMB = mergeStreamingThresholdMB
+                }
+                if let maxKeypointOps {
+                    config.maxConcurrentKeypointOps = maxKeypointOps
                 }
                 config.numberOfFramesToProcessConcurrently = Int(numConcurrentRenders)
                 config.writeOutlierClassificationValues = shouldWriteOutlierClassificationValues

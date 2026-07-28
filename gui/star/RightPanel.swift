@@ -806,6 +806,25 @@ struct MemoryMultiplierView: View {
                     viewModel.keypointMemoryMultiplier = newVal
                 }
             )
+            // Separate from kp mem on purpose: kp mem is the *estimate* of one op's
+            // memory, this is how many may run at once.  Raising kp mem to calm a big
+            // sequence used to be the only lever, and it inflated every reservation as
+            // a side effect.  0 = no explicit cap.
+            EditableNumberView(
+                value: $viewModel.maxConcurrentKeypointOps,
+                minValue: 0,
+                maxValue: 256,
+                fullTextProvider: { $0 == 0 ? "max kp ops: auto" : "max kp ops \($0)" },
+                prefixText: "max kp ops ",
+                suffixTextProvider: { _ in "" },
+                textColor: textColor,
+                focusedField: focusedField,
+                focusField: .maxConcurrentKeypointOps,
+                alwaysOpen: alwaysOpen,
+                commitAction: { newVal in
+                    viewModel.maxConcurrentKeypointOps = newVal
+                }
+            )
             EditableNumberView(
                 value: $viewModel.outlierMemoryMultiplier,
                 minValue: 1,

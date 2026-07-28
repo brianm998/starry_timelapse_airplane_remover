@@ -270,8 +270,34 @@ public struct Config: Codable, Sendable {
     public var maxMatMemoryFraction: Double = 0.85
 
     // Per-op memory multipliers: rawImageBytes × multiplier = estimated reservation.
-    // Raise to limit concurrency; lower to allow more concurrent ops at higher RAM risk.
-    public var keypointMemoryMultiplier: Int = 35
+
+    /// Estimated peak memory of one keypoint op, as a multiple of the raw frame.
+    ///
+    /// Measured rather than guessed: detecting on a 42MP 16-bit 3-channel frame
+    /// through `ia_find_features` peaks at 9921MB of process RSS against a 241.3MiB
+    /// raw frame — 41.1x, rounded up to 42 so the estimate covers the measurement
+    /// rather than sitting just under it. SIFT's scale space is the bulk of that and
+    /// costs a near-constant ~210 bytes per pixel of whatever image it is handed, so
+    /// the ratio holds across resolutions (36.5x measured at 12MP for the detector
+    /// alone). It is therefore NOT true that bigger images need a bigger multiplier.
+    ///
+    /// This value is only the memory estimate. It used to double as the sole way to
+    /// limit keypoint concurrency — the limiter divides the budget by it — so raising
+    /// it to calm a large sequence also silently inflated every reservation, and
+    /// correcting it to the real figure loosened concurrency. Use
+    /// `maxConcurrentKeypointOps` to bound concurrency directly instead.
+    public var keypointMemoryMultiplier: Int = 42
+
+    /// Explicit cap on how many keypoint ops may run at once. 0 means "no explicit
+    /// cap": the limit comes from the memory budget and
+    /// `numberOfFramesToProcessConcurrently` alone.
+    ///
+    /// This is a cap, not an override — it can only lower the limit, never raise it
+    /// above what the budget allows. Reach for this when you want to be more
+    /// conservative than the budget math, instead of inflating
+    /// `keypointMemoryMultiplier`, which distorts the accounting for every op.
+    public var maxConcurrentKeypointOps: Int = 0
+
     public var outlierMemoryMultiplier: Int = 3
     public var mergeMemoryMultiplier: Int = 4
 
@@ -618,6 +644,7 @@ public struct Config: Codable, Sendable {
         self.alignmentBaseImageThresholdValue = try c.decodeIfPresent(Int.self, forKey: .alignmentBaseImageThresholdValue) ?? self.alignmentBaseImageThresholdValue
         self.alignmentHalfResolutionKeypoints = try c.decodeIfPresent(Bool.self, forKey: .alignmentHalfResolutionKeypoints) ?? self.alignmentHalfResolutionKeypoints
         self.mergeStreamingThresholdMB = try c.decodeIfPresent(Int.self, forKey: .mergeStreamingThresholdMB) ?? self.mergeStreamingThresholdMB
+        self.maxConcurrentKeypointOps = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentKeypointOps) ?? self.maxConcurrentKeypointOps
         
 
         self.starVersion = try c.decodeIfPresent(String.self, forKey: .starVersion) ?? self.starVersion
@@ -826,6 +853,64 @@ public struct Config: Codable, Sendable {
     /// all memory gating.
     public var rawImageBytes: UInt64 {
         UInt64(imageWidth) * UInt64(imageHeight) * UInt64(max(imageBytesPerPixel, 1))
+    }
+
+    /// The result of `keypointConcurrency(physicalMemory:)`.
+    public struct KeypointConcurrency: Sendable {
+        /// How many keypoint ops may run at once — the smallest of the terms below.
+        public let limit: Int
+        /// How many `bytesPerOp` reservations fit in `budget`, or nil when image
+        /// dimensions are unknown and the budget term cannot be computed at all.
+        public let budgetLimit: Int?
+        /// `rawImageBytes × keypointMemoryMultiplier`.
+        public let bytesPerOp: UInt64
+        /// `physicalMemory × maxMatMemoryFraction`.
+        public let budget: UInt64
+        /// Which term actually decided `limit` — worth logging, because it tells you
+        /// which knob will change anything.
+        public let binding: String
+    }
+
+    /// How many keypoint ops may run concurrently, and which limit is binding.
+    ///
+    /// Three independent terms, smallest wins:
+    ///   - the memory budget: `budget / (rawImageBytes × keypointMemoryMultiplier)`
+    ///   - `numberOfFramesToProcessConcurrently`, the pipeline-wide concurrency
+    ///   - `maxConcurrentKeypointOps`, an explicit keypoint-only cap when non-zero
+    ///
+    /// Keeping these separate is the point. Previously only the first existed, so the
+    /// memory multiplier was the sole concurrency knob — and it was inert whenever the
+    /// frame count was the smaller term, which is why it appeared to do nothing at
+    /// 12MP and everything at 42MP.
+    public func keypointConcurrency(physicalMemory: UInt64) -> KeypointConcurrency {
+        let budget = UInt64(Double(physicalMemory) * maxMatMemoryFraction)
+        let bytesPerOp = rawImageBytes * UInt64(max(keypointMemoryMultiplier, 1))
+
+        var limit = max(1, numberOfFramesToProcessConcurrently)
+        var binding = "numberOfFramesToProcessConcurrently"
+
+        var budgetLimit: Int? = nil
+        if bytesPerOp > 0 {
+            let fits = Int(max(1, budget / bytesPerOp))
+            budgetLimit = fits
+            if fits < limit {
+                limit = fits
+                binding = "memory budget"
+            }
+        }
+
+        // A cap, never an override: it can lower the limit but not raise it past what
+        // the budget allows.
+        if maxConcurrentKeypointOps > 0, maxConcurrentKeypointOps < limit {
+            limit = maxConcurrentKeypointOps
+            binding = "maxConcurrentKeypointOps"
+        }
+
+        return KeypointConcurrency(limit: limit,
+                                   budgetLimit: budgetLimit,
+                                   bytesPerOp: bytesPerOp,
+                                   budget: budget,
+                                   binding: binding)
     }
 
     public var dirForKeypointData: String {

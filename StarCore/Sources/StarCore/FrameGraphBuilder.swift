@@ -31,8 +31,11 @@ extension OperationType {
         case .preview:             return 2
         case .horizon:             return 2
         case .mergedHorizon:       return 2
-        case .starKeypoints:       return 35
-        case .earthKeypoints:      return 35
+        // Fallback only — FrameGraphBuilder always passes config.keypointMemoryMultiplier
+        // explicitly when building KeypointOps.  Kept in step with that default (42,
+        // measured) so this cannot become a stale second opinion.
+        case .starKeypoints:       return 42
+        case .earthKeypoints:      return 42
         case .starHomography:      return 0
         case .earthHomography:     return 0
         case .alignmentValidation: return 0
@@ -80,30 +83,50 @@ public final actor FrameGraphBuilder {
 
     public func update(from config: Config) {
         queue.maxConcurrentOperationCount = config.numberOfFramesToProcessConcurrently
-
-        // Derive the keypoint concurrency cap from memory budget so large-image
-        // SIFT/AKAZE ops don't exhaust RAM before the MemoryMonitor can react.
-        // Falls back to numberOfFramesToProcessConcurrently if image dims are unknown.
-        let keypointMax: Int
-        if config.imageWidth > 0 && config.imageHeight > 0 && config.imageBytesPerPixel > 0 {
-            let physMem = UInt64(ProcessInfo.processInfo.physicalMemory)
-            let budget = UInt64(Double(physMem) * config.maxMatMemoryFraction)
-            let rawBytes = config.rawImageBytes
-            let bytesPerOp = rawBytes * UInt64(config.keypointMemoryMultiplier)
-            let memMax = Int(max(1, budget / bytesPerOp))
-            keypointMax = min(config.numberOfFramesToProcessConcurrently, memMax)
-            Log.i("KeypointLimiter: \(memMax) ops fit in budget " +
-                  "(\(rawBytes/(1024*1024))MB × \(config.keypointMemoryMultiplier) = " +
-                  "\(bytesPerOp/(1024*1024))MB/op, budget \(budget/(1024*1024))MB), " +
-                  "capped to \(keypointMax)")
-        } else {
-            keypointMax = config.numberOfFramesToProcessConcurrently
-        }
-        keypointLimiter.set(max: keypointMax)
+        applyKeypointLimit(from: config, context: "configure")
 
         Task {
             await MemoryMonitor.shared.configure(budgetFraction: config.maxMatMemoryFraction)
         }
+    }
+
+    /// Apply the keypoint concurrency cap, and say which term decided it.
+    ///
+    /// Called both when the config is set and again when the graph is built, since the
+    /// config can change in between. One implementation for both, so the two cannot
+    /// disagree — they previously computed the same thing twice with slightly different
+    /// arithmetic.
+    private func applyKeypointLimit(from config: Config, context: String) {
+        let kc = config.keypointConcurrency(
+          physicalMemory: UInt64(ProcessInfo.processInfo.physicalMemory)
+        )
+        keypointLimiter.set(max: kc.limit)
+
+        guard let budgetLimit = kc.budgetLimit else {
+            // Whoever built this config never called Config.set(imageInfo:).  Everything
+            // downstream degrades silently: rawImageBytes is 0, so every op's
+            // estimatedMemoryBytes is 0 and AsyncOperation skips reserve() altogether,
+            // and the keypoint limiter falls back to the frame concurrency count.  On
+            // high-resolution sequences that means N concurrent SIFT ops with no gating
+            // whatsoever.  Loud, because it is invisible otherwise.
+            Log.e("MEMORY GATING DISABLED [\(context)]: config has no image dimensions " +
+                  "(\(config.imageWidth)×\(config.imageHeight)×\(config.imageBytesPerPixel)B). " +
+                  "Call config.set(imageInfo:) before building the frame graph. " +
+                  "Every operation will reserve 0 bytes and the keypoint limiter is " +
+                  "capped only by numberOfFramesToProcessConcurrently (\(kc.limit)).")
+            return
+        }
+
+        let explicit = config.maxConcurrentKeypointOps > 0
+            ? ", explicit cap \(config.maxConcurrentKeypointOps)"
+            : ""
+        Log.i("KeypointLimiter[\(context)]: \(kc.limit) concurrent keypoint ops — " +
+              "budget fits \(budgetLimit) " +
+              "(image \(config.imageWidth)×\(config.imageHeight)×\(config.imageBytesPerPixel)B, " +
+              "raw \(config.rawImageBytes/(1024*1024))MB × \(config.keypointMemoryMultiplier) = " +
+              "\(kc.bytesPerOp/(1024*1024))MB/op of \(kc.budget/(1024*1024))MB budget), " +
+              "frames cap \(config.numberOfFramesToProcessConcurrently)\(explicit) " +
+              "→ bound by \(kc.binding)")
     }
 
     public func add(operation: Operation) {
@@ -135,35 +158,9 @@ public final actor FrameGraphBuilder {
         // its memory reservation via OperationType.memoryMultiplier.
         let rawImageBytes = config.rawImageBytes
 
-        // Recalculate the keypoint limiter now that we have actual image dimensions.
-        // update(from:) runs at startup before image dims are known, so it falls back
-        // to numberOfFramesToProcessConcurrently.  Here we have the real numbers.
-        if config.imageWidth > 0 && config.imageHeight > 0 && config.imageBytesPerPixel > 0 {
-            let physMem = UInt64(ProcessInfo.processInfo.physicalMemory)
-            let budget = UInt64(Double(physMem) * config.maxMatMemoryFraction)
-            let bytesPerOp = rawImageBytes * UInt64(config.keypointMemoryMultiplier)
-            let memMax = Int(max(1, budget / bytesPerOp))
-            let cap = min(config.numberOfFramesToProcessConcurrently, memMax)
-            keypointLimiter.set(max: cap)
-            Log.i("KeypointLimiter: \(cap) max ops " +
-                  "(image \(config.imageWidth)×\(config.imageHeight)×\(config.imageBytesPerPixel)B, " +
-                  "rawBytes=\(rawImageBytes/(1024*1024))MB, " +
-                  "×\(config.keypointMemoryMultiplier)=\(bytesPerOp/(1024*1024))MB/op, " +
-                  "budget=\(budget/(1024*1024))MB → memMax=\(memMax))")
-        } else {
-            // Whoever built this config never called Config.set(imageInfo:).  Everything
-            // downstream degrades silently: rawImageBytes is 0, so every op's
-            // estimatedMemoryBytes is 0 and AsyncOperation skips reserve() altogether,
-            // and the keypoint limiter falls back to the frame concurrency count.  On
-            // high-resolution sequences that means N concurrent SIFT ops with no gating
-            // whatsoever.  Loud, because it is invisible otherwise.
-            Log.e("MEMORY GATING DISABLED: config has no image dimensions " +
-                  "(\(config.imageWidth)×\(config.imageHeight)×\(config.imageBytesPerPixel)B). " +
-                  "Call config.set(imageInfo:) before building the frame graph. " +
-                  "Every operation will reserve 0 bytes and the keypoint limiter is " +
-                  "capped only by numberOfFramesToProcessConcurrently " +
-                  "(\(config.numberOfFramesToProcessConcurrently)).")
-        }
+        // Recalculate now that the config is final — dimensions may have been set, or
+        // any of the three limiting terms changed, since update(from:) ran.
+        applyKeypointLimit(from: config, context: "build")
 
         let hasHorizon = config.horizonDetectionEnabled
         // Skip per-frame detection and merge when the user has painted a global

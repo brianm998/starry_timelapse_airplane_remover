@@ -1099,6 +1099,17 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    /// 0 = no explicit cap; the limit then comes from the memory budget and the frame
+    /// concurrency alone.  Use this rather than inflating keypointMemoryMultiplier,
+    /// which also distorts every keypoint op's memory reservation.
+    var maxConcurrentKeypointOps: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.maxConcurrentKeypointOps = maxConcurrentKeypointOps
+            config.update(realConfig)
+        }
+    }
+
     var outlierMemoryMultiplier: Int {
         didSet {
             var realConfig = config.config()
@@ -1319,6 +1330,7 @@ public final class ImageSequenceViewModel {
         self.numberOfFramesToProcessConcurrently = config.numberOfFramesToProcessConcurrently
         self.memoryBudgetFraction = config.maxMatMemoryFraction
         self.keypointMemoryMultiplier = config.keypointMemoryMultiplier
+        self.maxConcurrentKeypointOps = config.maxConcurrentKeypointOps
         self.outlierMemoryMultiplier = config.outlierMemoryMultiplier
         self.mergeMemoryMultiplier = config.mergeMemoryMultiplier
         self.homographySmoothingEpsilon = config.homographySmoothingEpsilon
