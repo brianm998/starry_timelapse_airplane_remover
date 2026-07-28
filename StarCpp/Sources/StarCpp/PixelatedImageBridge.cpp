@@ -30,8 +30,10 @@ static cv::Mat ensure8U(const cv::Mat& input) {
     return output;
 }
 
+// Shares the buffer of a freshly produced cv::Mat the caller is about to drop.
+// Never pass a live wrapper's mat here — use the deep constructor for that.
 static MatWrapperRef wrap(const cv::Mat& mat) {
-    return new MatWrapperImpl(mat);
+    return new MatWrapperImpl(MatWrapperImpl::Adopt{}, mat);
 }
 
 // --- Implementation ---

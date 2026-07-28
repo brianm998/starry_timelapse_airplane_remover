@@ -47,9 +47,11 @@ static cv::Mat ensure8U(const cv::Mat& input) {
     return output;
 }
 
-// Helper: create a MatWrapperRef from a cv::Mat, cloning internally
+// Helper: create a MatWrapperRef from a freshly produced cv::Mat that the caller is
+// about to drop, sharing its buffer rather than copying it. Never pass a live
+// wrapper's mat here — use MatWrapperImpl's deep constructor for that.
 static MatWrapperRef wrap(const cv::Mat& mat) {
-    return new MatWrapperImpl(mat);
+    return new MatWrapperImpl(MatWrapperImpl::Adopt{}, mat);
 }
 
 // --- Create / Destroy ---
