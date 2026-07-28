@@ -6,8 +6,6 @@ final class KeypointOp: AsyncOperation, @unchecked Sendable {
     let mode: FrameViewMode
     let errorClosure: (String) -> Void
     private let limiter: KeypointLimiter
-    // Prevents double-acquiring a limiter slot if isReady is polled multiple times.
-    private var acquired = false
 
     init(
       forStars: Bool,
@@ -31,22 +29,16 @@ final class KeypointOp: AsyncOperation, @unchecked Sendable {
         }
     }
 
-    override var isReady: Bool {
-        if acquired { return super.isReady }
-        guard super.isReady else { return false }
-        if limiter.tryAcquire() {
-            acquired = true
-            return true
-        }
-        return false
+    // Note there is no `isReady` override.  Gating readiness on the limiter deadlocked
+    // the keypoint phase outright — `KeypointLimiter` has the full account.  The gate
+    // lives in `acquireExecutionSlot()` now, which suspends this op's task instead of
+    // lying to the queue about whether it can run.
+    override func acquireExecutionSlot() async {
+        await limiter.acquire()
     }
 
-    override func finish() {
-        if acquired {
-            limiter.release()
-            acquired = false
-        }
-        super.finish()
+    override func releaseExecutionSlot() async {
+        limiter.release()
     }
 
     override func asyncExecute() async {

@@ -111,6 +111,17 @@ open class AsyncOperation: Operation, @unchecked Sendable {
 
         let memBytes = estimatedMemoryBytes
         task = Task {
+            // Op-type-specific concurrency gate (the keypoint limiter, today).
+            //
+            // Ahead of the reservation on purpose: an op parked here holds no memory
+            // budget.  Reserving first would have a queue full of waiting keypoint ops
+            // sitting on gigabytes of reservation that nothing is using, starving every
+            // other op type of budget.
+            //
+            // Also note where this is *not*: gating readiness instead of execution is
+            // what wedged the keypoint phase — see `KeypointLimiter`.
+            await self.acquireExecutionSlot()
+
             // Reserve memory budget so the scheduler doesn't start more ops
             // than RAM can support.
             if memBytes > 0 {
@@ -129,6 +140,7 @@ open class AsyncOperation: Operation, @unchecked Sendable {
             if memBytes > 0 {
                 await MemoryMonitor.shared.release(bytes: memBytes)
             }
+            await self.releaseExecutionSlot()
             self.finish()
         }
     }
@@ -138,6 +150,16 @@ open class AsyncOperation: Operation, @unchecked Sendable {
     open func asyncExecute() async {
         fatalError("Subclasses must implement asyncExecute()")
     }
+
+    /// Awaited before this op reserves memory or does any work.  Override to gate a
+    /// class of ops on something narrower than the queue's own concurrency limit.
+    ///
+    /// Every call is balanced by exactly one `releaseExecutionSlot()`, so an override
+    /// may take a slot unconditionally.  Default: no gate.
+    open func acquireExecutionSlot() async {}
+
+    /// Balances `acquireExecutionSlot()`.  Default: nothing to release.
+    open func releaseExecutionSlot() async {}
 
     public func finish() {
         state = .finished
