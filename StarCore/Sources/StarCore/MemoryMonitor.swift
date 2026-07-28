@@ -23,6 +23,15 @@ You should have received a copy of the GNU General Public License along with sta
 /// Ignores actual free RAM — assumes the OS will page things out — so there
 /// is no race between when an op starts and when it peaks.
 ///
+/// Waiters are patient by design. A request that cannot ever fit (bigger than the
+/// whole budget) is admitted immediately with an error, so every waiter that stays
+/// queued is one that *can* eventually be satisfied. Beyond that, a waiter is only
+/// forced over budget as a deadlock escape hatch: at most one at a time, spaced by
+/// `forcedAdmissionInterval`. That matters because waiters tend to enqueue together
+/// — they become ready at the same barrier — so their deadlines also expire
+/// together, and "admit everything past its deadline" would admit everything at
+/// once, which is precisely the overload the monitor exists to prevent.
+///
 /// API:
 ///   - `reserve(bytes:)` — call before starting heavy work; suspends until
 ///     the accounting budget allows it.
@@ -41,8 +50,25 @@ public actor MemoryMonitor {
     /// Default 0.85 = 85%.
     private var budgetFraction: Double = 0.85
 
-    /// Maximum time a waiter will wait before proceeding anyway (seconds).
-    private let maxWaitTime: TimeInterval = 60.0
+    /// How long a waiter waits before the monitor considers forcing it through.
+    private var maxWaitTime: TimeInterval = 60.0
+
+    /// Minimum gap between forced over-budget admissions.
+    ///
+    /// Forcing exists only so a stuck queue cannot deadlock; it is not a throughput
+    /// valve. Admitting every timed-out waiter in one pass turns a congested queue
+    /// into a stampede — and because waiters generally enqueue together (they all
+    /// become ready at the same barrier) their deadlines all expire together, so
+    /// "release everything past its deadline" means releasing *everything*.
+    ///
+    /// One at a time, spaced by roughly the duration of a heavy op, keeps the
+    /// overshoot to a single operation. If ops are actually completing, reservations
+    /// are released and the normal fits-in-budget path admits waiters long before
+    /// this matters.
+    private var forcedAdmissionInterval: TimeInterval = 60.0
+
+    /// When the last over-budget waiter was forced through, if any.
+    private var lastForcedAdmission: Date?
 
     // MARK: - Derived limits
 
@@ -77,11 +103,21 @@ public actor MemoryMonitor {
 
     // MARK: - Configuration
 
-    public func configure(budgetFraction: Double) {
+    /// `maxWaitTime` and `forcedAdmissionInterval` are exposed mainly so tests can
+    /// drive the timeout path without waiting a minute; leave them nil in production.
+    public func configure(budgetFraction: Double,
+                          maxWaitTime: TimeInterval? = nil,
+                          forcedAdmissionInterval: TimeInterval? = nil) {
         self.budgetFraction = min(max(budgetFraction, 0.1), 0.95)
+        if let maxWaitTime { self.maxWaitTime = max(0, maxWaitTime) }
+        if let forcedAdmissionInterval {
+            self.forcedAdmissionInterval = max(0, forcedAdmissionInterval)
+        }
         Log.i("MemoryMonitor configured: budgetFraction=\(self.budgetFraction), " +
               "physical=\(physicalMemory / (1024*1024*1024))GB, " +
-              "budget=\(budget / (1024*1024))MB")
+              "budget=\(budget / (1024*1024))MB, " +
+              "maxWait=\(Int(self.maxWaitTime))s, " +
+              "forcedGap=\(Int(self.forcedAdmissionInterval))s")
     }
 
     // MARK: - Public API
@@ -99,6 +135,19 @@ public actor MemoryMonitor {
     /// Call `release(bytes:)` when the op finishes.
     public func reserve(bytes: UInt64) async {
         guard bytes > 0 else { return }
+
+        // A single request bigger than the whole budget can never fit, so queueing it
+        // would block until the timeout no matter what else happens.  Admit it now and
+        // say so — either the estimate or the budget is wrong, and that is worth
+        // knowing.  This is also what makes it safe for the queue below to be patient:
+        // every waiter that remains queued *can* eventually fit.
+        if bytes > budget {
+            reservedBytes += bytes
+            Log.e("MemoryMonitor: a single reservation of \(bytes / (1024*1024))MB exceeds " +
+                  "the entire \(budget / (1024*1024))MB budget — proceeding ungated. " +
+                  "Check the op's memoryMultiplier and maxMatMemoryFraction.")
+            return
+        }
 
         if reservedBytes + bytes <= budget {
             reservedBytes += bytes
@@ -190,18 +239,40 @@ public actor MemoryMonitor {
         var speculativeReserved = reservedBytes
         var released: [Waiter] = []
         var remaining: [Waiter] = []
+
+        // A timed-out waiter may be forced over budget, but at most one per drain and
+        // no more often than forcedAdmissionInterval.  Waiters are appended in FIFO
+        // order, so the oldest eligible one wins and nothing starves.
+        var mayForce = (lastForcedAdmission.map {
+            now.timeIntervalSince($0) >= forcedAdmissionInterval
+        } ?? true)
+
         for waiter in waiters {
-            let fits = speculativeReserved + waiter.needed <= budget
-            if fits || now >= waiter.deadline {
-                if now >= waiter.deadline {
-                    Log.w("MemoryMonitor: waiter \(waiter.id) timed out after \(maxWaitTime)s, proceeding anyway")
-                }
+            if speculativeReserved + waiter.needed <= budget {
                 released.append(waiter)
                 speculativeReserved += waiter.needed
-            } else {
-                remaining.append(waiter)
+                continue
             }
+
+            if mayForce, now >= waiter.deadline {
+                let over = (speculativeReserved + waiter.needed) - budget
+                Log.w("MemoryMonitor: forcing waiter \(waiter.id) " +
+                      "(\(waiter.needed / (1024*1024))MB) through — waited " +
+                      "\(String(format: "%.0f", now.timeIntervalSince(waiter.deadline) + maxWaitTime))s, " +
+                      "this puts us \(over / (1024*1024))MB over the " +
+                      "\(budget / (1024*1024))MB budget. Further forced admissions " +
+                      "held for \(Int(forcedAdmissionInterval))s so \(waiters.count - 1) " +
+                      "other waiter(s) do not pile on.")
+                released.append(waiter)
+                speculativeReserved += waiter.needed
+                lastForcedAdmission = now
+                mayForce = false
+                continue
+            }
+
+            remaining.append(waiter)
         }
+
         waiters = remaining
         for waiter in released { waiter.continuation.resume() }
 
