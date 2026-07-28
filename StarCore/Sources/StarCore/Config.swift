@@ -903,14 +903,56 @@ public struct Config: Codable, Sendable {
         }
     }
 
-    /// Bytes in one uncompressed source frame — the unit every operation's memory
-    /// reservation is derived from, via `OperationType.memoryMultiplier`.
+    /// Bytes in one uncompressed source frame.
+    ///
+    /// Truthful about the source, which is what `mergeStreams` and
+    /// `residentBuildExtraMultiplier` need: they reason about frames actually held in
+    /// memory. For sizing a *reservation*, use `workingFrameBytes` instead.
     ///
     /// Zero until `set(imageInfo:)` has been called, which is the condition
     /// `FrameGraphBuilder.build` warns loudly about: a zero here silently disables
     /// all memory gating.
     public var rawImageBytes: UInt64 {
         UInt64(imageWidth) * UInt64(imageHeight) * UInt64(max(imageBytesPerPixel, 1))
+    }
+
+    /// Components per pixel of the source, e.g. 3 for BGR at any depth.
+    ///
+    /// 0 when it cannot be derived, which needs `imageBitsPerComponent` as well as
+    /// `imageBytesPerPixel`. `set(imageInfo:)` always sets both together.
+    public var componentsPerPixel: Int {
+        let bytesPerComponent = imageBitsPerComponent / 8
+        guard bytesPerComponent > 0 else { return 0 }
+        return max(max(imageBytesPerPixel, 1) / bytesPerComponent, 1)
+    }
+
+    /// Bytes of one frame at the depth the pipeline actually works in — the unit every
+    /// memory multiplier in this file was derived against.
+    ///
+    /// All of those multipliers were measured on 16-bit 3-channel input, and the costs
+    /// they describe barely depend on the source depth:
+    ///
+    ///   - SIFT's scale space is CV_32F over the gray it is handed, so the 42x figure is
+    ///     per pixel — an 8-bit source builds exactly the same pyramid.
+    ///   - the blobber's `[[SortablePixel?]]` is 24 bytes per pixel regardless of depth.
+    ///   - `finishSelective` promotes to 16 bits via `ensure16Bits` and works there.
+    ///
+    /// So an 8-bit source does not make that work cheaper — but it does halve
+    /// `rawImageBytes`, which would halve every reservation while the work stayed the
+    /// same. Flooring the per-pixel figure at the 16-bit working depth keeps the
+    /// multipliers meaning what they were measured to mean, on any source depth.
+    ///
+    /// A source deeper than 16 bits is not shrunk: 32-bit input reserves against its own
+    /// size, since the pipeline will be carrying that.
+    /// Falls back to `rawImageBytes` when the component depth is unknown. Without it,
+    /// 3 bytes per pixel could be 8-bit BGR (working depth 6) or a 24-bit single
+    /// component (working depth 3), and guessing the first would double every
+    /// reservation for any config that happens not to carry the field.
+    public var workingFrameBytes: UInt64 {
+        let components = componentsPerPixel
+        guard components > 0 else { return rawImageBytes }
+        let workingBytesPerPixel = max(max(imageBytesPerPixel, 1), 2 * components)
+        return UInt64(imageWidth) * UInt64(imageHeight) * UInt64(workingBytesPerPixel)
     }
 
     /// Whether a merge of `sourceCount` frames streams its sources to scratch at this
@@ -1000,7 +1042,7 @@ public struct Config: Codable, Sendable {
     /// 12MP and everything at 42MP.
     public func keypointConcurrency(physicalMemory: UInt64) -> KeypointConcurrency {
         let budget = UInt64(Double(physicalMemory) * maxMatMemoryFraction)
-        let bytesPerOp = rawImageBytes * UInt64(max(keypointMemoryMultiplier, 1))
+        let bytesPerOp = workingFrameBytes * UInt64(max(keypointMemoryMultiplier, 1))
 
         var limit = max(1, numberOfFramesToProcessConcurrently)
         var binding = "numberOfFramesToProcessConcurrently"

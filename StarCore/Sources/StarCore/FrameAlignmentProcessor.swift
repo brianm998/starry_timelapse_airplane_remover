@@ -520,7 +520,7 @@ final public actor FrameAlignmentProcessor {
             if !heldLimiterSlot {
                 Log.w("frame \(frameIndex) timed out waiting for a keypoint slot, proceeding")
             }
-            reservedBytes = config.rawImageBytes * UInt64(config.keypointMemoryMultiplier)
+            reservedBytes = config.workingFrameBytes * UInt64(config.keypointMemoryMultiplier)
             if reservedBytes > 0 {
                 await MemoryMonitor.shared.reserve(bytes: reservedBytes)
             }

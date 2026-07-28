@@ -129,7 +129,7 @@ public final actor FrameGraphBuilder {
         Log.i("KeypointLimiter[\(context)]: \(kc.limit) concurrent keypoint ops — " +
               "budget fits \(budgetLimit) " +
               "(image \(config.imageWidth)×\(config.imageHeight)×\(config.imageBytesPerPixel)B, " +
-              "raw \(config.rawImageBytes/(1024*1024))MB × \(config.keypointMemoryMultiplier) = " +
+              "working frame \(config.workingFrameBytes/(1024*1024))MB × \(config.keypointMemoryMultiplier) = " +
               "\(kc.bytesPerOp/(1024*1024))MB/op of \(kc.budget/(1024*1024))MB budget), " +
               "frames cap \(config.numberOfFramesToProcessConcurrently)\(explicit) " +
               "→ bound by \(kc.binding)")
@@ -160,9 +160,10 @@ public final actor FrameGraphBuilder {
 
         let config = await configManager.config()
 
-        // Bytes in one uncompressed source frame.  Used by each op to compute
-        // its memory reservation via OperationType.memoryMultiplier.
-        let rawImageBytes = config.rawImageBytes
+        // The unit each op multiplies by its memoryMultiplier. Deliberately the working
+        // frame rather than the source frame: the multipliers were derived at 16-bit, and
+        // the work they describe is per-pixel, so an 8-bit source must not halve them.
+        let rawImageBytes = config.workingFrameBytes
 
         // Recalculate now that the config is final — dimensions may have been set, or
         // any of the three limiting terms changed, since update(from:) ran.
@@ -597,7 +598,9 @@ public final actor FrameGraphBuilder {
             return
         }
         let config = await configManager.config()
-        let rawImageBytes = config.rawImageBytes
+        // The reservation unit, not the source frame size: multipliers were derived at
+        // the 16-bit working depth, so an 8-bit source must not halve them.
+        let rawImageBytes = config.workingFrameBytes
 
         let errors = ArrayActor<String>([])
 
