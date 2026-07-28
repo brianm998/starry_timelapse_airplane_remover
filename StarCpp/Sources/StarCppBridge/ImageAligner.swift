@@ -4,15 +4,6 @@ import StarCpp
 
 public enum ImageAligner {
 
-    public static func medianMerge(_ frames: [MatWrapper], outlierThreshold: Double,
-                                    includeAll: Bool) -> MatWrapper {
-        var refs = frames.map { $0.ref as MatWrapperRef? }
-        let r = refs.withUnsafeMutableBufferPointer { buf in
-            ia_median_merge(buf.baseAddress, Int32(buf.count), outlierThreshold, includeAll)
-        }
-        return MatWrapper(ref: r!)
-    }
-
     /// Merge `image` with the frames named by `filenames`.
     ///
     /// When holding every source at once would exceed `streamingThresholdBytes`, the
@@ -130,51 +121,6 @@ public enum ImageAligner {
         }
 
         return HomographyResult(frameIndex: Int(frameIndex), warpInfo: warpInfos)
-    }
-
-    public static func align(baseFrameIndex: Int32,
-                              neighbors: [AlignmentNeighborInfo],
-                              homography: [Int: MatWrapper]) -> [WarpedImageResult] {
-        let cNeighbors = neighbors.map { n in
-            AlignmentNeighborData(filename: strdup(n.filename),
-                                   maskFilename: n.maskFilename.flatMap { strdup($0) },
-                                   keypoints: n.keypoints?.ref,
-                                   frameIndex: n.frameIndex)
-        }
-        defer {
-            for n in cNeighbors {
-                free(UnsafeMutablePointer(mutating: n.filename))
-                if let m = n.maskFilename { free(UnsafeMutablePointer(mutating: m)) }
-            }
-        }
-
-        let sortedKeys = homography.keys.sorted()
-        var keys = sortedKeys.map { Int32($0) }
-        var values = sortedKeys.map { homography[$0]!.ref as MatWrapperRef? }
-
-        var outResults = [WarpedImageResultData](repeating: WarpedImageResultData(), count: neighbors.count)
-        var errMsg: UnsafePointer<CChar>?
-
-        let count = cNeighbors.withUnsafeBufferPointer { nBuf in
-            keys.withUnsafeMutableBufferPointer { kBuf in
-                values.withUnsafeMutableBufferPointer { vBuf in
-                    outResults.withUnsafeMutableBufferPointer { rBuf in
-                        ia_align_with_homography(baseFrameIndex,
-                                                  nBuf.baseAddress, Int32(nBuf.count),
-                                                  kBuf.baseAddress, vBuf.baseAddress,
-                                                  Int32(kBuf.count),
-                                                  rBuf.baseAddress, &errMsg)
-                    }
-                }
-            }
-        }
-
-        return outResults.prefix(Int(count)).map { data in
-            WarpedImageResult(
-                warpedFrame: data.warpedFrame.flatMap { MatWrapper(ref: $0) },
-                warpedHorizon: data.warpedHorizon.flatMap { MatWrapper(ref: $0) }
-            )
-        }
     }
 
     /// Warp `neighbors` with `homography` and median merge them with `baseImage`,

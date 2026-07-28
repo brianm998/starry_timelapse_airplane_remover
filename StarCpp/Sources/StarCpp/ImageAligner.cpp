@@ -517,17 +517,6 @@ MatWrapperRef ia_median_merge_image_with_filenames(MatWrapperRef baseImage,
     return nullptr;
 }
 
-MatWrapperRef ia_median_merge(MatWrapperRef *frames, int count,
-                              double outlierThreshold, bool includeAll) {
-    try {
-        std::vector<cv::Mat> mats;
-        for (int i = 0; i < count; i++) {
-            if (frames[i]) mats.push_back(frames[i]->mat);
-        }
-        return medianImageFromMats(mats, outlierThreshold, includeAll);
-    } KHT_CATCH_LOG("ia_median_merge")
-    return nullptr;
-}
 
 MatWrapperRef ia_accumulate_horizon_masks(const char **filenames, int count) {
     if (count <= 0) return wrap(cv::Mat());
@@ -937,48 +926,6 @@ static cv::Mat warpInto(const cv::Mat &src, const cv::Mat &H) {
     return warped;
 }
 
-int ia_align_with_homography(int baseFrameIndex,
-                             const AlignmentNeighborData *neighbors, int neighborCount,
-                             const int *homographyKeys,
-                             MatWrapperRef *homographyValues, int homographyCount,
-                             WarpedImageResultData *outResults,
-                             const char **errorMsg) {
-    if (!neighbors || !outResults) return 0;
-    try {
-        int resultCount = 0;
-        for (int i = 0; i < neighborCount; ++i) {
-            MatWrapperRef neighbor = image_cache_load(neighbors[i].filename);
-            if (!neighbor) continue;
-
-            MatWrapperRef H = homographyForOffset(neighbors[i].frameIndex - baseFrameIndex,
-                                                  homographyKeys, homographyValues,
-                                                  homographyCount);
-            if (!H) { mat_wrapper_release(neighbor); continue; }
-
-            outResults[resultCount].warpedFrame = wrap(warpInto(neighbor->mat, H->mat));
-            outResults[resultCount].warpedHorizon = nullptr;
-
-            if (neighbors[i].maskFilename) {
-                MatWrapperRef maskImg = image_cache_load(neighbors[i].maskFilename);
-                if (maskImg) {
-                    outResults[resultCount].warpedHorizon =
-                        wrap(warpInto(maskImg->mat, H->mat));
-                    mat_wrapper_release(maskImg);
-                }
-            }
-
-            mat_wrapper_release(neighbor);
-            resultCount++;
-        }
-        return resultCount;
-    } catch (const cv::Exception &e) {
-        if (errorMsg) *errorMsg = "OpenCV exception in align";
-        Log_e("Error: %s", e.what());
-    } catch (...) {
-        if (errorMsg) *errorMsg = "Unknown exception";
-    }
-    return 0;
-}
 
 MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIndex,
                                         const AlignmentNeighborData *neighbors,

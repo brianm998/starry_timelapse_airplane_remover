@@ -278,6 +278,19 @@ bool mat_wrapper_is_8_bits(MatWrapperRef ref) {
     return ref && ref->mat.depth() == CV_8U;
 }
 
+// Both of these return a NEW ref that the caller owns and releases, but when no
+// conversion is needed it shares the existing pixels rather than copying them.  Deep
+// copying a conversion that does nothing cost a full frame — 241MB at 42MP, and
+// finishSelective calls ensure16Bits twice per merge.
+//
+// Sharing is the semantic these already had one level up: PixelatedImage.ensure16Bits
+// returns `self` when the mat is already 16-bit, so callers have always had to tolerate
+// getting the same pixels back.  The clone was only ever reached by the two sites that
+// bypass that property and call through MatWrapper directly.
+//
+// As with mat_wrapper_alias, neither handle may be mutated afterwards.  Nothing does:
+// mat_wrapper_data_ptr is const, and the one Swift accessor that casts it away
+// (MatWrapper.mutableBuffer) has no callers.
 MatWrapperRef mat_wrapper_ensure_16_bits(MatWrapperRef ref) {
     if (!ref) return nullptr;
     try {
@@ -286,7 +299,7 @@ MatWrapperRef mat_wrapper_ensure_16_bits(MatWrapperRef ref) {
             ref->mat.convertTo(img16, CV_16U, 256.0);
             return wrap(img16);
         }
-        return mat_wrapper_clone(ref);
+        return mat_wrapper_alias(ref);
     } KHT_CATCH_LOG("mat_wrapper_ensure_16_bits")
     return nullptr;
 }
@@ -299,7 +312,7 @@ MatWrapperRef mat_wrapper_ensure_8_bits(MatWrapperRef ref) {
             ref->mat.convertTo(img8, CV_8U, 1.0/256.0);
             return wrap(img8);
         }
-        return mat_wrapper_clone(ref);
+        return mat_wrapper_alias(ref);
     } KHT_CATCH_LOG("mat_wrapper_ensure_8_bits")
     return nullptr;
 }

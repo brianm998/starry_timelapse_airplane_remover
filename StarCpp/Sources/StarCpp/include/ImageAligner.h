@@ -38,12 +38,6 @@ MatWrapperRef ia_median_merge_image_with_filenames(MatWrapperRef baseImage,
                                                     const char *scratchDir,
                                                     int64_t streamingThresholdBytes);
 
-// Merge array of MatWrapperRef directly.  Every source is resident by definition
-// here, so there is nothing to stream: a caller that would have to hold all of them
-// just to make this call wants ia_align_and_median_merge instead.
-MatWrapperRef ia_median_merge(MatWrapperRef *frames, int count,
-                              double outlierThreshold, bool includeAll);
-
 // --- Feature detection ---
 
 // Detect features on a single frame. Returns new OCVFeatureSetRef on success, NULL on failure.
@@ -82,37 +76,25 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
 
 // --- Alignment with existing homography ---
 
-// Align neighbors using pre-computed homographies.
-// homographyKeys: array of int offsets (neighbor.frameIndex - baseFrameIndex)
-// homographyValues: corresponding MatWrapperRef homographies
-// Returns count of warped results written.
-//
-// Every warp is returned, so they are all live at once — see
-// ia_align_and_median_merge for the bounded-memory way to merge them.
-int ia_align_with_homography(int baseFrameIndex,
-                             const AlignmentNeighborData *neighbors, int neighborCount,
-                             const int *homographyKeys,
-                             MatWrapperRef *homographyValues, int homographyCount,
-                             WarpedImageResultData *outResults,
-                             const char **errorMsg);
-
 // Align neighbors with pre-computed homographies and median merge them with
 // baseImage, without ever holding all of the warps at once.
 //
-// ia_align_with_homography followed by ia_median_merge computes the same thing, but
-// that shape has to keep every warp resident to make the second call: baseImage +
-// neighborCount warps + the merge output, which is ten whole frames for the default
-// eight neighbours (2422MB measured at 42MP).  Fusing the two steps means each warp
-// can be spilled to a raw scratch file under scratchDir and released as soon as
-// warpPerspective returns it, so the peak holds the base, one neighbour, one warp
-// and the output regardless of how many neighbours there are.
+// Fused on purpose.  Warping into an array and merging that array afterwards computes
+// the same thing, but has to keep every warp resident in order to make the second
+// call: baseImage + neighborCount warps + the merge output, which is ten whole frames
+// for the default eight neighbours (2422MB measured at 42MP).  That is what the
+// separate ia_align_with_homography / ia_median_merge pair used to do, and why they
+// were deleted rather than kept as an alternative.  Keeping the warps inside one call
+// means each can be spilled to a raw scratch file under scratchDir and released as
+// soon as warpPerspective returns it, so the peak holds the base, one neighbour, one
+// warp and the output regardless of how many neighbours there are.
 //
 // Same threshold rule as ia_median_merge_image_with_filenames: streaming engages
 // only when the all-resident set would exceed streamingThresholdBytes, and <= 0
 // disables it.  The two paths produce bit-identical output.
 //
-// The warped horizon masks ia_align_with_homography also produces are NOT computed
-// here — its one caller discarded them.
+// Warped horizon masks are NOT produced here.  The older separate-align path computed
+// them and its one caller discarded them.
 //
 // outWarpCount (nullable) receives how many neighbours made it into the merge.
 // Returns NULL if that count is zero, or on error; caller must release the result.

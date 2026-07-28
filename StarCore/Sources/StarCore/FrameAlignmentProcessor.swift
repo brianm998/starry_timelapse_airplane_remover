@@ -788,7 +788,7 @@ final public actor FrameAlignmentProcessor {
                )
             {
                 // No keypoints needed here. This is the warp path: the homographies were
-                // computed earlier and are passed in, and ia_align_with_homography reads
+                // computed earlier and are passed in, and ia_align_and_median_merge reads
                 // only filename, maskFilename and frameIndex off each neighbour — it
                 // never touches the keypoints field. Loading them was pinning up to
                 // numberAlignedNeighborFrames feature sets per frame in the strong,
