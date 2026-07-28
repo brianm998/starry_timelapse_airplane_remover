@@ -1363,7 +1363,12 @@ public final class ImageSequenceViewModel {
         self.ignoreLowerPixels = CGFloat(ignoreLowerPixels) // XXX need to sync back the other dir
                     
         Log.d("loaded config \(config.imageSequenceDirname)")
-        
+
+        // Drop the previous sequence's keypoint sets. They are keyed by file path, so a
+        // new sequence never hits them, and holding them would pin one entry per frame
+        // per alignment type from every sequence opened this session.
+        await keypointCache.clear()
+
         let imageSequence = try ImageSequence(dirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
                                               supportedImageFileTypes: config.supportedImageFileTypes)
 

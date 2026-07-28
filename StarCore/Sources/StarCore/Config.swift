@@ -298,6 +298,20 @@ public struct Config: Codable, Sendable {
     /// `keypointMemoryMultiplier`, which distorts the accounting for every op.
     public var maxConcurrentKeypointOps: Int = 0
 
+    /// Byte budget for the in-memory keypoint cache, in megabytes. 0 = unbounded.
+    ///
+    /// The cache deduplicates keypoint-file parsing across neighbouring HomographyOps,
+    /// and it held strong references with no bound: one entry per frame per alignment
+    /// type, so 2000 entries on a 1000-frame sequence. Sky entries are ~1MB (capped by
+    /// `alignmentMaxKeypoints`) but earth entries are not capped at all — AKAZE runs with
+    /// a 1e-5 threshold and ignores `maxKeypoints` — so per-entry size varies by orders
+    /// of magnitude and an entry-count limit would not bound anything. Hence bytes.
+    ///
+    /// The access pattern is local: a HomographyOp reads only its own neighbours. So this
+    /// only needs to cover roughly `numberOfFramesToProcessConcurrently x
+    /// numberAlignedNeighborFrames` entries for the hit rate to stay high.
+    public var keypointCacheMaxMB: Int = 1024
+
     /// Estimated peak memory of one merge op, and of one outlier op, as a multiple of
     /// the raw frame — NOT counting the sources of a merge inside the op that keeps
     /// them all in memory. Charge an op with `effectiveMergeMemoryMultiplier` /
@@ -688,6 +702,7 @@ public struct Config: Codable, Sendable {
         self.alignmentHalfResolutionKeypoints = try c.decodeIfPresent(Bool.self, forKey: .alignmentHalfResolutionKeypoints) ?? self.alignmentHalfResolutionKeypoints
         self.mergeStreamingThresholdMB = try c.decodeIfPresent(Int.self, forKey: .mergeStreamingThresholdMB) ?? self.mergeStreamingThresholdMB
         self.maxConcurrentKeypointOps = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentKeypointOps) ?? self.maxConcurrentKeypointOps
+        self.keypointCacheMaxMB = try c.decodeIfPresent(Int.self, forKey: .keypointCacheMaxMB) ?? self.keypointCacheMaxMB
         
 
         self.starVersion = try c.decodeIfPresent(String.self, forKey: .starVersion) ?? self.starVersion
