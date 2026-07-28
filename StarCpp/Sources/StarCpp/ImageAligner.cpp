@@ -142,13 +142,18 @@ static MatWrapperRef medianImageFromMats(const std::vector<cv::Mat>& mats,
 // --- Streaming median merge ------------------------------------------------
 //
 // medianMergeTyped only ever needs row y of every input, so the whole set does
-// not have to be resident.  Sources given as filenames are decoded one at a
-// time into a raw scratch file and released immediately; the merge then reads
+// not have to be resident.  A source is handed to MergeSpiller one at a time,
+// written to a raw scratch file and released immediately; the merge then reads
 // one band of rows back from each scratch file per iteration.
 //
 // Peak memory becomes (sources x bandRows x rowBytes) + the output frame rather
 // than (sources x frameBytes) + the output frame.  At 42MP with 17 sources that
 // is roughly 290MB instead of 4.4GB.
+//
+// Sources reach the spiller two ways: decoded from a filename
+// (medianImageStreaming, for merges whose inputs are already on disk) or produced
+// in memory and spilled on the spot (ia_align_and_median_merge, where each warp is
+// spilled as soon as warpPerspective returns it).
 //
 // The result is bit-identical to medianImageFromMats: the same kernel sees the
 // same values in the same order, only the storage behind the row pointers
@@ -212,106 +217,143 @@ private:
     std::string path_;
 };
 
+// Collects merge sources spilled to raw scratch files, then merges them a band of
+// rows at a time.  Sources are added one at a time and may be released as soon as
+// add() returns, so the peak holds one source rather than all of them.  The files
+// are removed when this goes out of scope, on every exit path.
+class MergeSpiller {
+public:
+    explicit MergeSpiller(const char *scratchDir) {
+        std::error_code ec;
+        dir_ = (scratchDir && *scratchDir)
+            ? std::string(scratchDir)
+            : std::filesystem::temp_directory_path(ec).string();
+        std::filesystem::create_directories(dir_, ec);
+
+        // Unique per merge within this process; star does not run two instances
+        // against one temp dir.
+        static std::atomic<uint64_t> scratchSeq{0};
+        batch_ = scratchSeq.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    // Adopt the geometry every source has to match.  Called with the base frame so
+    // a mismatched source is rejected even when it is the first one spilled.
+    void expect(const cv::Mat &m) {
+        if (rows_ != 0 || m.empty()) return;
+        rows_ = m.rows;
+        cols_ = m.cols;
+        type_ = m.type();
+        rowBytes_ = (size_t)m.cols * m.elemSize();
+    }
+
+    bool hasGeometry() const { return rows_ != 0; }
+    bool matches(const cv::Mat &m) const {
+        return m.rows == rows_ && m.cols == cols_ && m.type() == type_;
+    }
+
+    // Spill one source.  The caller may release it as soon as this returns.
+    bool add(const cv::Mat &m) {
+        if (m.empty()) return false;
+        expect(m);                       // the first source defines the geometry
+        if (!matches(m)) return false;
+
+        char name[64];
+        std::snprintf(name, sizeof name, "star_merge_%llu_%zu.raw",
+                      (unsigned long long)batch_, files_.size());
+        const std::string path = dir_ + "/" + name;
+        auto sc = std::make_unique<MergeScratch>();
+        if (!sc->create(path) || !sc->write(m, rowBytes_)) {
+            Log_e("median merge: cannot write scratch file %s", path.c_str());
+            return false;
+        }
+        files_.push_back(std::move(sc));
+        return true;
+    }
+
+    // residentMats stay in RAM (there is at most one, the base image) and come
+    // first, in the order given, then each spilled source in the order it was
+    // added — the same order the all-resident path would see.
+    MatWrapperRef merge(const std::vector<cv::Mat> &residentMats,
+                        double k, bool includeAll) {
+        if (rows_ <= 0 || cols_ <= 0) return wrap(cv::Mat());
+        if (residentMats.empty() && files_.empty()) return wrap(cv::Mat());
+
+        const int depth = CV_MAT_DEPTH(type_);
+        if (depth != CV_8U && depth != CV_16U) return wrap(cv::Mat());
+        const int ch = CV_MAT_CN(type_);
+        const int band = std::max(1, std::min(kMergeBandRows, rows_));
+
+        // One reusable buffer per spilled source, allocated once for all bands.
+        std::vector<std::vector<uint8_t>> bandBufs(files_.size());
+        for (auto &b : bandBufs) b.resize(rowBytes_ * (size_t)band);
+
+        cv::Mat output(rows_, cols_, type_);
+
+        std::vector<cv::Mat> bandMats;
+        bandMats.reserve(residentMats.size() + files_.size());
+
+        for (int y0 = 0; y0 < rows_; y0 += band) {
+            const int n = std::min(band, rows_ - y0);
+
+            bandMats.clear();
+            for (const auto &m : residentMats) bandMats.push_back(m.rowRange(y0, y0 + n));
+            for (size_t i = 0; i < files_.size(); ++i) {
+                if (!files_[i]->readBand(bandBufs[i].data(), rowBytes_, y0, n)) {
+                    Log_e("median merge: scratch read failed at row %d", y0);
+                    return wrap(cv::Mat());
+                }
+                bandMats.push_back(cv::Mat(n, cols_, type_, bandBufs[i].data(), rowBytes_));
+            }
+
+            cv::Mat outBand = output.rowRange(y0, y0 + n);
+            if (depth == CV_8U) medianMergeTyped<uchar>(outBand, bandMats, k, includeAll, n, cols_, ch);
+            else                medianMergeTyped<uint16_t>(outBand, bandMats, k, includeAll, n, cols_, ch);
+        }
+
+        Log_d("median merge: streamed %zu sources in bands of %d rows",
+              files_.size() + residentMats.size(), band);
+        return wrap(output);
+    }
+
+private:
+    std::string dir_;
+    uint64_t batch_ = 0;
+    int rows_ = 0, cols_ = 0, type_ = 0;
+    size_t rowBytes_ = 0;
+    std::vector<std::unique_ptr<MergeScratch>> files_;
+};
+
 } // namespace
 
 // residentMats stay in RAM (there is at most one, the base image); every
-// filename is streamed.  Returns an empty wrapper on geometry mismatch or I/O
-// failure, matching medianImageFromMats' behaviour.
+// filename is decoded, spilled and released one at a time.  Returns an empty
+// wrapper on geometry mismatch or I/O failure, matching medianImageFromMats'
+// behaviour.
 static MatWrapperRef medianImageStreaming(const std::vector<cv::Mat> &residentMats,
                                           const char **filenames, int fileCount,
                                           double k, bool includeAll,
                                           const char *scratchDir)
 {
-    int rows = 0, cols = 0, type = 0;
-    if (!residentMats.empty() && !residentMats[0].empty()) {
-        rows = residentMats[0].rows;
-        cols = residentMats[0].cols;
-        type = residentMats[0].type();
-    }
-
-    std::error_code ec;
-    std::string dir = (scratchDir && *scratchDir)
-        ? std::string(scratchDir)
-        : std::filesystem::temp_directory_path(ec).string();
-    std::filesystem::create_directories(dir, ec);
-
-    // Unique per merge within this process; star does not run two instances
-    // against one temp dir.
-    static std::atomic<uint64_t> scratchSeq{0};
-    const uint64_t batch = scratchSeq.fetch_add(1, std::memory_order_relaxed);
-
-    std::vector<std::unique_ptr<MergeScratch>> streamed;
-    streamed.reserve((size_t)std::max(fileCount, 0));
-    size_t rowBytes = 0;
+    MergeSpiller spiller(scratchDir);
+    if (!residentMats.empty()) spiller.expect(residentMats[0]);
 
     for (int i = 0; i < fileCount; ++i) {
         MatWrapperRef img = image_cache_load(filenames[i]);
         if (!img) continue;                        // skip unreadable, as before
         if (img->mat.empty()) { mat_wrapper_release(img); continue; }
 
-        const cv::Mat &m = img->mat;
-        if (rows == 0) { rows = m.rows; cols = m.cols; type = m.type(); }
-        if (m.rows != rows || m.cols != cols || m.type() != type) {
+        if (spiller.hasGeometry() && !spiller.matches(img->mat)) {
             Log_w("median merge: %s does not match the base geometry", filenames[i]);
             mat_wrapper_release(img);
             return wrap(cv::Mat());
         }
-        if (rowBytes == 0) rowBytes = (size_t)m.cols * m.elemSize();
 
-        char name[64];
-        std::snprintf(name, sizeof name, "star_merge_%llu_%d.raw",
-                      (unsigned long long)batch, i);
-        auto sc = std::make_unique<MergeScratch>();
-        const std::string path = dir + "/" + name;
-        if (!sc->create(path) || !sc->write(m, rowBytes)) {
-            Log_e("median merge: cannot write scratch file %s", path.c_str());
-            mat_wrapper_release(img);
-            return wrap(cv::Mat());
-        }
+        const bool spilled = spiller.add(img->mat);
         mat_wrapper_release(img);       // decoded frame released; only the file remains
-        streamed.push_back(std::move(sc));
+        if (!spilled) return wrap(cv::Mat());
     }
 
-    if (rows <= 0 || cols <= 0) return wrap(cv::Mat());
-    if (residentMats.empty() && streamed.empty()) return wrap(cv::Mat());
-    if (rowBytes == 0) rowBytes = (size_t)cols * CV_ELEM_SIZE(type);
-
-    const int depth = CV_MAT_DEPTH(type);
-    if (depth != CV_8U && depth != CV_16U) return wrap(cv::Mat());
-    const int ch = CV_MAT_CN(type);
-    const int band = std::max(1, std::min(kMergeBandRows, rows));
-
-    // One reusable buffer per streamed source, allocated once for all bands.
-    std::vector<std::vector<uint8_t>> bandBufs(streamed.size());
-    for (auto &b : bandBufs) b.resize(rowBytes * (size_t)band);
-
-    cv::Mat output(rows, cols, type);
-
-    std::vector<cv::Mat> bandMats;
-    bandMats.reserve(residentMats.size() + streamed.size());
-
-    for (int y0 = 0; y0 < rows; y0 += band) {
-        const int n = std::min(band, rows - y0);
-
-        // Same source order as the all-resident path: resident first, then files.
-        bandMats.clear();
-        for (const auto &m : residentMats) bandMats.push_back(m.rowRange(y0, y0 + n));
-        for (size_t i = 0; i < streamed.size(); ++i) {
-            if (!streamed[i]->readBand(bandBufs[i].data(), rowBytes, y0, n)) {
-                Log_e("median merge: scratch read failed at row %d", y0);
-                return wrap(cv::Mat());
-            }
-            bandMats.push_back(cv::Mat(n, cols, type, bandBufs[i].data(), rowBytes));
-        }
-
-        cv::Mat outBand = output.rowRange(y0, y0 + n);
-        if (depth == CV_8U) medianMergeTyped<uchar>(outBand, bandMats, k, includeAll, n, cols, ch);
-        else                medianMergeTyped<uint16_t>(outBand, bandMats, k, includeAll, n, cols, ch);
-    }
-
-    Log_d("median merge: streamed %zu sources in bands of %d rows",
-          streamed.size() + residentMats.size(), band);
-    return wrap(output);
+    return spiller.merge(residentMats, k, includeAll);
 }
 
 // --- Gradient masks ---
@@ -848,6 +890,23 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
     return 0;
 }
 
+// The homography for one neighbour, keyed by its offset from the base frame.
+// Not owned; null when this neighbour has none and cannot be warped.
+static MatWrapperRef homographyForOffset(int offset, const int *keys,
+                                         MatWrapperRef *values, int count) {
+    for (int j = 0; j < count; ++j) {
+        if (keys[j] == offset) return values[j];
+    }
+    return nullptr;
+}
+
+static cv::Mat warpInto(const cv::Mat &src, const cv::Mat &H) {
+    cv::Mat warped;
+    cv::warpPerspective(src, warped, H, src.size(),
+                        cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0,0,0,0));
+    return warped;
+}
+
 int ia_align_with_homography(int baseFrameIndex,
                              const AlignmentNeighborData *neighbors, int neighborCount,
                              const int *homographyKeys,
@@ -861,29 +920,19 @@ int ia_align_with_homography(int baseFrameIndex,
             MatWrapperRef neighbor = image_cache_load(neighbors[i].filename);
             if (!neighbor) continue;
 
-            int offset = neighbors[i].frameIndex - baseFrameIndex;
-
-            // Find matching homography
-            MatWrapperRef H = nullptr;
-            for (int j = 0; j < homographyCount; j++) {
-                if (homographyKeys[j] == offset) { H = homographyValues[j]; break; }
-            }
+            MatWrapperRef H = homographyForOffset(neighbors[i].frameIndex - baseFrameIndex,
+                                                  homographyKeys, homographyValues,
+                                                  homographyCount);
             if (!H) { mat_wrapper_release(neighbor); continue; }
 
-            cv::Mat warped;
-            cv::warpPerspective(neighbor->mat, warped, H->mat, neighbor->mat.size(),
-                                cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0,0,0,0));
-
-            outResults[resultCount].warpedFrame = wrap(warped);
+            outResults[resultCount].warpedFrame = wrap(warpInto(neighbor->mat, H->mat));
             outResults[resultCount].warpedHorizon = nullptr;
 
             if (neighbors[i].maskFilename) {
                 MatWrapperRef maskImg = image_cache_load(neighbors[i].maskFilename);
                 if (maskImg) {
-                    cv::Mat warpedMask;
-                    cv::warpPerspective(maskImg->mat, warpedMask, H->mat, maskImg->mat.size(),
-                                        cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0,0,0,0));
-                    outResults[resultCount].warpedHorizon = wrap(warpedMask);
+                    outResults[resultCount].warpedHorizon =
+                        wrap(warpInto(maskImg->mat, H->mat));
                     mat_wrapper_release(maskImg);
                 }
             }
@@ -899,6 +948,105 @@ int ia_align_with_homography(int baseFrameIndex,
         if (errorMsg) *errorMsg = "Unknown exception";
     }
     return 0;
+}
+
+MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIndex,
+                                        const AlignmentNeighborData *neighbors,
+                                        int neighborCount,
+                                        const int *homographyKeys,
+                                        MatWrapperRef *homographyValues,
+                                        int homographyCount,
+                                        double outlierThreshold, bool includeAll,
+                                        const char *scratchDir,
+                                        int64_t streamingThresholdBytes,
+                                        int *outWarpCount,
+                                        const char **errorMsg) {
+    if (outWarpCount) *outWarpCount = 0;
+    if (!baseImage || baseImage->mat.empty()) {
+        if (errorMsg) *errorMsg = "null base image";
+        return nullptr;
+    }
+    if (!neighbors) {
+        if (errorMsg) *errorMsg = "no neighbors to align";
+        return nullptr;
+    }
+    try {
+        const cv::Mat &base = baseImage->mat;
+        const uint64_t frameBytes = (uint64_t)base.total() * base.elemSize();
+        const uint64_t residentBytes = frameBytes * (uint64_t)(neighborCount + 1);
+        const bool stream = streamingThresholdBytes > 0 &&
+                            residentBytes > (uint64_t)streamingThresholdBytes;
+
+        // Only one of these is used: warps are either banked here or spilled there.
+        std::vector<cv::Mat> warps;
+        MergeSpiller spiller(scratchDir);
+        if (stream) {
+            Log_i("aligned merge: streaming %d sources "
+                  "(all-resident would be %lluMB, threshold %lluMB)",
+                  neighborCount + 1,
+                  (unsigned long long)(residentBytes / (1024 * 1024)),
+                  (unsigned long long)((uint64_t)streamingThresholdBytes / (1024 * 1024)));
+            spiller.expect(base);
+        } else {
+            warps.reserve((size_t)std::max(neighborCount, 0));
+        }
+
+        int warpCount = 0;
+        for (int i = 0; i < neighborCount; ++i) {
+            MatWrapperRef neighbor = image_cache_load(neighbors[i].filename);
+            if (!neighbor) continue;
+
+            MatWrapperRef H = homographyForOffset(neighbors[i].frameIndex - baseFrameIndex,
+                                                  homographyKeys, homographyValues,
+                                                  homographyCount);
+            if (!H) { mat_wrapper_release(neighbor); continue; }
+
+            // Scoped so the warp is freed at the end of the iteration on the
+            // streaming path — that release is the whole point of fusing the merge
+            // into the alignment.
+            {
+                cv::Mat warped = warpInto(neighbor->mat, H->mat);
+                mat_wrapper_release(neighbor);
+
+                if (warped.rows != base.rows || warped.cols != base.cols ||
+                    warped.type() != base.type()) {
+                    Log_w("aligned merge: warp of %s does not match the base geometry",
+                          neighbors[i].filename);
+                    continue;
+                }
+
+                if (stream) {
+                    if (!spiller.add(warped)) {   // logs its own failure
+                        if (errorMsg) *errorMsg = "cannot spill warped frame to scratch";
+                        return nullptr;
+                    }
+                } else {
+                    warps.push_back(warped);
+                }
+            }
+            warpCount++;
+        }
+
+        if (outWarpCount) *outWarpCount = warpCount;
+        if (warpCount == 0) return nullptr;   // caller falls back to the original frame
+
+        if (stream) return spiller.merge({base}, outlierThreshold, includeAll);
+
+        std::vector<cv::Mat> mats;
+        mats.reserve(warps.size() + 1);
+        mats.push_back(base);
+        mats.insert(mats.end(), warps.begin(), warps.end());
+        return medianImageFromMats(mats, outlierThreshold, includeAll);
+    } catch (const cv::Exception &e) {
+        if (errorMsg) *errorMsg = "OpenCV exception in aligned merge";
+        Log_e("Error: %s", e.what());
+    } catch (const std::exception &e) {
+        if (errorMsg) *errorMsg = e.what();
+        Log_e("Error: %s", e.what());
+    } catch (...) {
+        if (errorMsg) *errorMsg = "Unknown exception";
+    }
+    return nullptr;
 }
 
 MatWrapperRef ia_gradient_mask_into_sky(MatWrapperRef binaryMask, int gradientDistance) {

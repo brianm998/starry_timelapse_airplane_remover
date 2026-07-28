@@ -299,35 +299,41 @@ public struct Config: Codable, Sendable {
     public var maxConcurrentKeypointOps: Int = 0
 
     /// Estimated peak memory of one merge op, and of one outlier op, as a multiple of
-    /// the raw frame. Both are 14 for a structural reason rather than a coincidence:
-    /// either op can be the one that builds the star-aligned frame, and that build is
-    /// the dominant cost in both.
+    /// the raw frame — NOT counting the sources of a merge inside the op that keeps
+    /// them all in memory. Charge an op with `effectiveMergeMemoryMultiplier` /
+    /// `effectiveOutlierMemoryMultiplier`, which add that back when it applies;
+    /// nothing should use these two values directly.
     ///
-    /// Derived, not guessed. Building an aligned frame warps every neighbour and banks
-    /// all of them before merging: `ia_align_with_homography` releases only the source
-    /// neighbour each iteration (ImageAligner.cpp:891), never the warp, so
-    /// `imagesToMerge` at FrameAlignmentProcessor.swift:867 is the original plus
-    /// `numberAlignedNeighborFrames` (8) warps, and the merge then allocates its output
-    /// — ten full frames live at once. Measured directly: a 9-source resident merge at
-    /// 42MP peaks at 2422MB against a 241.3MiB raw frame, i.e. 10.0x, which agrees with
-    /// 10.17x computed by walking the allocations.
+    /// Either op can be the one that builds an aligned frame, which is why both share
+    /// the resident term below. A streaming build warps or decodes one source at a
+    /// time and spills it (`ia_align_and_median_merge`,
+    /// `ia_median_merge_image_with_filenames`), so it peaks at the original, one
+    /// source, one warp and the merge output no matter how many neighbours there are.
+    /// Measured in a fresh process, one 9-source aligned merge at 42MP against a
+    /// 241.3MiB raw frame: 727MB streaming (3.02x) versus 2178MB resident (9.02x).
     ///
-    /// The worst case adds a little on top of that 10x. For a merge it is
-    /// `cleanMethod = .selective`, which holds the original and an
-    /// `ensure16Bits` clone of the earth-aligned frame across the star build (12.4x).
-    /// For an outlier op it is `tripodHeadWasMoving`, whose earth align also banks 8
-    /// warped horizon masks (12.7x). 14 is that peak plus ~10% margin; 13 is the floor.
+    /// On top of that build, measured at 12MP with streaming forced on. These runs used
+    /// `--num-concurrent-renders 2`, not 1 as MemoryProbe advises, because concurrency
+    /// 1 stalls the keypoint phase. Two ops in flight means the reported deltas come in
+    /// pairs — both ops of a pair are charged the same process growth — so what the
+    /// pair figure has to fit inside is TWO reservations, not one:
+    ///   - merge ops peaked at 3.0x per pair with `cleanMethod = .automatic` and 5.2x
+    ///     with `.selective`, which also holds the original and an `ensure16Bits` clone
+    ///     of the earth-aligned frame, against 12x for the pair at 6 each;
+    ///   - outlier ops peaked at 11.5x per pair, typically 4.3x, against 18x for the
+    ///     pair at 9 each. The blobber is the bulk of it, and walking its allocations
+    ///     agrees with the halved pair figure of 5.7x: the original and the
+    ///     star-aligned frame at 1x each, the subtraction image and the `[UInt16]` copy
+    ///     of its pixels at 0.33x each (it is single channel), and a `[SortablePixel?]`
+    ///     grid at 8 bytes per pixel for 1.33x, so 4x before the candidate pixels' own
+    ///     objects. That is why the outlier figure is now the larger of the two, where
+    ///     before both were pinned to the aligned build.
     ///
-    /// Note these do NOT come down as a result of the streaming median merge
-    /// (Config.mergeStreamingThresholdMB). Streaming only reaches
-    /// `ia_median_merge_image_with_filenames`, whose sole caller is the static-earth
-    /// branch at FrameAlignmentProcessor.swift:818. The star-aligned path — which every
-    /// configuration takes — goes through `ia_median_merge` instead, which accepts
-    /// already-resident mats and has no threshold at all. Giving that path a scratch
-    /// spill too would remove the 8x warp term and let both constants drop to roughly
-    /// 6 and 9; until then they have to cover it.
-    public var outlierMemoryMultiplier: Int = 14
-    public var mergeMemoryMultiplier: Int = 14
+    /// `tripodHeadWasMoving` used to add 8 warped horizon masks to an outlier op; the
+    /// aligned merge no longer produces those at all, since its one caller discarded
+    /// them.
+    public var outlierMemoryMultiplier: Int = 9
+    public var mergeMemoryMultiplier: Int = 6
 
     // used by updatable log
     public var progressBarLength = 35
@@ -560,19 +566,28 @@ public struct Config: Codable, Sendable {
     /// different scales.
     public var alignmentHalfResolutionKeypoints: Bool = false
 
-    /// Above this many bytes of would-be-resident sources, the median merge streams
+    /// Above this many bytes of would-be-resident sources, a median merge streams
     /// from scratch files instead of holding every frame in memory.
     ///
     /// The merge needs all N values for a pixel at once, so the naive form holds
-    /// N whole frames: base + `numberStaticNeighborFrames` (16) is ~4.3GB at 42MP,
-    /// under a reservation of only 3-4x the frame. Streaming decodes each source
-    /// once into a raw scratch file under `tempOutputPath` and reads back a band of
-    /// rows at a time, which bounds peak memory to a few hundred MB. The output is
+    /// N whole frames. Streaming puts each source into a raw scratch file under
+    /// `tempOutputPath` as it is produced or decoded, then reads back a band of rows
+    /// at a time, which bounds peak memory to a few hundred MB. The output is
     /// bit-identical; the cost is writing and re-reading each source once.
+    ///
+    /// This governs both merges that matter:
+    ///   - the static-earth merge, base + `numberStaticNeighborFrames` (16) decoded
+    ///     from disk, ~4.3GB at 42MP;
+    ///   - the star-aligned build, base + `numberAlignedNeighborFrames` (8) warps,
+    ///     ~2.3GB at 42MP — measured 2178MB resident against 728MB streaming.
     ///
     /// The default engages at 42MP (9 sources = 2.3GB, 17 = 4.3GB) but not at 12MP
     /// (9 = 0.65GB, 17 = 1.2GB), which is where the all-resident path already works.
     /// Set to 0 to always keep everything resident.
+    ///
+    /// The per-op memory estimates follow this: see `mergeStreams(sourceCount:)` and
+    /// `residentBuildExtraMultiplier`, which apply the same test so a reservation
+    /// cannot describe the path not taken.
     public var mergeStreamingThresholdMB: Int = 2048
 
     public var imageWidth: Int = 0
@@ -881,6 +896,64 @@ public struct Config: Codable, Sendable {
     /// all memory gating.
     public var rawImageBytes: UInt64 {
         UInt64(imageWidth) * UInt64(imageHeight) * UInt64(max(imageBytesPerPixel, 1))
+    }
+
+    /// Whether a merge of `sourceCount` frames streams its sources to scratch at this
+    /// frame size, rather than holding all of them at once.
+    ///
+    /// Mirrors the threshold check in `ia_align_and_median_merge` and
+    /// `ia_median_merge_image_with_filenames`. The estimate and the code have to agree
+    /// on this, or a reservation ends up describing the path that was not taken.
+    ///
+    /// For an 8-bit source this reads low, because `rawImageBytes` counts source bytes
+    /// per pixel while the C++ check measures the 16-bit working frame. That errs
+    /// toward calling a merge resident, i.e. toward the larger reservation.
+    public func mergeStreams(sourceCount: Int) -> Bool {
+        guard mergeStreamingThresholdMB > 0 else { return false }
+        let sources = UInt64(max(sourceCount, 0))
+        return rawImageBytes * sources > UInt64(mergeStreamingThresholdMB) * 1024 * 1024
+    }
+
+    /// Extra multiples of the raw frame for whichever merge inside a merge or outlier
+    /// op holds all of its sources at once, or 0 when they all stream.
+    ///
+    /// Two merges can run inside those ops, and each is streamed or resident on its
+    /// own source count, so the thresholds are crossed at different frame sizes:
+    ///   - the star-aligned build, `numberAlignedNeighborFrames` + 1 sources;
+    ///   - the static-earth build, `numberStaticNeighborFrames` + 1 sources, which
+    ///     with the default 16 stays resident up to a much smaller frame than the
+    ///     aligned build does.
+    /// They happen one after the other, so the larger of the two is what has to be
+    /// covered rather than their sum.
+    ///
+    /// A resident build holds every source instead of one, and the sources are what
+    /// grows with the neighbour count: measured at 42MP, 8 aligned neighbours cost
+    /// 9.03x resident against 3.02x streaming, i.e. 6 more multiples of the frame for
+    /// 8 neighbours. Charged as `neighbours - 1` so the same shape covers the
+    /// 16-neighbour static build with a little margin rather than exactly.
+    ///
+    /// This is what the old flat 14 was missing: at 12MP the static-earth build is
+    /// resident by default and needs ~18x, which is why merge ops in a 12MP run were
+    /// logging OVER RESERVATION against it.
+    public var residentBuildExtraMultiplier: Int {
+        var extra = 0
+        if !mergeStreams(sourceCount: numberAlignedNeighborFrames + 1) {
+            extra = max(extra, numberAlignedNeighborFrames - 1)
+        }
+        if !mergeStreams(sourceCount: numberStaticNeighborFrames + 1) {
+            extra = max(extra, numberStaticNeighborFrames - 1)
+        }
+        return max(extra, 0)
+    }
+
+    /// What one merge op should reserve, as a multiple of the raw frame.
+    public var effectiveMergeMemoryMultiplier: Int {
+        mergeMemoryMultiplier + residentBuildExtraMultiplier
+    }
+
+    /// What one outlier op should reserve, as a multiple of the raw frame.
+    public var effectiveOutlierMemoryMultiplier: Int {
+        outlierMemoryMultiplier + residentBuildExtraMultiplier
     }
 
     /// The result of `keypointConcurrency(physicalMemory:)`.

@@ -39,10 +39,13 @@ extension OperationType {
         case .starHomography:      return 0
         case .earthHomography:     return 0
         case .alignmentValidation: return 0
-        // Fallbacks only — FrameGraphBuilder passes the config values explicitly.
-        // Kept in step with those defaults (14, derived) so they cannot drift apart.
-        case .outliers:            return 14
-        case .merge:               return 14
+        // Fallbacks only — FrameGraphBuilder passes config.effective*MemoryMultiplier
+        // explicitly.  These are the config defaults (9 and 6) plus the largest
+        // residentBuildExtraMultiplier those defaults can produce
+        // (numberStaticNeighborFrames - 1 = 15): a fallback cannot see the frame size,
+        // so it assumes no merge inside the op streams.
+        case .outliers:            return 24
+        case .merge:               return 21
         }
     }
 }
@@ -503,7 +506,7 @@ public final actor FrameGraphBuilder {
                 let outlierOp = OutlierOp(
                   frame: frame,
                   rawImageBytes: rawImageBytes,
-                  memoryMultiplier: UInt64(config.outlierMemoryMultiplier)
+                  memoryMultiplier: UInt64(config.effectiveOutlierMemoryMultiplier)
                 ) { errorString in
                     Task { await errors.append(errorString) }
                     errorClosure(errorString)
@@ -521,7 +524,7 @@ public final actor FrameGraphBuilder {
             let mergeOp = MergeOp(
               frame: frame,
               rawImageBytes: rawImageBytes,
-              memoryMultiplier: UInt64(config.mergeMemoryMultiplier)
+              memoryMultiplier: UInt64(config.effectiveMergeMemoryMultiplier)
             ) { errorString in
                 Task { await errors.append(errorString) }
                 errorClosure(errorString)
@@ -617,7 +620,7 @@ public final actor FrameGraphBuilder {
             let mergeOp = MergeOp(
               frame: frame,
               rawImageBytes: rawImageBytes,
-              memoryMultiplier: UInt64(config.mergeMemoryMultiplier)
+              memoryMultiplier: UInt64(config.effectiveMergeMemoryMultiplier)
             ) { errorString in
                 Task { await errors.append(errorString) }
                 errorClosure(errorString)

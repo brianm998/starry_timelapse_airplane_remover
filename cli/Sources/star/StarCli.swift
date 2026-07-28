@@ -204,11 +204,13 @@ struct StarCli: AsyncParsableCommand {
     var halfResKeypoints: Bool = false
 
     @Option(name: [.customLong("merge-streaming-threshold-mb")], help:"""
-        When the median merge would need to hold more than this many megabytes of
+        When a median merge would need to hold more than this many megabytes of
         source frames at once, stream them from scratch files instead of keeping
-        them all in memory.  The output is bit identical either way; streaming
-        trades disk io for ram.  Measured at 42 megapixels with 17 sources:
-        4354MB resident vs 779MB streaming, 3% slower.
+        them all in memory.  Applies both to the static earth merge and to building
+        each star aligned frame from its warped neighbours.  The output is bit
+        identical either way; streaming trades disk io for ram.  Measured at 42
+        megapixels: 17 static sources 4354MB resident vs 779MB streaming, 9 aligned
+        sources 2178MB vs 728MB, both within noise on wall clock.
         Set to 0 to always keep every source in memory.
         """)
     var mergeStreamingThresholdMB: Int?

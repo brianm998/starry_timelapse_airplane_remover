@@ -63,7 +63,7 @@ public class FrameSaveQueue {
         // MemoryMonitor.  That left up to `concurrency` full merge pipelines running
         // completely unaccounted for, concurrently with the graph's own work.  Charge
         // the same estimate MergeOp would.
-        let reservation = config.rawImageBytes * UInt64(config.mergeMemoryMultiplier)
+        let reservation = config.rawImageBytes * UInt64(config.effectiveMergeMemoryMultiplier)
 
         Task.detached(priority: .high) {
             Log.d("frame \(frame.frameIndex) saveNow")

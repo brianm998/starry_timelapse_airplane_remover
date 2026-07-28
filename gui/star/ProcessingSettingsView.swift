@@ -1878,11 +1878,14 @@ extension ProcessingSettingsView {
           infoText: """
             How many times the raw frame size (in bytes) to reserve per outlier-detection operation.
 
-            Outlier detection loads and compares several aligned neighbor frames to find pixels \
-            that are statistically brighter than expected. Memory scales roughly with the number \
-            of neighbors loaded simultaneously.
+            Outlier detection subtracts the star-aligned frame from the original and blobs the \
+            difference. The blobber is the bulk of it: the original, the subtraction image, a \
+            copy of that image's pixels and an 8-byte-per-pixel grid, all live at once. It also \
+            builds the aligned frame if that is not on disk yet.
 
-            Raise this if you see heavy swap usage during the outlier phase. Default: 3.
+            Raise this if you see heavy swap usage during the outlier phase. Default: 9, plus the \
+            neighbor count of any merge inside the op that is small enough to keep all of its \
+            source frames in memory (see the merge streaming threshold).
             """
         ) {
             HStack {
@@ -1920,11 +1923,14 @@ extension ProcessingSettingsView {
           infoText: """
             How many times the raw frame size (in bytes) to reserve per merge operation.
 
-            The merge step composites the final output frame using warped neighbor images and \
-            classification masks. It loads the original frame plus any warped replacements needed \
-            to cover detected airplane trails.
+            The merge step composites the final output frame from the original and the \
+            star-aligned frame, building that aligned frame first if it is not on disk yet. \
+            The aligned build warps each neighbor in turn and spills it to a scratch file, so \
+            its cost no longer grows with the number of neighbors.
 
-            Raise this if you see thrashing during the merge phase. Default: 4.
+            Raise this if you see thrashing during the merge phase. Default: 6, plus the neighbor \
+            count of any merge inside the op that is small enough to keep all of its source \
+            frames in memory (see the merge streaming threshold).
             """
         ) {
             HStack {
