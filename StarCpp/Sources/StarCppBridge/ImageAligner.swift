@@ -13,8 +13,16 @@ public enum ImageAligner {
         return MatWrapper(ref: r!)
     }
 
+    /// Merge `image` with the frames named by `filenames`.
+    ///
+    /// When holding every source at once would exceed `streamingThresholdBytes`, the
+    /// sources are streamed from raw scratch files under `scratchDir` instead, which
+    /// bounds peak memory at the cost of writing and re-reading each source once. The
+    /// output is bit-identical either way. Pass 0 to disable streaming.
     public static func medianMergeImage(_ image: MatWrapper, withFilenames filenames: [String],
-                                         outlierThreshold: Double, includeAll: Bool) -> MatWrapper {
+                                         outlierThreshold: Double, includeAll: Bool,
+                                         scratchDir: String? = nil,
+                                         streamingThresholdBytes: Int64 = 0) -> MatWrapper {
         let cStrs = filenames.map { strdup($0) }
         defer { cStrs.forEach { free($0) } }
         var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
@@ -22,7 +30,9 @@ public enum ImageAligner {
             ia_median_merge_image_with_filenames(image.ref,
                                                   buf.baseAddress,
                                                   Int32(buf.count),
-                                                  outlierThreshold, includeAll)
+                                                  outlierThreshold, includeAll,
+                                                  scratchDir,
+                                                  streamingThresholdBytes)
         }
         return MatWrapper(ref: r!)
     }

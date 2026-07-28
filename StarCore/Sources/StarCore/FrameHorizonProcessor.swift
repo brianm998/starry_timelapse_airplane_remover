@@ -239,7 +239,8 @@ final public actor FrameHorizonProcessor {
             mergedHorizonImage = mask.image.medianMerge(
                 with: neighboringHorizons,
                 outlierThreshold: await configManager.config().pixelThreshold,
-                includeAll: true)
+                includeAll: true,
+                config: config)
         } else if let accumulator = horizonAccumulator {
             // Use the running accumulator that was populated by HorizonDetectionOps.
             // Any frames not yet accumulated will be loaded from disk here.

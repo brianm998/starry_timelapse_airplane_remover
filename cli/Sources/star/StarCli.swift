@@ -202,6 +202,16 @@ struct StarCli: AsyncParsableCommand {
         resolution run.  Keypoint files are stored separately per setting.
         """)
     var halfResKeypoints: Bool = false
+
+    @Option(name: [.customLong("merge-streaming-threshold-mb")], help:"""
+        When the median merge would need to hold more than this many megabytes of
+        source frames at once, stream them from scratch files instead of keeping
+        them all in memory.  The output is bit identical either way; streaming
+        trades disk io for ram.  Measured at 42 megapixels with 17 sources:
+        4354MB resident vs 779MB streaming, 3% slower.
+        Set to 0 to always keep every source in memory.
+        """)
+    var mergeStreamingThresholdMB: Int?
     
     @Option(name: [.short, .customLong("file-log-level")], help:"""
         If present, star will output a file log at the given level.
@@ -361,6 +371,9 @@ struct StarCli: AsyncParsableCommand {
                 config.finalOutputDir = finalOutputDirname
                 config.tripodHeadWasMoving = movingCamera
                 config.alignmentHalfResolutionKeypoints = halfResKeypoints
+                if let mergeStreamingThresholdMB {
+                    config.mergeStreamingThresholdMB = mergeStreamingThresholdMB
+                }
                 config.numberOfFramesToProcessConcurrently = Int(numConcurrentRenders)
                 config.writeOutlierClassificationValues = shouldWriteOutlierClassificationValues
                 

@@ -21,10 +21,22 @@ typedef struct {
 MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
                                         double outlierThreshold, bool includeAll);
 
-// Merge a base image + additional filenames
+// Merge a base image + additional filenames.
+//
+// Holding every source in memory at once costs (count + 1) x frameBytes, which is
+// ~4.3GB for 17 sources at 42MP.  When that would exceed streamingThresholdBytes,
+// each filename is instead decoded once into a raw scratch file under scratchDir
+// and the merge reads back a band of rows at a time, bounding peak memory to a few
+// hundred MB.  The output is bit-identical either way; the streaming path just
+// trades disk I/O for RAM.
+//
+// streamingThresholdBytes <= 0 disables streaming.  scratchDir may be null, in
+// which case the system temp directory is used.
 MatWrapperRef ia_median_merge_image_with_filenames(MatWrapperRef baseImage,
                                                     const char **filenames, int count,
-                                                    double outlierThreshold, bool includeAll);
+                                                    double outlierThreshold, bool includeAll,
+                                                    const char *scratchDir,
+                                                    int64_t streamingThresholdBytes);
 
 // Merge array of MatWrapperRef directly
 MatWrapperRef ia_median_merge(MatWrapperRef *frames, int count,

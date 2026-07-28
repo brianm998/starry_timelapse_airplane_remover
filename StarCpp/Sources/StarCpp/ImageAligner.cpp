@@ -18,6 +18,11 @@
 #include <string>
 #include <iostream>
 #include <cstring>
+#include <cstdio>
+#include <atomic>
+#include <memory>
+#include <filesystem>
+#include <system_error>
 #include <thread>
 #include <queue>
 #include <mutex>
@@ -131,6 +136,181 @@ static MatWrapperRef medianImageFromMats(const std::vector<cv::Mat>& mats,
     else if (depth == CV_16U) medianMergeTyped<uint16_t>(output, mats, k, includeAll, rows, cols, ch);
     else return wrap(cv::Mat());
 
+    return wrap(output);
+}
+
+// --- Streaming median merge ------------------------------------------------
+//
+// medianMergeTyped only ever needs row y of every input, so the whole set does
+// not have to be resident.  Sources given as filenames are decoded one at a
+// time into a raw scratch file and released immediately; the merge then reads
+// one band of rows back from each scratch file per iteration.
+//
+// Peak memory becomes (sources x bandRows x rowBytes) + the output frame rather
+// than (sources x frameBytes) + the output frame.  At 42MP with 17 sources that
+// is roughly 290MB instead of 4.4GB.
+//
+// The result is bit-identical to medianImageFromMats: the same kernel sees the
+// same values in the same order, only the storage behind the row pointers
+// differs.  (vals is sorted before the mean/stddev pass, so even input order
+// cannot perturb the floating point — but the order is preserved anyway.)
+//
+// The trade is disk I/O for RAM: each source is written once and read back once.
+// Callers gate it on a byte threshold so small frames keep the all-resident path.
+
+// Rows per band.  64 rows of a 42MP 16-bit 3-channel frame is ~3MB per source.
+static const int kMergeBandRows = 64;
+
+namespace {
+
+// Portable 64-bit seek: `long` is 32-bit on Windows, and while one frame stays
+// under 2GB today this removes the footgun.
+static inline int mergeSeek(std::FILE *f, uint64_t offset) {
+#ifdef _WIN32
+    return _fseeki64(f, (long long)offset, SEEK_SET);
+#else
+    return fseeko(f, (off_t)offset, SEEK_SET);
+#endif
+}
+
+// A raw dump of one source's pixels, removed when this goes out of scope.
+class MergeScratch {
+public:
+    MergeScratch() = default;
+    ~MergeScratch() { reset(); }
+    MergeScratch(const MergeScratch&) = delete;
+    MergeScratch& operator=(const MergeScratch&) = delete;
+
+    bool create(const std::string &path) {
+        reset();
+        f_ = std::fopen(path.c_str(), "w+b");
+        if (!f_) return false;
+        path_ = path;
+        return true;
+    }
+
+    // Row by row, so a non-continuous source Mat is handled correctly.
+    bool write(const cv::Mat &m, size_t rowBytes) {
+        for (int y = 0; y < m.rows; ++y)
+            if (std::fwrite(m.ptr(y), 1, rowBytes, f_) != rowBytes) return false;
+        return std::fflush(f_) == 0;
+    }
+
+    bool readBand(void *dst, size_t rowBytes, int firstRow, int rowCount) {
+        if (mergeSeek(f_, (uint64_t)firstRow * rowBytes) != 0) return false;
+        const size_t want = rowBytes * (size_t)rowCount;
+        return std::fread(dst, 1, want, f_) == want;
+    }
+
+    void reset() {
+        if (f_) { std::fclose(f_); f_ = nullptr; }
+        if (!path_.empty()) { std::remove(path_.c_str()); path_.clear(); }
+    }
+
+private:
+    std::FILE *f_ = nullptr;
+    std::string path_;
+};
+
+} // namespace
+
+// residentMats stay in RAM (there is at most one, the base image); every
+// filename is streamed.  Returns an empty wrapper on geometry mismatch or I/O
+// failure, matching medianImageFromMats' behaviour.
+static MatWrapperRef medianImageStreaming(const std::vector<cv::Mat> &residentMats,
+                                          const char **filenames, int fileCount,
+                                          double k, bool includeAll,
+                                          const char *scratchDir)
+{
+    int rows = 0, cols = 0, type = 0;
+    if (!residentMats.empty() && !residentMats[0].empty()) {
+        rows = residentMats[0].rows;
+        cols = residentMats[0].cols;
+        type = residentMats[0].type();
+    }
+
+    std::error_code ec;
+    std::string dir = (scratchDir && *scratchDir)
+        ? std::string(scratchDir)
+        : std::filesystem::temp_directory_path(ec).string();
+    std::filesystem::create_directories(dir, ec);
+
+    // Unique per merge within this process; star does not run two instances
+    // against one temp dir.
+    static std::atomic<uint64_t> scratchSeq{0};
+    const uint64_t batch = scratchSeq.fetch_add(1, std::memory_order_relaxed);
+
+    std::vector<std::unique_ptr<MergeScratch>> streamed;
+    streamed.reserve((size_t)std::max(fileCount, 0));
+    size_t rowBytes = 0;
+
+    for (int i = 0; i < fileCount; ++i) {
+        MatWrapperRef img = image_cache_load(filenames[i]);
+        if (!img) continue;                        // skip unreadable, as before
+        if (img->mat.empty()) { mat_wrapper_release(img); continue; }
+
+        const cv::Mat &m = img->mat;
+        if (rows == 0) { rows = m.rows; cols = m.cols; type = m.type(); }
+        if (m.rows != rows || m.cols != cols || m.type() != type) {
+            Log_w("median merge: %s does not match the base geometry", filenames[i]);
+            mat_wrapper_release(img);
+            return wrap(cv::Mat());
+        }
+        if (rowBytes == 0) rowBytes = (size_t)m.cols * m.elemSize();
+
+        char name[64];
+        std::snprintf(name, sizeof name, "star_merge_%llu_%d.raw",
+                      (unsigned long long)batch, i);
+        auto sc = std::make_unique<MergeScratch>();
+        const std::string path = dir + "/" + name;
+        if (!sc->create(path) || !sc->write(m, rowBytes)) {
+            Log_e("median merge: cannot write scratch file %s", path.c_str());
+            mat_wrapper_release(img);
+            return wrap(cv::Mat());
+        }
+        mat_wrapper_release(img);       // decoded frame released; only the file remains
+        streamed.push_back(std::move(sc));
+    }
+
+    if (rows <= 0 || cols <= 0) return wrap(cv::Mat());
+    if (residentMats.empty() && streamed.empty()) return wrap(cv::Mat());
+    if (rowBytes == 0) rowBytes = (size_t)cols * CV_ELEM_SIZE(type);
+
+    const int depth = CV_MAT_DEPTH(type);
+    if (depth != CV_8U && depth != CV_16U) return wrap(cv::Mat());
+    const int ch = CV_MAT_CN(type);
+    const int band = std::max(1, std::min(kMergeBandRows, rows));
+
+    // One reusable buffer per streamed source, allocated once for all bands.
+    std::vector<std::vector<uint8_t>> bandBufs(streamed.size());
+    for (auto &b : bandBufs) b.resize(rowBytes * (size_t)band);
+
+    cv::Mat output(rows, cols, type);
+
+    std::vector<cv::Mat> bandMats;
+    bandMats.reserve(residentMats.size() + streamed.size());
+
+    for (int y0 = 0; y0 < rows; y0 += band) {
+        const int n = std::min(band, rows - y0);
+
+        // Same source order as the all-resident path: resident first, then files.
+        bandMats.clear();
+        for (const auto &m : residentMats) bandMats.push_back(m.rowRange(y0, y0 + n));
+        for (size_t i = 0; i < streamed.size(); ++i) {
+            if (!streamed[i]->readBand(bandBufs[i].data(), rowBytes, y0, n)) {
+                Log_e("median merge: scratch read failed at row %d", y0);
+                return wrap(cv::Mat());
+            }
+            bandMats.push_back(cv::Mat(n, cols, type, bandBufs[i].data(), rowBytes));
+        }
+
+        cv::Mat outBand = output.rowRange(y0, y0 + n);
+        if (depth == CV_8U) medianMergeTyped<uchar>(outBand, bandMats, k, includeAll, n, cols, ch);
+        else                medianMergeTyped<uint16_t>(outBand, bandMats, k, includeAll, n, cols, ch);
+    }
+
+    Log_d("median merge: streamed %zu sources in bands of %d rows",
+          streamed.size() + residentMats.size(), band);
     return wrap(output);
 }
 
@@ -254,8 +434,29 @@ MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
 
 MatWrapperRef ia_median_merge_image_with_filenames(MatWrapperRef baseImage,
                                                     const char **filenames, int count,
-                                                    double outlierThreshold, bool includeAll) {
+                                                    double outlierThreshold, bool includeAll,
+                                                    const char *scratchDir,
+                                                    int64_t streamingThresholdBytes) {
     try {
+        // The all-resident path below holds every source at once.  When that would
+        // exceed the threshold, stream from scratch files instead: same result,
+        // bounded memory, at the cost of writing and re-reading each source once.
+        if (streamingThresholdBytes > 0 && baseImage && !baseImage->mat.empty()) {
+            const uint64_t frameBytes =
+                (uint64_t)baseImage->mat.total() * baseImage->mat.elemSize();
+            const uint64_t residentBytes = frameBytes * (uint64_t)(count + 1);
+            if (residentBytes > (uint64_t)streamingThresholdBytes) {
+                Log_i("median merge: streaming %d sources "
+                      "(all-resident would be %lluMB, threshold %lluMB)",
+                      count + 1,
+                      (unsigned long long)(residentBytes / (1024 * 1024)),
+                      (unsigned long long)((uint64_t)streamingThresholdBytes / (1024 * 1024)));
+                std::vector<cv::Mat> resident{baseImage->mat};
+                return medianImageStreaming(resident, filenames, count,
+                                            outlierThreshold, includeAll, scratchDir);
+            }
+        }
+
         std::vector<cv::Mat> mats;
         if (baseImage) mats.push_back(baseImage->mat);
         for (int i = 0; i < count; i++) {

@@ -812,9 +812,13 @@ final public actor FrameAlignmentProcessor {
             // don't try to align if we're combining not moving earth,
             // just median merge them all
 
+            // This is the heaviest merge in the pipeline: base plus
+            // numberStaticNeighborFrames sources, all resident at once unless the
+            // config lets it stream (~4.3GB vs a few hundred MB at 42MP).
             if let mergedImage = originalFrame.medianMerge(
                  with: self.getStaticNeighborFilenames(),
-                 outlierThreshold: pixelThreshold
+                 outlierThreshold: pixelThreshold,
+                 config: config
                )
             {
                 var horizonMask: HorizonMask? = nil

@@ -964,16 +964,25 @@ extension PixelatedImage {
         return PixelatedImage(mat: mat)
     }
 
+    /// Median merge this image with the frames named by `frames`.
+    ///
+    /// Pass `config` so the merge can stream from scratch files instead of holding
+    /// every source in memory when the set is large — see
+    /// `Config.mergeStreamingThresholdMB`. Without it the merge keeps everything
+    /// resident, which is `frames.count + 1` whole frames.
     public func medianMerge(
       with frames: [String],
       outlierThreshold: Double = 1.2,
-      includeAll: Bool = false
+      includeAll: Bool = false,
+      config: Config? = nil
     ) -> PixelatedImage? {
         let mat = ImageAligner.medianMergeImage(
             self.mat,
             withFilenames: frames,
             outlierThreshold: outlierThreshold,
-            includeAll: includeAll
+            includeAll: includeAll,
+            scratchDir: config?.tempOutputPath,
+            streamingThresholdBytes: Int64(config?.mergeStreamingThresholdMB ?? 0) * 1024 * 1024
         )
         return PixelatedImage(mat: mat)
     }

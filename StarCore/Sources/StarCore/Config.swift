@@ -506,6 +506,21 @@ public struct Config: Codable, Sendable {
     /// different scales.
     public var alignmentHalfResolutionKeypoints: Bool = false
 
+    /// Above this many bytes of would-be-resident sources, the median merge streams
+    /// from scratch files instead of holding every frame in memory.
+    ///
+    /// The merge needs all N values for a pixel at once, so the naive form holds
+    /// N whole frames: base + `numberStaticNeighborFrames` (16) is ~4.3GB at 42MP,
+    /// under a reservation of only 3-4x the frame. Streaming decodes each source
+    /// once into a raw scratch file under `tempOutputPath` and reads back a band of
+    /// rows at a time, which bounds peak memory to a few hundred MB. The output is
+    /// bit-identical; the cost is writing and re-reading each source once.
+    ///
+    /// The default engages at 42MP (9 sources = 2.3GB, 17 = 4.3GB) but not at 12MP
+    /// (9 = 0.65GB, 17 = 1.2GB), which is where the all-resident path already works.
+    /// Set to 0 to always keep everything resident.
+    public var mergeStreamingThresholdMB: Int = 2048
+
     public var imageWidth: Int = 0
     public var imageHeight: Int = 0
     public var imageBytesPerPixel: Int = 0
@@ -602,6 +617,7 @@ public struct Config: Codable, Sendable {
         self.alignmentBaseImageDilateSize = try c.decodeIfPresent(Int.self, forKey: .alignmentBaseImageDilateSize) ?? self.alignmentBaseImageDilateSize
         self.alignmentBaseImageThresholdValue = try c.decodeIfPresent(Int.self, forKey: .alignmentBaseImageThresholdValue) ?? self.alignmentBaseImageThresholdValue
         self.alignmentHalfResolutionKeypoints = try c.decodeIfPresent(Bool.self, forKey: .alignmentHalfResolutionKeypoints) ?? self.alignmentHalfResolutionKeypoints
+        self.mergeStreamingThresholdMB = try c.decodeIfPresent(Int.self, forKey: .mergeStreamingThresholdMB) ?? self.mergeStreamingThresholdMB
         
 
         self.starVersion = try c.decodeIfPresent(String.self, forKey: .starVersion) ?? self.starVersion
