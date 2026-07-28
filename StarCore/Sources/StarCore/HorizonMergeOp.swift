@@ -8,11 +8,13 @@ final class HorizonMergeOp: AsyncOperation, @unchecked Sendable {
     init(
       frame: FrameAirplaneRemover,
       rawImageBytes: UInt64 = 0,
+      memoryMultiplier: UInt64? = nil,
       errorClosure: @escaping (String) -> Void
     ) {
         self.frame = frame
         self.errorClosure = errorClosure
-        super.init(for: .mergedHorizon, rawImageBytes: rawImageBytes)
+        super.init(for: .mergedHorizon, rawImageBytes: rawImageBytes,
+                   memoryMultiplier: memoryMultiplier)
         self.name = "horizon merge frame \(frame.frameIndex)"
     }
 

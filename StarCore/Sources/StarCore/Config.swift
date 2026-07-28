@@ -349,6 +349,32 @@ public struct Config: Codable, Sendable {
     public var outlierMemoryMultiplier: Int = 9
     public var mergeMemoryMultiplier: Int = 6
 
+    /// Estimated peak memory of one horizon op, as a multiple of the working frame.
+    ///
+    /// Was 2, and it was the only reservation real data caught short. Instrumenting a
+    /// 24MP run (`--log-op-memory`), the first horizon op grew the process by 753MB
+    /// against a 274MB charge — 5.5x, i.e. 274% of its reservation. Later horizon ops
+    /// reported 84MB, but that is the footprint artifact described on `MemoryProbe`
+    /// rather than cheaper work: both frames log the same detection path, and the second
+    /// one is simply reusing pages the first had already faulted in.
+    ///
+    /// So the honest figure for the op that runs first — and one always does — is 5.5x.
+    ///
+    /// 7 rather than 6, which would have covered the measurement with only 8% to spare.
+    /// Most of that 756MB is one-time process start-up — runtime and OpenCV
+    /// initialisation, decision-tree loading, first touch of the loaded frame — rather
+    /// than the horizon detector itself. That part is roughly constant, so expressing it
+    /// as a multiple of the frame is the wrong shape for it: the same fixed cost reads as
+    /// ~3x at 42MP and ~19x at 6MP. This value is therefore calibrated at 24MP and errs
+    /// toward under-reserving below that, and a fixed component that varies with the
+    /// machine and the build does not deserve a thin margin.
+    ///
+    /// Over-reserving is close to free here: at 7x even a 16GB machine admits 14
+    /// concurrent horizon ops, so `numberOfFramesToProcessConcurrently` binds long before
+    /// the budget does. Pinning the fixed part down properly needs one horizon op measured
+    /// in a fresh process, which is the one thing a whole-pipeline run cannot give you.
+    public var horizonMemoryMultiplier: Int = 7
+
     // used by updatable log
     public var progressBarLength = 35
 
@@ -703,6 +729,7 @@ public struct Config: Codable, Sendable {
         self.mergeStreamingThresholdMB = try c.decodeIfPresent(Int.self, forKey: .mergeStreamingThresholdMB) ?? self.mergeStreamingThresholdMB
         self.maxConcurrentKeypointOps = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentKeypointOps) ?? self.maxConcurrentKeypointOps
         self.keypointCacheMaxMB = try c.decodeIfPresent(Int.self, forKey: .keypointCacheMaxMB) ?? self.keypointCacheMaxMB
+        self.horizonMemoryMultiplier = try c.decodeIfPresent(Int.self, forKey: .horizonMemoryMultiplier) ?? self.horizonMemoryMultiplier
         
 
         self.starVersion = try c.decodeIfPresent(String.self, forKey: .starVersion) ?? self.starVersion

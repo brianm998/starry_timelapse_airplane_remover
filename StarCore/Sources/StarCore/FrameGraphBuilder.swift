@@ -17,20 +17,29 @@ public enum OperationType: String, CaseIterable, Sendable {
 }
 
 extension OperationType {
-    /// Multiplier applied to the raw image byte size to estimate how much
-    /// memory this operation type needs.  Values are empirically derived.
+    /// Multiplier applied to `Config.workingFrameBytes` to estimate how much memory this
+    /// operation type needs.
     ///
-    /// - 0  means the op works on small data (keypoints, homographies) and
-    ///      doesn't need a reservation.
-    /// - 8  for SIFT/AKAZE: scale-space pyramid uses ~8× the raw image size.
-    /// - 4  for merge: loads warped neighbours + compositing.
-    /// - 3  for outliers: loads a few aligned images for comparison.
-    /// - 2  for horizon ops: converts to 8-bit + processing.
+    /// Every non-zero value here is a FALLBACK: FrameGraphBuilder passes the
+    /// corresponding `Config` value explicitly at each construction site, so these only
+    /// apply to an op built without one. They are kept at or above the config defaults so
+    /// that path can never be quietly cheaper than the gated one.
+    ///
+    /// 0 means the op works on small data — homographies, validation — and needs no
+    /// reservation. Note the homography ops can still run keypoint detection on a cache
+    /// miss; that path gates itself rather than relying on this (see
+    /// `FrameAlignmentProcessor.loadOrCreateOCVFeatures(of:selfGating:)`).
+    ///
+    /// The per-case notes live with the config properties these mirror, since that is
+    /// where the measurements are recorded.
     var memoryMultiplier: UInt64 {
         switch self {
         case .preview:             return 2
-        case .horizon:             return 2
-        case .mergedHorizon:       return 2
+        // Fallbacks only — FrameGraphBuilder passes config.horizonMemoryMultiplier
+        // explicitly.  Kept in step with that default (7: the first horizon op of a real
+        // 24MP run grew the process 756MB against the old 2x charge of 274MB).
+        case .horizon:             return 7
+        case .mergedHorizon:       return 7
         // Fallback only — FrameGraphBuilder always passes config.keypointMemoryMultiplier
         // explicitly when building KeypointOps.  Kept in step with that default (42,
         // measured) so this cannot become a stale second opinion.
@@ -235,7 +244,8 @@ public final actor FrameGraphBuilder {
                     if hasHorizon && !hasStaticReferenceHorizon {
                         let horizonOp = HorizonDetectionOp(
                           frame: frame,
-                          rawImageBytes: rawImageBytes
+                          rawImageBytes: rawImageBytes,
+                          memoryMultiplier: UInt64(config.horizonMemoryMultiplier)
                         ) { errorString in
                             Task { await errors.append(errorString) }
                             errorClosure(errorString)
@@ -279,7 +289,8 @@ public final actor FrameGraphBuilder {
                         taskGroup.addTask {
                             let horizonOp = HorizonMergeOp(
                               frame: frame,
-                              rawImageBytes: rawImageBytes
+                              rawImageBytes: rawImageBytes,
+                              memoryMultiplier: UInt64(config.horizonMemoryMultiplier)
                             ) { errorString in
                                 Task { await errors.append(errorString) }
                                 errorClosure(errorString)
@@ -314,7 +325,8 @@ public final actor FrameGraphBuilder {
                 }
                 let horizonOp = HorizonMergeOp(
                   frame: frame,
-                  rawImageBytes: rawImageBytes
+                  rawImageBytes: rawImageBytes,
+                  memoryMultiplier: UInt64(config.horizonMemoryMultiplier)
                 ) { errorString in
                     Task { await errors.append(errorString) }
                     errorClosure(errorString)
@@ -609,6 +621,7 @@ public final actor FrameGraphBuilder {
             let op = HorizonRefinementOp(
               frame: frame,
               rawImageBytes: rawImageBytes,
+              memoryMultiplier: UInt64(config.horizonMemoryMultiplier),
               errorClosure: { errorString in
                   Task { await errors.append(errorString) }
                   errorClosure(errorString)
