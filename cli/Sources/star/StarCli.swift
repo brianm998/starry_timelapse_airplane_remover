@@ -351,21 +351,23 @@ struct StarCli: AsyncParsableCommand {
                 config.finalOutputDir = finalOutputDirname
                 config.tripodHeadWasMoving = movingCamera
                 config.numberOfFramesToProcessConcurrently = Int(numConcurrentRenders)
-                
-                let configFilename = "config.json"
-                
-                configManager = await ConfigManager(
-                  configFilename: configFilename,
-                  config: config
-                )
-                
                 config.writeOutlierClassificationValues = shouldWriteOutlierClassificationValues
-
-                await constants.set(detectionType: config.detectionType)
 
                 if let ignoreLowerPixels {
                     config.ignoreLowerPixels = ignoreLowerPixels
                 }
+
+                // ConfigManager holds a copy of this struct, so all mutations
+                // to config must happen before it is constructed here
+                let configFilename = "config.json"
+
+                configManager = await ConfigManager(
+                  configFilename: configFilename,
+                  config: config
+                )
+
+                await constants.set(detectionType: config.detectionType)
+
                 Log.nameSuffix = inputImageSequenceName
                 // no name suffix on json config path
             }
