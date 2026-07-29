@@ -353,13 +353,48 @@ public struct Config: Codable, Sendable {
     ///     with `.selective`, which also holds the original and an `ensure16Bits` clone
     ///     of the earth-aligned frame, against 12x for the pair at 6 each;
     ///   - outlier ops peaked at 11.5x per pair, typically 4.3x, against 18x for the
-    ///     pair at 9 each. The blobber is the bulk of it, and walking its allocations
-    ///     agrees with the halved pair figure of 5.7x: the original and the
-    ///     star-aligned frame at 1x each, the subtraction image and the `[UInt16]` copy
-    ///     of its pixels at 0.33x each (it is single channel), and a `[SortablePixel?]`
-    ///     grid at 8 bytes per pixel for 1.33x, so 4x before the candidate pixels' own
-    ///     objects. That is why the outlier figure is now the larger of the two, where
-    ///     before both were pinned to the aligned build.
+    ///     pair at 9 each. The blobber is the bulk of it. That is why the outlier figure
+    ///     is now the larger of the two, where before both were pinned to the aligned
+    ///     build.
+    ///
+    /// The blobber has since been measured directly — `FullFrameBlobber` in a fresh
+    /// process, one frame, nothing else running — and it does not have a single peak.
+    /// It has a floor plus a term in how many pixels are bright, because a
+    /// `SortablePixel` is stored for every pixel above `minPixelIntensity` and for every
+    /// pixel dim enough that its contrast falls under `startMinContrast`, which for the
+    /// strong defaults (6000, 70) means everything above 1800. Blobber only, as a
+    /// multiple of the working frame, at 24MP and again at 42MP:
+    ///
+    ///     bright pixels    24MP           42MP
+    ///     none (floor)     183MB  1.3x    322MB  1.3x
+    ///     0.001%           203MB  1.5x
+    ///     0.01%            366MB  2.7x
+    ///     0.1%             748MB  5.4x
+    ///     1%               873MB  6.4x   1524MB  6.3x
+    ///     15.7%            960MB  7.0x
+    ///
+    /// Add the original and the `[UInt16]` subtraction copy that the op holds across all
+    /// of this and the process peak runs 2.7x at the floor to 8.7x at the top — against
+    /// 9x. So 9 covers a realistically-aligned frame, where densities sit in the tenths
+    /// of a percent, and it has very little left over for the rest of the op (the Hough
+    /// connector, the trimmers, outlier group construction, the saves). Density is the
+    /// variable to watch, not frame size: every ratio above is the same at 24MP and
+    /// 42MP. The 15.7% row is an upper bound — it comes from subtracting an UNALIGNED
+    /// neighbour, so every star that moved survives as residual.
+    ///
+    /// Two corrections to the walk-through above, which under-counted:
+    ///   - the 8-bytes-per-pixel array is `PixelStatusTracker.pixelStatus`
+    ///     (`[SortablePixel.Status]`, one slot per pixel, allocated up front). That is
+    ///     the whole of the 1.3x floor, and it is the only part that does not depend on
+    ///     the data.
+    ///   - `[[SortablePixel?]]` is 24 bytes per pixel, not 8 (`SortablePixel` is 21
+    ///     bytes, 24-byte stride, and the optional is free — it uses a spare
+    ///     inhabitant). At 24MP that grid is 549MB, 4x on its own. It is NOT paid up
+    ///     front, though: `Array(repeating: innerArray, count: width)` gives every
+    ///     column a reference to one shared buffer, so a column only materializes its
+    ///     4000 optionals when a pixel in it is stored. The cost is therefore per
+    ///     touched column, and it saturates once outliers are spread across the frame —
+    ///     which takes about 0.1% of pixels, hence the jump to 5.4x there.
     ///
     /// `tripodHeadWasMoving` used to add 8 warped horizon masks to an outlier op; the
     /// aligned merge no longer produces those at all, since its one caller discarded
