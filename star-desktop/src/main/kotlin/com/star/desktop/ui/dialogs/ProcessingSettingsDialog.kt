@@ -213,15 +213,15 @@ private fun ToggleRow(label: String, value: Boolean, onChange: (Boolean) -> Unit
 /// which field: it is exact, it is per field, and it needs no maintenance as fields are
 /// added. The version string is only used to word the message. (Reflection would be the
 /// other option, but the client uses protobuf-lite, which has no descriptors.)
-private sealed interface ExpertField {
+internal sealed interface ExpertField {
     val label: String
     val has: (Config) -> Boolean
 }
-private class IntField(override val label: String, val get: (Config) -> Int, val set: (Config.Builder, Int) -> Config.Builder, val min: Int, val max: Int, override val has: (Config) -> Boolean) : ExpertField
-private class DoubleField(override val label: String, val get: (Config) -> Double, val set: (Config.Builder, Double) -> Config.Builder, override val has: (Config) -> Boolean) : ExpertField
-private class BoolField(override val label: String, val get: (Config) -> Boolean, val set: (Config.Builder, Boolean) -> Config.Builder, override val has: (Config) -> Boolean) : ExpertField
+internal class IntField(override val label: String, val get: (Config) -> Int, val set: (Config.Builder, Int) -> Config.Builder, val min: Int, val max: Int, override val has: (Config) -> Boolean) : ExpertField
+internal class DoubleField(override val label: String, val get: (Config) -> Double, val set: (Config.Builder, Double) -> Config.Builder, override val has: (Config) -> Boolean) : ExpertField
+internal class BoolField(override val label: String, val get: (Config) -> Boolean, val set: (Config.Builder, Boolean) -> Config.Builder, override val has: (Config) -> Boolean) : ExpertField
 
-private val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
+internal val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
     IntField("Neighbor frames", { it.numberAlignedNeighborFrames }, { b, v -> b.setNumberAlignedNeighborFrames(v) }, 1, 1000, { it.hasNumberAlignedNeighborFrames() }),
     IntField("Static neighbor frames", { it.numberStaticNeighborFrames }, { b, v -> b.setNumberStaticNeighborFrames(v) }, 1, 1000, { it.hasNumberStaticNeighborFrames() }),
     IntField("Max keypoints", { it.alignmentMaxKeypoints }, { b, v -> b.setAlignmentMaxKeypoints(v) }, 4, 10000, { it.hasAlignmentMaxKeypoints() }),
@@ -239,7 +239,7 @@ private val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
     BoolField("Write debug images", { it.alignmentWriteDebugImages }, { b, v -> b.setAlignmentWriteDebugImages(v) }, { it.hasAlignmentWriteDebugImages() }),
 )
 
-private val HORIZON_FIELDS: List<ExpertField> = listOf(
+internal val HORIZON_FIELDS: List<ExpertField> = listOf(
     IntField("Strip width", { it.horizonStripWidth }, { b, v -> b.setHorizonStripWidth(v) }, 1, 8000, { it.hasHorizonStripWidth() }),
     BoolField("Canny edge detection", { it.useCannyForHorizonDetection }, { b, v -> b.setUseCannyForHorizonDetection(v) }, { it.hasUseCannyForHorizonDetection() }),
     DoubleField("Canny min threshold", { it.cannyMinThreshold }, { b, v -> b.setCannyMinThreshold(v) }, { it.hasCannyMinThreshold() }),
@@ -265,7 +265,7 @@ private val HORIZON_FIELDS: List<ExpertField> = listOf(
 // The three fields with a min of 0 mean something specific at 0 rather than "off":
 // no floor, no explicit cap, and never stream. 0 has to be reachable, and the daemon
 // honours a present 0 rather than substituting its default.
-private val MEMORY_FIELDS: List<ExpertField> = listOf(
+internal val MEMORY_FIELDS: List<ExpertField> = listOf(
     IntField("Keypoint mem ×", { it.keypointMemoryMultiplier }, { b, v -> b.setKeypointMemoryMultiplier(v) }, 1, 200, { it.hasKeypointMemoryMultiplier() }),
     IntField("Outlier mem ×", { it.outlierMemoryMultiplier }, { b, v -> b.setOutlierMemoryMultiplier(v) }, 1, 50, { it.hasOutlierMemoryMultiplier() }),
     IntField("Merge mem ×", { it.mergeMemoryMultiplier }, { b, v -> b.setMergeMemoryMultiplier(v) }, 1, 50, { it.hasMergeMemoryMultiplier() }),
