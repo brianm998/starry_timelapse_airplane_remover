@@ -77,46 +77,79 @@ static inline T clamp_cast_int(int v) {
     }
 }
 
+// Parallel over bands of rows.  This kernel is where a 42MP run now spends most of its
+// time — profiled at 16 of 49 threads inside it with 894 of 894 samples each and 77 of
+// 23805 samples on I/O, while the machine ran 18 of 36 cores because the loop was serial
+// and all the concurrency came from running many MergeOps at once.
+//
+// Bit-identical by construction rather than by measurement: output pixel (y, xc) reads
+// only column xc of row y of each source, and `vals`/`rowPtrs`/`mean`/`M2` are all
+// per-pixel or per-row state.  There is no accumulator spanning rows and no dependence on
+// the order bands are visited in, so banding cannot perturb a single value.  `vals` and
+// `rowPtrs` move inside the body because they are now per-worker rather than shared.
+//
+// Worth knowing before tuning this: the vendored OpenCV selects the GCD backend at
+// runtime (`getBuildInformation()` reports "Parallel framework: GCD", despite
+// cvconfig.h defining HAVE_PTHREADS_PF and the archive exporting the pthreads entry
+// points), and `cv::setNumThreads(N)` measurably does nothing for N > 1 — only N == 1
+// takes effect.  So the worker count here cannot be bounded from Star; what bounds total
+// threads is `numberOfFramesToProcessConcurrently`, which is why lowering it and
+// parallelising this loop are one change and not two.
 template <typename T>
 static void medianMergeTyped(cv::Mat &output, const std::vector<cv::Mat>& mats,
                              double k, bool includeAll, int rows, int cols, int ch) {
     const int n = (int)mats.size();
-    std::vector<int> vals(n);
 
-    for (int y = 0; y < rows; ++y) {
+    cv::parallel_for_(cv::Range(0, rows), [&](const cv::Range &band) {
+        std::vector<int> vals(n);
         std::vector<const T*> rowPtrs(n);
-        for (int i = 0; i < n; ++i) rowPtrs[i] = mats[i].ptr<T>(y);
-        T* outRow = output.ptr<T>(y);
 
-        for (int x = 0; x < cols; ++x) {
-            for (int c = 0; c < ch; ++c) {
-                const int xc = x * ch + c;
-                for (int i = 0; i < n; ++i) vals[i] = rowPtrs[i][xc];
-                small_sort(vals.data(), n);
+        for (int y = band.start; y < band.end; ++y) {
+            for (int i = 0; i < n; ++i) rowPtrs[i] = mats[i].ptr<T>(y);
+            T* outRow = output.ptr<T>(y);
 
-                double mean = 0.0, M2 = 0.0;
-                for (int i = 0; i < n; ++i) {
-                    double delta = vals[i] - mean;
-                    mean += delta / (i + 1);
-                    M2 += delta * (vals[i] - mean);
-                }
-                const double threshold = mean + k * std::sqrt(M2 / n);
+            for (int x = 0; x < cols; ++x) {
+                for (int c = 0; c < ch; ++c) {
+                    const int xc = x * ch + c;
+                    for (int i = 0; i < n; ++i) vals[i] = rowPtrs[i][xc];
+                    small_sort(vals.data(), n);
 
-                int minIndex = 0, maxIndex = n;
-                if (!includeAll) {
-                    for (int z = 0; z < n; ++z) {
-                        if (vals[z] == 0) minIndex = z + 1;
-                        if (vals[z] < threshold) maxIndex = z;
-                        else break;
+                    // Welford, deliberately kept.  Replacing it with exact int64 sum and
+                    // sum-of-squares was tried and reverted: measured 1.52x on the SERIAL
+                    // kernel (45.22s -> 29.76s on a 17-source 42MP merge), but once the
+                    // row loop above is parallel the kernel is ~3s and the difference
+                    // disappears into noise — 0.86x and 1.15x on two runs of the same
+                    // benchmark.  Against that it is not free: `threshold` feeds the
+                    // int-vs-double compare below, real data decides it at exactly zero
+                    // margin, and a flip selects a different source frame's sample
+                    // entirely rather than a neighbouring value.  Measured end to end,
+                    // 1 of 20 output frames changed, in 4 samples of 126.5M, but with a
+                    // max delta of 26368 of 65535.  No measurable speed for occasional
+                    // large isolated pixel changes is the wrong trade.
+                    double mean = 0.0, M2 = 0.0;
+                    for (int i = 0; i < n; ++i) {
+                        double delta = vals[i] - mean;
+                        mean += delta / (i + 1);
+                        M2 += delta * (vals[i] - mean);
                     }
-                }
+                    const double threshold = mean + k * std::sqrt(M2 / n);
 
-                int idx = (minIndex + maxIndex) / 2;
-                if (idx >= n) idx = n - 1;
-                outRow[xc] = clamp_cast_int<T>(vals[idx]);
+                    int minIndex = 0, maxIndex = n;
+                    if (!includeAll) {
+                        for (int z = 0; z < n; ++z) {
+                            if (vals[z] == 0) minIndex = z + 1;
+                            if (vals[z] < threshold) maxIndex = z;
+                            else break;
+                        }
+                    }
+
+                    int idx = (minIndex + maxIndex) / 2;
+                    if (idx >= n) idx = n - 1;
+                    outRow[xc] = clamp_cast_int<T>(vals[idx]);
+                }
             }
         }
-    }
+    });
 }
 
 static MatWrapperRef medianImageFromMats(const std::vector<cv::Mat>& mats,
