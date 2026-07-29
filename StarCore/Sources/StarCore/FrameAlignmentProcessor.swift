@@ -182,8 +182,11 @@ final public actor FrameAlignmentProcessor {
         var endFrame = startFrame + alignmentNumber + 1
 
         if startFrame < 0 { startFrame = 0 }
-        if endFrame >= imageSequence.filenames.count {
-            endFrame = imageSequence.filenames.count - 1
+        // endFrame is exclusive, so it clamps to count, not count - 1.  Clamping to
+        // count - 1 stopped one frame short, which kept the last frame of the sequence
+        // out of every other frame's neighbour list.
+        if endFrame > imageSequence.filenames.count {
+            endFrame = imageSequence.filenames.count
         }
 
         var ret: [Int] = []

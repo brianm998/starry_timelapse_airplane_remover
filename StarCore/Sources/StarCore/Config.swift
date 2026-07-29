@@ -1030,8 +1030,8 @@ public struct Config: Codable, Sendable {
     /// `nil` means the caller could not determine the count, and falls back to the
     /// configured value — over-reserving, which only costs concurrency, rather than
     /// under-reserving, which costs the machine. An actual 0 is honoured as 0: a frame
-    /// really can have no neighbours (frame 0 of a two-frame sequence does), and a merge
-    /// with no sources to merge holds nothing extra.
+    /// really can have no neighbours (the only frame of a single-frame sequence does),
+    /// and a merge with no sources to merge holds nothing extra.
     public func residentBuildExtraMultiplier(alignedNeighbours: Int?,
                                              staticNeighbours: Int?) -> Int {
         let aligned = alignedNeighbours ?? numberAlignedNeighborFrames
