@@ -750,18 +750,52 @@ public struct Config: Codable, Sendable {
     ///
     /// This governs both merges that matter:
     ///   - the static-earth merge, base + `numberStaticNeighborFrames` (16) decoded
-    ///     from disk, ~4.3GB at 42MP;
+    ///     from disk, 17x the frame — 4102MB at 42MP;
     ///   - the star-aligned build, base + `numberAlignedNeighborFrames` (8) warps,
-    ///     ~2.3GB at 42MP — measured 2178MB resident against 728MB streaming.
+    ///     9x the frame — 2172MB at 42MP, measured 2178MB resident against 728MB
+    ///     streaming.
     ///
-    /// The default engages at 42MP (9 sources = 2.3GB, 17 = 4.3GB) but not at 12MP
-    /// (9 = 0.65GB, 17 = 1.2GB), which is where the all-resident path already works.
-    /// Set to 0 to always keep everything resident.
+    /// Was 2048, which at 16-bit RGB streams the static merge above 21MP and the
+    /// aligned build above 40MP. At 42MP that put the aligned build 124MB — 6% — over
+    /// the line, so every merge of either kind in a 42MP run streamed on a near miss.
+    ///
+    /// The trade was measured per merge, in a fresh process, where it looks free.
+    /// Measured end to end it is not. Controlled A/B on 20 frames at 42MP, identical
+    /// config but for this value:
+    ///
+    ///     frame concurrency    resident    streaming    peak RSS resident/streaming
+    ///     6                        339s         681s              41.4 / 41.0 GB
+    ///     36 (the default)         420s         773s              70.5 / 70.3 GB
+    ///
+    /// 1.8-2.0x faster for no peak memory at all, 20 of 20 output frames bit-identical
+    /// in both arms. (The concurrency-6 pair ran back to back and is the controlled
+    /// one; the 36 pair confirms it holds at the shipped default and that peak RSS
+    /// does not move.)
+    ///
+    /// Streaming saved nothing because the peak of a run is set by the keypoint phase
+    /// — concurrent full-res SIFT, ~7GB an op — which has finished before the first
+    /// merge starts. What it bought instead was ~79GB of extra scratch traffic, which
+    /// is the whole of the second column. It would still earn its keep where the
+    /// merge really is the peak: `alignmentHalfResolutionKeypoints` cuts the keypoint
+    /// peak ~3.5x, and then a 4GB merge can be the largest thing in the run.
+    ///
+    /// 8192 holds a 17-source static merge resident up to 84MP, and a 9-source aligned
+    /// build up to 159MP — so it clears every current full-frame sensor, 61MP included
+    /// (17 x 345MB = 5858MB). Above that, or with `numberStaticNeighborFrames` raised
+    /// (the crossover moves inversely with the source count), streaming engages again,
+    /// which is what it is for. Set to 0 to always keep everything resident.
+    ///
+    /// A fixed megabyte figure is still the wrong shape for "too big to hold" — that
+    /// depends on the machine, not the frame. Making it relative to physical memory
+    /// needs an "auto" sentinel, and 0 is already taken by "never stream", so it would
+    /// have to widen the wire field and both settings UIs. Left as a follow-up.
     ///
     /// The per-op memory estimates follow this: see `mergeStreams(sourceCount:)` and
     /// `residentBuildExtraMultiplier`, which apply the same test so a reservation
-    /// cannot describe the path not taken.
-    public var mergeStreamingThresholdMB: Int = 2048
+    /// cannot describe the path not taken. Raising this therefore raises what a merge
+    /// op reserves — at 42MP from 6x to 21x the frame — and the budget converts that
+    /// into fewer concurrent merges on its own. No multiplier needs to change with it.
+    public var mergeStreamingThresholdMB: Int = 8192
 
     public var imageWidth: Int = 0
     public var imageHeight: Int = 0
@@ -1150,9 +1184,18 @@ public struct Config: Codable, Sendable {
     /// 8 neighbours. Charged as `neighbours - 1` so the same shape covers the
     /// 16-neighbour static build with a little margin rather than exactly.
     ///
-    /// This is what the old flat 14 was missing: at 12MP the static-earth build is
-    /// resident by default and needs ~18x, which is why merge ops in a 12MP run were
-    /// logging OVER RESERVATION against it.
+    /// This is what the old flat 14 was missing: the static-earth build is resident by
+    /// default and needs ~18x, which is why merge ops in a 12MP run were logging OVER
+    /// RESERVATION against it.
+    ///
+    /// Since `mergeStreamingThresholdMB` rose to 8192 that is no longer the small-frame
+    /// case — it is every frame size up to 84MP, so this term now carries the estimate
+    /// for a normal run rather than an edge of one. Worth checking the arithmetic
+    /// against what the C++ actually holds: `ia_median_merge_image_with_filenames`
+    /// peaks at `count + 2` whole frames resident (the base, every decoded source, and
+    /// the output medianImageFromMats allocates while they are all still live), so 18
+    /// at the default 16 static neighbours. Charged here as 15, plus
+    /// `mergeMemoryMultiplier`'s 6 for the op's own frames, is 21. Covered.
     /// Pass the ACTUAL neighbour counts for the frame, not the configured ones.
     /// `FrameAlignmentProcessor.calculateNeighborIndices` clamps to the sequence bounds,
     /// so a frame near either end — or any frame at all in a sequence shorter than the

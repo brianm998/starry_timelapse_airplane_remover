@@ -34,9 +34,9 @@ final class ExpertConfigFieldsTests: XCTestCase {
     }
 
     /// Every field whose 0 means something, not just the floor. StarCore's defaults are
-    /// 900, 0 and 2048, so for two of these a lost presence bit silently substitutes a
+    /// 900, 0 and 8192, so for two of these a lost presence bit silently substitutes a
     /// different behaviour: the client asks for "never stream" and gets streaming at
-    /// 2048MB, or asks for "no floor" and gets 900MB.
+    /// 8192MB, or asks for "no floor" and gets 900MB.
     func testEveryMeaningfulZeroSurvivesAsPresent() throws {
         var c = Star_V1_Config()
         c.horizonReservationFloorMb = 0      // no floor
@@ -48,7 +48,7 @@ final class ExpertConfigFieldsTests: XCTestCase {
         XCTAssertTrue(back.hasMaxConcurrentKeypointOps)
         XCTAssertTrue(back.hasMergeStreamingThresholdMb,
                       "0 here means never stream; losing presence would stream at the "
-                      + "2048MB default instead, which is the opposite of the request")
+                      + "8192MB default instead, which is the opposite of the request")
         XCTAssertEqual(back.mergeStreamingThresholdMb, 0)
     }
 
@@ -94,7 +94,7 @@ final class ExpertConfigFieldsTests: XCTestCase {
         XCTAssertEqual(c.horizonReservationFloorMB, 900)
         XCTAssertEqual(c.alignmentHalfResolutionKeypoints, false)
         XCTAssertEqual(c.maxConcurrentKeypointOps, 0)
-        XCTAssertEqual(c.mergeStreamingThresholdMB, 2048)
+        XCTAssertEqual(c.mergeStreamingThresholdMB, 8192)
         // And the floor is the binding one below ~17MP, which is the whole reason it exists.
         var small = c
         small.imageWidth = 3000; small.imageHeight = 2000

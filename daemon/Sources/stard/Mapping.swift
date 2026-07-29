@@ -290,7 +290,7 @@ enum Mapping {
         //   maxConcurrentKeypointOps   0 = no explicit cap, the budget decides
         //   mergeStreamingThresholdMB  0 = never stream, always keep every source resident
         // Under implicit presence each of those requests would be indistinguishable from
-        // an unset field, and StarCore's default (900, 0, 2048) would win instead — which
+        // an unset field, and StarCore's default (900, 0, 8192) would win instead — which
         // for the threshold means quietly streaming when the client asked not to.
         if p.hasHorizonReservationFloorMb { c.horizonReservationFloorMB = Int(p.horizonReservationFloorMb) }
         if p.hasMaxConcurrentKeypointOps { c.maxConcurrentKeypointOps = Int(p.maxConcurrentKeypointOps) }

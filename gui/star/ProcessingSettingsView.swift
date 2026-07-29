@@ -1944,9 +1944,12 @@ extension ProcessingSettingsView {
             How many times the raw frame size (in bytes) to reserve per merge operation.
 
             The merge step composites the final output frame from the original and the \
-            star-aligned frame, building that aligned frame first if it is not on disk yet. \
-            The aligned build warps each neighbor in turn and spills it to a scratch file, so \
-            its cost no longer grows with the number of neighbors.
+            star-aligned frame, building that aligned frame first if it is not on disk yet.
+
+            At the default streaming threshold that build keeps every warped neighbor in \
+            memory, so its cost does grow with the neighbor count — which is why the \
+            reserved amount below is not just this number. Only above the threshold does \
+            the build spill each warp to a scratch file instead and go flat.
 
             Raise this if you see thrashing during the merge phase. Default: 6, plus the neighbor \
             count of any merge inside the op that is small enough to keep all of its source \

@@ -210,7 +210,14 @@ struct StarCli: AsyncParsableCommand {
         each star aligned frame from its warped neighbours.  The output is bit
         identical either way; streaming trades disk io for ram.  Measured at 42
         megapixels: 17 static sources 4354MB resident vs 779MB streaming, 9 aligned
-        sources 2178MB vs 728MB, both within noise on wall clock.
+        sources 2178MB vs 728MB.
+        Those are per merge in isolation.  End to end, streaming is roughly twice as
+        slow at 42 megapixels and saves no peak memory at all, because the peak of a
+        run is set by the keypoint phase rather than by any merge — which is why the
+        default is 8192 rather than the 2048 that made a 42 megapixel run stream every
+        merge.  Lower it if you are memory bound rather than time bound, or if you run
+        with half resolution keypoints, which drops the keypoint peak far enough that
+        a merge can become the largest thing in the run.
         Set to 0 to always keep every source in memory.
         """)
     var mergeStreamingThresholdMB: Int?
