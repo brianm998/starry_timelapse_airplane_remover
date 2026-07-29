@@ -209,6 +209,11 @@ private val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
     IntField("Base image threshold", { it.alignmentBaseImageThresholdValue }, { b, v -> b.setAlignmentBaseImageThresholdValue(v) }, 1, 255),
     DoubleField("Homography smoothing ε", { it.homographySmoothingEpsilon }, { b, v -> b.setHomographySmoothingEpsilon(v) }),
     BoolField("Allow earth alignment", { it.allowEarthAlignment }, { b, v -> b.setAllowEarthAlignment(v) }),
+    // Detect on a half-size copy of each frame.  Keypoint detection is the most memory
+    // hungry step and its cost is per pixel, so this cuts it by about 4x, at some cost in
+    // alignment quality.  Keypoint files are kept separately per setting, so switching
+    // back and forth does not mix the two.
+    BoolField("Half resolution keypoints", { it.alignmentHalfResolutionKeypoints }, { b, v -> b.setAlignmentHalfResolutionKeypoints(v) }),
     BoolField("Write debug images", { it.alignmentWriteDebugImages }, { b, v -> b.setAlignmentWriteDebugImages(v) }),
 )
 
@@ -231,10 +236,26 @@ private val HORIZON_FIELDS: List<ExpertField> = listOf(
     IntField("Spike window half", { it.horizonSpikeWindowHalf }, { b, v -> b.setHorizonSpikeWindowHalf(v) }, 10, 2000),
 )
 
+// NOTE: labels are the keys of the edit maps, so they have to stay unique across all
+// three groups. "Max keypoint ops" here vs "Max keypoints" under Alignment are different
+// settings and must keep different labels.
+//
+// The three fields with a min of 0 mean something specific at 0 rather than "off":
+// no floor, no explicit cap, and never stream. 0 has to be reachable, and the daemon
+// honours a present 0 rather than substituting its default.
 private val MEMORY_FIELDS: List<ExpertField> = listOf(
     IntField("Keypoint mem ×", { it.keypointMemoryMultiplier }, { b, v -> b.setKeypointMemoryMultiplier(v) }, 1, 200),
     IntField("Outlier mem ×", { it.outlierMemoryMultiplier }, { b, v -> b.setOutlierMemoryMultiplier(v) }, 1, 50),
     IntField("Merge mem ×", { it.mergeMemoryMultiplier }, { b, v -> b.setMergeMemoryMultiplier(v) }, 1, 50),
+    IntField("Horizon mem ×", { it.horizonMemoryMultiplier }, { b, v -> b.setHorizonMemoryMultiplier(v) }, 1, 50),
+    // Horizon detection costs about the same whatever the frame size, so the multiplier
+    // above under-reserves on small frames.  This floor is what covers them; it stops
+    // mattering around 17MP.  0 = no floor.
+    IntField("Horizon floor MB", { it.horizonReservationFloorMb }, { b, v -> b.setHorizonReservationFloorMb(v) }, 0, 16384),
+    // 0 = no explicit cap; the memory budget decides.
+    IntField("Max keypoint ops", { it.maxConcurrentKeypointOps }, { b, v -> b.setMaxConcurrentKeypointOps(v) }, 0, 256),
+    // 0 = never stream, keep every source frame resident.
+    IntField("Merge streaming MB", { it.mergeStreamingThresholdMb }, { b, v -> b.setMergeStreamingThresholdMb(v) }, 0, 65536),
 )
 
 @Composable
